@@ -335,7 +335,32 @@
     <!-- Sidebar overlay for mobile -->
     <div class="sidebar-overlay" data-state="closed"></div>
 
+    <!-- Core JavaScript Modules -->
+    <script src="js/core/EventBus.js"></script>
+    <script src="js/core/Router.js"></script>
+    <script src="js/core/BaseTool.js"></script>
+    
+    <!-- Components -->
+    <script src="js/components/Sidebar.js"></script>
+    
+    <!-- Tools -->
+    <script src="js/tools/UUIDGenerator.js"></script>
+    
+    <!-- Main App -->
+    <script src="js/App.js"></script>
+    
+    <!-- Legacy Script (for backward compatibility) -->
     <script src="script.js"></script>
+    
+    <!-- Initialize App -->
+    <script>
+        // Initialize the new modular app
+        let app;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new App();
+        });
+    </script>
 </body>
 
 </html>
