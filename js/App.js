@@ -453,6 +453,13 @@ class App {
       document.body.appendChild(container);
     }
 
+    // Limit to maximum 3 notifications
+    const existingNotifications = container.querySelectorAll('.notification');
+    if (existingNotifications.length >= 3) {
+      // Remove the oldest notification
+      existingNotifications[0].remove();
+    }
+
     // Create notification element
     const notification = document.createElement("div");
     notification.className = `notification notification-${type}`;

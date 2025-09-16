@@ -12,9 +12,6 @@ class UUIDGenerator extends BaseTool {
             category: 'application',
             eventBus
         });
-        
-        this.generatedUUIDs = [];
-        this.maxHistory = 10;
     }
 
     /**
@@ -24,64 +21,59 @@ class UUIDGenerator extends BaseTool {
     render() {
         return `
             <div class="tool-container uuid-generator">
-                <div class="tool-header">
-                    <h2>UUID Generator</h2>
-                    <p class="tool-description">Generate universally unique identifiers (UUID v4)</p>
-                </div>
-                
-                <div class="tool-content">
-                    <div class="uuid-controls">
-                        <button class="btn btn-primary" id="generateUUID">
-                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-                                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-                                <path d="M2 2l7.586 7.586"/>
-                                <circle cx="11" cy="11" r="2"/>
-                            </svg>
-                            Generate UUID
+                <!-- Single UUID Section -->
+                <div class="uuid-section">
+                    <h2>Single UUID</h2>
+                    <div class="uuid-display">
+                        <input 
+                            type="text" 
+                            id="singleUuidResult" 
+                            class="uuid-input" 
+                            readonly 
+                            placeholder="Generated UUID will appear here"
+                        />
+                    </div>
+                    <div class="uuid-buttons">
+                        <button class="btn btn-primary" id="generateSingleUUID">
+                            Generate
                         </button>
-                        
-                        <div class="uuid-options">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="upperCase" />
-                                <span class="checkmark"></span>
-                                Uppercase
-                            </label>
-                            
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="removeDashes" />
-                                <span class="checkmark"></span>
-                                Remove dashes
-                            </label>
+                        <button class="btn btn-primary" id="copySingleUUID" disabled>
+                            Copy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Multiple UUIDs Section -->
+                <div class="uuid-section">
+                    <h2>Multiple UUIDs</h2>
+                    <div class="multiple-controls">
+                        <input 
+                            type="number" 
+                            id="uuidQuantity" 
+                            class="quantity-input" 
+                            placeholder="How many?" 
+                            min="1" 
+                            max="100"
+                        />
+                        <div class="uuid-buttons">
+                            <button class="btn btn-primary" id="generateMultipleUUID">
+                                Generate
+                            </button>
+                            <button class="btn btn-primary" id="copyMultipleUUID" disabled>
+                                Copy
+                            </button>
+                            <button class="btn btn-primary" id="clearMultipleUUID">
+                                Clear
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="uuid-output">
-                        <div class="output-group">
-                            <label for="uuidResult">Generated UUID:</label>
-                            <div class="input-group">
-                                <input 
-                                    type="text" 
-                                    id="uuidResult" 
-                                    class="form-input" 
-                                    readonly 
-                                    placeholder="Click 'Generate UUID' to create a new UUID"
-                                />
-                                <button class="btn btn-secondary" id="copyUUID" disabled>
-                                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                    </svg>
-                                    Copy
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="uuid-history" id="uuidHistory" style="display: none;">
-                        <h3>Recent UUIDs</h3>
-                        <div class="history-list" id="historyList"></div>
-                        <button class="btn btn-outline" id="clearHistory">Clear History</button>
+                    <div class="multiple-output">
+                        <textarea 
+                            id="multipleUuidResult" 
+                            class="uuid-textarea" 
+                            readonly 
+                            placeholder="Generated UUIDs will appear here"
+                        ></textarea>
                     </div>
                 </div>
             </div>
@@ -93,69 +85,137 @@ class UUIDGenerator extends BaseTool {
      */
     onMount() {
         this.bindToolEvents();
-        this.loadHistory();
     }
 
     /**
      * Bind tool-specific events
      */
     bindToolEvents() {
-        const generateBtn = document.getElementById('generateUUID');
-        const copyBtn = document.getElementById('copyUUID');
-        const clearHistoryBtn = document.getElementById('clearHistory');
-        const upperCaseCheckbox = document.getElementById('upperCase');
-        const removeDashesCheckbox = document.getElementById('removeDashes');
+        // Single UUID events
+        const generateSingleBtn = document.getElementById('generateSingleUUID');
+        const copySingleBtn = document.getElementById('copySingleUUID');
+        
+        // Multiple UUID events
+        const generateMultipleBtn = document.getElementById('generateMultipleUUID');
+        const copyMultipleBtn = document.getElementById('copyMultipleUUID');
+        const clearMultipleBtn = document.getElementById('clearMultipleUUID');
 
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => {
-                this.generateUUID();
+        if (generateSingleBtn) {
+            generateSingleBtn.addEventListener('click', () => {
+                this.generateSingleUUID();
             });
         }
 
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                this.copyCurrentUUID();
+        if (copySingleBtn) {
+            copySingleBtn.addEventListener('click', () => {
+                this.copySingleUUID();
             });
         }
 
-        if (clearHistoryBtn) {
-            clearHistoryBtn.addEventListener('click', () => {
-                this.clearHistory();
+        if (generateMultipleBtn) {
+            generateMultipleBtn.addEventListener('click', () => {
+                this.generateMultipleUUIDs();
             });
         }
 
-        // Auto-generate on option change
-        if (upperCaseCheckbox) {
-            upperCaseCheckbox.addEventListener('change', () => {
-                this.updateCurrentUUID();
+        if (copyMultipleBtn) {
+            copyMultipleBtn.addEventListener('click', () => {
+                this.copyMultipleUUIDs();
             });
         }
 
-        if (removeDashesCheckbox) {
-            removeDashesCheckbox.addEventListener('change', () => {
-                this.updateCurrentUUID();
+        if (clearMultipleBtn) {
+            clearMultipleBtn.addEventListener('click', () => {
+                this.clearMultipleUUIDs();
             });
         }
 
-        // Generate initial UUID
-        this.generateUUID();
+        // Generate initial single UUID
+        this.generateSingleUUID();
     }
 
     /**
-     * Generate a new UUID v4
+     * Generate a single UUID
      */
-    generateUUID() {
+    generateSingleUUID() {
         const uuid = this.createUUIDv4();
-        const formattedUUID = this.formatUUID(uuid);
+        const resultInput = document.getElementById('singleUuidResult');
         
-        this.displayUUID(formattedUUID);
-        this.addToHistory(uuid);
-        this.updateHistory();
+        if (resultInput) {
+            resultInput.value = uuid;
+        }
         
         // Enable copy button
-        const copyBtn = document.getElementById('copyUUID');
+        const copyBtn = document.getElementById('copySingleUUID');
         if (copyBtn) {
             copyBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Generate multiple UUIDs
+     */
+    generateMultipleUUIDs() {
+        const quantityInput = document.getElementById('uuidQuantity');
+        const resultTextarea = document.getElementById('multipleUuidResult');
+        
+        if (!quantityInput || !resultTextarea) return;
+        
+        const quantity = parseInt(quantityInput.value) || 1;
+        const uuids = [];
+        
+        for (let i = 0; i < Math.min(quantity, 100); i++) {
+            uuids.push(this.createUUIDv4());
+        }
+        
+        resultTextarea.value = uuids.join('\n');
+        
+        // Enable copy button
+        const copyBtn = document.getElementById('copyMultipleUUID');
+        if (copyBtn) {
+            copyBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Copy single UUID to clipboard
+     */
+    async copySingleUUID() {
+        const resultInput = document.getElementById('singleUuidResult');
+        if (resultInput && resultInput.value) {
+            await this.copyToClipboard(resultInput.value);
+        }
+    }
+
+    /**
+     * Copy multiple UUIDs to clipboard
+     */
+    async copyMultipleUUIDs() {
+        const resultTextarea = document.getElementById('multipleUuidResult');
+        if (resultTextarea && resultTextarea.value) {
+            await this.copyToClipboard(resultTextarea.value);
+        }
+    }
+
+    /**
+     * Clear multiple UUIDs
+     */
+    clearMultipleUUIDs() {
+        const resultTextarea = document.getElementById('multipleUuidResult');
+        const quantityInput = document.getElementById('uuidQuantity');
+        
+        if (resultTextarea) {
+            resultTextarea.value = '';
+        }
+        
+        if (quantityInput) {
+            quantityInput.value = '';
+        }
+        
+        // Disable copy button
+        const copyBtn = document.getElementById('copyMultipleUUID');
+        if (copyBtn) {
+            copyBtn.disabled = true;
         }
     }
 
@@ -169,150 +229,6 @@ class UUIDGenerator extends BaseTool {
             const v = c === 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
         });
-    }
-
-    /**
-     * Format UUID based on options
-     * @param {string} uuid - Raw UUID
-     * @returns {string} Formatted UUID
-     */
-    formatUUID(uuid) {
-        let formatted = uuid;
-        
-        const upperCaseCheckbox = document.getElementById('upperCase');
-        const removeDashesCheckbox = document.getElementById('removeDashes');
-        
-        if (removeDashesCheckbox && removeDashesCheckbox.checked) {
-            formatted = formatted.replace(/-/g, '');
-        }
-        
-        if (upperCaseCheckbox && upperCaseCheckbox.checked) {
-            formatted = formatted.toUpperCase();
-        }
-        
-        return formatted;
-    }
-
-    /**
-     * Display UUID in the output field
-     * @param {string} uuid - UUID to display
-     */
-    displayUUID(uuid) {
-        const resultInput = document.getElementById('uuidResult');
-        if (resultInput) {
-            resultInput.value = uuid;
-        }
-    }
-
-    /**
-     * Update current UUID with new formatting
-     */
-    updateCurrentUUID() {
-        const resultInput = document.getElementById('uuidResult');
-        if (resultInput && resultInput.value) {
-            // Get the raw UUID from history
-            const lastUUID = this.generatedUUIDs[this.generatedUUIDs.length - 1];
-            if (lastUUID) {
-                const formattedUUID = this.formatUUID(lastUUID);
-                this.displayUUID(formattedUUID);
-            }
-        }
-    }
-
-    /**
-     * Copy current UUID to clipboard
-     */
-    async copyCurrentUUID() {
-        const resultInput = document.getElementById('uuidResult');
-        if (resultInput && resultInput.value) {
-            await this.copyToClipboard(resultInput.value);
-        }
-    }
-
-    /**
-     * Add UUID to history
-     * @param {string} uuid - UUID to add
-     */
-    addToHistory(uuid) {
-        this.generatedUUIDs.push(uuid);
-        
-        // Keep only the last maxHistory items
-        if (this.generatedUUIDs.length > this.maxHistory) {
-            this.generatedUUIDs = this.generatedUUIDs.slice(-this.maxHistory);
-        }
-        
-        this.saveHistory();
-    }
-
-    /**
-     * Update history display
-     */
-    updateHistory() {
-        const historyContainer = document.getElementById('uuidHistory');
-        const historyList = document.getElementById('historyList');
-        
-        if (!historyContainer || !historyList) return;
-        
-        if (this.generatedUUIDs.length > 0) {
-            historyContainer.style.display = 'block';
-            
-            historyList.innerHTML = this.generatedUUIDs
-                .slice()
-                .reverse()
-                .map((uuid, index) => `
-                    <div class="history-item">
-                        <span class="history-uuid">${uuid}</span>
-                        <button class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText('${uuid}')">
-                            Copy
-                        </button>
-                    </div>
-                `).join('');
-        } else {
-            historyContainer.style.display = 'none';
-        }
-    }
-
-    /**
-     * Clear history
-     */
-    clearHistory() {
-        this.generatedUUIDs = [];
-        this.saveHistory();
-        this.updateHistory();
-        this.showSuccess('History cleared');
-    }
-
-    /**
-     * Load history from localStorage
-     */
-    loadHistory() {
-        try {
-            const saved = localStorage.getItem('uuid-generator-history');
-            if (saved) {
-                this.generatedUUIDs = JSON.parse(saved);
-                this.updateHistory();
-            }
-        } catch (error) {
-            console.error('Error loading UUID history:', error);
-        }
-    }
-
-    /**
-     * Save history to localStorage
-     */
-    saveHistory() {
-        try {
-            localStorage.setItem('uuid-generator-history', JSON.stringify(this.generatedUUIDs));
-        } catch (error) {
-            console.error('Error saving UUID history:', error);
-        }
-    }
-
-    /**
-     * Called when tool is deactivated
-     */
-    onDeactivate() {
-        this.saveHistory();
     }
 }
 
