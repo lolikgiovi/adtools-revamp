@@ -509,7 +509,11 @@ class Sidebar {
 
     handleMenuClick(e) {
         const button = e.currentTarget;
-
+        const menuItem = button.closest('.sidebar-menu-item');
+        
+        // Get the tool ID from data attribute
+        const toolId = menuItem ? menuItem.getAttribute('data-tool') : null;
+        
         // Remove active state from all buttons
         document.querySelectorAll(".sidebar-menu-button").forEach((btn) => {
             btn.setAttribute("data-active", "false");
@@ -518,11 +522,74 @@ class Sidebar {
         // Set active state on clicked button
         button.setAttribute("data-active", "true");
 
+        // Navigate to the tool or page
+        if (toolId) {
+            this.selectTool(toolId);
+        } else {
+            // Handle navigation for items without data-tool (like Documentation, Templates, etc.)
+            const spanText = button.querySelector('span')?.textContent?.trim();
+            if (spanText) {
+                this.handleSpecialNavigation(spanText);
+            }
+        }
+
         // Close sidebar on mobile after selection
         if (this.state.isMobile && this.state.isOpen) {
             setTimeout(() => {
                 this.close();
             }, 150);
+        }
+    }
+
+    /**
+     * Handle navigation for special menu items that don't have tools
+     * @param {string} itemName - Name of the menu item
+     */
+    handleSpecialNavigation(itemName) {
+        switch (itemName) {
+            case 'Documentation':
+                this.navigateToPage('documentation');
+                break;
+            case 'Templates':
+                this.navigateToPage('templates');
+                break;
+            case 'Workflows':
+                this.navigateToPage('workflows');
+                break;
+            case 'Sign out':
+                this.handleSignOut();
+                break;
+            default:
+                console.log(`Navigation not implemented for: ${itemName}`);
+        }
+    }
+
+    /**
+     * Navigate to a special page
+     * @param {string} pageId - Page identifier
+     */
+    navigateToPage(pageId) {
+        if (this.router) {
+            this.router.navigate(pageId);
+        }
+        
+        if (this.eventBus) {
+            this.eventBus.emit('page:navigate', { pageId });
+        }
+    }
+
+    /**
+     * Handle sign out action
+     */
+    handleSignOut() {
+        // Implement sign out logic here
+        console.log('Sign out clicked');
+        // For now, just show a notification
+        if (this.eventBus) {
+            this.eventBus.emit('notification:show', { 
+                message: 'Sign out functionality not implemented yet', 
+                type: 'info' 
+            });
         }
     }
 

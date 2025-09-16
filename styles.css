@@ -976,12 +976,7 @@ body {
   }
 }
 
-/* Focus management */
-.sidebar-menu-button:focus,
-.sidebar-trigger:focus {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
+
 
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {

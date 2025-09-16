@@ -99,6 +99,19 @@ class App {
       this.showHome();
     });
 
+    // Special page routes
+    this.router.register("documentation", () => {
+      this.showDocumentation();
+    });
+
+    this.router.register("templates", () => {
+      this.showTemplates();
+    });
+
+    this.router.register("workflows", () => {
+      this.showWorkflows();
+    });
+
     // Tool routes
     this.tools.forEach((tool, toolId) => {
       this.router.register(toolId, () => {
@@ -114,6 +127,9 @@ class App {
    * Show home page
    */
   showHome() {
+    // Update breadcrumb for home
+    this.updateBreadcrumb('Home', true);
+    
     if (this.currentTool) {
       this.currentTool.deactivate();
       this.currentTool = null;
@@ -174,6 +190,9 @@ class App {
       return;
     }
 
+    // Update breadcrumb for tool
+    this.updateBreadcrumb(tool.name);
+
     // Deactivate current tool
     if (this.currentTool && this.currentTool !== tool) {
       this.currentTool.deactivate();
@@ -197,6 +216,210 @@ class App {
    */
   navigateToTool(toolId) {
     this.router.navigate(toolId);
+  }
+
+  updateBreadcrumb(title, isHome = false) {
+    const breadcrumbCurrent = document.getElementById('breadcrumb-current');
+    const breadcrumbSeparator = document.querySelector('.breadcrumb-separator');
+    const breadcrumbCurrentItem = document.querySelector('.breadcrumb-current');
+    
+    if (breadcrumbCurrent) {
+      breadcrumbCurrent.textContent = title;
+    }
+    
+    // Show/hide separator and current item based on whether we're on home
+    if (isHome) {
+      breadcrumbSeparator.style.display = 'none';
+      breadcrumbCurrentItem.style.display = 'none';
+    } else {
+      breadcrumbSeparator.style.display = 'flex';
+      breadcrumbCurrentItem.style.display = 'block';
+    }
+  }
+
+  /**
+   * Show documentation page
+   */
+  showDocumentation() {
+    // Update breadcrumb for documentation
+    this.updateBreadcrumb('Documentation');
+    
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      this.mainContent.innerHTML = `
+        <div class="page-container">
+          <div class="page-header">
+            <h1>Documentation</h1>
+            <p class="subtitle">Learn how to use AD Tools effectively</p>
+          </div>
+          
+          <div class="documentation-content">
+            <div class="doc-section">
+              <h2>Getting Started</h2>
+              <p>Welcome to AD Tools! This comprehensive suite of utilities is designed to help you with various development and administrative tasks.</p>
+            </div>
+            
+            <div class="doc-section">
+              <h2>Available Tools</h2>
+              <div class="tools-list">
+                ${Array.from(this.tools.values()).map(tool => {
+                  const metadata = tool.getMetadata();
+                  return `
+                    <div class="tool-doc-item">
+                      <h3>${metadata.name}</h3>
+                      <p>${metadata.description}</p>
+                      <button class="btn btn-secondary" onclick="app.navigateToTool('${metadata.id}')">
+                        Try ${metadata.name}
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+            
+            <div class="doc-section">
+              <h2>Keyboard Shortcuts</h2>
+              <ul>
+                <li><kbd>Ctrl/Cmd + K</kbd> - Toggle sidebar</li>
+                <li><kbd>Ctrl/Cmd + H</kbd> - Go to home</li>
+                <li><kbd>Escape</kbd> - Close sidebar (mobile)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    this.eventBus.emit("page:changed", { page: "documentation" });
+  }
+
+  /**
+   * Show templates page
+   */
+  showTemplates() {
+    // Update breadcrumb for templates
+    this.updateBreadcrumb('Templates');
+    
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      this.mainContent.innerHTML = `
+        <div class="page-container">
+          <div class="page-header">
+            <h1>Templates</h1>
+            <p class="subtitle">Pre-built templates to speed up your workflow</p>
+          </div>
+          
+          <div class="templates-grid">
+            <div class="template-card">
+              <div class="template-icon">📄</div>
+              <h3>API Documentation Template</h3>
+              <p>Standard template for API documentation with examples and schemas.</p>
+              <button class="btn btn-primary">Use Template</button>
+            </div>
+            
+            <div class="template-card">
+              <div class="template-icon">🔧</div>
+              <h3>Configuration Template</h3>
+              <p>Common configuration files for various development environments.</p>
+              <button class="btn btn-primary">Use Template</button>
+            </div>
+            
+            <div class="template-card">
+              <div class="template-icon">📊</div>
+              <h3>Report Template</h3>
+              <p>Professional report template with charts and data visualization.</p>
+              <button class="btn btn-primary">Use Template</button>
+            </div>
+            
+            <div class="template-card">
+              <div class="template-icon">🚀</div>
+              <h3>Project Starter</h3>
+              <p>Complete project structure with best practices and tooling setup.</p>
+              <button class="btn btn-primary">Use Template</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    this.eventBus.emit("page:changed", { page: "templates" });
+  }
+
+  /**
+   * Show workflows page
+   */
+  showWorkflows() {
+    // Update breadcrumb for workflows
+    this.updateBreadcrumb('Workflows');
+    
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      this.mainContent.innerHTML = `
+        <div class="page-container">
+          <div class="page-header">
+            <h1>Workflows</h1>
+            <p class="subtitle">Automated workflows to streamline your tasks</p>
+          </div>
+          
+          <div class="workflows-content">
+            <div class="workflow-section">
+              <h2>Available Workflows</h2>
+              <div class="workflows-grid">
+                <div class="workflow-card">
+                  <div class="workflow-status active"></div>
+                  <h3>Data Processing Pipeline</h3>
+                  <p>Automated data validation, transformation, and export workflow.</p>
+                  <div class="workflow-actions">
+                    <button class="btn btn-primary">Run Workflow</button>
+                    <button class="btn btn-secondary">Configure</button>
+                  </div>
+                </div>
+                
+                <div class="workflow-card">
+                  <div class="workflow-status inactive"></div>
+                  <h3>Report Generation</h3>
+                  <p>Scheduled report generation with email notifications.</p>
+                  <div class="workflow-actions">
+                    <button class="btn btn-primary">Run Workflow</button>
+                    <button class="btn btn-secondary">Configure</button>
+                  </div>
+                </div>
+                
+                <div class="workflow-card">
+                  <div class="workflow-status active"></div>
+                  <h3>Backup & Sync</h3>
+                  <p>Automated backup and synchronization of important data.</p>
+                  <div class="workflow-actions">
+                    <button class="btn btn-primary">Run Workflow</button>
+                    <button class="btn btn-secondary">Configure</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="workflow-section">
+              <h2>Create New Workflow</h2>
+              <p>Build custom workflows using our visual workflow builder.</p>
+              <button class="btn btn-primary">Open Workflow Builder</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    this.eventBus.emit("page:changed", { page: "workflows" });
   }
 
   /**
