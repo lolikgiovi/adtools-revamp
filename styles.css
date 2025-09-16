@@ -133,6 +133,8 @@ body {
   font-weight: 600;
   color: hsl(var(--sidebar-foreground));
   line-height: 1.25;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
 }
 
 .sidebar-description {
@@ -145,7 +147,19 @@ body {
 .sidebar[data-state="collapsed"] .sidebar-description,
 .sidebar[data-state="collapsed"] .sidebar-group-label,
 .sidebar[data-state="collapsed"] .sidebar-menu-button {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+/* Expanded state transitions */
+.sidebar[data-state="expanded"] .sidebar-title,
+.sidebar[data-state="expanded"] .sidebar-description,
+.sidebar[data-state="expanded"] .sidebar-group-label,
+.sidebar[data-state="expanded"] .sidebar-menu-button {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease 0.1s, visibility 0.2s ease 0.1s;
 }
 
 /* SidebarContent */
@@ -185,6 +199,8 @@ body {
   letter-spacing: 0.05em;
   padding: 0.5rem 0.75rem 0.25rem;
   line-height: 1.25;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
 }
 
 .sidebar[data-state="collapsed"] .sidebar-group-label {
@@ -224,6 +240,7 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
+  white-space: nowrap;
 }
 
 .sidebar-menu-button:hover {
@@ -239,6 +256,11 @@ body {
 .sidebar-menu-button[data-active="true"] {
   background-color: hsl(var(--sidebar-primary));
   color: hsl(var(--sidebar-primary-foreground));
+}
+
+.sidebar-menu-button span {
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
 }
 
 .sidebar-menu-icon {
