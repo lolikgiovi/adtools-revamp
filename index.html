@@ -12,7 +12,7 @@
     <!-- React's SidebarProvider Concept equivalent -->
     <div class="sidebar-provider" data-sidebar="sidebar">
         <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation" data-state="expanded">
             <!-- SidebarHeader -->
             <div class="sidebar-header">
                 <div class="sidebar-header-content">
@@ -28,7 +28,7 @@
                     <div class="sidebar-group-label">Application</div>
                     <div class="sidebar-group-content">
                         <div class="sidebar-menu">
-                            <div class="sidebar-menu-item">
+                            <div class="sidebar-menu-item" data-tool="uuid-generator">
                                 <button class="sidebar-menu-button">
                                     <svg class="sidebar-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -39,7 +39,7 @@
                                     <span>UUIDv4 Generator</span>
                                 </button>
                             </div>
-                            <div class="sidebar-menu-item">
+                            <div class="sidebar-menu-item" data-tool="json-formatter">
                                 <button class="sidebar-menu-button">
                                     <svg class="sidebar-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -52,7 +52,7 @@
                                     <span>JSON Formatter</span>
                                 </button>
                             </div>
-                            <div class="sidebar-menu-item">
+                            <div class="sidebar-menu-item" data-tool="base64-image">
                                 <button class="sidebar-menu-button">
                                     <svg class="sidebar-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -63,7 +63,7 @@
                                     <span>Base64 - Image</span>
                                 </button>
                             </div>
-                            <div class="sidebar-menu-item">
+                            <div class="sidebar-menu-item" data-tool="base64-text">
                                 <button class="sidebar-menu-button">
                                     <svg class="sidebar-menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -335,28 +335,26 @@
     <!-- Sidebar overlay for mobile -->
     <div class="sidebar-overlay" data-state="closed"></div>
 
-    <!-- Core JavaScript Modules -->
+    <!-- Core JavaScript Files -->
     <script src="js/core/EventBus.js"></script>
     <script src="js/core/Router.js"></script>
     <script src="js/core/BaseTool.js"></script>
-    
-    <!-- Components -->
+    <script src="js/core/ThemeManager.js"></script>
+
+    <!-- Component Files -->
     <script src="js/components/Sidebar.js"></script>
-    
-    <!-- Tools -->
+
+    <!-- Tool Files -->
     <script src="js/tools/UUIDGenerator.js"></script>
-    
+
     <!-- Main App -->
     <script src="js/App.js"></script>
-    
-    <!-- Legacy Script (for backward compatibility) -->
-    <script src="script.js"></script>
-    
+
     <!-- Initialize App -->
     <script>
         // Initialize the new modular app
         let app;
-        
+
         document.addEventListener('DOMContentLoaded', () => {
             app = new App();
         });

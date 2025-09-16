@@ -7,8 +7,16 @@ class Sidebar {
         this.eventBus = config.eventBus;
         this.router = config.router;
         this.tools = config.tools || [];
-        this.isCollapsed = false;
+        
+        // State management - matching script.js
+        this.state = {
+            isOpen: false,
+            isCollapsed: false,
+            isMobile: false,
+        };
+        
         this.currentTool = null;
+        this.mobileBreakpoint = 768;
         
         this.init();
     }
@@ -19,6 +27,34 @@ class Sidebar {
     init() {
         this.bindEvents();
         this.setupToggle();
+        this.initializeAccessibility();
+        this.setupMenuButtons();
+        
+        // Set initial state - start with sidebar expanded on desktop
+        if (!this.state.isMobile) {
+            this.state.isCollapsed = false;
+        }
+        this.updateSidebarState();
+    }
+
+    /**
+     * Initialize accessibility features
+     */
+    initializeAccessibility() {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.querySelector('.sidebar-trigger');
+
+        if (!sidebar || !toggleBtn) return;
+
+        // Set initial ARIA attributes
+        sidebar.setAttribute("role", "navigation");
+        sidebar.setAttribute("aria-label", "Main navigation");
+
+        toggleBtn.setAttribute("type", "button");
+        toggleBtn.setAttribute("aria-controls", "sidebar");
+
+        // Set initial state
+        this.updateAriaStates();
     }
 
     /**
@@ -40,7 +76,7 @@ class Sidebar {
      * Setup sidebar toggle functionality
      */
     setupToggle() {
-        const toggleBtn = document.querySelector('.sidebar-toggle');
+        const toggleBtn = document.querySelector('.sidebar-trigger');
         const sidebar = document.querySelector('.sidebar');
         const overlay = document.querySelector('.sidebar-overlay');
 
@@ -52,44 +88,240 @@ class Sidebar {
 
         if (overlay) {
             overlay.addEventListener('click', () => {
-                this.collapse();
+                if (this.state.isMobile) {
+                    this.close();
+                }
             });
         }
 
-        // Handle escape key
+        // Keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !this.isCollapsed) {
-                this.collapse();
-            }
+            this.handleKeydown(e);
+        });
+
+        // Window resize
+        this.handleResize();
+        window.addEventListener('resize', () => {
+            this.handleResize();
         });
     }
 
     /**
-     * Toggle sidebar
+     * Handle keyboard events
      */
-    toggle() {
-        if (this.isCollapsed) {
-            this.expand();
-        } else {
-            this.collapse();
+    handleKeydown(e) {
+        // ESC key closes sidebar on mobile
+        if (e.key === 'Escape' && this.state.isMobile && this.state.isOpen) {
+            this.close();
+        }
+
+        // Toggle with Ctrl/Cmd + B
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+            e.preventDefault();
+            this.toggle();
         }
     }
 
     /**
-     * Expand sidebar
+     * Handle window resize for mobile detection
      */
-    expand() {
+    handleResize() {
+        const isMobile = window.innerWidth <= this.mobileBreakpoint;
+        const wasMobile = this.state.isMobile;
+        
+        this.state.isMobile = isMobile;
+        
+        // If switching between mobile and desktop
+        if (wasMobile !== isMobile) {
+            // Reset collapsed state based on device type
+            this.state.isCollapsed = isMobile ? true : false;
+            this.updateSidebarState();
+        }
+        
+        // Initial run - set state based on device type
+        if (wasMobile === undefined) {
+            this.state.isCollapsed = isMobile ? true : false;
+            this.updateSidebarState();
+        }
+    }
+
+    /**
+     * Update sidebar state and DOM attributes
+     */
+    updateSidebarState() {
         const sidebar = document.querySelector('.sidebar');
         const overlay = document.querySelector('.sidebar-overlay');
-        
-        if (sidebar) {
-            sidebar.classList.add('expanded');
-            this.isCollapsed = false;
+        const main = document.querySelector('.main');
+
+        if (!sidebar) return;
+
+        // Update sidebar data attributes
+        if (this.state.isMobile) {
+            // Mobile behavior
+            sidebar.setAttribute(
+                "data-state",
+                this.state.isOpen ? "open" : "closed"
+            );
+            sidebar.setAttribute("data-mobile", "true");
+        } else {
+            // Desktop behavior
+            sidebar.setAttribute(
+                "data-state",
+                this.state.isCollapsed ? "collapsed" : "expanded"
+            );
+            sidebar.setAttribute("data-mobile", "false");
         }
-        
+
+        // Update main content margin based on sidebar state
+        if (main) {
+            if (this.state.isMobile) {
+                main.style.marginLeft = "0";
+            } else {
+                main.style.marginLeft = this.state.isCollapsed ? "0" : "16rem";
+            }
+        }
+
+        // Update overlay
         if (overlay) {
-            overlay.classList.add('active');
+            overlay.setAttribute(
+                "data-state",
+                this.state.isMobile && this.state.isOpen ? "open" : "closed"
+            );
         }
+
+        // Update trigger icon rotation
+        this.updateTriggerIcon();
+
+        // Update ARIA attributes
+        this.updateAriaStates();
+    }
+
+    /**
+     * Update trigger icon rotation based on sidebar state
+     */
+    updateTriggerIcon() {
+        const toggleBtn = document.querySelector('.sidebar-trigger');
+        if (!toggleBtn) return;
+
+        const icon = toggleBtn.querySelector(".sidebar-trigger-icon");
+        if (!icon) return;
+
+        // Rotate icon based on state
+        if (this.state.isMobile) {
+            icon.style.transform = this.state.isOpen
+                ? "rotate(180deg)"
+                : "rotate(0deg)";
+        } else {
+            icon.style.transform = this.state.isCollapsed
+                ? "rotate(0deg)"
+                : "rotate(180deg)";
+        }
+    }
+
+    /**
+     * Update ARIA states for accessibility
+     */
+    updateAriaStates() {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.querySelector('.sidebar-trigger');
+
+        if (!sidebar || !toggleBtn) return;
+
+        sidebar.setAttribute(
+            "aria-hidden",
+            this.state.isMobile && !this.state.isOpen ? "true" : "false"
+        );
+
+        toggleBtn.setAttribute(
+            "aria-expanded",
+            this.state.isMobile
+                ? this.state.isOpen.toString()
+                : (!this.state.isCollapsed).toString()
+        );
+
+        toggleBtn.setAttribute(
+            "aria-label",
+            this.state.isMobile
+                ? this.state.isOpen
+                    ? "Close sidebar"
+                    : "Open sidebar"
+                : this.state.isCollapsed
+                ? "Expand sidebar"
+                : "Collapse sidebar"
+        );
+    }
+
+    /**
+     * Emit state change event
+     */
+    emitStateChange() {
+        if (this.eventBus) {
+            this.eventBus.emit('sidebar:stateChange', {
+                isOpen: this.state.isOpen,
+                isCollapsed: this.state.isCollapsed,
+                isMobile: this.state.isMobile
+            });
+        }
+
+        // Also emit to document for compatibility
+        document.dispatchEvent(new CustomEvent('sidebarStateChange', {
+            detail: {
+                isOpen: this.state.isOpen,
+                isCollapsed: this.state.isCollapsed,
+                isMobile: this.state.isMobile
+            }
+        }));
+    }
+
+    /**
+     * Toggle sidebar state
+     */
+    toggle() {
+        if (this.state.isMobile) {
+            if (this.state.isOpen) {
+                this.close();
+            } else {
+                this.open();
+            }
+        } else {
+            if (this.state.isCollapsed) {
+                this.expand();
+            } else {
+                this.collapse();
+            }
+        }
+    }
+
+    /**
+     * Open sidebar (mobile)
+     */
+    open() {
+        this.state.isOpen = true;
+        this.updateSidebarState();
+
+        if (this.eventBus) {
+            this.eventBus.emit('sidebar:opened');
+        }
+    }
+
+    /**
+     * Close sidebar (mobile)
+     */
+    close() {
+        this.state.isOpen = false;
+        this.updateSidebarState();
+
+        if (this.eventBus) {
+            this.eventBus.emit('sidebar:closed');
+        }
+    }
+
+    /**
+     * Expand sidebar (desktop)
+     */
+    expand() {
+        this.state.isCollapsed = false;
+        this.updateSidebarState();
 
         if (this.eventBus) {
             this.eventBus.emit('sidebar:expanded');
@@ -97,20 +329,11 @@ class Sidebar {
     }
 
     /**
-     * Collapse sidebar
+     * Collapse sidebar (desktop)
      */
     collapse() {
-        const sidebar = document.querySelector('.sidebar');
-        const overlay = document.querySelector('.sidebar-overlay');
-        
-        if (sidebar) {
-            sidebar.classList.remove('expanded');
-            this.isCollapsed = true;
-        }
-        
-        if (overlay) {
-            overlay.classList.remove('active');
-        }
+        this.state.isCollapsed = true;
+        this.updateSidebarState();
 
         if (this.eventBus) {
             this.eventBus.emit('sidebar:collapsed');
@@ -247,9 +470,11 @@ class Sidebar {
             this.eventBus.emit('tool:activate', { toolId });
         }
 
-        // Auto-collapse on mobile
-        if (window.innerWidth <= 768) {
-            this.collapse();
+        // Close sidebar on mobile after selection
+        if (this.state.isMobile && this.state.isOpen) {
+            setTimeout(() => {
+                this.close();
+            }, 150);
         }
     }
 
@@ -258,15 +483,46 @@ class Sidebar {
      * @param {string} toolId - Tool ID
      */
     updateActiveItem(toolId) {
-        // Remove active class from all items
-        document.querySelectorAll('.sidebar-item').forEach(item => {
-            item.classList.remove('active');
+        // Remove active state from all menu buttons
+        document.querySelectorAll('.sidebar-menu-button').forEach(button => {
+            button.removeAttribute('data-active');
         });
 
-        // Add active class to current item
-        const activeItem = document.querySelector(`[data-tool="${toolId}"]`);
-        if (activeItem) {
-            activeItem.classList.add('active');
+        // Add active state to current item
+        const activeButton = document.querySelector(`[data-tool="${toolId}"] .sidebar-menu-button`);
+        if (activeButton) {
+            activeButton.setAttribute('data-active', 'true');
+        }
+    }
+
+    /**
+     * Setup menu click handlers for existing menu items
+     */
+    setupMenuButtons() {
+        const menuButtons = document.querySelectorAll(".sidebar-menu-button");
+        menuButtons.forEach((button) => {
+            button.addEventListener("click", (e) => {
+                this.handleMenuClick(e);
+            });
+        });
+    }
+
+    handleMenuClick(e) {
+        const button = e.currentTarget;
+
+        // Remove active state from all buttons
+        document.querySelectorAll(".sidebar-menu-button").forEach((btn) => {
+            btn.setAttribute("data-active", "false");
+        });
+
+        // Set active state on clicked button
+        button.setAttribute("data-active", "true");
+
+        // Close sidebar on mobile after selection
+        if (this.state.isMobile && this.state.isOpen) {
+            setTimeout(() => {
+                this.close();
+            }, 150);
         }
     }
 

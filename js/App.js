@@ -47,6 +47,9 @@ class App {
             router: this.router
         });
 
+        // Initialize theme manager
+        this.themeManager = new ThemeManager(this.eventBus);
+
         // Setup notification system
         this.setupNotifications();
     }
