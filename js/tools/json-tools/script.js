@@ -30,7 +30,25 @@ class JSONTools extends BaseTool {
   }
 
   async initializeMonacoEditor() {
-    // Set Monaco Editor paths
+    // Set Monaco Editor paths and environment
+    self.MonacoEnvironment = {
+      getWorkerUrl: function (moduleId, label) {
+        if (label === "json") {
+          return "/js/libs/monaco-editor/min/vs/language/json/jsonWorker.js";
+        }
+        if (label === "css" || label === "scss" || label === "less") {
+          return "/js/libs/monaco-editor/min/vs/language/css/cssWorker.js";
+        }
+        if (label === "html" || label === "handlebars" || label === "razor") {
+          return "/js/libs/monaco-editor/min/vs/language/html/htmlWorker.js";
+        }
+        if (label === "typescript" || label === "javascript") {
+          return "/js/libs/monaco-editor/min/vs/language/typescript/tsWorker.js";
+        }
+        return "/js/libs/monaco-editor/min/vs/base/worker/workerMain.js";
+      },
+    };
+
     require.config({
       paths: {
         vs: "/js/libs/monaco-editor/min/vs",
@@ -451,10 +469,7 @@ class JSONTools extends BaseTool {
     errorContent.appendChild(errorItem);
   }
 
-  showSuccess(message) {
-    const errorContent = document.getElementById("error-content");
-    errorContent.innerHTML = `<div class="no-errors">${message}</div>`;
-  }
+
 
   clearErrors() {
     const errorContent = document.getElementById("error-content");
@@ -488,15 +503,10 @@ class JSONTools extends BaseTool {
   async copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      // Show temporary success message
-      const originalTitle = document.getElementById("output-title").textContent;
-      document.getElementById("output-title").textContent =
-        "Copied to clipboard!";
-      setTimeout(() => {
-        document.getElementById("output-title").textContent = originalTitle;
-      }, 1000);
-    } catch (err) {
-      console.error("Failed to copy to clipboard:", err);
+      this.showSuccess('Copied to clipboard!');
+    } catch (error) {
+      this.showError('Failed to copy to clipboard');
+      console.error('Clipboard error:', error);
     }
   }
 
