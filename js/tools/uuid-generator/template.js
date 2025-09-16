@@ -1,8 +1,4 @@
-/**
- * UUIDGenerator Template
- * HTML template for the UUID Generator tool
- */
-window.UUIDGeneratorTemplate = `
+window.UUIDGeneratorTemplate = /* html */ `
     <div class="tool-container uuid-generator">
         <!-- Single UUID Section -->
         <div class="uuid-section">
