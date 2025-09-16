@@ -33,7 +33,7 @@
     --input: 240 5.9% 90%;
     --ring: 240 5% 64.9%;
     --radius: 0.5rem;
-    
+
     /* Background variations */
     --bg-secondary: 240 4.8% 97.9%;
     --bg-tertiary: 240 4.8% 95.9%;
@@ -72,7 +72,7 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-    
+
     /* Background variations for dark mode */
     --bg-secondary: 240 3.7% 15.9%;
     --bg-tertiary: 240 3.7% 20.9%;
@@ -431,7 +431,7 @@ body {
 
 .main-content {
   flex: 1;
-  padding: 2rem;
+  padding: 1rem;
 }
 
 .content-wrapper {
@@ -561,7 +561,8 @@ body {
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
-  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
   font-size: 0.8rem;
   transition: border-color 0.2s ease;
 }
@@ -613,7 +614,8 @@ body {
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
-  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+    "Courier New", monospace;
   font-size: 0.875rem;
   resize: vertical;
   transition: border-color 0.2s ease;
@@ -989,10 +991,6 @@ body {
     height: 100vh;
     max-height: 100vh;
     overflow-y: auto;
-  }
-
-  .main-content {
-    padding: 1rem;
   }
 
   .content-wrapper h1 {

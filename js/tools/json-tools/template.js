@@ -3,10 +3,9 @@
  * Contains the UI structure for JSON validation, formatting, and manipulation tools
  */
 
-window.JSONToolsTemplate = `
+window.JSONToolsTemplate = /* html */ `
 <div class="json-tools-container">
     <div class="json-tools-header">
-        <h2>JSON Tools</h2>
         <div class="json-tools-tabs">
             <button class="tab-button active" data-tab="validator">Validator</button>
             <button class="tab-button" data-tab="prettify">Prettify</button>

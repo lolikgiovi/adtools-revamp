@@ -1,8 +1,3 @@
-/**
- * JSON Tools - Advanced JSON manipulation with Monaco Editor
- * Provides validation, formatting, minification, and other JSON operations
- */
-
 class JSONTools extends BaseTool {
   constructor(eventBus) {
     super({
@@ -10,7 +5,7 @@ class JSONTools extends BaseTool {
       name: "JSON Tools",
       description: "Advanced JSON manipulation with Monaco Editor",
       category: "general",
-      eventBus: eventBus
+      eventBus: eventBus,
     });
     this.editor = null;
     this.currentTab = "validator";
