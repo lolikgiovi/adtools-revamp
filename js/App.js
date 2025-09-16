@@ -72,9 +72,11 @@ class App {
     const uuidGenerator = new UUIDGenerator(this.eventBus);
     this.registerTool(uuidGenerator);
 
+    // Register JSON Tools
+    const jsonTools = new JSONTools(this.eventBus);
+    this.registerTool(jsonTools);
+
     // Add more tools here as they are implemented
-    // const jsonFormatter = new JSONFormatter(this.eventBus);
-    // this.registerTool(jsonFormatter);
   }
 
   /**
@@ -128,8 +130,8 @@ class App {
    */
   showHome() {
     // Update breadcrumb for home
-    this.updateBreadcrumb('Home', true);
-    
+    this.updateBreadcrumb("Home", true);
+
     if (this.currentTool) {
       this.currentTool.deactivate();
       this.currentTool = null;
@@ -219,21 +221,21 @@ class App {
   }
 
   updateBreadcrumb(title, isHome = false) {
-    const breadcrumbCurrent = document.getElementById('breadcrumb-current');
-    const breadcrumbSeparator = document.querySelector('.breadcrumb-separator');
-    const breadcrumbCurrentItem = document.querySelector('.breadcrumb-current');
-    
+    const breadcrumbCurrent = document.getElementById("breadcrumb-current");
+    const breadcrumbSeparator = document.querySelector(".breadcrumb-separator");
+    const breadcrumbCurrentItem = document.querySelector(".breadcrumb-current");
+
     if (breadcrumbCurrent) {
       breadcrumbCurrent.textContent = title;
     }
-    
+
     // Show/hide separator and current item based on whether we're on home
     if (isHome) {
-      breadcrumbSeparator.style.display = 'none';
-      breadcrumbCurrentItem.style.display = 'none';
+      breadcrumbSeparator.style.display = "none";
+      breadcrumbCurrentItem.style.display = "none";
     } else {
-      breadcrumbSeparator.style.display = 'flex';
-      breadcrumbCurrentItem.style.display = 'block';
+      breadcrumbSeparator.style.display = "flex";
+      breadcrumbCurrentItem.style.display = "block";
     }
   }
 
@@ -242,8 +244,8 @@ class App {
    */
   showDocumentation() {
     // Update breadcrumb for documentation
-    this.updateBreadcrumb('Documentation');
-    
+    this.updateBreadcrumb("Documentation");
+
     if (this.currentTool) {
       this.currentTool.deactivate();
       this.currentTool = null;
@@ -266,9 +268,10 @@ class App {
             <div class="doc-section">
               <h2>Available Tools</h2>
               <div class="tools-list">
-                ${Array.from(this.tools.values()).map(tool => {
-                  const metadata = tool.getMetadata();
-                  return `
+                ${Array.from(this.tools.values())
+                  .map((tool) => {
+                    const metadata = tool.getMetadata();
+                    return `
                     <div class="tool-doc-item">
                       <h3>${metadata.name}</h3>
                       <p>${metadata.description}</p>
@@ -277,7 +280,8 @@ class App {
                       </button>
                     </div>
                   `;
-                }).join('')}
+                  })
+                  .join("")}
               </div>
             </div>
             
@@ -302,8 +306,8 @@ class App {
    */
   showTemplates() {
     // Update breadcrumb for templates
-    this.updateBreadcrumb('Templates');
-    
+    this.updateBreadcrumb("Templates");
+
     if (this.currentTool) {
       this.currentTool.deactivate();
       this.currentTool = null;
@@ -358,8 +362,8 @@ class App {
    */
   showWorkflows() {
     // Update breadcrumb for workflows
-    this.updateBreadcrumb('Workflows');
-    
+    this.updateBreadcrumb("Workflows");
+
     if (this.currentTool) {
       this.currentTool.deactivate();
       this.currentTool = null;
@@ -454,7 +458,7 @@ class App {
     }
 
     // Limit to maximum 3 notifications
-    const existingNotifications = container.querySelectorAll('.notification');
+    const existingNotifications = container.querySelectorAll(".notification");
     if (existingNotifications.length >= 3) {
       // Remove the oldest notification
       existingNotifications[0].remove();
