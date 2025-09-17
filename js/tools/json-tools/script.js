@@ -76,13 +76,13 @@ class JSONTools extends BaseTool {
         );
 
         // Listen for content changes
-        this.editor.onDidChangeModelContent(() => {
-          if (this.currentTab === "validator") {
-            this.debounce(() => this.validateJSON(), 300);
-          } else {
-            this.debounce(() => this.processCurrentTab(), 300);
-          }
-        });
+        // this.editor.onDidChangeModelContent(() => {
+        //   if (this.currentTab === "validator") {
+        //     this.debounce(() => this.validateJSON(), 300);
+        //   } else {
+        //     this.debounce(() => this.processCurrentTab(), 300);
+        //   }
+        // });
 
         resolve();
       });
@@ -98,6 +98,12 @@ class JSONTools extends BaseTool {
     });
 
     // Action buttons
+    document
+      .querySelector(".btn-action-primary")
+      .addEventListener("click", () => {
+        this.processCurrentTab();
+      });
+
     document.querySelector(".btn-clear").addEventListener("click", () => {
       this.editor.setValue("");
       this.clearOutput();
@@ -146,6 +152,20 @@ class JSONTools extends BaseTool {
 
     // Update current tab
     this.currentTab = tabName;
+
+    // Update action button text
+    const actionButton = document.querySelector(".btn-action-primary");
+    const buttonTexts = {
+      validator: "Validate",
+      prettify: "Prettify",
+      minify: "Minify",
+      stringify: "Stringify",
+      unstringify: "Unstringify",
+      escape: "Escape",
+      unescape: "Unescape",
+      "extract-keys": "Extract Keys",
+    };
+    actionButton.textContent = buttonTexts[tabName] || "Action";
 
     // Show/hide extract options panel
     const extractOptions = document.getElementById("extract-options");
@@ -469,8 +489,6 @@ class JSONTools extends BaseTool {
     errorContent.appendChild(errorItem);
   }
 
-
-
   clearErrors() {
     const errorContent = document.getElementById("error-content");
     errorContent.innerHTML = '<div class="no-errors">No errors detected</div>';
@@ -503,10 +521,10 @@ class JSONTools extends BaseTool {
   async copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      this.showSuccess('Copied to clipboard!');
+      this.showSuccess("Copied to clipboard!");
     } catch (error) {
-      this.showError('Failed to copy to clipboard');
-      console.error('Clipboard error:', error);
+      this.showError("Failed to copy to clipboard");
+      console.error("Clipboard error:", error);
     }
   }
 

@@ -93,7 +93,8 @@
 
 .btn-clear,
 .btn-copy-input,
-.btn-copy-output {
+.btn-copy-output,
+.btn-action-primary {
   background: hsl(var(--primary));
   border: 1px solid hsl(var(--primary));
   color: hsl(var(--primary-foreground));
@@ -107,7 +108,8 @@
 
 .btn-clear:hover,
 .btn-copy-input:hover,
-.btn-copy-output:hover {
+.btn-copy-output:hover,
+.btn-action-primary:hover {
   background: hsl(var(--primary-hover));
   transform: translateY(-1px);
 }

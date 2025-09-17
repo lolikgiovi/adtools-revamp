@@ -23,6 +23,7 @@ window.JSONToolsTemplate = /* html */ `
             <div class="editor-header">
                 <h3>JSON Input</h3>
                 <div class="editor-actions">
+                    <button class="btn-action-primary" title="Perform Action">Action</button>
                     <button class="btn-clear" title="Clear Editor">Clear</button>
                     <button class="btn-copy-input" title="Copy Input">Copy</button>
                 </div>
