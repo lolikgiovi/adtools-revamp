@@ -31,9 +31,20 @@ class JSONTools extends BaseTool {
   }
 
   async initializeMonacoEditor() {
-    // Set Monaco Editor paths and environment
+    // Check if require is available
+    if (typeof require === "undefined") {
+      console.error("AMD loader (require) is not available");
+      return;
+    }
+
+    // Set Monaco Editor paths and environment - disable web workers to avoid CORS issues
     self.MonacoEnvironment = {
+      getWorker: function (moduleId, label) {
+        // Return null to disable web workers and fall back to main thread
+        return null;
+      },
       getWorkerUrl: function (moduleId, label) {
+        // Keep the URLs for reference but workers will be disabled
         if (label === "json") {
           return "/js/libs/monaco-editor/min/vs/language/json/jsonWorker.js";
         }
@@ -50,43 +61,59 @@ class JSONTools extends BaseTool {
       },
     };
 
-    require.config({
-      paths: {
-        vs: "/js/libs/monaco-editor/min/vs",
-      },
-    });
-
-    return new Promise((resolve) => {
-      require(["vs/editor/editor.main"], () => {
-        // Create Monaco Editor instance
-        this.editor = monaco.editor.create(
-          document.getElementById("json-editor"),
-          {
-            value: "",
-            language: "json",
-            theme: "vs-dark",
-            automaticLayout: true,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            wordWrap: "on",
-            formatOnPaste: true,
-            formatOnType: true,
-            tabSize: 2,
-            insertSpaces: true,
-          }
-        );
-
-        // Listen for content changes
-        // this.editor.onDidChangeModelContent(() => {
-        //   if (this.currentTab === "validator") {
-        //     this.debounce(() => this.validateJSON(), 300);
-        //   } else {
-        //     this.debounce(() => this.processCurrentTab(), 300);
-        //   }
-        // });
-
-        resolve();
+    // Configure AMD loader
+    try {
+      require.config({
+        paths: {
+          vs: "/js/libs/monaco-editor/min/vs",
+        },
       });
+    } catch (error) {
+      console.error("Error configuring AMD loader:", error);
+      return;
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        require(["vs/editor/editor.main"], () => {
+          try {
+            // Create Monaco Editor instance
+            this.editor = monaco.editor.create(
+              document.getElementById("json-editor"),
+              {
+                value: "",
+                language: "json",
+                theme: "vs-dark",
+                automaticLayout: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                formatOnPaste: true,
+                formatOnType: true,
+                tabSize: 2,
+                insertSpaces: true,
+              }
+            );
+
+            // Listen for content changes
+            // this.editor.onDidChangeModelContent(() => {
+            //   if (this.currentTab === "validator") {
+            //     this.debounce(() => this.validateJSON(), 300);
+            //   } else {
+            //     this.debounce(() => this.processCurrentTab(), 300);
+            //   }
+            // });
+
+            resolve();
+          } catch (error) {
+            console.error("Error creating Monaco Editor:", error);
+            reject(error);
+          }
+        });
+      } catch (error) {
+        console.error("Error loading Monaco Editor modules:", error);
+        reject(error);
+      }
     });
   }
 
@@ -482,7 +509,7 @@ class JSONTools extends BaseTool {
 
     outputSection.innerHTML = `
             <div class="error-message">${title}</div>
-            ${message ? `<div>${message}</div>` : ''}
+            ${message ? `<div>${message}</div>` : ""}
             ${locationText}
         `;
   }
@@ -490,19 +517,22 @@ class JSONTools extends BaseTool {
   clearErrors() {
     // Only clear output if it contains error messages, not successful results
     const output = document.getElementById("json-output");
-    if (output.className.includes('error') || output.innerHTML.includes('error-message')) {
+    if (
+      output.className.includes("error") ||
+      output.innerHTML.includes("error-message")
+    ) {
       this.clearOutput();
     }
   }
 
   showSuccess(message) {
     const outputSection = document.getElementById("json-output");
-    
+
     outputSection.innerHTML = `<div class="error-message success">✅ ${message}</div>`;
 
     // Auto-hide success message after 3 seconds
     setTimeout(() => {
-      if (outputSection.innerHTML.includes('✅')) {
+      if (outputSection.innerHTML.includes("✅")) {
         outputSection.innerHTML = "";
       }
     }, 3000);
@@ -531,7 +561,10 @@ class JSONTools extends BaseTool {
       const text = await navigator.clipboard.readText();
       this.editor.setValue(text);
     } catch (error) {
-      this.showError("Failed to paste from clipboard", "Make sure you have granted clipboard permissions.");
+      this.showError(
+        "Failed to paste from clipboard",
+        "Make sure you have granted clipboard permissions."
+      );
       console.error("Clipboard error:", error);
     }
   }

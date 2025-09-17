@@ -22,10 +22,11 @@ class App {
     this.initializeComponents();
     this.registerTools();
     this.setupRoutes();
+    
+    // Handle initial route after routes are registered
+    this.router.handleRouteChange();
+    
     this.bindGlobalEvents();
-
-    // Load home page content dynamically
-    this.showHome();
 
     console.log("AD Tools app initialized successfully");
   }
