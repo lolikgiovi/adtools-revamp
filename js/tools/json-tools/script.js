@@ -20,7 +20,8 @@ class JSONTools extends BaseTool {
     await this.initializeMonacoEditor();
     this.bindToolEvents();
     this.setupTabs();
-    this.setupErrorPanel();
+    // Remove setupErrorPanel call since error panel no longer exists
+    // this.setupErrorPanel();
     this.processCurrentTab();
   }
 
@@ -101,6 +102,7 @@ class JSONTools extends BaseTool {
     document
       .querySelector(".btn-action-primary")
       .addEventListener("click", () => {
+        this.clearErrors();
         this.processCurrentTab();
       });
 
@@ -111,10 +113,17 @@ class JSONTools extends BaseTool {
     });
 
     document.querySelector(".btn-copy-input").addEventListener("click", () => {
+      this.clearErrors();
       this.copyToClipboard(this.editor.getValue());
     });
 
+    document.querySelector(".btn-paste").addEventListener("click", () => {
+      this.clearErrors();
+      this.pasteFromClipboard();
+    });
+
     document.querySelector(".btn-copy-output").addEventListener("click", () => {
+      this.clearErrors();
       const output = document.getElementById("json-output").textContent;
       this.copyToClipboard(output);
     });
@@ -123,6 +132,7 @@ class JSONTools extends BaseTool {
     document.querySelectorAll('input[name="extract-type"]').forEach((radio) => {
       radio.addEventListener("change", () => {
         if (this.currentTab === "extract-keys") {
+          this.clearErrors();
           this.processCurrentTab();
         }
       });
@@ -134,14 +144,7 @@ class JSONTools extends BaseTool {
     this.switchTab("validator");
   }
 
-  setupErrorPanel() {
-    const errorHeader = document.querySelector(".error-header");
-    const toggleButton = document.querySelector(".btn-toggle-errors");
-
-    errorHeader.addEventListener("click", () => {
-      this.toggleErrorPanel();
-    });
-  }
+  // setupErrorPanel() method removed since error panel no longer exists
 
   switchTab(tabName) {
     // Update active tab button
@@ -269,7 +272,7 @@ class JSONTools extends BaseTool {
       const formatted = JSON.stringify(parsed, null, 2);
       output.textContent = formatted;
       output.className = "json-output success";
-      this.clearErrors();
+      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -290,7 +293,7 @@ class JSONTools extends BaseTool {
       const minified = JSON.stringify(parsed);
       output.textContent = minified;
       output.className = "json-output success";
-      this.clearErrors();
+      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -311,7 +314,7 @@ class JSONTools extends BaseTool {
       const stringified = JSON.stringify(JSON.stringify(parsed, null, 2));
       output.textContent = stringified;
       output.className = "json-output success";
-      this.clearErrors();
+      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -365,7 +368,7 @@ class JSONTools extends BaseTool {
 
       output.textContent = `"${escaped}"`;
       output.className = "json-output success";
-      this.clearErrors();
+      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -415,7 +418,7 @@ class JSONTools extends BaseTool {
 
       output.textContent = JSON.stringify(uniqueKeys, null, 2);
       output.className = "json-output success";
-      this.clearErrors();
+      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -466,9 +469,7 @@ class JSONTools extends BaseTool {
   }
 
   showError(title, message, position = null) {
-    const errorContent = document.getElementById("error-content");
-    const errorItem = document.createElement("div");
-    errorItem.className = "error-item";
+    const outputSection = document.getElementById("json-output");
 
     let locationText = "";
     if (position !== null) {
@@ -479,19 +480,32 @@ class JSONTools extends BaseTool {
       locationText = `<div class="error-location">Line ${line}, Column ${column}</div>`;
     }
 
-    errorItem.innerHTML = `
+    outputSection.innerHTML = `
             <div class="error-message">${title}</div>
-            <div>${message}</div>
+            ${message ? `<div>${message}</div>` : ''}
             ${locationText}
         `;
-
-    errorContent.innerHTML = "";
-    errorContent.appendChild(errorItem);
   }
 
   clearErrors() {
-    const errorContent = document.getElementById("error-content");
-    errorContent.innerHTML = '<div class="no-errors">No errors detected</div>';
+    // Only clear output if it contains error messages, not successful results
+    const output = document.getElementById("json-output");
+    if (output.className.includes('error') || output.innerHTML.includes('error-message')) {
+      this.clearOutput();
+    }
+  }
+
+  showSuccess(message) {
+    const outputSection = document.getElementById("json-output");
+    
+    outputSection.innerHTML = `<div class="error-message success">✅ ${message}</div>`;
+
+    // Auto-hide success message after 3 seconds
+    setTimeout(() => {
+      if (outputSection.innerHTML.includes('✅')) {
+        outputSection.innerHTML = "";
+      }
+    }, 3000);
   }
 
   clearOutput() {
@@ -500,23 +514,7 @@ class JSONTools extends BaseTool {
     output.className = "json-output";
   }
 
-  toggleErrorPanel() {
-    const errorPanel = document.getElementById("error-panel");
-    const errorContent = document.getElementById("error-content");
-    const toggleButton = document.querySelector(".btn-toggle-errors");
-
-    this.isErrorPanelCollapsed = !this.isErrorPanelCollapsed;
-
-    if (this.isErrorPanelCollapsed) {
-      errorContent.style.display = "none";
-      toggleButton.textContent = "▶";
-      errorPanel.classList.add("collapsed");
-    } else {
-      errorContent.style.display = "block";
-      toggleButton.textContent = "▼";
-      errorPanel.classList.remove("collapsed");
-    }
-  }
+  // toggleErrorPanel() method removed since error panel no longer exists
 
   async copyToClipboard(text) {
     try {
@@ -524,6 +522,16 @@ class JSONTools extends BaseTool {
       this.showSuccess("Copied to clipboard!");
     } catch (error) {
       this.showError("Failed to copy to clipboard");
+      console.error("Clipboard error:", error);
+    }
+  }
+
+  async pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      this.editor.setValue(text);
+    } catch (error) {
+      this.showError("Failed to paste from clipboard", "Make sure you have granted clipboard permissions.");
       console.error("Clipboard error:", error);
     }
   }

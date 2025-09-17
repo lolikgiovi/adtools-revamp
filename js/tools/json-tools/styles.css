@@ -94,6 +94,7 @@
 .btn-clear,
 .btn-copy-input,
 .btn-copy-output,
+.btn-paste,
 .btn-action-primary {
   background: hsl(var(--primary));
   border: 1px solid hsl(var(--primary));
@@ -109,6 +110,7 @@
 .btn-clear:hover,
 .btn-copy-input:hover,
 .btn-copy-output:hover,
+.btn-paste:hover,
 .btn-action-primary:hover {
   background: hsl(var(--primary-hover));
   transform: translateY(-1px);
@@ -124,12 +126,12 @@
 .json-output {
   flex: 1;
   background: hsl(var(--muted));
-  padding: 1rem;
+  padding: 0 0.5rem;
   overflow: auto;
   white-space: pre-wrap;
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
     "Courier New", monospace;
-  font-size: 0.875rem;
+  font-size: 0.7rem;
   line-height: 1.5;
   border: none;
   color: hsl(var(--foreground));
@@ -204,6 +206,11 @@
   border-left-color: hsl(45 93% 47%);
 }
 
+.error-item.success {
+  background: hsl(120 100% 50% / 0.1);
+  border-left-color: hsl(120 100% 25%);
+}
+
 .error-message {
   color: hsl(var(--destructive));
   font-weight: 600;
@@ -212,6 +219,10 @@
 
 .error-item.warning .error-message {
   color: hsl(45 93% 47%);
+}
+
+.error-item.success .error-message {
+  color: hsl(120 100% 25%);
 }
 
 .error-location {

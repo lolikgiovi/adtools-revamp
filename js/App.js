@@ -150,7 +150,7 @@ class App {
                             return `
                                 <div class="tool-card" data-tool="${
                                   metadata.id
-                                }">
+                                }" onclick="app.navigateToTool('${metadata.id}')">
                                     <div class="tool-card-icon">
                                         ${this.sidebar.getToolIcon(
                                           metadata.icon
@@ -162,11 +162,6 @@ class App {
                                     <p class="tool-card-description">${
                                       metadata.description
                                     }</p>
-                                    <button class="btn btn-primary" onclick="app.navigateToTool('${
-                                      metadata.id
-                                    }')">
-                                        Open Tool
-                                    </button>
                                 </div>
                             `;
                           })
@@ -322,32 +317,28 @@ class App {
           </div>
           
           <div class="templates-grid">
-            <div class="template-card">
+            <div class="template-card" onclick="alert('API Documentation Template selected')">
               <div class="template-icon">📄</div>
               <h3>API Documentation Template</h3>
               <p>Standard template for API documentation with examples and schemas.</p>
-              <button class="btn btn-primary">Use Template</button>
             </div>
             
-            <div class="template-card">
+            <div class="template-card" onclick="alert('Configuration Template selected')">
               <div class="template-icon">🔧</div>
               <h3>Configuration Template</h3>
               <p>Common configuration files for various development environments.</p>
-              <button class="btn btn-primary">Use Template</button>
             </div>
             
-            <div class="template-card">
+            <div class="template-card" onclick="alert('Report Template selected')">
               <div class="template-icon">📊</div>
               <h3>Report Template</h3>
               <p>Professional report template with charts and data visualization.</p>
-              <button class="btn btn-primary">Use Template</button>
             </div>
             
-            <div class="template-card">
+            <div class="template-card" onclick="alert('Project Starter selected')">
               <div class="template-icon">🚀</div>
               <h3>Project Starter</h3>
               <p>Complete project structure with best practices and tooling setup.</p>
-              <button class="btn btn-primary">Use Template</button>
             </div>
           </div>
         </div>

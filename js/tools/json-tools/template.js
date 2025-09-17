@@ -21,10 +21,11 @@ window.JSONToolsTemplate = /* html */ `
     <div class="json-tools-main">
         <div class="json-editor-section">
             <div class="editor-header">
-                <h3>JSON Input</h3>
+                <h3>Input</h3>
                 <div class="editor-actions">
                     <button class="btn-action-primary" title="Perform Action">Action</button>
                     <button class="btn-clear" title="Clear Editor">Clear</button>
+                    <button class="btn-paste" title="Paste from Clipboard">Paste</button>
                     <button class="btn-copy-input" title="Copy Input">Copy</button>
                 </div>
             </div>
@@ -39,16 +40,6 @@ window.JSONToolsTemplate = /* html */ `
                 </div>
             </div>
             <div id="json-output" class="json-output"></div>
-        </div>
-    </div>
-    
-    <div class="json-error-panel" id="error-panel">
-        <div class="error-header">
-            <h4>Errors & Warnings</h4>
-            <button class="btn-toggle-errors" title="Toggle Error Panel">▼</button>
-        </div>
-        <div class="error-content" id="error-content">
-            <div class="no-errors">No errors detected</div>
         </div>
     </div>
     
