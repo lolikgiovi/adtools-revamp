@@ -77,6 +77,10 @@ class App {
     const jsonTools = new JSONTools(this.eventBus);
     this.registerTool(jsonTools);
 
+    // Register Base64 Tools
+    const base64Tools = new Base64Tools(this.eventBus);
+    this.registerTool(base64Tools);
+
     // Add more tools here as they are implemented
   }
 

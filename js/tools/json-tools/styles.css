@@ -69,8 +69,8 @@
   border-right: 1px solid hsl(var(--border));
 }
 
-.editor-header,
-.output-header {
+.json-editor-header,
+.json-output-header {
   background: hsl(var(--muted));
   padding: 0.5rem 0.5rem;
   border-bottom: 1px solid hsl(var(--border));
