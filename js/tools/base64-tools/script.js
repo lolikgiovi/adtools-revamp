@@ -32,9 +32,9 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     // Tab switching
-    const tabButtons = container.querySelectorAll('.tab-button');
-    tabButtons.forEach(button => {
-      button.addEventListener('click', (e) => {
+    const tabButtons = container.querySelectorAll(".tab-button");
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", (e) => {
         const mode = e.target.dataset.mode;
         if (mode) {
           this.switchMode(mode);
@@ -43,67 +43,116 @@ class Base64Tools extends BaseTool {
     });
 
     // Process buttons
-    const encodeBtn = container.querySelector('#encode-btn');
-    const decodeBtn = container.querySelector('#decode-btn');
-    
+    const encodeBtn = container.querySelector("#encode-btn");
+    const decodeBtn = container.querySelector("#decode-btn");
+
     if (encodeBtn) {
-      encodeBtn.addEventListener('click', () => this.encodeToBase64());
+      encodeBtn.addEventListener("click", () => this.encodeToBase64());
     }
-    
+
     if (decodeBtn) {
-      decodeBtn.addEventListener('click', () => this.decodeFromBase64());
+      decodeBtn.addEventListener("click", () => this.decodeFromBase64());
     }
 
     // Copy buttons
-    const copyButtons = container.querySelectorAll('[id$="-copy-btn"]');
-    copyButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const targetId = e.target.id.replace('-copy-btn', '-output');
-        this.copyToClipboard(targetId);
-      });
-    });
+    const encodeCopyBtn = container.querySelector("#encode-copy-btn");
+    const decodeCopyBtn = container.querySelector("#decode-copy-btn");
+
+    if (encodeCopyBtn) {
+      encodeCopyBtn.addEventListener("click", () =>
+        this.copyToClipboard("encode-output")
+      );
+    }
+
+    if (decodeCopyBtn) {
+      decodeCopyBtn.addEventListener("click", () =>
+        this.copyToClipboard("decode-output")
+      );
+    }
 
     // Paste buttons
-    const pasteButtons = container.querySelectorAll('[id$="-paste-btn"]');
-    pasteButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const targetId = e.target.id.replace('-paste-btn', '-input');
-        this.pasteFromClipboard(targetId);
-      });
-    });
+    const encodePasteBtn = container.querySelector("#encode-paste-btn");
+    const decodePasteBtn = container.querySelector("#decode-paste-btn");
+
+    if (encodePasteBtn) {
+      encodePasteBtn.addEventListener("click", () =>
+        this.pasteFromClipboard("encode-input")
+      );
+    }
+
+    if (decodePasteBtn) {
+      decodePasteBtn.addEventListener("click", () =>
+        this.pasteFromClipboard("decode-input")
+      );
+    }
 
     // Clear buttons
-    const clearButtons = container.querySelectorAll('[id$="-clear-btn"]');
-    clearButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const targetId = e.target.id.replace('-clear-btn', '');
-        this.clearField(targetId);
-      });
-    });
+    const encodeClearBtn = container.querySelector("#encode-clear-btn");
+    const decodeClearBtn = container.querySelector("#decode-clear-btn");
+    const encodeOutputClearBtn = container.querySelector(
+      "#encode-output-clear-btn"
+    );
+    const decodeOutputClearBtn = container.querySelector(
+      "#decode-output-clear-btn"
+    );
+
+    if (encodeClearBtn) {
+      encodeClearBtn.addEventListener("click", () => this.clearField("encode"));
+    }
+
+    if (decodeClearBtn) {
+      decodeClearBtn.addEventListener("click", () => this.clearField("decode"));
+    }
+
+    if (encodeOutputClearBtn) {
+      encodeOutputClearBtn.addEventListener("click", () =>
+        this.clearField("encode")
+      );
+    }
+
+    if (decodeOutputClearBtn) {
+      decodeOutputClearBtn.addEventListener("click", () =>
+        this.clearField("decode")
+      );
+    }
 
     // Download buttons
-    const downloadButtons = container.querySelectorAll('[id$="-download-btn"]');
-    downloadButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const mode = e.target.id.includes('encode') ? 'encode' : 'decode';
-        this.downloadResult(mode);
-      });
-    });
+    const encodeDownloadBtn = container.querySelector("#encode-download-btn");
+    const decodeDownloadBtn = container.querySelector("#decode-download-btn");
+
+    if (encodeDownloadBtn) {
+      encodeDownloadBtn.addEventListener("click", () =>
+        this.downloadResult("encode")
+      );
+    }
+
+    if (decodeDownloadBtn) {
+      decodeDownloadBtn.addEventListener("click", () =>
+        this.downloadResult("decode")
+      );
+    }
 
     // File upload inputs
-    const fileInputs = container.querySelectorAll('input[type="file"]');
-    fileInputs.forEach(input => {
-      input.addEventListener('change', (e) => {
-        const mode = e.target.id.includes('encode') ? 'encode' : 'decode';
-        this.handleFileUpload(e, mode);
-      });
-    });
+    const encodeFileInput = container.querySelector("#encode-file-input");
+    const decodeFileInput = container.querySelector("#decode-file-input");
+
+    if (encodeFileInput) {
+      encodeFileInput.addEventListener("change", (e) =>
+        this.handleFileUpload(e, "encode")
+      );
+    }
+
+    if (decodeFileInput) {
+      decodeFileInput.addEventListener("change", (e) =>
+        this.handleFileUpload(e, "decode")
+      );
+    }
   }
 
   setupTabs() {
     const container = this.container;
     if (!container) return;
-    
+
     // Set initial active tab
     this.switchMode(this.currentMode);
   }
@@ -113,9 +162,9 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     // Setup file upload click handlers
-    const uploadAreas = container.querySelectorAll('.file-drop-area');
-    uploadAreas.forEach(area => {
-      area.addEventListener('click', () => {
+    const uploadAreas = container.querySelectorAll(".file-drop-area");
+    uploadAreas.forEach((area) => {
+      area.addEventListener("click", () => {
         const fileInput = area.querySelector('input[type="file"]');
         if (fileInput) {
           fileInput.click();
@@ -127,27 +176,29 @@ class Base64Tools extends BaseTool {
   switchMode(mode) {
     const container = this.container;
     if (!container) return;
-    
+
     this.currentMode = mode;
-    
+
     // Update tab buttons
-    const tabButtons = container.querySelectorAll('.tab-button');
-    tabButtons.forEach(btn => {
-      btn.classList.remove('active');
+    const tabButtons = container.querySelectorAll(".tab-button");
+    tabButtons.forEach((btn) => {
+      btn.classList.remove("active");
       if (btn.dataset.mode === mode) {
-        btn.classList.add('active');
+        btn.classList.add("active");
       }
     });
-    
+
     // Update sections visibility
-    const sections = container.querySelectorAll('.tool-section');
-    sections.forEach(section => {
-      section.style.display = section.classList.contains(`${mode}-section`) ? 'block' : 'none';
+    const sections = container.querySelectorAll(".tool-section");
+    sections.forEach((section) => {
+      section.style.display = section.classList.contains(`${mode}-section`)
+        ? "block"
+        : "none";
     });
   }
 
   processCurrentMode() {
-    if (this.currentMode === 'encode') {
+    if (this.currentMode === "encode") {
       this.encodeToBase64();
     } else {
       this.decodeFromBase64();
@@ -166,17 +217,17 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     try {
-      if (mode === 'encode') {
+      if (mode === "encode") {
         // For encoding, read file as ArrayBuffer and convert to base64
         const arrayBuffer = await this.readFileAsArrayBuffer(file);
         const uint8Array = new Uint8Array(arrayBuffer);
-        let binary = '';
+        let binary = "";
         for (let i = 0; i < uint8Array.length; i++) {
           binary += String.fromCharCode(uint8Array[i]);
         }
         const base64 = btoa(binary);
-        
-        const outputArea = container.querySelector('#encode-output');
+
+        const outputArea = container.querySelector("#encode-output");
         if (outputArea) {
           outputArea.value = base64;
         }
@@ -189,25 +240,28 @@ class Base64Tools extends BaseTool {
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          
+
           // Create blob and show download option
           const blob = new Blob([bytes]);
-          const outputArea = container.querySelector('#decode-output');
+          const outputArea = container.querySelector("#decode-output");
           if (outputArea) {
-            outputArea.value = `File decoded successfully. Size: ${this.formatFileSize(blob.size)}`;
+            outputArea.value = `File decoded successfully. Size: ${this.formatFileSize(
+              blob.size
+            )}`;
           }
-          
+
           // Store for download
           this.decodedBlob = blob;
-          this.decodedFilename = file.name.replace(/\.[^/.]+$/, '') + '_decoded';
+          this.decodedFilename =
+            file.name.replace(/\.[^/.]+$/, "") + "_decoded";
         } catch (error) {
-          this.showError('Decode Error', 'Invalid Base64 content in file');
+          this.showError("Invalid Base64 content in file");
         }
       }
-      
+
       this.showFileInfo(file, mode);
     } catch (error) {
-      this.showError('File Error', `Failed to process file: ${error.message}`);
+      this.showError(`Failed to process file: ${error.message}`);
     }
   }
 
@@ -225,10 +279,10 @@ class Base64Tools extends BaseTool {
           <strong>Size:</strong> ${this.formatFileSize(file.size)}
         </div>
         <div class="file-info-item">
-          <strong>Type:</strong> ${file.type || 'Unknown'}
+          <strong>Type:</strong> ${file.type || "Unknown"}
         </div>
       `;
-      infoDiv.style.display = 'block';
+      infoDiv.style.display = "block";
     }
   }
 
@@ -236,26 +290,26 @@ class Base64Tools extends BaseTool {
     const container = this.container;
     if (!container) return;
 
-    const inputArea = container.querySelector('#encode-input');
-    const outputArea = container.querySelector('#encode-output');
-    
+    const inputArea = container.querySelector("#encode-input");
+    const outputArea = container.querySelector("#encode-output");
+
     if (!inputArea || !outputArea) return;
-    
+
     const text = inputArea.value;
-    
+
     if (!text.trim()) {
-      this.clearErrors();
-      outputArea.value = '';
+      // Success - using BaseTool's native notification system
+      outputArea.value = "";
       return;
     }
-    
+
     try {
       const encoded = btoa(unescape(encodeURIComponent(text)));
       outputArea.value = encoded;
-      this.clearErrors();
+      // Success - using BaseTool's native notification system
     } catch (error) {
-      this.showError('Encoding Error', 'Failed to encode text to Base64');
-      outputArea.value = '';
+      this.showError("Failed to encode text to Base64");
+      outputArea.value = "";
     }
   }
 
@@ -263,26 +317,26 @@ class Base64Tools extends BaseTool {
     const container = this.container;
     if (!container) return;
 
-    const inputArea = container.querySelector('#decode-input');
-    const outputArea = container.querySelector('#decode-output');
-    
+    const inputArea = container.querySelector("#decode-input");
+    const outputArea = container.querySelector("#decode-output");
+
     if (!inputArea || !outputArea) return;
-    
+
     const base64Text = inputArea.value.trim();
-    
+
     if (!base64Text) {
-      this.clearErrors();
-      outputArea.value = '';
+      // Success - using BaseTool's native notification system
+      outputArea.value = "";
       return;
     }
-    
+
     try {
       const decoded = decodeURIComponent(escape(atob(base64Text)));
       outputArea.value = decoded;
-      this.clearErrors();
+      // Success - using BaseTool's native notification system
     } catch (error) {
-      this.showError('Decoding Error', 'Invalid Base64 string');
-      outputArea.value = '';
+      this.showError("Invalid Base64 string");
+      outputArea.value = "";
     }
   }
 
@@ -292,16 +346,16 @@ class Base64Tools extends BaseTool {
 
     const element = container.querySelector(`#${targetId}`);
     if (!element || !element.value.trim()) {
-      this.showError('Copy Error', 'No content to copy');
+      this.showError("No content to copy");
       return;
     }
-    
+
     try {
       await navigator.clipboard.writeText(element.value);
-      this.showSuccess('Copied to clipboard!');
+      this.showSuccess("Copied to clipboard!");
     } catch (error) {
-      this.showError('Copy Error', 'Failed to copy to clipboard');
-      console.error('Clipboard error:', error);
+      this.showError("Failed to copy to clipboard");
+      console.error("Clipboard error:", error);
     }
   }
 
@@ -316,11 +370,11 @@ class Base64Tools extends BaseTool {
         element.value = text;
         // Trigger processing
         this.processCurrentMode();
-        this.showSuccess('Pasted from clipboard!');
+        this.showSuccess("Pasted from clipboard!");
       }
     } catch (error) {
-      this.showError('Paste Error', 'Failed to paste from clipboard');
-      console.error('Clipboard error:', error);
+      this.showError("Failed to paste from clipboard");
+      console.error("Clipboard error:", error);
     }
   }
 
@@ -331,56 +385,59 @@ class Base64Tools extends BaseTool {
     const inputElement = container.querySelector(`#${targetId}-input`);
     const outputElement = container.querySelector(`#${targetId}-output`);
     const fileInfoElement = container.querySelector(`#${targetId}-file-info`);
-    
-    if (inputElement) inputElement.value = '';
-    if (outputElement) outputElement.value = '';
+
+    if (inputElement) inputElement.value = "";
+    if (outputElement) outputElement.value = "";
     if (fileInfoElement) {
-      fileInfoElement.style.display = 'none';
-      fileInfoElement.innerHTML = '';
+      fileInfoElement.style.display = "none";
+      fileInfoElement.innerHTML = "";
     }
-    
+
     // Clear any stored decoded blob
-    if (targetId === 'decode') {
+    if (targetId === "decode") {
       this.decodedBlob = null;
       this.decodedFilename = null;
     }
-    
-    this.clearErrors();
+
+    // Success - using BaseTool's native notification system
   }
 
   downloadResult(mode) {
     const container = this.container;
     if (!container) return;
 
-    if (mode === 'encode') {
-      const outputArea = container.querySelector('#encode-output');
+    if (mode === "encode") {
+      const outputArea = container.querySelector("#encode-output");
       if (!outputArea || !outputArea.value.trim()) {
-        this.showError('Download Error', 'No encoded content to download');
+        this.showError("No encoded content to download");
         return;
       }
-      
-      const blob = new Blob([outputArea.value], { type: 'text/plain' });
-      this.downloadBlob(blob, 'encoded.txt');
+
+      const blob = new Blob([outputArea.value], { type: "text/plain" });
+      this.downloadBlob(blob, "encoded.txt");
     } else {
       // For decode mode, check if we have a decoded blob
       if (this.decodedBlob) {
-        this.downloadBlob(this.decodedBlob, this.decodedFilename || 'decoded_file');
+        this.downloadBlob(
+          this.decodedBlob,
+          this.decodedFilename || "decoded_file"
+        );
       } else {
-        const outputArea = container.querySelector('#decode-output');
+        const outputArea = container.querySelector("#decode-output");
         if (!outputArea || !outputArea.value.trim()) {
-          this.showError('Download Error', 'No decoded content to download');
+          this.showError("No decoded content to download");
           return;
         }
-        
-        const blob = new Blob([outputArea.value], { type: 'text/plain' });
-        this.downloadBlob(blob, 'decoded.txt');
+
+        const blob = new Blob([outputArea.value], { type: "text/plain" });
+        this.downloadBlob(blob, "decoded.txt");
       }
     }
   }
 
   downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
@@ -409,88 +466,14 @@ class Base64Tools extends BaseTool {
   }
 
   formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
-  showError(title, message) {
-    const container = this.container;
-    if (!container) return;
-
-    this.clearErrors();
-    
-    const errorDiv = this.createErrorDiv();
-    errorDiv.innerHTML = `
-      <div class="error-header">
-        <strong>${title}</strong>
-        <button class="error-close" onclick="this.parentElement.parentElement.remove()">×</button>
-      </div>
-      <div class="error-message">${message}</div>
-    `;
-    
-    container.insertBefore(errorDiv, container.firstChild);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      if (errorDiv.parentNode) {
-        errorDiv.remove();
-      }
-    }, 5000);
-  }
-
-  showSuccess(message) {
-    const container = this.container;
-    if (!container) return;
-
-    this.clearErrors();
-    
-    const successDiv = this.createSuccessDiv();
-    successDiv.innerHTML = `
-      <div class="success-header">
-        <strong>Success</strong>
-        <button class="success-close" onclick="this.parentElement.parentElement.remove()">×</button>
-      </div>
-      <div class="success-message">${message}</div>
-    `;
-    
-    container.insertBefore(successDiv, container.firstChild);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-      if (successDiv.parentNode) {
-        successDiv.remove();
-      }
-    }, 3000);
-  }
-
-  clearErrors() {
-    const container = this.container;
-    if (!container) return;
-
-    const errorDivs = container.querySelectorAll('.error-message-container, .success-message-container');
-    errorDivs.forEach(div => div.remove());
-  }
-
-  createErrorDiv() {
-    const container = this.container;
-    if (!container) return null;
-
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-message-container';
-    return errorDiv;
-  }
-
-  createSuccessDiv() {
-    const container = this.container;
-    if (!container) return null;
-
-    const successDiv = document.createElement('div');
-    successDiv.className = 'success-message-container';
-    return successDiv;
-  }
+  // Removed custom notification methods - now using BaseTool's native notification system
 
   debounce(func, wait) {
     let timeout;
