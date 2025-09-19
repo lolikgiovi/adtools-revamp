@@ -31,13 +31,13 @@ window.Base64ToolsTemplate = /* html */ `
         <label for="encode-input">Input Text</label>
         <div class="input-actions">
           <label class="btn btn-secondary file-upload-btn">
-            <input type="file" id="encode-file-input" class="file-input" style="display: none;" />
+            <input type="file" id="encode-file-input" class="file-input" multiple style="display: none;" />
             <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            Upload Any File
+            Upload Any File(s)
           </label>
           <button id="encode-paste-btn" class="btn btn-sm paste-btn" data-target="encode-input" title="Paste from clipboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -55,6 +55,17 @@ window.Base64ToolsTemplate = /* html */ `
           </button>
         </div>
       </div>
+      
+      <!-- File Upload Display -->
+      <div id="encode-files-display" class="files-display" style="display: none;">
+        <div class="files-header">
+          <h4>Selected Files</h4>
+        </div>
+        <div id="encode-files-container" class="files-container">
+          <!-- File cards will be added here dynamically -->
+        </div>
+      </div>
+      
       <textarea 
         id="encode-input" 
         class="form-textarea" 
@@ -103,6 +114,17 @@ window.Base64ToolsTemplate = /* html */ `
           </button>
         </div>
       </div>
+      
+      <!-- Processed Files Display -->
+      <div id="encode-processed-files" class="processed-files" style="display: none;">
+        <div class="files-header">
+          <h4>Processed Files</h4>
+        </div>
+        <div id="encode-processed-container" class="files-container">
+          <!-- Processed file cards will be added here dynamically -->
+        </div>
+      </div>
+      
       <textarea 
         id="encode-output" 
         class="form-textarea output-textarea" 
@@ -146,6 +168,16 @@ window.Base64ToolsTemplate = /* html */ `
           </button>
         </div>
       </div>
+      <!-- File Upload Display -->
+      <div id="decode-files-display" class="files-display" style="display: none;">
+        <div class="files-header">
+          <h4>Selected Files</h4>
+        </div>
+        <div id="decode-files-container" class="files-container">
+          <!-- File cards will be added here dynamically -->
+        </div>
+      </div>
+      
       <textarea 
         id="decode-input" 
         class="form-textarea" 
@@ -194,6 +226,17 @@ window.Base64ToolsTemplate = /* html */ `
           </button>
         </div>
       </div>
+      
+      <!-- Processed Files Display -->
+      <div id="decode-processed-files" class="processed-files" style="display: none;">
+        <div class="files-header">
+          <h4>Processed Files</h4>
+        </div>
+        <div id="decode-processed-container" class="files-container">
+          <!-- Processed file cards will be added here dynamically -->
+        </div>
+      </div>
+      
       <textarea 
         id="decode-output" 
         class="form-textarea output-textarea" 
