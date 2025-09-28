@@ -8,8 +8,7 @@ class Base64Tools extends BaseTool {
       eventBus: eventBus,
     });
     this.currentMode = "encode";
-    this.uploadedFiles = [];
-    this.selectedFiles = new Map(); // Store selected files for processing
+    this.selectedFiles = new Map();
   }
 
   render() {
@@ -17,20 +16,9 @@ class Base64Tools extends BaseTool {
   }
 
   async onMount() {
-    console.log("🔍 [DEBUG] Base64Tools onMount() called");
-    console.log("🔍 [DEBUG] Container at mount:", this.container);
-    
     this.bindToolEvents();
     this.setupTabs();
     this.setupFileHandling();
-    this.processCurrentMode();
-    
-    console.log("🔍 [DEBUG] Base64Tools onMount() completed");
-  }
-
-  // Override the base bindEvents to prevent early binding
-  bindEvents() {
-    // Don't bind events during initialization - wait for onMount
   }
 
   bindToolEvents() {
@@ -52,12 +40,8 @@ class Base64Tools extends BaseTool {
     const encodeBtn = container.querySelector("#encode-btn");
     const decodeBtn = container.querySelector("#decode-btn");
 
-    console.log("🔍 [DEBUG] Button elements found:", { encodeBtn, decodeBtn });
-
     if (encodeBtn) {
-      console.log("🔍 [DEBUG] Adding click listener to encode button");
       encodeBtn.addEventListener("click", () => {
-        console.log("🔍 [DEBUG] Encode button clicked!");
         this.encodeToBase64();
       });
     } else {
@@ -65,9 +49,7 @@ class Base64Tools extends BaseTool {
     }
 
     if (decodeBtn) {
-      console.log("🔍 [DEBUG] Adding click listener to decode button");
       decodeBtn.addEventListener("click", () => {
-        console.log("🔍 [DEBUG] Decode button clicked!");
         this.decodeFromBase64();
       });
     } else {
@@ -117,30 +99,26 @@ class Base64Tools extends BaseTool {
     );
 
     if (encodeClearBtn) {
-      encodeClearBtn.addEventListener("click", () => this.clearInputFiles("encode"));
+      encodeClearBtn.addEventListener("click", () =>
+        this.clearInputFiles("encode")
+      );
     }
 
     if (decodeClearBtn) {
-      decodeClearBtn.addEventListener("click", () => this.clearInputFiles("decode"));
-    }
-
-    if (encodeOutputClearBtn) {
-      encodeOutputClearBtn.addEventListener("click", () => this.clearOutputFiles("encode"));
-    }
-
-    if (decodeOutputClearBtn) {
-      decodeOutputClearBtn.addEventListener("click", () => this.clearOutputFiles("decode"));
+      decodeClearBtn.addEventListener("click", () =>
+        this.clearInputFiles("decode")
+      );
     }
 
     if (encodeOutputClearBtn) {
       encodeOutputClearBtn.addEventListener("click", () =>
-        this.clearField("encode")
+        this.clearOutputFiles("encode")
       );
     }
 
     if (decodeOutputClearBtn) {
       decodeOutputClearBtn.addEventListener("click", () =>
-        this.clearField("decode")
+        this.clearOutputFiles("decode")
       );
     }
 
@@ -159,9 +137,6 @@ class Base64Tools extends BaseTool {
         this.downloadResult("decode")
       );
     }
-
-    // File upload inputs are handled in setupFileHandling() method
-    // Removed duplicate event listeners to prevent duplicate file cards
   }
 
   setupTabs() {
@@ -227,108 +202,64 @@ class Base64Tools extends BaseTool {
 
   async handleMultipleFileUpload(event, mode) {
     const files = Array.from(event.target.files);
+    let txtFiles = [];
     if (files.length === 0) return;
 
-    // Check if any files are .txt files containing base64 data
-    const txtFiles = files.filter(file => file.name.toLowerCase().endsWith('.txt'));
-    const otherFiles = files.filter(file => !file.name.toLowerCase().endsWith('.txt'));
-
-    // Process .txt files containing base64 data
-    for (const txtFile of txtFiles) {
-      await this.processTxtFileWithBase64(txtFile, mode);
+    if (mode === "decode") {
+      txtFiles = files.filter((file) =>
+        file.name.toLowerCase().endsWith(".txt")
+      );
     }
 
-    // Handle other files normally if any
-    if (otherFiles.length > 0) {
-      // Hide textareas during file upload
-      this.hideTextareas(mode);
+    const otherFiles =
+      txtFiles.length > 0 && mode === "encode"
+        ? files.filter((file) => !txtFiles.includes(file))
+        : files;
 
-      // Add files to selected files map and display them
-      otherFiles.forEach(file => {
-        const fileId = `${mode}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    if (otherFiles.length > 0) {
+      otherFiles.forEach((file) => {
+        const fileId = `${mode}-${crypto.randomUUID()}-${Date.now()}`;
         this.selectedFiles.set(fileId, { file, mode });
         this.displayFileCard(file, fileId, mode);
       });
-
-      // Show files display container
-      this.showFilesDisplay(mode);
     }
-  }
-
-  async processTxtFileWithBase64(txtFile, mode) {
-    try {
-      console.log(`[DEBUG] Processing .txt file: ${txtFile.name}`);
-      
-      // Read the text file content
-      const textContent = await this.readFileAsText(txtFile);
-      
-      // Clean and validate base64 content
-      const base64Content = textContent.trim().replace(/\s+/g, '');
-      
-      if (!base64Content) {
-        throw new Error('Empty file content');
-      }
-
-      // Validate base64 format
-      if (!this.isValidBase64(base64Content)) {
-        throw new Error('Invalid base64 format');
-      }
-
-      console.log(`[DEBUG] Valid base64 content found, length: ${base64Content.length}`);
-
-      try {
-        // Decode the base64 content
-        const binaryString = atob(base64Content);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        // Detect content type and process accordingly
-        const contentType = this.detectContentType(bytes);
-        console.log(`[DEBUG] Detected content type: ${contentType}`);
-
-        if (contentType.startsWith('image/')) {
-          await this.displayImagePreview(bytes, contentType, txtFile.name);
-        } else if (this.isTextContent(binaryString)) {
-          this.displayTextContent(binaryString, txtFile.name);
-        } else {
-          this.displayBinaryFileCard(bytes, contentType, txtFile.name);
-        }
-      } catch (decodeError) {
-        console.error(`[ERROR] Failed to decode base64 content from ${txtFile.name}:`, decodeError);
-        this.showError(`Failed to decode base64 content from ${txtFile.name}: ${decodeError.message}`);
-      }
-
-    } catch (error) {
-      console.error(`[ERROR] Failed to process .txt file ${txtFile.name}:`, error);
-      this.showError(`Failed to process ${txtFile.name}: ${error.message}`);
-    }
+    this.showFilesDisplay(mode);
   }
 
   isValidBase64(str) {
     try {
       // Check if string is empty or contains only whitespace
-      if (!str || typeof str !== 'string' || !str.trim()) {
+      if (!str || typeof str !== "string" || !str.trim()) {
         return false;
       }
 
-      // Remove whitespace and check basic format
-      const cleanStr = str.replace(/\s/g, '');
-      
+      // Remove all whitespace (including newlines, tabs, etc.)
+      const cleanStr = str.replace(/\s+/g, "");
+
+      // Handle data URI format
+      let base64Content = cleanStr;
+      if (cleanStr.startsWith("data:")) {
+        const dataUriMatch = cleanStr.match(/^data:[^;]*;base64,(.+)$/);
+        if (dataUriMatch) {
+          base64Content = dataUriMatch[1];
+        } else {
+          return false; // Invalid data URI format
+        }
+      }
+
       // Base64 should only contain valid characters
       const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(cleanStr)) {
+      if (!base64Regex.test(base64Content)) {
         return false;
       }
 
       // Length should be multiple of 4 (after padding)
-      if (cleanStr.length % 4 !== 0) {
+      if (base64Content.length % 4 !== 0) {
         return false;
       }
 
       // Try to decode to verify it's valid
-      atob(cleanStr);
+      atob(base64Content);
       return true;
     } catch (error) {
       return false;
@@ -338,16 +269,16 @@ class Base64Tools extends BaseTool {
   detectContentType(bytes) {
     // Check for common file signatures
     const signatures = {
-      'image/png': [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
-      'image/jpeg': [0xFF, 0xD8, 0xFF],
-      'image/gif': [0x47, 0x49, 0x46, 0x38],
-      'image/webp': [0x52, 0x49, 0x46, 0x46],
-      'image/bmp': [0x42, 0x4D],
-      'image/svg+xml': [0x3C, 0x73, 0x76, 0x67], // <svg
-      'application/pdf': [0x25, 0x50, 0x44, 0x46],
-      'application/zip': [0x50, 0x4B, 0x03, 0x04],
-      'text/html': [0x3C, 0x68, 0x74, 0x6D, 0x6C], // <html
-      'text/xml': [0x3C, 0x3F, 0x78, 0x6D, 0x6C], // <?xml
+      "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+      "image/jpeg": [0xff, 0xd8, 0xff],
+      "image/gif": [0x47, 0x49, 0x46, 0x38],
+      "image/webp": [0x52, 0x49, 0x46, 0x46],
+      "image/bmp": [0x42, 0x4d],
+      "image/svg+xml": [0x3c, 0x73, 0x76, 0x67], // <svg
+      "application/pdf": [0x25, 0x50, 0x44, 0x46],
+      "application/zip": [0x50, 0x4b, 0x03, 0x04],
+      "text/html": [0x3c, 0x68, 0x74, 0x6d, 0x6c], // <html
+      "text/xml": [0x3c, 0x3f, 0x78, 0x6d, 0x6c], // <?xml
     };
 
     for (const [mimeType, signature] of Object.entries(signatures)) {
@@ -357,131 +288,22 @@ class Base64Tools extends BaseTool {
     }
 
     // Default to binary if no signature matches
-    return 'application/octet-stream';
+    return "application/octet-stream";
   }
 
   matchesSignature(bytes, signature) {
     if (bytes.length < signature.length) return false;
-    
+
     for (let i = 0; i < signature.length; i++) {
       if (bytes[i] !== signature[i]) {
         return false;
       }
     }
-  }
-
-  async displayImagePreview(bytes, contentType, filename) {
-    try {
-      console.log(`[DEBUG] Displaying image preview for ${filename}, type: ${contentType}`);
-      
-      const container = this.container;
-      if (!container) return;
-
-      // Create blob and object URL for the image
-      const blob = new Blob([bytes], { type: contentType });
-      const imageUrl = URL.createObjectURL(blob);
-
-      // Create image element to get dimensions
-      const img = new Image();
-      
-      return new Promise((resolve, reject) => {
-        img.onload = () => {
-          try {
-            const imageData = {
-              name: filename.replace('.txt', ''),
-              content: bytes,
-              type: contentType,
-              size: bytes.length,
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              url: imageUrl
-            };
-
-            // Display in processed files area
-            this.displayProcessedFiles([{
-              originalName: filename,
-              processedName: imageData.name,
-              content: imageData,
-              isImage: true
-            }], 'decode');
-
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        };
-
-        img.onerror = () => {
-          reject(new Error(`Failed to load image: ${filename}`));
-        };
-
-        img.src = imageUrl;
-      });
-
-    } catch (error) {
-      this.showError(`Error displaying image preview for ${filename}: ${error.message}`);
-      console.error('Error in displayImagePreview:', error);
-    }
-  }
-
-  displayTextContent(textContent, filename) {
-    try {
-      console.log(`[DEBUG] Displaying text content for ${filename}`);
-      
-      const container = this.container;
-      if (!container) return;
-
-      // Show textarea and insert text content
-      this.showTextareas('decode');
-      
-      const outputArea = container.querySelector('#decode-output');
-      if (outputArea) {
-        outputArea.value = textContent;
-        outputArea.style.display = 'block';
-        
-        // Show success message
-        this.showSuccess(`Text content from ${filename} loaded into textarea`);
-      } else {
-        throw new Error('Output textarea not found');
-      }
-
-      console.log(`[DEBUG] Text content inserted into textarea for ${filename}`);
-    } catch (error) {
-      this.showError(`Error displaying text content from ${filename}: ${error.message}`);
-      console.error('Error in displayTextContent:', error);
-    }
-  }
-
-  displayBinaryFileCard(bytes, contentType, filename) {
-    try {
-      console.log(`[DEBUG] Displaying file card for ${filename}, type: ${contentType}`);
-      
-      const fileData = {
-        name: filename.replace('.txt', ''),
-        content: bytes,
-        type: contentType,
-        size: bytes.length
-      };
-
-      // Display in processed files area
-      this.displayProcessedFiles([{
-        originalName: filename,
-        processedName: fileData.name,
-        content: fileData,
-        isFile: true
-      }], 'decode');
-
-      this.showSuccess(`Binary file ${filename} processed and displayed as file card`);
-    } catch (error) {
-      this.showError(`Error displaying binary file card for ${filename}: ${error.message}`);
-      console.error('Error in displayBinaryFileCard:', error);
-    }
+    return true;
   }
 
   showError(message) {
     console.error(`[ERROR] ${message}`);
-    // You can implement a proper error display mechanism here
-    // For now, just log to console
   }
 
   displayFileCard(file, fileId, mode) {
@@ -490,11 +312,60 @@ class Base64Tools extends BaseTool {
     const filesContainer = container.querySelector(`#${mode}-files-container`);
     if (!filesContainer) return;
 
-    const fileCard = document.createElement('div');
-    fileCard.className = 'file-card';
+    const fileCard = document.createElement("div");
+    fileCard.className = "file-card";
     fileCard.dataset.fileId = fileId;
 
-    fileCard.innerHTML = `
+    // Check if it's an image file and we're in encode mode
+    const isImage = file.type && file.type.startsWith("image/");
+    const isEncodeMode = mode === "encode";
+
+    if (isImage && isEncodeMode) {
+      // Create image preview card
+      this.createImageFileCard(fileCard, file, fileId, mode);
+    } else {
+      // Create default file card
+      this.createDefaultFileCard(fileCard, file, fileId, mode);
+    }
+
+    filesContainer.appendChild(fileCard);
+  }
+
+  createImageFileCard(fileCard, file, fileId, mode) {
+    // Create image preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      fileCard.innerHTML = /*html*/ `
+        <div class="file-card-preview">
+          <img src="${e.target.result}" alt="${
+        file.name
+      }" class="file-card-image" />
+        </div>
+        <div class="file-card-info">
+          <div class="file-card-details">
+            <p class="file-card-name" title="${file.name}">${file.name}</p>
+            <p class="file-card-size">${this.formatFileSize(file.size)}</p>
+          </div>
+        </div>
+        <button class="file-card-remove" type="button" title="Remove file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      `;
+
+      // Add remove functionality
+      const removeBtn = fileCard.querySelector(".file-card-remove");
+      removeBtn.addEventListener("click", () => {
+        this.removeFileCard(fileId, mode);
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  createDefaultFileCard(fileCard, file, fileId, mode) {
+    fileCard.innerHTML = /*html*/ `
       <div class="file-card-info">
         <svg class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path>
@@ -514,12 +385,10 @@ class Base64Tools extends BaseTool {
     `;
 
     // Add remove functionality
-    const removeBtn = fileCard.querySelector('.file-card-remove');
-    removeBtn.addEventListener('click', () => {
+    const removeBtn = fileCard.querySelector(".file-card-remove");
+    removeBtn.addEventListener("click", () => {
       this.removeFileCard(fileId, mode);
     });
-
-    filesContainer.appendChild(fileCard);
   }
 
   removeFileCard(fileId, mode) {
@@ -528,6 +397,7 @@ class Base64Tools extends BaseTool {
 
     // Remove from selected files
     this.selectedFiles.delete(fileId);
+    console.log(this.selectedFiles);
 
     // Remove card from DOM
     const fileCard = container.querySelector(`[data-file-id="${fileId}"]`);
@@ -548,8 +418,10 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     const filesDisplay = container.querySelector(`#${mode}-files-display`);
+    const textField = container.querySelector(`#${mode}-input`);
     if (filesDisplay) {
-      filesDisplay.style.display = 'block';
+      filesDisplay.style.display = "block";
+      textField.style.display = "none";
     }
   }
 
@@ -558,8 +430,10 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     const filesDisplay = container.querySelector(`#${mode}-files-display`);
+    const textField = container.querySelector(`#${mode}-input`);
     if (filesDisplay) {
-      filesDisplay.style.display = 'none';
+      filesDisplay.style.display = "none";
+      textField.style.display = "block";
     }
   }
 
@@ -568,26 +442,31 @@ class Base64Tools extends BaseTool {
     if (!container) return;
 
     // Only hide textareas if processed files are present (not input files)
-    const processedDisplay = container.querySelector(`#${mode}-processed-files`);
-    const processedContainer = container.querySelector(`#${mode}-processed-container`);
-    
-    // Check if processed files div is visible and has content
-    const hasProcessedFiles = processedDisplay && 
-                             processedDisplay.style.display !== 'none' && 
-                             processedContainer && 
-                             processedContainer.children.length > 0;
+    const processedDisplay = container.querySelector(
+      `#${mode}-processed-files`
+    );
+    const processedContainer = container.querySelector(
+      `#${mode}-processed-container`
+    );
 
+    // Check if processed files div is visible and has content
+    const hasProcessedFiles =
+      processedDisplay &&
+      processedDisplay.style.display !== "none" &&
+      processedContainer &&
+      processedContainer.children.length > 0;
+
+    const inputTextarea = container.querySelector(`#${mode}-input`);
+    const outputTextarea = container.querySelector(`#${mode}-output`);
+
+    if (inputTextarea) {
+      inputTextarea.style.display = "none";
+    }
+
+    if (outputTextarea) {
+      outputTextarea.style.display = "none";
+    }
     if (hasProcessedFiles) {
-      const inputTextarea = container.querySelector(`#${mode}-input`);
-      const outputTextarea = container.querySelector(`#${mode}-output`);
-      
-      if (inputTextarea) {
-        inputTextarea.style.display = 'none';
-      }
-      
-      if (outputTextarea) {
-        outputTextarea.style.display = 'none';
-      }
     }
   }
 
@@ -597,13 +476,13 @@ class Base64Tools extends BaseTool {
 
     const inputTextarea = container.querySelector(`#${mode}-input`);
     const outputTextarea = container.querySelector(`#${mode}-output`);
-    
+
     if (inputTextarea) {
-      inputTextarea.style.display = 'block';
+      inputTextarea.style.display = "block";
     }
-    
+
     if (outputTextarea) {
-      outputTextarea.style.display = 'block';
+      outputTextarea.style.display = "block";
     }
   }
 
@@ -630,7 +509,7 @@ class Base64Tools extends BaseTool {
         // For decoding, read file as text and decode
         const text = await this.readFileAsText(file);
         try {
-          const binaryString = atob(text.trim());
+          const binaryString = atob(text);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
@@ -666,7 +545,7 @@ class Base64Tools extends BaseTool {
 
     const infoDiv = container.querySelector(`#${mode}-file-info`);
     if (infoDiv) {
-      infoDiv.innerHTML = `
+      infoDiv.innerHTML = /*html*/ `
         <div class="file-info-item">
           <strong>File:</strong> ${file.name}
         </div>
@@ -682,57 +561,37 @@ class Base64Tools extends BaseTool {
   }
 
   async encodeToBase64() {
-    console.log("🔍 [DEBUG] encodeToBase64() method called");
-    
     const container = this.container;
-    if (!container) {
-      console.error("❌ [DEBUG] Container not found in encodeToBase64");
-      return;
-    }
-
-    console.log("🔍 [DEBUG] Container found:", container);
+    console.log("🔍 [DEBUG] encodeToBase64() method called");
 
     // Check if we have selected files to process
-    const selectedFilesForMode = Array.from(this.selectedFiles.entries())
-      .filter(([_, data]) => data.mode === 'encode');
+    const selectedFilesForMode = Array.from(
+      this.selectedFiles.entries()
+    ).filter(([_, data]) => data.mode === "encode");
 
-    console.log("🔍 [DEBUG] Selected files for encode mode:", selectedFilesForMode.length, selectedFilesForMode);
+    console.log(
+      "🔍 [DEBUG] Selected files for encode mode:",
+      selectedFilesForMode.length,
+      selectedFilesForMode
+    );
 
     if (selectedFilesForMode.length > 0) {
       console.log("🔍 [DEBUG] Processing multiple files for encode");
-      // Process multiple files
-      await this.processMultipleFiles('encode');
+      await this.processMultipleFiles("encode");
     } else {
       console.log("🔍 [DEBUG] Processing text input for encode");
-      // Process text input as before
       const inputArea = container.querySelector("#encode-input");
       const outputArea = container.querySelector("#encode-output");
-
-      console.log("🔍 [DEBUG] Input/Output areas found:", { inputArea, outputArea });
-
-      if (!inputArea || !outputArea) {
-        console.error("❌ [DEBUG] Input or output area not found");
-        return;
-      }
-
       const text = inputArea.value;
-      console.log("🔍 [DEBUG] Input text:", text ? `"${text.substring(0, 50)}..."` : "empty");
-
-      if (!text.trim()) {
-        console.log("🔍 [DEBUG] Empty input, clearing output");
-        // Success - using BaseTool's native notification system
-        outputArea.value = "";
-        return;
-      }
 
       try {
-        console.log("🔍 [DEBUG] Attempting to encode text to Base64");
-        const encoded = btoa(unescape(encodeURIComponent(text)));
+        // const encoded = btoa(unescape(encodeURIComponent(text)));
+        const encoded = btoa(
+          String.fromCharCode(...new TextEncoder().encode(text))
+        );
+        this.showSuccess("Encoded to Base64!");
         outputArea.value = encoded;
-        console.log("✅ [DEBUG] Successfully encoded text to Base64");
-        // Success - using BaseTool's native notification system
       } catch (error) {
-        console.error("❌ [DEBUG] Error encoding text:", error);
         this.showError("Failed to encode text to Base64");
         outputArea.value = "";
       }
@@ -741,7 +600,7 @@ class Base64Tools extends BaseTool {
 
   async decodeFromBase64() {
     console.log("🔍 [DEBUG] decodeFromBase64() method called");
-    
+
     const container = this.container;
     if (!container) {
       console.error("❌ [DEBUG] Container not found in decodeFromBase64");
@@ -751,30 +610,36 @@ class Base64Tools extends BaseTool {
     console.log("🔍 [DEBUG] Container found:", container);
 
     // Check if we have selected files to process
-    const selectedFilesForMode = Array.from(this.selectedFiles.entries())
-      .filter(([_, data]) => data.mode === 'decode');
+    const selectedFilesForMode = Array.from(
+      this.selectedFiles.entries()
+    ).filter(([_, data]) => data.mode === "decode");
 
-    console.log("🔍 [DEBUG] Selected files for decode mode:", selectedFilesForMode.length, selectedFilesForMode);
+    console.log(
+      "🔍 [DEBUG] Selected files for decode mode:",
+      selectedFilesForMode.length,
+      selectedFilesForMode
+    );
 
     if (selectedFilesForMode.length > 0) {
       console.log("🔍 [DEBUG] Processing multiple files for decode");
       // Process multiple files
-      await this.processMultipleFiles('decode');
+      await this.processMultipleFiles("decode");
     } else {
       console.log("🔍 [DEBUG] Processing text input for decode");
       // Process text input as before
       const inputArea = container.querySelector("#decode-input");
       const outputArea = container.querySelector("#decode-output");
 
-      console.log("🔍 [DEBUG] Input/Output areas found:", { inputArea, outputArea });
-
-      if (!inputArea || !outputArea) {
-        console.error("❌ [DEBUG] Input or output area not found");
-        return;
-      }
+      console.log("🔍 [DEBUG] Input/Output areas found:", {
+        inputArea,
+        outputArea,
+      });
 
       const base64Text = inputArea.value.trim();
-      console.log("🔍 [DEBUG] Input Base64 text:", base64Text ? `"${base64Text.substring(0, 50)}..."` : "empty");
+      console.log(
+        "🔍 [DEBUG] Input Base64 text:",
+        base64Text ? `"${base64Text.substring(0, 50)}..."` : "empty"
+      );
 
       if (!base64Text) {
         console.log("🔍 [DEBUG] Empty input, clearing output");
@@ -785,21 +650,27 @@ class Base64Tools extends BaseTool {
 
       try {
         console.log("🔍 [DEBUG] Attempting to decode Base64 text");
-        const decoded = decodeURIComponent(escape(atob(base64Text)));
-        
+        // const decoded = decodeURIComponent(escape(atob(base64Text)));
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
+          bytes
+        );
+
         // Check if decoded content is text (printable characters)
         const isTextContent = this.isTextContent(decoded);
         console.log("🔍 [DEBUG] Decoded content is text:", isTextContent);
-        
+
         if (isTextContent) {
           // Show as text in textarea
           outputArea.value = decoded;
-          console.log("✅ [DEBUG] Successfully decoded Base64 text and displayed in textarea");
+          console.log(
+            "✅ [DEBUG] Successfully decoded Base64 text and displayed in textarea"
+          );
         } else {
           // Hide textarea and show as downloadable file
           outputArea.value = "";
-          outputArea.style.display = 'none';
-          
+          outputArea.style.display = "none";
+
           // Store the decoded binary data for download
           const uint8Array = new Uint8Array(decoded.length);
           for (let i = 0; i < decoded.length; i++) {
@@ -807,13 +678,16 @@ class Base64Tools extends BaseTool {
           }
           this.decodedBlob = new Blob([uint8Array]);
           this.decodedFilename = "decoded_file";
-          
+
           // Show file info
-          this.showFileInfo({ name: this.decodedFilename, size: this.decodedBlob.size }, 'decode');
-          console.log("✅ [DEBUG] Successfully decoded Base64 binary and prepared for download");
+          this.showFileInfo(
+            { name: this.decodedFilename, size: this.decodedBlob.size },
+            "decode"
+          );
+          console.log(
+            "✅ [DEBUG] Successfully decoded Base64 binary and prepared for download"
+          );
         }
-        
-        // Success - using BaseTool's native notification system
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
         this.showError("Invalid Base64 input");
@@ -823,106 +697,183 @@ class Base64Tools extends BaseTool {
   }
 
   async processMultipleFiles(mode) {
-    console.log("🔍 [DEBUG] processMultipleFiles() called with mode:", mode);
-    
     const container = this.container;
     if (!container) {
-      console.error("❌ [DEBUG] Container not found in processMultipleFiles");
       return;
     }
 
-    const selectedFilesForMode = Array.from(this.selectedFiles.entries())
-      .filter(([_, data]) => data.mode === mode);
-
-    console.log("🔍 [DEBUG] Selected files for processing:", selectedFilesForMode.length, selectedFilesForMode.map(([id, data]) => data.file.name));
+    const selectedFilesForMode = Array.from(
+      this.selectedFiles.entries()
+    ).filter(([_, data]) => data.mode === mode);
 
     if (selectedFilesForMode.length === 0) {
-      console.log("🔍 [DEBUG] No files selected for mode:", mode);
       return;
     }
 
-    // Hide textareas during processing
-    console.log("🔍 [DEBUG] Hiding textareas for mode:", mode);
-    this.hideTextareas(mode);
-    const outputArea = container.querySelector(`#${mode}-output`);
-    if (outputArea) {
-      outputArea.style.display = 'none';
-      console.log("🔍 [DEBUG] Output area hidden");
-    }
-
-    // Clear processed files display
-    console.log("🔍 [DEBUG] Clearing processed files display");
-    this.clearProcessedFiles(mode);
+    this.clearOutputFiles(mode);
 
     // Process each file
     const processedFiles = [];
-    console.log("🔍 [DEBUG] Starting to process", selectedFilesForMode.length, "files");
-    
+
     for (const [fileId, { file }] of selectedFilesForMode) {
       console.log("🔍 [DEBUG] Processing file:", file.name, "size:", file.size);
       try {
         const result = await this.processFileForMultiple(file, mode);
-        console.log("🔍 [DEBUG] File processed successfully:", file.name, "result length:", result.length);
-        
-        processedFiles.push({
-          originalName: file.name,
-          processedName: `${file.name.split('.')[0]}.txt`,
-          content: result,
-          size: new Blob([result]).size
-        });
+        console.log(
+          "🔍 [DEBUG] File processed successfully:",
+          file.name,
+          "result length:",
+          result.length
+        );
+
+        if (mode === "encode") {
+          // Maintain current encoding packaging (text output)
+          processedFiles.push({
+            originalName: file.name,
+            processedName: `${file.name.split(".")[0]}.txt`,
+            content: result,
+            size: new Blob([result]).size,
+          });
+        } else {
+          // New: Decoding packaging with format preservation and preview support
+          const binaryString = result;
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          const contentType = this.detectContentType(bytes);
+
+          if (contentType.startsWith("image/")) {
+            const blob = new Blob([bytes], { type: contentType });
+            const url = URL.createObjectURL(blob);
+
+            // Measure image dimensions for preview card
+            const { width, height } = await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.onload = () =>
+                resolve({
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+              img.onerror = (e) => reject(e);
+              img.src = url;
+            });
+
+            processedFiles.push({
+              originalName: file.name,
+              processedName: `${file.name.split(".")[0]}.${
+                contentType.split("/")[1]
+              }`,
+              content: {
+                url,
+                name: file.name,
+                size: blob.size,
+                width,
+                height,
+                type: contentType,
+                content: bytes,
+              },
+              size: blob.size,
+              isImage: true,
+            });
+          } else if (this.isTextContent(binaryString)) {
+            // Treat as text content
+            processedFiles.push({
+              originalName: file.name,
+              processedName: `${file.name.split(".")[0]}.txt`,
+              content: binaryString,
+              size: new Blob([binaryString]).size,
+            });
+          } else {
+            // Generic binary file (non-image)
+            const blob = new Blob([bytes], { type: contentType });
+            const extension = contentType.split("/")[1] || "bin";
+            const processedName = `${file.name.split(".")[0]}.${extension}`;
+
+            processedFiles.push({
+              originalName: file.name,
+              processedName,
+              content: {
+                name: processedName,
+                size: blob.size,
+                type: contentType,
+                content: bytes,
+              },
+              size: blob.size,
+              isFile: true,
+            });
+          }
+        }
       } catch (error) {
         console.error("❌ [DEBUG] Failed to process file:", file.name, error);
         this.showError(`Failed to process ${file.name}: ${error.message}`);
       }
     }
 
-    console.log("🔍 [DEBUG] All files processed. Total processed files:", processedFiles.length);
+    console.log(
+      "🔍 [DEBUG] All files processed. Total processed files:",
+      processedFiles.length
+    );
 
     // Display processed files
-    console.log("🔍 [DEBUG] Calling displayProcessedFiles with", processedFiles.length, "files");
+    console.log(
+      "🔍 [DEBUG] Calling displayProcessedFiles with",
+      processedFiles.length,
+      "files"
+    );
     this.displayProcessedFiles(processedFiles, mode);
 
     // Clear selected files and reset to default state after processing
     console.log("🔍 [DEBUG] Clearing file upload state");
-    this.clearFileUploadState(mode);
-    
+    // this.clearFileUploadState(mode);
+
     console.log("🔍 [DEBUG] processMultipleFiles() completed");
   }
 
   async processFileForMultiple(file, mode) {
-    console.log("🔍 [DEBUG] processFileForMultiple() called with file:", file.name, "mode:", mode, "size:", file.size);
-    
     try {
-      if (mode === 'encode') {
-        console.log("🔍 [DEBUG] Encoding file to Base64 with data URI format");
+      if (mode === "encode") {
         // For encoding, read file as ArrayBuffer and convert to base64 with data URI
         const arrayBuffer = await this.readFileAsArrayBuffer(file);
-        console.log("🔍 [DEBUG] File read as ArrayBuffer, size:", arrayBuffer.byteLength);
-        
         const uint8Array = new Uint8Array(arrayBuffer);
         let binary = "";
         for (let i = 0; i < uint8Array.length; i++) {
           binary += String.fromCharCode(uint8Array[i]);
         }
-        
+
         const base64Result = btoa(binary);
-        
-        // Detect MIME type from file extension and content
-        const mimeType = this.getMimeTypeFromFile(file, uint8Array);
-        console.log("🔍 [DEBUG] Detected MIME type:", mimeType);
-        
-        // Create data URI format
+        const mimeType = this.getMimeTypeFromBase64(file, uint8Array);
         const dataUri = `data:${mimeType};base64,${base64Result}`;
-        console.log("🔍 [DEBUG] File encoded to data URI, result length:", dataUri.length);
         return dataUri;
       } else {
-        console.log("🔍 [DEBUG] Decoding file from Base64");
-        // For decoding, read file as text and decode
         const text = await this.readFileAsText(file);
-        console.log("🔍 [DEBUG] File read as text, length:", text.length);
-        
-        const binaryString = atob(text.trim());
-        console.log("🔍 [DEBUG] File decoded from Base64, result length:", binaryString.length);
+        const base64Content = text.trim();
+        if (!base64Content) {
+          throw new Error("Empty file content");
+        }
+
+        // Validate base64 format
+        if (!this.isValidBase64(base64Content)) {
+          throw new Error("Invalid base64 format");
+        }
+
+        // Extract actual base64 content and detect MIME type from data URI
+        let actualBase64 = base64Content.replace(/\s+/g, "");
+        let detectedMimeType = null;
+
+        if (actualBase64.startsWith("data:")) {
+          const dataUriMatch = actualBase64.match(/^data:([^;]*);base64,(.+)$/);
+          if (dataUriMatch) {
+            detectedMimeType = dataUriMatch[1];
+            actualBase64 = dataUriMatch[2];
+          } else {
+            throw new Error("Invalid data URI format");
+          }
+        }
+
+        // Decode the base64 content
+        const binaryString = atob(actualBase64);
         return binaryString;
       }
     } catch (error) {
@@ -931,114 +882,111 @@ class Base64Tools extends BaseTool {
     }
   }
 
-  // New method to get MIME type from file
-  getMimeTypeFromFile(file, uint8Array) {
+  getMimeTypeFromBase64(file, uint8Array) {
     // First try to detect from file content (magic numbers)
     const detectedType = this.detectContentType(uint8Array);
-    if (detectedType !== 'application/octet-stream') {
+    if (detectedType !== "application/octet-stream") {
       return detectedType;
     }
-    
+
     // Fallback to file extension
-    const extension = file.name.toLowerCase().split('.').pop();
+    const extension = file.name.toLowerCase().split(".").pop();
     const extensionMimeTypes = {
       // Images
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'bmp': 'image/bmp',
-      'svg': 'image/svg+xml',
-      'ico': 'image/x-icon',
-      'tiff': 'image/tiff',
-      'tif': 'image/tiff',
-      
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      webp: "image/webp",
+      bmp: "image/bmp",
+      svg: "image/svg+xml",
+      ico: "image/x-icon",
+      tiff: "image/tiff",
+      tif: "image/tiff",
+
       // Documents
-      'pdf': 'application/pdf',
-      'doc': 'application/msword',
-      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'xls': 'application/vnd.ms-excel',
-      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'ppt': 'application/vnd.ms-powerpoint',
-      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ppt: "application/vnd.ms-powerpoint",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
       // Text files
-      'txt': 'text/plain',
-      'html': 'text/html',
-      'htm': 'text/html',
-      'css': 'text/css',
-      'js': 'text/javascript',
-      'json': 'application/json',
-      'xml': 'text/xml',
-      'csv': 'text/csv',
-      
+      txt: "text/plain",
+      html: "text/html",
+      htm: "text/html",
+      css: "text/css",
+      js: "text/javascript",
+      json: "application/json",
+      xml: "text/xml",
+      csv: "text/csv",
+
       // Audio
-      'mp3': 'audio/mpeg',
-      'wav': 'audio/wav',
-      'ogg': 'audio/ogg',
-      'flac': 'audio/flac',
-      'm4a': 'audio/mp4',
-      
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+      ogg: "audio/ogg",
+      flac: "audio/flac",
+      m4a: "audio/mp4",
+
       // Video
-      'mp4': 'video/mp4',
-      'avi': 'video/x-msvideo',
-      'mov': 'video/quicktime',
-      'wmv': 'video/x-ms-wmv',
-      'flv': 'video/x-flv',
-      'webm': 'video/webm',
-      
+      mp4: "video/mp4",
+      avi: "video/x-msvideo",
+      mov: "video/quicktime",
+      wmv: "video/x-ms-wmv",
+      flv: "video/x-flv",
+      webm: "video/webm",
+
       // Archives
-      'zip': 'application/zip',
-      'rar': 'application/x-rar-compressed',
-      '7z': 'application/x-7z-compressed',
-      'tar': 'application/x-tar',
-      'gz': 'application/gzip',
-      
+      zip: "application/zip",
+      rar: "application/x-rar-compressed",
+      "7z": "application/x-7z-compressed",
+      tar: "application/x-tar",
+      gz: "application/gzip",
+
       // Other
-      'exe': 'application/x-msdownload',
-      'dmg': 'application/x-apple-diskimage',
-      'iso': 'application/x-iso9660-image'
+      exe: "application/x-msdownload",
+      dmg: "application/x-apple-diskimage",
+      iso: "application/x-iso9660-image",
     };
-    
-    return extensionMimeTypes[extension] || 'application/octet-stream';
+
+    return extensionMimeTypes[extension] || "application/octet-stream";
   }
 
   displayProcessedFiles(processedFiles, mode) {
-    console.log("🔍 [DEBUG] displayProcessedFiles() called with mode:", mode, "files count:", processedFiles.length);
-    
+    console.log(
+      "🔍 [DEBUG] displayProcessedFiles() called with mode:",
+      mode,
+      "files count:",
+      processedFiles.length
+    );
+
     const container = this.container;
     if (!container) {
       console.error("❌ [DEBUG] Container not found in displayProcessedFiles");
       return;
     }
 
-    const processedContainer = container.querySelector(`#${mode}-processed-container`);
-    const processedDisplay = container.querySelector(`#${mode}-processed-files`);
-    
-    console.log("🔍 [DEBUG] DOM elements found:", {
-      processedContainer: !!processedContainer,
-      processedDisplay: !!processedDisplay,
-      containerSelector: `#${mode}-processed-container`,
-      displaySelector: `#${mode}-processed-files`
-    });
-    
-    if (!processedContainer || !processedDisplay) {
-      console.error("❌ [DEBUG] Required DOM elements not found for processed files display");
-      return;
-    }
+    const processedContainer = container.querySelector(
+      `#${mode}-processed-container`
+    );
+    const processedDisplay = container.querySelector(
+      `#${mode}-processed-files`
+    );
+    const outputTextarea = container.querySelector(`#${mode}-output`);
 
-    // Clear existing processed files
-    console.log("🔍 [DEBUG] Clearing existing processed files");
-    processedContainer.innerHTML = '';
-
-    // Add each processed file as a card
-    console.log("🔍 [DEBUG] Creating file cards for", processedFiles.length, "processed files");
+    processedContainer.innerHTML = "";
     processedFiles.forEach((fileData, index) => {
-      console.log("🔍 [DEBUG] Creating card for file:", fileData.processedName, "size:", fileData.size);
-      
-      const fileCard = document.createElement('div');
-      fileCard.className = 'file-card processed-file-card';
+      console.log(
+        "🔍 [DEBUG] Creating card for file:",
+        fileData.processedName,
+        "size:",
+        fileData.size
+      );
+
+      const fileCard = document.createElement("div");
+      fileCard.className = "file-card processed-file-card";
       fileCard.dataset.fileIndex = index;
 
       // Handle different content types
@@ -1050,36 +998,35 @@ class Base64Tools extends BaseTool {
         // Default text file card
         this.createDefaultCard(fileCard, fileData, index);
       }
-
-      console.log("🔍 [DEBUG] Appending file card to container");
       processedContainer.appendChild(fileCard);
     });
 
-    // Show processed files display
-    console.log("🔍 [DEBUG] Showing processed files display");
-    processedDisplay.style.display = 'block';
-    
-    // Hide textarea when processed files are present (not input files)
-    console.log("🔍 [DEBUG] Hiding textarea since processed files are present");
-    this.hideTextareas(mode);
-    
-    console.log("✅ [DEBUG] displayProcessedFiles() completed successfully");
+    processedDisplay.style.display = "block";
+    outputTextarea.style.display = "none";
   }
 
   createImageCard(fileCard, fileData, index) {
     const imageData = fileData.content;
-    
-    fileCard.innerHTML = `
+
+    fileCard.innerHTML = /*html*/ `
       <div class="file-card-info image-card">
         <div class="image-preview">
-          <img src="${imageData.url}" alt="${imageData.name}" style="max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 4px;">
+          <img src="${imageData.url}" alt="${
+      imageData.name
+    }" style="max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 4px;">
         </div>
         <div class="file-card-details">
-          <p class="file-card-name" title="${imageData.name}">${imageData.name}</p>
+          <p class="file-card-name" title="${imageData.name}">${
+      imageData.name
+    }</p>
           <p class="file-card-size">${this.formatFileSize(imageData.size)}</p>
           <p class="file-card-meta">
-            <span class="image-dimensions">${imageData.width} × ${imageData.height}</span>
-            <span class="image-format">${imageData.type.split('/')[1].toUpperCase()}</span>
+            <span class="image-dimensions">${imageData.width} × ${
+      imageData.height
+    }</span>
+            <span class="image-format">${imageData.type
+              .split("/")[1]
+              .toUpperCase()}</span>
           </p>
         </div>
       </div>
@@ -1094,8 +1041,8 @@ class Base64Tools extends BaseTool {
     `;
 
     // Add download functionality
-    const downloadBtn = fileCard.querySelector('.download-btn');
-    downloadBtn.addEventListener('click', () => {
+    const downloadBtn = fileCard.querySelector(".download-btn");
+    downloadBtn.addEventListener("click", () => {
       const blob = new Blob([imageData.content], { type: imageData.type });
       this.downloadBlob(blob, imageData.name);
     });
@@ -1104,17 +1051,21 @@ class Base64Tools extends BaseTool {
   createFileCard(fileCard, fileData, index) {
     const fileInfo = fileData.content;
     const fileTypeIcon = this.getFileTypeIcon(fileInfo.type);
-    
-    fileCard.innerHTML = `
+
+    fileCard.innerHTML = /*html*/ `
       <div class="file-card-info file-card">
         <div class="file-type-icon">
           ${fileTypeIcon}
         </div>
         <div class="file-card-details">
-          <p class="file-card-name" title="${fileInfo.name}">${fileInfo.name}</p>
+          <p class="file-card-name" title="${fileInfo.name}">${
+      fileInfo.name
+    }</p>
           <p class="file-card-size">${this.formatFileSize(fileInfo.size)}</p>
           <p class="file-card-meta">
-            <span class="file-type">${this.getFileTypeLabel(fileInfo.type)}</span>
+            <span class="file-type">${this.getFileTypeLabel(
+              fileInfo.type
+            )}</span>
           </p>
         </div>
       </div>
@@ -1129,22 +1080,24 @@ class Base64Tools extends BaseTool {
     `;
 
     // Add download functionality
-    const downloadBtn = fileCard.querySelector('.download-btn');
-    downloadBtn.addEventListener('click', () => {
+    const downloadBtn = fileCard.querySelector(".download-btn");
+    downloadBtn.addEventListener("click", () => {
       const blob = new Blob([fileInfo.content], { type: fileInfo.type });
       this.downloadBlob(blob, fileInfo.name);
     });
   }
 
   createDefaultCard(fileCard, fileData, index) {
-    fileCard.innerHTML = `
+    fileCard.innerHTML = /*html*/ `
       <div class="file-card-info">
         <svg class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
         <div class="file-card-details">
-          <p class="file-card-name" title="${fileData.processedName}">${fileData.processedName}</p>
+          <p class="file-card-name" title="${fileData.processedName}">${
+      fileData.processedName
+    }</p>
           <p class="file-card-size">${this.formatFileSize(fileData.size)}</p>
         </div>
       </div>
@@ -1159,77 +1112,64 @@ class Base64Tools extends BaseTool {
     `;
 
     // Add download functionality
-    const downloadBtn = fileCard.querySelector('.download-btn');
-    downloadBtn.addEventListener('click', () => {
+    const downloadBtn = fileCard.querySelector(".download-btn");
+    downloadBtn.addEventListener("click", () => {
       this.downloadProcessedFile(fileData);
     });
   }
 
   getFileTypeIcon(mimeType) {
     const iconMap = {
-      'application/pdf': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #dc3545;">
+      "application/pdf": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #dc3545;">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <line x1="16" y1="13" x2="8" y2="13"></line>
         <line x1="16" y1="17" x2="8" y2="17"></line>
         <polyline points="10 9 9 9 8 9"></polyline>
       </svg>`,
-      'application/zip': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #ffc107;">
+      "application/zip": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #ffc107;">
         <path d="M16 22h2a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v3"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <path d="M10 20v-1a2 2 0 1 1 4 0v1a2 2 0 1 1-4 0Z"></path>
         <path d="M10 7h4"></path>
         <path d="M10 11h4"></path>
       </svg>`,
-      'text/html': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #e34c26;">
+      "text/html": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #e34c26;">
         <polyline points="16 18 22 12 16 6"></polyline>
         <polyline points="8 6 2 12 8 18"></polyline>
       </svg>`,
-      'text/xml': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #28a745;">
+      "text/xml": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #28a745;">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <line x1="16" y1="13" x2="8" y2="13"></line>
         <line x1="16" y1="17" x2="8" y2="17"></line>
-      </svg>`
+      </svg>`,
     };
 
-    return iconMap[mimeType] || `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #6c757d;">
+    return (
+      iconMap[mimeType] ||
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #6c757d;">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
       <polyline points="14 2 14 8 20 8"></polyline>
-    </svg>`;
+    </svg>`
+    );
   }
 
   getFileTypeLabel(mimeType) {
     const labelMap = {
-      'application/pdf': 'PDF Document',
-      'application/zip': 'ZIP Archive',
-      'text/html': 'HTML Document',
-      'text/xml': 'XML Document',
-      'application/octet-stream': 'Binary File'
+      "application/pdf": "PDF Document",
+      "application/zip": "ZIP Archive",
+      "text/html": "HTML Document",
+      "text/xml": "XML Document",
+      "application/octet-stream": "Binary File",
     };
 
-    return labelMap[mimeType] || mimeType.split('/')[1].toUpperCase() + ' File';
+    return labelMap[mimeType] || mimeType.split("/")[1].toUpperCase() + " File";
   }
 
   downloadProcessedFile(fileData) {
-    const blob = new Blob([fileData.content], { type: 'text/plain' });
+    const blob = new Blob([fileData.content], { type: "text/plain" });
     this.downloadBlob(blob, fileData.processedName);
-  }
-
-  clearProcessedFiles(mode) {
-    const container = this.container;
-    if (!container) return;
-
-    const processedDisplay = container.querySelector(`#${mode}-processed-files`);
-    const processedContainer = container.querySelector(`#${mode}-processed-container`);
-    
-    if (processedDisplay) {
-      processedDisplay.style.display = 'none';
-    }
-    
-    if (processedContainer) {
-      processedContainer.innerHTML = '';
-    }
   }
 
   async copyToClipboard(targetId) {
@@ -1261,7 +1201,7 @@ class Base64Tools extends BaseTool {
       if (element) {
         element.value = text;
         // Trigger processing
-        this.processCurrentMode();
+        // this.processCurrentMode();
         this.showSuccess("Pasted from clipboard!");
       }
     } catch (error) {
@@ -1323,37 +1263,34 @@ class Base64Tools extends BaseTool {
   }
 
   clearOutputFiles(mode) {
-    console.log(`[DEBUG] Clearing output files for mode: ${mode}`);
     const container = this.container;
     if (!container) return;
 
-    // Clear the textarea output
-    const outputElement = container.querySelector(`#${mode}-output`);
-    if (outputElement) {
-      outputElement.value = "";
-      outputElement.style.display = 'block'; // Ensure textarea is visible when cleared
+    const outputTextfield = container.querySelector(`#${mode}-output`);
+    if (outputTextfield) {
+      outputTextfield.value = "";
+      outputTextfield.style.display = "block";
     }
 
-    // Clear processed files display
-    this.clearProcessedFiles(mode);
+    const processedDisplay = container.querySelector(
+      `#${mode}-processed-files`
+    );
+    const processedContainer = container.querySelector(
+      `#${mode}-processed-container`
+    );
 
-    // Clear any stored decoded blob
+    if (processedDisplay) {
+      processedDisplay.style.display = "none";
+    }
+
+    if (processedContainer) {
+      processedContainer.innerHTML = "";
+    }
+
     if (mode === "decode") {
       this.decodedBlob = null;
       this.decodedFilename = null;
     }
-
-    // Clear file info display
-    const fileInfoElement = container.querySelector(`#${mode}-file-info`);
-    if (fileInfoElement) {
-      fileInfoElement.style.display = "none";
-      fileInfoElement.innerHTML = "";
-    }
-
-    // Show textarea if it was hidden
-    this.showTextareas(mode);
-
-    console.log(`[DEBUG] Output files cleared for mode: ${mode}`);
   }
 
   clearFileUploadState(mode) {
@@ -1364,22 +1301,19 @@ class Base64Tools extends BaseTool {
     const filesToRemove = Array.from(this.selectedFiles.entries())
       .filter(([_, data]) => data.mode === mode)
       .map(([fileId]) => fileId);
-    
-    filesToRemove.forEach(fileId => {
+
+    filesToRemove.forEach((fileId) => {
       this.selectedFiles.delete(fileId);
     });
 
     // Clear file cards
     const filesContainer = container.querySelector(`#${mode}-files-container`);
     if (filesContainer) {
-      filesContainer.innerHTML = '';
+      filesContainer.innerHTML = "";
     }
 
     // Hide files display
     this.hideFilesDisplay(mode);
-
-    // Don't clear processed files - they should remain visible after processing
-    // this.clearProcessedFiles(mode);
 
     // Show textareas
     this.showTextareas(mode);
@@ -1387,13 +1321,13 @@ class Base64Tools extends BaseTool {
     // Show output area
     const outputArea = container.querySelector(`#${mode}-output`);
     if (outputArea) {
-      outputArea.style.display = 'block';
+      outputArea.style.display = "block";
     }
 
     // Reset file input
     const fileInput = container.querySelector(`#${mode}-file-input`);
     if (fileInput) {
-      fileInput.value = '';
+      fileInput.value = "";
     }
   }
 
@@ -1468,59 +1402,48 @@ class Base64Tools extends BaseTool {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
-  // Removed custom notification methods - now using BaseTool's native notification system
-
-  debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
   isTextContent(content) {
     // Check if content contains mostly printable characters
     // Allow common text characters: letters, numbers, spaces, punctuation, newlines, tabs
-    const printableRegex = /^[\x20-\x7E\x09\x0A\x0D\u00A0-\u00FF\u0100-\u017F\u0180-\u024F]*$/;
-    
+    const printableRegex =
+      /^[\x20-\x7E\x09\x0A\x0D\u00A0-\u00FF\u0100-\u017F\u0180-\u024F]*$/;
+
     // Also check for common binary file signatures that should not be treated as text
     const binarySignatures = [
-      '\x89PNG',     // PNG
-      '\xFF\xD8\xFF', // JPEG
-      'GIF8',        // GIF
-      'PK\x03\x04',  // ZIP
-      '%PDF',        // PDF
-      '\x00\x00\x01\x00', // ICO
-      'BM',          // BMP
-      'RIFF'         // WAV, AVI, etc.
+      "\x89PNG", // PNG
+      "\xFF\xD8\xFF", // JPEG
+      "GIF8", // GIF
+      "PK\x03\x04", // ZIP
+      "%PDF", // PDF
+      "\x00\x00\x01\x00", // ICO
+      "BM", // BMP
+      "RIFF", // WAV, AVI, etc.
     ];
-    
+
     // Check for binary signatures
     for (const signature of binarySignatures) {
       if (content.startsWith(signature)) {
         return false;
       }
     }
-    
+
     // Check if content is mostly printable characters
     if (!printableRegex.test(content)) {
       return false;
     }
-    
+
     // Additional check: if content has too many null bytes or control characters, it's likely binary
     const nullBytes = (content.match(/\x00/g) || []).length;
-    const controlChars = (content.match(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
-    
+    const controlChars = (
+      content.match(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []
+    ).length;
+
     // If more than 1% of content is null bytes or control characters, consider it binary
     const threshold = Math.max(1, content.length * 0.01);
     if (nullBytes > threshold || controlChars > threshold) {
       return false;
     }
-    
+
     return true;
   }
 }

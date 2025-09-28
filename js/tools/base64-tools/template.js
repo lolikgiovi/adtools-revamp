@@ -28,7 +28,7 @@ window.Base64ToolsTemplate = /* html */ `
     <!-- Input Area -->
     <div class="input-group">
       <div class="input-header">
-        <label for="encode-input">Input Text</label>
+        <label for="encode-input">Input</label>
         <div class="input-actions">
           <label class="btn btn-secondary file-upload-btn">
             <input type="file" id="encode-file-input" class="file-input" multiple style="display: none;" />
@@ -144,7 +144,7 @@ window.Base64ToolsTemplate = /* html */ `
         <label for="decode-input">Base64 Input</label>
         <div class="input-actions">
           <label class="btn btn-secondary file-upload-btn">
-            <input type="file" id="decode-file-input" class="file-input" accept=".txt,.base64" style="display: none;" />
+            <input type="file" id="decode-file-input" class="file-input" multiple accept=".txt,.base64" style="display: none;" />
             <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>

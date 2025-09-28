@@ -20,14 +20,7 @@ class JSONTools extends BaseTool {
     await this.initializeMonacoEditor();
     this.bindToolEvents();
     this.setupTabs();
-    // Remove setupErrorPanel call since error panel no longer exists
-    // this.setupErrorPanel();
     this.processCurrentTab();
-  }
-
-  // Override the base bindEvents to prevent early binding
-  bindEvents() {
-    // Don't bind events during initialization - wait for onMount
   }
 
   async initializeMonacoEditor() {
@@ -95,15 +88,6 @@ class JSONTools extends BaseTool {
               }
             );
 
-            // Listen for content changes
-            // this.editor.onDidChangeModelContent(() => {
-            //   if (this.currentTab === "validator") {
-            //     this.debounce(() => this.validateJSON(), 300);
-            //   } else {
-            //     this.debounce(() => this.processCurrentTab(), 300);
-            //   }
-            // });
-
             resolve();
           } catch (error) {
             console.error("Error creating Monaco Editor:", error);
@@ -167,14 +151,10 @@ class JSONTools extends BaseTool {
   }
 
   setupTabs() {
-    // Initialize first tab as active
     this.switchTab("validator");
   }
 
-  // setupErrorPanel() method removed since error panel no longer exists
-
   switchTab(tabName) {
-    // Update active tab button
     document.querySelectorAll(".tab-button").forEach((btn) => {
       btn.classList.remove("active");
     });
@@ -272,11 +252,8 @@ class JSONTools extends BaseTool {
 
     try {
       const parsed = JSON.parse(content);
-      output.textContent = "✅ Valid JSON";
       output.className = "json-output success";
-      this.showSuccess("JSON is valid");
-
-      // Show formatted version as output
+      this.showSuccess("JSON is valid ✅");
       const formatted = JSON.stringify(parsed, null, 2);
       output.textContent = formatted;
     } catch (error) {
@@ -299,7 +276,6 @@ class JSONTools extends BaseTool {
       const formatted = JSON.stringify(parsed, null, 2);
       output.textContent = formatted;
       output.className = "json-output success";
-      // Don't call clearErrors() here as it would clear the successful output
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
@@ -525,26 +501,11 @@ class JSONTools extends BaseTool {
     }
   }
 
-  showSuccess(message) {
-    const outputSection = document.getElementById("json-output");
-
-    outputSection.innerHTML = `<div class="error-message success">✅ ${message}</div>`;
-
-    // Auto-hide success message after 3 seconds
-    setTimeout(() => {
-      if (outputSection.innerHTML.includes("✅")) {
-        outputSection.innerHTML = "";
-      }
-    }, 3000);
-  }
-
   clearOutput() {
     const output = document.getElementById("json-output");
     output.textContent = "";
     output.className = "json-output";
   }
-
-  // toggleErrorPanel() method removed since error panel no longer exists
 
   async copyToClipboard(text) {
     try {
@@ -567,11 +528,6 @@ class JSONTools extends BaseTool {
       );
       console.error("Clipboard error:", error);
     }
-  }
-
-  debounce(func, wait) {
-    clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(func, wait);
   }
 }
 
