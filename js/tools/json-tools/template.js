@@ -22,7 +22,7 @@ window.JSONToolsTemplate = /* html */ `
         <div class="json-editor-section">
             <div class="json-editor-header">
                 <h3>Input</h3>
-                <div class="editor-actions">
+                <div class="json-editor-actions">
                     <button class="btn-action-primary" title="Perform Action">Action</button>
                     <button class="btn-clear" title="Clear Editor">Clear</button>
                     <button class="btn-paste" title="Paste from Clipboard">Paste</button>
@@ -35,7 +35,7 @@ window.JSONToolsTemplate = /* html */ `
         <div class="json-output-section">
             <div class="json-output-header">
                 <h3 id="output-title">Output</h3>
-                <div class="output-actions">
+                <div class="json-output-actions">
                     <button class="btn-copy-output" title="Copy Output">Copy</button>
                 </div>
             </div>
