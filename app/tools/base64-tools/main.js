@@ -186,83 +186,135 @@ class Base64Tools extends BaseTool {
 
     const filesContainer = container.querySelector(`#${mode}-files-container`);
     if (!filesContainer) return;
-
-    const fileCard = document.createElement("div");
-    fileCard.className = "file-card";
-    fileCard.dataset.fileId = fileId;
-
     // Check if it's an image file and we're in encode mode
     const isImage = file.type && file.type.startsWith("image/");
     const isEncodeMode = mode === "encode";
 
     if (isImage && isEncodeMode) {
-      // Create image preview card
-      this.createImageFileCard(fileCard, file, fileId, mode);
+      // Use DataURL for preview in input cards
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const card = this.buildFileCard(
+          {
+            variant: "image",
+            name: file.name,
+            size: file.size,
+            type: file.type || "Unknown",
+            previewUrl: e.target.result,
+          },
+          {
+            remove: () => this.removeFileCard(fileId, mode),
+          }
+        );
+        card.dataset.fileId = fileId;
+        filesContainer.appendChild(card);
+      };
+      reader.readAsDataURL(file);
     } else {
-      // Create default file card
-      this.createDefaultFileCard(fileCard, file, fileId, mode);
+      const card = this.buildFileCard(
+        {
+          variant: "binary",
+          name: file.name,
+          size: file.size,
+          type: file.type || "Unknown",
+        },
+        {
+          remove: () => this.removeFileCard(fileId, mode),
+        }
+      );
+      card.dataset.fileId = fileId;
+      filesContainer.appendChild(card);
     }
-
-    filesContainer.appendChild(fileCard);
   }
 
-  createImageFileCard(fileCard, file, fileId, mode) {
-    // Create image preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      fileCard.innerHTML = /*html*/ `
-        <div class="file-card-preview">
-          <img src="${e.target.result}" alt="${file.name}" class="file-card-image" />
-        </div>
-        <div class="file-card-info">
-          <div class="file-card-details">
-            <p class="file-card-name" title="${file.name}">${file.name}</p>
-            <p class="file-card-size">${this.formatFileSize(file.size)}</p>
+  buildFileCard(data, actions = {}) {
+    const { variant, name, size, type, previewUrl, dimensions } = data;
+    const { remove, download } = actions;
+
+    const card = document.createElement("div");
+    card.className = "file-card";
+
+    let infoInner = "";
+    if (variant === "image") {
+      infoInner = /*html*/ `
+        <div class="file-card-info image-card">
+          <div class="image-preview">
+            <img src="${previewUrl}" alt="${name}" style="max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 4px;">
           </div>
-        </div>
+          <div class="file-card-details">
+            <p class="file-card-name" title="${name}">${name}</p>
+            <p class="file-card-size">${this.formatFileSize(size)}</p>
+            ${
+              dimensions
+                ? `<p class="file-card-meta"><span class="image-dimensions">${dimensions.width} × ${
+                    dimensions.height
+                  }</span><span class="image-format">${(type || "").split("/")[1]?.toUpperCase() || ""}</span></p>`
+                : ""
+            }
+          </div>
+        </div>`;
+    } else if (variant === "binary") {
+      const fileTypeIcon = this.getFileTypeIcon(type);
+      infoInner = /*html*/ `
+        <div class="file-card-info binary-card">
+          <div class="file-card-icon">${fileTypeIcon}</div>
+          <div class="file-card-details">
+            <p class="file-card-name" title="${name}">${name}</p>
+            <p class="file-card-size">${this.formatFileSize(size)}</p>
+            <p class="file-card-meta"><span class="file-type">${this.getFileTypeLabel(type)}</span></p>
+          </div>
+        </div>`;
+    } else {
+      // text/default
+      const fileTypeIcon = this.getFileTypeIcon("text/plain");
+      infoInner = /*html*/ `
+        <div class="file-card-info">
+          <div class="file-card-icon">${fileTypeIcon}</div>
+          <div class="file-card-details">
+            <p class="file-card-name" title="${name}">${name}</p>
+            <p class="file-card-size">${this.formatFileSize(size)}</p>
+          </div>
+        </div>`;
+    }
+
+    const removeBtn = remove
+      ? /*html*/ `
         <button class="file-card-remove" type="button" title="Remove file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
-        </button>
-      `;
+        </button>`
+      : "";
 
-      // Add remove functionality
-      const removeBtn = fileCard.querySelector(".file-card-remove");
-      removeBtn.addEventListener("click", () => {
-        this.removeFileCard(fileId, mode);
-      });
-    };
-    reader.readAsDataURL(file);
+    const downloadBtn = download
+      ? /*html*/ `
+        <button class="btn btn-sm download-btn" type="button" title="Download">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </button>`
+      : "";
+
+    card.innerHTML = infoInner + removeBtn + downloadBtn;
+
+    if (remove) {
+      const btn = card.querySelector(".file-card-remove");
+      btn?.addEventListener("click", remove);
+    }
+    if (download) {
+      const btn = card.querySelector(".download-btn");
+      btn?.addEventListener("click", download);
+      card.classList.add("processed-file-card");
+    }
+
+    return card;
   }
 
-  createDefaultFileCard(fileCard, file, fileId, mode) {
-    fileCard.innerHTML = /*html*/ `
-      <div class="file-card-info">
-        <svg class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-        </svg>
-        <div class="file-card-details">
-          <p class="file-card-name" title="${file.name}">${file.name}</p>
-          <p class="file-card-size">${this.formatFileSize(file.size)}</p>
-        </div>
-      </div>
-      <button class="file-card-remove" type="button" title="Remove file">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    `;
-
-    // Add remove functionality
-    const removeBtn = fileCard.querySelector(".file-card-remove");
-    removeBtn.addEventListener("click", () => {
-      this.removeFileCard(fileId, mode);
-    });
-  }
+  // Old specific card creators removed in favor of buildFileCard
 
   removeFileCard(fileId, mode) {
     const container = this.validateContainer();
@@ -545,161 +597,101 @@ class Base64Tools extends BaseTool {
 
     processedContainer.innerHTML = "";
     processedFiles.forEach((fileData, index) => {
-      const fileCard = document.createElement("div");
-      fileCard.className = "file-card processed-file-card";
-      fileCard.dataset.fileIndex = index;
-
-      // Handle different content types
+      let card;
       if (fileData.isImage) {
-        this.createImageCard(fileCard, fileData, index);
+        const imageData = fileData.content;
+        card = this.buildFileCard(
+          {
+            variant: "image",
+            name: imageData.name,
+            size: imageData.size,
+            type: imageData.type,
+            previewUrl: imageData.url,
+            dimensions: { width: imageData.width, height: imageData.height },
+          },
+          {
+            download: () => {
+              const blob = new Blob([imageData.content], { type: imageData.type });
+              this.downloadBlob(blob, imageData.name);
+            },
+          }
+        );
       } else if (fileData.isFile) {
-        this.createFileCard(fileCard, fileData, index);
+        const fileInfo = fileData.content;
+        card = this.buildFileCard(
+          {
+            variant: "binary",
+            name: fileInfo.name,
+            size: fileInfo.size,
+            type: fileInfo.type,
+          },
+          {
+            download: () => {
+              const blob = new Blob([fileInfo.content], { type: fileInfo.type });
+              this.downloadBlob(blob, fileInfo.name);
+            },
+          }
+        );
       } else {
-        // Default text file card
-        this.createDefaultCard(fileCard, fileData, index);
+        card = this.buildFileCard(
+          {
+            variant: "text",
+            name: fileData.processedName,
+            size: fileData.size,
+            type: "text/plain",
+          },
+          {
+            download: () => this.downloadProcessedFile(fileData),
+          }
+        );
       }
-      processedContainer.appendChild(fileCard);
+      card.dataset.fileIndex = index;
+      processedContainer.appendChild(card);
     });
 
     processedDisplay.style.display = "block";
     outputTextarea.style.display = "none";
   }
 
-  createImageCard(fileCard, fileData, index) {
-    const imageData = fileData.content;
-
-    fileCard.innerHTML = /*html*/ `
-      <div class="file-card-info image-card">
-        <div class="image-preview">
-          <img src="${imageData.url}" alt="${
-      imageData.name
-    }" style="max-width: 200px; max-height: 150px; object-fit: contain; border-radius: 4px;">
-        </div>
-        <div class="file-card-details">
-          <p class="file-card-name" title="${imageData.name}">${imageData.name}</p>
-          <p class="file-card-size">${this.formatFileSize(imageData.size)}</p>
-          <p class="file-card-meta">
-            <span class="image-dimensions">${imageData.width} × ${imageData.height}</span>
-            <span class="image-format">${imageData.type.split("/")[1].toUpperCase()}</span>
-          </p>
-        </div>
-      </div>
-      <button class="btn btn-sm download-btn" type="button" title="Download image">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        Download
-      </button>
-    `;
-
-    // Add download functionality
-    const downloadBtn = fileCard.querySelector(".download-btn");
-    downloadBtn.addEventListener("click", () => {
-      const blob = new Blob([imageData.content], { type: imageData.type });
-      this.downloadBlob(blob, imageData.name);
-    });
-  }
-
-  createFileCard(fileCard, fileData, index) {
-    const fileInfo = fileData.content;
-    const fileTypeIcon = this.getFileTypeIcon(fileInfo.type);
-
-    fileCard.innerHTML = /*html*/ `
-      <div class="file-card-info binary-card">
-        <div class="file-type-icon">
-          ${fileTypeIcon}
-        </div>
-        <div class="file-card-details">
-          <p class="file-card-name" title="${fileInfo.name}">${fileInfo.name}</p>
-          <p class="file-card-size">${this.formatFileSize(fileInfo.size)}</p>
-          <p class="file-card-meta">
-            <span class="file-type">${this.getFileTypeLabel(fileInfo.type)}</span>
-          </p>
-        </div>
-      </div>
-      <button class="btn btn-sm download-btn" type="button" title="Download file">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        Download
-      </button>
-    `;
-
-    // Add download functionality
-    const downloadBtn = fileCard.querySelector(".download-btn");
-    downloadBtn.addEventListener("click", () => {
-      const blob = new Blob([fileInfo.content], { type: fileInfo.type });
-      this.downloadBlob(blob, fileInfo.name);
-    });
-  }
-
-  createDefaultCard(fileCard, fileData, index) {
-    fileCard.innerHTML = /*html*/ `
-      <div class="file-card-info">
-        <svg class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-        </svg>
-        <div class="file-card-details">
-          <p class="file-card-name" title="${fileData.processedName}">${fileData.processedName}</p>
-          <p class="file-card-size">${this.formatFileSize(fileData.size)}</p>
-        </div>
-      </div>
-      <button class="btn btn-sm download-btn" type="button" title="Download processed file">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        Download
-      </button>
-    `;
-
-    // Add download functionality
-    const downloadBtn = fileCard.querySelector(".download-btn");
-    downloadBtn.addEventListener("click", () => {
-      this.downloadProcessedFile(fileData);
-    });
-  }
-
   getFileTypeIcon(mimeType) {
     const iconMap = {
-      "application/pdf": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #dc3545;">
+      "application/pdf": `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #dc3545;">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <line x1="16" y1="13" x2="8" y2="13"></line>
         <line x1="16" y1="17" x2="8" y2="17"></line>
         <polyline points="10 9 9 9 8 9"></polyline>
       </svg>`,
-      "application/zip": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #ffc107;">
+      "application/zip": `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #ffc107;">
         <path d="M16 22h2a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v3"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <path d="M10 20v-1a2 2 0 1 1 4 0v1a2 2 0 1 1-4 0Z"></path>
         <path d="M10 7h4"></path>
         <path d="M10 11h4"></path>
       </svg>`,
-      "text/html": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #e34c26;">
+      "text/html": `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #e34c26;">
         <polyline points="16 18 22 12 16 6"></polyline>
         <polyline points="8 6 2 12 8 18"></polyline>
       </svg>`,
-      "text/xml": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #28a745;">
+      "text/xml": `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #28a745;">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
         <polyline points="14 2 14 8 20 8"></polyline>
         <line x1="16" y1="13" x2="8" y2="13"></line>
         <line x1="16" y1="17" x2="8" y2="17"></line>
       </svg>`,
+      // Text default icon
+      "text/plain": `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #6c757d;">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 1 2 2h12a2 2 0 0 1 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+      </svg>`,
     };
 
     return (
       iconMap[mimeType] ||
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; color: #6c757d;">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-      <polyline points="14 2 14 8 20 8"></polyline>
-    </svg>`
+      `<svg id="base64-filecard-icon" class="file-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #6c757d;">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+      </svg>`
     );
   }
 

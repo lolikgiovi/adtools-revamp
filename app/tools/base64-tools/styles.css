@@ -40,6 +40,25 @@
   height: 1rem;
 }
 
+/* Base64 tool-specific icon sizing by unique ids */
+#base64-tab-encode-icon,
+#base64-tab-decode-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+#base64-upload-icon-encode,
+#base64-upload-icon-decode {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+/* Default file-card SVG icon size; overridden by stretch rules below */
+#base64-filecard-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
 /* Tool Sections */
 .tool-section {
   display: flex;
@@ -145,8 +164,8 @@
 }
 
 .file-upload-icon {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .file-info {
@@ -198,15 +217,15 @@
 .files-container {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem; /* tighter vertical spacing between cards */
 }
 
 .file-card {
-  gap: 10px;
+  gap: 6px; /* reduce internal spacing between icon/details/actions */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem; /* compact card padding */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
@@ -221,16 +240,23 @@
 .file-card-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem; /* smaller gap inside info cluster */
   flex: 1;
   min-width: 0;
 }
 
 .file-card-icon {
-  width: 1.25rem;
-  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
+  height: 100%; /* stretch to the height of the file-card-info row */
+}
+
+.file-card-icon svg {
+  max-height: 100%;
+  width: auto;
 }
 
 .file-card-details {
@@ -239,27 +265,29 @@
 }
 
 .file-card-name {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: hsl(var(--foreground));
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2; /* tighter line spacing */
 }
 
 .file-card-size {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: hsl(var(--muted-foreground));
-  margin: 0.25rem 0 0 0;
+  margin: 0.2rem 0 0 0; /* slightly tighter */
+  line-height: 1.2; /* tighter line spacing */
 }
 
 .file-card-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem; /* slightly smaller action button footprint */
+  height: 1.75rem;
   border: none;
   border-radius: var(--radius);
   background: transparent;
@@ -275,8 +303,8 @@
 }
 
 .file-card-remove svg {
-  width: 1rem;
-  height: 1rem;
+  width: 0.9rem; /* consistent smaller svg */
+  height: 0.9rem;
 }
 
 /* Image preview styles for file cards */
@@ -298,6 +326,32 @@
   border-radius: var(--radius);
 }
 
+/* Unified image preview (input + output) */
+.file-card-info.image-card .image-preview {
+  width: 200px;
+  height: 150px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+  background: hsl(var(--muted));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-card-info.image-card .image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+/* Smaller meta spans */
+.file-card-meta span {
+  font-size: 0.7rem;
+  line-height: 1.2; /* tighter line spacing */
+}
+
 /* Processed Files Display */
 .processed-files {
   margin-top: 1rem;
@@ -311,7 +365,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem; /* compact processed card padding */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--muted));
@@ -330,6 +384,12 @@
 .processed-file-card .file-card-name {
   color: hsl(var(--primary));
   font-weight: 600;
+}
+
+/* Download button icon normalization */
+.download-btn svg {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 /* Action Buttons */

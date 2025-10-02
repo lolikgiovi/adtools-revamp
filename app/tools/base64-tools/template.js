@@ -7,14 +7,14 @@ window.Base64ToolsTemplate = /* html */ `
   <!-- Tab Navigation -->
   <div class="tab-navigation">
     <button class="base64-tab-button active" data-mode="encode">
-      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg id="base64-tab-encode-icon" class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="16 18 22 12 16 6"></polyline>
         <polyline points="8 6 2 12 8 18"></polyline>
       </svg>
       Encode to Base64
     </button>
     <button class="base64-tab-button" data-mode="decode">
-      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg id="base64-tab-decode-icon" class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="8 18 2 12 8 6"></polyline>
         <polyline points="16 6 22 12 16 18"></polyline>
       </svg>
@@ -32,7 +32,7 @@ window.Base64ToolsTemplate = /* html */ `
         <div class="input-actions">
           <label class="btn btn-secondary file-upload-btn">
             <input type="file" id="encode-file-input" class="file-input" multiple style="display: none;" />
-            <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg id="base64-upload-icon-encode" class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -145,7 +145,7 @@ window.Base64ToolsTemplate = /* html */ `
         <div class="input-actions">
           <label class="btn btn-secondary file-upload-btn">
             <input type="file" id="decode-file-input" class="file-input" multiple accept=".txt,.base64" style="display: none;" />
-            <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg id="base64-upload-icon-decode" class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
