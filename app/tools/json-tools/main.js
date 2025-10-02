@@ -245,16 +245,15 @@ class JSONTools extends BaseTool {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(content);
-      output.className = "json-output success";
-      this.showSuccess("JSON is valid ✅");
-      const formatted = JSON.stringify(parsed, null, 2);
-      output.textContent = formatted;
-    } catch (error) {
+    const res = window.JSONToolsService.validate(content);
+    if (res.error) {
       output.textContent = "❌ Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.className = "json-output success";
+      this.showSuccess("JSON is valid ✅");
+      output.textContent = res.result;
     }
   }
 
@@ -262,15 +261,14 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      const parsed = JSON.parse(content);
-      const formatted = JSON.stringify(parsed, null, 2);
-      output.textContent = formatted;
-      output.className = "json-output success";
-    } catch (error) {
+    const res = window.JSONToolsService.prettify(content);
+    if (res.error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
     }
   }
 
@@ -278,16 +276,14 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      const parsed = JSON.parse(content);
-      const minified = JSON.stringify(parsed);
-      output.textContent = minified;
-      output.className = "json-output success";
-      // Don't call clearErrors() here as it would clear the successful output
-    } catch (error) {
+    const res = window.JSONToolsService.minify(content);
+    if (res.error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
     }
   }
 
@@ -295,16 +291,14 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      const parsed = JSON.parse(content);
-      const stringified = JSON.stringify(JSON.stringify(parsed, null, 2));
-      output.textContent = stringified;
-      output.className = "json-output success";
-      // Don't call clearErrors() here as it would clear the successful output
-    } catch (error) {
+    const res = window.JSONToolsService.stringify(content);
+    if (res.error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
     }
   }
 
@@ -312,23 +306,15 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      // First parse to get the string
-      const firstParse = JSON.parse(content);
-      if (typeof firstParse !== "string") {
-        throw new Error("Input is not a JSON string");
-      }
-
-      // Then parse the string to get the actual JSON
-      const secondParse = JSON.parse(firstParse);
-      const formatted = JSON.stringify(secondParse, null, 2);
-      output.textContent = formatted;
-      output.className = "json-output success";
-      this.clearErrors();
-    } catch (error) {
+    const res = window.JSONToolsService.unstringify(content);
+    if (res.error) {
       output.textContent = "Error: Invalid JSON string";
       output.className = "json-output error";
-      this.showError("JSON Unstringify Error", error.message);
+      this.showError("JSON Unstringify Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
+      this.clearErrors();
     }
   }
 
@@ -336,20 +322,14 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      // Validate JSON first
-      JSON.parse(content);
-
-      // Escape the JSON string
-      const escaped = content.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
-
-      output.textContent = `"${escaped}"`;
-      output.className = "json-output success";
-      // Don't call clearErrors() here as it would clear the successful output
-    } catch (error) {
+    const res = window.JSONToolsService.escape(content);
+    if (res.error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
     }
   }
 
@@ -357,23 +337,15 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
-    try {
-      // Parse the escaped string
-      const unescaped = JSON.parse(content);
-      if (typeof unescaped !== "string") {
-        throw new Error("Input is not an escaped JSON string");
-      }
-
-      // Validate the unescaped content is valid JSON
-      const parsed = JSON.parse(unescaped);
-      const formatted = JSON.stringify(parsed, null, 2);
-      output.textContent = formatted;
-      output.className = "json-output success";
-      this.clearErrors();
-    } catch (error) {
+    const res = window.JSONToolsService.unescape(content);
+    if (res.error) {
       output.textContent = "Error: Invalid escaped JSON string";
       output.className = "json-output error";
-      this.showError("JSON Unescape Error", error.message);
+      this.showError("JSON Unescape Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
+      this.clearErrors();
     }
   }
 
@@ -382,54 +354,18 @@ class JSONTools extends BaseTool {
     const output = document.getElementById("json-output");
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;
 
-    try {
-      const parsed = JSON.parse(content);
-      const keys = this.getAllKeys(parsed, extractType === "paths");
-      const uniqueKeys = [...new Set(keys)].sort();
-
-      output.textContent = JSON.stringify(uniqueKeys, null, 2);
-      output.className = "json-output success";
-      // Don't call clearErrors() here as it would clear the successful output
-    } catch (error) {
+    const res = window.JSONToolsService.extractKeys(content, extractType === "paths");
+    if (res.error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      output.textContent = res.result;
+      output.className = "json-output success";
     }
   }
 
-  getAllKeys(obj, includePaths = false, currentPath = "") {
-    const keys = [];
-
-    if (Array.isArray(obj)) {
-      obj.forEach((item, index) => {
-        if (typeof item === "object" && item !== null) {
-          const newPath = includePaths ? `${currentPath}[${index}]` : "";
-          keys.push(...this.getAllKeys(item, includePaths, newPath));
-        }
-      });
-    } else if (typeof obj === "object" && obj !== null) {
-      Object.keys(obj).forEach((key) => {
-        const newPath = includePaths ? (currentPath ? `${currentPath}.${key}` : key) : "";
-
-        if (includePaths) {
-          keys.push(newPath);
-        } else {
-          keys.push(key);
-        }
-
-        if (typeof obj[key] === "object" && obj[key] !== null) {
-          keys.push(...this.getAllKeys(obj[key], includePaths, newPath));
-        }
-      });
-    }
-
-    return keys;
-  }
-
-  getErrorPosition(errorMessage) {
-    const match = errorMessage.match(/position (\d+)/i);
-    return match ? parseInt(match[1]) : null;
-  }
+  // getAllKeys and getErrorPosition are now provided by JSONToolsService
 
   showError(title, message, position = null) {
     const outputSection = document.getElementById("json-output");
