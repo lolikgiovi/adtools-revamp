@@ -39,18 +39,18 @@ class JSONTools extends BaseTool {
       getWorkerUrl: function (moduleId, label) {
         // Keep the URLs for reference but workers will be disabled
         if (label === "json") {
-          return "/js/libs/monaco-editor/min/vs/language/json/jsonWorker.js";
+          return "/libs/monaco-editor/min/vs/language/json/jsonWorker.js";
         }
         if (label === "css" || label === "scss" || label === "less") {
-          return "/js/libs/monaco-editor/min/vs/language/css/cssWorker.js";
+          return "/libs/monaco-editor/min/vs/language/css/cssWorker.js";
         }
         if (label === "html" || label === "handlebars" || label === "razor") {
-          return "/js/libs/monaco-editor/min/vs/language/html/htmlWorker.js";
+          return "/libs/monaco-editor/min/vs/language/html/htmlWorker.js";
         }
         if (label === "typescript" || label === "javascript") {
-          return "/js/libs/monaco-editor/min/vs/language/typescript/tsWorker.js";
+          return "/libs/monaco-editor/min/vs/language/typescript/tsWorker.js";
         }
-        return "/js/libs/monaco-editor/min/vs/base/worker/workerMain.js";
+        return "/libs/monaco-editor/min/vs/base/worker/workerMain.js";
       },
     };
 
@@ -58,7 +58,7 @@ class JSONTools extends BaseTool {
     try {
       require.config({
         paths: {
-          vs: "/js/libs/monaco-editor/min/vs",
+          vs: "/libs/monaco-editor/min/vs",
         },
       });
     } catch (error) {
