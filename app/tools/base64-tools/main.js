@@ -185,82 +185,6 @@ class Base64Tools extends BaseTool {
     this.showInputFileContainer(mode);
   }
 
-  isValidBase64(str) {
-    try {
-      // Check if string is empty or contains only whitespace
-      if (!str || typeof str !== "string" || !str.trim()) {
-        return false;
-      }
-
-      // Remove all whitespace (including newlines, tabs, etc.)
-      const cleanStr = str.replace(/\s+/g, "");
-
-      // Handle data URI format
-      let base64Content = cleanStr;
-      if (cleanStr.startsWith("data:")) {
-        const dataUriMatch = cleanStr.match(/^data:[^;]*;base64,(.+)$/);
-        if (dataUriMatch) {
-          base64Content = dataUriMatch[1];
-        } else {
-          return false; // Invalid data URI format
-        }
-      }
-
-      // Base64 should only contain valid characters
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(base64Content)) {
-        return false;
-      }
-
-      // Length should be multiple of 4 (after padding)
-      if (base64Content.length % 4 !== 0) {
-        return false;
-      }
-
-      // Try to decode to verify it's valid
-      atob(base64Content);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  detectContentType(bytes) {
-    // Check for common file signatures
-    const signatures = {
-      "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
-      "image/jpeg": [0xff, 0xd8, 0xff],
-      "image/gif": [0x47, 0x49, 0x46, 0x38],
-      "image/webp": [0x52, 0x49, 0x46, 0x46],
-      "image/bmp": [0x42, 0x4d],
-      "image/svg+xml": [0x3c, 0x73, 0x76, 0x67], // <svg
-      "application/pdf": [0x25, 0x50, 0x44, 0x46],
-      "application/zip": [0x50, 0x4b, 0x03, 0x04],
-      "text/html": [0x3c, 0x68, 0x74, 0x6d, 0x6c], // <html
-      "text/xml": [0x3c, 0x3f, 0x78, 0x6d, 0x6c], // <?xml
-    };
-
-    for (const [mimeType, signature] of Object.entries(signatures)) {
-      if (this.matchesSignature(bytes, signature)) {
-        return mimeType;
-      }
-    }
-
-    // Default to binary if no signature matches
-    return "application/octet-stream";
-  }
-
-  matchesSignature(bytes, signature) {
-    if (bytes.length < signature.length) return false;
-
-    for (let i = 0; i < signature.length; i++) {
-      if (bytes[i] !== signature[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   displayFileCard(file, fileId, mode) {
     const container = this.validateContainer();
 
@@ -406,7 +330,7 @@ class Base64Tools extends BaseTool {
   }
 
   async encodeToBase64() {
-    const container = this.container;
+    const container = this.validateContainer();
 
     // Check if we have selected files to process
     const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "encode");
@@ -420,7 +344,7 @@ class Base64Tools extends BaseTool {
 
       try {
         // const encoded = btoa(unescape(encodeURIComponent(text)));
-        const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+        const encoded = window.Base64ToolsService.encodeText(text);
         this.showSuccess("Encoded to Base64!");
         outputArea.value = encoded;
       } catch (error) {
@@ -431,10 +355,7 @@ class Base64Tools extends BaseTool {
   }
 
   async decodeFromBase64() {
-    const container = this.container;
-    if (!container) {
-      return;
-    }
+    const container = this.validateContainer();
 
     // Check if we have selected files to process
     const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "decode");
@@ -451,27 +372,14 @@ class Base64Tools extends BaseTool {
       }
 
       try {
-        if (!this.isValidBase64(base64Text)) {
+        if (!window.Base64ToolsService.isValidBase64(base64Text)) {
           throw new Error("Invalid base64 format");
         }
 
-        // Extract actual base64 content and detect MIME type from data URI
-        let actualBase64 = base64Text.replace(/\s+/g, "");
-        let detectedMimeType = null;
+        const { base64: actualBase64 } = window.Base64ToolsService.normalizeDataUri(base64Text);
 
-        if (actualBase64.startsWith("data:")) {
-          const dataUriMatch = actualBase64.match(/^data:([^;]*);base64,(.+)$/);
-          if (dataUriMatch) {
-            detectedMimeType = dataUriMatch[1];
-            actualBase64 = dataUriMatch[2];
-          } else {
-            throw new Error("Invalid data URI format");
-          }
-        }
-
-        // Decode the base64 content
-        const decoded = atob(actualBase64);
-        const isTextContent = this.isTextContent(decoded);
+        const decoded = window.Base64ToolsService.decodeToBinaryString(actualBase64);
+        const isTextContent = window.Base64ToolsService.isTextContent(decoded);
 
         if (isTextContent) {
           outputArea.value = decoded;
@@ -496,10 +404,7 @@ class Base64Tools extends BaseTool {
   }
 
   async processMultipleFiles(mode) {
-    const container = this.container;
-    if (!container) {
-      return;
-    }
+    const container = this.validateContainer();
 
     const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === mode);
 
@@ -532,7 +437,7 @@ class Base64Tools extends BaseTool {
             bytes[i] = binaryString.charCodeAt(i);
           }
 
-          const contentType = this.detectContentType(bytes);
+          const contentType = window.Base64ToolsService.detectContentType(bytes);
 
           if (contentType.startsWith("image/")) {
             const blob = new Blob([bytes], { type: contentType });
@@ -565,7 +470,7 @@ class Base64Tools extends BaseTool {
               size: blob.size,
               isImage: true,
             });
-          } else if (this.isTextContent(binaryString)) {
+          } else if (window.Base64ToolsService.isTextContent(binaryString)) {
             // Treat as text content
             processedFiles.push({
               originalName: file.name,
@@ -609,13 +514,8 @@ class Base64Tools extends BaseTool {
         // For encoding, read file as ArrayBuffer and convert to base64 with data URI
         const arrayBuffer = await this.readFileAsArrayBuffer(file);
         const uint8Array = new Uint8Array(arrayBuffer);
-        let binary = "";
-        for (let i = 0; i < uint8Array.length; i++) {
-          binary += String.fromCharCode(uint8Array[i]);
-        }
-
-        const base64Result = btoa(binary);
-        const mimeType = this.getMimeTypeFromBase64(file, uint8Array);
+        const base64Result = window.Base64ToolsService.toBase64FromBytes(uint8Array);
+        const mimeType = window.Base64ToolsService.getMimeTypeFromBase64(file, uint8Array);
         const dataUri = `data:${mimeType};base64,${base64Result}`;
         return dataUri;
       } else {
@@ -626,26 +526,11 @@ class Base64Tools extends BaseTool {
         }
 
         // Validate base64 format
-        if (!this.isValidBase64(base64Content)) {
+        if (!window.Base64ToolsService.isValidBase64(base64Content)) {
           throw new Error("Invalid base64 format");
         }
-
-        // Extract actual base64 content and detect MIME type from data URI
-        let actualBase64 = base64Content.replace(/\s+/g, "");
-        let detectedMimeType = null;
-
-        if (actualBase64.startsWith("data:")) {
-          const dataUriMatch = actualBase64.match(/^data:([^;]*);base64,(.+)$/);
-          if (dataUriMatch) {
-            detectedMimeType = dataUriMatch[1];
-            actualBase64 = dataUriMatch[2];
-          } else {
-            throw new Error("Invalid data URI format");
-          }
-        }
-
-        // Decode the base64 content
-        const binaryString = atob(actualBase64);
+        const { base64: actualBase64 } = window.Base64ToolsService.normalizeDataUri(base64Content);
+        const binaryString = window.Base64ToolsService.decodeToBinaryString(actualBase64);
         return binaryString;
       }
     } catch (error) {
@@ -653,78 +538,6 @@ class Base64Tools extends BaseTool {
       this.showError("Invalid: Not a valid Base64 Text");
       throw error;
     }
-  }
-
-  getMimeTypeFromBase64(file, uint8Array) {
-    // First try to detect from file content (magic numbers)
-    const detectedType = this.detectContentType(uint8Array);
-    if (detectedType !== "application/octet-stream") {
-      return detectedType;
-    }
-
-    // Fallback to file extension
-    const extension = file.name.toLowerCase().split(".").pop();
-    const extensionMimeTypes = {
-      // Images
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      gif: "image/gif",
-      webp: "image/webp",
-      bmp: "image/bmp",
-      svg: "image/svg+xml",
-      ico: "image/x-icon",
-      tiff: "image/tiff",
-      tif: "image/tiff",
-
-      // Documents
-      pdf: "application/pdf",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      xls: "application/vnd.ms-excel",
-      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ppt: "application/vnd.ms-powerpoint",
-      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-
-      // Text files
-      txt: "text/plain",
-      html: "text/html",
-      htm: "text/html",
-      css: "text/css",
-      js: "text/javascript",
-      json: "application/json",
-      xml: "text/xml",
-      csv: "text/csv",
-
-      // Audio
-      mp3: "audio/mpeg",
-      wav: "audio/wav",
-      ogg: "audio/ogg",
-      flac: "audio/flac",
-      m4a: "audio/mp4",
-
-      // Video
-      mp4: "video/mp4",
-      avi: "video/x-msvideo",
-      mov: "video/quicktime",
-      wmv: "video/x-ms-wmv",
-      flv: "video/x-flv",
-      webm: "video/webm",
-
-      // Archives
-      zip: "application/zip",
-      rar: "application/x-rar-compressed",
-      "7z": "application/x-7z-compressed",
-      tar: "application/x-tar",
-      gz: "application/gzip",
-
-      // Other
-      exe: "application/x-msdownload",
-      dmg: "application/x-apple-diskimage",
-      iso: "application/x-iso9660-image",
-    };
-
-    return extensionMimeTypes[extension] || "application/octet-stream";
   }
 
   displayProcessedFiles(processedFiles, mode) {
@@ -1074,48 +887,6 @@ class Base64Tools extends BaseTool {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  }
-
-  isTextContent(content) {
-    // Check if content contains mostly printable characters
-    // Allow common text characters: letters, numbers, spaces, punctuation, newlines, tabs
-    const printableRegex = /^[\x20-\x7E\x09\x0A\x0D\u00A0-\u00FF\u0100-\u017F\u0180-\u024F]*$/;
-
-    // Also check for common binary file signatures that should not be treated as text
-    const binarySignatures = [
-      "\x89PNG", // PNG
-      "\xFF\xD8\xFF", // JPEG
-      "GIF8", // GIF
-      "PK\x03\x04", // ZIP
-      "%PDF", // PDF
-      "\x00\x00\x01\x00", // ICO
-      "BM", // BMP
-      "RIFF", // WAV, AVI, etc.
-    ];
-
-    // Check for binary signatures
-    for (const signature of binarySignatures) {
-      if (content.startsWith(signature)) {
-        return false;
-      }
-    }
-
-    // Check if content is mostly printable characters
-    if (!printableRegex.test(content)) {
-      return false;
-    }
-
-    // Additional check: if content has too many null bytes or control characters, it's likely binary
-    const nullBytes = (content.match(/\x00/g) || []).length;
-    const controlChars = (content.match(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
-
-    // If more than 1% of content is null bytes or control characters, consider it binary
-    const threshold = Math.max(1, content.length * 0.01);
-    if (nullBytes > threshold || controlChars > threshold) {
-      return false;
-    }
-
-    return true;
   }
 }
 
