@@ -22,10 +22,10 @@ class App {
     this.initializeComponents();
     this.registerTools();
     this.setupRoutes();
-    
+
     // Handle initial route after routes are registered
     this.router.handleRouteChange();
-    
+
     this.bindGlobalEvents();
 
     console.log("AD Tools app initialized successfully");
@@ -153,20 +153,12 @@ class App {
                           .map((tool) => {
                             const metadata = tool.getMetadata();
                             return `
-                                <div class="tool-card" data-tool="${
-                                  metadata.id
-                                }" onclick="app.navigateToTool('${metadata.id}')">
+                                <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
                                     <div class="tool-card-icon">
-                                        ${this.sidebar.getToolIcon(
-                                          metadata.icon
-                                        )}
+                                        ${this.sidebar.getToolIcon(metadata.icon)}
                                     </div>
-                                    <h3 class="tool-card-title">${
-                                      metadata.name
-                                    }</h3>
-                                    <p class="tool-card-description">${
-                                      metadata.description
-                                    }</p>
+                                    <h3 class="tool-card-title">${metadata.name}</h3>
+                                    <p class="tool-card-description">${metadata.description}</p>
                                 </div>
                             `;
                           })
@@ -427,15 +419,15 @@ class App {
    */
   setupNotifications() {
     this.eventBus.on("notification:success", (data) => {
-      this.showNotification(data.message, "success");
+      this.showNotification(data.message, "success", data.duration);
     });
 
     this.eventBus.on("notification:error", (data) => {
-      this.showNotification(data.message, "error");
+      this.showNotification(data.message, "error", data.duration);
     });
 
     this.eventBus.on("notification:info", (data) => {
-      this.showNotification(data.message, "info");
+      this.showNotification(data.message, "info", data.duration);
     });
   }
 
@@ -444,7 +436,7 @@ class App {
    * @param {string} message - Notification message
    * @param {string} type - Notification type (success, error, info)
    */
-  showNotification(message, type = "info") {
+  showNotification(message, type = "info", durationMs = 1000) {
     // Create notification container if it doesn't exist
     let container = document.querySelector(".notification-container");
     if (!container) {
@@ -478,12 +470,12 @@ class App {
     // Add to container
     container.appendChild(notification);
 
-    // Auto-remove after 5 seconds
+    // Auto-remove after configured duration
     setTimeout(() => {
       if (notification.parentElement) {
         notification.remove();
       }
-    }, 5000);
+    }, durationMs);
 
     // Add slide-in animation
     setTimeout(() => {
