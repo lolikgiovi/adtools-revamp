@@ -25,27 +25,19 @@ window.UUIDGeneratorTemplate = /* html */ `
         <!-- Multiple UUIDs Section -->
         <div class="uuid-section">
             <h2>Multiple UUIDs</h2>
-            <div class="multiple-controls">
-                <input 
-                    type="number" 
-                    id="uuidQuantity" 
-                    class="quantity-input" 
-                    placeholder="How many?" 
-                    min="1" 
-                    max="100"
-                />
                 <div class="uuid-buttons">
-                    <button class="btn btn-primary" id="generateMultipleUUID">
-                        Generate
-                    </button>
-                    <button class="btn btn-primary" id="copyMultipleUUID" disabled>
-                        Copy
-                    </button>
-                    <button class="btn btn-primary" id="clearMultipleUUID">
-                        Clear
-                    </button>
+                    <input 
+                        type="number" 
+                        id="uuidQuantity" 
+                        class="quantity-input" 
+                        placeholder="How many?" 
+                        min="1" 
+                        max="10000"
+                    />
+                    <button class="btn btn-primary" id="generateMultipleUUID">Generate</button>
+                    <button class="btn btn-primary" id="copyMultipleUUID" disabled>Copy</button>
+                    <button class="btn btn-primary" id="clearMultipleUUID">Clear</button>
                 </div>
-            </div>
             <div class="multiple-output">
                 <textarea 
                     id="multipleUuidResult" 
