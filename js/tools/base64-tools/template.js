@@ -6,14 +6,14 @@ window.Base64ToolsTemplate = /* html */ `
 
   <!-- Tab Navigation -->
   <div class="tab-navigation">
-    <button class="tab-button active" data-mode="encode">
+    <button class="base64-tab-button active" data-mode="encode">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="16 18 22 12 16 6"></polyline>
         <polyline points="8 6 2 12 8 18"></polyline>
       </svg>
       Encode to Base64
     </button>
-    <button class="tab-button" data-mode="decode">
+    <button class="base64-tab-button" data-mode="decode">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="8 18 2 12 8 6"></polyline>
         <polyline points="16 6 22 12 16 18"></polyline>

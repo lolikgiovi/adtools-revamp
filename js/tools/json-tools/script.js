@@ -71,22 +71,19 @@ class JSONTools extends BaseTool {
         require(["vs/editor/editor.main"], () => {
           try {
             // Create Monaco Editor instance
-            this.editor = monaco.editor.create(
-              document.getElementById("json-editor"),
-              {
-                value: "",
-                language: "json",
-                theme: "vs-dark",
-                automaticLayout: true,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                formatOnPaste: true,
-                formatOnType: true,
-                tabSize: 2,
-                insertSpaces: true,
-              }
-            );
+            this.editor = monaco.editor.create(document.getElementById("json-editor"), {
+              value: "",
+              language: "json",
+              theme: "vs-dark",
+              automaticLayout: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              formatOnPaste: true,
+              formatOnType: true,
+              tabSize: 2,
+              insertSpaces: true,
+            });
 
             resolve();
           } catch (error) {
@@ -103,19 +100,17 @@ class JSONTools extends BaseTool {
 
   bindToolEvents() {
     // Tab switching
-    document.querySelectorAll(".tab-button").forEach((button) => {
+    document.querySelectorAll(".json-tab-button").forEach((button) => {
       button.addEventListener("click", (e) => {
         this.switchTab(e.target.dataset.tab);
       });
     });
 
     // Action buttons
-    document
-      .querySelector(".btn-action-primary")
-      .addEventListener("click", () => {
-        this.clearErrors();
-        this.processCurrentTab();
-      });
+    document.querySelector(".btn-action-primary").addEventListener("click", () => {
+      this.clearErrors();
+      this.processCurrentTab();
+    });
 
     document.querySelector(".btn-clear").addEventListener("click", () => {
       this.editor.setValue("");
@@ -155,7 +150,7 @@ class JSONTools extends BaseTool {
   }
 
   switchTab(tabName) {
-    document.querySelectorAll(".tab-button").forEach((btn) => {
+    document.querySelectorAll(".json-tab-button").forEach((btn) => {
       btn.classList.remove("active");
     });
     document.querySelector(`[data-tab="${tabName}"]`).classList.add("active");
@@ -259,11 +254,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "❌ Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -279,11 +270,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -300,11 +287,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -321,11 +304,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -362,12 +341,7 @@ class JSONTools extends BaseTool {
       JSON.parse(content);
 
       // Escape the JSON string
-      const escaped = content
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, "\\n")
-        .replace(/\r/g, "\\r")
-        .replace(/\t/g, "\\t");
+      const escaped = content.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
 
       output.textContent = `"${escaped}"`;
       output.className = "json-output success";
@@ -375,11 +349,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -410,9 +380,7 @@ class JSONTools extends BaseTool {
   extractKeys() {
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
-    const extractType = document.querySelector(
-      'input[name="extract-type"]:checked'
-    ).value;
+    const extractType = document.querySelector('input[name="extract-type"]:checked').value;
 
     try {
       const parsed = JSON.parse(content);
@@ -425,11 +393,7 @@ class JSONTools extends BaseTool {
     } catch (error) {
       output.textContent = "Error: Invalid JSON";
       output.className = "json-output error";
-      this.showError(
-        "JSON Syntax Error",
-        error.message,
-        this.getErrorPosition(error.message)
-      );
+      this.showError("JSON Syntax Error", error.message, this.getErrorPosition(error.message));
     }
   }
 
@@ -445,11 +409,7 @@ class JSONTools extends BaseTool {
       });
     } else if (typeof obj === "object" && obj !== null) {
       Object.keys(obj).forEach((key) => {
-        const newPath = includePaths
-          ? currentPath
-            ? `${currentPath}.${key}`
-            : key
-          : "";
+        const newPath = includePaths ? (currentPath ? `${currentPath}.${key}` : key) : "";
 
         if (includePaths) {
           keys.push(newPath);
@@ -493,10 +453,7 @@ class JSONTools extends BaseTool {
   clearErrors() {
     // Only clear output if it contains error messages, not successful results
     const output = document.getElementById("json-output");
-    if (
-      output.className.includes("error") ||
-      output.innerHTML.includes("error-message")
-    ) {
+    if (output.className.includes("error") || output.innerHTML.includes("error-message")) {
       this.clearOutput();
     }
   }
@@ -522,10 +479,7 @@ class JSONTools extends BaseTool {
       const text = await navigator.clipboard.readText();
       this.editor.setValue(text);
     } catch (error) {
-      this.showError(
-        "Failed to paste from clipboard",
-        "Make sure you have granted clipboard permissions."
-      );
+      this.showError("Failed to paste from clipboard", "Make sure you have granted clipboard permissions.");
       console.error("Clipboard error:", error);
     }
   }

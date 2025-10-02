@@ -7,14 +7,14 @@ window.JSONToolsTemplate = /* html */ `
 <div class="json-tools-container">
     <div class="json-tools-header">
         <div class="json-tools-tabs">
-            <button class="tab-button active" data-tab="validator">Validator</button>
-            <button class="tab-button" data-tab="prettify">Prettify</button>
-            <button class="tab-button" data-tab="minify">Minify</button>
-            <button class="tab-button" data-tab="stringify">Stringify</button>
-            <button class="tab-button" data-tab="unstringify">Unstringify</button>
-            <button class="tab-button" data-tab="escape">Escape</button>
-            <button class="tab-button" data-tab="unescape">Unescape</button>
-            <button class="tab-button" data-tab="extract-keys">Extract Keys</button>
+            <button class="json-tab-button active" data-tab="validator">Validator</button>
+            <button class="json-tab-button" data-tab="prettify">Prettify</button>
+            <button class="json-tab-button" data-tab="minify">Minify</button>
+            <button class="json-tab-button" data-tab="stringify">Stringify</button>
+            <button class="json-tab-button" data-tab="unstringify">Unstringify</button>
+            <button class="json-tab-button" data-tab="escape">Escape</button>
+            <button class="json-tab-button" data-tab="unescape">Unescape</button>
+            <button class="json-tab-button" data-tab="extract-keys">Extract Keys</button>
         </div>
     </div>
     
