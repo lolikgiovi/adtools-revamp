@@ -166,17 +166,13 @@ class Base64Tools extends BaseTool {
 
   async handleMultipleFileUpload(event, mode) {
     const files = Array.from(event.target.files);
-    let txtFiles = [];
     if (files.length === 0) return;
 
-    if (mode === "decode") {
-      txtFiles = files.filter((file) => file.name.toLowerCase().endsWith(".txt"));
-    }
+    // In decode mode, accept only .txt files that contain Base64 text
+    const filesToAdd = mode === "decode" ? files.filter((file) => file.name.toLowerCase().endsWith(".txt")) : files;
 
-    const otherFiles = txtFiles.length > 0 && mode === "encode" ? files.filter((file) => !txtFiles.includes(file)) : files;
-
-    if (otherFiles.length > 0) {
-      otherFiles.forEach((file) => {
+    if (filesToAdd.length > 0) {
+      filesToAdd.forEach((file) => {
         const fileId = `${mode}-${crypto.randomUUID()}-${Date.now()}`;
         this.selectedFiles.set(fileId, { file, mode });
         this.displayFileCard(file, fileId, mode);
@@ -390,10 +386,11 @@ class Base64Tools extends BaseTool {
           for (let i = 0; i < decoded.length; i++) {
             uint8Array[i] = decoded.charCodeAt(i);
           }
-          this.decodedBlob = new Blob([uint8Array]);
+          const contentType = window.Base64ToolsService.detectContentType(uint8Array);
+          this.decodedBlob = new Blob([uint8Array], { type: contentType });
           this.decodedFilename = `decoded_base64-${Date.now()}`;
 
-          this.showFileInfo({ name: this.decodedFilename, size: this.decodedBlob.size }, "decode");
+          this.showFileInfo({ name: this.decodedFilename, size: this.decodedBlob.size, type: contentType }, "decode");
         }
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
@@ -610,7 +607,7 @@ class Base64Tools extends BaseTool {
     const fileTypeIcon = this.getFileTypeIcon(fileInfo.type);
 
     fileCard.innerHTML = /*html*/ `
-      <div class="file-card-info file-card">
+      <div class="file-card-info binary-card">
         <div class="file-type-icon">
           ${fileTypeIcon}
         </div>
@@ -813,7 +810,21 @@ class Base64Tools extends BaseTool {
     }
 
     if (processedContainer) {
+      // Revoke any object URLs in image cards to prevent memory leaks
+      const imageImgs = processedContainer.querySelectorAll(".image-preview img");
+      imageImgs.forEach((img) => {
+        if (img.src && img.src.startsWith("blob:")) {
+          URL.revokeObjectURL(img.src);
+        }
+      });
       processedContainer.innerHTML = "";
+    }
+
+    // Only clear output-related info panel; keep input panel untouched
+    const outputInfo = container.querySelector(`#${mode}-processed-file`);
+    if (outputInfo) {
+      outputInfo.style.display = "none";
+      outputInfo.innerHTML = "";
     }
 
     if (mode === "decode") {
@@ -824,6 +835,13 @@ class Base64Tools extends BaseTool {
 
   downloadResult(mode) {
     const container = this.validateContainer();
+
+    // If processed cards are visible, prefer per-card "Download" actions
+    const processedDisplay = container.querySelector(`#${mode}-processed-files`);
+    if (processedDisplay && processedDisplay.style.display === "block") {
+      this.showError("Use per-file Download buttons for processed items");
+      return;
+    }
 
     if (mode === "encode") {
       const outputArea = container.querySelector("#encode-output");
