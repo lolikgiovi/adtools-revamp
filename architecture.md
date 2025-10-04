@@ -118,6 +118,7 @@ To add a new tool:
 ## Notes & Future Work
 
 - Consider extracting common helpers (clipboard, error formatting) to shared utilities.
+- Preview in localhost:5500 since it has hot-reloading enabled.
 - Add light integration tests for routing and tool activation.
 - Evaluate lazy-loading of heavy dependencies (e.g., Monaco) to improve initial load times.
 - If needed, further standardize the Tool base class (`BaseTool`) usage across tools.

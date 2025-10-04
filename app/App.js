@@ -81,6 +81,10 @@ class App {
     const base64Tools = new Base64Tools(this.eventBus);
     this.registerTool(base64Tools);
 
+    // Register QR Tools
+    const qrTools = new QRTools(this.eventBus);
+    this.registerTool(qrTools);
+
     // Add more tools here as they are implemented
   }
 
