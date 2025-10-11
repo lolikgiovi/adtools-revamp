@@ -92,10 +92,14 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 ## Dependencies
 
 - **Monaco Editor**: Imported as ES modules from npm package (`monaco-editor`). Workers are configured using Vite's `?worker` syntax for proper bundling.
+- **Handsontable**: Imported from npm (`handsontable`) for grid rendering in Quick Query; CSS is included via ESM import. No global variables or CDN scripts required.
 - **QRCode**: Imported as ES module from npm package (`qrcode`) for QR code generation.
 - **Vite**: Development server and build tool providing HMR, ES module bundling, and modern tooling.
 - **Vitest**: Testing framework with JSDOM environment for unit testing service logic.
 - Vanilla JS and CSS; no external framework dependency.
+
+### Editor Migration
+- CodeMirror usage has been removed. Editor functionality is now provided by Monaco Editor across tools (e.g., JSON Tools, Quick Query). This ensures consistent ESM-based loading and worker configuration under Vite.
 
 ## Build Process & Development
 
