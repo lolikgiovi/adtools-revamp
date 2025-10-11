@@ -12,7 +12,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         value="schema_name.table_name">
                 </div>
                 <div class="button-group quick-query-left-controls">
-                    <button id="showSavedSchemas" class="btn btn-secondary btn-sm">Manage Saved Schemas</button>
+                    <button id="showSavedSchemas" class="btn btn-secondary btn-sm">Schemas</button>
                     <button id="addNewSchemaRow" class="btn btn-secondary btn-sm">Add row</button>
                     <button id="removeLastSchemaRow" class="btn btn-outline btn-sm">Remove last row</button>
                     <button id="clearAll" class="btn btn-outline btn-sm">Clear All</button>

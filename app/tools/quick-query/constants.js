@@ -206,6 +206,42 @@ export const initialSchemaTableSpecification = {
   contextMenu: true,
   mergeCells: true,
   manualColumnResize: true,
+  // Limit maximum column width to 80% of the container, allow manual resizing below the cap
+  beforeColumnResize: function (newSize, column, isDoubleClick) {
+    const containerWidth = this.rootElement?.clientWidth || 0;
+    const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+    if (typeof newSize === 'number' && newSize > MAX_WIDTH) {
+      return MAX_WIDTH;
+    }
+  },
+  afterInit: function () {
+    const clampToMax = () => {
+      const containerWidth = this.rootElement?.clientWidth || 0;
+      const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+      const resizePlugin = this.getPlugin('manualColumnResize');
+      const totalCols = this.countCols();
+      for (let col = 0; col < totalCols; col++) {
+        const width = this.getColWidth(col);
+        if (width && width > MAX_WIDTH) {
+          resizePlugin.setManualSize(col, MAX_WIDTH);
+        }
+      }
+      this.render();
+    };
+    // Initial clamp
+    clampToMax();
+    // Observe container resize to re-clamp dynamically
+    if (!this.__maxWidthObserver) {
+      this.__maxWidthObserver = new ResizeObserver(() => clampToMax());
+      this.__maxWidthObserver.observe(this.rootElement);
+    }
+  },
+  // Enforce a dynamic hard maximum width based on container size
+  modifyColWidth: function (width, col) {
+    const containerWidth = this.rootElement?.clientWidth || 0;
+    const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+    return typeof width === 'number' ? Math.min(width, MAX_WIDTH) : width;
+  },
   afterChange: (changes) => {
     if (changes) {
       this.updateDataSpreadsheet();
@@ -232,7 +268,43 @@ export const initialDataTableSpecification = {
   rowHeights: 20,
   contextMenu: true,
   manualColumnResize: true,
+  // Disable stretching; enforce a maximum width per column and allow manual resize below the cap
   stretchH: "none",
+  beforeColumnResize: function (newSize, column, isDoubleClick) {
+    const containerWidth = this.rootElement?.clientWidth || 0;
+    const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+    if (typeof newSize === 'number' && newSize > MAX_WIDTH) {
+      return MAX_WIDTH;
+    }
+  },
+  afterInit: function () {
+    const clampToMax = () => {
+      const containerWidth = this.rootElement?.clientWidth || 0;
+      const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+      const resizePlugin = this.getPlugin('manualColumnResize');
+      const totalCols = this.countCols();
+      for (let col = 0; col < totalCols; col++) {
+        const width = this.getColWidth(col);
+        if (width && width > MAX_WIDTH) {
+          resizePlugin.setManualSize(col, MAX_WIDTH);
+        }
+      }
+      this.render();
+    };
+    // Initial clamp
+    clampToMax();
+    // Observe container resize to re-clamp dynamically
+    if (!this.__maxWidthObserver) {
+      this.__maxWidthObserver = new ResizeObserver(() => clampToMax());
+      this.__maxWidthObserver.observe(this.rootElement);
+    }
+  },
+  // Enforce a dynamic hard maximum width based on container size
+  modifyColWidth: function (width, col) {
+    const containerWidth = this.rootElement?.clientWidth || 0;
+    const MAX_WIDTH = Math.floor(containerWidth * 0.8);
+    return typeof width === 'number' ? Math.min(width, MAX_WIDTH) : width;
+  },
   className: "hide-scrollbar",
   cells: function (row, col) {
     const cellProperties = {};

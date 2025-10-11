@@ -177,7 +177,6 @@
 .quick-query-tool-container .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
-  height: 20px !important;
   box-sizing: border-box;
   vertical-align: middle;
 }
@@ -186,8 +185,13 @@
 #spreadsheet-data .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
-  height: 20px !important;
+  /* Force wrapping for long tokens to prevent column over-expansion */
+  white-space: normal !important;
+  word-break: break-word !important;
 }
+
+/* Restore Handsontable's default layout for accurate hit-testing */
+/* Removed forced width and table-layout overrides to ensure clicks register */
 
 /* Ensure theme class selector also picks up compact vars */
 .quick-query-tool-container #spreadsheet-data .handsontable.ht-theme-main,
