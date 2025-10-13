@@ -2,7 +2,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="quick-query-content">
         <div class="content-a">
             <div class="quick-query-left-panel">
-                <div class="button-group">
+                <div class="button-group quick-query-search">
                     <select id="queryTypeSelect">
                         <option value="merge">MERGE INTO</option>
                         <option value="insert">INSERT</option>
@@ -14,8 +14,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <div class="button-group quick-query-left-controls">
                     <button id="showSavedSchemas" class="btn btn-secondary btn-sm">Schemas</button>
                     <button id="addNewSchemaRow" class="btn btn-secondary btn-sm">Add row</button>
-                    <button id="removeLastSchemaRow" class="btn btn-outline btn-sm">Remove last row</button>
-                    <button id="clearAll" class="btn btn-outline btn-sm">Clear All</button>
+                    <button id="removeLastSchemaRow" class="btn btn-secondary btn-sm">Remove last row</button>
+                    <button id="clearAll" class="btn btn-secondary btn-sm">Clear All</button>
                     <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
                 </div>
 
@@ -33,7 +33,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
-                    <button id="toggleWordWrap" class="btn btn-outline btn-sm">Word Wrap: Off</button>
+                    <button id="toggleWordWrap" class="btn btn-secondary btn-sm">Word Wrap: Off</button>
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
                     <button id="downloadSQL" class="btn btn-secondary btn-sm">Download SQL</button>
                 </div>
@@ -43,11 +43,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
         </div>
         <div class="content-b">
-            <div class="button-group">
+            <div class="button-group quick-query-data-controls">
                 <button id="addFieldNames" class="btn btn-secondary btn-sm">Add field names from schema</button>
                 <button id="addDataRow" class="btn btn-secondary btn-sm">Add Row</button>
-                <button id="removeDataRow" class="btn btn-outline btn-sm">Remove Last Row</button>
-                <button id="clearData" class="btn btn-outline btn-sm">Clear Data</button>
+                <button id="removeDataRow" class="btn btn-secondary btn-sm">Remove Last Row</button>
+                <button id="clearData" class="btn btn-secondary btn-sm">Clear Data</button>
                 <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
             </div>
             <div id="spreadsheet-data"></div>

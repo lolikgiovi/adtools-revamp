@@ -35,7 +35,6 @@
 }
 .quick-query-left-panel .button-group:first-of-type #tableNameInput {
   flex: 1 1 100%; /* take full width when wrapped */
-  min-width: 240px;
   width: 100%;
   max-width: none; /* override global cap to allow full line */
 }
@@ -180,14 +179,43 @@
 
 /* Bottom toolbar: wrap buttons and place tip on its own line */
 .content-b .button-group {
-  flex-wrap: wrap;
-  white-space: normal;
-  align-items: flex-start; /* avoid vertical centering with multi-line */
+  min-width: 0;
 }
 .content-b .button-group .tip-text {
-  flex: 1 1 100%;
   margin-top: 6px;
+  /* default: allow wrap in generic bottom toolbar */
   white-space: normal;
+}
+
+/* Force no-wrap for specific groups */
+.quick-query-search.button-group,
+.quick-query-data-controls.button-group {
+  white-space: nowrap;
+  overflow: hidden; /* prevent horizontal scrollbars in tight layouts */
+}
+
+/* Beat the :first-of-type rule for left-panel search specifically */
+.quick-query-left-panel .quick-query-search.button-group {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Allow the tableName input to shrink and remain inline */
+.quick-query-search.button-group #tableNameInput {
+  flex: 1 1 auto;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+}
+
+/* Allow the tip text to truncate in data-controls when no-wrap */
+.quick-query-data-controls .tip-text {
+  /* In data controls, keep tip inline and truncate */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Monaco editor is used; remove legacy CodeMirror rules */
