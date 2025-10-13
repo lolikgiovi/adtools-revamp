@@ -11,16 +11,33 @@
 .quick-query-content .button-group {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap; /* keep controls on one line */
+  flex-wrap: wrap; /* allow wrapping when space is tight */
   gap: 6px;
   margin-bottom: 8px;
-  overflow-x: auto; /* allow horizontal scroll if overflow */
-  white-space: nowrap;
+  overflow: visible; /* avoid horizontal scroll, let items wrap */
+  white-space: normal;
 }
 .quick-query-right-panel .button-group,
 .quick-query-left-controls.button-group {
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  overflow: visible;
+  white-space: normal;
+}
+
+/* Allow the first left-panel control group to wrap its input on narrow widths */
+.quick-query-left-panel .button-group:first-of-type {
+  flex-wrap: wrap;
+  white-space: normal; /* enable wrapping */
+  overflow: visible; /* allow items to break to next line */
+}
+.quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
+  flex: 0 0 150px; /* fixed width as defined */
+}
+.quick-query-left-panel .button-group:first-of-type #tableNameInput {
+  flex: 1 1 100%; /* take full width when wrapped */
+  min-width: 240px;
+  width: 100%;
+  max-width: none; /* override global cap to allow full line */
 }
 
 .quick-query-content {
@@ -89,10 +106,33 @@
   min-height: 400px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible; /* allow Monaco widgets to overflow */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
+}
+
+/* Ensure Monaco's suggest widget is visible and above overlays */
+.monaco-editor .suggest-widget {
+  z-index: 9999 !important;
+  background: #252526 !important;
+  border: 1px solid #3c3c3c !important;
+}
+.monaco-editor .suggest-widget .monaco-list-row {
+  color: #d4d4d4 !important; /* readable on dark theme */
+  background: #252526 !important;
+}
+.monaco-editor .suggest-widget .monaco-list {
+  background: #252526 !important;
+}
+.monaco-editor .suggest-widget .monaco-list-row.focused,
+.monaco-editor .suggest-widget .monaco-list-row.selected {
+  background: #094771 !important;
+}
+.monaco-editor .suggest-widget .monaco-icon-label .label-name,
+.monaco-editor .suggest-widget .monaco-icon-label .label-name > span {
+  color: #d4d4d4 !important;
+  opacity: 1 !important;
 }
 
 /* Compact button styling to match screenshot */
@@ -132,10 +172,22 @@
 }
 #tableNameInput {
   width: 100%;
-  max-width: 486px;
+  max-width: 486px; /* default cap; group-specific override can remove */
   min-width: 0;
   padding: 4px 8px;
   box-sizing: border-box;
+}
+
+/* Bottom toolbar: wrap buttons and place tip on its own line */
+.content-b .button-group {
+  flex-wrap: wrap;
+  white-space: normal;
+  align-items: flex-start; /* avoid vertical centering with multi-line */
+}
+.content-b .button-group .tip-text {
+  flex: 1 1 100%;
+  margin-top: 6px;
+  white-space: normal;
 }
 
 /* Monaco editor is used; remove legacy CodeMirror rules */

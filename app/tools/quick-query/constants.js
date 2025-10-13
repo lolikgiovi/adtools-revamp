@@ -143,16 +143,16 @@ export const oracleDateFormats = {
 };
 
 export const sampleSchema1 = [
-  ["TABLE_ID", "VARCHAR2(36)", "PK", "", "1"],
-  ["DESC_ID", "VARCHAR2(500)", "PK", "", "2"],
-  ["DESC_EN", "VARCHAR2(500)", "No", "", "3"],
-  ["AMOUNT", "NUMBER(15,2)", "Yes", "", "4"],
-  ["SEQUENCE", "NUMBER(3,0)", "No", "", "5"],
-  ["IS_ACTIVE", "NUMBER", "No", "", "6"],
-  ["CREATED_TIME", "TIMESTAMP(6)", "No", "", "7"],
-  ["CREATED_BY", "VARCHAR2(36)", "No", "", "8"],
-  ["UPDATED_TIME", "TIMESTAMP(6)", "No", "", "9"],
-  ["UPDATED_BY", "VARCHAR2(36)", "No", "", "10"],
+  ["TABLE_ID", "VARCHAR2(36)", "No", "", "1", "Yes"],
+  ["DESC_ID", "VARCHAR2(500)", "No", "", "2", "Yes"],
+  ["DESC_EN", "VARCHAR2(500)", "No", "", "3", "No"],
+  ["AMOUNT", "NUMBER(15,2)", "Yes", "", "4", "No"],
+  ["SEQUENCE", "NUMBER(3,0)", "No", "", "5", "No"],
+  ["IS_ACTIVE", "NUMBER", "No", "", "6", "No"],
+  ["CREATED_TIME", "TIMESTAMP(6)", "No", "", "7", "No"],
+  ["CREATED_BY", "VARCHAR2(36)", "No", "", "8", "No"],
+  ["UPDATED_TIME", "TIMESTAMP(6)", "No", "", "9", "No"],
+  ["UPDATED_BY", "VARCHAR2(36)", "No", "", "10", "No"],
 ];
 
 export const sampleData1 = [
@@ -162,8 +162,8 @@ export const sampleData1 = [
 ];
 
 export const initialSchemaTableSpecification = {
-  data: [["", "", "", ""]], // empty data
-  colHeaders: ["Field Name", "Data Type", "Nullable/PK", "Default", "Field Order", "Comments"],
+  data: [["", "", "", "", "", ""]], // empty data
+  colHeaders: ["Field Name", "Data Type", "Null", "Default", "Order", "PK"],
   columns: [
     {
       renderer: function (instance, td, row, col, prop, value, cellProperties) {
@@ -174,9 +174,9 @@ export const initialSchemaTableSpecification = {
     {},
     {
       type: "dropdown",
-      source: ["Yes", "No", "PK"],
+      source: ["Yes", "No"],
       validator: function (value, callback) {
-        callback(["Yes", "No", "PK", "yes", "no", "pk", "Yes", "No", "Pk", "Y", "N", "y", "n"].includes(value));
+        callback(["Yes", "No", "yes", "no", "Y", "N", "y", "n"].includes(value));
       },
       renderer: function (instance, td, row, col, prop, value, cellProperties) {
         td.textContent = value == null ? "" : String(value);
@@ -194,7 +194,17 @@ export const initialSchemaTableSpecification = {
         td.style.textAlign = "center";
       },
     },
-    {},
+    {
+      type: "dropdown",
+      source: ["Yes", "No"],
+      validator: function (value, callback) {
+        callback(["Yes", "No", "yes", "no", "Y", "N", "y", "n"].includes(value));
+      },
+      renderer: function (instance, td, row, col, prop, value, cellProperties) {
+        td.textContent = value == null ? "" : String(value);
+        td.style.textAlign = "center";
+      },
+    },
   ],
   height: "auto",
   licenseKey: "non-commercial-and-evaluation",
@@ -321,25 +331,25 @@ export const initialDataTableSpecification = {
 
 export const sampleSchema2 = [
   // Test case: Mixed case field names and special characters
-  ["Field_NAME_1", "VARCHAR2(50)", "PK", "", "1", "Test PK field"],
+  ["Field_NAME_1", "VARCHAR2(50)", "No", "", "1", "Yes"],
 
   // Test case: Number field with maximum precision and scale
-  ["amount_2", "NUMBER(38,10)", "No", "0", "2", "Max Oracle number"],
+  ["amount_2", "NUMBER(38,10)", "No", "0", "2", "No"],
 
   // Test case: Nullable field with default
-  ["description", "VARCHAR2(4000)", "Yes", "'N/A'", "3", "Max VARCHAR2"],
+  ["description", "VARCHAR2(4000)", "Yes", "'N/A'", "3", "No"],
 
   // Test case: Boolean/Flag field
-  ["is_active_FLAG", "NUMBER(1,0)", "No", "1", "4", "Boolean field"],
+  ["is_active_FLAG", "NUMBER(1,0)", "No", "1", "4", "No"],
 
   // Test case: Reserved word as field name
-  ['"TABLE"', "VARCHAR2(100)", "No", "", "5", "Reserved word"],
+  ['"TABLE"', "VARCHAR2(100)", "No", "", "5", "No"],
 
   // Test case: Timestamp with timezone
-  ["event_time", "TIMESTAMP(9) WITH TIME ZONE", "No", "SYSDATE", "6", "Max precision"],
+  ["event_time", "TIMESTAMP(9) WITH TIME ZONE", "No", "SYSDATE", "6", "No"],
 
   // Test case: CLOB type
-  ["large_text", "CLOB", "Yes", "", "7", "CLOB field"],
+  ["large_text", "CLOB", "Yes", "", "7", "No"],
 ];
 
 export const sampleData2 = [

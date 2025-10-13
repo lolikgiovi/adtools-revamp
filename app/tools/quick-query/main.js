@@ -250,7 +250,16 @@ export class QuickQueryUI {
           { token: 'number', foreground: 'F78C6C' },           // numbers orange
           { token: 'constant.null', foreground: 'ff93f9' },    // NULL red
         ],
-        colors: {}
+        colors: {
+          'editor.background': '#1e1e1e',
+          'editor.foreground': '#d4d4d4',
+          'editorWidget.background': '#252526',
+          'editorSuggestWidget.background': '#252526',
+          'editorSuggestWidget.foreground': '#d4d4d4',
+          'editorSuggestWidget.selectedBackground': '#094771',
+          'editorSuggestWidget.highlightForeground': '#93c5ff',
+          'editorSuggestWidget.border': '#3c3c3c'
+        }
       });
     } catch (e) {
       console.warn('Failed to register Oracle SQL language; falling back to sql', e);
@@ -453,14 +462,24 @@ export class QuickQueryUI {
       language: "oracle-dml",
       theme: "oracle-dml-dark",
       automaticLayout: true,
+      fontSize: 12,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "off",
+      // Encourage suggestions during typing
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
     });
     // Ensure language is applied even if model was created before registration
     const model = this.editor.getModel();
     if (model) {
       monaco.editor.setModelLanguage(model, 'oracle-dml');
+    }
+    // Sync initial word wrap label with current editor option
+    const wordWrapButton = document.getElementById("toggleWordWrap");
+    const currentWrap = this.editor.getRawOptions().wordWrap;
+    if (wordWrapButton) {
+      wordWrapButton.textContent = `Word Wrap: ${currentWrap === "on" ? "On" : "Off"}`;
     }
   }
 
@@ -623,8 +642,8 @@ export class QuickQueryUI {
 
     if (this.schemaTable) {
       this.schemaTable.updateSettings({
-        data: [["", "", "", ""]],
-        colHeaders: ["Field Name", "Data Type", "Nullable/PK", "Default", "Field Order", "Comments"],
+        data: [["", "", "", "", "", ""]],
+        colHeaders: ["Field Name", "Data Type", "Null", "Default", "Order", "PK"],
       });
     }
 
@@ -667,13 +686,14 @@ export class QuickQueryUI {
   }
 
   handleToggleWordWrap() {
-    const wordWrapButton = document.getElementById("toggleWordWrap");
-    const currentState = this.editor.getOption("lineWrapping");
-    const newState = !currentState;
+    const wordWrapButton = this.elements?.toggleWordWrapButton || document.getElementById("toggleWordWrap");
+    const current = this.editor.getRawOptions().wordWrap;
+    const next = current === "on" ? "off" : "on";
 
-    this.editor.setOption("lineWrapping", newState);
-    wordWrapButton.textContent = `Word Wrap: ${newState ? "On" : "Off"}`;
-    this.editor.refresh();
+    this.editor.updateOptions({ wordWrap: next });
+    if (wordWrapButton) {
+      wordWrapButton.textContent = `Word Wrap: ${next === "on" ? "On" : "Off"}`;
+    }
   }
 
   handleToggleGuide() {
@@ -1168,7 +1188,7 @@ export class QuickQueryUI {
     const removedHeader = schemaData.slice(1);
 
     // Transform the data
-    const adjustedSchemaData = removedHeader.map((row) => {
+    const adjustedSchemaData = removedHeader.map((row, idx) => {
       // Original DBeaver format:
       // [0]: Column Name
       // [1]: Column Type
@@ -1178,8 +1198,8 @@ export class QuickQueryUI {
       // [5]: Default Value
       // [6]: Comments
 
-      // Transform nullable from TRUE/FALSE to No/Yes
-      const nullable = String(row[4]).toLowerCase() === "true" ? "No" : "Yes";
+      // Transform nullable from TRUE/FALSE to Yes/No
+      const nullable = String(row[4]).toLowerCase() === "true" ? "Yes" : "No";
 
       // Transform [NULL] to empty string
       const defaultValue = row[5] === "[NULL]" ? "" : row[5];
@@ -1187,10 +1207,10 @@ export class QuickQueryUI {
       return [
         row[0], // [0] Field Name (same as Column Name)
         row[2], // [1] Data Type (use Type Name instead of Column Type)
-        nullable, // [2] Nullable/PK
+        nullable, // [2] Null
         defaultValue, // [3] Default Value
-        row[1] || "", // [4] Field Order (use Column Type as order)
-        row[6] || "", // [5] Comments
+        String(idx + 1), // [4] Order
+        "No", // [5] PK (default to No; DBeaver export doesn't include PK info)
       ];
     });
 

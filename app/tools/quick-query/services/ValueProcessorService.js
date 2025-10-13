@@ -205,8 +205,13 @@ export class ValueProcessorService {
       if (parameterKeyField) return [parameterKeyField[0].toLowerCase()];
     }
 
-    // Look for fields with "PK" or "pk" in the Nullable field
-    const pkFields = data.filter((field) => field[2].toLowerCase().includes("pk")).map((field) => field[0]);
+    // Detect PK from dedicated PK column (index 5)
+    const pkFields = data
+      .filter((field) => {
+        const pkValue = (field[5] ?? "").toString().trim().toLowerCase();
+        return pkValue === "yes" || pkValue === "y";
+      })
+      .map((field) => field[0]);
 
     if (pkFields.length > 0) return pkFields;
 

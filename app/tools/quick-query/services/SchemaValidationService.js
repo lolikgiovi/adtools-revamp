@@ -11,15 +11,16 @@ export class SchemaValidationService {
     // Track invalid entries
     const invalidDataTypes = [];
     const invalidNullableValues = [];
+    const invalidPkValues = [];
 
     // Validate each row in the schema once
     schemaData.forEach((row, index) => {
-      const [fieldName, dataType, nullable] = row;
+      const [fieldName, dataType, nullable, _default, _order, pk] = row;
 
       // Check if any required field is empty
       if (!fieldName || !dataType || !nullable) {
         throw new Error(
-          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Nullable are required.`
+          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`
         );
       }
 
@@ -28,14 +29,21 @@ export class SchemaValidationService {
         invalidDataTypes.push(`${dataType} (in field ${fieldName})`);
       }
 
-      // Validate nullable values
+      // Validate Null column values ('Yes' or 'No')
       if (!this.isValidNullableDataType(nullable)) {
         invalidNullableValues.push(`${nullable} (in field ${fieldName})`);
+      }
+
+      // Validate PK column values if present ('Yes' or 'No')
+      if (pk !== undefined && pk !== null && pk !== "") {
+        if (!this.isValidPkValue(pk)) {
+          invalidPkValues.push(`${pk} (in field ${fieldName})`);
+        }
       }
     });
 
     // Build error message if any validations failed
-    if (invalidDataTypes.length > 0 || invalidNullableValues.length > 0) {
+    if (invalidDataTypes.length > 0 || invalidNullableValues.length > 0 || invalidPkValues.length > 0) {
       const errors = [];
 
       if (invalidDataTypes.length > 0) {
@@ -43,7 +51,10 @@ export class SchemaValidationService {
       }
 
       if (invalidNullableValues.length > 0) {
-        errors.push(`Invalid nullable values: ${invalidNullableValues.join(", ")}. Must be 'Yes', 'No', or 'PK'`);
+        errors.push(`Invalid Null values: ${invalidNullableValues.join(", ")}. Must be 'Yes' or 'No'`);
+      }
+      if (invalidPkValues.length > 0) {
+        errors.push(`Invalid PK values: ${invalidPkValues.join(", ")}. Must be 'Yes' or 'No'`);
       }
 
       throw new Error(`Schema Validation Error:<br>${errors.join("<br>")}`);
@@ -58,8 +69,13 @@ export class SchemaValidationService {
   }
 
   isValidNullableDataType(nullable) {
-    const validValues = ["Yes", "No", "PK", "yes", "no", "pk", "Y", "N", "y", "n"];
+    const validValues = ["Yes", "No", "yes", "no", "Y", "N", "y", "n"];
     return validValues.includes(nullable);
+  }
+
+  isValidPkValue(pk) {
+    const validValues = ["Yes", "No", "yes", "no", "Y", "N", "y", "n"];
+    return validValues.includes(pk);
   }
 
   matchSchemaWithData(schemaData, inputData) {
