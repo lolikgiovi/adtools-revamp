@@ -71,8 +71,6 @@
   padding: 0 0 8px 8px;
   display: flex;
   flex-direction: column;
-  overflow: auto;
-  /* Allow scroll chaining from inner elements */
   overscroll-behavior: auto;
 }
 
@@ -953,7 +951,7 @@
 .tip-text {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
   color: hsl(var(--muted-foreground));
   margin: 6px 0;
   padding: 6px 10px;

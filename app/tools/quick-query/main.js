@@ -30,14 +30,14 @@ export class QuickQuery extends BaseTool {
   }
 
   onMount() {
-    // Instantiate legacy UI controller against the mounted container
-    this.ui = new QuickQueryUI(this.container, () => {});
+    this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this));
   }
 }
 
 export class QuickQueryUI {
-  constructor(container, updateHeaderTitle) {
+  constructor(container, updateHeaderTitle, copyToClipboard) {
     this.container = container;
+    this.copyToClipboard = copyToClipboard;
     this.updateHeaderTitle = updateHeaderTitle;
     this.editor = null;
     this.schemaTable = null;
@@ -549,7 +549,7 @@ export class QuickQueryUI {
       language: "oracle-dml",
       theme: "oracle-dml-dark",
       automaticLayout: true,
-      fontSize: 12,
+      fontSize: 10.5,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "off",
