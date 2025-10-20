@@ -118,7 +118,7 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 40;
+  z-index: 200; /* raised above Handsontable header clones */
 }
 
 .sidebar[data-state="collapsed"] {
@@ -758,7 +758,7 @@ body {
     top: 0;
     left: 0;
     height: 100vh;
-    z-index: 50;
+    z-index: 200; /* keep above in mobile too */
     transition: transform 0.2s ease;
   }
 
@@ -795,7 +795,7 @@ body {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    z-index: 40;
+    z-index: 180; /* Above Handsontable clones, below sidebar (200) */
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
