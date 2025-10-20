@@ -21,12 +21,18 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 
                 <div id="spreadsheet-schema"></div>
 
-                <div id="attachments-container" class="attachment-container-hide">
-                    <p>Drop attachments or click to select. Supports: txt, jpg, png, html, pdf and json</p>
-                    <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png , .html, .pdf, .json"
-                        multiple style="display: none;" />
+                <!-- Attachments container -->
+                <div id="files-container">
+                    <div id="attachments-controls" class="button-group quick-query-attachments-controls" role="toolbar" aria-label="Attachment actions">
+                        <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file"><span class="btn-icon">📎</span> Add file</button>
+                        <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached text files" disabled aria-disabled="true">Minify</button>
+                        <button id="deleteAllButton" class="btn btn-outline btn-xs delete-all-button" aria-label="Delete all attached files" disabled aria-disabled="true">Delete all</button>
+                        <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png, .html, .pdf, .json" multiple style="display: none;" />
+                    </div>
+                    <div id="file-items">
+                        <div id="files-empty" class="empty-file-button" role="button" tabindex="0" aria-label="No file attached, click to attach file">No file attached, click to attach file</div>
+                    </div>
                 </div>
-                <div id="files-container"></div>
 
                 <div id="guideContainer">
                 </div>
@@ -130,9 +136,24 @@ export const GUIDE_TEMPLATE = /* html */ `<button id="toggleGuide" class="toggle
     </div>
 </div>`;
 
-export const FILE_BUTTON_TEMPLATE = (file) => /* html */ `
+export const FILE_BUTTON_TEMPLATE = (file) => {
+  const t = (file.type || "").toLowerCase();
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const icon = t.startsWith("image/")
+    ? "🖼️"
+    : t === "application/pdf" || ext === "pdf"
+    ? "📄"
+    : t.includes("json") || ext === "json"
+    ? "🧾"
+    : t.includes("html") || ext === "html"
+    ? "🌐"
+    : t.includes("text") || ext === "txt"
+    ? "📝"
+    : "📦";
+  return /* html */ `
   <div class="file-info">
-    <button class="copy-filename" title="Copy filename">
+    <span class="file-type-icon" aria-hidden="true">${icon}</span>
+    <button class="copy-filename" title="Copy filename" aria-label="Copy filename">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -141,7 +162,8 @@ export const FILE_BUTTON_TEMPLATE = (file) => /* html */ `
     <span class="file-name">${file.name}</span>
   </div>
   <div class="file-actions">
-    <span class="file-size">${(file.size / 1024).toFixed(2)} KB</span>
-    <button class="delete-file" title="Delete file">×</button>
+    <span class="file-size" aria-label="File size">${(file.size / 1024).toFixed(2)} KB</span>
+    <button class="delete-file" title="Delete file" aria-label="Delete file">×</button>
   </div>
 `;
+};

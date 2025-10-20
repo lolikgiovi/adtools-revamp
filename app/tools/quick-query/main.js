@@ -5,13 +5,11 @@ import { sampleSchema1, sampleData1, initialSchemaTableSpecification, initialDat
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { MAIN_TEMPLATE, GUIDE_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from 'monaco-editor';
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import Handsontable from 'handsontable';
-// Handsontable v15+ theming: import base and a theme CSS
-import 'handsontable/styles/handsontable.css';
-import 'handsontable/styles/ht-theme-main.css';
-
+import * as monaco from "monaco-editor";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import Handsontable from "handsontable";
+import "handsontable/styles/handsontable.css";
+import "handsontable/styles/ht-theme-main.css";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -85,6 +83,8 @@ export class QuickQueryUI {
       // Initialize UI components
       this.bindElements();
       this.clearError();
+      // Ensure attachments toolbar visibility reflects initial state
+      this.updateAttachmentControlsState();
       this.registerOracleSqlLanguage();
       await this.initializeComponents();
       this.setupEventListeners();
@@ -100,31 +100,80 @@ export class QuickQueryUI {
   registerOracleSqlLanguage() {
     try {
       // Focused highlighter for Oracle DML: SELECT, MERGE, UPDATE, INSERT
-      const id = 'oracle-dml';
-      if (!monaco.languages.getLanguages().some(l => l.id === id)) {
-        monaco.languages.register({ id, aliases: ['Oracle DML', 'Oracle SQL'] });
+      const id = "oracle-dml";
+      if (!monaco.languages.getLanguages().some((l) => l.id === id)) {
+        monaco.languages.register({ id, aliases: ["Oracle DML", "Oracle SQL"] });
       }
 
       const dmlKeywords = [
-        'select','insert','update','merge','into','values','set','where','from','join','inner','left','right','full','outer','on','group','by','order','having','connect','start','with','prior','using','when','matched','not','then','and','or'
+        "select",
+        "insert",
+        "update",
+        "merge",
+        "into",
+        "values",
+        "set",
+        "where",
+        "from",
+        "join",
+        "inner",
+        "left",
+        "right",
+        "full",
+        "outer",
+        "on",
+        "group",
+        "by",
+        "order",
+        "having",
+        "connect",
+        "start",
+        "with",
+        "prior",
+        "using",
+        "when",
+        "matched",
+        "not",
+        "then",
+        "and",
+        "or",
       ];
       const functions = [
-        'nvl','nvl2','coalesce','decode','substr','instr','length','replace','regexp_like','regexp_substr','regexp_replace','to_char','to_date','to_timestamp','trunc','round','upper','lower','initcap','lpad','rpad','trim'
+        "nvl",
+        "nvl2",
+        "coalesce",
+        "decode",
+        "substr",
+        "instr",
+        "length",
+        "replace",
+        "regexp_like",
+        "regexp_substr",
+        "regexp_replace",
+        "to_char",
+        "to_date",
+        "to_timestamp",
+        "trunc",
+        "round",
+        "upper",
+        "lower",
+        "initcap",
+        "lpad",
+        "rpad",
+        "trim",
       ];
-      const specialKeywords = ['sysdate','systimestamp'];
-      const constants = ['null'];
+      const specialKeywords = ["sysdate", "systimestamp"];
+      const constants = ["null"];
       // Custom coloring targets per user request
-      const dmlBlueKeywords = ['merge','into','as','then','update','set','select','from'];
-      const aliasesBlue = ['tgt','src'];
-      const specialFunctionsBlue = ['nvl'];
+      const dmlBlueKeywords = ["merge", "into", "as", "then", "update", "set", "select", "from"];
+      const aliasesBlue = ["tgt", "src"];
+      const specialFunctionsBlue = ["nvl"];
 
       monaco.languages.setMonarchTokensProvider(id, {
-        defaultToken: '',
-        tokenPostfix: '.oracle',
+        defaultToken: "",
+        tokenPostfix: ".oracle",
         ignoreCase: true,
-        brackets: [
-          { open: '(', close: ')', token: 'delimiter.parenthesis' },
-        ],
+        brackets: [{ open: "(", close: ")", token: "delimiter.parenthesis" }],
         keywords: dmlKeywords,
         functions,
         specialKeywords,
@@ -133,136 +182,178 @@ export class QuickQueryUI {
         aliasesBlue,
         specialFunctionsBlue,
         operators: [
-          '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=', '<>', '&&', '||', '++', '--', '+', '-', '*', '/', '%', '|', '^', '@'
+          "=",
+          ">",
+          "<",
+          "!",
+          "~",
+          "?",
+          ":",
+          "==",
+          "<=",
+          ">=",
+          "!=",
+          "<>",
+          "&&",
+          "||",
+          "++",
+          "--",
+          "+",
+          "-",
+          "*",
+          "/",
+          "%",
+          "|",
+          "^",
+          "@",
         ],
         symbols: /[=><!~?:&|+\-*/^%]+/,
         tokenizer: {
           root: [
-            [/--.*$/, 'comment'],
-            [/\/\*/, 'comment', '@comment'],
+            [/--.*$/, "comment"],
+            [/\/\*/, "comment", "@comment"],
 
             // Enter ON clause to highlight field names inside parentheses
-            [/\bON\s*\(/, { token: 'keyword', next: '@onClause' }],
+            [/\bON\s*\(/, { token: "keyword", next: "@onClause" }],
 
             // strings
-            [/\'(?:''|[^'])*\'/, 'string'],
+            [/\'(?:''|[^'])*\'/, "string"],
 
             // Explicit schema_name.table_name (quoted) — green as requested
-            [/"schema_name"(?=\.)/, 'entity.schema'],
-            [/\./, 'delimiter'],
-            [/"table_name"/, 'entity.table'],
+            [/"schema_name"(?=\.)/, "entity.schema"],
+            [/\./, "delimiter"],
+            [/"table_name"/, "entity.table"],
 
             // Explicit schema_name.table_name (unquoted) — green as requested
-            [/\bschema_name(?=\.)/, 'entity.schema'],
-            [/\./, 'delimiter'],
-            [/\btable_name\b/, 'entity.table'],
+            [/\bschema_name(?=\.)/, "entity.schema"],
+            [/\./, "delimiter"],
+            [/\btable_name\b/, "entity.table"],
 
             // quoted identifiers (standalone)
-            [/"(?:""|[^"])*"/, 'identifier'],
+            [/"(?:""|[^"])*"/, "identifier"],
 
             // bind variables :var
-            [/:[a-zA-Z_][\w$]*/, 'variable'],
+            [/:[a-zA-Z_][\w$]*/, "variable"],
 
             // numbers
-            [/0x[0-9a-fA-F]+/, 'number.hex'],
-            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, 'number'],
+            [/0x[0-9a-fA-F]+/, "number.hex"],
+            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, "number"],
 
             // identifiers, keywords, functions, aliases
-            [/[a-zA-Z_][\w$]*/, {
-              cases: {
-                '@dmlBlueKeywords': 'keyword.dml',
-                '@keywords': 'keyword',
-                '@specialKeywords': 'predefined.sys',
-                '@specialFunctionsBlue': 'predefined.func.special',
-                '@functions': 'predefined.func',
-                '@aliasesBlue': 'alias.dml',
-                '@constants': 'constant.null',
-                '@default': 'identifier'
-              }
-            }],
+            [
+              /[a-zA-Z_][\w$]*/,
+              {
+                cases: {
+                  "@dmlBlueKeywords": "keyword.dml",
+                  "@keywords": "keyword",
+                  "@specialKeywords": "predefined.sys",
+                  "@specialFunctionsBlue": "predefined.func.special",
+                  "@functions": "predefined.func",
+                  "@aliasesBlue": "alias.dml",
+                  "@constants": "constant.null",
+                  "@default": "identifier",
+                },
+              },
+            ],
 
             // delimiters and operators
-            [/[,.;]/, 'delimiter'],
-            [/@symbols/, 'operator'],
-            [/[()]/, 'delimiter.parenthesis'],
+            [/[,.;]/, "delimiter"],
+            [/@symbols/, "operator"],
+            [/[()]/, "delimiter.parenthesis"],
           ],
 
           // Inside MERGE ON (...) — emphasize field names
           onClause: [
-            [/\)/, { token: 'delimiter.parenthesis', next: '@pop' }],
-            [/\.[a-zA-Z_][\w$]*/, 'predicate.onfield'],
-            [/--.*$/, 'comment'],
-            [/\'(?:''|[^'])*\'/, 'string'],
-            [/0x[0-9a-fA-F]+/, 'number.hex'],
-            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, 'number'],
-            [/[,.;]/, 'delimiter'],
-            [/@symbols/, 'operator'],
-            [/[(]/, 'delimiter.parenthesis'],
-            [/[a-zA-Z_][\w$]*/, {
-              cases: {
-                '@dmlBlueKeywords': 'keyword.dml',
-                '@keywords': 'keyword',
-                '@specialKeywords': 'predefined.sys',
-                '@specialFunctionsBlue': 'predefined.func.special',
-                '@functions': 'predefined.func',
-                '@aliasesBlue': 'alias.dml',
-                '@constants': 'constant.null',
-                '@default': 'identifier'
-              }
-            }],
+            [/\)/, { token: "delimiter.parenthesis", next: "@pop" }],
+            [/\.[a-zA-Z_][\w$]*/, "predicate.onfield"],
+            [/--.*$/, "comment"],
+            [/\'(?:''|[^'])*\'/, "string"],
+            [/0x[0-9a-fA-F]+/, "number.hex"],
+            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, "number"],
+            [/[,.;]/, "delimiter"],
+            [/@symbols/, "operator"],
+            [/[(]/, "delimiter.parenthesis"],
+            [
+              /[a-zA-Z_][\w$]*/,
+              {
+                cases: {
+                  "@dmlBlueKeywords": "keyword.dml",
+                  "@keywords": "keyword",
+                  "@specialKeywords": "predefined.sys",
+                  "@specialFunctionsBlue": "predefined.func.special",
+                  "@functions": "predefined.func",
+                  "@aliasesBlue": "alias.dml",
+                  "@constants": "constant.null",
+                  "@default": "identifier",
+                },
+              },
+            ],
           ],
 
           comment: [
-            [/[^*/]+/, 'comment'],
-            [/\/\*/, 'comment', '@push' ],
-            [/\*\//, 'comment', '@pop' ],
-            [/[*/]/, 'comment']
+            [/[^*/]+/, "comment"],
+            [/\/\*/, "comment", "@push"],
+            [/\*\//, "comment", "@pop"],
+            [/[*/]/, "comment"],
           ],
         },
       });
 
       // Basic completion provider for DML keywords and common functions
       monaco.languages.registerCompletionItemProvider(id, {
-        triggerCharacters: [' ', '('],
+        triggerCharacters: [" ", "("],
         provideCompletionItems: () => ({
           suggestions: [
-            ...dmlKeywords.map(k => ({ label: k.toUpperCase(), kind: monaco.languages.CompletionItemKind.Keyword, insertText: k.toUpperCase() })),
-            ...functions.map(f => ({ label: f.toUpperCase(), kind: monaco.languages.CompletionItemKind.Function, insertText: `${f.toUpperCase()}(` })),
-            ...specialKeywords.map(s => ({ label: s.toUpperCase(), kind: monaco.languages.CompletionItemKind.Keyword, insertText: s.toUpperCase() }))
-          ]
-        })
+            ...dmlKeywords.map((k) => ({
+              label: k.toUpperCase(),
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: k.toUpperCase(),
+            })),
+            ...functions.map((f) => ({
+              label: f.toUpperCase(),
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: `${f.toUpperCase()}(`,
+            })),
+            ...specialKeywords.map((s) => ({
+              label: s.toUpperCase(),
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: s.toUpperCase(),
+            })),
+          ],
+        }),
       });
 
       // Theme tweaks: requested colors for keywords, aliases, schema.table, built-ins, strings, numbers, NULL
-      monaco.editor.defineTheme('oracle-dml-dark', {
-        base: 'vs-dark', inherit: true,
+      monaco.editor.defineTheme("oracle-dml-dark", {
+        base: "vs-dark",
+        inherit: true,
         rules: [
-          { token: 'keyword', foreground: '#93c5ff' },           // general keywords blue
-          { token: 'keyword.dml', foreground: '#93c5ff' },      // MERGE, INTO, AS, THEN, UPDATE, SET, SELECT, FROM
-          { token: 'alias.dml', foreground: '#93c5ff' },        // tgt/src in blue
-          { token: 'predefined.func.special', foreground: '#93c5ff' }, // NVL in blue
-          { token: 'predefined.sys', foreground: 'A6E22E' },   // SYSDATE/SYSTIMESTAMP in blue
-          { token: 'predicate.match', foreground: 'ff93f9' },  // equality pairs in ON clause red
-          { token: 'predicate.onfield', foreground: 'ff93f9' }, // field names inside ON (...) red
-          { token: 'entity.schema', foreground: '#ff93f9' },    // schema name green
-          { token: 'entity.table', foreground: '#ff93f9' },     // table name green
-          { token: 'string', foreground: 'A6E22E' },           // strings green
-          { token: 'number', foreground: 'F78C6C' },           // numbers orange
-          { token: 'constant.null', foreground: 'ff93f9' },    // NULL red
+          { token: "keyword", foreground: "#93c5ff" }, // general keywords blue
+          { token: "keyword.dml", foreground: "#93c5ff" }, // MERGE, INTO, AS, THEN, UPDATE, SET, SELECT, FROM
+          { token: "alias.dml", foreground: "#93c5ff" }, // tgt/src in blue
+          { token: "predefined.func.special", foreground: "#93c5ff" }, // NVL in blue
+          { token: "predefined.sys", foreground: "A6E22E" }, // SYSDATE/SYSTIMESTAMP in blue
+          { token: "predicate.match", foreground: "ff93f9" }, // equality pairs in ON clause red
+          { token: "predicate.onfield", foreground: "ff93f9" }, // field names inside ON (...) red
+          { token: "entity.schema", foreground: "#ff93f9" }, // schema name green
+          { token: "entity.table", foreground: "#ff93f9" }, // table name green
+          { token: "string", foreground: "A6E22E" }, // strings green
+          { token: "number", foreground: "F78C6C" }, // numbers orange
+          { token: "constant.null", foreground: "ff93f9" }, // NULL red
         ],
         colors: {
-          'editor.background': '#1e1e1e',
-          'editor.foreground': '#d4d4d4',
-          'editorWidget.background': '#252526',
-          'editorSuggestWidget.background': '#252526',
-          'editorSuggestWidget.foreground': '#d4d4d4',
-          'editorSuggestWidget.selectedBackground': '#094771',
-          'editorSuggestWidget.highlightForeground': '#93c5ff',
-          'editorSuggestWidget.border': '#3c3c3c'
-        }
+          "editor.background": "#1e1e1e",
+          "editor.foreground": "#d4d4d4",
+          "editorWidget.background": "#252526",
+          "editorSuggestWidget.background": "#252526",
+          "editorSuggestWidget.foreground": "#d4d4d4",
+          "editorSuggestWidget.selectedBackground": "#094771",
+          "editorSuggestWidget.highlightForeground": "#93c5ff",
+          "editorSuggestWidget.border": "#3c3c3c",
+        },
       });
     } catch (e) {
-      console.warn('Failed to register Oracle SQL language; falling back to sql', e);
+      console.warn("Failed to register Oracle SQL language; falling back to sql", e);
     }
   }
 
@@ -276,9 +367,9 @@ export class QuickQueryUI {
       this.initializeSpreadsheets();
       this.initializeEditor();
 
-      if (this.elements.filesContainer && this.elements.attachmentsContainer) {
-        this.elements.filesContainer.classList.add("hidden");
-        this.elements.attachmentsContainer.classList.remove("hidden");
+      // Make sure files container is visible initially
+      if (this.elements.filesContainer) {
+        this.elements.filesContainer.classList.remove("hidden");
       }
     } catch (error) {
       console.error("Failed to initialize components:", error);
@@ -298,9 +389,14 @@ export class QuickQueryUI {
       dataContainer: document.getElementById("spreadsheet-data"),
 
       // Attachments components
-      attachmentsContainer: document.getElementById("attachments-container"),
+      addFilesButton: document.getElementById("addFilesButton"),
       attachmentsInput: document.getElementById("attachmentsInput"),
       filesContainer: document.getElementById("files-container"),
+      fileItemsContainer: document.getElementById("file-items"),
+      attachmentsControls: document.getElementById("attachments-controls"),
+      minifyButton: document.getElementById("minifyButton"),
+      deleteAllButton: document.getElementById("deleteAllButton"),
+      filesEmpty: document.getElementById("files-empty"),
 
       // Message and display elements
       errorMessages: document.getElementById("errorMessages"),
@@ -361,15 +457,22 @@ export class QuickQueryUI {
         click: () => this.handleToggleWordWrap(),
       },
 
-      // Attachments related
-      attachmentsContainer: {
-        click: () => this.elements.attachmentsInput.click(),
-        dragOver: (e) => this.handleDragOver(e),
-        dragLeave: (e) => this.handleDragLeave(e),
-        drop: (e) => this.handleDrop(e),
+      // Attachments related (button only; no drag-and-drop)
+      addFilesButton: {
+        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+      },
+      filesEmpty: {
+        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+        keydown: (e) => this.handleEmptyStateKeydown(e),
       },
       attachmentsInput: {
         change: (e) => this.handleAttachmentsInput(e),
+      },
+      minifyButton: {
+        click: () => this.handleMinifyAttachments(),
+      },
+      deleteAllButton: {
+        click: () => this.handleDeleteAllAttachments(),
       },
 
       // Guide related buttons
@@ -473,7 +576,7 @@ export class QuickQueryUI {
     // Ensure language is applied even if model was created before registration
     const model = this.editor.getModel();
     if (model) {
-      monaco.editor.setModelLanguage(model, 'oracle-dml');
+      monaco.editor.setModelLanguage(model, "oracle-dml");
     }
     // Sync initial word wrap label with current editor option
     const wordWrapButton = document.getElementById("toggleWordWrap");
@@ -481,6 +584,10 @@ export class QuickQueryUI {
     if (wordWrapButton) {
       wordWrapButton.textContent = `Word Wrap: ${currentWrap === "on" ? "On" : "Off"}`;
     }
+
+    // Enable scroll chaining: when editor reaches its scroll limits,
+    // scroll the surrounding page/container instead.
+    this.setupEditorScrollChaining();
   }
 
   initializeSpreadsheets() {
@@ -527,6 +634,105 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+  }
+
+  setupEditorScrollChaining() {
+    try {
+      const editorNode = this.editor?.getDomNode();
+      if (!editorNode || !this.editor) return;
+
+      // Edge-lock chaining: swallow first edge hit, then chain to page
+      const EDGE_TOLERANCE = 2; // px tolerance for fractional layouts
+
+      const wheelHandler = (e) => {
+        const deltaY = e.deltaY;
+        if (!deltaY) return;
+
+        // Use Monaco APIs for accurate internal scroll state
+        const scrollTop = this.editor.getScrollTop();
+        const scrollHeight = this.editor.getScrollHeight();
+        const viewHeight = this.editor.getLayoutInfo()?.height ?? 0;
+
+        const atTop = scrollTop <= EDGE_TOLERANCE;
+        const atBottom = scrollTop >= scrollHeight - viewHeight - EDGE_TOLERANCE;
+
+        if ((atTop && deltaY < 0) || (atBottom && deltaY > 0)) {
+          // At edge: decide swallow or chain
+          if (!this._editorEdgeLock) {
+            // Swallow first edge hit: allow Monaco to remain at boundary without chaining
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            this._editorEdgeLock = true;
+            return;
+          }
+          // Subsequent edge scrolls: chain to container/page scrolling
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+          const amount = deltaY * scale;
+          const scrollTarget = this.findScrollableAncestor(editorNode) || document.scrollingElement;
+          if (scrollTarget && scrollTarget !== document.body && scrollTarget !== document.documentElement) {
+            scrollTarget.scrollTop += amount;
+          } else {
+            window.scrollBy({ top: amount, left: 0, behavior: "auto" });
+          }
+        } else {
+          // Not at edge: don’t interfere, and reset lock so next edge is swallowed again
+          this._editorEdgeLock = false;
+        }
+      };
+
+      // Attach on Monaco's internal scrollable element to reliably intercept edge hits
+      const scrollableEl = editorNode.querySelector(".monaco-scrollable-element") || editorNode;
+      const innerScrollableEl = editorNode.querySelector(".scrollable-element");
+      const attachWheel = (el, useCapture = true) => {
+        if (!el) return;
+        el.addEventListener(
+          "wheel",
+          (evt) => {
+            wheelHandler(evt);
+            // Ensure no other listeners or native bubbling cause pass-through
+            if (evt.defaultPrevented) {
+              evt.stopImmediatePropagation();
+            }
+          },
+          { passive: false, capture: useCapture }
+        );
+      };
+      attachWheel(scrollableEl, true);
+      attachWheel(innerScrollableEl, true);
+      // Attach to overflow guard and root as additional safety nets
+      const overflowGuard = editorNode.querySelector(".overflow-guard");
+      attachWheel(overflowGuard, false);
+      attachWheel(editorNode, false);
+      this._editorWheelHandler = wheelHandler;
+
+      // Initialize and reset edge lock when leaving extremes via Monaco scroll events
+      this._editorEdgeLock = false;
+      this._editorScrollListener = this.editor.onDidScrollChange(() => {
+        const top = this.editor.getScrollTop();
+        const scrollHeight = this.editor.getScrollHeight();
+        const viewHeight = this.editor.getLayoutInfo()?.height ?? 0;
+        const atTopNow = top <= EDGE_TOLERANCE;
+        const atBottomNow = top >= scrollHeight - viewHeight - EDGE_TOLERANCE;
+        if (!atTopNow && !atBottomNow) {
+          this._editorEdgeLock = false;
+        }
+      });
+    } catch (err) {
+      console.warn("Failed to setup editor scroll chaining:", err);
+    }
+  }
+
+  findScrollableAncestor(node) {
+    let el = node.parentElement;
+    while (el) {
+      const style = getComputedStyle(el);
+      const canScroll = el.scrollHeight > el.clientHeight && style.overflowY !== "visible" && style.overflowY !== "hidden";
+      if (canScroll) return el;
+      el = el.parentElement;
+    }
+    return null;
   }
 
   updateDataSpreadsheet() {
@@ -762,19 +968,6 @@ export class QuickQueryUI {
     this.dataTable.loadData(newData);
   }
 
-  // handleAddNewSchemaRow() {
-  //   const currentData = this.schemaTable.getData();
-  //   const newRow = Array(6).fill(null);
-  //   const newData = [...currentData, newRow];
-  //   this.schemaTable.loadData(newData);
-  // }
-
-  // handleRemoveLastSchemaRow() {
-  //   const currentData = this.schemaTable.getData();
-  //   const newData = currentData.slice(0, -1);
-  //   this.schemaTable.loadData(newData);
-  // }
-
   handleAddNewSchemaRow() {
     const currentRowCount = this.schemaTable.countRows();
     // Insert a new row with empty cells for all columns
@@ -972,7 +1165,7 @@ export class QuickQueryUI {
     this.elements.tableSearchContainer = container;
     this.elements.dropdownContainer = dropdownContainer;
 
-    // this.setupSearchEventListeners(container, dropdownContainer, tableNameInput);
+    this.setupSearchEventListeners(container, dropdownContainer, tableNameInput);
   }
 
   setupSearchEventListeners(container, dropdownContainer, tableNameInput) {
@@ -1229,125 +1422,162 @@ export class QuickQueryUI {
 
   async handleAttachmentsInput(e) {
     const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      try {
-        this.processedFiles = await this.attachmentProcessorService.processAttachments(files);
-        console.log("Processed files:", this.processedFiles);
+    if (files.length === 0) return;
 
-        // Clear existing file buttons
-        this.elements.filesContainer.innerHTML = "";
-        // Reset file input
-        this.elements.attachmentsInput.value = "";
+    try {
+      const addedFiles = await this.attachmentProcessorService.processAttachments(files);
+      // Merge with existing files while preserving previously added ones
+      this.processedFiles = [...this.processedFiles, ...addedFiles];
 
-        // Add minify button if there's a text file
-        const hasTextFile = this.processedFiles.some((file) => ["txt", "html", "json"].includes(file.name.split(".").pop().toLowerCase()));
+      // Reset file input for subsequent selections
+      this.elements.attachmentsInput.value = "";
 
-        if (hasTextFile) {
-          const buttonContainer = document.createElement("div");
-          buttonContainer.className = "attachment-actions";
+      // Clear current file items and re-render full list
+      const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+      if (container) container.innerHTML = "";
 
-          const minifyButton = document.createElement("button");
-          minifyButton.className = "minify-button";
-          minifyButton.textContent = "Minify Content";
-          minifyButton.addEventListener("click", async () => {
-            // Show processing state
-            minifyButton.textContent = "Processing...";
-            minifyButton.disabled = true;
+      this.processedFiles.forEach((file) => {
+        const fileButton = document.createElement("button");
+        fileButton.className = "file-button";
+        fileButton.setAttribute("aria-label", `View ${file.name}`);
+        fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
 
-            // Process files
-            this.processedFiles = this.processedFiles.map((file) => {
-              const ext = file.name.split(".").pop().toLowerCase();
-              if (["txt", "html", "json"].includes(ext)) {
-                return this.attachmentProcessorService.minifyContent(file);
-              }
-              return file;
-            });
-
-            // Refresh the file viewer if it's currently open and visible
-            const fileViewer = document.getElementById("fileViewerOverlay");
-            const isViewerVisible = !fileViewer.classList.contains("hidden");
-
-            if (isViewerVisible) {
-              const activeFileName = document.getElementById("fileViewerTitle")?.textContent;
-              const activeFile = this.processedFiles.find((f) => f.name === activeFileName);
-              if (activeFile) {
-                this.showFileViewer(activeFile);
-              }
-            }
-
-            // Show success message
-            minifyButton.textContent = "Content Minified!";
-
-            setTimeout(() => {
-              minifyButton.textContent = "Minify Content";
-              minifyButton.style.color = "";
-              minifyButton.disabled = false;
-            }, 1000);
-          });
-          this.elements.filesContainer.appendChild(minifyButton);
-
-          const deleteAllButton = document.createElement("button");
-          deleteAllButton.className = "delete-all-button";
-          deleteAllButton.textContent = "Delete All Attachments";
-          deleteAllButton.addEventListener("click", () => {
-            if (confirm("Are you sure you want to delete all attachments?")) {
-              this.processedFiles = [];
-              this.elements.filesContainer.innerHTML = "";
-              this.elements.filesContainer.classList.add("hidden");
-              this.elements.attachmentsContainer.classList.remove("hidden");
-            }
-          });
-
-          buttonContainer.appendChild(minifyButton);
-          buttonContainer.appendChild(deleteAllButton);
-          this.elements.filesContainer.appendChild(buttonContainer);
-        }
-
-        // Create file buttons for each processed file
-        this.processedFiles.forEach((file, index) => {
-          const fileButton = document.createElement("button");
-          fileButton.className = "file-button";
-          fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
-
-          const copyBtn = fileButton.querySelector(".copy-filename");
-          copyBtn.addEventListener("click", (e) => {
-            e.stopPropagation(); // Prevent file button click
-            navigator.clipboard.writeText(file.name);
-
-            // Visual feedback
-            copyBtn.classList.add("copied");
-            setTimeout(() => copyBtn.classList.remove("copied"), 1000);
-          });
-
-          // Add click handler for the delete button
-          const deleteBtn = fileButton.querySelector(".delete-file");
-          deleteBtn.addEventListener("click", (e) => {
-            e.stopPropagation(); // Prevent file button click
-            const fileIndex = this.processedFiles.findIndex((f) => f.name === file.name);
-            if (fileIndex !== -1) {
-              this.processedFiles.splice(fileIndex, 1);
-              fileButton.remove();
-            }
-
-            // If no files left, show the upload container again
-            if (this.processedFiles.length === 0) {
-              this.elements.filesContainer.classList.add("hidden");
-              this.elements.attachmentsContainer.classList.remove("hidden");
-            }
-          });
-
-          fileButton.addEventListener("click", () => this.showFileViewer(file));
-          this.elements.filesContainer.appendChild(fileButton);
+        const copyBtn = fileButton.querySelector(".copy-filename");
+        copyBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          navigator.clipboard.writeText(file.name);
+          copyBtn.classList.add("copied");
+          setTimeout(() => copyBtn.classList.remove("copied"), 1000);
         });
 
-        // Hide attachments container and show files container
-        this.elements.attachmentsContainer.classList.add("hidden");
-        this.elements.filesContainer.classList.remove("hidden");
+        const deleteBtn = fileButton.querySelector(".delete-file");
+        deleteBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const idx = this.processedFiles.findIndex((f) => f.name === file.name);
+          if (idx !== -1) {
+            this.processedFiles.splice(idx, 1);
+            fileButton.remove();
+          }
 
-        this.clearError();
-      } catch (error) {
-        this.showError(`Error processing attachments: ${error.message}`);
+          // If no files left, return to empty state
+          if (this.processedFiles.length === 0) {
+            const c = this.elements.fileItemsContainer || this.elements.filesContainer;
+            c.innerHTML = "";
+            const emptyEl = document.createElement("div");
+            emptyEl.id = "files-empty";
+            emptyEl.className = "empty-file-button";
+            emptyEl.setAttribute("role", "button");
+            emptyEl.setAttribute("tabindex", "0");
+            emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
+            emptyEl.textContent = "No file attached, click to attach file";
+            emptyEl.addEventListener("click", () => this.elements.attachmentsInput?.click());
+            emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
+            c.appendChild(emptyEl);
+            this.elements.filesEmpty = emptyEl;
+          }
+
+          this.updateAttachmentControlsState();
+        });
+
+        fileButton.addEventListener("click", () => this.showFileViewer(file));
+        (this.elements.fileItemsContainer || this.elements.filesContainer).appendChild(fileButton);
+      });
+
+      // Update action buttons state
+      this.updateAttachmentControlsState();
+      this.clearError();
+    } catch (error) {
+      this.showError(`Error processing attachments: ${error.message}`);
+    }
+  }
+
+  updateAttachmentControlsState() {
+    const hasFiles = this.processedFiles.length > 0;
+    const hasTextFile = this.processedFiles.some((file) => {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const t = (file.type || "").toLowerCase();
+      return ["txt", "html", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html");
+    });
+
+    if (this.elements.deleteAllButton) {
+      this.elements.deleteAllButton.disabled = !hasFiles;
+      this.elements.deleteAllButton.setAttribute("aria-disabled", String(!hasFiles));
+    }
+
+    if (this.elements.minifyButton) {
+      this.elements.minifyButton.disabled = !hasTextFile;
+      this.elements.minifyButton.setAttribute("aria-disabled", String(!hasTextFile));
+    }
+
+    if (this.elements.filesEmpty) {
+      this.elements.filesEmpty.style.display = hasFiles ? "none" : "";
+    }
+
+    if (this.elements.attachmentsControls) {
+      // Show action bar only when files exist
+      this.elements.attachmentsControls.style.display = hasFiles ? "" : "none";
+    }
+  }
+
+  async handleMinifyAttachments() {
+    if (!this.processedFiles.length) return;
+    const btn = this.elements.minifyButton;
+    if (btn) {
+      btn.textContent = "Processing...";
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+    }
+
+    this.processedFiles = this.processedFiles.map((file) => {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const t = (file.type || "").toLowerCase();
+      if (["txt", "html", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
+        return this.attachmentProcessorService.minifyContent(file);
       }
+      return file;
+    });
+
+    // Refresh viewer if it's open
+    const fileViewer = document.getElementById("fileViewerOverlay");
+    if (fileViewer && !fileViewer.classList.contains("hidden")) {
+      const activeFileName = document.getElementById("fileViewerTitle")?.textContent;
+      const activeFile = this.processedFiles.find((f) => f.name === activeFileName);
+      if (activeFile) {
+        this.showFileViewer(activeFile);
+      }
+    }
+
+    if (btn) {
+      btn.textContent = "Minify";
+    }
+    this.updateAttachmentControlsState();
+  }
+
+  handleDeleteAllAttachments() {
+    this.processedFiles = [];
+    const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+    if (container) {
+      container.innerHTML = "";
+      const emptyEl = document.createElement("div");
+      emptyEl.id = "files-empty";
+      emptyEl.className = "empty-file-button";
+      emptyEl.setAttribute("role", "button");
+      emptyEl.setAttribute("tabindex", "0");
+      emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
+      emptyEl.textContent = "No file attached, click to attach file";
+      emptyEl.addEventListener("click", () => this.elements.attachmentsInput?.click());
+      emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
+      container.appendChild(emptyEl);
+      this.elements.filesEmpty = emptyEl;
+    }
+
+    this.updateAttachmentControlsState();
+  }
+
+  handleEmptyStateKeydown(evt) {
+    if (evt.key === "Enter" || evt.key === " ") {
+      evt.preventDefault();
+      this.elements.attachmentsInput && this.elements.attachmentsInput.click();
     }
   }
 
@@ -1509,24 +1739,6 @@ export class QuickQueryUI {
   }
   closeFilePreview() {
     this.elements.filePreviewOverlay.classList.add("hidden");
-  }
-
-  handleDragOver(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this.attachmentsContainer.classList.add("drag-over");
-  }
-
-  handleDragLeave(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this.attachmentsContainer.classList.remove("drag-over");
-  }
-
-  handleDrop(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this.attachmentsContainer.classList.remove("drag-over");
   }
 }
 

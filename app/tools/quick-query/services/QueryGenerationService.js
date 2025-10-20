@@ -206,19 +206,14 @@ export class QueryGenerationService {
   generateMergeStatement(tableName, processedFields, primaryKeys) {
     // Format fields for SELECT part
     console.log("primaryKeys", primaryKeys);
-    const primaryKeysLowerCase = primaryKeys.map((pk) => pk.toLowerCase());
     const selectFields = processedFields.map((f) => `\n  ${f.formattedValue} AS ${this.formatFieldName(f.fieldName)}`).join(",");
 
     // Format ON conditions for primary keys
-    const pkConditions = primaryKeys
-      .map((pk) => `tgt.${this.formatFieldName(pk).toLowerCase()} = src.${this.formatFieldName(pk).toLowerCase()}`)
-      .join(" AND ");
+    const pkConditions = primaryKeys.map((pk) => `tgt.${this.formatFieldName(pk)} = src.${this.formatFieldName(pk)}`).join(" AND ");
 
     // Format UPDATE SET clause (excluding PKs and creation fields)
     const updateFields = processedFields
-      .filter(
-        (f) => !primaryKeys.includes(f.fieldName.toLowerCase()) && !["created_time", "created_by"].includes(f.fieldName.toLowerCase())
-      )
+      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(f.fieldName))
       .map((f) => `  tgt.${this.formatFieldName(f.fieldName)} = src.${this.formatFieldName(f.fieldName)}`)
       .join(",\n");
 
@@ -236,8 +231,6 @@ export class QueryGenerationService {
   }
 
   generateUpdateStatement(tableName, processedRows, primaryKeys) {
-    // const primaryKeysLowerCase = primaryKeys.map((pk) => pk.toLowerCase());
-
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
     const pkValueMap = new Map(primaryKeys.map((pk) => [pk, new Set()]));
