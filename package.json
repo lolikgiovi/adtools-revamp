@@ -1,5 +1,5 @@
 {
-  "name": "adtools-ui-test",
+  "name": "adtools-revamp",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "monaco-editor": "^0.54.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "handsontable": "^16.0.0"
   }
 }

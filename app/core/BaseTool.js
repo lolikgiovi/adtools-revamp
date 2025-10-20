@@ -163,6 +163,7 @@ class BaseTool {
       this.eventBus.emit("notification:error", { message, duration: durationMs });
     } else {
       console.error(message);
+      this.#inlineToast(message, "error", durationMs);
     }
   }
 
@@ -175,6 +176,7 @@ class BaseTool {
       this.eventBus.emit("notification:success", { message, duration: durationMs });
     } else {
       console.log(message);
+      this.#inlineToast(message, "success", durationMs);
     }
   }
 
@@ -182,13 +184,42 @@ class BaseTool {
    * Copy text to clipboard
    * @param {string} text - Text to copy
    */
-  async copyToClipboard(text) {
+  async copyToClipboard(text, targetEl = null) {
     try {
       await navigator.clipboard.writeText(text);
       this.showSuccess("Copied to clipboard!");
+      if (targetEl) {
+        try {
+          targetEl.classList.add("copied");
+          setTimeout(() => targetEl.classList.remove("copied"), 1000);
+        } catch (_) {
+          // noop if targetEl does not support classList
+        }
+      }
     } catch (error) {
       this.showError("Failed to copy to clipboard");
       console.error("Clipboard error:", error);
+    }
+  }
+
+  // Lightweight inline toast for environments without EventBus
+  #inlineToast(message, type = "success", durationMs = 2500) {
+    try {
+      const toast = document.createElement("div");
+      toast.textContent = message;
+      toast.style.position = "fixed";
+      toast.style.bottom = "16px";
+      toast.style.right = "16px";
+      toast.style.padding = "8px 12px";
+      toast.style.borderRadius = "6px";
+      toast.style.zIndex = "9999";
+      toast.style.color = type === "error" ? "#721c24" : "#0f5132";
+      toast.style.background = type === "error" ? "#f8d7da" : "#d1e7dd";
+      toast.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), durationMs);
+    } catch (_) {
+      // ignore if DOM is not available
     }
   }
 }

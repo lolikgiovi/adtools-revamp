@@ -11,6 +11,7 @@ import { Router } from "./core/Router.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
+import { QuickQuery } from "./tools/quick-query/main.js";
 
 class App {
   constructor() {
@@ -94,6 +95,10 @@ class App {
     // Register QR Tools
     const qrTools = new QRTools(this.eventBus);
     this.registerTool(qrTools);
+
+    // Register Quick Query
+    const quickQuery = new QuickQuery(this.eventBus);
+    this.registerTool(quickQuery);
 
     // Add more tools here as they are implemented
   }

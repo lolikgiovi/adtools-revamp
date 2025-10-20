@@ -4,7 +4,7 @@ This document describes the system design of the AD Tools application, its core 
 
 ## System Overview
 
-AD Tools is a client-side, modular web application that hosts multiple small utilities (tools) under a unified UI. Each tool renders into the main content area and is navigable via hash-based routing. Common services (event bus, router, theme, UI components) orchestrate the experience.
+AD Tools is a client-side, modular web application built with Vite that hosts multiple small utilities (tools) under a unified UI. Each tool renders into the main content area and is navigable via hash-based routing. The application uses ES modules for code organization and Vite for development and build processes. Common services (event bus, router, theme, UI components) orchestrate the experience.
 
 ## Core Modules
 
@@ -12,6 +12,7 @@ AD Tools is a client-side, modular web application that hosts multiple small uti
   - Initializes the application, sets up DOM, components, routes, and notifications.
   - Registers tools and manages activation/mounting via `showTool(toolId)`.
   - Coordinates global events with the `EventBus`.
+  - Uses ES module imports to load all tools and core components.
 - EventBus (`app/core/EventBus.js`)
   - Lightweight pub/sub mechanism to decouple components and tools.
   - Common events include `tool:registered`, `tool:activate`, `page:changed`, `route:change`, and `route:changed`.
@@ -28,12 +29,13 @@ AD Tools is a client-side, modular web application that hosts multiple small uti
 
 ## Tool Architecture
 
-Each tool is implemented as a class instance (exposed on `window`) that App registers and routes to. Tools follow a common pattern:
+Each tool is implemented as a class that exports from its module and is imported by App for registration and routing. Tools follow a common pattern:
 
 - Files per tool (under `app/tools/<tool-name>/`):
-  - `template.js`: Defines HTML template for the tool UI as a string (global assignment).
+  - `template.js`: Defines HTML template for the tool UI as a string (exported as a module).
   - `styles.css`: Scoped styles for the tool.
-  - `script.js` (current pattern): Tool class implementing lifecycle, DOM bindings, and logic.
+  - `main.js`: Tool class implementing lifecycle, DOM bindings, and logic (exported as ES module).
+  - `service.js` (optional): Pure business logic functions exported as ES modules.
 
 ### Lifecycle
 
@@ -50,25 +52,30 @@ To improve maintainability and testability, we use a simple separation of concer
 
 - `main.js` (UI/controller)
   - Owns lifecycle, DOM, event wiring, tab state, clipboard, error panel UI.
-  - Calls service functions with plain values and renders results.
+  - Imports and calls service functions with plain values and renders results.
+  - Exports the tool class as an ES module for App to import and register.
 - `service.js` (business logic)
   - Stateless processing functions (input → output) for validation, formatting, conversion, etc.
   - Contains no DOM or framework-specific code.
+  - Exports pure functions as ES modules for easy testing and reuse.
 
 This split is recommended for tools with meaningful processing (e.g., JSON/Base64). For small tools, keep logic in `main.js` or use a very small `service.js` to retain consistency without over-structuring.
 
 ## Implemented Tools
 
 - JSON Tools (`app/tools/json-tools/`)
-  - Uses Monaco Editor for input; tabs control actions (validate, prettify, minify, stringify, unstringify, escape/unescape, extract keys).
+  - Uses Monaco Editor (imported as ES modules) for input; tabs control actions (validate, prettify, minify, stringify, unstringify, escape/unescape, extract keys).
   - UI: binds tabs and buttons, manages error panel and output title.
-  - Logic: JSON parsing/formatting/transform operations suitable for `service.js`.
+  - Logic: JSON parsing/formatting/transform operations in `service.js`.
 - Base64 Tools (`app/tools/base64-tools/`)
   - UI: tabbed interface and file/text inputs; event binding for actions.
-  - Logic: base64 encode/decode for strings and files; can be isolated in `service.js`.
+  - Logic: base64 encode/decode for strings and files; isolated in `service.js`.
 - UUID Generator (`app/tools/uuid-generator/`)
   - UI: controls to generate/copy single/multiple UUIDs.
-  - Logic: uses `crypto.randomUUID()`; simple enough to keep in `main.js`, or provide a minimal `service.js` with `generate(count)` for consistency.
+  - Logic: uses `crypto.randomUUID()`; simple enough to keep in `main.js`.
+- QR Tools (`app/tools/qr-tools/`)
+  - UI: QR code generation and customization interface.
+  - Logic: uses QRCode library (imported as ES module) for QR generation and canvas manipulation.
 
 ## Routing and Navigation
 
@@ -84,41 +91,108 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 
 ## Dependencies
 
-- Monaco Editor is vendored under the root `libs/monaco-editor/` and used by JSON Tools for rich editing.
+- **Monaco Editor**: Imported as ES modules from npm package (`monaco-editor`). Workers are configured using Vite's `?worker` syntax for proper bundling.
+- **Handsontable**: Imported from npm (`handsontable`) for grid rendering in Quick Query; CSS is included via ESM import. No global variables or CDN scripts required.
+- **QRCode**: Imported as ES module from npm package (`qrcode`) for QR code generation.
+- **Vite**: Development server and build tool providing HMR, ES module bundling, and modern tooling.
+- **Vitest**: Testing framework with JSDOM environment for unit testing service logic.
 - Vanilla JS and CSS; no external framework dependency.
 
-## Script Loading & Globals
+### Editor Migration
+- CodeMirror usage has been removed. Editor functionality is now provided by Monaco Editor across tools (e.g., JSON Tools, Quick Query). This ensures consistent ESM-based loading and worker configuration under Vite.
 
-- Tool classes and templates are exposed on `window` for App to instantiate/register.
-- If adopting `main.js` + `service.js`, include `service.js` before `main.js` so the controller can import or access the service.
-- Maintain consistent global naming: `window.<ToolName>` for controllers, `window.<ToolName>Service` for logic (optional).
+## Build Process & Development
+
+### Development
+- `npm run dev`: Starts Vite development server with hot module replacement (HMR)
+- Vite serves the application with ES module support and fast refresh
+- Monaco Editor workers are handled via Vite's worker bundling
+
+### Build
+- `npm run build`: Creates optimized production build in `dist/` directory
+- `npm run preview`: Serves the built application for testing
+- Post-build step copies `app/` directory to `dist/app` for compatibility
+
+### Testing
+- `npm run test`: Runs Vitest with JSDOM environment
+- Unit tests focus on service logic with coverage reporting
+- Tests are located in `tests/` directory
+
+## Module System & Application Loading
+
+### ES Module Architecture
+- Application uses ES modules (`import`/`export`) throughout the codebase
+- Main application entry point is `index.html` with a module script that imports `App.js`
+- All tools, components, and core modules are imported as ES modules
+- No reliance on global `window` assignments for application logic
+
+### Application Initialization
+```javascript
+// index.html
+<script type="module">
+  import { App } from './app/App.js';
+  document.addEventListener('DOMContentLoaded', () => {
+    const app = new App();
+    window.app = app; // Only for debugging/console access
+  });
+</script>
+```
+
+### Tool Registration
+- Tools are imported directly in `App.js` and instantiated with dependency injection
+- Each tool exports its main class from `main.js`
+- Services are imported by tools as needed, promoting modularity and testability
 
 ## Testing Strategy
 
-- Unit test `service.js` functions (pure logic) with various inputs and edge cases.
-- Manual or E2E tests for `main.js` UI flows: tab switching, button actions, clipboard, error display.
-- Prefer throwing or returning `{ result, error }` from services to simplify UI assertions.
+- **Unit Tests**: Focus on `service.js` functions (pure logic) with various inputs and edge cases using Vitest
+- **Test Environment**: JSDOM provides browser-like environment for DOM-dependent code
+- **Coverage**: V8 coverage provider generates detailed coverage reports
+- **Test Structure**: Tests import service modules directly, enabling isolated testing of business logic
+- **Manual Testing**: UI flows like tab switching, button actions, clipboard, and error display
+- Service functions should return consistent data structures or throw errors to simplify assertions
 
 ## Extensibility
 
 To add a new tool:
 
 1. Create `app/tools/<tool>/template.js`, `styles.css`, `main.js` (and `service.js` if needed).
-2. Expose the controller class globally (`window.<ToolClass>`).
-3. Register in `App.registerTools()` by instantiating the class with `eventBus`.
-4. The Sidebar will render it via `tool:registered` metadata.
+2. Export the tool class from `main.js` as an ES module.
+3. Import and register the tool in `App.js` by adding it to the imports and `registerTools()` method.
+4. The Sidebar will render it via `tool:registered` metadata emitted during registration.
 
 ## Design Principles
 
-- Separation of concerns: UI vs logic, shared services vs tool-specific code.
-- Minimal coupling via EventBus; tools communicate with the app and components through events.
-- Stateless services to ease reuse and unit testing.
+- **Separation of concerns**: UI vs logic, shared services vs tool-specific code.
+- **ES Module Architecture**: Clean imports/exports eliminate global dependencies and improve maintainability.
+- **Minimal coupling via EventBus**: Tools communicate with the app and components through events.
+- **Stateless services**: Pure functions ease reuse, testing, and debugging.
+- **Modern tooling**: Vite provides fast development experience with HMR and optimized builds.
 - Keep changes focused and consistent with the existing style.
 
 ## Notes & Future Work
 
 - Consider extracting common helpers (clipboard, error formatting) to shared utilities.
-- Preview in localhost:5500 since it has hot-reloading enabled.
+- **Development server**: Use `npm run dev` for development with HMR enabled.
+- **Production builds**: Use `npm run build` for optimized production artifacts.
 - Add light integration tests for routing and tool activation.
 - Evaluate lazy-loading of heavy dependencies (e.g., Monaco) to improve initial load times.
 - If needed, further standardize the Tool base class (`BaseTool`) usage across tools.
+
+## Migration from Previous Architecture
+
+This application was migrated from a vanilla JS setup without a build tool to the current Vite-based architecture:
+
+### Key Changes Made:
+- **Build System**: Migrated from static file serving to Vite development server and build process
+- **Module System**: Converted from global `window` assignments to ES module imports/exports
+- **Dependencies**: Moved from vendored libraries to npm packages (Monaco Editor, QRCode)
+- **Testing**: Added Vitest with JSDOM for comprehensive unit testing
+- **Development Experience**: Gained HMR, fast refresh, and modern development tooling
+
+### Benefits Achieved:
+- **Faster Development**: HMR provides instant feedback during development
+- **Better Testing**: Isolated unit tests with coverage reporting
+- **Improved Maintainability**: ES modules eliminate global dependencies
+- **Modern Tooling**: Vite provides optimized builds and development experience
+- **Dependency Management**: npm packages ensure consistent, updatable dependencies

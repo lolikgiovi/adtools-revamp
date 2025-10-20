@@ -168,7 +168,7 @@
   height: 1rem;
 }
 
-.file-info {
+/* .file-info {
   margin-top: 1rem;
   padding: 0.75rem;
   background: hsl(var(--muted));
@@ -176,7 +176,7 @@
   font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
   display: none;
-}
+} */
 
 .file-info.show {
   display: block;
