@@ -1,9 +1,9 @@
 import { LocalStorageService } from "./services/LocalStorageService.js";
 import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
-import { sampleSchema1, sampleData1, initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
+import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
-import { MAIN_TEMPLATE, GUIDE_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
+import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import * as monaco from "monaco-editor";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
@@ -408,8 +408,6 @@ export class QuickQueryUI {
       savedSchemasList: document.getElementById("savedSchemasList"),
 
       // Buttons
-      toggleGuideButton: document.getElementById("toggleGuide"),
-      guideContent: document.getElementById("guide"),
       toggleWordWrapButton: document.getElementById("toggleWordWrap"),
       showSavedSchemasButton: document.getElementById("showSavedSchemas"),
       closeSchemaOverlayButton: document.getElementById("closeSchemaOverlay"),
@@ -473,20 +471,6 @@ export class QuickQueryUI {
       },
       deleteAllButton: {
         click: () => this.handleDeleteAllAttachments(),
-      },
-
-      // Guide related buttons
-      toggleGuideButton: {
-        click: () => this.handleToggleGuide(),
-      },
-      simulationFillSchemaButton: {
-        click: () => this.handleSimulationFillSchema(),
-      },
-      simulationFillDataButton: {
-        click: () => this.handleSimulationFillData(),
-      },
-      simulationGenerateQueryButton: {
-        click: () => this.handleSimulationGenerateQuery(),
       },
 
       // Overlay handlers
@@ -584,10 +568,6 @@ export class QuickQueryUI {
     if (wordWrapButton) {
       wordWrapButton.textContent = `Word Wrap: ${currentWrap === "on" ? "On" : "Off"}`;
     }
-
-    // Enable scroll chaining: when editor reaches its scroll limits,
-    // scroll the surrounding page/container instead.
-    this.setupEditorScrollChaining();
   }
 
   initializeSpreadsheets() {
@@ -634,105 +614,6 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
-  }
-
-  setupEditorScrollChaining() {
-    try {
-      const editorNode = this.editor?.getDomNode();
-      if (!editorNode || !this.editor) return;
-
-      // Edge-lock chaining: swallow first edge hit, then chain to page
-      const EDGE_TOLERANCE = 2; // px tolerance for fractional layouts
-
-      const wheelHandler = (e) => {
-        const deltaY = e.deltaY;
-        if (!deltaY) return;
-
-        // Use Monaco APIs for accurate internal scroll state
-        const scrollTop = this.editor.getScrollTop();
-        const scrollHeight = this.editor.getScrollHeight();
-        const viewHeight = this.editor.getLayoutInfo()?.height ?? 0;
-
-        const atTop = scrollTop <= EDGE_TOLERANCE;
-        const atBottom = scrollTop >= scrollHeight - viewHeight - EDGE_TOLERANCE;
-
-        if ((atTop && deltaY < 0) || (atBottom && deltaY > 0)) {
-          // At edge: decide swallow or chain
-          if (!this._editorEdgeLock) {
-            // Swallow first edge hit: allow Monaco to remain at boundary without chaining
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            this._editorEdgeLock = true;
-            return;
-          }
-          // Subsequent edge scrolls: chain to container/page scrolling
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-          const amount = deltaY * scale;
-          const scrollTarget = this.findScrollableAncestor(editorNode) || document.scrollingElement;
-          if (scrollTarget && scrollTarget !== document.body && scrollTarget !== document.documentElement) {
-            scrollTarget.scrollTop += amount;
-          } else {
-            window.scrollBy({ top: amount, left: 0, behavior: "auto" });
-          }
-        } else {
-          // Not at edge: don’t interfere, and reset lock so next edge is swallowed again
-          this._editorEdgeLock = false;
-        }
-      };
-
-      // Attach on Monaco's internal scrollable element to reliably intercept edge hits
-      const scrollableEl = editorNode.querySelector(".monaco-scrollable-element") || editorNode;
-      const innerScrollableEl = editorNode.querySelector(".scrollable-element");
-      const attachWheel = (el, useCapture = true) => {
-        if (!el) return;
-        el.addEventListener(
-          "wheel",
-          (evt) => {
-            wheelHandler(evt);
-            // Ensure no other listeners or native bubbling cause pass-through
-            if (evt.defaultPrevented) {
-              evt.stopImmediatePropagation();
-            }
-          },
-          { passive: false, capture: useCapture }
-        );
-      };
-      attachWheel(scrollableEl, true);
-      attachWheel(innerScrollableEl, true);
-      // Attach to overflow guard and root as additional safety nets
-      const overflowGuard = editorNode.querySelector(".overflow-guard");
-      attachWheel(overflowGuard, false);
-      attachWheel(editorNode, false);
-      this._editorWheelHandler = wheelHandler;
-
-      // Initialize and reset edge lock when leaving extremes via Monaco scroll events
-      this._editorEdgeLock = false;
-      this._editorScrollListener = this.editor.onDidScrollChange(() => {
-        const top = this.editor.getScrollTop();
-        const scrollHeight = this.editor.getScrollHeight();
-        const viewHeight = this.editor.getLayoutInfo()?.height ?? 0;
-        const atTopNow = top <= EDGE_TOLERANCE;
-        const atBottomNow = top >= scrollHeight - viewHeight - EDGE_TOLERANCE;
-        if (!atTopNow && !atBottomNow) {
-          this._editorEdgeLock = false;
-        }
-      });
-    } catch (err) {
-      console.warn("Failed to setup editor scroll chaining:", err);
-    }
-  }
-
-  findScrollableAncestor(node) {
-    let el = node.parentElement;
-    while (el) {
-      const style = getComputedStyle(el);
-      const canScroll = el.scrollHeight > el.clientHeight && style.overflowY !== "visible" && style.overflowY !== "hidden";
-      if (canScroll) return el;
-      el = el.parentElement;
-    }
-    return null;
   }
 
   updateDataSpreadsheet() {
@@ -900,31 +781,6 @@ export class QuickQueryUI {
     if (wordWrapButton) {
       wordWrapButton.textContent = `Word Wrap: ${next === "on" ? "On" : "Off"}`;
     }
-  }
-
-  handleToggleGuide() {
-    if (this.elements.guideContent.classList.contains("hidden")) {
-      this.elements.guideContent.classList.remove("hidden");
-      this.elements.toggleGuideButton.textContent = "Hide";
-    } else {
-      this.elements.guideContent.classList.add("hidden");
-      this.elements.toggleGuideButton.textContent = "Tutorial & Simulation";
-    }
-  }
-
-  handleSimulationFillSchema() {
-    this.elements.tableNameInput.value = "schema_name.table_name";
-    this.schemaTable.loadData(sampleSchema1);
-  }
-
-  handleSimulationFillData() {
-    this.dataTable.loadData(sampleData1);
-    this.updateDataSpreadsheet();
-  }
-
-  handleSimulationGenerateQuery() {
-    this.handleGenerateQuery();
-    this.handleToggleGuide();
   }
 
   handleAddFieldNames() {

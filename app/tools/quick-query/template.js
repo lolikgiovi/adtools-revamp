@@ -12,11 +12,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         value="schema_name.table_name">
                 </div>
                 <div class="button-group quick-query-left-controls">
-                    <button id="showSavedSchemas" class="btn btn-secondary btn-sm">Schemas</button>
-                    <button id="addNewSchemaRow" class="btn btn-secondary btn-sm">Add row</button>
-                    <button id="removeLastSchemaRow" class="btn btn-secondary btn-sm">Remove last row</button>
-                    <button id="clearAll" class="btn btn-secondary btn-sm">Clear All</button>
-                    <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
+                    <button id="showSavedSchemas" class="btn btn-primary">Schemas</button>
+                    <button id="addNewSchemaRow" class="btn btn-primary">Add row</button>
+                    <button id="removeLastSchemaRow" class="btn btn-primary">Remove last row</button>
+                    <button id="clearAll" class="btn btn-primary">Clear All</button>
+                    <button id="generateQuery" class="btn btn-primary">Generate Query</button>
                 </div>
 
                 <div id="spreadsheet-schema"></div>
@@ -24,7 +24,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <!-- Attachments container -->
                 <div id="files-container">
                     <div id="attachments-controls" class="button-group quick-query-attachments-controls" role="toolbar" aria-label="Attachment actions">
-                        <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file"><span class="btn-icon">📎</span> Add file</button>
+                        <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file">Add file</button>
                         <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached text files" disabled aria-disabled="true">Minify</button>
                         <button id="deleteAllButton" class="btn btn-outline btn-xs delete-all-button" aria-label="Delete all attached files" disabled aria-disabled="true">Delete all</button>
                         <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png, .html, .pdf, .json" multiple style="display: none;" />
@@ -39,9 +39,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
-                    <button id="toggleWordWrap" class="btn btn-secondary btn-sm">Word Wrap: Off</button>
-                    <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
-                    <button id="downloadSQL" class="btn btn-secondary btn-sm">Download SQL</button>
+                    <button id="toggleWordWrap" class="btn btn-primary">Word Wrap: Off</button>
+                    <button id="copySQL" class="btn btn-primary">Copy SQL</button>
+                    <button id="downloadSQL" class="btn btn-primary">Download SQL</button>
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>
@@ -50,10 +50,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
         <div class="content-b">
             <div class="button-group quick-query-data-controls">
-                <button id="addFieldNames" class="btn btn-secondary btn-sm">Add field names from schema</button>
-                <button id="addDataRow" class="btn btn-secondary btn-sm">Add Row</button>
-                <button id="removeDataRow" class="btn btn-secondary btn-sm">Remove Last Row</button>
-                <button id="clearData" class="btn btn-secondary btn-sm">Clear Data</button>
+                <button id="addFieldNames" class="btn btn-primary">Add field names from schema</button>
+                <button id="addDataRow" class="btn btn-primary">Add Row</button>
+                <button id="removeDataRow" class="btn btn-primary">Remove Last Row</button>
+                <button id="clearData" class="btn btn-primary">Clear Data</button>
                 <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
             </div>
             <div id="spreadsheet-data"></div>
@@ -66,9 +66,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="schema-modal-header">
             <h3>Saved Schemas</h3>
             <div class="schema-modal-actions">
-                <button id="clearAllSchemas" class="btn btn-outline btn-sm">Clear All</button>
-                <button id="exportSchemas" class="btn btn-secondary btn-sm">Export</button>
-                <button id="importSchemas" class="btn btn-secondary btn-sm">Import</button>
+                <button id="clearAllSchemas" class="btn btn-primary">Clear All</button>
+                <button id="exportSchemas" class="btn btn-primary">Export</button>
+                <button id="importSchemas" class="btn btn-primary">Import</button>
                 <button id="closeSchemaOverlay" class="overlay-close-button">&times;</button>
             </div>
             <input type="file" id="schemaFileInput" accept=".json" style="display: none;">
@@ -115,44 +115,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>`;
 
-export const GUIDE_TEMPLATE = /* html */ `<button id="toggleGuide" class="toggle-guide">Tutorial & Simulation</button>
-<div id="guide" class="guide-content hidden">
-    <h4>Quick Guide:</h4>
-    <ul>
-        <li>Copy and paste your database schema.</li>
-        <li>Use "PK" in the Nullable field to indicate Primary Keys. If no "PK" is stated, default
-            PK would be field[0].</li>
-        <li>You can have multiple primary keys.</li>
-        <li>Fill in the Data Input with your values.</li>
-        <li>Click buttons below to simulate the query generation.</li>
-    </ul>
-    <div class="button-group simulate-buttons">
-        <button id="simulationFillSchemaButton" class="simulate-button">1. Fill Schema</button>
-        <p>&rarr;</p>
-        <button id="simulationFillDataButton" class="simulate-button">2. Fill Data</button>
-        <p>&rarr;</p>
-        <button id="simulationGenerateQueryButton" class="simulate-button">3. Generate
-            Query</button>
-    </div>
-</div>`;
-
 export const FILE_BUTTON_TEMPLATE = (file) => {
   const t = (file.type || "").toLowerCase();
   const ext = (file.name.split(".").pop() || "").toLowerCase();
-  const icon = t.startsWith("image/")
-    ? "🖼️"
-    : t === "application/pdf" || ext === "pdf"
-    ? "📄"
-    : t.includes("json") || ext === "json"
-    ? "🧾"
-    : t.includes("html") || ext === "html"
-    ? "🌐"
-    : t.includes("text") || ext === "txt"
-    ? "📝"
-    : "📦";
   return /* html */ `
   <div class="file-info">
-    <span class="file-type-icon" aria-hidden="true">${icon}</span>
     <button class="copy-filename" title="Copy filename" aria-label="Copy filename">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>

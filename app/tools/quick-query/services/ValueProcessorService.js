@@ -57,7 +57,7 @@ export class ValueProcessorService {
       (fieldName === "config_id" && upperDataType === "NUMBER") || // specific for config_id
       (upperDataType.startsWith("NUMBER") && value.toLowerCase() === "max") // any number fields with exactly max value
     ) {
-      return `(SELECT MAX(${fieldName})+1 FROM ${tableName})`;
+      return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
     }
 
     // Varchar containing UUID

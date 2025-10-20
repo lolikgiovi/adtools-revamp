@@ -143,7 +143,7 @@ export class QueryGenerationService {
           // Check if value matches any attachment
           const attachmentValue = this.attachmentValidationService.validateAttachment(
             value,
-            dataType,
+            dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
             this.getMaxLength(dataType),
             attachments
           );

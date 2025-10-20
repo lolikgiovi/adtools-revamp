@@ -3,6 +3,9 @@
 # Dependencies
 node_modules/
 
+#REFERENCE
+reference/
+
 # Build output
 dist/
 .vite/
