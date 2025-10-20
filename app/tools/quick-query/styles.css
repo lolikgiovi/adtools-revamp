@@ -45,7 +45,6 @@
   flex: 1;
   min-height: 0; /* Allow content to grow */
   overflow: visible; /* Allow content to expand */
-  gap: 10px;
 }
 
 .content-a {
@@ -53,7 +52,6 @@
   flex: 1 0 auto; /* Allow it to grow but not shrink */
   min-height: calc(80vh - 80px); /* 80% of container's height (100vh - 100px) */
   position: relative;
-  gap: 10px;
 }
 
 .quick-query-left-panel {
