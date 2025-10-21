@@ -12,6 +12,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
+import { SettingsPage } from "./pages/settings/main.js";
 
 class App {
   constructor() {
@@ -132,6 +133,11 @@ class App {
       });
     });
 
+    // Settings route
+    this.router.register("settings", () => {
+      this.showSettings();
+    });
+
     // Set default route
     this.router.setDefaultRoute("home");
   }
@@ -208,6 +214,25 @@ class App {
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });
+  }
+
+  showSettings() {
+    // Update breadcrumb for settings
+    this.updateBreadcrumb("Settings");
+
+    // Ensure no tool is active
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      const settingsPage = new SettingsPage({ eventBus: this.eventBus, themeManager: this.themeManager });
+      settingsPage.mount(this.mainContent);
+    }
+
+    // Emit page change
+    this.eventBus.emit("page:changed", { page: "settings" });
   }
 
   /**

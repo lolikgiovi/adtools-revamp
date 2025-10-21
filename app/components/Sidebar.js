@@ -554,6 +554,9 @@ class Sidebar {
     const button = e.currentTarget;
     const menuItem = button.closest(".sidebar-menu-item");
 
+    // Prefer explicit page navigation
+    const pageId = menuItem ? menuItem.getAttribute("data-page") : null;
+
     // Get the tool ID from data attribute
     const toolId = menuItem ? menuItem.getAttribute("data-tool") : null;
 
@@ -568,8 +571,10 @@ class Sidebar {
     // Navigate to the tool or page
     if (toolId) {
       this.selectTool(toolId);
+    } else if (pageId) {
+      this.navigateToPage(pageId);
     } else {
-      // Handle navigation for items without data-tool (like Documentation, Templates, etc.)
+      // Handle navigation for items without explicit attributes (fallback)
       const spanText = button.querySelector("span")?.textContent?.trim();
       if (spanText) {
         this.handleSpecialNavigation(spanText);

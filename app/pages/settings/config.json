@@ -1,0 +1,69 @@
+{
+  "version": 2,
+  "categories": [
+    {
+      "id": "general",
+      "label": "General Settings",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "theme.darkMode",
+          "storageKey": "theme.darkMode",
+          "label": "Dark Mode",
+          "type": "boolean",
+          "default": "system",
+          "apply": "theme",
+          "description": "Toggle between Light and Dark themes. Defaults to system preference if available."
+        }
+      ]
+    },
+    {
+      "id": "config",
+      "label": "Configuration Settings",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.baseUrls",
+          "storageKey": "config.baseUrls",
+          "label": "BaseURL Configuration",
+          "type": "kvlist",
+          "default": [],
+          "keyPlaceholder": "Environment",
+          "valuePlaceholder": "Base URL",
+          "description": "Add environment ➝ base URL pairs."
+        }
+      ]
+    },
+    {
+      "id": "credentials",
+      "label": "Credential Management",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "secure.jenkins.token",
+          "storageKey": "secure.jenkins.token",
+          "label": "Jenkins Token",
+          "type": "secret",
+          "default": "",
+          "description": "Enter a new token to replace the existing one. Copy is disabled; only full replacement is allowed.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          }
+        },
+        {
+          "key": "secure.jira.token",
+          "storageKey": "secure.jira.token",
+          "label": "JIRA Token",
+          "type": "secret",
+          "default": "",
+          "description": "Enter a new token to replace the existing one. Copy is disabled; only full replacement is allowed.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          }
+        }
+      ]
+    }
+  ]
+}

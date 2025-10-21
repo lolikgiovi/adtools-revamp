@@ -1,0 +1,281 @@
+.settings-page {
+  padding: 1rem;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.settings-title {
+  margin: 0;
+}
+.settings-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.settings-search {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+}
+
+/* Categories */
+.settings-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.settings-category {
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-layer, #fff);
+}
+.settings-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  background: var(--bg-subtle, #f8f8f8);
+}
+.settings-category-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.settings-category-toggle {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary, #555);
+}
+.settings-category-content {
+  display: none;
+  padding: 0.8rem;
+}
+.settings-category[aria-expanded="true"] .settings-category-content {
+  display: block;
+}
+
+/* Items */
+.setting-item {
+  border: 1px dashed var(--border-color, #ddd);
+  border-radius: 6px;
+  padding: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.setting-name {
+  font-weight: 600;
+  min-width: 160px;
+}
+.setting-value {
+  color: var(--text-secondary, #555);
+  flex: 1;
+}
+.setting-value.editable {
+  cursor: pointer;
+  border-bottom: 1px dotted var(--border-color, #ddd);
+}
+
+.setting-value.editable:hover {
+  color: var(--text-primary, #222);
+}
+
+.setting-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.setting-edit {
+  padding: 0.25rem 0.5rem;
+}
+.setting-edit-panel {
+  margin-top: 0.5rem;
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+.setting-label {
+  min-width: 140px;
+  color: var(--text-secondary, #555);
+}
+.setting-input {
+  padding: 0.25rem 0.5rem;
+}
+.setting-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.setting-error {
+  color: #d32f2f;
+  font-size: 0.85rem;
+}
+
+/* Daisy-like toggle switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 3rem;
+  height: 1.5rem;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--toggle-off-bg, #e5e7eb);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 9999px;
+}
+.slider::before {
+  position: absolute;
+  content: "";
+  height: 1.25rem;
+  width: 1.25rem;
+  left: 0.125rem;
+  bottom: 0.125rem;
+  background-color: white;
+  transition: transform 0.2s ease;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.switch input:checked + .slider {
+  background-color: var(--toggle-on-bg, #4ade80);
+}
+.switch input:checked + .slider::before {
+  transform: translateX(1.5rem);
+}
+
+/* kvlist layout */
+.kvlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.kv-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.kv-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+.kv-row input {
+  width: 100%;
+}
+.kv-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+.kv-add.btn {
+  padding: 0.25rem 0.5rem;
+}
+
+/* Secret value display masking already handled in JS using dots */
+
+/* Improve editable affordance alignment with Daisy-like visuals */
+.setting-value.editable {
+  cursor: pointer;
+  border-bottom: 1px dotted var(--border-muted, #9ca3af);
+}
+.setting-value.editable:hover {
+  border-bottom-color: var(--border-strong, #6b7280);
+}
+
+/* Maintain overall alignment */
+.setting-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Toggle alignment within control */
+.setting-control {
+  display: flex;
+  align-items: center;
+}
+
+.setting-edit-panel {
+  margin-top: 0.5rem;
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+.setting-label {
+  min-width: 140px;
+  color: var(--text-secondary, #555);
+}
+.setting-input {
+  padding: 0.25rem 0.5rem;
+}
+.setting-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.setting-error {
+  color: #d32f2f;
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .setting-row {
+    flex-wrap: wrap;
+  }
+  .setting-name {
+    min-width: auto;
+  }
+}
+.secret-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn.btn-icon {
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--bg-subtle, #f8f8f8);
+  color: var(--text-secondary, #555);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* kvlist preview (read-only) */
+.kvlist-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.kvlist-preview-row {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.kvlist-env {
+  font-weight: 600;
+}
+.kvlist-arrow {
+  color: var(--text-secondary, #666);
+}
+.kvlist-url {
+  color: var(--text-secondary, #555);
+  word-break: break-all;
+}
