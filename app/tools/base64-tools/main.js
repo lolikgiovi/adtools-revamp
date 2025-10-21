@@ -2,7 +2,8 @@ import { Base64ToolsService } from "./service.js";
 import { Base64ToolsConstants } from "./constants.js";
 import { Base64ToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
-import { getIconSvg } from './icon.js';
+import { getIconSvg } from "./icon.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {
@@ -18,7 +19,9 @@ class Base64Tools extends BaseTool {
     this.selectedFiles = new Map();
   }
 
-  getIconSvg() { return getIconSvg(); }
+  getIconSvg() {
+    return getIconSvg();
+  }
 
   render() {
     return Base64ToolsTemplate;
@@ -373,6 +376,7 @@ class Base64Tools extends BaseTool {
   }
 
   async encodeToBase64() {
+    +UsageTracker.track("base64-tools", "encode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process
@@ -397,6 +401,7 @@ class Base64Tools extends BaseTool {
   }
 
   async decodeFromBase64() {
+    +UsageTracker.track("base64-tools", "decode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process

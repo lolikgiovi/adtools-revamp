@@ -19,6 +19,7 @@ import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
+import { UsageTracker } from "./core/UsageTracker.js";
 
 class App {
   constructor() {
@@ -40,6 +41,9 @@ class App {
   init() {
     this.setupDOM();
     this.buildToolsConfigMap();
+    // Initialize usage tracking early with the app event bus
+    UsageTracker.init(this.eventBus);
+
     this.initializeComponents();
     this.registerTools();
     this.buildIconRegistry();
@@ -258,10 +262,13 @@ class App {
     if (this.mainContent) {
       this.mainContent.innerHTML = `
         <div class="home-container">
-          <div class="home-header"></div>
+          <div class="home-header">
+            <div id="usage-panel"></div>
+          </div>
           <div class="tools-grid">${toolCards}</div>
         </div>
       `;
+      this.renderUsagePanel();
     }
 
     this.eventBus.emit("page:changed", { page: "home" });
@@ -455,6 +462,13 @@ class App {
     this.eventBus.on("theme:change", (data) => {
       document.documentElement.setAttribute("data-theme", data.theme);
     });
+
+    // Live update usage panel on usage changes when home is visible
+    this.eventBus.on("usage:updated", () => {
+      if (document.querySelector(".home-container")) {
+        this.renderUsagePanel();
+      }
+    });
   }
 
   /**
@@ -566,6 +580,69 @@ class App {
       ],
       footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
     };
+  }
+  renderUsagePanel() {
+    const container = document.getElementById("usage-panel");
+    if (!container) return;
+
+    const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
+
+    const featuresHtml = Object.entries(totalsByFeature)
+      .map(([id, count]) => {
+        const name = this.tools.get(id)?.name || id;
+        return `
+          <div class="usage-feature-row">
+            <span class="usage-feature-name">${name}</span>
+            <span class="usage-feature-count">${count}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    const now = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dayStr = d.toISOString().slice(0, 10);
+      const value = Object.values(daily[dayStr] || {}).reduce((s, v) => s + v, 0);
+      const label = d.toLocaleDateString(undefined, { weekday: "short" });
+      days.push({ label, value });
+    }
+    const max = Math.max(1, ...days.map((d) => d.value));
+    const barsHtml = days
+      .map((d) => {
+        const h = Math.round((d.value / max) * 100);
+        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}"><span class="usage-bar-label">${d.label}</span></div>`;
+      })
+      .join("");
+
+    const emptyHtml = `<div class="usage-empty">No usage data yet. Start using tools to see stats.</div>`;
+
+    container.innerHTML = `
+      <div class="usage-panel">
+        <div class="usage-panel-header">
+          <h2>Usage Overview</h2>
+          <div class="usage-total">Total events: <strong>${totalEvents}</strong></div>
+        </div>
+        ${totalEvents === 0
+          ? emptyHtml
+          : `
+        <div class="usage-grid">
+          <div class="usage-card">
+            <h3>By Feature</h3>
+            <div class="usage-feature-list">${featuresHtml}</div>
+          </div>
+          <div class="usage-card">
+            <h3>7-day Activity</h3>
+            <div class="usage-trend">
+              ${barsHtml}
+            </div>
+          </div>
+        </div>
+        `}
+      </div>
+    `;
   }
 }
 

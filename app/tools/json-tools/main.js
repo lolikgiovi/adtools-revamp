@@ -8,6 +8,7 @@ import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { getIconSvg } from "./icon.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {
@@ -213,14 +214,9 @@ class JSONTools extends BaseTool {
   }
 
   validateJSON() {
+    UsageTracker.track("json-tools", "validate");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
-
-    if (!content) {
-      this.clearOutput();
-      this.clearErrors();
-      return;
-    }
 
     const res = JSONToolsService.validate(content);
     if (res.error) {
@@ -235,6 +231,7 @@ class JSONTools extends BaseTool {
   }
 
   prettifyJSON() {
+    UsageTracker.track("json-tools", "prettify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -250,6 +247,7 @@ class JSONTools extends BaseTool {
   }
 
   minifyJSON() {
+    UsageTracker.track("json-tools", "minify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -265,6 +263,7 @@ class JSONTools extends BaseTool {
   }
 
   stringifyJSON() {
+    UsageTracker.track("json-tools", "stringify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -280,6 +279,7 @@ class JSONTools extends BaseTool {
   }
 
   unstringifyJSON() {
+    UsageTracker.track("json-tools", "unstringify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -296,6 +296,7 @@ class JSONTools extends BaseTool {
   }
 
   escapeJSON() {
+    UsageTracker.track("json-tools", "escape");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -311,6 +312,7 @@ class JSONTools extends BaseTool {
   }
 
   unescapeJSON() {
+    UsageTracker.track("json-tools", "unescape");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -327,6 +329,7 @@ class JSONTools extends BaseTool {
   }
 
   extractKeys() {
+    UsageTracker.track("json-tools", "extract_keys");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;
