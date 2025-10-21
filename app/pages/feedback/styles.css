@@ -1,0 +1,9 @@
+.feedback-page { padding: 1rem; }
+.feedback-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+.feedback-title { margin: 0; }
+.feedback-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.feedback-form label { font-weight: 600; }
+.feedback-form textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border, #ddd); border-radius: 6px; resize: vertical; }
+.feedback-actions { display: flex; justify-content: flex-end; }
+.feedback-submit { padding: 0.5rem 0.75rem; border: none; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-radius: 6px; cursor: pointer; }
+.feedback-submit:hover { filter: brightness(0.95); }

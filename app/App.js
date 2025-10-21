@@ -15,8 +15,9 @@ import { QuickQuery } from "./tools/quick-query/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
 import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
-import { getIconSvg as getFeedbackIconSvg } from "./icons/feedback.js";
-import { getIconSvg as getSignoutIconSvg } from "./icons/signout.js";
+import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
+import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
+import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 
 class App {
@@ -207,6 +208,11 @@ class App {
       this.showSettings();
     });
 
+    // Feedback route
+    this.router.register("feedback", () => {
+      this.showFeedback();
+    });
+
     // Set default route
     this.router.setDefaultRoute("home");
   }
@@ -311,6 +317,25 @@ class App {
 
     // Emit page change
     this.eventBus.emit("page:changed", { page: "settings" });
+  }
+
+  showFeedback() {
+    // Update breadcrumb for feedback
+    this.updateBreadcrumb("Feedback");
+
+    // Ensure no tool is active
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      const feedbackPage = new FeedbackPage({ eventBus: this.eventBus });
+      feedbackPage.mount(this.mainContent);
+    }
+
+    // Emit page change
+    this.eventBus.emit("page:changed", { page: "feedback" });
   }
 
   /**
@@ -507,6 +532,14 @@ class App {
       type: "page",
       icon: "settings",
     });
+    items.push({
+      id: "feedback",
+      name: "Feedback",
+      description: "Send feedback",
+      route: "feedback",
+      type: "page",
+      icon: "feedback",
+    });
 
     // Tools
     this.tools.forEach((tool) => {
@@ -529,7 +562,7 @@ class App {
       config: [],
       app: [
         { id: "settings", name: "Settings", icon: "settings", type: "page" },
-        { id: "feedback", name: "Feedback", icon: "feedback", type: "action" },
+        { id: "feedback", name: "Feedback", icon: "feedback", type: "page" },
       ],
       footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
     };
