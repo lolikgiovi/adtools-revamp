@@ -7,6 +7,7 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+import { getIconSvg } from './icon.js';
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {
@@ -14,13 +15,16 @@ class JSONTools extends BaseTool {
       id: "json-tools",
       name: "JSON Tools",
       description: "Advanced JSON manipulation with Monaco Editor",
-      category: "general",
+      icon: "json",
+      category: "application",
       eventBus: eventBus,
     });
     this.editor = null;
     this.currentTab = "validator";
     this.isErrorPanelCollapsed = false;
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return JSONToolsTemplate;

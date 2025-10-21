@@ -1,5 +1,6 @@
 import { UUIDGeneratorTemplate } from './template.js';
 import { BaseTool } from '../../core/BaseTool.js';
+import { getIconSvg } from './icon.js';
 
 class UUIDGenerator extends BaseTool {
   constructor(eventBus) {
@@ -12,6 +13,8 @@ class UUIDGenerator extends BaseTool {
       eventBus,
     });
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return UUIDGeneratorTemplate;

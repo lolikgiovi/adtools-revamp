@@ -13,6 +13,11 @@ import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
+import { GlobalSearch } from "./components/GlobalSearch.js";
+import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
+import { getIconSvg as getFeedbackIconSvg } from "./icons/feedback.js";
+import { getIconSvg as getSignoutIconSvg } from "./icons/signout.js";
+import toolsConfig from "./config/tools.json";
 
 class App {
   constructor() {
@@ -22,6 +27,8 @@ class App {
     this.tools = new Map();
     this.currentTool = null;
     this.mainContent = null;
+    this.iconRegistry = new Map();
+    this.toolsConfigMap = new Map();
 
     this.init();
   }
@@ -31,9 +38,14 @@ class App {
    */
   init() {
     this.setupDOM();
+    this.buildToolsConfigMap();
     this.initializeComponents();
     this.registerTools();
+    this.buildIconRegistry();
     this.setupRoutes();
+
+    // Build global search index after routes/tools are ready
+    this.updateGlobalSearchIndex();
 
     // Handle initial route after routes are registered
     this.router.handleRouteChange();
@@ -53,6 +65,14 @@ class App {
     }
   }
 
+  buildToolsConfigMap() {
+    const list = toolsConfig && toolsConfig.tools ? toolsConfig.tools : [];
+    this.toolsConfigMap.clear();
+    list.forEach((cfg) => {
+      if (cfg && cfg.id) this.toolsConfigMap.set(cfg.id, cfg);
+    });
+  }
+
   /**
    * Initialize core components
    */
@@ -61,6 +81,9 @@ class App {
     this.sidebar = new Sidebar({
       eventBus: this.eventBus,
       router: this.router,
+      getIcon: this.getToolIcon.bind(this),
+      menuConfig: this.buildMenuConfig(),
+      toolsConfigMap: this.toolsConfigMap,
     });
 
     // Initialize breadcrumb
@@ -73,8 +96,45 @@ class App {
     // Initialize theme manager
     this.themeManager = new ThemeManager(this.eventBus);
 
+    // Initialize global search
+    this.globalSearch = new GlobalSearch({
+      eventBus: this.eventBus,
+      router: this.router,
+      app: this,
+      getIcon: this.getToolIcon.bind(this),
+    });
+
     // Setup notification system
     this.setupNotifications();
+  }
+
+  /** Build icon registry from registered tools */
+  buildIconRegistry() {
+    this.iconRegistry.clear();
+    this.tools.forEach((tool) => {
+      const md = tool.getMetadata();
+      if (typeof tool.getIconSvg === "function" && md.icon) {
+        this.iconRegistry.set(md.icon, () => tool.getIconSvg());
+      }
+    });
+    // Page and action icons
+    this.iconRegistry.set("settings", () => getSettingsIconSvg());
+    this.iconRegistry.set("feedback", () => getFeedbackIconSvg());
+    this.iconRegistry.set("signout", () => getSignoutIconSvg());
+  }
+
+  /** Get SVG icon by alias, preferring tool-provided icon */
+  getToolIcon(iconName) {
+    const provider = this.iconRegistry.get(iconName);
+    if (provider) {
+      try {
+        return provider();
+      } catch (e) {
+        // fallback below
+      }
+    }
+    // Fallback to sidebar's built-in icons
+    return this.sidebar?.getToolIcon(iconName);
   }
 
   /**
@@ -109,6 +169,15 @@ class App {
    * @param {BaseTool} tool - Tool instance
    */
   registerTool(tool) {
+    // Apply config overrides before registering
+    const cfg = this.toolsConfigMap.get(tool.id);
+    if (cfg) {
+      if (typeof cfg.name === "string") tool.name = cfg.name;
+      if (typeof cfg.icon === "string") tool.icon = cfg.icon;
+      if (typeof cfg.category === "string") tool.category = cfg.category;
+      tool.__config = cfg;
+    }
+
     this.tools.set(tool.id, tool);
 
     // Notify sidebar about new tool
@@ -154,30 +223,39 @@ class App {
       this.currentTool = null;
     }
 
+    const toolCards = Array.from(this.tools.values())
+      .filter((tool) => {
+        const cfg = this.toolsConfigMap.get(tool.id);
+        const enabled = cfg ? cfg.enabled !== false : true;
+        const showOnHome = cfg ? cfg.showOnHome !== false : true;
+        return enabled && showOnHome;
+      })
+      .sort((a, b) => {
+        const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
+        const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
+        return ca - cb;
+      })
+      .map((tool) => {
+        const metadata = tool.getMetadata();
+        return `
+            <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
+              <div class="tool-card-icon">
+                ${this.getToolIcon(metadata.icon)}
+              </div>
+              <h3 class="tool-card-title">${metadata.name}</h3>
+              <p class="tool-card-description">${metadata.description}</p>
+            </div>
+          `;
+      })
+      .join("");
+
     if (this.mainContent) {
       this.mainContent.innerHTML = `
-                <div class="home-container">
-                    <div class="home-header">
-                    </div>
-                    
-                    <div class="tools-grid">
-                        ${Array.from(this.tools.values())
-                          .map((tool) => {
-                            const metadata = tool.getMetadata();
-                            return `
-                                <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
-                                    <div class="tool-card-icon">
-                                        ${this.sidebar.getToolIcon(metadata.icon)}
-                                    </div>
-                                    <h3 class="tool-card-title">${metadata.name}</h3>
-                                    <p class="tool-card-description">${metadata.description}</p>
-                                </div>
-                            `;
-                          })
-                          .join("")}
-                    </div>
-                </div>
-            `;
+        <div class="home-container">
+          <div class="home-header"></div>
+          <div class="tools-grid">${toolCards}</div>
+        </div>
+      `;
     }
 
     this.eventBus.emit("page:changed", { page: "home" });
@@ -365,6 +443,12 @@ class App {
       this.sidebar.toggle();
     }
 
+    // Cmd/Ctrl + P: Open global search
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+      e.preventDefault();
+      this.globalSearch?.open();
+    }
+
     // Escape: Close modals/overlays
     if (e.key === "Escape") {
       this.eventBus.emit("escape:pressed");
@@ -400,6 +484,55 @@ class App {
     }
 
     console.log("AD Tools app destroyed");
+  }
+
+  updateGlobalSearchIndex() {
+    if (!this.globalSearch) return;
+    const items = [];
+
+    // Pages
+    items.push({
+      id: "home",
+      name: "Home",
+      description: "Go to home page",
+      route: "home",
+      type: "page",
+      icon: null,
+    });
+    items.push({
+      id: "settings",
+      name: "Settings",
+      description: "Adjust application settings",
+      route: "settings",
+      type: "page",
+      icon: "settings",
+    });
+
+    // Tools
+    this.tools.forEach((tool) => {
+      const md = tool.getMetadata();
+      items.push({
+        id: md.id,
+        name: md.name,
+        description: md.description || "",
+        route: md.id,
+        type: "tool",
+        icon: md.icon || null,
+      });
+    });
+
+    this.globalSearch.setIndex(items);
+  }
+  /** Build app-level menu config for dynamic sidebar groups */
+  buildMenuConfig() {
+    return {
+      config: [],
+      app: [
+        { id: "settings", name: "Settings", icon: "settings", type: "page" },
+        { id: "feedback", name: "Feedback", icon: "feedback", type: "action" },
+      ],
+      footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
+    };
   }
 }
 

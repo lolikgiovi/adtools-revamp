@@ -10,6 +10,7 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import Handsontable from "handsontable";
 import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
+import { getIconSvg } from './icon.js';
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -24,6 +25,8 @@ export class QuickQuery extends BaseTool {
     });
     this.ui = null;
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return MAIN_TEMPLATE;

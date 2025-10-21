@@ -1,6 +1,7 @@
 import { QRToolsService } from './service.js';
 import { QRToolsTemplate } from './template.js';
 import { BaseTool } from '../../core/BaseTool.js';
+import { getIconSvg } from './icon.js';
 
 class QRTools extends BaseTool {
   constructor(eventBus) {
@@ -24,6 +25,8 @@ class QRTools extends BaseTool {
     };
     this._debounceTimer = null;
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return QRToolsTemplate;

@@ -1,0 +1,54 @@
+{
+  "tools": [
+    {
+      "id": "uuid-generator",
+      "name": "UUID Generator",
+      "category": "general",
+      "icon": "uuid",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 10
+    },
+    {
+      "id": "json-tools",
+      "name": "JSON Tools",
+      "category": "general",
+      "icon": "json",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 20
+    },
+    {
+      "id": "base64-tools",
+      "name": "Base64 Tools",
+      "category": "general",
+      "icon": "base64",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 30
+    },
+    {
+      "id": "qr-tools",
+      "name": "QR Tools",
+      "category": "general",
+      "icon": "qr",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 40
+    },
+    {
+      "id": "quick-query",
+      "name": "Quick Query",
+      "category": "config",
+      "icon": "database",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 50
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { Base64ToolsService } from "./service.js";
 import { Base64ToolsConstants } from "./constants.js";
 import { Base64ToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
+import { getIconSvg } from './icon.js';
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {
@@ -9,12 +10,15 @@ class Base64Tools extends BaseTool {
       id: "base64-tools",
       name: "Base64 Tools",
       description: "Encode and decode Base64 with text and file support",
-      category: "general",
+      icon: "base64",
+      category: "application",
       eventBus: eventBus,
     });
     this.currentMode = "encode";
     this.selectedFiles = new Map();
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return Base64ToolsTemplate;
