@@ -7,6 +7,9 @@ class Sidebar {
     this.eventBus = config.eventBus;
     this.router = config.router;
     this.tools = config.tools || [];
+    this.getIcon = typeof config.getIcon === "function" ? config.getIcon : null;
+    this.menuConfig = config.menuConfig || { app: [], config: [], footer: [] };
+    this.toolsConfigMap = config.toolsConfigMap || new Map();
 
     // State management - matching script.js
     this.state = {
@@ -29,6 +32,7 @@ class Sidebar {
     this.setupToggle();
     this.initializeAccessibility();
     this.setupMenuButtons();
+    this.renderMenuGroups();
 
     // Set initial state - start with sidebar expanded on desktop
     if (!this.state.isMobile) {
@@ -334,44 +338,134 @@ class Sidebar {
   /**
    * Render tools in the sidebar
    */
-  renderTools() {
+  async renderTools() {
     const applicationGroup = document.querySelector('.sidebar-group[data-category="application"] .sidebar-menu');
 
     if (!applicationGroup) return;
 
-    // Group tools by category
-    const toolsByCategory = this.tools.reduce((acc, tool) => {
-      if (!acc[tool.category]) {
-        acc[tool.category] = [];
+    const { categorizeTool } = await import("../core/Categories.js");
+
+    const sourceTools = (this.tools || [])
+      .filter((tool) => {
+        const cfg = this.toolsConfigMap.get(tool.id);
+        const enabled = cfg ? cfg.enabled !== false : true;
+        const showInSidebar = cfg ? cfg.showInSidebar !== false : true;
+        return enabled && showInSidebar;
+      })
+      .sort((a, b) => {
+        const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
+        const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
+        return ca - cb;
+      });
+
+    const toolsByCategory = sourceTools.reduce((acc, tool) => {
+      const cat = categorizeTool(tool);
+      if (!acc[cat]) {
+        acc[cat] = [];
       }
-      acc[tool.category].push(tool);
+      acc[cat].push(tool);
       return acc;
     }, {});
 
-    // Render application tools
-    if (toolsByCategory.application) {
-      applicationGroup.innerHTML = toolsByCategory.application
-        .map(
-          (tool) => `
-                <a href="#${tool.id}" class="sidebar-item" data-tool="${tool.id}">
-                    <div class="sidebar-icon">
-                        ${this.getToolIcon(tool.icon)}
-                    </div>
-                    <span class="sidebar-text">${tool.name}</span>
-                </a>
-            `
-        )
+    const ensureSvgClass = (svgString, className = "sidebar-menu-icon") => {
+      if (!svgString) return svgString;
+      if (svgString.includes("<svg") && !svgString.includes('class="' + className + '"')) {
+        return svgString.replace("<svg", `<svg class=\"${className}\"`);
+      }
+      return svgString;
+    };
+
+    if (toolsByCategory.general) {
+      applicationGroup.innerHTML = toolsByCategory.general
+        .map((tool) => {
+          const rawSvg = this.getIcon ? this.getIcon(tool.icon) : this.getToolIcon(tool.icon);
+          const svg = ensureSvgClass(rawSvg);
+          return `
+            <div class="sidebar-menu-item" data-tool="${tool.id}">
+              <button class="sidebar-menu-button" type="button">
+                ${svg}
+                <span>${tool.name}</span>
+              </button>
+            </div>
+          `;
+        })
         .join("");
 
-      // Add click handlers
-      applicationGroup.querySelectorAll(".sidebar-item").forEach((item) => {
-        item.addEventListener("click", (e) => {
-          e.preventDefault();
-          const toolId = item.dataset.tool;
-          this.selectTool(toolId);
-        });
+      applicationGroup.querySelectorAll(".sidebar-menu-item").forEach((item) => {
+        const button = item.querySelector(".sidebar-menu-button");
+        if (button) {
+          button.addEventListener("click", (e) => {
+            e.preventDefault();
+            const toolId = item.dataset.tool;
+            this.selectTool(toolId);
+          });
+        }
       });
     }
+  }
+
+  async renderMenuGroups() {
+    const { categorizeTool } = await import("../core/Categories.js");
+
+    const renderGroup = (groupName, items) => {
+      const container = document.querySelector(`.sidebar-menu[data-group="${groupName}"]`);
+      if (!container) return;
+
+      const ensureSvgClass = (svgString, className = "sidebar-menu-icon") => {
+        if (!svgString) return svgString;
+        if (svgString.includes("<svg") && !svgString.includes('class="' + className + '"')) {
+          return svgString.replace("<svg", `<svg class=\"${className}\"`);
+        }
+        return svgString;
+      };
+
+      let merged = [...(items || [])];
+      if (groupName === "config") {
+        const configTools = (this.tools || [])
+          .filter((t) => {
+            const cfg = this.toolsConfigMap.get(t.id);
+            const enabled = cfg ? cfg.enabled !== false : true;
+            const showInSidebar = cfg ? cfg.showInSidebar !== false : true;
+            return categorizeTool(t) === "config" && enabled && showInSidebar;
+          })
+          .sort((a, b) => {
+            const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
+            const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
+            return ca - cb;
+          })
+          .map((t) => ({ id: t.id, name: t.name, icon: t.icon, type: "tool" }));
+        merged = [...merged, ...configTools];
+      }
+
+      container.innerHTML = merged
+        .map((item) => {
+          const rawSvg = this.getIcon ? this.getIcon(item.icon) : this.getToolIcon(item.icon);
+          const svg = ensureSvgClass(rawSvg);
+          const dataAttr =
+            item.type === "tool"
+              ? `data-tool="${item.id}"`
+              : item.type === "action"
+              ? `data-action="${item.id}"`
+              : `data-page="${item.id}"`;
+          return `
+            <div class=\"sidebar-menu-item\" ${dataAttr}>
+              <button class=\"sidebar-menu-button\" type=\"button\">
+                ${svg}
+                <span>${item.name}</span>
+              </button>
+            </div>
+          `;
+        })
+        .join("");
+
+      container.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
+        button.addEventListener("click", (e) => this.handleMenuClick(e));
+      });
+    };
+
+    renderGroup("config", this.menuConfig?.config);
+    renderGroup("app", this.menuConfig?.app);
+    renderGroup("footer", this.menuConfig?.footer);
   }
 
   /**
@@ -380,121 +474,13 @@ class Sidebar {
    * @returns {string} SVG string
    */
   getToolIcon(iconName) {
-    const icons = {
-      uuid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <path d="M9 9h6v6H9z"/>
-                <path d="M9 3v6M15 3v6M9 15v6M15 15v6M3 9h6M3 15h6M15 9h6M15 15h6"/>
-            </svg>`,
-      json: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5z"/>
-                <path d="M9 7h1a2 2 0 0 1 2 2v1a2 2 0 0 0 2 2 2 2 0 0 0-2 2v1a2 2 0 0 1-2 2H9"/>
-                <path d="M15 7h-1a2 2 0 0 0-2 2v1a2 2 0 0 1-2 2 2 2 0 0 1 2 2v1a2 2 0 0 0 2 2h1"/>
-            </svg>`,
-      base64: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="16 18 22 12 16 6"/>
-                <polyline points="8 6 2 12 8 18"/>
-                <circle cx="12" cy="12" r="2"/>
-            </svg>`,
-      diff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/>
-                <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/>
-                <path d="M12 20v2"/>
-                <path d="M12 14v2"/>
-                <path d="M12 8v2"/>
-                <path d="M12 2v2"/>
-            </svg>`,
-      qr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="5" height="5"/>
-                <rect x="3" y="16" width="5" height="5"/>
-                <rect x="16" y="3" width="5" height="5"/>
-                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
-                <path d="M21 21v.01"/>
-                <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
-                <path d="M3 12h.01"/>
-                <path d="M12 3h.01"/>
-                <path d="M12 16v.01"/>
-                <path d="M16 12h1"/>
-                <path d="M21 12v.01"/>
-                <path d="M12 21v-1"/>
-            </svg>`,
-      query: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
-                <path d="M11 6v10"/>
-                <path d="M6 11h10"/>
-            </svg>`,
-      compare: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 12l2 2 4-4"/>
-                <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-                <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-                <path d="M12 3c0 1-1 3-3 3s-3-2-3-3 1-3 3-3 3 2 3 3"/>
-                <path d="M12 21c0-1 1-3 3-3s3 2 3 3-1 3-3 3-3-2-3-3"/>
-            </svg>`,
-      image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
-                <path d="M9 12l2 2 4-4"/>
-            </svg>`,
-      html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="16 18 22 12 16 6"/>
-                <polyline points="8 6 2 12 8 18"/>
-                <path d="M12 2v20"/>
-            </svg>`,
-      splunk: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3v18h18"/>
-                <path d="M18.7 8a3 3 0 0 0-5.4 0"/>
-                <path d="M16.4 12a3 3 0 0 0-5.4 0"/>
-                <path d="M14.1 16a3 3 0 0 0-5.4 0"/>
-                <path d="M11.8 20a3 3 0 0 0-5.4 0"/>
-            </svg>`,
-      template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-                <path d="M9 13h6"/>
-                <path d="M12 10v6"/>
-            </svg>`,
-      docs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-            </svg>`,
-      feedback: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                <path d="M9 9h6"/>
-                <path d="M9 13h3"/>
-            </svg>`,
-      // Legacy icons for backward compatibility
-      hash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="4" y1="9" x2="20" y2="9"/>
-                <line x1="4" y1="15" x2="20" y2="15"/>
-                <line x1="10" y1="3" x2="8" y2="21"/>
-                <line x1="16" y1="3" x2="14" y2="21"/>
-            </svg>`,
-      encode: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="16 18 22 12 16 6"/>
-                <polyline points="8 6 2 12 8 18"/>
-            </svg>`,
-      color: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="13.5" cy="6.5" r=".5"/>
-                <circle cx="17.5" cy="10.5" r=".5"/>
-                <circle cx="8.5" cy="7.5" r=".5"/>
-                <circle cx="6.5" cy="12.5" r=".5"/>
-                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
-            </svg>`,
-      password: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <circle cx="12" cy="16" r="1"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>`,
-      default: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-                <path d="M2 2l7.586 7.586"/>
-                <circle cx="11" cy="11" r="2"/>
-            </svg>`,
-    };
-
-    return icons[iconName] || icons.default;
+    // Minimal fallback: default generic icon
+    const defaultSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10" />
+      <path d="M7 12h10" />
+    </svg>`;
+    return defaultSvg;
   }
 
   /**
@@ -554,6 +540,10 @@ class Sidebar {
     const button = e.currentTarget;
     const menuItem = button.closest(".sidebar-menu-item");
 
+    // Prefer explicit page or action navigation
+    const pageId = menuItem ? menuItem.getAttribute("data-page") : null;
+    const actionId = menuItem ? menuItem.getAttribute("data-action") : null;
+
     // Get the tool ID from data attribute
     const toolId = menuItem ? menuItem.getAttribute("data-tool") : null;
 
@@ -565,11 +555,31 @@ class Sidebar {
     // Set active state on clicked button
     button.setAttribute("data-active", "true");
 
-    // Navigate to the tool or page
+    // Navigate to the tool, page, or action
     if (toolId) {
       this.selectTool(toolId);
+    } else if (pageId) {
+      this.navigateToPage(pageId);
+    } else if (actionId) {
+      switch (actionId) {
+        case "signout":
+          this.handleSignOut();
+          break;
+        case "feedback":
+          // For now, just show a notification
+          if (this.eventBus) {
+            this.eventBus.emit("notification:show", {
+              message: "Thanks for your feedback!",
+              type: "info",
+            });
+          }
+          break;
+        default:
+          // Fallback to special navigation handler
+          this.handleSpecialNavigation(actionId);
+      }
     } else {
-      // Handle navigation for items without data-tool (like Documentation, Templates, etc.)
+      // Handle navigation for items without explicit attributes (fallback)
       const spanText = button.querySelector("span")?.textContent?.trim();
       if (spanText) {
         this.handleSpecialNavigation(spanText);

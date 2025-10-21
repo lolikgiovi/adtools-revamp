@@ -10,6 +10,8 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import Handsontable from "handsontable";
 import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
+import { getIconSvg } from './icon.js';
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -24,6 +26,8 @@ export class QuickQuery extends BaseTool {
     });
     this.ui = null;
   }
+
+  getIconSvg() { return getIconSvg(); }
 
   render() {
     return MAIN_TEMPLATE;
@@ -677,52 +681,53 @@ export class QuickQueryUI {
 
   // Event Handlers
   handleGenerateQuery() {
-    try {
-      const tableName = this.elements.tableNameInput.value.trim();
-      const queryType = this.elements.queryTypeSelect.value;
++    UsageTracker.track("quick-query", "execute");
+     try {
+       const tableName = this.elements.tableNameInput.value.trim();
+       const queryType = this.elements.queryTypeSelect.value;
 
-      const schemaData = this.schemaTable.getData().filter((row) => row[0]);
-      const inputData = this.dataTable.getData();
+       const schemaData = this.schemaTable.getData().filter((row) => row[0]);
+       const inputData = this.dataTable.getData();
 
-      if (!tableName) {
-        throw new Error("Please fill in schema_name.table_name.");
-      }
+       if (!tableName) {
+         throw new Error("Please fill in schema_name.table_name.");
+       }
 
-      if (!tableName.includes(".")) {
-        throw new Error("Table name format should be 'schema_name.table_name'.");
-      }
+       if (!tableName.includes(".")) {
+         throw new Error("Table name format should be 'schema_name.table_name'.");
+       }
 
-      if (schemaData.length === 0) {
-        throw new Error("Please fill the schema data first");
-      }
+       if (schemaData.length === 0) {
+         throw new Error("Please fill the schema data first");
+       }
 
-      if (isDbeaverSchema(schemaData)) {
-        this.adjustDbeaverSchema(schemaData);
+       if (isDbeaverSchema(schemaData)) {
+         this.adjustDbeaverSchema(schemaData);
 
-        throw new Error("Schema data adjusted from DBeaver to SQL Developer format. Please refill the data sheet.");
-      }
+         throw new Error("Schema data adjusted from DBeaver to SQL Developer format. Please refill the data sheet.");
+       }
 
-      this.schemaValidationService.validateSchema(schemaData);
-      this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
+       this.schemaValidationService.validateSchema(schemaData);
+       this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
-      this.localStorageService.saveSchema(tableName, schemaData, inputData);
+       this.localStorageService.saveSchema(tableName, schemaData, inputData);
 
-      const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles);
+       const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles);
 
-      this.editor.setValue(query);
-      this.clearError();
+       this.editor.setValue(query);
+       this.clearError();
 
-      // Check for duplicate primary keys for MERGE and UPDATE operations
-      const duplicateResult = this.queryGenerationService.detectDuplicatePrimaryKeys(schemaData, inputData, tableName);
-      if (duplicateResult.hasDuplicates && duplicateResult.warningMessage) {
-        this.showWarning(duplicateResult.warningMessage);
-        console.log("Detected duplicate result");
-      }
-    } catch (error) {
-      this.showError(error.message);
-      this.editor.setValue("");
-    }
-  }
+       // Check for duplicate primary keys for MERGE and UPDATE operations
+       const duplicateResult = this.queryGenerationService.detectDuplicatePrimaryKeys(schemaData, inputData, tableName);
+       if (duplicateResult.hasDuplicates && duplicateResult.warningMessage) {
+         this.showWarning(duplicateResult.warningMessage);
+         console.log("Detected duplicate result");
+       }
+     } catch (error) {
+       this.showError(error.message);
+       this.editor.setValue("");
+     }
+   }
 
   handleClearAll() {
     this.elements.tableNameInput.value = "";

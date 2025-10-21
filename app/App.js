@@ -12,6 +12,14 @@ import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
+import { SettingsPage } from "./pages/settings/main.js";
+import { GlobalSearch } from "./components/GlobalSearch.js";
+import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
+import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
+import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
+import { FeedbackPage } from "./pages/feedback/main.js";
+import toolsConfig from "./config/tools.json";
+import { UsageTracker } from "./core/UsageTracker.js";
 
 class App {
   constructor() {
@@ -21,6 +29,8 @@ class App {
     this.tools = new Map();
     this.currentTool = null;
     this.mainContent = null;
+    this.iconRegistry = new Map();
+    this.toolsConfigMap = new Map();
 
     this.init();
   }
@@ -30,9 +40,17 @@ class App {
    */
   init() {
     this.setupDOM();
+    this.buildToolsConfigMap();
+    // Initialize usage tracking early with the app event bus
+    UsageTracker.init(this.eventBus);
+
     this.initializeComponents();
     this.registerTools();
+    this.buildIconRegistry();
     this.setupRoutes();
+
+    // Build global search index after routes/tools are ready
+    this.updateGlobalSearchIndex();
 
     // Handle initial route after routes are registered
     this.router.handleRouteChange();
@@ -52,6 +70,14 @@ class App {
     }
   }
 
+  buildToolsConfigMap() {
+    const list = toolsConfig && toolsConfig.tools ? toolsConfig.tools : [];
+    this.toolsConfigMap.clear();
+    list.forEach((cfg) => {
+      if (cfg && cfg.id) this.toolsConfigMap.set(cfg.id, cfg);
+    });
+  }
+
   /**
    * Initialize core components
    */
@@ -60,6 +86,9 @@ class App {
     this.sidebar = new Sidebar({
       eventBus: this.eventBus,
       router: this.router,
+      getIcon: this.getToolIcon.bind(this),
+      menuConfig: this.buildMenuConfig(),
+      toolsConfigMap: this.toolsConfigMap,
     });
 
     // Initialize breadcrumb
@@ -72,8 +101,45 @@ class App {
     // Initialize theme manager
     this.themeManager = new ThemeManager(this.eventBus);
 
+    // Initialize global search
+    this.globalSearch = new GlobalSearch({
+      eventBus: this.eventBus,
+      router: this.router,
+      app: this,
+      getIcon: this.getToolIcon.bind(this),
+    });
+
     // Setup notification system
     this.setupNotifications();
+  }
+
+  /** Build icon registry from registered tools */
+  buildIconRegistry() {
+    this.iconRegistry.clear();
+    this.tools.forEach((tool) => {
+      const md = tool.getMetadata();
+      if (typeof tool.getIconSvg === "function" && md.icon) {
+        this.iconRegistry.set(md.icon, () => tool.getIconSvg());
+      }
+    });
+    // Page and action icons
+    this.iconRegistry.set("settings", () => getSettingsIconSvg());
+    this.iconRegistry.set("feedback", () => getFeedbackIconSvg());
+    this.iconRegistry.set("signout", () => getSignoutIconSvg());
+  }
+
+  /** Get SVG icon by alias, preferring tool-provided icon */
+  getToolIcon(iconName) {
+    const provider = this.iconRegistry.get(iconName);
+    if (provider) {
+      try {
+        return provider();
+      } catch (e) {
+        // fallback below
+      }
+    }
+    // Fallback to sidebar's built-in icons
+    return this.sidebar?.getToolIcon(iconName);
   }
 
   /**
@@ -108,6 +174,15 @@ class App {
    * @param {BaseTool} tool - Tool instance
    */
   registerTool(tool) {
+    // Apply config overrides before registering
+    const cfg = this.toolsConfigMap.get(tool.id);
+    if (cfg) {
+      if (typeof cfg.name === "string") tool.name = cfg.name;
+      if (typeof cfg.icon === "string") tool.icon = cfg.icon;
+      if (typeof cfg.category === "string") tool.category = cfg.category;
+      tool.__config = cfg;
+    }
+
     this.tools.set(tool.id, tool);
 
     // Notify sidebar about new tool
@@ -132,6 +207,16 @@ class App {
       });
     });
 
+    // Settings route
+    this.router.register("settings", () => {
+      this.showSettings();
+    });
+
+    // Feedback route
+    this.router.register("feedback", () => {
+      this.showFeedback();
+    });
+
     // Set default route
     this.router.setDefaultRoute("home");
   }
@@ -148,30 +233,42 @@ class App {
       this.currentTool = null;
     }
 
+    const toolCards = Array.from(this.tools.values())
+      .filter((tool) => {
+        const cfg = this.toolsConfigMap.get(tool.id);
+        const enabled = cfg ? cfg.enabled !== false : true;
+        const showOnHome = cfg ? cfg.showOnHome !== false : true;
+        return enabled && showOnHome;
+      })
+      .sort((a, b) => {
+        const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
+        const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
+        return ca - cb;
+      })
+      .map((tool) => {
+        const metadata = tool.getMetadata();
+        return `
+            <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
+              <div class="tool-card-icon">
+                ${this.getToolIcon(metadata.icon)}
+              </div>
+              <h3 class="tool-card-title">${metadata.name}</h3>
+              <p class="tool-card-description">${metadata.description}</p>
+            </div>
+          `;
+      })
+      .join("");
+
     if (this.mainContent) {
       this.mainContent.innerHTML = `
-                <div class="home-container">
-                    <div class="home-header">
-                    </div>
-                    
-                    <div class="tools-grid">
-                        ${Array.from(this.tools.values())
-                          .map((tool) => {
-                            const metadata = tool.getMetadata();
-                            return `
-                                <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
-                                    <div class="tool-card-icon">
-                                        ${this.sidebar.getToolIcon(metadata.icon)}
-                                    </div>
-                                    <h3 class="tool-card-title">${metadata.name}</h3>
-                                    <p class="tool-card-description">${metadata.description}</p>
-                                </div>
-                            `;
-                          })
-                          .join("")}
-                    </div>
-                </div>
-            `;
+        <div class="home-container">
+          <div class="home-header">
+            <div id="usage-panel"></div>
+          </div>
+          <div class="tools-grid">${toolCards}</div>
+        </div>
+      `;
+      this.renderUsagePanel();
     }
 
     this.eventBus.emit("page:changed", { page: "home" });
@@ -208,6 +305,44 @@ class App {
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });
+  }
+
+  showSettings() {
+    // Update breadcrumb for settings
+    this.updateBreadcrumb("Settings");
+
+    // Ensure no tool is active
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      const settingsPage = new SettingsPage({ eventBus: this.eventBus, themeManager: this.themeManager });
+      settingsPage.mount(this.mainContent);
+    }
+
+    // Emit page change
+    this.eventBus.emit("page:changed", { page: "settings" });
+  }
+
+  showFeedback() {
+    // Update breadcrumb for feedback
+    this.updateBreadcrumb("Feedback");
+
+    // Ensure no tool is active
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      const feedbackPage = new FeedbackPage({ eventBus: this.eventBus });
+      feedbackPage.mount(this.mainContent);
+    }
+
+    // Emit page change
+    this.eventBus.emit("page:changed", { page: "feedback" });
   }
 
   /**
@@ -327,6 +462,13 @@ class App {
     this.eventBus.on("theme:change", (data) => {
       document.documentElement.setAttribute("data-theme", data.theme);
     });
+
+    // Live update usage panel on usage changes when home is visible
+    this.eventBus.on("usage:updated", () => {
+      if (document.querySelector(".home-container")) {
+        this.renderUsagePanel();
+      }
+    });
   }
 
   /**
@@ -338,6 +480,12 @@ class App {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
       e.preventDefault();
       this.sidebar.toggle();
+    }
+
+    // Cmd/Ctrl + P: Open global search
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+      e.preventDefault();
+      this.globalSearch?.open();
     }
 
     // Escape: Close modals/overlays
@@ -375,6 +523,128 @@ class App {
     }
 
     console.log("AD Tools app destroyed");
+  }
+
+  updateGlobalSearchIndex() {
+    if (!this.globalSearch) return;
+    const items = [];
+
+    // Pages
+    items.push({
+      id: "home",
+      name: "Home",
+      description: "Go to home page",
+      route: "home",
+      type: "page",
+      icon: null,
+    });
+    items.push({
+      id: "settings",
+      name: "Settings",
+      description: "Adjust application settings",
+      route: "settings",
+      type: "page",
+      icon: "settings",
+    });
+    items.push({
+      id: "feedback",
+      name: "Feedback",
+      description: "Send feedback",
+      route: "feedback",
+      type: "page",
+      icon: "feedback",
+    });
+
+    // Tools
+    this.tools.forEach((tool) => {
+      const md = tool.getMetadata();
+      items.push({
+        id: md.id,
+        name: md.name,
+        description: md.description || "",
+        route: md.id,
+        type: "tool",
+        icon: md.icon || null,
+      });
+    });
+
+    this.globalSearch.setIndex(items);
+  }
+  /** Build app-level menu config for dynamic sidebar groups */
+  buildMenuConfig() {
+    return {
+      config: [],
+      app: [
+        { id: "settings", name: "Settings", icon: "settings", type: "page" },
+        { id: "feedback", name: "Feedback", icon: "feedback", type: "page" },
+      ],
+      footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
+    };
+  }
+  renderUsagePanel() {
+    const container = document.getElementById("usage-panel");
+    if (!container) return;
+
+    const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
+
+    const featuresHtml = Object.entries(totalsByFeature)
+      .map(([id, count]) => {
+        const name = this.tools.get(id)?.name || id;
+        return `
+          <div class="usage-feature-row">
+            <span class="usage-feature-name">${name}</span>
+            <span class="usage-feature-count">${count}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    const now = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dayStr = d.toISOString().slice(0, 10);
+      const value = Object.values(daily[dayStr] || {}).reduce((s, v) => s + v, 0);
+      const label = d.toLocaleDateString(undefined, { weekday: "short" });
+      days.push({ label, value });
+    }
+    const max = Math.max(1, ...days.map((d) => d.value));
+    const barsHtml = days
+      .map((d) => {
+        const h = Math.round((d.value / max) * 100);
+        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}"><span class="usage-bar-label">${d.label}</span></div>`;
+      })
+      .join("");
+
+    const emptyHtml = `<div class="usage-empty">No usage data yet. Start using tools to see stats.</div>`;
+
+    container.innerHTML = `
+      <div class="usage-panel">
+        <div class="usage-panel-header">
+          <h2>Usage Overview</h2>
+          <div class="usage-total">Total events: <strong>${totalEvents}</strong></div>
+        </div>
+        ${
+          totalEvents === 0
+            ? emptyHtml
+            : `
+        <div class="usage-grid">
+          <div class="usage-card">
+            <h3>By Feature</h3>
+            <div class="usage-feature-list">${featuresHtml}</div>
+          </div>
+          <div class="usage-card">
+            <h3>7-day Activity</h3>
+            <div class="usage-trend">
+              ${barsHtml}
+            </div>
+          </div>
+        </div>
+        `
+        }
+      </div>
+    `;
   }
 }
 
