@@ -12,6 +12,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
+import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
 import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
@@ -165,6 +166,10 @@ class App {
     // Register Quick Query
     const quickQuery = new QuickQuery(this.eventBus);
     this.registerTool(quickQuery);
+
+    // Register HTML Template
+    const htmlTemplate = new HTMLTemplateTool(this.eventBus);
+    this.registerTool(htmlTemplate);
 
     // Add more tools here as they are implemented
   }

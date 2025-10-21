@@ -1,0 +1,111 @@
+/* HTML Template Tool Styles */
+.html-template {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 90px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.html-template-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.html-template-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.editor-pane {
+  border-right: 1px solid hsl(var(--border));
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: hsl(var(--muted));
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+}
+
+.monaco-editor-container {
+  flex: 1;
+  min-height: 300px;
+  border: none;
+  background: hsl(var(--background));
+}
+
+.renderer-iframe {
+  flex: 1;
+  border: none;
+  width: 100%;
+  background: hsl(var(--muted));
+}
+
+.renderer-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.renderer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+/* VTL panel */
+.vtl-panel {
+  background: hsl(var(--card));
+  border-top: 1px solid hsl(var(--border));
+}
+
+.vtl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--muted));
+}
+
+.vtl-content {
+  padding: 0.75rem 1rem;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .html-template-layout {
+    flex-direction: column;
+  }
+  .editor-pane {
+    border-right: none;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+}
