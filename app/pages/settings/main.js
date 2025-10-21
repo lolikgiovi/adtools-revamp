@@ -173,8 +173,8 @@ class SettingsPage {
     panel.innerHTML = `
       ${this.service.inputForType(item.type, item)}
       <div class="setting-actions">
-        <button class="setting-confirm" data-action="confirm" disabled>Confirm</button>
-        <button class="setting-cancel" data-action="cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
+        <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
       </div>
       <div class="setting-error" aria-live="polite"></div>
     `;
@@ -302,7 +302,7 @@ class SettingsPage {
     row.innerHTML = `
       <input type="text" class="kv-key" placeholder="${item.keyPlaceholder || 'Environment'}" aria-label="Environment"/>
       <input type="url" class="kv-value" placeholder="${item.valuePlaceholder || 'Base URL'}" aria-label="Base URL"/>
-      <button type="button" class="btn btn-icon kv-remove" data-role="kv-remove" aria-label="Remove">Remove</button>
+      <button type="button" class="btn btn-outline btn-sm kv-remove" data-role="kv-remove" aria-label="Remove">Remove</button>
     `;
     row.querySelector('.kv-key').value = rowData.key || '';
     row.querySelector('.kv-value').value = rowData.value || '';

@@ -625,9 +625,10 @@ class App {
           <h2>Usage Overview</h2>
           <div class="usage-total">Total events: <strong>${totalEvents}</strong></div>
         </div>
-        ${totalEvents === 0
-          ? emptyHtml
-          : `
+        ${
+          totalEvents === 0
+            ? emptyHtml
+            : `
         <div class="usage-grid">
           <div class="usage-card">
             <h3>By Feature</h3>
@@ -640,7 +641,8 @@ class App {
             </div>
           </div>
         </div>
-        `}
+        `
+        }
       </div>
     `;
   }

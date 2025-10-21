@@ -2,22 +2,6 @@
   "version": 2,
   "categories": [
     {
-      "id": "general",
-      "label": "General Settings",
-      "initiallyExpanded": true,
-      "items": [
-        {
-          "key": "theme.darkMode",
-          "storageKey": "theme.darkMode",
-          "label": "Dark Mode",
-          "type": "boolean",
-          "default": "system",
-          "apply": "theme",
-          "description": "Toggle between Light and Dark themes. Defaults to system preference if available."
-        }
-      ]
-    },
-    {
       "id": "config",
       "label": "Configuration Settings",
       "initiallyExpanded": true,
