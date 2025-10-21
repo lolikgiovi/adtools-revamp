@@ -26,12 +26,12 @@ export const HTMLTemplateToolTemplate = /* html */ `
           <h3>Preview</h3>
           <div class="renderer-actions">
             <label class="renderer-toggle">
-              <input type="checkbox" id="toggleSandboxSameOrigin" /> allow-same-origin
+              <input type="checkbox" id="toggleSandboxSameOrigin" checked /> allow-same-origin
             </label>
             <button id="btnReloadPreview" class="btn btn-sm" title="Reload Preview">Reload</button>
           </div>
         </div>
-        <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms"></iframe>
+        <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
       </div>
     </div>
 

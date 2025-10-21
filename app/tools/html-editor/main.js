@@ -24,7 +24,7 @@ class HTMLTemplateTool extends BaseTool {
     this.editor = null;
     this.minifyWorker = null;
     this.lastRenderedHTML = "";
-    this.sandboxSameOriginAllowed = false;
+    this.sandboxSameOriginAllowed = true; // default to match checkbox and fidelity requirement
     this.debouncedRender = null;
   }
 

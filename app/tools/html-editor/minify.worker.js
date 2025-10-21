@@ -1,6 +1,66 @@
-import { minify } from 'html-minifier-terser';
+// HTML Minifier vendored browser build (CDN download) with fallback
+import minifierSource from "./vendor/htmlminifier.min.js?raw";
+let minifyFn = null;
 
-const MINIFY_OPTS = {
+async function ensureMinifierLoaded() {
+  if (minifyFn) return true;
+  try {
+    if (minifierSource && typeof minifierSource === "string" && minifierSource.length > 0) {
+      const factory = new Function(
+        minifierSource +
+          "\nreturn (typeof require===\"function\" ? require(\"html-minifier\") : (self.minify || (self.htmlMinifier && self.htmlMinifier.minify) || null));"
+      );
+      const mod = factory();
+      const candidate = (mod && mod.minify) || mod;
+      if (typeof candidate === "function") {
+        minifyFn = candidate;
+        return true;
+      }
+    }
+  } catch (e) {
+    // swallow and fallback
+  }
+  return false;
+}
+
+// Fallback single-line minifier that preserves script/style/pre/textarea blocks
+const TOKEN_PREFIX = "__HTML_MIN_BLOCK_";
+function extractPreservedBlocks(html) {
+  const blocks = [];
+  const patterns = [
+    { type: "script", re: /<script\b[^>]*>[\s\S]*?<\/script>/gi },
+    { type: "style", re: /<style\b[^>]*>[\s\S]*?<\/style>/gi },
+    { type: "pre", re: /<pre\b[^>]*>[\s\S]*?<\/pre>/gi },
+    { type: "textarea", re: /<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi },
+  ];
+  let processed = html;
+  for (const p of patterns) {
+    processed = processed.replace(p.re, (m) => {
+      const id = blocks.push({ type: p.type, content: m }) - 1;
+      return `${TOKEN_PREFIX}${id}__`;
+    });
+  }
+  return { processed, blocks };
+}
+function restorePreservedBlocks(html, blocks) {
+  return html.replace(new RegExp(`${TOKEN_PREFIX}(\\d+)__`, "g"), (_, idx) => {
+    const b = blocks[Number(idx)];
+    return b ? b.content : "";
+  });
+}
+function fallbackMinify(html) {
+  const { processed, blocks } = extractPreservedBlocks(html || "");
+  let s = processed;
+  s = s.replace(/<!--(?!\[if)[\s\S]*?-->/g, "");
+  s = s.replace(/>\s+</g, "><");
+  s = s.replace(/[\r\n\t]+/g, "");
+  s = s.replace(/\s{2,}/g, " ").trim();
+  s = restorePreservedBlocks(s, blocks);
+  return s.replace(/\r?\n+/g, "");
+}
+
+// Options matching your desired configuration
+const OPTIONS = {
   caseSensitive: false,
   collapseBooleanAttributes: false,
   collapseInlineTagWhitespace: true,
@@ -15,7 +75,7 @@ const MINIFY_OPTS = {
   preserveLineBreaks: false,
   preventAttributesEscaping: false,
   processConditionalComments: true,
-  processScripts: ['text/html'],
+  processScripts: ["text/html"],
   removeAttributeQuotes: false,
   removeComments: true,
   removeEmptyAttributes: false,
@@ -28,13 +88,19 @@ const MINIFY_OPTS = {
   sortAttributes: false,
   sortClassName: false,
   trimCustomFragments: false,
-  useShortDoctype: false
+  useShortDoctype: false,
 };
 
 self.onmessage = async (e) => {
-  const { html } = e.data || {};
+  const html = e?.data?.html ?? "";
   try {
-    const result = await minify(html || '', MINIFY_OPTS);
+    let result;
+    if (await ensureMinifierLoaded()) {
+      result = minifyFn(html, OPTIONS);
+      result = typeof result === "string" ? result.replace(/\r?\n+/g, "") : "";
+    } else {
+      result = fallbackMinify(html);
+    }
     self.postMessage({ success: true, result });
   } catch (err) {
     self.postMessage({ success: false, error: err?.message || String(err) });

@@ -1,4 +1,11 @@
 /* HTML Template Tool Styles */
+.tool-container.html-template {
+  /* Override global tool-container constraints for wide layout */
+  max-width: none;
+  margin: 0;
+  padding: 0; /* main-content already provides outer padding */
+}
+
 .html-template {
   display: flex;
   flex-direction: column;
@@ -14,7 +21,7 @@
   gap: 0.5rem;
   background: hsl(var(--card));
   border-bottom: 1px solid hsl(var(--border));
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1rem; /* consistent with main-content spacing */
 }
 
 .toolbar-left,
@@ -46,7 +53,7 @@
   justify-content: space-between;
   background: hsl(var(--muted));
   border-bottom: 1px solid hsl(var(--border));
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1rem;
 }
 
 .monaco-editor-container {
@@ -60,7 +67,7 @@
   flex: 1;
   border: none;
   width: 100%;
-  background: hsl(var(--muted));
+  background: transparent; /* do not affect page rendering fidelity */
 }
 
 .renderer-actions {
