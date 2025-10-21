@@ -178,7 +178,11 @@ class GlobalSearch {
     // Reset input and populate
     this.inputEl.value = "";
     this.inputEl.focus({ preventScroll: true });
-    this._renderResults(this.index.slice(0, 8));
+
+    // Initialize filtered list so keyboard nav works immediately
+    this.filtered = this.index.slice(0, 8);
+    this.activeIndex = this.filtered.length ? 0 : -1;
+    this._renderResults(this.filtered);
   }
 
   /** Close the overlay */
