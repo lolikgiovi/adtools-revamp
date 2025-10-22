@@ -21,6 +21,9 @@ export const SplunkVTLEditorTemplate = /* html */ `
       <div class="pane table-pane">
         <div class="pane-header">
           <h3>Fields Review</h3>
+          <div>
+            <button id="btnAddField" class="btn btn-sm" title="Add field">Add Field</button>
+          </div>
         </div>
         <div id="fieldsTable" class="handsontable-container"></div>
       </div>

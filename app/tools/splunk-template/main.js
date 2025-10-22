@@ -6,7 +6,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
-import { formatVtlTemplate, minifyVtlTemplate, extractFieldsFromTemplate } from "./service.js";
+import { formatVtlTemplate, minifyVtlTemplate, extractFieldsFromTemplate, splitByPipesSafely } from "./service.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import "./styles.css";
 import Handsontable from "handsontable";
@@ -25,6 +25,9 @@ class SplunkVTLEditor extends BaseTool {
     this.editor = null;
     this.table = null;
     this._storageKey = "tool:splunk-template:editor";
+    this._trailingPipe = false;
+    this._resizerCleanup = null;
+    this._suppressTableEdit = false;
   }
 
   getIconSvg() {
@@ -96,21 +99,15 @@ class SplunkVTLEditor extends BaseTool {
       keywords: ["if", "elseif", "else", "end", "set", "foreach", "macro", "parse", "include", "define", "stop"],
       tokenizer: {
         root: [
-          // comments
           [/##.*$/, "comment"],
           [/\#\*[\s\S]*?\*\#/, "comment"],
-          // strings
           [/"([^"\\]|\\.)*"/, "string"],
           [/'([^'\\]|\\.)*'/, "string"],
-          // directives
           [/\#(if|elseif|else|end|set|foreach|macro|parse|include|define|stop)\b/, "keyword"],
-          // variables $var, $!var, ${path}, $!{path}
           [/\$!?\{[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\}/, "variable"],
           [/\$!?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/, "variable"],
-          // delimiters for Splunk template
           [/\|/, "delimiter"],
           [/=/, "operator"],
-          // numbers
           [/\b\d+(?:\.\d+)?\b/, "number"],
         ],
       },
@@ -140,7 +137,6 @@ class SplunkVTLEditor extends BaseTool {
       insertSpaces: true,
     });
 
-    // Persist content to localStorage
     this._persistTimer = null;
     this._fieldsUpdateTimer = null;
     this.editor.onDidChangeModelContent(() => {
@@ -151,7 +147,6 @@ class SplunkVTLEditor extends BaseTool {
           localStorage.setItem(this._storageKey, v);
         } catch (_) {}
       }, 250);
-      // debounce table update
       clearTimeout(this._fieldsUpdateTimer);
       this._fieldsUpdateTimer = setTimeout(() => this.updateFieldsTable(), 300);
     });
@@ -164,9 +159,15 @@ class SplunkVTLEditor extends BaseTool {
       data: [],
       columns: [
         { data: "field", type: "text", className: "v-align-middle" },
-        { data: "source", type: "text", className: "v-align-middle" },
+        {
+          data: "source",
+          type: "dropdown",
+          source: ["context", "variable", "hardcoded"],
+          allowInvalid: false,
+          className: "v-align-middle",
+        },
         { data: "value", type: "text", className: "v-align-middle" },
-        { data: "functions", type: "text", className: "v-align-middle" },
+        { data: "functions", type: "text", className: "v-align-middle", readOnly: true },
       ],
       colHeaders: ["Field", "Source", "Value", "VTL Functions"],
       rowHeaders: true,
@@ -175,16 +176,37 @@ class SplunkVTLEditor extends BaseTool {
       width: "100%",
       height: "100%",
       manualColumnResize: true,
+      fixedColumnsLeft: 1,
       className: "ht-theme-light",
       columnSorting: true,
+      minSpareRows: 0,
+      afterChange: (changes, src) => {
+        if (this._suppressTableEdit) return;
+        if (!changes || src === "loadData") return;
+        this.onTableChanged();
+      },
+      afterCreateRow: (index, amount, source) => {
+        if (this._suppressTableEdit) return;
+        this.onTableChanged();
+      },
+      afterRemoveRow: (index, amount, physicalRows, source) => {
+        if (this._suppressTableEdit) return;
+        this.onTableChanged();
+      },
     });
   }
 
   updateFieldsTable() {
     if (!this.table || !this.editor) return;
     const src = this.editor.getValue();
+    const { trailingPipe } = splitByPipesSafely(src);
+    this._trailingPipe = trailingPipe;
     const rows = extractFieldsFromTemplate(src);
+    this._suppressTableEdit = true;
     this.table.loadData(rows);
+    setTimeout(() => {
+      this._suppressTableEdit = false;
+    }, 10);
   }
 
   bindUIEvents() {
@@ -193,6 +215,7 @@ class SplunkVTLEditor extends BaseTool {
     const btnCopy = document.getElementById("btnCopyVtl");
     const btnPaste = document.getElementById("btnPasteVtl");
     const btnClear = document.getElementById("btnClearVtl");
+    const btnAddField = document.getElementById("btnAddField");
 
     btnFormat?.addEventListener("click", () => {
       const src = this.editor.getValue();
@@ -237,6 +260,98 @@ class SplunkVTLEditor extends BaseTool {
         localStorage.setItem(this._storageKey, "");
       } catch (_) {}
     });
+
+    // Add Field: insert a blank row at the end without triggering sync
+    btnAddField?.addEventListener("click", () => {
+      if (!this.table) return;
+      this._suppressTableEdit = true;
+      try {
+        const idx = this.table.countRows();
+        this.table.alter("insert_row", idx, 1);
+        // Initialize with safe defaults
+        this.table.setDataAtRowProp(idx, "field", "");
+        this.table.setDataAtRowProp(idx, "source", "hardcoded");
+        this.table.setDataAtRowProp(idx, "value", "");
+        this.table.setDataAtRowProp(idx, "functions", "");
+        this.table.selectCell(idx, 0);
+      } catch (_) {}
+      this._suppressTableEdit = false;
+    });
+  }
+
+  // Build value expression from a row
+  _rowToExpr(row) {
+    const src = (row.source || "").toLowerCase();
+    const val = (row.value ?? "").trim();
+    if (!val) return "";
+    if (src === "context") return `$!{context.${val}}`;
+    if (src === "variable") return `$!{${val}}`;
+    return val; // hardcoded literal
+  }
+
+  // Apply table rows back to template, preserving non key=value segments
+  _applyTableToTemplate(template, rows) {
+    const { segments } = splitByPipesSafely(String(template));
+    const rowMap = new Map();
+    rows.forEach((r) => {
+      const f = (r.field ?? "").trim();
+      if (!f) return;
+      const expr = this._rowToExpr(r);
+      if (!expr) return;
+      rowMap.set(f, expr);
+    });
+
+    const updated = [];
+    const seen = new Set();
+    for (const raw of segments) {
+      // Preserve original leading/trailing whitespace and spacing around '='
+      const m = String(raw).match(/^(\s*[^=|]+?)(\s*=\s*)([\s\S]*?)$/);
+      if (!m) {
+        // Not a key=value segment; keep exactly as-is
+        updated.push(String(raw));
+        continue;
+      }
+      const leftWithLead = m[1]; // includes any leading whitespace and field name
+      const eqSpacing = m[2];
+      const valuePart = m[3]; // may include leading/trailing spaces
+
+      // Extract field name (trimmed) to match rowMap
+      const field = leftWithLead.trim();
+
+      if (rowMap.has(field)) {
+        const newExpr = rowMap.get(field);
+        const valLeadMatch = valuePart.match(/^\s*/);
+        const valTrailMatch = valuePart.match(/\s*$/);
+        const valLead = valLeadMatch ? valLeadMatch[0] : "";
+        const valTrail = valTrailMatch ? valTrailMatch[0] : "";
+        updated.push(`${leftWithLead}${eqSpacing}${valLead}${newExpr}${valTrail}`);
+        seen.add(field);
+      } else {
+        // Keep original segment untouched
+        updated.push(String(raw));
+      }
+    }
+
+    // Append new fields not present in original
+    for (const [field, expr] of rowMap.entries()) {
+      if (!seen.has(field)) {
+        updated.push(`${field}=${expr}`);
+      }
+    }
+
+    let out = updated.join("|");
+    if (this._trailingPipe) out += "|";
+    return out;
+  }
+
+  onTableChanged() {
+    if (!this.table || !this.editor) return;
+    const rows = this.table.getSourceData();
+    // Filter out empty rows
+    const filtered = rows.filter((r) => (r.field ?? "").trim().length > 0);
+    const current = this.editor.getValue();
+    const next = this._applyTableToTemplate(current, filtered);
+    this.editor.setValue(next);
   }
 
   initializeResizer() {

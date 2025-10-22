@@ -60,8 +60,8 @@ export function splitByPipesSafely(input = "") {
       }
     }
 
-    // Split logic on top-level '|'
-    if (!inSQ && !inDQ && !inBrace && !inBlockComment && !inLineComment && ch === "|" && prev !== "\\") {
+    // Split logic on top-level '|': do not block inside line comments
+    if (!inSQ && !inDQ && !inBrace && !inBlockComment && ch === "|" && prev !== "\\") {
       segments.push(cur);
       cur = "";
       continue;
@@ -164,7 +164,8 @@ export function extractFieldsFromTemplate(input = "") {
       continue;
     }
 
-    const m = seg.match(/^([^=|]+?)\s*=\s*(.+)$/);
+    // Allow empty right-hand value
+    const m = seg.match(/^([^=|]+?)\s*=\s*(.*)$/);
     if (!m) continue;
     const field = m[1].trim();
     const valueExpr = m[2].trim();
@@ -178,13 +179,11 @@ export function extractFieldsFromTemplate(input = "") {
       const inner = t.replace(/^\$!?\{/, "").replace(/\}$/, "");
       const pathMatch = inner.match(/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/);
       if (pathMatch) variables.add(pathMatch[0]);
-      // collect method calls within
       const methodRe = /\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
       let mm;
       while ((mm = methodRe.exec(inner))) {
         functions.add(mm[1]);
       }
-      // collect function calls like format(foo)
       const funcRe = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
       let ff;
       while ((ff = funcRe.exec(inner))) {
@@ -192,20 +191,17 @@ export function extractFieldsFromTemplate(input = "") {
       }
     }
 
-    // Unbraced variables e.g. $context.foo.toUpperCase()
     const unbraced = valueExpr.match(/\$!?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g) || [];
     for (const t of unbraced) {
       const path = t.replace(/^\$!?/, "");
       variables.add(path);
     }
 
-    // Method calls outside braces
     const methodCalls = valueExpr.match(/\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g) || [];
     for (const mth of methodCalls) {
       const name = mth.replace(/^\./, "").replace(/\(.*/, "");
       functions.add(name);
     }
-    // Stand-alone function calls not preceded by '#'
     const funcCalls = [];
     {
       const re = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
