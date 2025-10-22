@@ -20,7 +20,7 @@ import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
-import { UsageTracker } from "./core/UsageTracker.js";
+import { UsageTracker } from './core/UsageTracker.js';
 
 class App {
   constructor() {
@@ -44,6 +44,19 @@ class App {
     this.buildToolsConfigMap();
     // Initialize usage tracking early with the app event bus
     UsageTracker.init(this.eventBus);
+    // Always expose a global reset helper so it’s callable from console
+    try {
+      window.resetUsageAnalytics = () => {
+        UsageTracker.resetDev();
+        console.info('Usage analytics cleared. Reload to start clean.');
+      };
+    } catch (_) {}
+    // Dev convenience: disable backup to avoid fallback
+    if (import.meta?.env?.DEV) {
+      try {
+        UsageTracker.setBackupEnabled(false);
+      } catch (_) {}
+    }
 
     this.initializeComponents();
     this.registerTools();
@@ -307,6 +320,7 @@ class App {
     // Mount tool to main content
     if (this.mainContent) {
       tool.mount(this.mainContent);
+      // Record mount in usage analytics under the tool’s feature
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });
