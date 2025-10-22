@@ -37,7 +37,7 @@ class JSONTools extends BaseTool {
     await this.initializeMonacoEditor();
     this.bindToolEvents();
     this.setupTabs();
-    this.processCurrentTab();
+    // this.processCurrentTab();
   }
 
   async initializeMonacoEditor() {
@@ -197,7 +197,7 @@ class JSONTools extends BaseTool {
     outputTitle.textContent = titles[tabName] || "Output";
 
     // Process current content
-    this.processCurrentTab();
+    // this.processCurrentTab();
   }
 
   processCurrentTab() {
