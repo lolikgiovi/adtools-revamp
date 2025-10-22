@@ -22,7 +22,7 @@ AD Tools is a client-side, modular web application built with Vite that hosts mu
 - ThemeManager (`app/core/ThemeManager.js`)
   - Controls light/dark theme by toggling CSS variables/classes at the root.
 - BaseTool (`app/core/BaseTool.js`)
-  - Optional shared lifecycle contracts for tools (activate, mount, deactivate).
+  - Shared lifecycle contracts (activate, mount, deactivate) and notification helpers (`showSuccess`, `showError`) that emit via EventBus with inline toast fallback.
 - UI Components
   - Sidebar (`app/components/Sidebar.js`): Lists tools by category, handles selection, mobile toggle, and navigation.
   - Breadcrumb (`app/components/Breadcrumb.js`): Reflects current location/tool.
@@ -76,6 +76,12 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 - QR Tools (`app/tools/qr-tools/`)
   - UI: QR code generation and customization interface.
   - Logic: uses QRCode library (imported as ES module) for QR generation and canvas manipulation.
+- HTML Editor (`app/tools/html-editor/`)
+  - Preview iframe defaults to `sandbox="allow-scripts allow-forms"`; `allow-same-origin` is disabled by default for safer isolation.
+  - HTML Minify Worker (`minify.worker.js`) provides standards-compliant minification and is reusable by other tools.
+- Quick Query (`app/tools/quick-query/`)
+  - UI: Monaco SQL editor, Handsontable grids for schema/data, and attachment management.
+  - Logic: `AttachmentProcessorService` processes files and uses the HTML Minify Worker for HTML/HTM attachments; async minify awaits worker results; JSON/text handled inline.
 
 ## Routing and Navigation
 
@@ -83,11 +89,16 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 - On navigation, App deactivates the current tool, activates the target tool, and mounts its UI.
 - Sidebar navigates via `router.navigate(toolId)` and emits `tool:activate`.
 
+## Security
+
+- HTML Editor preview uses a restricted iframe sandbox (`allow-scripts allow-forms`) by default; `allow-same-origin` is disabled unless explicitly enabled.
+- This isolates untrusted content from cookies/storage and prevents parent DOM access.
+
 ## Error Handling & UX
 
 - Tools display operation results in an output area; error states are styled distinctly.
 - JSON Tools includes error positioning and a collapsible error panel to improve feedback.
-- Clipboard operations provide success/error notifications via EventBus.
+- Global notifications: Tools call `BaseTool`’s `showSuccess`/`showError` to publish via EventBus; `App.js` listens and renders toasts. The HTML Editor now uses this shared system.
 
 ## Dependencies
 
