@@ -6,7 +6,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
-import { formatVtlTemplate, minifyVtlTemplate, lintVtlSyntax, toMonacoMarkers } from "./service.js";
+import { formatVtlTemplate, minifyVtlTemplate } from "./service.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import "./styles.css";
 
@@ -15,7 +15,7 @@ class SplunkVTLEditor extends BaseTool {
     super({
       id: "splunk-template",
       name: "Splunk Template",
-      description: "Edit Splunk templates with VTL formatting, minify, lint, and syntax highlighting",
+      description: "Edit Splunk templates with formatting, minify, and syntax highlighting",
       icon: "splunk-template",
       category: "config",
       eventBus,
@@ -128,18 +128,14 @@ class SplunkVTLEditor extends BaseTool {
   bindUIEvents() {
     const btnFormat = document.getElementById("btnFormatVtl");
     const btnMinify = document.getElementById("btnMinifyVtl");
-    const btnLint = document.getElementById("btnLintVtl");
     const btnCopy = document.getElementById("btnCopyVtl");
     const btnPaste = document.getElementById("btnPasteVtl");
     const btnClear = document.getElementById("btnClearVtl");
-    const lintOut = document.getElementById("vtlLintOutput");
-    const lintSummary = document.getElementById("vtlLintSummary");
 
     btnFormat?.addEventListener("click", () => {
       const src = this.editor.getValue();
       const formatted = formatVtlTemplate(src);
       this.editor.setValue(formatted);
-      this.updateLintMarkers();
       UsageTracker.trackFeature("splunk-template", "format");
     });
 
@@ -147,30 +143,12 @@ class SplunkVTLEditor extends BaseTool {
       const src = this.editor.getValue();
       const minified = minifyVtlTemplate(src);
       this.editor.setValue(minified);
-      this.updateLintMarkers();
       UsageTracker.trackFeature("splunk-template", "minify", { bytes: minified.length });
     });
 
-    const renderLint = ({ issues, summary }) => {
-      if (!lintOut || !lintSummary) return;
-      if (!issues.length) {
-        lintSummary.textContent = "No issues found.";
-        lintOut.innerHTML = "<div class=\"lint-item ok\">Syntax looks good.</div>";
-        return;
-      }
-      lintSummary.textContent = `${summary.errors} error(s), ${summary.warnings} warning(s)`;
-      lintOut.innerHTML = issues
-        .map((i) => `<div class=\"lint-item ${i.severity === 'warning' ? 'warn' : ''}\">Line ${i.line}: ${i.message}</div>`)
-        .join("");
-    };
 
-    btnLint?.addEventListener("click", () => {
-      const src = this.editor.getValue();
-      const result = lintVtlSyntax(src);
-      renderLint(result);
-      monaco.editor.setModelMarkers(this.editor.getModel(), "vtl-lint", toMonacoMarkers(result.issues));
-      UsageTracker.trackFeature("splunk-template", "lint", { errors: result.summary.errors, warnings: result.summary.warnings });
-    });
+
+
 
     btnCopy?.addEventListener("click", async () => {
       try {
@@ -194,23 +172,10 @@ class SplunkVTLEditor extends BaseTool {
     btnClear?.addEventListener("click", () => {
       this.editor.setValue("");
       try { localStorage.setItem(this._storageKey, ""); } catch (_) {}
-      this.updateLintMarkers();
     });
   }
 
-  updateLintMarkers() {
-    const src = this.editor.getValue();
-    const result = lintVtlSyntax(src);
-    monaco.editor.setModelMarkers(this.editor.getModel(), "vtl-lint", toMonacoMarkers(result.issues));
-    const summary = document.getElementById("vtlLintSummary");
-    const out = document.getElementById("vtlLintOutput");
-    if (summary && out) {
-      summary.textContent = result.issues.length ? `${result.summary.errors} error(s), ${result.summary.warnings} warning(s)` : "";
-      out.innerHTML = result.issues
-        .map((i) => `<div class=\"lint-item ${i.severity === 'warning' ? 'warn' : ''}\">Line ${i.line}: ${i.message}</div>`)
-        .join("");
-    }
-  }
+
 }
 
 export { SplunkVTLEditor };

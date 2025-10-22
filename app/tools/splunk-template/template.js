@@ -4,7 +4,6 @@ export const SplunkVTLEditorTemplate = /* html */ `
       <div class="toolbar-left">
         <button id="btnFormatVtl" class="btn btn-primary" title="Format template">Format</button>
         <button id="btnMinifyVtl" class="btn btn-primary" title="Minify template">Minify</button>
-        <button id="btnLintVtl" class="btn btn-secondary" title="Lint VTL syntax">Lint</button>
       </div>
       <div class="toolbar-right">
         <button id="btnCopyVtl" class="btn btn-sm" title="Copy">Copy</button>
@@ -21,13 +20,7 @@ export const SplunkVTLEditorTemplate = /* html */ `
         <div id="vtlEditor" class="monaco-editor-container"></div>
       </div>
 
-      <div class="pane lint-pane">
-        <div class="pane-header">
-          <h3>Lint Results</h3>
-          <div id="vtlLintSummary" class="lint-summary" aria-live="polite"></div>
-        </div>
-        <div id="vtlLintOutput" class="lint-output"></div>
-      </div>
+
     </div>
   </div>
 `;
