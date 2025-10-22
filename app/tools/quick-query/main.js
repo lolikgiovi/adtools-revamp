@@ -1391,14 +1391,16 @@ export class QuickQueryUI {
       btn.setAttribute("aria-disabled", "true");
     }
 
-    this.processedFiles = this.processedFiles.map((file) => {
-      const ext = (file.name.split(".").pop() || "").toLowerCase();
-      const t = (file.type || "").toLowerCase();
-      if (["txt", "html", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
-        return this.attachmentProcessorService.minifyContent(file);
-      }
-      return file;
-    });
+    this.processedFiles = await Promise.all(
+      this.processedFiles.map(async (file) => {
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        const t = (file.type || "").toLowerCase();
+        if (["txt", "html", "htm", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
+          return await this.attachmentProcessorService.minifyContent(file);
+        }
+        return file;
+      })
+    );
 
     // Refresh viewer if it's open
     const fileViewer = document.getElementById("fileViewerOverlay");
@@ -1412,6 +1414,8 @@ export class QuickQueryUI {
 
     if (btn) {
       btn.textContent = "Minify";
+      btn.disabled = false;
+      btn.setAttribute("aria-disabled", "false");
     }
     this.updateAttachmentControlsState();
   }
