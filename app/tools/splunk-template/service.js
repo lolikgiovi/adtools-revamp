@@ -12,7 +12,7 @@ export function splitByPipesSafely(input = "") {
   let inBrace = false; // for ${...}
   let braceDepth = 0;
   let inBlockComment = false; // VTL #* ... *#
-  let inLineComment = false;  // VTL ## ... \n
+  let inLineComment = false; // VTL ## ... \n
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
     const prev = i > 0 ? input[i - 1] : "";
@@ -150,4 +150,98 @@ export function minifyVtlTemplate(input = "") {
   // Remove indentation spaces at start of lines left by format
   s = s.replace(/\n[ \t]+/g, "\n");
   return s;
+}
+
+export function extractFieldsFromTemplate(input = "") {
+  const { segments } = splitByPipesSafely(String(input));
+  const rows = [];
+  for (const raw of segments) {
+    const seg = raw.trim();
+    if (!seg || seg.startsWith("##")) continue;
+
+    // Skip directives like #if, #foreach etc.
+    if (/^#(if|elseif|else|end|set|foreach|macro|parse|include|define|stop)\b/i.test(seg)) {
+      continue;
+    }
+
+    const m = seg.match(/^([^=|]+?)\s*=\s*(.+)$/);
+    if (!m) continue;
+    const field = m[1].trim();
+    const valueExpr = m[2].trim();
+
+    const variables = new Set();
+    const functions = new Set();
+
+    // Braced variables e.g. $!{context.name.toUpperCase()}
+    const braced = valueExpr.match(/\$!\{([^}]+)\}|\$\{([^}]+)\}/g) || [];
+    for (const t of braced) {
+      const inner = t.replace(/^\$!?\{/, "").replace(/\}$/, "");
+      const pathMatch = inner.match(/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/);
+      if (pathMatch) variables.add(pathMatch[0]);
+      // collect method calls within
+      const methodRe = /\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+      let mm;
+      while ((mm = methodRe.exec(inner))) {
+        functions.add(mm[1]);
+      }
+      // collect function calls like format(foo)
+      const funcRe = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+      let ff;
+      while ((ff = funcRe.exec(inner))) {
+        functions.add(ff[2]);
+      }
+    }
+
+    // Unbraced variables e.g. $context.foo.toUpperCase()
+    const unbraced = valueExpr.match(/\$!?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g) || [];
+    for (const t of unbraced) {
+      const path = t.replace(/^\$!?/, "");
+      variables.add(path);
+    }
+
+    // Method calls outside braces
+    const methodCalls = valueExpr.match(/\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g) || [];
+    for (const mth of methodCalls) {
+      const name = mth.replace(/^\./, "").replace(/\(.*/, "");
+      functions.add(name);
+    }
+    // Stand-alone function calls not preceded by '#'
+    const funcCalls = [];
+    {
+      const re = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+      let match;
+      while ((match = re.exec(valueExpr))) {
+        funcCalls.push(match[2]);
+      }
+    }
+    for (const f of funcCalls) functions.add(f);
+
+    const varsArr = Array.from(variables);
+    const funcsArr = Array.from(functions);
+
+    // choose a primary variable path (prefer context.*)
+    let primaryVar = null;
+    if (varsArr.length > 0) {
+      primaryVar = varsArr.find((p) => /^context\b/i.test(p)) || varsArr[0];
+      // remove trailing method segment if matches any collected function name
+      for (const fn of funcsArr) {
+        const dotFn = `.${fn}`;
+        if (primaryVar.endsWith(dotFn)) {
+          primaryVar = primaryVar.slice(0, -dotFn.length);
+        }
+      }
+    }
+
+    const usesContext = varsArr.some((p) => /^context\b/i.test(p));
+    const source = primaryVar ? (usesContext ? "context" : "variable") : "hardcoded";
+
+    // Compute display value: either hardcoded literal or variable name without context.
+    let displayValue = valueExpr;
+    if (primaryVar) {
+      displayValue = primaryVar.replace(/^context\./i, "");
+    }
+
+    rows.push({ field, source, value: displayValue, variables: varsArr.join(", "), functions: funcsArr.join(", ") });
+  }
+  return rows;
 }
