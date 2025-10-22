@@ -509,16 +509,19 @@ class Sidebar {
 
   /**
    * Update active item in sidebar
-   * @param {string} toolId - Tool ID
+   * @param {string} id - Route or tool ID
    */
-  updateActiveItem(toolId) {
+  updateActiveItem(id) {
     // Remove active state from all menu buttons
     document.querySelectorAll(".sidebar-menu-button").forEach((button) => {
       button.removeAttribute("data-active");
     });
 
-    // Add active state to current item
-    const activeButton = document.querySelector(`[data-tool="${toolId}"] .sidebar-menu-button`);
+    // Prefer tool match, otherwise page match
+    const activeButton =
+      document.querySelector(`[data-tool="${id}"] .sidebar-menu-button`) ||
+      document.querySelector(`[data-page="${id}"] .sidebar-menu-button`);
+
     if (activeButton) {
       activeButton.setAttribute("data-active", "true");
     }
