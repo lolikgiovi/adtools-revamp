@@ -18,7 +18,7 @@ export class AttachmentValidationService {
   }
 
   handleVarcharType(file, maxLength) {
-    if (file.type.includes("text")) {
+    if (file.type.includes("text") || file.type.includes("json")) {
       // For text files, use original content
       const content = file.processedFormats.original;
       if (content.length <= maxLength) {
