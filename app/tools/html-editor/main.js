@@ -94,17 +94,54 @@ class HTMLTemplateTool extends BaseTool {
   initializeWorker() {
     this.minifyWorker = new MinifyWorker();
     this.minifyWorker.onmessage = (e) => {
-      const { success, result, error } = e.data || {};
+      const { success, result, error, engine } = e.data || {};
       const btn = document.getElementById("btnMinifyHtml");
       if (btn) btn.disabled = false;
-      if (success) {
-        this.editor.setValue(result || "");
-        this.renderPreview(result || "");
-        UsageTracker.trackFeature("html-template", "minify", { bytes: (result || "").length });
-      } else {
+
+      // Update badge when engine info is present
+      if (typeof engine === "string") {
+        const badge = document.getElementById("minifierStatusBadge");
+        const link = document.getElementById("minifierStatusLink");
+        if (badge) {
+          // Subtle inline tweak for visibility
+          if (engine === "cdn") {
+            badge.style.color = "#7bd88f"; // green-ish
+            badge.style.borderColor = "rgba(123,216,143,0.35)";
+            badge.style.backgroundColor = "rgba(123,216,143,0.08)";
+          } else {
+            badge.style.color = "#e0a800"; // amber
+            badge.style.borderColor = "rgba(224,168,0,0.35)";
+            badge.style.backgroundColor = "rgba(224,168,0,0.08)";
+          }
+        }
+        if (link) {
+          if (engine === "cdn") {
+            const name = e.data?.enginePackageName || "html-minifier";
+            const version = e.data?.enginePackageVersion || null;
+            const url = e.data?.enginePackageUrl || `https://www.npmjs.com/package/${name}`;
+            link.textContent = version ? `${name}@${version}` : name;
+            link.href = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          } else {
+            link.textContent = "Fallback";
+            link.removeAttribute("href");
+            link.removeAttribute("target");
+            link.removeAttribute("rel");
+          }
+        }
+      }
+
+      if (success && typeof result === "string") {
+        this.editor.setValue(result);
+        this.renderPreview(result);
+        UsageTracker.trackFeature("html-template", "minify", { bytes: result.length });
+      } else if (!success && error) {
         this.showNotification(`Minify error: ${error}`, "error");
       }
     };
+    // Probe worker for engine status on load
+    this.minifyWorker.postMessage({ type: "probe" });
   }
 
   bindToolEvents() {
@@ -133,7 +170,7 @@ class HTMLTemplateTool extends BaseTool {
       btnMinify.addEventListener("click", async () => {
         const html = this.editor.getValue();
         btnMinify.disabled = true;
-        this.minifyWorker.postMessage({ html });
+        this.minifyWorker.postMessage({ type: "minify", html });
       });
     }
 

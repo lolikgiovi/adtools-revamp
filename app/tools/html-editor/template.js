@@ -25,6 +25,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
         <div class="pane-header">
           <h3>Preview</h3>
           <div class="renderer-actions">
+            <span id="minifierStatusBadge" class="status-badge" title="HTML minifier engine" style="margin-right:.5rem;padding:.125rem .375rem;border-radius:6px;font-size:12px;line-height:1;color:#8aa; background-color: rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);">Minifier: <a id="minifierStatusLink" href="#" class="status-link" style="color:inherit;">unknown</a></span>
             <label class="renderer-toggle">
               <input type="checkbox" id="toggleSandboxSameOrigin" checked /> allow-same-origin
             </label>

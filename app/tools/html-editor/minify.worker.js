@@ -2,6 +2,20 @@
 import minifierSource from "./vendor/htmlminifier.min.js?raw";
 let minifyFn = null;
 
+function parseCdnPackageInfo() {
+  const src = typeof minifierSource === "string" ? minifierSource : "";
+  const name = "html-minifier";
+  let version = null;
+  // Try common patterns in the vendored CDN header
+  const m1 = src.match(/html-minifier\s*v(\d+\.\d+\.\d+)/i);
+  const m2 = src.match(/@version\s*([0-9]+\.[0-9]+\.[0-9]+)/i);
+  version = (m1 && m1[1]) || (m2 && m2[1]) || null;
+  const npmUrl = version
+    ? `https://www.npmjs.com/package/${name}/v/${version}`
+    : `https://www.npmjs.com/package/${name}`;
+  return { name, version, npmUrl };
+}
+
 async function ensureMinifierLoaded() {
   if (minifyFn) return true;
   try {
@@ -92,16 +106,40 @@ const OPTIONS = {
 };
 
 self.onmessage = async (e) => {
+  const type = e?.data?.type || "minify";
   const html = e?.data?.html ?? "";
   try {
+    if (type === "probe") {
+      const loaded = await ensureMinifierLoaded();
+      const engine = loaded ? "cdn" : "fallback";
+      const details = loaded ? parseCdnPackageInfo() : null;
+      self.postMessage({
+        success: true,
+        engine,
+        enginePackageName: details?.name || null,
+        enginePackageVersion: details?.version || null,
+        enginePackageUrl: details?.npmUrl || null,
+      });
+      return;
+    }
     let result;
-    if (await ensureMinifierLoaded()) {
+    const loaded = await ensureMinifierLoaded();
+    const engine = loaded ? "cdn" : "fallback";
+    const details = loaded ? parseCdnPackageInfo() : null;
+    if (loaded) {
       result = minifyFn(html, OPTIONS);
       result = typeof result === "string" ? result.replace(/\r?\n+/g, "") : "";
     } else {
       result = fallbackMinify(html);
     }
-    self.postMessage({ success: true, result });
+    self.postMessage({
+      success: true,
+      result,
+      engine,
+      enginePackageName: details?.name || null,
+      enginePackageVersion: details?.version || null,
+      enginePackageUrl: details?.npmUrl || null,
+    });
   } catch (err) {
     self.postMessage({ success: false, error: err?.message || String(err) });
   }
