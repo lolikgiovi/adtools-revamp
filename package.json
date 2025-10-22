@@ -24,6 +24,7 @@
     "handsontable": "^16.0.0",
     "html-minifier": "^4.0.0",
     "monaco-editor": "^0.54.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "velocityjs": "^2.1.5"
   }
 }

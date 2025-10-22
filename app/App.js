@@ -21,6 +21,7 @@ import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
+import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 
 class App {
   constructor() {
@@ -183,6 +184,10 @@ class App {
     // Register HTML Template
     const htmlTemplate = new HTMLTemplateTool(this.eventBus);
     this.registerTool(htmlTemplate);
+
+    // Register Splunk VTL Editor
+    const splunkVtl = new SplunkVTLEditor(this.eventBus);
+    this.registerTool(splunkVtl);
 
     // Add more tools here as they are implemented
   }
@@ -607,6 +612,7 @@ class App {
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
     const featuresHtml = Object.entries(totalsByFeature)
+      .sort(([, a], [, b]) => b - a)
       .map(([id, count]) => {
         const name = this.tools.get(id)?.name || id;
         return `
