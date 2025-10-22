@@ -22,6 +22,7 @@ import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
+import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 
 class App {
   constructor() {
@@ -188,6 +189,10 @@ class App {
     // Register Splunk VTL Editor
     const splunkVtl = new SplunkVTLEditor(this.eventBus);
     this.registerTool(splunkVtl);
+
+    // Register SQL IN Clause
+    const sqlInClause = new SQLInClauseTool(this.eventBus);
+    this.registerTool(sqlInClause);
 
     // Add more tools here as they are implemented
   }

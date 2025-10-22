@@ -69,6 +69,16 @@
       "showOnHome": true,
       "enabled": true,
       "order": 70
+    },
+    {
+      "id": "sql-in-clause",
+      "name": "Query IN",
+      "category": "config",
+      "icon": "sql-in",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 80
     }
   ]
 }
