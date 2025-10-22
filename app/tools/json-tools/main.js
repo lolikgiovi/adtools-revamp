@@ -74,6 +74,27 @@ class JSONTools extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
     });
+
+    // Load saved content from localStorage
+    try {
+      const key = "tool:json-tools:editor";
+      this._jsonStorageKey = key;
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        this.editor.setValue(saved);
+      }
+    } catch (_) {}
+
+    // Persist content changes with a light debounce
+    this._persistTimer = null;
+    this.editor.onDidChangeModelContent(() => {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(this._jsonStorageKey || "tool:json-tools:editor", this.editor.getValue());
+        } catch (_) {}
+      }, 300);
+    });
   }
 
   bindToolEvents() {
@@ -92,6 +113,9 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-clear").addEventListener("click", () => {
       this.editor.setValue("");
+      try {
+        localStorage.setItem(this._jsonStorageKey || "tool:json-tools:editor", "");
+      } catch (_) {}
       this.clearOutput();
       this.clearErrors();
     });

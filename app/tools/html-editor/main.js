@@ -6,7 +6,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import MinifyWorker from "./minify.worker.js?worker";
-import { extractVtlVariables, debounce } from "./service.js";
+import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 
@@ -24,8 +24,13 @@ class HTMLTemplateTool extends BaseTool {
     this.editor = null;
     this.minifyWorker = null;
     this.lastRenderedHTML = "";
-    this.sandboxSameOriginAllowed = true; // default to match checkbox and fidelity requirement
+    this.sandboxSameOriginAllowed = false; // default disabled for safer preview
     this.debouncedRender = null;
+    // VTL values state and storage key
+    this.vtlValues = {};
+    this._vtlValuesStorageKey = "tool:html-template:vtl-values";
+    this.baseUrls = [];
+    this._envStorageKey = "tool:html-template:env";
   }
 
   getIconSvg() {
@@ -38,8 +43,17 @@ class HTMLTemplateTool extends BaseTool {
 
   async onMount() {
     await this.initializeMonacoEditor();
+    // Load any saved VTL values
+    try {
+      const savedVtl = localStorage.getItem(this._vtlValuesStorageKey);
+      if (savedVtl) this.vtlValues = JSON.parse(savedVtl) || {};
+    } catch (_) {
+      this.vtlValues = {};
+    }
     this.initializeWorker();
     this.bindToolEvents();
+    // Setup ENV dropdown and baseUrl special handling
+    this.setupEnvDropdown();
     this.setupDebouncedRendering();
     this.renderPreview(this.editor.getValue());
   }
@@ -89,6 +103,16 @@ class HTMLTemplateTool extends BaseTool {
       quickSuggestions: { other: true, comments: false, strings: true },
       suggestOnTriggerCharacters: true,
     });
+
+    // Load saved content from localStorage
+    try {
+      const key = "tool:html-template:editor";
+      this._htmlStorageKey = key;
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        this.editor.setValue(saved);
+      }
+    } catch (_) {}
   }
 
   initializeWorker() {
@@ -137,7 +161,7 @@ class HTMLTemplateTool extends BaseTool {
         this.renderPreview(result);
         UsageTracker.trackFeature("html-template", "minify", { bytes: result.length });
       } else if (!success && error) {
-        this.showNotification(`Minify error: ${error}`, "error");
+        this.showError(`Minify error: ${error}`);
       }
     };
     // Probe worker for engine status on load
@@ -152,7 +176,6 @@ class HTMLTemplateTool extends BaseTool {
     const btnPaste = document.getElementById("btnPasteHtml");
     const btnClear = document.getElementById("btnClearHtml");
     const btnReload = document.getElementById("btnReloadPreview");
-    const toggleSameOrigin = document.getElementById("toggleSandboxSameOrigin");
     const btnCloseVtl = document.getElementById("btnCloseVtl");
 
     if (btnFormat) {
@@ -177,11 +200,64 @@ class HTMLTemplateTool extends BaseTool {
     if (btnExtract) {
       btnExtract.addEventListener("click", () => {
         const html = this.editor.getValue();
-        const vars = extractVtlVariables(html);
+        const allVars = extractVtlVariables(html);
+        const vars = allVars.filter((v) => v !== "baseUrl");
         const panel = document.getElementById("vtlPanel");
         const content = document.getElementById("vtlContent");
         if (content) {
-          content.textContent = vars.length ? vars.join("\n") : "No VTL variables found.";
+          content.innerHTML = "";
+          if (!vars.length) {
+            content.textContent = "No VTL variables found.";
+          } else {
+            const info = document.createElement("div");
+            info.className = "vtl-info";
+            info.textContent = "Provide values for detected variables:";
+            info.style.margin = "0 0 .5rem 0";
+            info.style.fontSize = "13px";
+            info.style.color = "#8aa";
+            content.appendChild(info);
+
+            vars.forEach((v) => {
+              const row = document.createElement("div");
+              row.className = "vtl-field-row";
+              row.style.display = "grid";
+              row.style.gridTemplateColumns = "160px 1fr";
+              row.style.alignItems = "center";
+              row.style.gap = ".5rem";
+              row.style.margin = "0 0 .5rem 0";
+
+              const label = document.createElement("label");
+              label.setAttribute("for", `vtl_${v.replace(/\./g, "__")}`);
+              label.textContent = v;
+              label.style.fontWeight = "600";
+              label.style.fontSize = "13px";
+
+              const input = document.createElement("input");
+              input.type = "text";
+              input.id = `vtl_${v.replace(/\./g, "__")}`;
+              input.className = "vtl-input";
+              input.placeholder = "Enter value";
+              input.value = this.vtlValues?.[v] ?? "";
+              input.style.width = "100%";
+              input.style.padding = ".375rem .5rem";
+              input.style.border = "1px solid rgba(255,255,255,0.18)";
+              input.style.borderRadius = "6px";
+              input.style.fontSize = "13px";
+
+              input.addEventListener("input", (e) => {
+                this.vtlValues[v] = e.target.value;
+                try {
+                  localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
+                } catch (_) {}
+                // Force re-render to apply latest substitutions
+                this.renderPreview(this.editor.getValue(), true);
+              });
+
+              row.appendChild(label);
+              row.appendChild(input);
+              content.appendChild(row);
+            });
+          }
         }
         if (panel) panel.style.display = "block";
         UsageTracker.trackFeature("html-template", "vtl-extract", { count: vars.length });
@@ -199,9 +275,9 @@ class HTMLTemplateTool extends BaseTool {
       btnCopy.addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(this.editor.getValue());
-          this.showNotification("HTML copied", "success");
+          this.showSuccess("HTML copied");
         } catch (e) {
-          this.showNotification("Copy failed", "error");
+          this.showError("Copy failed");
         }
       });
     }
@@ -221,7 +297,7 @@ class HTMLTemplateTool extends BaseTool {
             this.renderPreview(this.editor.getValue());
           }
         } catch (e) {
-          this.showNotification("Paste failed", "error");
+          this.showError("Paste failed");
         }
       });
     }
@@ -229,6 +305,9 @@ class HTMLTemplateTool extends BaseTool {
     if (btnClear) {
       btnClear.addEventListener("click", () => {
         this.editor.setValue("");
+        try {
+          localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", "");
+        } catch (_) {}
         this.renderPreview("");
       });
     }
@@ -239,18 +318,18 @@ class HTMLTemplateTool extends BaseTool {
       });
     }
 
-    if (toggleSameOrigin) {
-      toggleSameOrigin.addEventListener("change", (e) => {
-        this.sandboxSameOriginAllowed = !!e.target.checked;
-        this.applyIframeSandbox();
-        // Re-render to apply new sandbox immediately
-        this.renderPreview(this.editor.getValue(), true);
-      });
-    }
 
-    // Render on content change with debounce
+    // Render on content change with debounce and persist to localStorage
+    this._persistTimer = this._persistTimer || null;
     this.editor.onDidChangeModelContent(() => {
-      this.debouncedRender?.(this.editor.getValue());
+      const value = this.editor.getValue();
+      this.debouncedRender?.(value);
+      clearTimeout(this._persistTimer);
+      this._persistTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", value);
+        } catch (_) {}
+      }, 300);
     });
   }
 
@@ -280,30 +359,88 @@ class HTMLTemplateTool extends BaseTool {
     // Ensure sandbox set
     this.applyIframeSandbox();
 
+    // Apply VTL substitutions before rendering
+    const rendered = renderVtlTemplate(html, this.vtlValues);
+
     // Use srcdoc for atomic update and secure context
-    iframe.srcdoc = html || "";
+    iframe.srcdoc = rendered || "";
   }
 
-  showNotification(message, type = "info", durationMs = 1200) {
-    // Reuse app-level notification if available
-    if (typeof window.__showNotification === "function") {
-      window.__showNotification(message, type, durationMs);
-      return;
+
+
+
+
+  setupEnvDropdown() {
+    const select = document.getElementById("envSelector");
+    const controls = document.getElementById("envControls");
+    if (!select) return;
+
+    // Load config.baseUrls from localStorage (kvlist of { key, value })
+    let pairs = [];
+    try {
+      const raw = localStorage.getItem("config.baseUrls");
+      const parsed = raw ? JSON.parse(raw) : [];
+      pairs = Array.isArray(parsed) ? parsed.filter(p => p && p.key && p.value) : [];
+    } catch (_) {
+      pairs = [];
     }
-    // Fallback: basic toast
-    const toast = document.createElement("div");
-    toast.textContent = message;
-    toast.style.position = "fixed";
-    toast.style.bottom = "1rem";
-    toast.style.left = "50%";
-    toast.style.transform = "translateX(-50%)";
-    toast.style.background = "hsl(var(--card))";
-    toast.style.border = "1px solid hsl(var(--border))";
-    toast.style.padding = "0.5rem 0.75rem";
-    toast.style.borderRadius = "8px";
-    toast.style.zIndex = 9999;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), durationMs);
+    this.baseUrls = pairs;
+
+    // Hide controls if no environments configured
+    if (!this.baseUrls.length) {
+      if (controls) controls.style.display = "none";
+      return;
+    } else {
+      if (controls) controls.style.display = "inline-flex";
+    }
+
+    // Populate options
+    select.innerHTML = "";
+    this.baseUrls.forEach(({ key }) => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = key;
+      select.appendChild(opt);
+    });
+
+    // Restore last selection or default to first
+    let selectedKey = null;
+    try {
+      const savedEnv = localStorage.getItem(this._envStorageKey);
+      const keys = new Set(this.baseUrls.map(p => p.key));
+      selectedKey = savedEnv && keys.has(savedEnv) ? savedEnv : (this.baseUrls[0]?.key || null);
+    } catch (_) {
+      selectedKey = this.baseUrls[0]?.key || null;
+    }
+    if (selectedKey) {
+      select.value = selectedKey;
+      this.updateVtlBaseUrlFromEnv(selectedKey);
+    }
+
+    // Bind change
+    select.addEventListener("change", (e) => {
+      const envKey = e.target.value;
+      this.updateVtlBaseUrlFromEnv(envKey);
+    });
+  }
+
+  updateVtlBaseUrlFromEnv(envKey) {
+    const pair = this.baseUrls.find(p => p.key === envKey);
+    const url = pair?.value || "";
+
+    // Update VTL special variable and persist
+    this.vtlValues = { ...this.vtlValues, baseUrl: url };
+    try {
+      localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
+      localStorage.setItem(this._envStorageKey, envKey || "");
+    } catch (_) {}
+
+    // Reflect in VTL panel input if present
+    const baseUrlInput = document.getElementById("vtl_baseUrl");
+    if (baseUrlInput) baseUrlInput.value = url;
+
+    // Re-render preview with updated substitution
+    this.renderPreview(this.editor.getValue(), true);
   }
 }
 

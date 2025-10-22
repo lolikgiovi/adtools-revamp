@@ -21,7 +21,7 @@
   gap: 0.5rem;
   background: hsl(var(--card));
   border-bottom: 1px solid hsl(var(--border));
-  padding: 0.5rem 1rem; /* consistent with main-content spacing */
+  padding: 0 0 0.5rem 0;
 }
 
 .toolbar-left,
