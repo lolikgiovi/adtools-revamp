@@ -9,6 +9,7 @@ import MinifyWorker from "./minify.worker.js?worker";
 import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import "./styles.css";
 
 class HTMLTemplateTool extends BaseTool {
   constructor(eventBus) {
@@ -31,6 +32,8 @@ class HTMLTemplateTool extends BaseTool {
     this._vtlValuesStorageKey = "tool:html-template:vtl-values";
     this.baseUrls = [];
     this._envStorageKey = "tool:html-template:env";
+    this._splitStorageKey = "tool:html-template:split-ratio";
+    this._resizerCleanup = null;
   }
 
   getIconSvg() {
@@ -55,10 +58,12 @@ class HTMLTemplateTool extends BaseTool {
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
     this.setupDebouncedRendering();
+    // Removed resizer for fixed split
     this.renderPreview(this.editor.getValue());
   }
 
   onUnmount() {
+    // Removed resizer cleanup for fixed split
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -121,40 +126,6 @@ class HTMLTemplateTool extends BaseTool {
       const { success, result, error, engine } = e.data || {};
       const btn = document.getElementById("btnMinifyHtml");
       if (btn) btn.disabled = false;
-
-      // Update badge when engine info is present
-      if (typeof engine === "string") {
-        const badge = document.getElementById("minifierStatusBadge");
-        const link = document.getElementById("minifierStatusLink");
-        if (badge) {
-          // Subtle inline tweak for visibility
-          if (engine === "cdn") {
-            badge.style.color = "#7bd88f"; // green-ish
-            badge.style.borderColor = "rgba(123,216,143,0.35)";
-            badge.style.backgroundColor = "rgba(123,216,143,0.08)";
-          } else {
-            badge.style.color = "#e0a800"; // amber
-            badge.style.borderColor = "rgba(224,168,0,0.35)";
-            badge.style.backgroundColor = "rgba(224,168,0,0.08)";
-          }
-        }
-        if (link) {
-          if (engine === "cdn") {
-            const name = e.data?.enginePackageName || "html-minifier";
-            const version = e.data?.enginePackageVersion || null;
-            const url = e.data?.enginePackageUrl || `https://www.npmjs.com/package/${name}`;
-            link.textContent = version ? `${name}@${version}` : name;
-            link.href = url;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-          } else {
-            link.textContent = "Fallback";
-            link.removeAttribute("href");
-            link.removeAttribute("target");
-            link.removeAttribute("rel");
-          }
-        }
-      }
 
       if (success && typeof result === "string") {
         this.editor.setValue(result);
@@ -318,7 +289,6 @@ class HTMLTemplateTool extends BaseTool {
       });
     }
 
-
     // Render on content change with debounce and persist to localStorage
     this._persistTimer = this._persistTimer || null;
     this.editor.onDidChangeModelContent(() => {
@@ -366,10 +336,6 @@ class HTMLTemplateTool extends BaseTool {
     iframe.srcdoc = rendered || "";
   }
 
-
-
-
-
   setupEnvDropdown() {
     const select = document.getElementById("envSelector");
     const controls = document.getElementById("envControls");
@@ -380,7 +346,7 @@ class HTMLTemplateTool extends BaseTool {
     try {
       const raw = localStorage.getItem("config.baseUrls");
       const parsed = raw ? JSON.parse(raw) : [];
-      pairs = Array.isArray(parsed) ? parsed.filter(p => p && p.key && p.value) : [];
+      pairs = Array.isArray(parsed) ? parsed.filter((p) => p && p.key && p.value) : [];
     } catch (_) {
       pairs = [];
     }
@@ -407,8 +373,8 @@ class HTMLTemplateTool extends BaseTool {
     let selectedKey = null;
     try {
       const savedEnv = localStorage.getItem(this._envStorageKey);
-      const keys = new Set(this.baseUrls.map(p => p.key));
-      selectedKey = savedEnv && keys.has(savedEnv) ? savedEnv : (this.baseUrls[0]?.key || null);
+      const keys = new Set(this.baseUrls.map((p) => p.key));
+      selectedKey = savedEnv && keys.has(savedEnv) ? savedEnv : this.baseUrls[0]?.key || null;
     } catch (_) {
       selectedKey = this.baseUrls[0]?.key || null;
     }
@@ -425,7 +391,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   updateVtlBaseUrlFromEnv(envKey) {
-    const pair = this.baseUrls.find(p => p.key === envKey);
+    const pair = this.baseUrls.find((p) => p.key === envKey);
     const url = pair?.value || "";
 
     // Update VTL special variable and persist
@@ -441,6 +407,67 @@ class HTMLTemplateTool extends BaseTool {
 
     // Re-render preview with updated substitution
     this.renderPreview(this.editor.getValue(), true);
+  }
+
+  initializeResizer() {
+    const layout = document.querySelector(".html-template-layout");
+    const resizer = document.getElementById("splitResizer");
+    if (!layout || !resizer) return;
+
+    const RESIZER_W = 6;
+    const MIN_LEFT = 240;
+    const MIN_RIGHT = 240;
+    let dragging = false;
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const rect = layout.getBoundingClientRect();
+      const total = rect.width - RESIZER_W;
+      let left = clientX - rect.left;
+      left = Math.max(MIN_LEFT, Math.min(left, total - MIN_RIGHT));
+      layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${total - left}px`;
+      e.preventDefault();
+    };
+
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove("is-resizing");
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+
+    const onDown = (e) => {
+      if (window.innerWidth <= 900) return; // disabled on mobile layout
+      dragging = true;
+      document.body.classList.add("is-resizing");
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      window.addEventListener("touchmove", onMove, { passive: false });
+      window.addEventListener("touchend", onUp);
+      e.preventDefault();
+    };
+
+    resizer.addEventListener("mousedown", onDown);
+    resizer.addEventListener("touchstart", onDown, { passive: false });
+
+    this._resizerCleanup = () => {
+      resizer.removeEventListener("mousedown", onDown);
+      resizer.removeEventListener("touchstart", onDown);
+      onUp();
+    };
+  }
+
+  cleanupResizer() {
+    if (this._resizerCleanup) {
+      try {
+        this._resizerCleanup();
+      } catch (_) {}
+      this._resizerCleanup = null;
+    }
   }
 }
 

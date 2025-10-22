@@ -1,26 +1,22 @@
 export const HTMLTemplateToolTemplate = /* html */ `
   <div class="tool-container html-template">
-    <div class="html-template-toolbar">
-      <div class="toolbar-left">
-        <button id="btnFormatHtml" class="btn btn-primary" title="Format HTML">Format</button>
-        <button id="btnMinifyHtml" class="btn btn-primary" title="Minify HTML">Minify</button>
-        <button id="btnExtractVtl" class="btn btn-secondary" title="Extract VTL Fields">Extract VTL Fields</button>
-      </div>
-      <div class="toolbar-right">
-        <button id="btnCopyHtml" class="btn btn-sm" title="Copy HTML">Copy</button>
-        <button id="btnPasteHtml" class="btn btn-sm" title="Paste HTML">Paste</button>
-        <button id="btnClearHtml" class="btn btn-sm" title="Clear HTML">Clear</button>
-      </div>
-    </div>
-
     <div class="html-template-layout">
       <div class="pane editor-pane">
         <div class="pane-header">
           <h3>Editor</h3>
-          <span id="minifierStatusBadge" class="status-badge" title="HTML minifier engine" style="margin-right:.5rem;padding:.125rem .375rem;border-radius:6px;font-size:12px;line-height:1;color:#8aa; background-color: rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);">Minifier: <a id="minifierStatusLink" href="#" class="status-link" style="color:inherit;">unknown</a></span>
+          <div class="toolbar-left">
+            <button id="btnFormatHtml" class="btn btn-primary" title="Format HTML">Format</button>
+            <button id="btnMinifyHtml" class="btn btn-primary" title="Minify HTML">Minify</button>
+            <button id="btnExtractVtl" class="btn btn-secondary" title="Extract VTL Fields">Extract VTL Fields</button>
+            <button id="btnCopyHtml" class="btn btn-sm" title="Copy HTML">Copy</button>
+            <button id="btnPasteHtml" class="btn btn-sm" title="Paste HTML">Paste</button>
+            <button id="btnClearHtml" class="btn btn-sm" title="Clear HTML">Clear</button>
+          </div>
         </div>
         <div id="htmlEditor" class="monaco-editor-container"></div>
       </div>
+
+      <!-- Removed resizer for fixed split -->
 
       <div class="pane renderer-pane">
         <div class="pane-header">
