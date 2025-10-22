@@ -612,6 +612,7 @@ class App {
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
     const featuresHtml = Object.entries(totalsByFeature)
+      .sort(([, a], [, b]) => b - a)
       .map(([id, count]) => {
         const name = this.tools.get(id)?.name || id;
         return `

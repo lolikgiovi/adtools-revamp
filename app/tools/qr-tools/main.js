@@ -2,6 +2,7 @@ import { QRToolsService } from './service.js';
 import { QRToolsTemplate } from './template.js';
 import { BaseTool } from '../../core/BaseTool.js';
 import { getIconSvg } from './icon.js';
+import { UsageTracker } from '../../core/UsageTracker.js';
 
 class QRTools extends BaseTool {
   constructor(eventBus) {
@@ -33,6 +34,7 @@ class QRTools extends BaseTool {
   }
 
   onMount() {
+    UsageTracker.track('qr-tools', 'mount');
     this.bindEvents();
     this.updatePreview();
   }

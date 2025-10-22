@@ -408,7 +408,9 @@ class SplunkVTLEditor extends BaseTool {
 
   cleanupResizer() {
     if (this._resizerCleanup) {
-      try { this._resizerCleanup(); } catch (_) {}
+      try {
+        this._resizerCleanup();
+      } catch (_) {}
       this._resizerCleanup = null;
     }
   }

@@ -60,8 +60,8 @@ export function splitByPipesSafely(input = "") {
       }
     }
 
-    // Split logic on top-level '|': do not block inside line comments
-    if (!inSQ && !inDQ && !inBrace && !inBlockComment && ch === "|" && prev !== "\\") {
+    // Split logic on top-level '|'
+    if (!inSQ && !inDQ && !inBrace && !inBlockComment && !inLineComment && ch === "|" && prev !== "\\") {
       segments.push(cur);
       cur = "";
       continue;
@@ -86,20 +86,124 @@ export function formatVtlTemplate(input = "") {
   // Newline after pipe segments as specified
   s = s.replace(/\|\s*/g, "|\n");
 
-  // Insert line boundaries around directives
-  const patterns = [
-    /#if\s*\([^)]*\)/gi,
-    /#elseif\s*\([^)]*\)/gi,
-    /#foreach\s*\([^)]*\)/gi,
-    /#macro\s*\([^)]*\)/gi,
-    /#define\s*\([^)]*\)/gi,
-    /#set\s*\([^)]*\)/gi,
-    /\b#else\b/gi,
-    /\b#end\b/gi,
-  ];
-  patterns.forEach((re) => {
-    s = s.replace(re, (m) => `\n${m}\n`);
-  });
+  // Insert line boundaries around directives using balanced parentheses detection
+  const wrapDirectives = (text) => {
+    const dirs = ["#if", "#elseif", "#foreach", "#macro", "#define", "#set"];
+    let out = "";
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === "#") {
+        const lowerRest = text.slice(i).toLowerCase();
+        let matched = null;
+        for (const d of dirs) {
+          if (lowerRest.startsWith(d)) {
+            matched = d;
+            break;
+          }
+        }
+        if (matched) {
+          let j = i + matched.length;
+          while (j < text.length && /\s/.test(text[j])) j++;
+          if (text[j] === "(") {
+            let depth = 1;
+            let k = j + 1;
+            let inSQ = false,
+              inDQ = false;
+            let prev = "";
+            while (k < text.length) {
+              const ch = text[k];
+              if (!inDQ && ch === "'" && prev !== "\\") {
+                inSQ = !inSQ;
+              } else if (!inSQ && ch === '"' && prev !== "\\") {
+                inDQ = !inDQ;
+              } else if (!inSQ && !inDQ) {
+                if (ch === "(") depth++;
+                else if (ch === ")") {
+                  depth--;
+                  if (depth === 0) break;
+                }
+              }
+              prev = ch;
+              k++;
+            }
+            const inner = text.slice(j + 1, k);
+            const hasContent = inner.trim().length > 0;
+            out += "\n" + text.slice(i, k + 1) + (hasContent ? "\n" : "");
+            i = k + 1;
+            continue;
+          }
+        }
+      }
+      out += text[i];
+      i++;
+    }
+    return out;
+  };
+
+  // Add newline after [ ... ] blocks when content is non-empty
+  const wrapBrackets = (text) => {
+    let out = "";
+    let i = 0;
+    let inSQ = false,
+      inDQ = false;
+    let prev = "";
+    while (i < text.length) {
+      const ch = text[i];
+      if (!inDQ && ch === "'" && prev !== "\\") {
+        inSQ = !inSQ;
+        out += ch;
+        i++;
+        prev = ch;
+        continue;
+      }
+      if (!inSQ && ch === '"' && prev !== "\\") {
+        inDQ = !inDQ;
+        out += ch;
+        i++;
+        prev = ch;
+        continue;
+      }
+      if (!inSQ && !inDQ && ch === "[") {
+        let depth = 1;
+        let k = i + 1;
+        let localInSQ = false,
+          localInDQ = false;
+        let localPrev = "";
+        while (k < text.length) {
+          const c = text[k];
+          if (!localInDQ && c === "'" && localPrev !== "\\") {
+            localInSQ = !localInSQ;
+          } else if (!localInSQ && c === '"' && localPrev !== "\\") {
+            localInDQ = !localInDQ;
+          } else if (!localInSQ && !localInDQ) {
+            if (c === "[") depth++;
+            else if (c === "]") {
+              depth--;
+              if (depth === 0) break;
+            }
+          }
+          localPrev = c;
+          k++;
+        }
+        const inner = text.slice(i + 1, k);
+        out += text.slice(i, k + 1) + (inner.trim().length > 0 ? "\n" : "");
+        i = k + 1;
+        prev = "";
+        continue;
+      }
+      out += ch;
+      prev = ch;
+      i++;
+    }
+    return out;
+  };
+
+  s = wrapDirectives(s);
+  s = wrapBrackets(s);
+
+  // Always wrap #else and #end with newlines
+  s = s.replace(/\b#else\b/gi, (m) => `\n${m}\n`);
+  s = s.replace(/\b#end\b/gi, (m) => `\n${m}\n`);
 
   // Normalize whitespace and collapse consecutive blank lines
   s = s.replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{2,}/g, "\n");
@@ -142,6 +246,76 @@ export function formatVtlTemplate(input = "") {
  */
 export function minifyVtlTemplate(input = "") {
   let s = String(input);
+
+  // Ensure newline after non-empty [ ... ] blocks
+  const ensureBracketNewline = (text) => {
+    let out = "";
+    let i = 0;
+    let inSQ = false,
+      inDQ = false;
+    let prev = "";
+    while (i < text.length) {
+      const ch = text[i];
+      if (!inDQ && ch === "'" && prev !== "\\") {
+        inSQ = !inSQ;
+        out += ch;
+        i++;
+        prev = ch;
+        continue;
+      }
+      if (!inSQ && ch === '"' && prev !== "\\") {
+        inDQ = !inDQ;
+        out += ch;
+        i++;
+        prev = ch;
+        continue;
+      }
+      if (!inSQ && !inDQ && ch === "[") {
+        let depth = 1;
+        let k = i + 1;
+        let localInSQ = false,
+          localInDQ = false;
+        let localPrev = "";
+        while (k < text.length) {
+          const c = text[k];
+          if (!localInDQ && c === "'" && localPrev !== "\\") {
+            localInSQ = !localInSQ;
+          } else if (!localInSQ && c === '"' && localPrev !== "\\") {
+            localInDQ = !localInDQ;
+          } else if (!localInSQ && !localInDQ) {
+            if (c === "[") depth++;
+            else if (c === "]") {
+              depth--;
+              if (depth === 0) break;
+            }
+          }
+          localPrev = c;
+          k++;
+        }
+        const inner = text.slice(i + 1, k);
+        // Find next non-whitespace char after closing bracket
+        let p = k + 1;
+        while (p < text.length && /\s/.test(text[p])) p++;
+        const nextNonSpace = text[p] || "";
+        const hasContent = inner.trim().length > 0;
+        let sep = "";
+        if (hasContent) {
+          // If next token is a pipe, no space; otherwise insert a single space
+          sep = nextNonSpace === "|" ? "" : " ";
+        }
+        out += text.slice(i, k + 1) + sep;
+        i = p;
+        prev = "";
+        continue;
+      }
+      out += ch;
+      prev = ch;
+      i++;
+    }
+    return out;
+  };
+  s = ensureBracketNewline(s);
+
   // Keep existing rule: remove newline(s) immediately after '|'
   s = s.replace(/\|\s*\r?\n\s*/g, "|");
   // Collapse newlines around Velocity directives
@@ -155,16 +329,90 @@ export function minifyVtlTemplate(input = "") {
 export function extractFieldsFromTemplate(input = "") {
   const { segments } = splitByPipesSafely(String(input));
   const rows = [];
+
+  // Strip leading Velocity directives (#if/#elseif/#else/#end/#set/etc.) with balanced parentheses
+  const stripLeadingDirectives = (s) => {
+    let t = String(s).trimStart();
+    while (t.startsWith("#")) {
+      const lower = t.toLowerCase();
+      const m = lower.match(/^(#(?:if|elseif|foreach|macro|define|set|parse|include|stop|else|end))/);
+      if (!m) break;
+      const name = m[1];
+      t = t.slice(name.length);
+      t = t.replace(/^\s+/, "");
+      if (name !== "#else" && name !== "#end" && name !== "#stop") {
+        if (t[0] === "(") {
+          let depth = 1;
+          let k = 1;
+          let inSQ = false,
+            inDQ = false;
+          let prev = "";
+          while (k < t.length) {
+            const ch = t[k];
+            if (!inDQ && ch === "'" && prev !== "\\") inSQ = !inSQ;
+            else if (!inSQ && ch === '"' && prev !== "\\") inDQ = !inDQ;
+            else if (!inSQ && !inDQ) {
+              if (ch === "(") depth++;
+              else if (ch === ")") {
+                depth--;
+                if (depth === 0) {
+                  k++;
+                  break;
+                }
+              }
+            }
+            prev = ch;
+            k++;
+          }
+          t = t.slice(k);
+        }
+      }
+      t = t.trimStart();
+    }
+    return t.trimStart();
+  };
+
+  // Strip a leading [ ... ] block (e.g., Splunk subsearch) with balanced brackets
+  const stripLeadingBrackets = (s) => {
+    let t = String(s).trimStart();
+    let i = 0;
+    while (i < t.length && t[i] === "[") {
+      let k = i + 1;
+      let depth = 1;
+      let inSQ = false,
+        inDQ = false;
+      let prev = "";
+      while (k < t.length) {
+        const ch = t[k];
+        if (!inDQ && ch === "'" && prev !== "\\") inSQ = !inSQ;
+        else if (!inSQ && ch === '"' && prev !== "\\") inDQ = !inDQ;
+        else if (!inSQ && !inDQ) {
+          if (ch === "[") depth++;
+          else if (ch === "]") {
+            depth--;
+            if (depth === 0) break;
+          }
+        }
+        prev = ch;
+        k++;
+      }
+      if (depth !== 0) break;
+      i = k + 1;
+      while (i < t.length && /\s/.test(t[i])) i++;
+    }
+    return t.slice(i).trimStart();
+  };
+
   for (const raw of segments) {
-    const seg = raw.trim();
+    let seg = String(raw).trim();
     if (!seg || seg.startsWith("##")) continue;
 
-    // Skip directives like #if, #foreach etc.
-    if (/^#(if|elseif|else|end|set|foreach|macro|parse|include|define|stop)\b/i.test(seg)) {
-      continue;
-    }
+    // Previously, segments starting with directives were skipped entirely.
+    // Now strip leading directives and brackets, then detect key=value.
+    seg = stripLeadingDirectives(seg);
+    seg = stripLeadingBrackets(seg);
+    if (!seg) continue;
 
-    // Allow empty right-hand value
     const m = seg.match(/^([^=|]+?)\s*=\s*(.*)$/);
     if (!m) continue;
     const field = m[1].trim();
@@ -179,11 +427,13 @@ export function extractFieldsFromTemplate(input = "") {
       const inner = t.replace(/^\$!?\{/, "").replace(/\}$/, "");
       const pathMatch = inner.match(/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/);
       if (pathMatch) variables.add(pathMatch[0]);
+      // collect method calls within
       const methodRe = /\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
       let mm;
       while ((mm = methodRe.exec(inner))) {
         functions.add(mm[1]);
       }
+      // collect function calls like format(foo)
       const funcRe = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
       let ff;
       while ((ff = funcRe.exec(inner))) {
@@ -191,17 +441,20 @@ export function extractFieldsFromTemplate(input = "") {
       }
     }
 
+    // Unbraced variables e.g. $context.foo.toUpperCase()
     const unbraced = valueExpr.match(/\$!?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g) || [];
     for (const t of unbraced) {
       const path = t.replace(/^\$!?/, "");
       variables.add(path);
     }
 
+    // Method calls outside braces
     const methodCalls = valueExpr.match(/\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/g) || [];
     for (const mth of methodCalls) {
       const name = mth.replace(/^\./, "").replace(/\(.*/, "");
       functions.add(name);
     }
+    // Stand-alone function calls not preceded by '#'
     const funcCalls = [];
     {
       const re = /(^|[^#])\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
