@@ -87,6 +87,31 @@ class Base64Tools extends BaseTool {
       decodePasteBtn.addEventListener("click", () => this.pasteFromClipboard("decode-input"));
     }
 
+    // Load and persist text inputs to localStorage
+    const encodeInput = container.querySelector("#encode-input");
+    const decodeInput = container.querySelector("#decode-input");
+    const encKey = "tool:base64-tools:encode-input";
+    const decKey = "tool:base64-tools:decode-input";
+    try {
+      const savedEnc = localStorage.getItem(encKey);
+      const savedDec = localStorage.getItem(decKey);
+      if (encodeInput && savedEnc !== null) encodeInput.value = savedEnc;
+      if (decodeInput && savedDec !== null) decodeInput.value = savedDec;
+    } catch (_) {}
+    let encTimer = null, decTimer = null;
+    encodeInput?.addEventListener("input", () => {
+      clearTimeout(encTimer);
+      encTimer = setTimeout(() => {
+        try { localStorage.setItem(encKey, encodeInput.value || ""); } catch (_) {}
+      }, 250);
+    });
+    decodeInput?.addEventListener("input", () => {
+      clearTimeout(decTimer);
+      decTimer = setTimeout(() => {
+        try { localStorage.setItem(decKey, decodeInput.value || ""); } catch (_) {}
+      }, 250);
+    });
+
     // Clear buttons
     const encodeClearBtn = container.querySelector("#encode-clear-btn");
     const decodeClearBtn = container.querySelector("#decode-clear-btn");
@@ -682,6 +707,16 @@ class Base64Tools extends BaseTool {
       if (element) {
         element.value = text;
         this.showSuccess("Pasted from clipboard!");
+        // Persist pasted value
+        try {
+          const key =
+            targetId === "encode-input"
+              ? "tool:base64-tools:encode-input"
+              : targetId === "decode-input"
+              ? "tool:base64-tools:decode-input"
+              : null;
+          if (key) localStorage.setItem(key, element.value || "");
+        } catch (_) {}
       }
     } catch (error) {
       this.showError("Failed to paste from clipboard");
@@ -694,7 +729,13 @@ class Base64Tools extends BaseTool {
 
     // Clear the textarea input
     const inputElement = container.querySelector(`#${mode}-input`);
-    if (inputElement) inputElement.value = "";
+    if (inputElement) {
+      inputElement.value = "";
+      try {
+        const key = mode === "encode" ? "tool:base64-tools:encode-input" : "tool:base64-tools:decode-input";
+        localStorage.setItem(key, "");
+      } catch (_) {}
+    }
 
     // Clear file info display
     const fileInfoElement = container.querySelector(`#${mode}-file-info`);

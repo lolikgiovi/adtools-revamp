@@ -1,3 +1,4 @@
+import MinifyWorker from "../../html-editor/minify.worker.js?worker";
 export class AttachmentProcessorService {
   constructor() {
     this.attachmentsContainer = null;
@@ -115,46 +116,84 @@ export class AttachmentProcessorService {
     });
   }
 
-  minifyContent(file) {
-    if (!file.processedFormats.original) return file;
+  async minifyContent(file) {
+    try {
+      const original = (file.processedFormats && file.processedFormats.original) || "";
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const t = (file.type || "").toLowerCase();
 
-    const extension = file.name.split(".").pop().toLowerCase();
-    let minified = file.processedFormats.original;
+      // Only attempt minify for text-like and specific known types
+      if (!original || (!t.includes("text") && !t.includes("json") && !t.includes("html") && !["txt","html","htm","json"].includes(ext))) {
+        return file;
+      }
 
-    switch (extension) {
-      case "html":
-        // Minify HTML: remove extra spaces, newlines, and comments
-        minified = minified
-          .replace(/<!--[\s\S]*?-->/g, "") // Remove comments
-          .replace(/\s+/g, " ") // Replace multiple spaces with single space
-          .replace(/>\s+</g, "><") // Remove spaces between tags
-          .trim();
-        break;
+      let minified = original;
 
-      case "json":
-        // Minify JSON: parse and stringify without spaces
+      if (ext === "html" || ext === "htm" || t.includes("html")) {
         try {
-          minified = JSON.stringify(JSON.parse(minified));
-        } catch (e) {
-          console.error("JSON minification failed:", e);
+          minified = await this.#minifyHtmlWithWorker(original);
+        } catch (err) {
+          console.error("HTML Minify Worker failed, falling back to basic minify:", err);
+          // Fallback to previous simple minifier
+          minified = original
+            .replace(/<!--[\s\S]*?-->/g, "")
+            .replace(/>\s+</g, "><")
+            .replace(/[\r\n\t]+/g, "")
+            .replace(/\s{2,}/g, " ")
+            .trim();
         }
-        break;
-
-      default:
-        // For other text files: remove extra spaces and empty lines
-        minified = minified
+      } else if (ext === "json" || t.includes("json")) {
+        try {
+          minified = JSON.stringify(JSON.parse(original));
+        } catch (e) {
+          // Keep original if JSON parse fails
+          console.warn("JSON minify failed, keeping original:", e);
+          minified = original;
+        }
+      } else {
+        // Generic text: collapse extra whitespace and trim
+        minified = original
           .split("\n")
           .map((line) => line.trim())
-          .filter((line) => line)
-          .join("\n");
-    }
+          .join(" ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+      }
 
-    return {
-      ...file,
-      processedFormats: {
-        ...file.processedFormats,
-        original: minified,
-      },
-    };
+      return {
+        ...file,
+        processedFormats: {
+          ...(file.processedFormats || {}),
+          original: minified,
+        },
+      };
+    } catch (e) {
+      console.error("Unexpected error during minify:", e);
+      return file;
+    }
+  }
+
+  async #minifyHtmlWithWorker(html) {
+    return new Promise((resolve, reject) => {
+      const worker = new MinifyWorker();
+      const cleanup = () => {
+        try { worker.terminate(); } catch (_) {}
+      };
+      worker.onmessage = (event) => {
+        const data = event.data || {};
+        const { success, result, error } = data;
+        cleanup();
+        if (success) {
+          resolve(typeof result === "string" ? result : "");
+        } else {
+          reject(new Error(error || "HTML minify failed"));
+        }
+      };
+      worker.onerror = (err) => {
+        cleanup();
+        reject(err instanceof Error ? err : new Error("Worker error"));
+      };
+      worker.postMessage({ type: "minify", html });
+    });
   }
 }

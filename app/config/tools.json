@@ -49,6 +49,16 @@
       "showOnHome": true,
       "enabled": true,
       "order": 50
+    },
+    {
+      "id": "html-template",
+      "name": "HTML Template",
+      "category": "config",
+      "icon": "html",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 60
     }
   ]
 }

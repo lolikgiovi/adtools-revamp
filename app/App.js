@@ -12,6 +12,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
+import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
 import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
@@ -19,7 +20,7 @@ import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
-import { UsageTracker } from "./core/UsageTracker.js";
+import { UsageTracker } from './core/UsageTracker.js';
 
 class App {
   constructor() {
@@ -43,6 +44,19 @@ class App {
     this.buildToolsConfigMap();
     // Initialize usage tracking early with the app event bus
     UsageTracker.init(this.eventBus);
+    // Always expose a global reset helper so it’s callable from console
+    try {
+      window.resetUsageAnalytics = () => {
+        UsageTracker.resetDev();
+        console.info('Usage analytics cleared. Reload to start clean.');
+      };
+    } catch (_) {}
+    // Dev convenience: disable backup to avoid fallback
+    if (import.meta?.env?.DEV) {
+      try {
+        UsageTracker.setBackupEnabled(false);
+      } catch (_) {}
+    }
 
     this.initializeComponents();
     this.registerTools();
@@ -165,6 +179,10 @@ class App {
     // Register Quick Query
     const quickQuery = new QuickQuery(this.eventBus);
     this.registerTool(quickQuery);
+
+    // Register HTML Template
+    const htmlTemplate = new HTMLTemplateTool(this.eventBus);
+    this.registerTool(htmlTemplate);
 
     // Add more tools here as they are implemented
   }
@@ -302,6 +320,7 @@ class App {
     // Mount tool to main content
     if (this.mainContent) {
       tool.mount(this.mainContent);
+      // Record mount in usage analytics under the tool’s feature
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });

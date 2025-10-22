@@ -11,7 +11,10 @@ class UsageTracker {
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static FLUSH_DELAY_MS = 300; // debounce writes
-
+  static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
+  static _backupEnabled = true;
+  static ENABLED_KEY = "usage.analytics.enabled";
+  static _enabled = true;
   static _state = null;
   static _flushTimer = null;
   static _eventBus = null;
@@ -19,54 +22,72 @@ class UsageTracker {
   /** Initialize tracker (optional), sets event bus and attaches lifecycle hooks */
   static init(eventBus = null) {
     this._eventBus = eventBus || null;
+    // Set sane defaults before reading storage (prevents backup fallback in dev)
+    const isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
+    this._backupEnabled = isDev ? false : true;
+    this._enabled = true;
+    // Respect persisted flags if present
+    try {
+      const be = localStorage.getItem(this.BACKUP_ENABLED_KEY);
+      if (be === "false") this._backupEnabled = false;
+      else if (be === "true") this._backupEnabled = true;
+      const en = localStorage.getItem(this.ENABLED_KEY);
+      if (en === "false") this._enabled = false;
+    } catch (_) {}
+
+    // Load after flags applied so fallback behaves correctly
     this._state = this._loadFromStorage();
 
     // Ensure flush on unload to prevent data loss
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", () => {
-        try { this.flushSync(); } catch (_) {}
+        try {
+          this.flushSync();
+        } catch (_) {}
       });
     }
   }
 
-  /** Track a usage event with consistent schema */
+  /** Track a usage event (simple: increment counts and daily, flush immediately) */
   static track(featureId, action, meta = {}) {
-    if (!featureId || !action) return; // must specify both
+    if (!featureId || !action) return;
+    if (!this._enabled) return;
 
-    // Lazy-load state
-    if (!this._state) {
-      this._state = this._loadFromStorage();
-    }
+    if (!this._state) this._state = this._loadFromStorage();
 
     const now = new Date();
-    if (!this._isValidTimestamp(now)) return; // guard against invalid clocks
+    if (!this._isValidTimestamp(now)) return;
 
-    const event = {
-      featureId: String(featureId),
-      action: String(action),
-      ts: now.toISOString(),
-      meta: this._sanitizeMeta(meta),
-    };
-
-    // Append to rolling events buffer
-    this._state.events.push(event);
-    if (this._state.events.length > this.MAX_EVENTS) {
-      this._state.events.splice(0, this._state.events.length - this.MAX_EVENTS);
-    }
+    const featureKey = String(featureId);
+    const actionKey = String(action);
 
     // Increment aggregated counts
     const counts = this._state.counts;
-    counts[featureId] = counts[featureId] || {};
-    counts[featureId][action] = (counts[featureId][action] || 0) + 1;
+    counts[featureKey] = counts[featureKey] || {};
+    counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
 
-    this._state.lastUpdated = event.ts;
+    // Increment per-day counters for 7-day activity
+    const day = now.toISOString().slice(0, 10);
+    const k = `${featureKey}.${actionKey}`;
+    this._state.daily = this._state.daily || {};
+    this._state.daily[day] = this._state.daily[day] || {};
+    this._state.daily[day][k] = (this._state.daily[day][k] || 0) + 1;
+
+    this._state.lastUpdated = now.toISOString();
     this._state.revision = (this._state.revision || 0) + 1;
 
-    // Debounced flush for performance
-    this._scheduleFlush();
+    // Persist immediately (keep it dead simple)
+    this.flushSync();
 
-    // Emit update event for any future dashboards
-    try { this._eventBus?.emit?.("usage:updated", { featureId, action, ts: event.ts }); } catch (_) {}
+    // Notify listeners
+    try {
+      this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
+    } catch (_) {}
+  }
+
+  /** Alias for feature-centric tracking */
+  static trackFeature(featureId, action, meta = {}) {
+    this.track(featureId, action, meta);
   }
 
   /** Return deep-copied aggregated counts */
@@ -75,11 +96,9 @@ class UsageTracker {
     return JSON.parse(JSON.stringify(counts));
   }
 
-  /** Return recent events (default last 100) */
+  /** Return recent events (not used in simple tracker) */
   static getEvents(limit = 100) {
-    const events = this._state?.events || [];
-    const start = Math.max(0, events.length - limit);
-    return events.slice(start);
+    return [];
   }
 
   /** Return counts per feature and per day breakdown */
@@ -94,13 +113,8 @@ class UsageTracker {
       totalEvents += featureTotal;
     });
 
-    const daily = {};
-    for (const ev of this._state?.events || []) {
-      const day = ev.ts.slice(0, 10); // YYYY-MM-DD
-      const key = `${ev.featureId}.${ev.action}`;
-      daily[day] = daily[day] || {};
-      daily[day][key] = (daily[day][key] || 0) + 1;
-    }
+    // Use simple daily counters maintained in state
+    const daily = this._state?.daily || {};
 
     return { totalEvents, totalsByFeature, counts, daily };
   }
@@ -129,9 +143,11 @@ class UsageTracker {
   static _scheduleFlush() {
     if (this._flushTimer) return;
     this._flushTimer = setTimeout(() => {
-      this.flush().catch(() => {}).finally(() => {
-        this._flushTimer = null;
-      });
+      this.flush()
+        .catch(() => {})
+        .finally(() => {
+          this._flushTimer = null;
+        });
     }, this.FLUSH_DELAY_MS);
   }
 
@@ -149,8 +165,9 @@ class UsageTracker {
 
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
-      // Maintain backup key for resilience
-      localStorage.setItem(this.BACKUP_KEY, JSON.stringify(payload));
+      if (this._backupEnabled) {
+        localStorage.setItem(this.BACKUP_KEY, JSON.stringify(payload));
+      }
     } catch (err) {
       // Quota or other write issues: trim events and retry best-effort
       try {
@@ -160,7 +177,9 @@ class UsageTracker {
       } catch (_) {
         // Fall back to saving counts only
         const minimal = { ...payload, events: [] };
-        try { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(minimal)); } catch (_) {}
+        try {
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify(minimal));
+        } catch (_) {}
       }
     }
   }
@@ -170,7 +189,9 @@ class UsageTracker {
     if (!this._state) return;
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this._state));
-      localStorage.setItem(this.BACKUP_KEY, JSON.stringify(this._state));
+      if (this._backupEnabled) {
+        localStorage.setItem(this.BACKUP_KEY, JSON.stringify(this._state));
+      }
     } catch (_) {
       // Ignore sync failures
     }
@@ -179,7 +200,7 @@ class UsageTracker {
   static _loadFromStorage() {
     let raw = null;
     try {
-      raw = localStorage.getItem(this.STORAGE_KEY) || localStorage.getItem(this.BACKUP_KEY);
+      raw = localStorage.getItem(this.STORAGE_KEY) || (this._backupEnabled ? localStorage.getItem(this.BACKUP_KEY) : null);
     } catch (_) {}
 
     let state = null;
@@ -191,12 +212,15 @@ class UsageTracker {
         } else {
           // Validate timestamps on existing events
           state.events = Array.isArray(state.events) ? state.events.filter((ev) => this._validateEvent(ev)) : [];
+          if (state.events.length > this.MAX_EVENTS) {
+            state.events = state.events.slice(state.events.length - this.MAX_EVENTS);
+          }
           state.counts = state.counts && typeof state.counts === "object" ? state.counts : {};
+          state.daily = state.daily && typeof state.daily === "object" ? state.daily : {};
           state.version = typeof state.version === "number" ? state.version : 1;
           state.revision = typeof state.revision === "number" ? state.revision : 0;
-          state.lastUpdated = typeof state.lastUpdated === "string" && this._validateTimestampString(state.lastUpdated)
-            ? state.lastUpdated
-            : null;
+          state.lastUpdated =
+            typeof state.lastUpdated === "string" && this._validateTimestampString(state.lastUpdated) ? state.lastUpdated : null;
           state.installId = state.installId || this._getOrCreateInstallId();
         }
       } catch (_) {
@@ -216,6 +240,7 @@ class UsageTracker {
       revision: 0,
       counts: {},
       events: [],
+      daily: {},
       integrity: null,
     };
   }
@@ -260,7 +285,9 @@ class UsageTracker {
   static async _computeSha256(str) {
     const bytes = new TextEncoder().encode(str);
     const digest = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
 
   static _simpleHash(str) {
@@ -270,6 +297,39 @@ class UsageTracker {
       h |= 0;
     }
     return (h >>> 0).toString(16);
+  }
+
+  /** Enable/disable backup writes and fallback */
+  static setBackupEnabled(enabled) {
+    this._backupEnabled = !!enabled;
+    try {
+      localStorage.setItem(this.BACKUP_ENABLED_KEY, this._backupEnabled ? "true" : "false");
+    } catch (_) {}
+  }
+
+  /** Clear stored analytics keys (primary and backup) */
+  static clearStorage() {
+    try {
+      localStorage.removeItem(this.STORAGE_KEY);
+      localStorage.removeItem(this.BACKUP_KEY);
+    } catch (_) {}
+  }
+
+  /** Enable/disable analytics events and persistence */
+  static setEnabled(enabled) {
+    this._enabled = !!enabled;
+    try {
+      localStorage.setItem(this.ENABLED_KEY, this._enabled ? "true" : "false");
+    } catch (_) {}
+  }
+
+  /** Dev convenience: force reset analytics and disable backup */
+  static resetDev() {
+    try {
+      this.setBackupEnabled(false);
+      this.clearStorage();
+      this._state = null;
+    } catch (_) {}
   }
 }
 
