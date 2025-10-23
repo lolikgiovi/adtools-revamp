@@ -622,7 +622,9 @@ class App {
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
     const featuresHtml = Object.entries(totalsByFeature)
+      .filter(([id]) => this.toolsConfigMap.has(id))
       .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
       .map(([id, count]) => {
         const name = this.tools.get(id)?.name || id;
         return `
@@ -648,7 +650,7 @@ class App {
     const barsHtml = days
       .map((d) => {
         const h = Math.round((d.value / max) * 100);
-        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}"><span class="usage-bar-label">${d.label}</span></div>`;
+        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}" aria-label="${d.label} ${d.value} events"><span class="usage-bar-value">${d.value}</span><span class="usage-bar-label">${d.label}</span></div>`;
       })
       .join("");
 

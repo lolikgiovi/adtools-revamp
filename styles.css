@@ -1343,6 +1343,7 @@ body.global-search-open {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
+  align-items: stretch;
 }
 
 .usage-card {
@@ -1350,6 +1351,9 @@ body.global-search-open {
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .usage-card h3 {
@@ -1385,9 +1389,13 @@ body.global-search-open {
   align-items: flex-end;
   justify-content: space-between;
   gap: 6px;
-  height: 110px;
-  padding-bottom: 14px;
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: 0;
+  margin-bottom: 14px;
   position: relative;
+  box-sizing: border-box;
 }
 
 .usage-bar {
@@ -1406,6 +1414,15 @@ body.global-search-open {
   transform: translateX(-50%);
   font-size: 0.7rem;
   color: hsl(var(--muted-foreground));
+}
+
+.usage-bar-value {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: hsl(var(--text-secondary));
 }
 
 .usage-empty {
