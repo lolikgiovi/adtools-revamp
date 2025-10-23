@@ -135,18 +135,7 @@
   font-weight: 500;
   transition: all 0.15s ease;
 }
-.quick-query-tool-container .btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
-  height: 28px;
-  line-height: 20px;
-}
 
-.quick-query-tool-container .btn-secondary {
-  background-color: hsl(var(--muted));
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--border));
-}
 .quick-query-tool-container .btn-outline {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
@@ -222,12 +211,11 @@
 /* Handsontable compact sizing overrides (scoped to quick-query) */
 .quick-query-tool-container .handsontable {
   font-size: 11px;
-  /* Override Handsontable v15+ theme variables for compact sizing */
   --ht-row-height: 20px;
   --ht-header-row-height: 20px;
   --ht-font-size: 11px;
   --ht-header-font-size: 11px;
-  --ht-cell-vertical-padding: 0px;
+  --ht-cell-vertical-padding: 1px;
   --ht-cell-horizontal-padding: 6px;
 }
 
@@ -264,7 +252,6 @@
 #spreadsheet-data .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
-  /* Force wrapping for long tokens to prevent column over-expansion */
   white-space: normal !important;
   word-break: break-word !important;
 }
@@ -326,44 +313,6 @@
 
 #warningMessages {
   margin-bottom: 10px;
-}
-
-.center-aligned {
-  text-align: center !important;
-}
-
-/* Error Page */
-.quick-query-error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  padding: 2rem;
-  text-align: center;
-}
-
-.quick-query-error-state .error-message {
-  color: hsl(var(--destructive));
-  margin-bottom: 1rem;
-  font-size: large;
-}
-
-.quick-query-error-state .retry-button {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border: 1px solid hsl(var(--primary));
-  border-radius: var(--radius);
-  transition: background-color 0.2s;
-}
-
-.quick-query-error-state .retry-button:hover {
-  background: hsl(var(--primary-hover));
-}
-
-.quick-query-error-state .retry-button:disabled {
-  background-color: hsl(var(--muted));
-  cursor: not-allowed;
 }
 
 /* Schema Management */
@@ -577,44 +526,13 @@
   border: 2px solid #f0f0f0;
 }
 
-#attachments-container {
-  border: 2px dashed hsl(var(--border));
-  border-radius: 4px;
-  padding: 16px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-#attachments-container.drag-over {
-  background-color: hsl(var(--secondary));
-}
-
-#attachments-container.wide {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  height: 100%; /* Take full height of the container */
-}
-
-#attachments-container.small {
-  padding: 10px;
-  margin-bottom: 20px;
-}
-
-#attachments-container.hidden {
-  display: none;
-}
-
 /* File buttons styling */
 .file-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 10px 15px;
+  padding: 5px 10px;
   margin: 5px 0;
   background-color: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
@@ -854,19 +772,6 @@
   width: 30%;
 }
 
-.attachment-actions {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.attachment-actions button {
-  flex: 1;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
 .tip-text {
   display: flex;
   align-items: center;
@@ -943,11 +848,6 @@
 
 .empty-file-button:active {
   transform: translateY(1px);
-}
-
-.file-type-icon {
-  margin-right: 8px;
-  font-size: 14px;
 }
 
 .file-button:focus-visible {
