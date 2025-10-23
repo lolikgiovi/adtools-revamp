@@ -1383,6 +1383,7 @@ body.global-search-open {
 .usage-trend {
   display: flex;
   align-items: flex-end;
+  justify-content: space-between;
   gap: 6px;
   height: 110px;
   padding-bottom: 14px;
