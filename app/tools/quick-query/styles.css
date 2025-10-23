@@ -24,21 +24,6 @@
   white-space: normal;
 }
 
-/* Allow the first left-panel control group to wrap its input on narrow widths */
-.quick-query-left-panel .button-group:first-of-type {
-  flex-wrap: wrap;
-  white-space: normal; /* enable wrapping */
-  overflow: visible; /* allow items to break to next line */
-}
-.quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
-  flex: 0 0 150px; /* fixed width as defined */
-}
-.quick-query-left-panel .button-group:first-of-type #tableNameInput {
-  flex: 1 1 100%; /* take full width when wrapped */
-  width: 100%;
-  max-width: none; /* override global cap to allow full line */
-}
-
 .quick-query-content {
   display: flex;
   flex-direction: column;
@@ -139,7 +124,6 @@
   opacity: 1 !important;
 }
 
-/* Compact button styling to match screenshot */
 .quick-query-tool-container .btn {
   background: hsl(var(--primary));
   border: 1px solid hsl(var(--primary));
@@ -172,19 +156,27 @@
   background-color: hsl(var(--muted));
 }
 
-/* Compact form controls */
-#queryTypeSelect,
-#tableNameInput {
+/* Allow the first left-panel control group to wrap its input on narrow widths */
+.quick-query-left-panel .button-group:first-of-type {
+  flex-wrap: wrap;
+  white-space: normal; /* enable wrapping */
+  overflow: visible; /* allow items to break to next line */
+}
+
+.quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
   height: 28px;
   font-size: 12px;
-}
-#queryTypeSelect {
   width: 150px;
+  flex: 0 0 150px; /* fixed width as defined */
+  border-radius: calc(var(--radius) - 2px);
 }
-#tableNameInput {
+.quick-query-left-panel .button-group:first-of-type #tableNameInput {
+  height: 28px;
+  font-size: 12px;
+  flex: 1 1 100%; /* take full width when wrapped */
   width: 100%;
-  max-width: 486px; /* default cap; group-specific override can remove */
-  min-width: 0;
+  border-radius: calc(var(--radius) - 2px);
+  max-width: none; /* override global cap to allow full line */
   padding: 4px 8px;
   box-sizing: border-box;
 }
@@ -203,7 +195,6 @@
 .quick-query-search.button-group,
 .quick-query-data-controls.button-group {
   white-space: nowrap;
-  /* overflow: hidden;  */
 }
 
 .quick-query-left-panel .quick-query-search.button-group {
@@ -315,77 +306,6 @@
   border-radius: 4px;
 }
 
-.toggle-guide {
-  margin-top: 16px;
-  width: 100%;
-  text-align: center;
-  padding: 8px 12px;
-  background-color: hsl(var(--accent));
-  border: 1px solid hsl(var(--ring));
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-  color: hsl(var(--foreground));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-}
-
-.toggle-guide:hover {
-  background-color: hsl(var(--muted));
-}
-
-.guide-content {
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background-color: hsl(var(--background));
-}
-
-.guide-content.hidden {
-  display: none;
-}
-
-#guide {
-  font-size: 14px;
-  line-height: 1.5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol";
-  color: hsl(var(--foreground));
-}
-
-#guide h4 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-#guide ul {
-  padding-left: 20px;
-}
-
-#guide li {
-  margin-bottom: 6px;
-}
-
-.simulate-button {
-  margin-top: 12px;
-  color: hsl(var(--foreground));
-  background-color: hsl(var(--accent));
-  border: 1px solid hsl(var(--ring));
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-}
-
-.simulate-button:hover {
-  background-color: hsl(var(--muted));
-}
-
 #tableNameInput {
   width: 100%;
   max-width: 486px;
@@ -401,6 +321,7 @@
 #errorMessages {
   color: hsl(var(--destructive));
   margin-bottom: 10px;
+  font-size: 14px;
 }
 
 #warningMessages {

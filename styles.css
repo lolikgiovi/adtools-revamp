@@ -531,7 +531,7 @@ body {
 
 /* Home Page Styles */
 .home-container {
-  padding: 2rem;
+  padding-bottom: 2rem;
   max-width: 1200px;
   margin: 0 auto;
 }
