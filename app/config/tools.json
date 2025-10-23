@@ -79,6 +79,16 @@
       "showOnHome": true,
       "enabled": true,
       "order": 80
+    },
+    {
+      "id": "check-image",
+      "name": "Check Image",
+      "category": "config",
+      "icon": "image-check",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 90
     }
   ]
 }

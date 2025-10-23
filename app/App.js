@@ -23,6 +23,7 @@ import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
+import { CheckImageTool } from "./tools/image-checker/main.js";
 
 class App {
   constructor() {
@@ -193,6 +194,10 @@ class App {
     // Register SQL IN Clause
     const sqlInClause = new SQLInClauseTool(this.eventBus);
     this.registerTool(sqlInClause);
+
+    // Register Check Image
+    const checkImage = new CheckImageTool(this.eventBus);
+    this.registerTool(checkImage);
 
     // Add more tools here as they are implemented
   }
