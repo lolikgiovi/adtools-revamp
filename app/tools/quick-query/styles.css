@@ -24,21 +24,6 @@
   white-space: normal;
 }
 
-/* Allow the first left-panel control group to wrap its input on narrow widths */
-.quick-query-left-panel .button-group:first-of-type {
-  flex-wrap: wrap;
-  white-space: normal; /* enable wrapping */
-  overflow: visible; /* allow items to break to next line */
-}
-.quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
-  flex: 0 0 150px; /* fixed width as defined */
-}
-.quick-query-left-panel .button-group:first-of-type #tableNameInput {
-  flex: 1 1 100%; /* take full width when wrapped */
-  width: 100%;
-  max-width: none; /* override global cap to allow full line */
-}
-
 .quick-query-content {
   display: flex;
   flex-direction: column;
@@ -139,7 +124,6 @@
   opacity: 1 !important;
 }
 
-/* Compact button styling to match screenshot */
 .quick-query-tool-container .btn {
   background: hsl(var(--primary));
   border: 1px solid hsl(var(--primary));
@@ -151,18 +135,7 @@
   font-weight: 500;
   transition: all 0.15s ease;
 }
-.quick-query-tool-container .btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
-  height: 28px;
-  line-height: 20px;
-}
 
-.quick-query-tool-container .btn-secondary {
-  background-color: hsl(var(--muted));
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--border));
-}
 .quick-query-tool-container .btn-outline {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
@@ -172,19 +145,27 @@
   background-color: hsl(var(--muted));
 }
 
-/* Compact form controls */
-#queryTypeSelect,
-#tableNameInput {
+/* Allow the first left-panel control group to wrap its input on narrow widths */
+.quick-query-left-panel .button-group:first-of-type {
+  flex-wrap: wrap;
+  white-space: normal; /* enable wrapping */
+  overflow: visible; /* allow items to break to next line */
+}
+
+.quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
   height: 28px;
   font-size: 12px;
-}
-#queryTypeSelect {
   width: 150px;
+  flex: 0 0 150px; /* fixed width as defined */
+  border-radius: calc(var(--radius) - 2px);
 }
-#tableNameInput {
+.quick-query-left-panel .button-group:first-of-type #tableNameInput {
+  height: 28px;
+  font-size: 12px;
+  flex: 1 1 100%; /* take full width when wrapped */
   width: 100%;
-  max-width: 486px; /* default cap; group-specific override can remove */
-  min-width: 0;
+  border-radius: calc(var(--radius) - 2px);
+  max-width: none; /* override global cap to allow full line */
   padding: 4px 8px;
   box-sizing: border-box;
 }
@@ -203,7 +184,6 @@
 .quick-query-search.button-group,
 .quick-query-data-controls.button-group {
   white-space: nowrap;
-  /* overflow: hidden;  */
 }
 
 .quick-query-left-panel .quick-query-search.button-group {
@@ -231,12 +211,11 @@
 /* Handsontable compact sizing overrides (scoped to quick-query) */
 .quick-query-tool-container .handsontable {
   font-size: 11px;
-  /* Override Handsontable v15+ theme variables for compact sizing */
   --ht-row-height: 20px;
   --ht-header-row-height: 20px;
   --ht-font-size: 11px;
   --ht-header-font-size: 11px;
-  --ht-cell-vertical-padding: 0px;
+  --ht-cell-vertical-padding: 1px;
   --ht-cell-horizontal-padding: 6px;
 }
 
@@ -273,7 +252,6 @@
 #spreadsheet-data .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
-  /* Force wrapping for long tokens to prevent column over-expansion */
   white-space: normal !important;
   word-break: break-word !important;
 }
@@ -315,77 +293,6 @@
   border-radius: 4px;
 }
 
-.toggle-guide {
-  margin-top: 16px;
-  width: 100%;
-  text-align: center;
-  padding: 8px 12px;
-  background-color: hsl(var(--accent));
-  border: 1px solid hsl(var(--ring));
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-  color: hsl(var(--foreground));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-}
-
-.toggle-guide:hover {
-  background-color: hsl(var(--muted));
-}
-
-.guide-content {
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background-color: hsl(var(--background));
-}
-
-.guide-content.hidden {
-  display: none;
-}
-
-#guide {
-  font-size: 14px;
-  line-height: 1.5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol";
-  color: hsl(var(--foreground));
-}
-
-#guide h4 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-#guide ul {
-  padding-left: 20px;
-}
-
-#guide li {
-  margin-bottom: 6px;
-}
-
-.simulate-button {
-  margin-top: 12px;
-  color: hsl(var(--foreground));
-  background-color: hsl(var(--accent));
-  border: 1px solid hsl(var(--ring));
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-}
-
-.simulate-button:hover {
-  background-color: hsl(var(--muted));
-}
-
 #tableNameInput {
   width: 100%;
   max-width: 486px;
@@ -401,48 +308,11 @@
 #errorMessages {
   color: hsl(var(--destructive));
   margin-bottom: 10px;
+  font-size: 14px;
 }
 
 #warningMessages {
   margin-bottom: 10px;
-}
-
-.center-aligned {
-  text-align: center !important;
-}
-
-/* Error Page */
-.quick-query-error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  padding: 2rem;
-  text-align: center;
-}
-
-.quick-query-error-state .error-message {
-  color: hsl(var(--destructive));
-  margin-bottom: 1rem;
-  font-size: large;
-}
-
-.quick-query-error-state .retry-button {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border: 1px solid hsl(var(--primary));
-  border-radius: var(--radius);
-  transition: background-color 0.2s;
-}
-
-.quick-query-error-state .retry-button:hover {
-  background: hsl(var(--primary-hover));
-}
-
-.quick-query-error-state .retry-button:disabled {
-  background-color: hsl(var(--muted));
-  cursor: not-allowed;
 }
 
 /* Schema Management */
@@ -656,44 +526,13 @@
   border: 2px solid #f0f0f0;
 }
 
-#attachments-container {
-  border: 2px dashed hsl(var(--border));
-  border-radius: 4px;
-  padding: 16px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-#attachments-container.drag-over {
-  background-color: hsl(var(--secondary));
-}
-
-#attachments-container.wide {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  height: 100%; /* Take full height of the container */
-}
-
-#attachments-container.small {
-  padding: 10px;
-  margin-bottom: 20px;
-}
-
-#attachments-container.hidden {
-  display: none;
-}
-
 /* File buttons styling */
 .file-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 10px 15px;
+  padding: 5px 10px;
   margin: 5px 0;
   background-color: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
@@ -933,19 +772,6 @@
   width: 30%;
 }
 
-.attachment-actions {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.attachment-actions button {
-  flex: 1;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
 .tip-text {
   display: flex;
   align-items: center;
@@ -1022,11 +848,6 @@
 
 .empty-file-button:active {
   transform: translateY(1px);
-}
-
-.file-type-icon {
-  margin-right: 8px;
-  font-size: 14px;
 }
 
 .file-button:focus-visible {

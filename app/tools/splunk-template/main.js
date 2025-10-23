@@ -44,6 +44,7 @@ class SplunkVTLEditor extends BaseTool {
     this.initializeResizer();
     this.bindUIEvents();
     this.updateFieldsTable();
+    UsageTracker.trackFeature("splunk-template", "mount");
   }
 
   onUnmount() {
@@ -222,7 +223,6 @@ class SplunkVTLEditor extends BaseTool {
       const formatted = formatVtlTemplate(src);
       this.editor.setValue(formatted);
       this.updateFieldsTable();
-      UsageTracker.trackFeature("splunk-template", "format");
     });
 
     btnMinify?.addEventListener("click", () => {
@@ -230,7 +230,6 @@ class SplunkVTLEditor extends BaseTool {
       const minified = minifyVtlTemplate(src);
       this.editor.setValue(minified);
       this.updateFieldsTable();
-      UsageTracker.trackFeature("splunk-template", "minify", { bytes: minified.length });
     });
 
     btnCopy?.addEventListener("click", async () => {

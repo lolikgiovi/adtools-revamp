@@ -22,6 +22,8 @@ import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
+import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
+import { CheckImageTool } from "./tools/image-checker/main.js";
 
 class App {
   constructor() {
@@ -188,6 +190,14 @@ class App {
     // Register Splunk VTL Editor
     const splunkVtl = new SplunkVTLEditor(this.eventBus);
     this.registerTool(splunkVtl);
+
+    // Register SQL IN Clause
+    const sqlInClause = new SQLInClauseTool(this.eventBus);
+    this.registerTool(sqlInClause);
+
+    // Register Check Image
+    const checkImage = new CheckImageTool(this.eventBus);
+    this.registerTool(checkImage);
 
     // Add more tools here as they are implemented
   }
@@ -612,7 +622,9 @@ class App {
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
     const featuresHtml = Object.entries(totalsByFeature)
+      .filter(([id]) => this.toolsConfigMap.has(id))
       .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
       .map(([id, count]) => {
         const name = this.tools.get(id)?.name || id;
         return `
@@ -638,7 +650,7 @@ class App {
     const barsHtml = days
       .map((d) => {
         const h = Math.round((d.value / max) * 100);
-        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}"><span class="usage-bar-label">${d.label}</span></div>`;
+        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}" aria-label="${d.label} ${d.value} events"><span class="usage-bar-value">${d.value}</span><span class="usage-bar-label">${d.label}</span></div>`;
       })
       .join("");
 

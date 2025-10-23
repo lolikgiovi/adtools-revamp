@@ -69,6 +69,26 @@
       "showOnHome": true,
       "enabled": true,
       "order": 70
+    },
+    {
+      "id": "sql-in-clause",
+      "name": "Query IN",
+      "category": "config",
+      "icon": "sql-in",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 80
+    },
+    {
+      "id": "check-image",
+      "name": "Check Image",
+      "category": "config",
+      "icon": "image-check",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 90
     }
   ]
 }
