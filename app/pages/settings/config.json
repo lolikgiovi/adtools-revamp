@@ -9,7 +9,7 @@
         {
           "key": "config.baseUrls",
           "storageKey": "config.baseUrls",
-          "label": "BaseURL Configuration",
+          "label": "CDN Base URLs",
           "type": "kvlist",
           "default": [],
           "keyPlaceholder": "Environment",
@@ -19,7 +19,7 @@
         {
           "key": "config.jenkins.url",
           "storageKey": "config.jenkins.url",
-          "label": "Jenkins Base URL",
+          "label": "Jenkins Base URL for Jenkins Query Runner",
           "type": "string",
           "default": "",
           "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",

@@ -57,6 +57,10 @@
   overscroll-behavior: auto;
 }
 
+.quick-query-content-area {
+  border-radius: 6px;
+}
+
 .content-b {
   flex: 0 0 auto; /* Allow it to grow but not shrink */
   padding: 8px 0 8px 0;
@@ -91,9 +95,17 @@
   overflow: visible; /* allow Monaco widgets to overflow */
   /* Contain overscroll so wheel events don't bubble naturally */
   overscroll-behavior: contain;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
+  border-radius: 6px;
   background: hsl(var(--background));
+}
+
+/* Clip editor canvas to rounded corners while keeping parent overflow visible */
+#queryEditor .monaco-editor,
+#queryEditor .monaco-editor .overflow-guard {
+  border-radius: 6px;
+}
+#queryEditor .monaco-editor .overflow-guard {
+  overflow: hidden; /* ensures inner canvas respects the radius */
 }
 
 /* Ensure the internal scroll container also contains overscroll */
