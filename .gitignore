@@ -30,3 +30,19 @@ coverage/
 
 # Misc
 *.local
+
+# Tauri / Cargo build artifacts
+src-tauri/target/
+# Tauri generated schemas (dev-time only)
+src-tauri/gen/
+
+# macOS signing/notarization artifacts (never commit secrets)
+*.p12
+*.pem
+*.cer
+*.key
+*.mobileprovision
+*.provisionprofile
+
+# Optional: avoid committing packaged binaries if copied out of target
+*.dmg
