@@ -1,6 +1,7 @@
 import { SettingsTemplate } from './template.js';
 import './styles.css';
 import { SettingsService } from './service.js';
+import { invoke } from '@tauri-apps/api/core';
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -255,7 +256,7 @@ class SettingsPage {
       }
     });
 
-    panel.addEventListener('click', (e) => {
+    panel.addEventListener('click', async (e) => {
       const action = e.target.getAttribute('data-action');
       if (!action) return;
 
@@ -276,7 +277,29 @@ class SettingsPage {
         const value = getCurrentEditValue();
         const { valid } = this.service.validate(value, item.type, item.validation || {});
         if (!valid) return;
-        const stored = this.service.setValue(storageKey, item.type, value, item.apply);
+
+        let stored;
+        if (storageKey === 'secure.jenkins.token') {
+          try {
+            await invoke('set_jenkins_token', { token: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          // Store a marker only, not the token itself
+          stored = this.service.setValue(storageKey, 'secret', 'set', item.apply);
+        } else if (storageKey === 'secure.jenkins.username') {
+          try {
+            await invoke('set_jenkins_username', { username: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          stored = this.service.setValue(storageKey, 'string', value, item.apply);
+        } else {
+          stored = this.service.setValue(storageKey, item.type, value, item.apply);
+        }
+
         let display = '';
         if (item.type === 'secret') {
           display = stored ? '••••••••' : '—';

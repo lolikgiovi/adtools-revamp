@@ -24,6 +24,14 @@
       "initiallyExpanded": true,
       "items": [
         {
+          "key": "secure.jenkins.username",
+          "storageKey": "secure.jenkins.username",
+          "label": "Jenkins Username",
+          "type": "string",
+          "default": "",
+          "description": "Username paired with Jenkins API token."
+        },
+        {
           "key": "secure.jenkins.token",
           "storageKey": "secure.jenkins.token",
           "label": "Jenkins Token",
