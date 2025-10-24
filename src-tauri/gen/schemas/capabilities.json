@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capability for the main window, enabling core permissions and devtools toggling.","local":true,"windows":["main"],"permissions":["core:default","core:webview:allow-internal-toggle-devtools"],"platforms":["macOS"]}}
