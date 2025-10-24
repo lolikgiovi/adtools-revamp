@@ -1,15 +1,16 @@
-/* Jenkins Runner styles - responsive, accessible, consistent */
+/* Jenkins Runner styles - theme-aware, responsive, accessible */
 .jenkins-runner {
-  --jr-bg: var(--color-surface, #111315);
-  --jr-panel: var(--color-panel, #15181b);
-  --jr-border: rgba(255, 255, 255, 0.12);
-  --jr-text: var(--color-text, #e6e6e6);
-  --jr-muted: rgba(230, 230, 230, 0.7);
-  --jr-primary: var(--color-primary, #4f8cff);
-  --jr-primary-contrast: #ffffff;
-  --jr-danger: #ff4d4f;
-  --jr-success: #4caf50;
-  --jr-focus: #89b4ff;
+  /* Map to global CSS variables so light/dark are respected */
+  --jr-bg: hsl(var(--background));
+  --jr-panel: hsl(var(--card));
+  --jr-border: hsl(var(--border));
+  --jr-text: hsl(var(--foreground));
+  --jr-muted: hsl(var(--muted-foreground));
+  --jr-primary: hsl(var(--primary));
+  --jr-primary-contrast: hsl(var(--primary-foreground));
+  --jr-danger: #ff4d4f; /* no global destructive-dark/light split; keep semantic */
+  --jr-success: #4caf50; /* semantic green */
+  --jr-focus: hsl(var(--ring));
 
   color: var(--jr-text);
   background: var(--jr-bg);
@@ -54,24 +55,24 @@
 .jr-input,
 .jr-textarea,
 .jr-input-readonly {
-  background: #0f1214;
+  background: hsl(var(--card));
   border: 1px solid var(--jr-border);
   color: var(--jr-text);
   border-radius: 6px;
   padding: 8px 10px;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
 }
 .jr-input:hover,
 .jr-textarea:hover,
 .jr-input-readonly:hover {
-  border-color: rgba(255,255,255,0.2);
+  border-color: hsl(var(--muted-foreground) / 0.3);
 }
 .jr-input:focus,
 .jr-textarea:focus,
 .jr-input-readonly:focus {
   outline: none;
   border-color: var(--jr-focus);
-  box-shadow: 0 0 0 3px rgba(79,140,255,0.25);
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
 }
 
 .jr-textarea { width: 100%; resize: vertical; min-height: 140px; }
@@ -89,10 +90,10 @@
 }
 .jr-actions .btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
 .jr-actions .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.jr-actions .btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(79,140,255,0.3); }
+.jr-actions .btn:focus { outline: none; box-shadow: 0 0 0 3px var(--jr-focus / 0.3); }
 
 .jr-log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.jr-log { background: #0b0d0f; border: 1px solid var(--jr-border); border-radius: 6px; padding: 12px; height: 240px; overflow: auto; white-space: pre-wrap; }
+.jr-log { background: hsl(var(--card)); border: 1px solid var(--jr-border); border-radius: 6px; padding: 12px; height: 240px; overflow: auto; white-space: pre-wrap; color: var(--jr-text); }
 
 .jr-hint { color: var(--jr-muted); font-size: 0.9rem; }
 
@@ -118,7 +119,7 @@
 
 /* Accessibility */
 .jenkins-runner a { color: var(--jr-primary); text-decoration: underline; }
-.jenkins-runner a:focus { outline: none; box-shadow: 0 0 0 3px rgba(79,140,255,0.3); border-radius: 4px; }
+.jenkins-runner a:focus { outline: none; box-shadow: 0 0 0 3px var(--jr-focus / 0.3); border-radius: 4px; }
 
 /* Responsive */
 @media (max-width: 900px) {
