@@ -27,7 +27,7 @@ use keyring::Entry;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize};
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 const KEYCHAIN_SERVICE: &str = "ad-tools:jenkins";
 
@@ -39,29 +39,33 @@ fn http_client() -> Client {
 }
 
 async fn load_credentials() -> Result<(String, String), String> {
-  let user_entry = Entry::new(KEYCHAIN_SERVICE, "__username__");
+  let user_entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
   let username = user_entry.get_password().map_err(|e| e.to_string())?;
-  let token = Entry::new(KEYCHAIN_SERVICE, &username).get_password().map_err(|e| e.to_string())?;
+  let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
+  let token = token_entry.get_password().map_err(|e| e.to_string())?;
   Ok((username, token))
 }
 
 #[tauri::command]
-pub fn set_jenkins_username(username: String) -> Result<(), String> {
-  Entry::new(KEYCHAIN_SERVICE, "__username__").set_password(&username).map_err(|e| e.to_string())
+fn set_jenkins_username(username: String) -> Result<(), String> {
+  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
+  entry.set_password(&username).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn set_jenkins_token(token: String) -> Result<(), String> {
-  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__");
+fn set_jenkins_token(token: String) -> Result<(), String> {
+  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
   let username = entry.get_password().map_err(|e| e.to_string())?;
-  Entry::new(KEYCHAIN_SERVICE, &username).set_password(&token).map_err(|e| e.to_string())
+  let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
+  token_entry.set_password(&token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn has_jenkins_token() -> Result<bool, String> {
-  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__");
+fn has_jenkins_token() -> Result<bool, String> {
+  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
   let username = match entry.get_password() { Ok(u) => u, Err(_) => return Ok(false) };
-  match Entry::new(KEYCHAIN_SERVICE, &username).get_password() { Ok(_) => Ok(true), Err(_) => Ok(false) }
+  let token_entry = match Entry::new(KEYCHAIN_SERVICE, &username) { Ok(e) => e, Err(_) => return Ok(false) };
+  match token_entry.get_password() { Ok(_) => Ok(true), Err(_) => Ok(false) }
 }
 
 #[derive(Deserialize)]
@@ -79,7 +83,7 @@ enum JobParamDefinition {
 }
 
 #[tauri::command]
-pub async fn jenkins_get_env_choices(base_url: String, job: String) -> Result<Vec<String>, String> {
+async fn jenkins_get_env_choices(base_url: String, job: String) -> Result<Vec<String>, String> {
   let (username, token) = load_credentials().await?;
   let client = http_client();
   let url = format!("{}/job/{}/api/json", base_url.trim_end_matches('/'), job);
@@ -92,7 +96,7 @@ pub async fn jenkins_get_env_choices(base_url: String, job: String) -> Result<Ve
 }
 
 #[tauri::command]
-pub async fn jenkins_trigger_job(base_url: String, job: String, env: String, sql_text: String) -> Result<String, String> {
+async fn jenkins_trigger_job(base_url: String, job: String, env: String, sql_text: String) -> Result<String, String> {
   let lowered = sql_text.to_lowercase();
   for kw in ["insert","update","delete","alter","drop","truncate"] { if lowered.contains(kw) { return Err("SQL contains forbidden statements".into()); } }
 
@@ -126,7 +130,7 @@ pub async fn jenkins_trigger_job(base_url: String, job: String, env: String, sql
 }
 
 #[tauri::command]
-pub async fn jenkins_poll_queue_for_build(_base_url: String, queue_url: String) -> Result<(Option<u64>, Option<String>), String> {
+async fn jenkins_poll_queue_for_build(_base_url: String, queue_url: String) -> Result<(Option<u64>, Option<String>), String> {
   let (username, token) = load_credentials().await?;
   let client = http_client();
   let res = client.get(&queue_url).basic_auth(username, Some(token)).send().await.map_err(|e| e.to_string())?;
@@ -138,7 +142,7 @@ pub async fn jenkins_poll_queue_for_build(_base_url: String, queue_url: String) 
 }
 
 #[tauri::command]
-pub async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, build_number: u64) -> Result<(), String> {
+async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, build_number: u64) -> Result<(), String> {
   let (username, token) = load_credentials().await?;
   let client = http_client();
 
@@ -157,7 +161,7 @@ pub async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, 
       let _ = app.emit("jenkins:log", serde_json::json!({ "chunk": text, "next_offset": next, "more": more }));
       if !more { let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number })); break; }
       start = next;
-      tauri::async_runtime::sleep(Duration::from_millis(800)).await;
+      tokio::time::sleep(Duration::from_millis(800)).await;
     }
   });
 

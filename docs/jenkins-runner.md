@@ -3,6 +3,7 @@
 This feature integrates with Jenkins to run read-only SQL queries through specially configured jobs, stream build logs live, and provide a secure workflow for credentials.
 
 ## Overview
+
 - Frontend tool: `Jenkins Query Runner` available in the sidebar.
 - Secure credentials: Username + API Token stored in macOS Keychain via Tauri.
 - Dedicated Jenkins Base URL: configured in Settings and used by the runner.
@@ -11,13 +12,16 @@ This feature integrates with Jenkins to run read-only SQL queries through specia
 - Live logs: streamed progressively and displayed in the tool.
 
 ## Settings
+
 Open `Settings` → `Configuration Settings` and `Credential Management`.
 
 - `Jenkins Base URL` (`config.jenkins.url`)
+
   - Required; must start with `http://` or `https://`.
   - Saved to local storage and used by the runner as read-only in the tool.
 
 - `Jenkins Username` (`secure.jenkins.username`)
+
   - Saved to macOS Keychain and persisted for display in Settings.
 
 - `Jenkins Token` (`secure.jenkins.token`)
@@ -26,6 +30,7 @@ Open `Settings` → `Configuration Settings` and `Credential Management`.
   - Guidance: generate a token in Jenkins: User → Configure → API Token.
 
 ## Using the Runner
+
 1. Ensure `Jenkins Base URL`, `Jenkins Username`, and `Jenkins Token` are set in Settings.
 2. Open `Jenkins Query Runner`.
 3. Enter a job name:
@@ -43,17 +48,20 @@ Open `Settings` → `Configuration Settings` and `Credential Management`.
    - If available, an `Open Build` link is shown.
 
 ## Validation & Accessibility
+
 - Required fields are marked with an asterisk.
 - Submission is disabled until all validations pass.
 - Clear error messages are shown inline; ENV fetch errors include retry attempts.
 - Styles include focus states, adequate contrast, responsive behavior, and hover transitions.
 
 ## Security Notes
+
 - Tokens never persist client-side; only a placeholder is saved for masked display.
 - Jenkins Username and Token are read from macOS Keychain when invoking backend commands.
 - HTTP requests use basic auth over HTTPS (recommended), with crumb issuer handling.
 
 ## Troubleshooting
+
 - ENV choices not loading:
   - Verify Jenkins Base URL, Job Name, and credentials.
   - Check backend logs; crumb issuer might be required.
@@ -63,6 +71,7 @@ Open `Settings` → `Configuration Settings` and `Credential Management`.
   - Ensure build has started; the tool polls the queue and begins streaming once executable is assigned.
 
 ## Backend Commands (Tauri)
+
 - `set_jenkins_username(username: String)`
 - `set_jenkins_token(token: String)`
 - `has_jenkins_token() -> bool`
@@ -72,6 +81,7 @@ Open `Settings` → `Configuration Settings` and `Credential Management`.
 - `jenkins_stream_logs(app, base_url: String, job: String, build_number: u64)`
 
 ## Testing Checklist
+
 - Styling: verify across supported browsers; check focus, hover, and contrast.
 - Responsive: test on narrow and wide viewports; controls stack under 900px.
 - Security: confirm token storage in Keychain and masked display; test token replacement.
