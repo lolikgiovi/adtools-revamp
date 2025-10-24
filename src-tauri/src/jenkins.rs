@@ -10,7 +10,7 @@ pub struct Credentials {
 struct JobInfo { property: Option<Vec<JobProperty>> }
 
 #[derive(Deserialize)]
-struct JobProperty { #[serde(default)] parameterDefinitions: Vec<JobParamDefinition> }
+struct JobProperty { #[serde(rename = "parameterDefinitions", default)] parameter_definitions: Vec<JobParamDefinition> }
 
 #[derive(Deserialize)]
 #[serde(tag = "_class")]
@@ -33,7 +33,7 @@ pub async fn fetch_env_choices(client: &Client, base_url: &str, job: &str, creds
   let mut env_choices = vec![];
   if let Some(props) = info.property {
     for p in props {
-      for def in p.parameterDefinitions {
+      for def in p.parameter_definitions {
         if let JobParamDefinition::Choice { name, choices } = def {
           if name == "ENV" { env_choices = choices; }
         }
