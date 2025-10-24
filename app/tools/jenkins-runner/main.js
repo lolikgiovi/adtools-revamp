@@ -4,8 +4,7 @@ import { JenkinsRunnerService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 import { listen } from "@tauri-apps/api/event";
-import * as monaco from "monaco-editor";
-import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
@@ -137,16 +136,11 @@ export class JenkinsRunner extends BaseTool {
       jobInput.value = lastState.job;
     }
 
-    // Initialize Monaco for SQL editor
-    self.MonacoEnvironment = {
-      getWorker() {
-        return new editorWorker();
-      },
-    };
-    this.editor = monaco.editor.create(sqlEditorContainer, {
+    // Initialize Monaco for Oracle SQL editor via shared setup
+    ensureMonacoWorkers();
+    setupMonacoOracle();
+    this.editor = createOracleEditor(sqlEditorContainer, {
       value: lastState.sql || "",
-      language: "sql",
-      theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
