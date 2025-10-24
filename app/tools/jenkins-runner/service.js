@@ -1,13 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export class JenkinsRunnerService {
-  loadBaseUrls() {
+  loadJenkinsUrl() {
     try {
-      const raw = localStorage.getItem('config.baseUrls');
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr.filter(p => p && p.key && p.value) : [];
+      const raw = localStorage.getItem('config.jenkins.url');
+      return raw || '';
     } catch (_) {
-      return [];
+      return '';
     }
   }
 
@@ -16,11 +15,11 @@ export class JenkinsRunnerService {
   }
 
   async getEnvChoices(baseUrl, job) {
-    return await invoke('jenkins_get_env_choices', { baseUrl, job });
+    return await invoke('jenkins_get_env_choices', { base_url: baseUrl, job });
   }
 
   async triggerJob(baseUrl, job, env, sqlText) {
-    const queueUrl = await invoke('jenkins_trigger_job', { baseUrl, job, env, sql_text: sqlText });
+    const queueUrl = await invoke('jenkins_trigger_job', { base_url: baseUrl, job, env, sql_text: sqlText });
     return queueUrl;
   }
 

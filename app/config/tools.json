@@ -52,7 +52,7 @@
     },
     {
       "id": "jenkins-runner",
-      "name": "Jenkins Query Runner",
+      "name": "Jenkins Runner",
       "category": "config",
       "icon": "jenkins",
       "showInSidebar": true,

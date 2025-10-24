@@ -6,16 +6,18 @@ export const JenkinsRunnerTemplate = `
     </div>
     <div class="jr-controls">
       <label class="jr-field">
-        <span>Base URL</span>
-        <select id="jenkins-baseurl" class="jr-input"></select>
+        <span>Jenkins URL <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
+        <input id="jenkins-baseurl" class="jr-input-readonly" type="text" placeholder="Set in Settings" aria-readonly="true" readonly />
       </label>
       <label class="jr-field">
-        <span>Job Name</span>
-        <input id="jenkins-job" class="jr-input" type="text" placeholder="Enter Jenkins job name" />
+        <span>Job Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
+        <input id="jenkins-job" class="jr-input" type="text" placeholder="TESTER-EXECUTE-QUERY or TESTER-EXECUTE-QUERY-NEW" />
+        <div class="jr-error" id="jenkins-job-error" style="display:none"></div>
       </label>
       <label class="jr-field">
-        <span>ENV Choice</span>
+        <span>ENV Choice <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
         <select id="jenkins-env" class="jr-input"></select>
+        <div class="jr-error" id="jenkins-env-error" style="display:none"></div>
       </label>
     </div>
     <div class="jr-sql">
