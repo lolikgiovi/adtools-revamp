@@ -1,4 +1,4 @@
-export const JenkinsRunnerTemplate = `
+export const JenkinsRunnerTemplate = /*html*/ `
   <div class="jenkins-runner">
     <div class="jr-header">
       <h2>Jenkins Query Runner</h2>
@@ -11,7 +11,10 @@ export const JenkinsRunnerTemplate = `
       </label>
       <label class="jr-field">
         <span>Job Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-        <input id="jenkins-job" class="jr-input" type="text" placeholder="TESTER-EXECUTE-QUERY or TESTER-EXECUTE-QUERY-NEW" />
+        <select id="jenkins-job" class="jr-input">
+          <option value="tester-execute-query-new">tester-execute-query-new</option>
+          <option value="tester-execute-query">tester-execute-query</option>
+        </select>
         <div class="jr-error" id="jenkins-job-error" style="display:none"></div>
       </label>
       <label class="jr-field">
@@ -21,18 +24,23 @@ export const JenkinsRunnerTemplate = `
       </label>
     </div>
     <div class="jr-sql">
-      <label>
-        <span>SQL Text</span>
-        <textarea id="jenkins-sql" rows="10" class="jr-textarea" placeholder="Write a read-only SQL query..."></textarea>
-      </label>
-    </div>
-    <div class="jr-actions">
-      <button id="jenkins-run" class="btn btn-primary">Run on Jenkins</button>
+      <div class="jr-sql-header">
+        <label for="jenkins-sql"><span>SQL Query</span></label>
+        <div class="jr-actions">
+          <button id="jenkins-run" class="btn btn-primary">Run on Jenkins</button>
+        </div>
+      </div>
+      <textarea id="jenkins-sql" rows="10" class="jr-textarea" placeholder="Write a read-only SQL query..."></textarea>
     </div>
     <div class="jr-logs">
       <div class="jr-log-header">
-        <span>Build Logs</span>
-        <a id="jenkins-build-link" href="#" target="_blank" rel="noopener" style="display:none">Open Build</a>
+        <div class="jr-log-title">
+          <span>Build Logs</span>
+          <span id="jenkins-build-number" class="jr-build-number" style="display:none"></span>
+        </div>
+        <div class="jr-log-header-right">
+          <a id="jenkins-build-link" href="#" target="_blank" rel="noopener" style="display:none">Open Build</a>
+        </div>
       </div>
       <pre id="jenkins-logs" class="jr-log"></pre>
     </div>

@@ -1,5 +1,6 @@
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
+use chrono::{Datelike, Local};
 
 pub struct Credentials {
   pub username: String,
@@ -49,8 +50,17 @@ pub async fn trigger_job(client: &Client, base_url: &str, job: &str, env: &str, 
     if lowered.contains(kw) { return Err("SQL contains forbidden statements".into()); }
   }
 
+  // Build dynamic filename: username_adtools_yyyy_mm_dd.sql
+  let username_raw = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_else(|_| "user".to_string());
+  let username: String = username_raw
+    .chars()
+    .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c.to_ascii_lowercase() } else { '_' })
+    .collect();
+  let today = Local::now().date_naive();
+  let filename = format!("{}_adtools_{:04}_{:02}_{:02}.sql", username, today.year(), today.month(), today.day());
+
   let file_part = reqwest::multipart::Part::bytes(sql_text.as_bytes().to_vec())
-    .file_name("query.sql")
+    .file_name(filename)
     .mime_str("application/sql")
     .unwrap();
   let form = reqwest::multipart::Form::new().text("ENV", env.to_string()).part("INPUT_FILE", file_part);

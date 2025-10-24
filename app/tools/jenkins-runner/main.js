@@ -42,8 +42,9 @@ export class JenkinsRunner extends BaseTool {
     const buildLink = this.container.querySelector('#jenkins-build-link');
     const jobErrorEl = this.container.querySelector('#jenkins-job-error');
     const envErrorEl = this.container.querySelector('#jenkins-env-error');
+    const buildNumEl = this.container.querySelector('#jenkins-build-number');
 
-    const allowedJobs = new Set(['TESTER-EXECUTE-QUERY','TESTER-EXECUTE-QUERY-NEW']);
+    const allowedJobs = new Set(['tester-execute-query','tester-execute-query-new']);
 
     // Load Jenkins URL
     this.state.jenkinsUrl = this.service.loadJenkinsUrl();
@@ -66,7 +67,7 @@ export class JenkinsRunner extends BaseTool {
       const name = jobInput.value.trim();
       if (!allowedJobs.has(name)) {
         jobErrorEl.style.display = 'block';
-        jobErrorEl.textContent = 'Invalid job name. Allowed: TESTER-EXECUTE-QUERY or TESTER-EXECUTE-QUERY-NEW.';
+        jobErrorEl.textContent = 'Invalid job name. Allowed: tester-execute-query or tester-execute-query-new.';
         return false;
       }
       jobErrorEl.style.display = 'none';
@@ -84,6 +85,7 @@ export class JenkinsRunner extends BaseTool {
     const refreshEnvChoices = async (retry = 0) => {
       logsEl.textContent = '';
       buildLink.style.display = 'none';
+      if (buildNumEl) { buildNumEl.style.display = 'none'; buildNumEl.textContent = ''; }
       this.state.executableUrl = null;
       const baseUrl = this.state.jenkinsUrl;
       const job = jobInput.value.trim();
@@ -120,7 +122,7 @@ export class JenkinsRunner extends BaseTool {
       statusEl.textContent = 'Jenkins URL is managed in Settings.';
     });
 
-    jobInput.addEventListener('input', () => {
+    jobInput.addEventListener('change', () => {
       validateJobName();
       toggleSubmitEnabled();
       if (allowedJobs.has(jobInput.value.trim())) refreshEnvChoices();
@@ -181,7 +183,7 @@ export class JenkinsRunner extends BaseTool {
         return;
       }
       if (!allowedJobs.has(job)) {
-        this.showError('Invalid job name. Allowed: TESTER-EXECUTE-QUERY or TESTER-EXECUTE-QUERY-NEW.');
+        this.showError('Invalid job name. Allowed: tester-execute-query or tester-execute-query-new.');
         return;
       }
       if (sql.length < 5) {
@@ -198,6 +200,7 @@ export class JenkinsRunner extends BaseTool {
         statusEl.textContent = 'Triggering job…';
         logsEl.textContent = '';
         buildLink.style.display = 'none';
+        if (buildNumEl) { buildNumEl.style.display = 'none'; buildNumEl.textContent = ''; }
         const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
         this.state.queueUrl = queueUrl;
         statusEl.textContent = 'Queued. Polling…';
@@ -210,6 +213,7 @@ export class JenkinsRunner extends BaseTool {
             if (buildNumber) {
               this.state.buildNumber = buildNumber;
               this.state.executableUrl = executableUrl;
+              if (buildNumEl) { buildNumEl.textContent = String(buildNumber); buildNumEl.style.display = 'inline-flex'; }
               if (executableUrl) {
                 buildLink.href = executableUrl;
                 buildLink.style.display = 'inline-block';
