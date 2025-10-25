@@ -51,6 +51,17 @@
       "order": 50
     },
     {
+      "id": "jenkins-runner",
+      "name": "Jenkins Runner",
+      "category": "config",
+      "icon": "jenkins",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "requiresTauri": true,
+      "order": 55
+    },
+    {
       "id": "html-template",
       "name": "HTML Template",
       "category": "config",

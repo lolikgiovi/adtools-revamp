@@ -20,6 +20,8 @@ class Sidebar {
 
     this.currentTool = null;
     this.mobileBreakpoint = 768;
+    // Runtime detection may initialize slightly after first render in Tauri
+    this._runtimeRetry = false;
 
     this.init();
   }
@@ -344,19 +346,28 @@ class Sidebar {
     if (!applicationGroup) return;
 
     const { categorizeTool } = await import("../core/Categories.js");
+    const { isTauri } = await import("../core/Runtime.js");
+    const runtimeIsTauri = isTauri();
 
     const sourceTools = (this.tools || [])
       .filter((tool) => {
         const cfg = this.toolsConfigMap.get(tool.id);
         const enabled = cfg ? cfg.enabled !== false : true;
         const showInSidebar = cfg ? cfg.showInSidebar !== false : true;
-        return enabled && showInSidebar;
+        const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
+        return enabled && showInSidebar && requiresTauriOk;
       })
       .sort((a, b) => {
         const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
         const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
         return ca - cb;
       });
+
+    // If runtime detection might not be ready yet, re-render once shortly
+    if (!runtimeIsTauri && !this._runtimeRetry) {
+      this._runtimeRetry = true;
+      setTimeout(() => this.renderTools(), 150);
+    }
 
     const toolsByCategory = sourceTools.reduce((acc, tool) => {
       const cat = categorizeTool(tool);
@@ -406,6 +417,14 @@ class Sidebar {
 
   async renderMenuGroups() {
     const { categorizeTool } = await import("../core/Categories.js");
+    const { isTauri } = await import("../core/Runtime.js");
+    const runtimeIsTauri = isTauri();
+
+    // If runtime detection might not be ready yet, re-render once shortly
+    if (!runtimeIsTauri && !this._runtimeRetry) {
+      this._runtimeRetry = true;
+      setTimeout(() => this.renderMenuGroups(), 150);
+    }
 
     const renderGroup = (groupName, items) => {
       const container = document.querySelector(`.sidebar-menu[data-group="${groupName}"]`);
@@ -426,7 +445,8 @@ class Sidebar {
             const cfg = this.toolsConfigMap.get(t.id);
             const enabled = cfg ? cfg.enabled !== false : true;
             const showInSidebar = cfg ? cfg.showInSidebar !== false : true;
-            return categorizeTool(t) === "config" && enabled && showInSidebar;
+            const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
+            return categorizeTool(t) === "config" && enabled && showInSidebar && requiresTauriOk;
           })
           .sort((a, b) => {
             const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;

@@ -5,8 +5,7 @@ import { initialSchemaTableSpecification, initialDataTableSpecification } from "
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor";
-import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
 import Handsontable from "handsontable";
 import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
@@ -68,12 +67,8 @@ export class QuickQueryUI {
 
   async init() {
     try {
-      // Configure Monaco workers for Vite ESM builds
-      self.MonacoEnvironment = {
-        getWorker() {
-          return new editorWorker();
-        },
-      };
+      // Configure Monaco workers and Oracle SQL language via shared module
+      ensureMonacoWorkers();
 
       // Set HTML content only if not already rendered by the tool wrapper
       if (!this.container.querySelector(".quick-query-content")) {
@@ -91,276 +86,22 @@ export class QuickQueryUI {
       this.clearError();
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
-      this.registerOracleSqlLanguage();
+      setupMonacoOracle();
       await this.initializeComponents();
       this.setupEventListeners();
       this.setupTableNameSearch();
       this.loadMostRecentSchema();
     } catch (error) {
       console.error("Failed to initialize Quick Query:", error);
+      UsageTracker.trackEvent("quick-query", "ui_error", { type: "init_failed", message: error.message });
       this.container.innerHTML = `<div class="error-message">Failed to load: ${error.message}</div>`;
       throw error;
     }
   }
 
   registerOracleSqlLanguage() {
-    try {
-      // Focused highlighter for Oracle DML: SELECT, MERGE, UPDATE, INSERT
-      const id = "oracle-dml";
-      if (!monaco.languages.getLanguages().some((l) => l.id === id)) {
-        monaco.languages.register({ id, aliases: ["Oracle DML", "Oracle SQL"] });
-      }
-
-      const dmlKeywords = [
-        "select",
-        "insert",
-        "update",
-        "merge",
-        "into",
-        "values",
-        "set",
-        "where",
-        "from",
-        "join",
-        "inner",
-        "left",
-        "right",
-        "full",
-        "outer",
-        "on",
-        "group",
-        "by",
-        "order",
-        "having",
-        "connect",
-        "start",
-        "with",
-        "prior",
-        "using",
-        "when",
-        "matched",
-        "not",
-        "then",
-        "and",
-        "or",
-      ];
-      const functions = [
-        "nvl",
-        "nvl2",
-        "coalesce",
-        "decode",
-        "substr",
-        "instr",
-        "length",
-        "replace",
-        "regexp_like",
-        "regexp_substr",
-        "regexp_replace",
-        "to_char",
-        "to_date",
-        "to_timestamp",
-        "trunc",
-        "round",
-        "upper",
-        "lower",
-        "initcap",
-        "lpad",
-        "rpad",
-        "trim",
-      ];
-      const specialKeywords = ["sysdate", "systimestamp"];
-      const constants = ["null"];
-      // Custom coloring targets per user request
-      const dmlBlueKeywords = ["merge", "into", "as", "then", "update", "set", "select", "from"];
-      const aliasesBlue = ["tgt", "src"];
-      const specialFunctionsBlue = ["nvl"];
-
-      monaco.languages.setMonarchTokensProvider(id, {
-        defaultToken: "",
-        tokenPostfix: ".oracle",
-        ignoreCase: true,
-        brackets: [{ open: "(", close: ")", token: "delimiter.parenthesis" }],
-        keywords: dmlKeywords,
-        functions,
-        specialKeywords,
-        constants,
-        dmlBlueKeywords,
-        aliasesBlue,
-        specialFunctionsBlue,
-        operators: [
-          "=",
-          ">",
-          "<",
-          "!",
-          "~",
-          "?",
-          ":",
-          "==",
-          "<=",
-          ">=",
-          "!=",
-          "<>",
-          "&&",
-          "||",
-          "++",
-          "--",
-          "+",
-          "-",
-          "*",
-          "/",
-          "%",
-          "|",
-          "^",
-          "@",
-        ],
-        symbols: /[=><!~?:&|+\-*/^%]+/,
-        tokenizer: {
-          root: [
-            [/--.*$/, "comment"],
-            [/\/\*/, "comment", "@comment"],
-
-            // Enter ON clause to highlight field names inside parentheses
-            [/\bON\s*\(/, { token: "keyword", next: "@onClause" }],
-
-            // strings
-            [/\'(?:''|[^'])*\'/, "string"],
-
-            // Explicit schema_name.table_name (quoted) — green as requested
-            [/"schema_name"(?=\.)/, "entity.schema"],
-            [/\./, "delimiter"],
-            [/"table_name"/, "entity.table"],
-
-            // Explicit schema_name.table_name (unquoted) — green as requested
-            [/\bschema_name(?=\.)/, "entity.schema"],
-            [/\./, "delimiter"],
-            [/\btable_name\b/, "entity.table"],
-
-            // quoted identifiers (standalone)
-            [/"(?:""|[^"])*"/, "identifier"],
-
-            // bind variables :var
-            [/:[a-zA-Z_][\w$]*/, "variable"],
-
-            // numbers
-            [/0x[0-9a-fA-F]+/, "number.hex"],
-            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, "number"],
-
-            // identifiers, keywords, functions, aliases
-            [
-              /[a-zA-Z_][\w$]*/,
-              {
-                cases: {
-                  "@dmlBlueKeywords": "keyword.dml",
-                  "@keywords": "keyword",
-                  "@specialKeywords": "predefined.sys",
-                  "@specialFunctionsBlue": "predefined.func.special",
-                  "@functions": "predefined.func",
-                  "@aliasesBlue": "alias.dml",
-                  "@constants": "constant.null",
-                  "@default": "identifier",
-                },
-              },
-            ],
-
-            // delimiters and operators
-            [/[,.;]/, "delimiter"],
-            [/@symbols/, "operator"],
-            [/[()]/, "delimiter.parenthesis"],
-          ],
-
-          // Inside MERGE ON (...) — emphasize field names
-          onClause: [
-            [/\)/, { token: "delimiter.parenthesis", next: "@pop" }],
-            [/\.[a-zA-Z_][\w$]*/, "predicate.onfield"],
-            [/--.*$/, "comment"],
-            [/\'(?:''|[^'])*\'/, "string"],
-            [/0x[0-9a-fA-F]+/, "number.hex"],
-            [/[-+]?\d*(?:\.|\d)\d*(?:[eE][-+]?\d+)?/, "number"],
-            [/[,.;]/, "delimiter"],
-            [/@symbols/, "operator"],
-            [/[(]/, "delimiter.parenthesis"],
-            [
-              /[a-zA-Z_][\w$]*/,
-              {
-                cases: {
-                  "@dmlBlueKeywords": "keyword.dml",
-                  "@keywords": "keyword",
-                  "@specialKeywords": "predefined.sys",
-                  "@specialFunctionsBlue": "predefined.func.special",
-                  "@functions": "predefined.func",
-                  "@aliasesBlue": "alias.dml",
-                  "@constants": "constant.null",
-                  "@default": "identifier",
-                },
-              },
-            ],
-          ],
-
-          comment: [
-            [/[^*/]+/, "comment"],
-            [/\/\*/, "comment", "@push"],
-            [/\*\//, "comment", "@pop"],
-            [/[*/]/, "comment"],
-          ],
-        },
-      });
-
-      // Basic completion provider for DML keywords and common functions
-      monaco.languages.registerCompletionItemProvider(id, {
-        triggerCharacters: [" ", "("],
-        provideCompletionItems: () => ({
-          suggestions: [
-            ...dmlKeywords.map((k) => ({
-              label: k.toUpperCase(),
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: k.toUpperCase(),
-            })),
-            ...functions.map((f) => ({
-              label: f.toUpperCase(),
-              kind: monaco.languages.CompletionItemKind.Function,
-              insertText: `${f.toUpperCase()}(`,
-            })),
-            ...specialKeywords.map((s) => ({
-              label: s.toUpperCase(),
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: s.toUpperCase(),
-            })),
-          ],
-        }),
-      });
-
-      // Theme tweaks: requested colors for keywords, aliases, schema.table, built-ins, strings, numbers, NULL
-      monaco.editor.defineTheme("oracle-dml-dark", {
-        base: "vs-dark",
-        inherit: true,
-        rules: [
-          { token: "keyword", foreground: "#93c5ff" }, // general keywords blue
-          { token: "keyword.dml", foreground: "#93c5ff" }, // MERGE, INTO, AS, THEN, UPDATE, SET, SELECT, FROM
-          { token: "alias.dml", foreground: "#93c5ff" }, // tgt/src in blue
-          { token: "predefined.func.special", foreground: "#93c5ff" }, // NVL in blue
-          { token: "predefined.sys", foreground: "A6E22E" }, // SYSDATE/SYSTIMESTAMP in blue
-          { token: "predicate.match", foreground: "ff93f9" }, // equality pairs in ON clause red
-          { token: "predicate.onfield", foreground: "ff93f9" }, // field names inside ON (...) red
-          { token: "entity.schema", foreground: "#ff93f9" }, // schema name green
-          { token: "entity.table", foreground: "#ff93f9" }, // table name green
-          { token: "string", foreground: "A6E22E" }, // strings green
-          { token: "number", foreground: "F78C6C" }, // numbers orange
-          { token: "constant.null", foreground: "ff93f9" }, // NULL red
-        ],
-        colors: {
-          "editor.background": "#1e1e1e",
-          "editor.foreground": "#d4d4d4",
-          "editorWidget.background": "#252526",
-          "editorSuggestWidget.background": "#252526",
-          "editorSuggestWidget.foreground": "#d4d4d4",
-          "editorSuggestWidget.selectedBackground": "#094771",
-          "editorSuggestWidget.highlightForeground": "#93c5ff",
-          "editorSuggestWidget.border": "#3c3c3c",
-        },
-      });
-    } catch (e) {
-      console.warn("Failed to register Oracle SQL language; falling back to sql", e);
-    }
+    // Centralized setup via shared module
+    setupMonacoOracle();
   }
 
   async initializeComponents() {
@@ -379,6 +120,7 @@ export class QuickQueryUI {
       }
     } catch (error) {
       console.error("Failed to initialize components:", error);
+      UsageTracker.trackEvent("quick-query", "ui_error", { type: "components_init_failed", message: error.message });
       throw error;
     }
   }
@@ -550,10 +292,8 @@ export class QuickQueryUI {
   }
 
   initializeEditor() {
-    this.editor = monaco.editor.create(document.getElementById("queryEditor"), {
+    this.editor = createOracleEditor(document.getElementById("queryEditor"), {
       value: "",
-      language: "oracle-dml",
-      theme: "oracle-dml-dark",
       automaticLayout: true,
       fontSize: 10.5,
       minimap: { enabled: false },
@@ -563,11 +303,6 @@ export class QuickQueryUI {
       quickSuggestions: { other: true, comments: false, strings: true },
       suggestOnTriggerCharacters: true,
     });
-    // Ensure language is applied even if model was created before registration
-    const model = this.editor.getModel();
-    if (model) {
-      monaco.editor.setModelLanguage(model, "oracle-dml");
-    }
     // Sync initial word wrap label with current editor option
     const wordWrapButton = document.getElementById("toggleWordWrap");
     const currentWrap = this.editor.getRawOptions().wordWrap;
@@ -724,9 +459,12 @@ export class QuickQueryUI {
         this.showWarning(duplicateResult.warningMessage);
         console.log("Detected duplicate result");
       }
-      UsageTracker.track("quick-query", queryType); // Track query generated by type
+      UsageTracker.trackFeature("quick-query", queryType); // Track query generated by type
     } catch (error) {
       this.showError(error.message);
+      const qt = this.elements.queryTypeSelect?.value;
+      const tn = this.elements.tableNameInput?.value?.trim();
+      UsageTracker.trackEvent("quick-query", "ui_error", { type: "generate_failed", message: error.message, queryType: qt, tableName: tn });
       this.editor.setValue("");
     }
   }
@@ -1210,6 +948,8 @@ export class QuickQueryUI {
       setTimeout(() => this.clearError(), 3000);
     } catch (error) {
       this.showError(`Failed to import schemas: ${error.message}`);
+      const file = event?.target?.files?.[0];
+      UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_import_failed", message: error.message, filename: file?.name });
     } finally {
       event.target.value = ""; // Reset file input
     }
@@ -1279,6 +1019,7 @@ export class QuickQueryUI {
         this.updateDataSpreadsheet();
       } catch (error) {
         console.error("Error updating schema table:", error);
+        UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_update_failed", message: error.message });
       }
     }
   }
@@ -1351,6 +1092,7 @@ export class QuickQueryUI {
       this.clearError();
     } catch (error) {
       this.showError(`Error processing attachments: ${error.message}`);
+      UsageTracker.trackEvent("quick-query", "ui_error", { type: "attachments_processing_failed", message: error.message, files: (this.processedFiles || []).length });
     }
   }
 

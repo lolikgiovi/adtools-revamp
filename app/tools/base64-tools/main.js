@@ -98,17 +98,22 @@ class Base64Tools extends BaseTool {
       if (encodeInput && savedEnc !== null) encodeInput.value = savedEnc;
       if (decodeInput && savedDec !== null) decodeInput.value = savedDec;
     } catch (_) {}
-    let encTimer = null, decTimer = null;
+    let encTimer = null,
+      decTimer = null;
     encodeInput?.addEventListener("input", () => {
       clearTimeout(encTimer);
       encTimer = setTimeout(() => {
-        try { localStorage.setItem(encKey, encodeInput.value || ""); } catch (_) {}
+        try {
+          localStorage.setItem(encKey, encodeInput.value || "");
+        } catch (_) {}
       }, 250);
     });
     decodeInput?.addEventListener("input", () => {
       clearTimeout(decTimer);
       decTimer = setTimeout(() => {
-        try { localStorage.setItem(decKey, decodeInput.value || ""); } catch (_) {}
+        try {
+          localStorage.setItem(decKey, decodeInput.value || "");
+        } catch (_) {}
       }, 250);
     });
 
@@ -401,7 +406,7 @@ class Base64Tools extends BaseTool {
   }
 
   async encodeToBase64() {
-    +UsageTracker.track("base64-tools", "encode");
+    UsageTracker.trackFeature("base64-tools", "encode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process
@@ -426,7 +431,7 @@ class Base64Tools extends BaseTool {
   }
 
   async decodeFromBase64() {
-    +UsageTracker.track("base64-tools", "decode");
+    UsageTracker.trackFeature("base64-tools", "decode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process
@@ -681,46 +686,23 @@ class Base64Tools extends BaseTool {
   }
 
   async copyToClipboard(targetId) {
-    const container = this.validateContainer();
-
-    const element = container.querySelector(`#${targetId}`);
-    if (!element || !element.value.trim()) {
-      this.showError("No content to copy");
-      return;
-    }
-
     try {
-      await navigator.clipboard.writeText(element.value);
+      const el = this.validateContainer()?.querySelector(`#${targetId}`);
+      const val = el?.value || el?.textContent || "";
+      await navigator.clipboard.writeText(val);
       this.showSuccess("Copied to clipboard!");
     } catch (error) {
       this.showError("Failed to copy to clipboard");
-      console.error("Clipboard error:", error);
     }
   }
 
   async pasteFromClipboard(targetId) {
-    const container = this.validateContainer();
-
     try {
       const text = await navigator.clipboard.readText();
-      const element = container.querySelector(`#${targetId}`);
-      if (element) {
-        element.value = text;
-        this.showSuccess("Pasted from clipboard!");
-        // Persist pasted value
-        try {
-          const key =
-            targetId === "encode-input"
-              ? "tool:base64-tools:encode-input"
-              : targetId === "decode-input"
-              ? "tool:base64-tools:decode-input"
-              : null;
-          if (key) localStorage.setItem(key, element.value || "");
-        } catch (_) {}
-      }
+      const el = this.validateContainer()?.querySelector(`#${targetId}`);
+      if (el) el.value = text;
     } catch (error) {
       this.showError("Failed to paste from clipboard");
-      console.error("Clipboard error:", error);
     }
   }
 

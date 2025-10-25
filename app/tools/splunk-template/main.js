@@ -44,7 +44,7 @@ class SplunkVTLEditor extends BaseTool {
     this.initializeResizer();
     this.bindUIEvents();
     this.updateFieldsTable();
-    UsageTracker.trackFeature("splunk-template", "mount");
+    UsageTracker.trackFeature("splunk-template", "mount", "", 5000);
   }
 
   onUnmount() {

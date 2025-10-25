@@ -1,6 +1,7 @@
 import { ValueProcessorService } from "./ValueProcessorService.js";
 import { oracleReservedWords } from "../constants.js";
 import { AttachmentValidationService } from "./AttachmentValidationService.js";
+import { UsageTracker } from "../../../core/UsageTracker.js";
 
 export class QueryGenerationService {
   constructor() {
@@ -25,6 +26,7 @@ export class QueryGenerationService {
     const pkIndices = primaryKeys.map((pk) => {
       const index = fieldNames.indexOf(pk);
       if (index === -1) {
+        UsageTracker.trackEvent("quick-query", "generation_error", { type: "pk_field_missing", pk });
         throw new Error(`Primary key field '${pk}' not found in data columns`);
       }
       return { field: pk, index };
@@ -158,6 +160,7 @@ export class QueryGenerationService {
           };
         });
       } catch (error) {
+        UsageTracker.trackEvent("quick-query", "generation_error", { row: rowIndex + 2, message: error.message });
         throw new Error(`Row ${rowIndex + 2}: ${error.message}`);
       }
     });
@@ -259,11 +262,13 @@ export class QueryGenerationService {
     // Validate that we have primary key values
     const hasValidPkValues = Array.from(pkValueMap.values()).some((valueSet) => valueSet.size > 0);
     if (!hasValidPkValues) {
+      UsageTracker.trackEvent("quick-query", "generation_error", { type: "missing_pk_for_update" });
       throw new Error("Primary key values are required for UPDATE operation.");
     }
 
     // Validate that we have fields to update
     if (allUpdatedFields.size === 0) {
+      UsageTracker.trackEvent("quick-query", "generation_error", { type: "no_fields_to_update" });
       throw new Error("No fields to update. Please provide at least one non-primary-key field with a value.");
     }
 
@@ -288,6 +293,11 @@ export class QueryGenerationService {
           .map((pk) => {
             const pkField = row.find((f) => f.fieldName === pk);
             if (!pkField || pkField.formattedValue === null || pkField.formattedValue === "NULL" || !pkField.formattedValue) {
+              UsageTracker.trackEvent("quick-query", "generation_error", {
+                type: "pk_missing_in_row",
+                row: processedRows.indexOf(row) + 2,
+                pk,
+              });
               throw new Error(`Primary key '${pk}' in row ${processedRows.indexOf(row) + 2} must have a value for UPDATE operation.`);
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;

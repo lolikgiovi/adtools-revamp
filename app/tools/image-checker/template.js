@@ -6,8 +6,8 @@ export const imageCheckerTemplate = /*html*/ `
           <textarea id="batchImagePathsInput" class="check-image-textarea" placeholder="Enter image UUIDs or /content/v1/image paths, one per line"></textarea>
         </div>
         <div class="button-group check-image-button-group">
-          <button id="checkImageButton" class="check-image-button">Check Images</button>
-          <button id="clearButton" class="check-image-clear-button">Clear</button>
+          <button id="checkImageButton" class="btn btn-primary">Check Images</button>
+          <button id="clearButton" class="btn btn-secondary">Clear</button>
         </div>
       </div>
       <div id="resultsContainer" class="results-container check-image-results-container" aria-live="polite">

@@ -238,7 +238,7 @@ class JSONTools extends BaseTool {
   }
 
   validateJSON() {
-    UsageTracker.track("json-tools", "validate");
+    UsageTracker.trackFeature("json-tools", "validate");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -255,7 +255,7 @@ class JSONTools extends BaseTool {
   }
 
   prettifyJSON() {
-    UsageTracker.track("json-tools", "prettify");
+    UsageTracker.trackFeature("json-tools", "prettify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -271,7 +271,7 @@ class JSONTools extends BaseTool {
   }
 
   minifyJSON() {
-    UsageTracker.track("json-tools", "minify");
+    UsageTracker.trackFeature("json-tools", "minify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -287,7 +287,7 @@ class JSONTools extends BaseTool {
   }
 
   stringifyJSON() {
-    UsageTracker.track("json-tools", "stringify");
+    UsageTracker.trackFeature("json-tools", "stringify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -303,7 +303,7 @@ class JSONTools extends BaseTool {
   }
 
   unstringifyJSON() {
-    UsageTracker.track("json-tools", "unstringify");
+    UsageTracker.trackFeature("json-tools", "unstringify");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -320,7 +320,7 @@ class JSONTools extends BaseTool {
   }
 
   escapeJSON() {
-    UsageTracker.track("json-tools", "escape");
+    UsageTracker.trackFeature("json-tools", "escape");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -336,7 +336,7 @@ class JSONTools extends BaseTool {
   }
 
   unescapeJSON() {
-    UsageTracker.track("json-tools", "unescape");
+    UsageTracker.trackFeature("json-tools", "unescape");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
 
@@ -353,7 +353,7 @@ class JSONTools extends BaseTool {
   }
 
   extractKeys() {
-    UsageTracker.track("json-tools", "extract_keys");
+    UsageTracker.trackFeature("json-tools", "extract_keys");
     const content = this.editor.getValue().trim();
     const output = document.getElementById("json-output");
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;

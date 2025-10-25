@@ -46,3 +46,6 @@ src-tauri/gen/
 
 # Optional: avoid committing packaged binaries if copied out of target
 *.dmg
+
+# Wrangler local state (dev-time)
+.wrangler/*

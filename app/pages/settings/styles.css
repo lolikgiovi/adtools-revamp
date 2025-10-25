@@ -98,11 +98,14 @@
   color: hsl(var(--text-secondary));
 }
 .setting-input {
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
+  font-size: 0.8rem; /* match .btn-sm */
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 .setting-input:focus {
   outline: none;
@@ -121,7 +124,7 @@
 .setting-edit-panel {
   margin-top: 0.5rem;
   display: none;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
 }
 .setting-label {
@@ -243,7 +246,7 @@
 .setting-edit-panel {
   margin-top: 0.5rem;
   display: none;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
 }
 .setting-label {
@@ -251,7 +254,10 @@
   color: var(--text-secondary, #555);
 }
 .setting-input {
-  padding: 0.25rem 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 .setting-actions {
   display: flex;
@@ -308,3 +314,72 @@
   color: var(--text-secondary);
   word-break: break-all;
 }
+
+/* Runtime status badge */
+/* Settings page styles */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Runtime status indicator */
+.runtime-status {
+  display: flex;
+  align-items: center;
+}
+
+.runtime-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  background: var(--surface-2, #2a2a2a);
+  color: var(--text-1, #fff);
+  border: 1px solid var(--border-2, #3a3a3a);
+}
+
+.runtime-status-badge[data-state="desktop"] {
+  background: var(--green-9, #2e7d32);
+  border-color: var(--green-10, #1b5e20);
+}
+
+.runtime-status-badge[data-state="web"] {
+  background: var(--indigo-9, #3f51b5);
+  border-color: var(--indigo-10, #283593);
+}
+
+.settings-search input[type="search"] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-2, #3a3a3a);
+  background: var(--surface-1, #1f1f1f);
+  color: var(--text-1, #fff);
+}
+
+.settings-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Existing styles for categories/items assumed below */

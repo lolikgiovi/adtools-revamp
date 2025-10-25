@@ -1,0 +1,43 @@
+name = "adtools"
+main = "src/worker.js"
+compatibility_date = "2024-10-01"
+workers_dev = true
+
+# Serve built assets from Vite's dist directory
+assets = { directory = "./dist" }
+
+# Environment variables
+[vars]
+DEV_MODE = "true"
+SECRET_SALT = "change-me-in-production"
+MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_SUBJECT_PREFIX = "[AD Tools]"
+WHITELIST_ENABLED = "false"
+
+# Production environment overrides
+[env.production]
+[env.production.vars]
+DEV_MODE = "false"
+MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_SUBJECT_PREFIX = "[AD Tools]"
+WHITELIST_ENABLED = "false"
+
+# KV bindings: fill in your IDs via Cloudflare dashboard or uncomment/edit below
+[[kv_namespaces]]
+binding = "WHITELIST"
+id = "d1b16a8778cb4860bb6c1f63f6f51497"
+preview_id = "d1b16a8778cb4860bb6c1f63f6f51497"
+#
+# [[kv_namespaces]]
+# binding = "ANALYTICS"
+# id = "<YOUR_PRODUCTION_ANALYTICS_KV_ID>"
+# preview_id = "<YOUR_PREVIEW_ANALYTICS_KV_ID>"
+
+# D1 database binding (fill in database_id from Cloudflare dashboard)
+[[d1_databases]]
+binding = "DB"
+database_name = "adtools"
+database_id = "9a9a1466-05be-4b18-af48-6e8902fab81a"
+
+# Optional: route to a custom domain managed in Cloudflare
+# routes = ["https://your-domain.example/*"]

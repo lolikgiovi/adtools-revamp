@@ -1,3 +1,4 @@
+import { UsageTracker } from "../../../core/UsageTracker.js";
 const STORAGE_KEY = "quickquery_schemas";
 const ORACLE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_$#]*$/;
 const MAX_SCHEMA_LENGTH = 30;
@@ -13,6 +14,7 @@ export class LocalStorageService {
   parseTableIdentifier(fullTableName) {
     const [schemaName, tableName] = fullTableName.split(".");
     if (!schemaName || !tableName) {
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "invalid_table_format", input: fullTableName });
       throw new Error('Invalid table name format. Expected "schema_name.table_name"');
     }
     return { schemaName, tableName };
@@ -30,6 +32,7 @@ export class LocalStorageService {
       return JSON.parse(data);
     } catch (error) {
       console.error("Error reading storage:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "read_failed", message: error.message });
       return {
         schemas: {},
         lastUpdated: new Date().toISOString(),
@@ -44,6 +47,7 @@ export class LocalStorageService {
       return true;
     } catch (error) {
       console.error("Error saving to storage:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "write_failed", message: error.message });
       return false;
     }
   }
@@ -67,6 +71,7 @@ export class LocalStorageService {
       return this.saveStorageData(storageData);
     } catch (error) {
       console.error("Error saving schema:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "save_schema_failed", message: error.message });
       return false;
     }
   }
@@ -89,6 +94,7 @@ export class LocalStorageService {
       };
     } catch (error) {
       console.error("Error loading schema:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "load_schema_failed", message: error.message });
       return null;
     }
   }
@@ -108,6 +114,7 @@ export class LocalStorageService {
       return this.saveStorageData(storageData);
     } catch (error) {
       console.error("Error updating table data:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "update_table_data_failed", message: error.message });
       return false;
     }
   }
@@ -129,6 +136,7 @@ export class LocalStorageService {
       return false;
     } catch (error) {
       console.error("Error deleting schema:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "delete_schema_failed", message: error.message });
       return false;
     }
   }
@@ -139,6 +147,7 @@ export class LocalStorageService {
       return true;
     } catch (error) {
       console.error("Error clearing schemas:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "clear_schemas_failed", message: error.message });
       return false;
     }
   }
@@ -259,98 +268,47 @@ export class LocalStorageService {
       }
     });
 
-    return abbrs;
-  }
-
-  getScore(schema, table, searchTerm) {
-    const termLower = searchTerm.toLowerCase();
-    schema = schema.toLowerCase();
-    table = table?.toLowerCase();
-
-    const schemaAbbrs = this.getSchemaAbbreviations(schema);
-
-    if (schema === termLower) return 7;
-    if (table === termLower) return 6;
-    if (schemaAbbrs.has(termLower)) return 5;
-    if (schema.startsWith(termLower)) return 4;
-    if (table?.startsWith(termLower)) return 3;
-    if (schema.includes(termLower)) return 2;
-    if (table?.includes(termLower)) return 1;
-    return 0;
+    return Array.from(abbrs);
   }
 
   searchSavedSchemas(searchTerm) {
-    const allTables = this.getAllTables();
-    if (!searchTerm) return allTables;
+    if (!searchTerm) return [];
 
-    let [schemaSearch, tableSearch] = searchTerm.split(".");
+    const storageData = this.getStorageData();
+    const results = [];
 
-    if (!tableSearch) {
-      const searchPattern = `%${schemaSearch}%`;
-      const pattern = this.sqlLikeToRegex(searchPattern);
+    Object.entries(storageData.schemas).forEach(([schemaName, schemaData]) => {
+      if (!this.validateOracleName(schemaName, "schema")) return;
 
-      return allTables
-        .filter((table) => {
-          const schemaAbbrs = this.getSchemaAbbreviations(table.schemaName);
-          return pattern.test(table.schemaName) || pattern.test(table.tableName) || schemaAbbrs.has(schemaSearch.toLowerCase());
-        })
-        .sort((a, b) => {
-          const scoreA = this.getScore(a.schemaName, a.tableName, schemaSearch);
-          const scoreB = this.getScore(b.schemaName, b.tableName, schemaSearch);
+      // Generate abbreviations and variations to match against
+      const abbrs = this.getSchemaAbbreviations(schemaName);
 
-          return scoreB - scoreA || a.schemaName.localeCompare(b.schemaName);
-        });
-    } else {
-      const schemaPattern = this.sqlLikeToRegex(`%${schemaSearch}%`);
-      const tablePattern = this.sqlLikeToRegex(`%${tableSearch}%`);
+      Object.entries(schemaData.tables).forEach(([tableName, tableData]) => {
+        if (!this.validateOracleName(tableName, "table")) return;
 
-      return allTables
-        .filter((table) => {
-          const schemaAbbrs = this.getSchemaAbbreviations(table.schemaName);
-          const tableAbbrs = this.getSchemaAbbreviations(table.tableName); // Add table abbreviations
-          return (
-            (schemaPattern.test(table.schemaName) || schemaAbbrs.has(schemaSearch.toLowerCase())) &&
-            (tablePattern.test(table.tableName) || tableAbbrs.has(tableSearch.toLowerCase())) // Check table abbreviations
-          );
-        })
-        .sort((a, b) => {
-          const schemaAbbrsA = this.getSchemaAbbreviations(a.schemaName);
-          const schemaAbbrsB = this.getSchemaAbbreviations(b.schemaName);
-          const tableAbbrsA = this.getSchemaAbbreviations(a.tableName); // Add table abbreviations
-          const tableAbbrsB = this.getSchemaAbbreviations(b.tableName);
+        const fullName = `${schemaName}.${tableName}`;
+        const regex = this.sqlLikeToRegex(searchTerm);
 
-          const schemaMatchA = schemaSearch.toLowerCase() === a.schemaName.toLowerCase() || schemaAbbrsA.has(schemaSearch.toLowerCase());
-          const schemaMatchB = schemaSearch.toLowerCase() === b.schemaName.toLowerCase() || schemaAbbrsB.has(schemaSearch.toLowerCase());
+        if (regex.test(schemaName) || regex.test(tableName) || regex.test(fullName) || abbrs.some((abbr) => regex.test(abbr))) {
+          results.push({
+            fullName,
+            schemaName,
+            tableName,
+            timestamp: tableData.timestamp,
+          });
+        }
+      });
+    });
 
-          if (schemaMatchA !== schemaMatchB) return schemaMatchB ? 1 : -1;
-
-          const tableMatchA = tableSearch.toLowerCase() === a.tableName.toLowerCase() || tableAbbrsA.has(tableSearch.toLowerCase());
-          const tableMatchB = tableSearch.toLowerCase() === b.tableName.toLowerCase() || tableAbbrsB.has(tableSearch.toLowerCase());
-
-          return tableMatchA ? -1 : tableMatchB ? 1 : 0;
-        });
-    }
+    return results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }
 
   validateSchemaFormat(data) {
-    if (!data || typeof data !== "object") return false;
+    if (!Array.isArray(data) || data.length === 0) return false;
 
-    return Object.entries(data).every(([schemaName, tables]) => {
-      if (typeof tables !== "object") return false;
+    const hasHeaderRow = Array.isArray(data[0]) && data[0].length >= 2;
+    const hasDataRow = Array.isArray(data[1]) && data[1].length >= 2;
 
-      return Object.entries(tables).every(([tableName, schema]) => {
-        return (
-          Array.isArray(schema) &&
-          schema.every(
-            (row) =>
-              Array.isArray(row) &&
-              row.length >= 3 &&
-              typeof row[0] === "string" &&
-              typeof row[1] === "string" &&
-              typeof row[2] === "string"
-          )
-        );
-      });
-    });
+    return hasHeaderRow && hasDataRow;
   }
 }

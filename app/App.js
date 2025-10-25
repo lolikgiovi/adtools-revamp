@@ -21,9 +21,13 @@ import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
+import { AnalyticsSender } from './core/AnalyticsSender.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
+import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { RegisterPage } from "./pages/register/main.js";
+import { isTauri } from "./core/Runtime.js";
 
 class App {
   constructor() {
@@ -62,6 +66,13 @@ class App {
     }
 
     this.initializeComponents();
+    this.setupHeaderRuntime();
+    // Apply sidebar title from stored username
+    try {
+      const titleEl = document.querySelector(".sidebar-title");
+      const username = localStorage.getItem("user.username");
+      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+    } catch (_) {}
     this.registerTools();
     this.buildIconRegistry();
     this.setupRoutes();
@@ -199,6 +210,10 @@ class App {
     const checkImage = new CheckImageTool(this.eventBus);
     this.registerTool(checkImage);
 
+    // Register Jenkins Runner
+    const jenkinsRunner = new JenkinsRunner(this.eventBus);
+    this.registerTool(jenkinsRunner);
+
     // Add more tools here as they are implemented
   }
 
@@ -250,15 +265,25 @@ class App {
       this.showFeedback();
     });
 
-    // Set default route
-    this.router.setDefaultRoute("home");
+    // Register route for onboarding
+    this.router.register("register", () => {
+      const registerPage = new RegisterPage({ eventBus: this.eventBus });
+      registerPage.mount(this.mainContent);
+    });
+
+    // Set default route based on registration state
+    const registered = localStorage.getItem("user.registered") === "true";
+    this.router.setDefaultRoute(registered ? "home" : "register");
   }
 
   /**
    * Show home page
    */
   showHome() {
-    // Update breadcrumb for home
+    if (localStorage.getItem("user.registered") !== "true") {
+      this.router.navigate("register");
+      return;
+    }
     this.updateBreadcrumb("Home", true);
 
     if (this.currentTool) {
@@ -266,12 +291,18 @@ class App {
       this.currentTool = null;
     }
 
+    const runtimeIsTauri = isTauri();
+    if (!runtimeIsTauri && !this._runtimeRetryHome) {
+      this._runtimeRetryHome = true;
+      setTimeout(() => this.showHome(), 150);
+    }
     const toolCards = Array.from(this.tools.values())
       .filter((tool) => {
         const cfg = this.toolsConfigMap.get(tool.id);
         const enabled = cfg ? cfg.enabled !== false : true;
         const showOnHome = cfg ? cfg.showOnHome !== false : true;
-        return enabled && showOnHome;
+        const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
+        return enabled && showOnHome && requiresTauriOk;
       })
       .sort((a, b) => {
         const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
@@ -307,11 +338,11 @@ class App {
     this.eventBus.emit("page:changed", { page: "home" });
   }
 
-  /**
-   * Show a specific tool
-   * @param {string} toolId - Tool ID
-   */
   showTool(toolId) {
+    if (localStorage.getItem("user.registered") !== "true") {
+      this.router.navigate("register");
+      return;
+    }
     const tool = this.tools.get(toolId);
 
     if (!tool) {
@@ -320,22 +351,25 @@ class App {
       return;
     }
 
-    // Update breadcrumb for tool
+    // Runtime gate: respect requiresTauri
+    const cfg = this.toolsConfigMap.get(tool.id);
+    if (cfg && cfg.requiresTauri && !isTauri()) {
+      this.eventBus.emit("notification:error", { message: "This tool requires the desktop app (Tauri) and is hidden in the browser.", type: "error" });
+      this.router.navigate("home");
+      return;
+    }
+
     this.updateBreadcrumb(tool.name);
 
-    // Deactivate current tool
     if (this.currentTool && this.currentTool !== tool) {
       this.currentTool.deactivate();
     }
 
-    // Activate new tool
     this.currentTool = tool;
     tool.activate();
 
-    // Mount tool to main content
     if (this.mainContent) {
       tool.mount(this.mainContent);
-      // Record mount in usage analytics under the tool’s feature
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });
@@ -503,6 +537,14 @@ class App {
         this.renderUsagePanel();
       }
     });
+
+
+    // Update sidebar title when user registers
+    this.eventBus.on("user:registered", (data) => {
+      const titleEl = document.querySelector(".sidebar-title");
+      const username = data?.username || localStorage.getItem("user.username");
+      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+    });
   }
 
   /**
@@ -609,10 +651,9 @@ class App {
     return {
       config: [],
       app: [
-        { id: "settings", name: "Settings", icon: "settings", type: "page" },
         { id: "feedback", name: "Feedback", icon: "feedback", type: "page" },
       ],
-      footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
+      footer: [{ id: "settings", name: "Settings", icon: "settings", type: "page" }],
     };
   }
   renderUsagePanel() {
@@ -621,6 +662,7 @@ class App {
 
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
+    // Build features list first, so we can decide to hide if empty
     const featuresHtml = Object.entries(totalsByFeature)
       .filter(([id]) => this.toolsConfigMap.has(id))
       .sort(([, a], [, b]) => b - a)
@@ -635,6 +677,21 @@ class App {
         `;
       })
       .join("");
+
+    const featuresEmpty = featuresHtml.trim() === "";
+
+    // Hide the entire usage overview when there is no data or no feature rows
+    if (totalEvents === 0 || featuresEmpty) {
+      try {
+        container.style.display = "none";
+        container.innerHTML = "";
+      } catch (_) {}
+      return;
+    } else {
+      try {
+        container.style.display = "block";
+      } catch (_) {}
+    }
 
     const now = new Date();
     const days = [];
@@ -654,18 +711,12 @@ class App {
       })
       .join("");
 
-    const emptyHtml = `<div class="usage-empty">No usage data yet. Start using tools to see stats.</div>`;
-
-    container.innerHTML = `
+    container.innerHTML = /*html*/`
       <div class="usage-panel">
         <div class="usage-panel-header">
           <h2>Usage Overview</h2>
-          <div class="usage-total">Total events: <strong>${totalEvents}</strong></div>
+          <div class="usage-total">Total activities: <strong>${totalEvents}</strong></div>
         </div>
-        ${
-          totalEvents === 0
-            ? emptyHtml
-            : `
         <div class="usage-grid">
           <div class="usage-card">
             <h3>By Feature</h3>
@@ -678,10 +729,45 @@ class App {
             </div>
           </div>
         </div>
-        `
-        }
       </div>
     `;
+  }
+  setupHeaderRuntime() {
+    const header = document.querySelector(".main-header");
+    const reloadBtn = document.querySelector(".header-reload");
+
+    const applyRuntime = () => {
+      const rt = isTauri() ? "tauri" : "web";
+      if (header) header.setAttribute("data-runtime", rt);
+      if (reloadBtn) reloadBtn.title = rt === "tauri" ? "Reload window" : "Reload";
+    };
+
+    // Initial runtime set + delayed re-check to handle late Tauri init
+    applyRuntime();
+    setTimeout(applyRuntime, 200);
+
+    // Wire reload behavior
+    if (reloadBtn) {
+      reloadBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        try {
+          // Attempt a standard reload
+          window.location.reload();
+        } catch (err) {
+          // Fallback to hard navigation
+          try {
+            window.location.href = window.location.href;
+          } catch (_) {}
+        }
+      });
+      // Keyboard accessibility for div[role="button"]
+      reloadBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          reloadBtn.click();
+        }
+      });
+    }
   }
 }
 

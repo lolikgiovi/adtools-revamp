@@ -60,6 +60,9 @@ class HTMLTemplateTool extends BaseTool {
     this.setupDebouncedRendering();
     // Removed resizer for fixed split
     this.renderPreview(this.editor.getValue());
+    try {
+      UsageTracker.trackFeature("html-template", "mount", "", 5000);
+    } catch (_) {}
   }
 
   onUnmount() {
@@ -130,7 +133,6 @@ class HTMLTemplateTool extends BaseTool {
       if (success && typeof result === "string") {
         this.editor.setValue(result);
         this.renderPreview(result);
-        UsageTracker.trackFeature("html-template", "minify", { bytes: result.length });
       } else if (!success && error) {
         this.showError(`Minify error: ${error}`);
       }
@@ -155,7 +157,6 @@ class HTMLTemplateTool extends BaseTool {
         if (action) {
           await action.run();
           this.renderPreview(this.editor.getValue());
-          UsageTracker.trackFeature("html-template", "format");
         }
       });
     }
@@ -231,7 +232,6 @@ class HTMLTemplateTool extends BaseTool {
           }
         }
         if (panel) panel.style.display = "block";
-        UsageTracker.trackFeature("html-template", "vtl-extract", { count: vars.length });
       });
     }
 

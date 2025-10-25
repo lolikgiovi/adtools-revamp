@@ -1,7 +1,7 @@
-import { UUIDGeneratorTemplate } from './template.js';
-import { BaseTool } from '../../core/BaseTool.js';
-import { getIconSvg } from './icon.js';
-import { UsageTracker } from '../../core/UsageTracker.js';
+import { UUIDGeneratorTemplate } from "./template.js";
+import { BaseTool } from "../../core/BaseTool.js";
+import { getIconSvg } from "./icon.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 class UUIDGenerator extends BaseTool {
   constructor(eventBus) {
@@ -15,7 +15,9 @@ class UUIDGenerator extends BaseTool {
     });
   }
 
-  getIconSvg() { return getIconSvg(); }
+  getIconSvg() {
+    return getIconSvg();
+  }
 
   render() {
     return UUIDGeneratorTemplate;
@@ -105,7 +107,7 @@ class UUIDGenerator extends BaseTool {
   async copySingleUUID() {
     const resultInput = document.getElementById("singleUuidResult");
     if (resultInput && resultInput.value) {
-      UsageTracker.track("uuid-generator", "copy_single");
+      UsageTracker.trackFeature("uuid-generator", "single");
       await this.copyToClipboard(resultInput.value);
     }
   }
@@ -113,7 +115,7 @@ class UUIDGenerator extends BaseTool {
   async copyMultipleUUIDs() {
     const resultTextarea = document.getElementById("multipleUuidResult");
     if (resultTextarea && resultTextarea.value) {
-      UsageTracker.track("uuid-generator", "copy_multiple");
+      UsageTracker.trackFeature("uuid-generator", "multiple");
       await this.copyToClipboard(resultTextarea.value);
     }
   }

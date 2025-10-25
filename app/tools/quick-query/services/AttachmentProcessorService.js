@@ -1,4 +1,5 @@
 import MinifyWorker from "../../html-editor/minify.worker.js?worker";
+import { UsageTracker } from "../../../core/UsageTracker.js";
 export class AttachmentProcessorService {
   constructor() {
     this.attachmentsContainer = null;
@@ -51,6 +52,11 @@ export class AttachmentProcessorService {
         processedFiles.push(processedFile);
       } catch (error) {
         console.error(`Error processing file ${file.name}:`, error);
+        UsageTracker.trackEvent("quick-query", "attachment_error", {
+          type: "processing",
+          file: sanitizedFileName,
+          message: error.message,
+        });
       }
     }
 
@@ -88,6 +94,7 @@ export class AttachmentProcessorService {
         processedFile.processedFormats.sizes.original = decoded.length;
         processedFile.processedFormats.sizes.base64 = cleaned.length;
       } catch (e) {
+        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "base64_decode_failed", file: processedFile.name });
         processedFile.processedFormats.sizes.original = new TextEncoder().encode(textContent).length;
       }
     } else {
@@ -100,7 +107,10 @@ export class AttachmentProcessorService {
       const reader = new FileReader();
 
       reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Error reading file"));
+      reader.onerror = () => {
+        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "read_error", file: file.name, readAs });
+        reject(new Error("Error reading file"));
+      };
 
       switch (readAs) {
         case "arrayBuffer":
@@ -134,6 +144,7 @@ export class AttachmentProcessorService {
           minified = await this.#minifyHtmlWithWorker(original);
         } catch (err) {
           console.error("HTML Minify Worker failed, falling back to basic minify:", err);
+          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_fallback", file: file.name, message: err.message });
           // Fallback to previous simple minifier
           minified = original
             .replace(/<!--[\s\S]*?-->/g, "")
@@ -148,6 +159,7 @@ export class AttachmentProcessorService {
         } catch (e) {
           // Keep original if JSON parse fails
           console.warn("JSON minify failed, keeping original:", e);
+          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "json_minify_failed", file: file.name });
           minified = original;
         }
       } else {
@@ -169,6 +181,7 @@ export class AttachmentProcessorService {
       };
     } catch (e) {
       console.error("Unexpected error during minify:", e);
+      UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_unexpected", file: file.name, message: e.message });
       return file;
     }
   }
@@ -186,11 +199,13 @@ export class AttachmentProcessorService {
         if (success) {
           resolve(typeof result === "string" ? result : "");
         } else {
+          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_failed", message: error || "HTML minify failed" });
           reject(new Error(error || "HTML minify failed"));
         }
       };
       worker.onerror = (err) => {
         cleanup();
+        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_error", message: (err && err.message) || "Worker error" });
         reject(err instanceof Error ? err : new Error("Worker error"));
       };
       worker.postMessage({ type: "minify", html });
