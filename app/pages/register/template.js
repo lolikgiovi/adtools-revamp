@@ -17,7 +17,7 @@ export const RegisterTemplate = /* html */ `
         </div>
         <div class="register-error" aria-live="polite"></div>
       </form>
-      <p class="register-note"></p>
+      <p class="register-note">Use your real office email, since user is currently based on whitelist.</p>
     </div>
   </div>
 `;
