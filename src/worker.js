@@ -126,6 +126,28 @@ async function handleRegister(request, env) {
   }
 }
 
+// Timestamp helpers: store and compare using GMT+7 formatted strings
+function tsGmt7(offsetMs = 0) {
+  const base = Date.now() + 7 * 60 * 60 * 1000 + (offsetMs || 0);
+  const d = new Date(base);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mi = String(d.getUTCMinutes()).padStart(2, '0');
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
+  return `${y}-${m}-${day}T${hh}:${mi}:${ss}.${ms}+07:00`;
+}
+function parseTsFlexible(x) {
+  if (typeof x === 'number') return x;
+  const s = String(x || '');
+  const num = Number(s);
+  if (!Number.isNaN(num)) return num;
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? 0 : t;
+}
+
 // Request an OTP code for email verification
 async function handleRegisterRequestOtp(request, env) {
   try {
@@ -138,14 +160,14 @@ async function handleRegisterRequestOtp(request, env) {
       });
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    const nowMs = Date.now();
-    const expiresAt = nowMs + 10 * 60 * 1000; // 10 minutes
+    const nowTs = tsGmt7();
+    const expiresTs = tsGmt7(10 * 60 * 1000); // +10 minutes
 
     if (env.DB) {
       try {
         await env.DB
           .prepare('INSERT INTO otps (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)')
-          .bind(normalized, code, expiresAt, nowMs)
+          .bind(normalized, code, expiresTs, nowTs)
           .run();
       } catch (_) {}
     }
@@ -180,7 +202,10 @@ async function handleRegisterVerify(request, env) {
     const data = await request.json();
     const email = String(data.email || '').trim().toLowerCase();
     const code = String(data.code || '').trim();
-    const installId = String(data.installId || '').trim();
+    const installIdRaw = String(data.installId || '').trim();
+    const platform = String(data.platform || '').trim() || null;
+    const browser = String(data.browser || '').trim() || null;
+    const installId = installIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
     const displayName = String(data.displayName || '').trim();
 
     if (!email || !code) {
@@ -196,7 +221,7 @@ async function handleRegisterVerify(request, env) {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });
 
-    const now = Date.now();
+    const nowMs = Date.now();
     const row = await env.DB
       .prepare('SELECT id, expires_at, consumed_at FROM otps WHERE email = ? AND code = ? ORDER BY created_at DESC LIMIT 1')
       .bind(email, code)
@@ -214,7 +239,8 @@ async function handleRegisterVerify(request, env) {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });
     }
-    if (Number(row.expires_at) < now) {
+    const expMs = parseTsFlexible(row.expires_at);
+    if (expMs < nowMs) {
       return new Response(JSON.stringify({ ok: false, error: 'Code expired' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
@@ -222,10 +248,10 @@ async function handleRegisterVerify(request, env) {
     }
 
     // Consume the code
-    await env.DB.prepare('UPDATE otps SET consumed_at = ? WHERE id = ?').bind(now, row.id).run();
+    await env.DB.prepare('UPDATE otps SET consumed_at = ? WHERE id = ?').bind(tsGmt7(), row.id).run();
 
     const salt = String(env.SECRET_SALT || '');
-    const emailHash = salt ? await hashEmail(email, salt) : null;
+    const emailHash = null; // email hash no longer stored
 
     // Upsert user (plain email as canonical identifier)
     let userId = null;
@@ -234,23 +260,30 @@ async function handleRegisterVerify(request, env) {
       userId = existing.id;
       await env.DB
         .prepare('UPDATE users SET display_name = ?, last_seen = ? WHERE id = ?')
-        .bind(displayName || null, new Date().toISOString(), userId)
+        .bind(displayName || null, tsGmt7(), userId)
         .run();
     } else {
       userId = crypto.randomUUID();
       await env.DB
         .prepare(
-          'INSERT INTO users (id, email, email_hash, display_name, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)'
+          'INSERT INTO users (id, email, display_name, created_at, last_seen) VALUES (?, ?, ?, ?, ?)'
         )
-        .bind(userId, email, emailHash, displayName || null, new Date().toISOString(), new Date().toISOString())
+        .bind(userId, email, displayName || null, tsGmt7(), tsGmt7())
         .run();
     }
 
-    if (installId) {
+    try {
       await env.DB
-        .prepare('INSERT OR IGNORE INTO user_installs (user_id, install_id, created_at) VALUES (?, ?, ?)')
-        .bind(userId, installId, new Date().toISOString())
+        .prepare('INSERT OR IGNORE INTO user_installs (user_id, install_id, platform, browser, created_at) VALUES (?, ?, ?, ?, ?)')
+        .bind(userId, installId, platform, browser, tsGmt7())
         .run();
+    } catch (_) {
+      try {
+        await env.DB
+          .prepare('INSERT OR IGNORE INTO user_installs (user_id, install_id, created_at) VALUES (?, ?, ?)')
+          .bind(userId, installId, tsGmt7())
+          .run();
+      } catch (_) {}
     }
 
     return new Response(JSON.stringify({ ok: true, userId }), {
@@ -270,7 +303,7 @@ async function handleAnalyticsPost(request, env) {
     const installId = String(data.installId || '');
     const featureId = String(data.featureId || data.feature_id || data.type || 'unknown');
     const action = String(data.action || data.event || 'unknown');
-    const ts = String(data.ts || new Date().toISOString());
+    const ts = String(data.ts || tsGmt7());
     const meta = data.meta ? JSON.stringify(data.meta) : null;
 
     let ok = false;
@@ -292,8 +325,8 @@ async function handleAnalyticsPost(request, env) {
 
     // Fallback to KV when DB unavailable
     if (!ok && env.ANALYTICS) {
-      const key = `events:${installId || 'anon'}:${Date.now()}`;
-      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: new Date().toISOString() }), {
+      const key = `events:${installId || crypto.randomUUID()}:${Date.now()}`;
+      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7() }), {
         expirationTtl: 90 * 24 * 60 * 60,
       });
       ok = true;

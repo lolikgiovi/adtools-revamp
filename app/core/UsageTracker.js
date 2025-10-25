@@ -292,15 +292,21 @@ class UsageTracker {
 
   static _getOrCreateInstallId() {
     try {
-      let id = localStorage.getItem(this.INSTALL_ID_KEY);
+      const key = 'adtools.installId';
+      const existing = (typeof localStorage !== 'undefined') ? localStorage.getItem(key) : null;
+      let id = existing;
       if (!id) {
-        id = `anon-${crypto.randomUUID()}`;
-        localStorage.setItem(this.INSTALL_ID_KEY, id);
+        id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
+      } else if (id && typeof id === 'string' && id.startsWith('anon-')) {
+        const suffix = id.slice(5);
+        id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suffix)
+          ? suffix
+          : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
       }
+      if (typeof localStorage !== 'undefined') localStorage.setItem(key, id);
       return id;
     } catch (_) {
-      // Environments without localStorage
-      return `anon-${Math.random().toString(36).slice(2)}`;
+      return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
     }
   }
 

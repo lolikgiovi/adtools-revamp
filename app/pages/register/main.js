@@ -212,3 +212,27 @@ export class RegisterPage {
     return id;
   }
 }
+
+// Simple platform/browser detectors for install analytics
+function detectPlatform() {
+  return typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined' ? 'tauri' : 'browser';
+}
+function detectBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return 'Chrome';
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'Safari';
+  if (/Chromium\//.test(ua)) return 'Chromium';
+  return 'Unknown';
+}
+async function verifyOtp(email, code, installId, displayName) {
+  const platform = detectPlatform();
+  const browser = detectBrowser();
+  const res = await fetch('/api/register/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code, installId, displayName, platform, browser }),
+  });
+  return res.json();
+}
