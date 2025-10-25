@@ -24,6 +24,7 @@ import { UsageTracker } from './core/UsageTracker.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
+import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 
 class App {
   constructor() {
@@ -198,6 +199,10 @@ class App {
     // Register Check Image
     const checkImage = new CheckImageTool(this.eventBus);
     this.registerTool(checkImage);
+
+    // Register Jenkins Runner
+    const jenkinsRunner = new JenkinsRunner(this.eventBus);
+    this.registerTool(jenkinsRunner);
 
     // Add more tools here as they are implemented
   }

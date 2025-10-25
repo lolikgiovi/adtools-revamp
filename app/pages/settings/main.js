@@ -1,6 +1,7 @@
 import { SettingsTemplate } from './template.js';
 import './styles.css';
 import { SettingsService } from './service.js';
+import { invoke } from '@tauri-apps/api/core';
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -151,6 +152,7 @@ class SettingsPage {
 
     // Display value
     let displayValue = '';
+    const isRequired = !!(item.validation && item.validation.required);
     if (item.type === 'secret') {
       displayValue = current ? '••••••••' : '—';
     } else if (item.type === 'kvlist') {
@@ -161,7 +163,7 @@ class SettingsPage {
 
     // Non-boolean: direct inline editing when clicking the value
     row.innerHTML = `
-      <div class="setting-name">${item.label}</div>
+      <div class="setting-name">${item.label}${isRequired ? ' <span class=\"setting-required\" title=\"Required\" aria-hidden=\"true\">*</span>' : ''}</div>
       <div class="setting-value editable" data-value tabindex="0" role="button" aria-label="Edit ${item.label}">
         ${displayValue}
       </div>
@@ -255,7 +257,7 @@ class SettingsPage {
       }
     });
 
-    panel.addEventListener('click', (e) => {
+    panel.addEventListener('click', async (e) => {
       const action = e.target.getAttribute('data-action');
       if (!action) return;
 
@@ -276,7 +278,40 @@ class SettingsPage {
         const value = getCurrentEditValue();
         const { valid } = this.service.validate(value, item.type, item.validation || {});
         if (!valid) return;
-        const stored = this.service.setValue(storageKey, item.type, value, item.apply);
+
+        let stored;
+        if (storageKey === 'secure.jenkins.token') {
+          try {
+            await invoke('set_jenkins_token', { token: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          // Store a marker only, not the token itself
+          stored = this.service.setValue(storageKey, 'secret', 'set', item.apply);
+        } else if (storageKey === 'secure.jenkins.username') {
+          try {
+            await invoke('set_jenkins_username', { username: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          // Persist username for display
+          stored = this.service.setValue(storageKey, 'string', value, item.apply);
+        } else if (storageKey === 'config.jenkins.url') {
+          // Strong URL validation via URL parser
+          try {
+            const u = new URL(String(value));
+            if (!u.protocol.startsWith('http')) throw new Error('URL must be http(s)');
+          } catch (err) {
+            errorEl.textContent = 'Invalid URL format';
+            return;
+          }
+          stored = this.service.setValue(storageKey, 'string', value, item.apply);
+        } else {
+          stored = this.service.setValue(storageKey, item.type, value, item.apply);
+        }
+
         let display = '';
         if (item.type === 'secret') {
           display = stored ? '••••••••' : '—';

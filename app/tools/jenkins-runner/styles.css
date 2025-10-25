@@ -1,0 +1,279 @@
+/* Jenkins Runner styles - theme-aware, responsive, accessible */
+.jenkins-runner {
+  /* Map to global CSS variables so light/dark are respected */
+  --jr-bg: hsl(var(--background));
+  --jr-panel: hsl(var(--card));
+  --jr-border: hsl(var(--border));
+  --jr-text: hsl(var(--foreground));
+  --jr-muted: hsl(var(--muted-foreground));
+  --jr-primary: hsl(var(--primary));
+  --jr-primary-contrast: hsl(var(--primary-foreground));
+  --jr-danger: #ff4d4f; /* no global destructive-dark/light split; keep semantic */
+  --jr-success: #4caf50; /* semantic green */
+  --jr-focus: hsl(var(--ring));
+
+  color: var(--jr-text);
+  background: var(--jr-bg);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto; /* header removed */
+  gap: 16px;
+}
+
+/* Ensure content inside the Run tab maintains vertical spacing between panels */
+#jr-tab-run {
+  display: grid;
+  gap: 16px;
+}
+
+/* Tabs at top with status on the right */
+.jr-tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--jr-border);
+  margin-bottom: 8px;
+}
+.jr-tabs-left {
+  display: inline-flex;
+  gap: 8px;
+}
+.jr-tab {
+  background: transparent;
+  border: none;
+  color: var(--jr-muted);
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-size: 0.95rem;
+}
+.jr-tab.active {
+  color: var(--jr-text);
+  font-weight: 600;
+  border-bottom-color: var(--jr-primary);
+}
+
+.jr-status {
+  font-size: 0.95rem;
+  color: var(--jr-muted);
+}
+
+/* Panels */
+.jr-controls,
+.jr-sql,
+.jr-logs {
+  background: var(--jr-panel);
+  border: 1px solid var(--jr-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.jr-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.jr-field > span {
+  font-size: 0.9rem;
+  color: var(--jr-muted);
+}
+.jr-input,
+.jr-textarea,
+.jr-input-readonly {
+  background: hsl(var(--card));
+  border: 1px solid var(--jr-border);
+  color: var(--jr-text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  box-sizing: border-box; /* normalize sizing across engines */
+  font-size: 0.9rem; /* consistent text metrics */
+  line-height: 1.2; /* avoid engine-specific defaults */
+  min-height: 34px; /* align input and select heights */
+}
+.jr-input:hover,
+.jr-textarea:hover,
+.jr-input-readonly:hover {
+  border-color: hsl(var(--muted-foreground) / 0.3);
+}
+.jr-input:focus,
+.jr-textarea:focus,
+.jr-input-readonly:focus {
+  outline: none;
+  border-color: var(--jr-focus);
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
+}
+
+.jr-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 140px;
+}
+/* Normalize select height across browsers to match text inputs */
+.jenkins-runner select.jr-input {
+  height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Monaco editor container for SQL */
+.jr-monaco-editor {
+  width: 100%;
+  min-height: 200px;
+  border: 1px solid var(--jr-border);
+  border-radius: 6px;
+  background: hsl(var(--card));
+  overflow: hidden;
+}
+
+.jr-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.jr-sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.jr-actions .btn {
+  background: var(--jr-primary);
+  color: var(--jr-primary-contrast);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+}
+.jr-actions .btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.jr-actions .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.jr-actions .btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
+}
+
+.jr-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.jr-log-title {
+  display: inline-flex;
+  align-items: center;
+}
+.jr-log-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.jr-build-number {
+  font-weight: 600;
+  color: var(--jr-muted);
+}
+.jr-build-number::before {
+  content: ":";
+  margin-left: 6px;
+  margin-right: 6px;
+  color: var(--jr-muted);
+}
+.jr-log {
+  background: hsl(var(--card));
+  border: 1px solid var(--jr-border);
+  border-radius: 6px;
+  padding: 12px;
+  height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--jr-text);
+}
+
+.jr-hint {
+  color: var(--jr-muted);
+  font-size: 0.9rem;
+}
+
+/* Loading state */
+.jr-loading {
+  position: relative;
+}
+.jr-loading::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--jr-muted);
+  border-top-color: var(--jr-primary);
+  animation: jr-spin 1s linear infinite;
+}
+@keyframes jr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error and success feedback */
+.jr-error {
+  color: var(--jr-danger);
+  font-size: 0.9rem;
+}
+.jr-success {
+  color: var(--jr-success);
+  font-size: 0.9rem;
+}
+
+/* Accessibility */
+.jenkins-runner a {
+  color: var(--jr-primary);
+  text-decoration: underline;
+}
+.jenkins-runner a:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
+  border-radius: 4px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .jr-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* History table */
+.jr-history {
+  background: var(--jr-panel);
+  border: 1px solid var(--jr-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.jr-history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.jr-history-table th,
+.jr-history-table td {
+  border-bottom: 1px solid var(--jr-border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.jr-history-table tbody tr:hover {
+  background: hsl(var(--muted) / 0.06);
+}

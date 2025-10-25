@@ -9,12 +9,24 @@
         {
           "key": "config.baseUrls",
           "storageKey": "config.baseUrls",
-          "label": "BaseURL Configuration",
+          "label": "CDN Base URLs",
           "type": "kvlist",
           "default": [],
           "keyPlaceholder": "Environment",
           "valuePlaceholder": "Base URL",
           "description": "Add environment ➝ base URL pairs."
+        },
+        {
+          "key": "config.jenkins.url",
+          "storageKey": "config.jenkins.url",
+          "label": "Jenkins Base URL for Jenkins Query Runner",
+          "type": "string",
+          "default": "",
+          "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",
+          "validation": {
+            "required": true,
+            "pattern": "^https?://"
+          }
         }
       ]
     },
@@ -24,12 +36,20 @@
       "initiallyExpanded": true,
       "items": [
         {
+          "key": "secure.jenkins.username",
+          "storageKey": "secure.jenkins.username",
+          "label": "Jenkins Username",
+          "type": "string",
+          "default": "",
+          "description": "Username paired with Jenkins API token."
+        },
+        {
           "key": "secure.jenkins.token",
           "storageKey": "secure.jenkins.token",
           "label": "Jenkins Token",
           "type": "secret",
           "default": "",
-          "description": "Enter a new token to replace the existing one. Copy is disabled; only full replacement is allowed.",
+          "description": "Generate an API token from Jenkins (User ➝ Configure ➝ API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
           "validation": {
             "required": true,
             "minLength": 8

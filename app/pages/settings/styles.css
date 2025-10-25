@@ -98,11 +98,14 @@
   color: hsl(var(--text-secondary));
 }
 .setting-input {
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
+  font-size: 0.8rem; /* match .btn-sm */
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 .setting-input:focus {
   outline: none;
@@ -121,7 +124,7 @@
 .setting-edit-panel {
   margin-top: 0.5rem;
   display: none;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
 }
 .setting-label {
@@ -243,7 +246,7 @@
 .setting-edit-panel {
   margin-top: 0.5rem;
   display: none;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
 }
 .setting-label {
@@ -251,7 +254,10 @@
   color: var(--text-secondary, #555);
 }
 .setting-input {
-  padding: 0.25rem 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 .setting-actions {
   display: flex;

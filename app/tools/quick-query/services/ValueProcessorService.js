@@ -202,7 +202,7 @@ export class ValueProcessorService {
     // For config table, use field parameter_key if exist as primary key
     if (tableName.toLowerCase().endsWith("config")) {
       const parameterKeyField = data.find((field) => field[0].toLowerCase() === "parameter_key");
-      if (parameterKeyField) return [parameterKeyField[0].toLowerCase()];
+      if (parameterKeyField) return [parameterKeyField[0]];
     }
 
     // Detect PK from dedicated PK column (index 5)
