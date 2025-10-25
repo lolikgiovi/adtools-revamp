@@ -320,27 +320,46 @@ async function handleAnalyticsPost(request, env) {
     const ts = String(data.ts || tsGmt7());
     const meta = data.meta ? JSON.stringify(data.meta) : null;
 
+    // New fields for upgraded schema
+    const eventName = String(data.event_name || data.eventName || `${featureId}.${action}`);
+    const tsEpochCandidate = Number(data.ts_epoch);
+    const tsEpoch = Number.isFinite(tsEpochCandidate) ? Math.floor(tsEpochCandidate) : parseTsFlexible(ts);
+    const properties = data.properties ? JSON.stringify(data.properties) : meta;
+
     let ok = false;
     if (env.DB) {
       try {
         const id = crypto.randomUUID();
         await env.DB
           .prepare(
-            'INSERT INTO events (id, device_id, user_id, feature_id, action, ts, meta) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO events (id, device_id, feature_id, action, ts, ts_epoch, event_name, meta, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
           )
-          .bind(id, deviceId || null, data.userId || null, featureId, action, ts, meta)
+          .bind(id, deviceId || null, featureId, action, ts, tsEpoch, eventName, meta, properties)
           .run();
         await upsertDailyCount(env, ts.slice(0, 10), featureId, action);
         ok = true;
       } catch (_) {
-        ok = false;
+        // Fallback to legacy schema if new columns are missing
+        try {
+          const id = crypto.randomUUID();
+          await env.DB
+            .prepare(
+              'INSERT INTO events (id, device_id, feature_id, action, ts, meta) VALUES (?, ?, ?, ?, ?, ?)'
+            )
+            .bind(id, deviceId || null, featureId, action, ts, meta)
+            .run();
+          await upsertDailyCount(env, ts.slice(0, 10), featureId, action);
+          ok = true;
+        } catch (_) {
+          ok = false;
+        }
       }
     }
 
     // Fallback to KV when DB unavailable
     if (!ok && env.ANALYTICS) {
       const key = `events:${deviceId || crypto.randomUUID()}:${Date.now()}`;
-      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7() }), {
+      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7(), ts_epoch: tsEpoch, event_name: eventName, properties: data.properties || data.meta || null }), {
         expirationTtl: 90 * 24 * 60 * 60,
       });
       ok = true;
@@ -360,22 +379,42 @@ async function handleAnalyticsPost(request, env) {
 async function handleAnalyticsGet(request, env) {
   try {
     if (env.DB) {
-      const rs = await env.DB
-        .prepare('SELECT id, device_id, user_id, feature_id, action, ts, meta FROM events ORDER BY ts DESC LIMIT 10')
-        .all();
-      const events = (rs?.results || []).map((row) => ({
-        id: row.id,
-        deviceId: row.device_id,
-        installId: row.device_id, // legacy alias for compatibility
-        userId: row.user_id,
-        featureId: row.feature_id,
-        action: row.action,
-        ts: row.ts,
-        meta: row.meta ? JSON.parse(row.meta) : null,
-      }));
-      return new Response(JSON.stringify({ events }), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      });
+      try {
+        const rs = await env.DB
+          .prepare("SELECT id, device_id, feature_id, action, ts, ts_epoch, event_name, meta, properties FROM events ORDER BY COALESCE(ts_epoch, CAST(strftime('%s', replace(substr(ts, 1, 19), 'T', ' '), 'utc') AS INTEGER) * 1000, 0) DESC LIMIT 10")
+          .all();
+        const events = (rs?.results || []).map((row) => ({
+          id: row.id,
+          deviceId: row.device_id,
+          installId: row.device_id, // legacy alias for compatibility
+          featureId: row.feature_id,
+          action: row.action,
+          ts: row.ts,
+          ts_epoch: row.ts_epoch ?? null,
+          event_name: row.event_name ?? null,
+          meta: row.meta ? JSON.parse(row.meta) : null,
+          properties: row.properties ? JSON.parse(row.properties) : null,
+        }));
+        return new Response(JSON.stringify({ events }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        });
+      } catch (_) {
+        const rs = await env.DB
+          .prepare('SELECT id, device_id, feature_id, action, ts, meta FROM events ORDER BY ts DESC LIMIT 10')
+          .all();
+        const events = (rs?.results || []).map((row) => ({
+          id: row.id,
+          deviceId: row.device_id,
+          installId: row.device_id, // legacy alias for compatibility
+          featureId: row.feature_id,
+          action: row.action,
+          ts: row.ts,
+          meta: row.meta ? JSON.parse(row.meta) : null,
+        }));
+        return new Response(JSON.stringify({ events }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        });
+      }
     }
 
     // Fallback to KV

@@ -1,3 +1,4 @@
+import { AnalyticsSender } from './AnalyticsSender.js';
 /**
  * UsageTracker - Centralized usage analytics with localStorage persistence
  * - Records feature/action events with timestamps
@@ -79,6 +80,11 @@ class UsageTracker {
     try {
       this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
     } catch (_) {}
+
+    try {
+      const deviceId = this.getDeviceId();
+      AnalyticsSender.send({ type: featureKey, action: actionKey, event_name: `${featureKey}.${actionKey}`, deviceId, properties: meta });
+    } catch (_) {}
   }
 
   /** Alias for feature-centric tracking */
@@ -131,6 +137,11 @@ class UsageTracker {
 
     try {
       this._eventBus?.emit?.("usage:updated", ev);
+    } catch (_) {}
+
+    try {
+      const deviceId = this.getDeviceId();
+      AnalyticsSender.send({ type: featureKey, action: actionKey, event_name: `${featureKey}.${actionKey}`, deviceId, properties: meta, ts: ev.ts });
     } catch (_) {}
   }
 

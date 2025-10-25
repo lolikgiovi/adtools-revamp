@@ -66,6 +66,7 @@ class App {
     }
 
     this.initializeComponents();
+    this.setupHeaderRuntime();
     // Apply sidebar title from stored username
     try {
       const titleEl = document.querySelector(".sidebar-title");
@@ -537,18 +538,6 @@ class App {
       }
     });
 
-    // Send lightweight analytics on page changes
-    this.eventBus.on("page:changed", (data) => {
-      const page = data?.page || "unknown";
-      const action = page === "tool" ? `tool:${data?.toolId || ""}` : page;
-      try {
-        UsageTracker.track("page", action);
-      } catch (_) {}
-      try {
-        const installId = UsageTracker.getInstallId();
-        AnalyticsSender.send({ type: "page", page, toolId: data?.toolId || null, installId });
-      } catch (_) {}
-    });
 
     // Update sidebar title when user registers
     this.eventBus.on("user:registered", (data) => {
@@ -742,6 +731,43 @@ class App {
         </div>
       </div>
     `;
+  }
+  setupHeaderRuntime() {
+    const header = document.querySelector(".main-header");
+    const reloadBtn = document.querySelector(".header-reload");
+
+    const applyRuntime = () => {
+      const rt = isTauri() ? "tauri" : "web";
+      if (header) header.setAttribute("data-runtime", rt);
+      if (reloadBtn) reloadBtn.title = rt === "tauri" ? "Reload window" : "Reload";
+    };
+
+    // Initial runtime set + delayed re-check to handle late Tauri init
+    applyRuntime();
+    setTimeout(applyRuntime, 200);
+
+    // Wire reload behavior
+    if (reloadBtn) {
+      reloadBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        try {
+          // Attempt a standard reload
+          window.location.reload();
+        } catch (err) {
+          // Fallback to hard navigation
+          try {
+            window.location.href = window.location.href;
+          } catch (_) {}
+        }
+      });
+      // Keyboard accessibility for div[role="button"]
+      reloadBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          reloadBtn.click();
+        }
+      });
+    }
   }
 }
 

@@ -340,6 +340,51 @@ body {
   margin: 0;
 }
 
+/* Header actions (right side) */
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-reload {
+  display: none; /* Tauri-only: hidden by default */
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: hsl(var(--foreground));
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin: 1rem;
+}
+.main-header[data-runtime="tauri"] .header-reload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.main-header .header-reload {
+  margin: 0;
+}
+.header-reload:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.header-reload:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.header-reload svg {
+  display: block;
+  overflow: visible;
+  width: 0.95rem;
+  height: 0.95rem;
+  transition: transform 0.15s ease;
+}
+
 /* Breadcrumb Navigation */
 .breadcrumb {
   flex: 1;
