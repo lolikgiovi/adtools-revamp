@@ -12,6 +12,7 @@ DEV_MODE = "true"
 SECRET_SALT = "change-me-in-production"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools - OTP]"
+WHITELIST_ENABLED = "false"
 
 # Production environment overrides
 [env.production]
@@ -19,6 +20,7 @@ MAIL_SUBJECT_PREFIX = "[AD Tools - OTP]"
 DEV_MODE = "false"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools - OTP]"
+WHITELIST_ENABLED = "false"
 
 # KV bindings: fill in your IDs via Cloudflare dashboard or uncomment/edit below
 [[kv_namespaces]]

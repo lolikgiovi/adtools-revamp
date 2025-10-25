@@ -73,6 +73,13 @@ function methodNotAllowed() {
 
 async function handleWhitelist(env) {
   try {
+    const flag = String(env.WHITELIST_ENABLED ?? 'true').toLowerCase();
+    const disabled = flag === 'false' || flag === '0' || flag === 'no' || flag === 'off';
+    if (disabled) {
+      return new Response(JSON.stringify([]), {
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      });
+    }
     // Expect KV value as either an array JSON or object with emails key
     const raw = await env.WHITELIST?.get('emails');
     let body = [];
@@ -143,13 +150,19 @@ async function handleRegisterRequestOtp(request, env) {
       } catch (_) {}
     }
 
-    // Try to send via MailChannels; fall back silently if unavailable
-    let sent = false;
+    // Try to send via MailChannels; capture status for dev
+    let sendResult = null;
     try {
-      sent = await sendOtpEmail(env, normalized, code);
-    } catch (_) {}
+      sendResult = await sendOtpEmail(env, normalized, code);
+    } catch (e) {
+      sendResult = { ok: false, error: String(e) };
+    }
+    const sent = !!(sendResult && sendResult.ok);
 
-    const payload = String(env.DEV_MODE || '') === 'true' ? { ok: true, devCode: code } : { ok: true };
+    const payload = String(env.DEV_MODE || '') === 'true'
+      ? { ok: true, devCode: code, mailSent: sent, mailStatus: sendResult }
+      : { ok: true };
+
     return new Response(JSON.stringify(payload), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders() },
     });
@@ -361,14 +374,20 @@ async function sendOtpEmail(env, to, code) {
         },
       ],
     });
+    const headers = { 'Content-Type': 'application/json' };
+    const apiKey = env.MAILCHANNELS_API_KEY || env.MAILCHANNELS_TOKEN || '';
+    if (apiKey) headers['X-Api-Key'] = apiKey;
+
     const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body,
     });
-    return res.ok;
-  } catch (_) {
-    return false;
+    let text = '';
+    try { text = await res.text(); } catch (_) {}
+    return { ok: res.ok, status: res.status, body: text };
+  } catch (e) {
+    return { ok: false, error: String(e) };
   }
 }
 
