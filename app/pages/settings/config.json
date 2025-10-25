@@ -27,18 +27,6 @@
             "required": true,
             "pattern": "^https?://"
           }
-        },
-        {
-          "key": "config.analytics.endpoint",
-          "storageKey": "config.analytics.endpoint",
-          "label": "Cloudflare Analytics Base URL",
-          "type": "string",
-          "default": "",
-          "description": "Base URL of your Cloudflare Worker (e.g., https://analytics.yourdomain.workers.dev).",
-          "validation": {
-            "required": false,
-            "pattern": "^https?://"
-          }
         }
       ]
     },

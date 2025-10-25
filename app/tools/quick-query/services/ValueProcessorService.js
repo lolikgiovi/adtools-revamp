@@ -1,4 +1,5 @@
 import { commonDateFormats } from "../constants.js";
+import { UsageTracker } from "../../../core/UsageTracker.js";
 
 export class ValueProcessorService {
   constructor() {}
@@ -14,9 +15,6 @@ export class ValueProcessorService {
 
     // Handle audit fields
     if (AUDIT_FIELDS.time.includes(fieldName.toLowerCase())) {
-      // const hasNoValue = !value;
-      // const hasNoTimestampCharacters = !/[-/]/.test(value);
-      // return hasNoValue || hasNoTimestampCharacters ? "SYSDATE" : this.formatTimestamp(value);
       return "SYSDATE"; // for data integrity, return sysdate to log the time of the query
     }
 
@@ -35,6 +33,7 @@ export class ValueProcessorService {
       }
       // For other operations, validate nullable constraint
       if (nullable?.toLowerCase() !== "yes") {
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -44,6 +43,7 @@ export class ValueProcessorService {
     if (isExplicitNull) {
       // Always validate nullable constraint for explicit NULL values
       if (nullable?.toLowerCase() !== "yes") {
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -78,19 +78,12 @@ export class ValueProcessorService {
 
     switch (fieldDataType.type) {
       case "NUMBER":
-        // NUMBER(1,0) / boolean number
-        // if (fieldDataType.precision === 1 && fieldDataType.scale === 0) {
-        //   if (value !== "0" && value !== "1" && value !== 0 && value !== 1) {
-        //     throw new Error(`Invalid boolean value "${value}" for field "${fieldName}". Only 0 or 1 are allowed.`);
-        //   }
-        //   return value;
-        // }
-
         // Convert comma to dot if present
         const normalizedValue = value.toString().replace(",", ".");
         const num = parseFloat(normalizedValue);
 
         if (isNaN(num)) {
+          UsageTracker.trackEvent("quick-query", "value_error", { type: "invalid_number", fieldName, value });
           throw new Error(`Invalid numeric value "${value}" for field "${fieldName}"`);
         }
 
@@ -108,6 +101,7 @@ export class ValueProcessorService {
 
         if (value.toLowerCase() === "uuid") {
           if (fieldDataType.maxLength && fieldDataType.maxLength < UUID_V4_MAXLENGTH) {
+            UsageTracker.trackEvent("quick-query", "value_error", { type: "uuid_length_too_small", fieldName, maxLength: fieldDataType.maxLength });
             throw new Error(
               `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. Minimum required length is ${UUID_V4_MAXLENGTH}.`
             );
@@ -119,6 +113,7 @@ export class ValueProcessorService {
           const length = fieldDataType.unit === "BYTE" ? new TextEncoder().encode(value).length : value.length;
 
           if (length > fieldDataType.maxLength) {
+            UsageTracker.trackEvent("quick-query", "value_error", { type: "max_length_exceeded", fieldName, maxLength: fieldDataType.maxLength, length, unit: fieldDataType.unit });
             throw new Error(`Value exceeds maximum length of ${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`);
           }
         }
@@ -126,10 +121,6 @@ export class ValueProcessorService {
 
       case "DATE":
       case "TIMESTAMP":
-        // skip validation, run right through formatTimeStamp
-        // if (!this.isValidDate(value)) {
-        //   throw new Error(`Invalid date value "${value}" for field "${fieldName}"`);
-        // }
         return this.formatTimestamp(value);
 
       case "CLOB":
@@ -184,14 +175,17 @@ export class ValueProcessorService {
     const decimalDigits = parts[1]?.length || 0;
 
     if (integerDigits + decimalDigits > precision) {
+      UsageTracker.trackEvent("quick-query", "value_error", { type: "precision_exceeded", fieldName, precision, value: num });
       throw new Error(`Value ${num} exceeds maximum precision of ${precision} for field "${fieldName}"`);
     }
 
     if (scale !== undefined && decimalDigits > scale) {
+      UsageTracker.trackEvent("quick-query", "value_error", { type: "scale_exceeded", fieldName, scale, precision, value: num });
       throw new Error(`Value ${num} exceeds maximum scale of ${scale} (${precision},${scale}) for field "${fieldName}"`);
     }
 
     if (scale !== undefined && integerDigits > precision - scale) {
+      UsageTracker.trackEvent("quick-query", "value_error", { type: "integer_digits_exceeded", fieldName, precision, scale, value: num });
       throw new Error(`Integer part of ${num} exceeds maximum allowed digits for field "${fieldName}"`);
     }
   }
@@ -250,134 +244,44 @@ export class ValueProcessorService {
         }
       }
 
-      // 2. Handle timestamps with fractional seconds
-      if (value.includes(",")) {
-        // First replace dots in time with colons, but keep the date dots
-        const normalizedValue = value.replace(/(\d{2})\.(\d{2})\.(\d{2}),/, "$1:$2:$3,");
-        const [datePart, fractionalPart] = normalizedValue.split(",");
-        const precision = Math.min(fractionalPart?.length || 0, 9);
-
-        const parsed = moment(datePart, "DD-MM-YYYY HH:mm:ss", true);
+      // 2. Handle common explicit formats without timezone
+      for (const fmt of commonDateFormats) {
+        const parsed = moment(value, fmt, true);
         if (parsed.isValid()) {
-          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
-            0,
-            precision
-          )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
+          return `TO_DATE('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
         }
       }
 
-      // 3. Handle common formats with strict parsing
-      const commonFormats = [
-        "YYYY-MM-DD HH:mm:ss",
-        "DD-MM-YYYY HH:mm:ss",
-        "MM/DD/YYYY HH:mm:ss",
-        "DD/MM/YYYY HH:mm:ss",
-        "YYYY-MM-DD",
-        "DD-MM-YYYY",
-        "MM/DD/YYYY",
-        "DD/MM/YYYY",
-        "DD-MMM-YYYY",
-        "DD-MMM-YY",
-        "DD.MM.YYYY HH:mm:ss",
-        "DD.MM.YYYY",
-        "YYYY/MM/DD HH:mm:ss",
-        "YYYY/MM/DD",
-      ];
-
-      for (const format of commonFormats) {
-        const parsed = moment(value, format, true);
+      // 3. Fallback to parsing with timezone if provided (like +07:00)
+      const tzMatch = value.match(/([+-]\d{2}:?\d{2})$/);
+      if (tzMatch) {
+        const parsed = moment(value);
         if (parsed.isValid()) {
-          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
+          return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ssZ")}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
         }
       }
 
-      // 4. Handle AM/PM format
-      if (/[AaPpMm]/.test(value)) {
-        const amPmFormats = [
-          "MM/DD/YYYY hh:mm:ss A",
-          "DD-MM-YYYY hh:mm:ss A",
-          "YYYY-MM-DD hh:mm:ss A",
-          "DD/MM/YYYY hh:mm:ss A",
-          "MM-DD-YYYY hh:mm:ss A",
-        ];
-
-        for (const format of amPmFormats) {
-          const parsed = moment(value, format, true);
-          if (parsed.isValid()) {
-            return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
-          }
-        }
-      }
-
-      // 5. Last resort: try flexible parsing
-      const parsed = moment(value);
-      if (parsed.isValid()) {
-        console.warn(`Using flexible date parsing for format: ${value}`);
-        return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
-      }
-
-      throw new Error(`Unable to parse date format: ${value}`);
+      // 4. If none matched, return literal string
+      return `'${value.replace(/'/g, "''")}'`;
     } catch (error) {
-      console.error(`Error parsing timestamp: ${value}`, error);
-      throw new Error(`Invalid timestamp format: ${value}. Please use a valid date/time format.`);
+      UsageTracker.trackEvent("quick-query", "value_error", { type: "timestamp_parse_failed", message: error.message, value });
+      return `'${value.replace(/'/g, "''")}'`;
     }
   }
 
   formatCLOB(value) {
-    const chunkSize = 1000;
-    let result = "";
-    let currentChunkSize = 0;
-    let isFirstChunk = true;
-
-    for (let i = 0; i < value.length; i++) {
-      let char = value[i];
-
-      if (char === "'" || char === "\u2018" || char === "\u2019") {
-        char = "''";
-      } else if (char === "\u201C" || char === "\u201D") {
-        char = '"';
-      }
-
-      if (currentChunkSize + char.length > chunkSize || isFirstChunk) {
-        if (!isFirstChunk) {
-          result += "') || \n";
-        }
-        result += "to_clob('";
-        currentChunkSize = 0;
-        isFirstChunk = false;
-      }
-
-      result += char;
-      currentChunkSize += char.length;
-    }
-
-    result += "')";
-    return result;
+    // Escape single quotes and wrap in TO_CLOB()
+    return `TO_CLOB('${value.replace(/'/g, "''")}')`;
   }
 
   formatBLOB(value) {
-    return `UTL_RAW.CAST_TO_RAW('${value}')`;
+    // Ensure base64 string and wrap in utl_raw.cast_to_raw
+    const base64 = value.replace(/^data:.*;base64,/, "");
+    return `utl_raw.cast_to_raw('${base64}')`;
   }
 
   isValidDate(value) {
-    // Handle special cases
-    if (!value) return false;
-    if (value.toUpperCase() === "SYSDATE" || value.toUpperCase() === "CURRENT_TIMESTAMP") {
-      return true;
-    }
-
-    // Try strict parsing with common formats
-    if (commonDateFormats.some((format) => moment(value, format, true).isValid())) {
-      return true;
-    }
-
-    // If strict parsing fails, try flexible parsing as last resort
     const parsed = moment(value);
-    if (parsed.isValid()) {
-      console.warn(`Date validated using flexible parsing: ${value}`);
-      return true;
-    }
-
-    return false;
+    return parsed.isValid();
   }
 }

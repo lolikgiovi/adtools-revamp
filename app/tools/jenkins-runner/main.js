@@ -3,6 +3,7 @@ import { JenkinsRunnerTemplate } from "./template.js";
 import { JenkinsRunnerService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
+import { UsageTracker } from "../../core/UsageTracker.js";
 import { listen } from "@tauri-apps/api/event";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
 
@@ -101,6 +102,9 @@ export class JenkinsRunner extends BaseTool {
       this._logUnsubscribes.push(
         await listen("jenkins:log-complete", () => {
           statusEl.textContent = "Complete";
+          try {
+            UsageTracker.trackEvent("jenkins-runner", "run_success", { buildNumber: this.state.buildNumber || null });
+          } catch (_) {}
         })
       );
     };
@@ -203,6 +207,7 @@ export class JenkinsRunner extends BaseTool {
         const choices = await this.service.getEnvChoices(baseUrl, job);
         this.state.envChoices = Array.isArray(choices) ? choices : [];
         envSelect.innerHTML = this.state.envChoices.map((c) => `<option value="${c}">${c}</option>`).join("");
+
         if (savedEnv && this.state.envChoices.includes(savedEnv)) {
           envSelect.value = savedEnv;
         } else if (lastState.env && this.state.envChoices.includes(lastState.env)) {
@@ -290,6 +295,7 @@ export class JenkinsRunner extends BaseTool {
     // Tab switching
     const switchToRun = () => {
       if (!runTabBtn || !historyTabBtn || !runTab || !historyTab) return;
+
       runTabBtn.classList.add("active");
       runTabBtn.setAttribute("aria-selected", "true");
       historyTabBtn.classList.remove("active");
@@ -299,6 +305,7 @@ export class JenkinsRunner extends BaseTool {
     };
     const switchToHistory = () => {
       if (!runTabBtn || !historyTabBtn || !runTab || !historyTab) return;
+
       runTabBtn.classList.remove("active");
       runTabBtn.setAttribute("aria-selected", "false");
       historyTabBtn.classList.add("active");
@@ -315,6 +322,7 @@ export class JenkinsRunner extends BaseTool {
         const t = e.target;
         if (t && t.classList && t.classList.contains("jr-history-load")) {
           const idx = Number(t.getAttribute("data-index"));
+
           const arr = loadHistory();
           const it = arr[idx];
           if (!it) return;
@@ -343,6 +351,9 @@ export class JenkinsRunner extends BaseTool {
       const job = jobInput.value.trim();
       const env = envSelect.value;
       const sql = this.editor ? this.editor.getValue().trim() : "";
+      try {
+        UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length });
+      } catch (_) {}
 
       if (!baseUrl || !job || !env) {
         this.showError("Select Jenkins URL, enter Job, and choose ENV");
@@ -383,6 +394,7 @@ export class JenkinsRunner extends BaseTool {
 
         const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
         this.state.queueUrl = queueUrl;
+
         statusEl.textContent = "Queued. Polling…";
 
         let attempts = 0;
@@ -420,11 +432,15 @@ export class JenkinsRunner extends BaseTool {
             }
             if (attempts > 30) {
               statusEl.textContent = "Polling timeout";
+
               runBtn.disabled = false;
               return;
             }
           } catch (err) {
             statusEl.textContent = "Polling error";
+            try {
+              UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(err || "") });
+            } catch (_) {}
             this.showError(String(err));
             runBtn.disabled = false;
             return;
@@ -434,6 +450,9 @@ export class JenkinsRunner extends BaseTool {
         poll();
       } catch (err) {
         statusEl.textContent = "Trigger failed";
+        try {
+          UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(toFriendlyError(err) || ""), job, env });
+        } catch (_) {}
         this.showError(toFriendlyError(err));
         runBtn.disabled = false;
       }

@@ -34,7 +34,7 @@ class QRTools extends BaseTool {
   }
 
   onMount() {
-    UsageTracker.track('qr-tools', 'mount');
+    UsageTracker.trackFeature("qr-tools", "mount");
     this.bindEvents();
     this.updatePreview();
   }
@@ -154,6 +154,7 @@ class QRTools extends BaseTool {
   }
 
   async downloadPng() {
+    try { UsageTracker.trackEvent("qr-tools", "download_png", { size: this.state.size, margin: this.state.margin, mode: this.state.mode }); } catch (_) {}
     const canvas = document.getElementById("qrCanvas");
     if (!canvas || !this.state.isValid) return;
     const link = document.createElement("a");
@@ -180,6 +181,7 @@ class QRTools extends BaseTool {
   }
 
   async downloadSvg() {
+    try { UsageTracker.trackEvent("qr-tools", "download_svg", { size: this.state.size, margin: this.state.margin, mode: this.state.mode }); } catch (_) {}
     const content = (this.state.content || "").trim();
     if (!content || !this.state.isValid) return;
     try {

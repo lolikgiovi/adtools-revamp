@@ -61,12 +61,10 @@ class UsageTracker {
     const featureKey = String(featureId);
     const actionKey = String(action);
 
-    // Increment aggregated counts
     const counts = this._state.counts;
     counts[featureKey] = counts[featureKey] || {};
     counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
 
-    // Increment per-day counters for 7-day activity
     const day = now.toISOString().slice(0, 10);
     const k = `${featureKey}.${actionKey}`;
     this._state.daily = this._state.daily || {};
@@ -76,10 +74,8 @@ class UsageTracker {
     this._state.lastUpdated = now.toISOString();
     this._state.revision = (this._state.revision || 0) + 1;
 
-    // Persist immediately (keep it dead simple)
     this.flushSync();
 
-    // Notify listeners
     try {
       this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
     } catch (_) {}
@@ -90,6 +86,54 @@ class UsageTracker {
     this.track(featureId, action, meta);
   }
 
+  // Add explicit event-level tracking with event detail persistence
+  static trackEvent(featureId, event, meta = {}) {
+    if (!featureId || !event) return;
+    if (!this._enabled) return;
+
+    if (!this._state) this._state = this._loadFromStorage();
+
+    const now = new Date();
+    if (!this._isValidTimestamp(now)) return;
+
+    const featureKey = String(featureId);
+    const actionKey = String(event);
+
+    // Increment aggregated counts
+    const counts = this._state.counts;
+    counts[featureKey] = counts[featureKey] || {};
+    counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
+
+    // Increment per-day counters
+    const day = now.toISOString().slice(0, 10);
+    const k = `${featureKey}.${actionKey}`;
+    this._state.daily = this._state.daily || {};
+    this._state.daily[day] = this._state.daily[day] || {};
+    this._state.daily[day][k] = (this._state.daily[day][k] || 0) + 1;
+
+    // Persist event details (sanitized)
+    const ev = {
+      featureId: featureKey,
+      action: actionKey,
+      ts: now.toISOString(),
+      meta: this._sanitizeMeta(meta),
+    };
+    this._state.events = Array.isArray(this._state.events) ? this._state.events : [];
+    this._state.events.push(ev);
+    if (this._state.events.length > this.MAX_EVENTS) {
+      this._state.events = this._state.events.slice(this._state.events.length - this.MAX_EVENTS);
+    }
+
+    this._state.lastUpdated = ev.ts;
+    this._state.revision = (this._state.revision || 0) + 1;
+
+    this.flushSync();
+
+    try {
+      this._eventBus?.emit?.("usage:updated", ev);
+    } catch (_) {}
+  }
+
   /** Return deep-copied aggregated counts */
   static getCounts() {
     const counts = this._state?.counts || {};
@@ -98,7 +142,8 @@ class UsageTracker {
 
   /** Return recent events (not used in simple tracker) */
   static getEvents(limit = 100) {
-    return [];
+    const arr = Array.isArray(this._state?.events) ? this._state.events.slice(-limit) : [];
+    return JSON.parse(JSON.stringify(arr));
   }
 
   /** Return counts per feature and per day breakdown */
