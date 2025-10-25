@@ -670,6 +670,7 @@ class App {
 
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
 
+    // Build features list first, so we can decide to hide if empty
     const featuresHtml = Object.entries(totalsByFeature)
       .filter(([id]) => this.toolsConfigMap.has(id))
       .sort(([, a], [, b]) => b - a)
@@ -684,6 +685,21 @@ class App {
         `;
       })
       .join("");
+
+    const featuresEmpty = featuresHtml.trim() === "";
+
+    // Hide the entire usage overview when there is no data or no feature rows
+    if (totalEvents === 0 || featuresEmpty) {
+      try {
+        container.style.display = "none";
+        container.innerHTML = "";
+      } catch (_) {}
+      return;
+    } else {
+      try {
+        container.style.display = "block";
+      } catch (_) {}
+    }
 
     const now = new Date();
     const days = [];
@@ -703,18 +719,12 @@ class App {
       })
       .join("");
 
-    const emptyHtml = `<div class="usage-empty">No usage data yet. Start using tools to see stats.</div>`;
-
-    container.innerHTML = `
+    container.innerHTML = /*html*/`
       <div class="usage-panel">
         <div class="usage-panel-header">
           <h2>Usage Overview</h2>
-          <div class="usage-total">Total events: <strong>${totalEvents}</strong></div>
+          <div class="usage-total">Total activities: <strong>${totalEvents}</strong></div>
         </div>
-        ${
-          totalEvents === 0
-            ? emptyHtml
-            : `
         <div class="usage-grid">
           <div class="usage-card">
             <h3>By Feature</h3>
@@ -727,8 +737,6 @@ class App {
             </div>
           </div>
         </div>
-        `
-        }
       </div>
     `;
   }

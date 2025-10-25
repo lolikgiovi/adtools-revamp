@@ -6,6 +6,7 @@ export class RegisterPage {
   constructor({ eventBus } = {}) {
     this.eventBus = eventBus;
     this.root = null;
+    this.step = "email"; // "email" -> request OTP, "otp" -> verify
   }
 
   mount(container) {
@@ -14,6 +15,8 @@ export class RegisterPage {
 
     const form = container.querySelector(".register-form");
     const errorEl = container.querySelector(".register-error");
+    const otpField = container.querySelector(".otp-field");
+    const submitBtn = container.querySelector('[data-role="submit-btn"]');
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -21,6 +24,7 @@ export class RegisterPage {
 
       const usernameInput = container.querySelector("#reg-username");
       const emailInput = container.querySelector("#reg-email");
+      const otpInput = container.querySelector("#reg-otp");
       const username = ((usernameInput.value || "").trim()).slice(0, 15);
       const email = (emailInput.value || "").trim();
 
@@ -35,98 +39,163 @@ export class RegisterPage {
       }
 
       try {
-        // Fetch whitelist from same-origin Worker (with env-based fallback for Tauri)
         const baseEnv = (import.meta?.env?.VITE_WORKER_BASE || "").replace(/\/$/, "");
-        const fallback = baseEnv ? `${baseEnv}/whitelist.json` : "https://adtools.lolik.workers.dev/whitelist.json";
-        const WHITELIST_CANDIDATES = ["/whitelist.json", fallback];
-        let whitelist = [];
-        for (const url of WHITELIST_CANDIDATES) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data)) whitelist = data;
-              else if (data && Array.isArray(data.whitelistEmails)) whitelist = data.whitelistEmails;
-              else if (data && Array.isArray(data.allowedEmails)) whitelist = data.allowedEmails;
-              else if (data && Array.isArray(data.emails)) whitelist = data.emails;
-              else console.warn("Unexpected whitelist schema from URL");
-              if (whitelist && whitelist.length) break;
+
+        // Step 1: enforce whitelist and request OTP
+        if (this.step === "email") {
+          // Fetch whitelist from Worker or fallback
+          const fallback = baseEnv ? `${baseEnv}/whitelist.json` : "https://adtools.lolik.workers.dev/whitelist.json";
+          const WHITELIST_CANDIDATES = ["/whitelist.json", fallback];
+          let whitelist = [];
+          for (const url of WHITELIST_CANDIDATES) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 5000);
+              const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+              clearTimeout(timeoutId);
+              if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) whitelist = data;
+                else if (data && Array.isArray(data.whitelistEmails)) whitelist = data.whitelistEmails;
+                else if (data && Array.isArray(data.allowedEmails)) whitelist = data.allowedEmails;
+                else if (data && Array.isArray(data.emails)) whitelist = data.emails;
+                else console.warn("Unexpected whitelist schema from URL");
+                if (whitelist && whitelist.length) break;
+              }
+            } catch (_) {
+              // Try next candidate
             }
-          } catch (err) {
-            // Try next candidate
           }
-        }
 
-        // Normalize and cache whitelist locally
-        try {
-          const lower = (whitelist || [])
-            .map((e) =>
-              String(e || "")
-                .trim()
-                .toLowerCase()
-            )
-            .filter(Boolean);
-          localStorage.setItem("config.whitelistEmails", JSON.stringify(lower));
-          localStorage.setItem("config.whitelistFetchedAt", new Date().toISOString());
-          whitelist = lower;
-        } catch (_) {}
-
-        // Fallback to cached whitelist when fetch failed
-        if (!Array.isArray(whitelist) || !whitelist.length) {
+          // Normalize and cache whitelist locally
           try {
-            const cached = JSON.parse(localStorage.getItem("config.whitelistEmails") || "[]");
-            if (Array.isArray(cached) && cached.length) whitelist = cached;
+            const lower = (whitelist || [])
+              .map((e) => String(e || "").trim().toLowerCase())
+              .filter(Boolean);
+            localStorage.setItem("config.whitelistEmails", JSON.stringify(lower));
+            localStorage.setItem("config.whitelistFetchedAt", new Date().toISOString());
+            whitelist = lower;
           } catch (_) {}
+
+          // Fallback to cached whitelist when fetch failed
+          if (!Array.isArray(whitelist) || !whitelist.length) {
+            try {
+              const cached = JSON.parse(localStorage.getItem("config.whitelistEmails") || "[]");
+              if (Array.isArray(cached) && cached.length) whitelist = cached;
+            } catch (_) {}
+          }
+
+          // Enforce whitelist when available; if none available, allow
+          const allowed = whitelist.length ? whitelist.includes(email.toLowerCase()) : true;
+          if (!allowed) {
+            errorEl.textContent = "Email is not whitelisted. Please contact admin.";
+            return;
+          }
+
+          // Request OTP
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Sending code...";
+          const endpointCandidates = ["/register/request-otp", baseEnv ? `${baseEnv}/register/request-otp` : ""];
+          let devCode = null;
+          let requested = false;
+          for (const endpoint of endpointCandidates.filter(Boolean)) {
+            try {
+              const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email }),
+                credentials: "omit",
+              });
+              if (res.ok) {
+                const resp = await res.json();
+                devCode = resp?.devCode || null;
+                requested = true;
+                break;
+              }
+            } catch (_) {}
+          }
+          submitBtn.disabled = false;
+          if (!requested) {
+            submitBtn.textContent = "Continue";
+            errorEl.textContent = "Failed to send code. Please try again.";
+            return;
+          }
+
+          // Progress UI to OTP step
+          otpField.style.display = "block";
+          this.step = "otp";
+          submitBtn.textContent = "Verify & Continue";
+          if (devCode) {
+            otpInput.value = devCode;
+          }
+          errorEl.textContent = "We sent a verification code to your email.";
+          return; // stop here; verification will happen on next submit
         }
 
-        // Enforce whitelist when available; if none available, allow
-        const allowed = whitelist.length ? whitelist.includes(email.toLowerCase()) : true;
-        if (!allowed) {
-          errorEl.textContent = "Email is not whitelisted. Please contact admin.";
+        // Step 2: verify OTP and finalize registration
+        if (this.step === "otp") {
+          const code = (otpInput.value || "").trim();
+          if (!/^[0-9]{6}$/.test(code)) {
+            errorEl.textContent = "Enter the 6-digit verification code.";
+            return;
+          }
+
+          const endpointCandidates = ["/register/verify", baseEnv ? `${baseEnv}/register/verify` : ""];
+          const installId =
+            typeof UsageTracker?.getInstallId === "function"
+              ? UsageTracker.getInstallId()
+              : localStorage.getItem("usage.installId") || this._fallbackInstallId();
+
+          const payload = {
+            installId,
+            displayName: username,
+            email,
+            code,
+          };
+
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Verifying...";
+          let verified = false;
+          let userId = null;
+          for (const endpoint of endpointCandidates.filter(Boolean)) {
+            try {
+              const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                credentials: "omit",
+              });
+              if (res.ok) {
+                const resp = await res.json();
+                if (resp?.ok) {
+                  verified = true;
+                  userId = resp?.userId || null;
+                  break;
+                }
+              }
+            } catch (_) {}
+          }
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Verify & Continue";
+
+          if (!verified) {
+            errorEl.textContent = "Verification failed. Check the code and try again.";
+            return;
+          }
+
+          // Persist locally after verification
+          try {
+            localStorage.setItem("user.username", username);
+            localStorage.setItem("user.email", email);
+            if (userId) localStorage.setItem("user.id", userId);
+            localStorage.setItem("user.registered", "true");
+          } catch (_) {}
+
+          // Notify app and move to home
+          this.eventBus?.emit?.("user:registered", { username, email, userId });
+          location.hash = "#home";
           return;
         }
-
-        // Persist locally after passing whitelist
-        localStorage.setItem("user.username", username);
-        localStorage.setItem("user.email", email);
-        localStorage.setItem("user.registered", "true");
-
-        // Try to register with same-origin Worker (best-effort), fallback to env base
-        const endpointCandidates = ["/register", baseEnv ? `${baseEnv}/register` : ""];
-        const installId =
-          typeof UsageTracker?.getInstallId === "function"
-            ? UsageTracker.getInstallId()
-            : localStorage.getItem("usage.installId") || this._fallbackInstallId();
-
-        const payload = {
-          installId,
-          displayName: username,
-          email,
-          timestamp: new Date().toISOString(),
-        };
-        let posted = false;
-        for (const endpoint of endpointCandidates.filter(Boolean)) {
-          try {
-            await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-              credentials: "omit",
-            });
-            posted = true;
-            break;
-          } catch (_) {}
-        }
-        if (!posted) {
-          console.warn("Registration call failed, proceeding locally");
-        }
-
-        // Notify app and move to home
-        this.eventBus?.emit?.("user:registered", { username, email });
-        location.hash = "#home";
       } catch (err) {
         console.error(err);
         errorEl.textContent = "Unexpected error. Please try again.";

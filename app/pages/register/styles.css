@@ -71,3 +71,10 @@
   font-size: 12px;
   color: var(--color-text-muted, #64748b);
 }
+
+/* Additional hint for OTP step */
+.register-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted, #64748b);
+}
