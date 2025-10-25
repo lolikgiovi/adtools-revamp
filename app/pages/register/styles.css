@@ -52,8 +52,8 @@
 }
 
 .btn.btn-primary {
-  background: var(--color-primary, #2563eb);
-  color: #fff;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   border: none;
   border-radius: 8px;
   padding: 8px 14px;

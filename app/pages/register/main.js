@@ -21,7 +21,7 @@ export class RegisterPage {
 
       const usernameInput = container.querySelector("#reg-username");
       const emailInput = container.querySelector("#reg-email");
-      const username = (usernameInput.value || "").trim();
+      const username = ((usernameInput.value || "").trim()).slice(0, 15);
       const email = (emailInput.value || "").trim();
 
       const emailOk = /.+@.+\..+/.test(email);

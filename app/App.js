@@ -69,7 +69,7 @@ class App {
     try {
       const titleEl = document.querySelector(".sidebar-title");
       const username = localStorage.getItem("user.username");
-      if (titleEl && username) titleEl.textContent = username;
+      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
     } catch (_) {}
     this.registerTools();
     this.buildIconRegistry();
@@ -551,7 +551,7 @@ class App {
     this.eventBus.on("user:registered", (data) => {
       const titleEl = document.querySelector(".sidebar-title");
       const username = data?.username || localStorage.getItem("user.username");
-      if (titleEl && username) titleEl.textContent = username;
+      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
     });
   }
 
@@ -659,10 +659,9 @@ class App {
     return {
       config: [],
       app: [
-        { id: "settings", name: "Settings", icon: "settings", type: "page" },
         { id: "feedback", name: "Feedback", icon: "feedback", type: "page" },
       ],
-      footer: [{ id: "signout", name: "Sign out", icon: "signout", type: "action" }],
+      footer: [{ id: "settings", name: "Settings", icon: "settings", type: "page" }],
     };
   }
   renderUsagePanel() {
