@@ -61,7 +61,7 @@ class HTMLTemplateTool extends BaseTool {
     // Removed resizer for fixed split
     this.renderPreview(this.editor.getValue());
     try {
-      UsageTracker.trackFeature("html-template", "mount");
+      UsageTracker.trackFeature("html-template", "mount", "", 5000);
     } catch (_) {}
   }
 

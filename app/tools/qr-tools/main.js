@@ -34,7 +34,7 @@ class QRTools extends BaseTool {
   }
 
   onMount() {
-    UsageTracker.trackFeature("qr-tools", "mount");
+    UsageTracker.trackFeature("qr-tools", "mount", "", 5000);
     this.bindEvents();
     this.updatePreview();
   }

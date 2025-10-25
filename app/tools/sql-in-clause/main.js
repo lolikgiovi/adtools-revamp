@@ -37,7 +37,7 @@ class SQLInClauseTool extends BaseTool {
     this.updateOutput();
     // Track page mount as a feature
     try {
-      UsageTracker.trackFeature("sql-in-clause", "mount");
+      UsageTracker.trackFeature("sql-in-clause", "mount", "", 5000);
     } catch (_) {}
   }
 

@@ -18,6 +18,7 @@ class UsageTracker {
   static _enabled = true;
   static _state = null;
   static _flushTimer = null;
+  static _debounceTimers = new Map();
   static _eventBus = null;
 
   /** Initialize tracker (optional), sets event bus and attaches lifecycle hooks */
@@ -81,19 +82,50 @@ class UsageTracker {
       this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
     } catch (_) {}
 
-    try {
-      const deviceId = this.getDeviceId();
-      AnalyticsSender.send({ type: featureKey, action: actionKey, event_name: `${featureKey}.${actionKey}`, deviceId, properties: meta });
-    } catch (_) {}
   }
 
   /** Alias for feature-centric tracking */
-  static trackFeature(featureId, action, meta = {}) {
+  static trackFeature(featureId, action, meta = {}, debounceMs) {
+    if (!featureId || !action) return;
+    const ms = Number(debounceMs);
+    if (Number.isFinite(ms) && ms > 0) {
+      const key = `${String(featureId)}:${String(action)}`;
+      const existing = this._debounceTimers.get(key);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        try {
+          this.track(featureId, action, meta);
+        } finally {
+          this._debounceTimers.delete(key);
+        }
+      }, ms);
+      this._debounceTimers.set(key, timer);
+      return;
+    }
     this.track(featureId, action, meta);
   }
 
   // Add explicit event-level tracking with event detail persistence
-  static trackEvent(featureId, event, meta = {}) {
+  static trackEvent(featureId, event, meta = {}, debounceMs) {
+    const ms = Number(debounceMs);
+    if (Number.isFinite(ms) && ms > 0) {
+      const key = `${String(featureId)}:${String(event)}:ev`;
+      const existing = this._debounceTimers.get(key);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        try {
+          this._trackEventImmediate(featureId, event, meta);
+        } finally {
+          this._debounceTimers.delete(key);
+        }
+      }, ms);
+      this._debounceTimers.set(key, timer);
+      return;
+    }
+    return this._trackEventImmediate(featureId, event, meta);
+  }
+
+  static _trackEventImmediate(featureId, event, meta = {}) {
     if (!featureId || !event) return;
     if (!this._enabled) return;
 
@@ -105,19 +137,16 @@ class UsageTracker {
     const featureKey = String(featureId);
     const actionKey = String(event);
 
-    // Increment aggregated counts
     const counts = this._state.counts;
     counts[featureKey] = counts[featureKey] || {};
     counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
 
-    // Increment per-day counters
     const day = now.toISOString().slice(0, 10);
     const k = `${featureKey}.${actionKey}`;
     this._state.daily = this._state.daily || {};
     this._state.daily[day] = this._state.daily[day] || {};
     this._state.daily[day][k] = (this._state.daily[day][k] || 0) + 1;
 
-    // Persist event details (sanitized)
     const ev = {
       featureId: featureKey,
       action: actionKey,

@@ -320,10 +320,8 @@ async function handleAnalyticsPost(request, env) {
     const ts = String(data.ts || tsGmt7());
     const meta = data.meta ? JSON.stringify(data.meta) : null;
 
-    // New fields for upgraded schema
+    // New fields for upgraded schema (without ts_epoch)
     const eventName = String(data.event_name || data.eventName || `${featureId}.${action}`);
-    const tsEpochCandidate = Number(data.ts_epoch);
-    const tsEpoch = Number.isFinite(tsEpochCandidate) ? Math.floor(tsEpochCandidate) : parseTsFlexible(ts);
     const properties = data.properties ? JSON.stringify(data.properties) : meta;
 
     let ok = false;
@@ -332,9 +330,9 @@ async function handleAnalyticsPost(request, env) {
         const id = crypto.randomUUID();
         await env.DB
           .prepare(
-            'INSERT INTO events (id, device_id, feature_id, action, ts, ts_epoch, event_name, meta, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO events (id, device_id, feature_id, action, ts, event_name, meta, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
           )
-          .bind(id, deviceId || null, featureId, action, ts, tsEpoch, eventName, meta, properties)
+          .bind(id, deviceId || null, featureId, action, ts, eventName, meta, properties)
           .run();
         await upsertDailyCount(env, ts.slice(0, 10), featureId, action);
         ok = true;
@@ -359,7 +357,7 @@ async function handleAnalyticsPost(request, env) {
     // Fallback to KV when DB unavailable
     if (!ok && env.ANALYTICS) {
       const key = `events:${deviceId || crypto.randomUUID()}:${Date.now()}`;
-      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7(), ts_epoch: tsEpoch, event_name: eventName, properties: data.properties || data.meta || null }), {
+      await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7(), event_name: eventName, properties: data.properties || data.meta || null }), {
         expirationTtl: 90 * 24 * 60 * 60,
       });
       ok = true;
@@ -381,7 +379,7 @@ async function handleAnalyticsGet(request, env) {
     if (env.DB) {
       try {
         const rs = await env.DB
-          .prepare("SELECT id, device_id, feature_id, action, ts, ts_epoch, event_name, meta, properties FROM events ORDER BY COALESCE(ts_epoch, CAST(strftime('%s', replace(substr(ts, 1, 19), 'T', ' '), 'utc') AS INTEGER) * 1000, 0) DESC LIMIT 10")
+          .prepare("SELECT id, device_id, feature_id, action, ts, event_name, meta, properties FROM events ORDER BY CAST(strftime('%s', replace(substr(ts, 1, 19), 'T', ' '), 'utc') AS INTEGER) * 1000 DESC LIMIT 10")
           .all();
         const events = (rs?.results || []).map((row) => ({
           id: row.id,
@@ -390,7 +388,6 @@ async function handleAnalyticsGet(request, env) {
           featureId: row.feature_id,
           action: row.action,
           ts: row.ts,
-          ts_epoch: row.ts_epoch ?? null,
           event_name: row.event_name ?? null,
           meta: row.meta ? JSON.parse(row.meta) : null,
           properties: row.properties ? JSON.parse(row.properties) : null,
