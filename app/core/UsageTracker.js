@@ -280,7 +280,7 @@ class UsageTracker {
   static _createEmptyState() {
     return {
       version: 1,
-      installId: this._getOrCreateInstallId(),
+      deviceId: this._getOrCreateDeviceId(),
       lastUpdated: null,
       revision: 0,
       counts: {},
@@ -288,6 +288,38 @@ class UsageTracker {
       daily: {},
       integrity: null,
     };
+  }
+
+  static _getOrCreateDeviceId() {
+    try {
+      const keyNew = 'adtools.deviceId';
+      const keyOld = 'adtools.installId';
+      const existingNew = (typeof localStorage !== 'undefined') ? localStorage.getItem(keyNew) : null;
+      let id = existingNew;
+      if (!id) {
+        const existingOld = (typeof localStorage !== 'undefined') ? localStorage.getItem(keyOld) : null;
+        id = existingOld || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
+        if (id && typeof id === 'string' && id.startsWith('anon-')) {
+          const suffix = id.slice(5);
+          id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suffix)
+            ? suffix
+            : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
+        }
+      }
+      if (typeof localStorage !== 'undefined') localStorage.setItem(keyNew, id);
+      return id;
+    } catch (_) {
+      return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
+    }
+  }
+
+  static getDeviceId() {
+    if (this._state?.deviceId) return this._state.deviceId;
+    try {
+      return localStorage.getItem('adtools.deviceId') || this._getOrCreateDeviceId();
+    } catch (_) {
+      return this._getOrCreateDeviceId();
+    }
   }
 
   static _getOrCreateInstallId() {
@@ -383,12 +415,8 @@ class UsageTracker {
     } catch (_) {}
   }
   static getInstallId() {
-    if (this._state?.installId) return this._state.installId;
-    try {
-      return localStorage.getItem(this.INSTALL_ID_KEY) || this._getOrCreateInstallId();
-    } catch (_) {
-      return this._getOrCreateInstallId();
-    }
+    // Legacy alias
+    return this.getDeviceId();
   }
 }
 

@@ -12,6 +12,7 @@ class SettingsPage {
     this.categoriesRoot = null;
     this.searchInput = null;
     this.currentConfig = null;
+    this._runtimeRetrySettings = false;
   }
 
   async mount(root) {
@@ -25,6 +26,31 @@ class SettingsPage {
     this.container = root.querySelector('.settings-page');
     this.categoriesRoot = root.querySelector('.settings-categories');
     this.searchInput = root.querySelector('#settings-search');
+
+    // Populate runtime status badge
+    try {
+      const { getRuntime } = await import('../../core/Runtime.js');
+      const setBadge = (rt) => {
+        const badge = root.querySelector('#runtime-status');
+        if (!badge) return;
+        const isDesktop = rt === 'tauri';
+        badge.textContent = isDesktop ? 'Desktop' : 'Web App';
+        badge.setAttribute('data-state', isDesktop ? 'desktop' : 'web');
+        badge.setAttribute('title', isDesktop ? 'Running in Tauri (Desktop)' : 'Running in Browser');
+      };
+      const runtime = getRuntime();
+      setBadge(runtime);
+      // One-time delayed re-check in case Tauri globals arrive slightly later
+      if (!this._runtimeRetrySettings && runtime !== 'tauri') {
+        this._runtimeRetrySettings = true;
+        setTimeout(() => {
+          try {
+            const rt2 = getRuntime();
+            if (rt2 === 'tauri') setBadge(rt2);
+          } catch (_) {}
+        }, 200);
+      }
+    } catch (_) {}
 
     // Bind toolbar actions
     root.querySelector('.settings-reload')?.addEventListener('click', () => this.reloadConfig());
@@ -431,6 +457,7 @@ class SettingsPage {
     this.categoriesRoot = null;
     this.searchInput = null;
     this.currentConfig = null;
+    this._runtimeRetrySettings = false;
   }
 }
 

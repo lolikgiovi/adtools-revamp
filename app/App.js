@@ -27,6 +27,7 @@ import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { RegisterPage } from "./pages/register/main.js";
+import { isTauri } from "./core/Runtime.js";
 
 class App {
   constructor() {
@@ -278,12 +279,10 @@ class App {
    * Show home page
    */
   showHome() {
-    // Gate: require registration
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
     }
-    // Update breadcrumb for home
     this.updateBreadcrumb("Home", true);
 
     if (this.currentTool) {
@@ -291,12 +290,18 @@ class App {
       this.currentTool = null;
     }
 
+    const runtimeIsTauri = isTauri();
+    if (!runtimeIsTauri && !this._runtimeRetryHome) {
+      this._runtimeRetryHome = true;
+      setTimeout(() => this.showHome(), 150);
+    }
     const toolCards = Array.from(this.tools.values())
       .filter((tool) => {
         const cfg = this.toolsConfigMap.get(tool.id);
         const enabled = cfg ? cfg.enabled !== false : true;
         const showOnHome = cfg ? cfg.showOnHome !== false : true;
-        return enabled && showOnHome;
+        const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
+        return enabled && showOnHome && requiresTauriOk;
       })
       .sort((a, b) => {
         const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
@@ -332,12 +337,7 @@ class App {
     this.eventBus.emit("page:changed", { page: "home" });
   }
 
-  /**
-   * Show a specific tool
-   * @param {string} toolId - Tool ID
-   */
   showTool(toolId) {
-    // Gate: require registration
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
@@ -350,22 +350,25 @@ class App {
       return;
     }
 
-    // Update breadcrumb for tool
+    // Runtime gate: respect requiresTauri
+    const cfg = this.toolsConfigMap.get(tool.id);
+    if (cfg && cfg.requiresTauri && !isTauri()) {
+      this.eventBus.emit("notification:error", { message: "This tool requires the desktop app (Tauri) and is hidden in the browser.", type: "error" });
+      this.router.navigate("home");
+      return;
+    }
+
     this.updateBreadcrumb(tool.name);
 
-    // Deactivate current tool
     if (this.currentTool && this.currentTool !== tool) {
       this.currentTool.deactivate();
     }
 
-    // Activate new tool
     this.currentTool = tool;
     tool.activate();
 
-    // Mount tool to main content
     if (this.mainContent) {
       tool.mount(this.mainContent);
-      // Record mount in usage analytics under the tool’s feature
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });

@@ -110,8 +110,8 @@ async function handleWhitelist(env) {
 async function handleRegister(request, env) {
   try {
     const data = await request.json();
-    const installId = String(data.installId || '');
-    const key = `registrations:${installId || 'anon'}:${Date.now()}`;
+    const deviceId = String(data.deviceId || data.device_id || data.installId || '');
+    const key = `registrations:${deviceId || 'anon'}:${Date.now()}`;
     await env.ANALYTICS?.put(key, JSON.stringify({ ...data, receivedAt: new Date().toISOString() }), {
       expirationTtl: 90 * 24 * 60 * 60, // 90 days
     });
@@ -202,10 +202,24 @@ async function handleRegisterVerify(request, env) {
     const data = await request.json();
     const email = String(data.email || '').trim().toLowerCase();
     const code = String(data.code || '').trim();
-    const installIdRaw = String(data.installId || '').trim();
-    const platform = String(data.platform || '').trim() || null;
-    const browser = String(data.browser || '').trim() || null;
-    const installId = installIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
+    const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || '').trim();
+    const ua = request.headers.get('User-Agent') || '';
+    const payloadPlatform = String(data.platform || '').trim();
+    const payloadBrowser = String(data.browser || '').trim();
+    const tauriHint = /tauri/i.test(ua) || /tauri/i.test(payloadPlatform) || /tauri/i.test(payloadBrowser) || (payloadPlatform === 'Desktop' && (!payloadBrowser || /unknown/i.test(payloadBrowser)));
+    let platform = tauriHint ? 'Desktop' : (payloadPlatform || 'Browser');
+    const browserUA = (/Firefox\//i.test(ua)) ? 'Firefox' :
+                     (/Edg\//i.test(ua)) ? 'Edge' :
+                     ((/Chrome\//i.test(ua) && !/Chromium\//i.test(ua)) ? 'Chrome' :
+                     ((/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) ? 'Safari' :
+                     ((/Chromium\//i.test(ua)) ? 'Chromium' : 'Unknown')));
+    const browserFromPayload = (payloadBrowser && !/unknown/i.test(payloadBrowser)) ? payloadBrowser : null;
+    let browser = tauriHint ? 'Tauri' : (browserFromPayload || browserUA);
+    if (!tauriHint && (!payloadBrowser || /unknown/i.test(payloadBrowser)) && (!payloadPlatform || /browser/i.test(payloadPlatform))) {
+      platform = 'Desktop';
+      browser = 'Tauri';
+    }
+    const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
     const displayName = String(data.displayName || '').trim();
 
     if (!email || !code) {
@@ -274,14 +288,14 @@ async function handleRegisterVerify(request, env) {
 
     try {
       await env.DB
-        .prepare('INSERT OR IGNORE INTO user_installs (user_id, install_id, platform, browser, created_at) VALUES (?, ?, ?, ?, ?)')
-        .bind(userId, installId, platform, browser, tsGmt7())
+        .prepare('INSERT OR IGNORE INTO user_device (user_id, device_id, platform, browser, created_at) VALUES (?, ?, ?, ?, ?)')
+        .bind(userId, deviceId, platform, browser, tsGmt7())
         .run();
     } catch (_) {
       try {
         await env.DB
           .prepare('INSERT OR IGNORE INTO user_installs (user_id, install_id, created_at) VALUES (?, ?, ?)')
-          .bind(userId, installId, tsGmt7())
+          .bind(userId, deviceId, tsGmt7())
           .run();
       } catch (_) {}
     }
@@ -300,7 +314,7 @@ async function handleRegisterVerify(request, env) {
 async function handleAnalyticsPost(request, env) {
   try {
     const data = await request.json();
-    const installId = String(data.installId || '');
+    const deviceId = String(data.deviceId || data.device_id || data.installId || '');
     const featureId = String(data.featureId || data.feature_id || data.type || 'unknown');
     const action = String(data.action || data.event || 'unknown');
     const ts = String(data.ts || tsGmt7());
@@ -312,9 +326,9 @@ async function handleAnalyticsPost(request, env) {
         const id = crypto.randomUUID();
         await env.DB
           .prepare(
-            'INSERT INTO events (id, install_id, user_id, feature_id, action, ts, meta) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO events (id, device_id, user_id, feature_id, action, ts, meta) VALUES (?, ?, ?, ?, ?, ?, ?)'
           )
-          .bind(id, installId || null, data.userId || null, featureId, action, ts, meta)
+          .bind(id, deviceId || null, data.userId || null, featureId, action, ts, meta)
           .run();
         await upsertDailyCount(env, ts.slice(0, 10), featureId, action);
         ok = true;
@@ -325,7 +339,7 @@ async function handleAnalyticsPost(request, env) {
 
     // Fallback to KV when DB unavailable
     if (!ok && env.ANALYTICS) {
-      const key = `events:${installId || crypto.randomUUID()}:${Date.now()}`;
+      const key = `events:${deviceId || crypto.randomUUID()}:${Date.now()}`;
       await env.ANALYTICS.put(key, JSON.stringify({ ...data, receivedAt: tsGmt7() }), {
         expirationTtl: 90 * 24 * 60 * 60,
       });
@@ -347,11 +361,12 @@ async function handleAnalyticsGet(request, env) {
   try {
     if (env.DB) {
       const rs = await env.DB
-        .prepare('SELECT id, install_id, user_id, feature_id, action, ts, meta FROM events ORDER BY ts DESC LIMIT 10')
+        .prepare('SELECT id, device_id, user_id, feature_id, action, ts, meta FROM events ORDER BY ts DESC LIMIT 10')
         .all();
       const events = (rs?.results || []).map((row) => ({
         id: row.id,
-        installId: row.install_id,
+        deviceId: row.device_id,
+        installId: row.device_id, // legacy alias for compatibility
         userId: row.user_id,
         featureId: row.feature_id,
         action: row.action,
@@ -437,4 +452,14 @@ async function upsertDailyCount(env, day, featureId, action) {
   } catch (_) {
     return false;
   }
+}
+
+function detectBrowserFromUA(ua) {
+  const s = String(ua || '');
+  if (/Firefox\//i.test(s)) return 'Firefox';
+  if (/Edg\//i.test(s)) return 'Edge';
+  if (/Chrome\//i.test(s) && !/Chromium\//i.test(s)) return 'Chrome';
+  if (/Safari\//i.test(s) && !/Chrome\//i.test(s)) return 'Safari';
+  if (/Chromium\//i.test(s)) return 'Chromium';
+  return 'Unknown';
 }

@@ -19,7 +19,7 @@
         {
           "key": "config.jenkins.url",
           "storageKey": "config.jenkins.url",
-          "label": "Jenkins Base URL for Jenkins Query Runner",
+          "label": "Jenkins URL",
           "type": "string",
           "default": "",
           "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",

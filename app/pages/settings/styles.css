@@ -314,3 +314,72 @@
   color: var(--text-secondary);
   word-break: break-all;
 }
+
+/* Runtime status badge */
+/* Settings page styles */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Runtime status indicator */
+.runtime-status {
+  display: flex;
+  align-items: center;
+}
+
+.runtime-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  background: var(--surface-2, #2a2a2a);
+  color: var(--text-1, #fff);
+  border: 1px solid var(--border-2, #3a3a3a);
+}
+
+.runtime-status-badge[data-state="desktop"] {
+  background: var(--green-9, #2e7d32);
+  border-color: var(--green-10, #1b5e20);
+}
+
+.runtime-status-badge[data-state="web"] {
+  background: var(--indigo-9, #3f51b5);
+  border-color: var(--indigo-10, #283593);
+}
+
+.settings-search input[type="search"] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-2, #3a3a3a);
+  background: var(--surface-1, #1f1f1f);
+  color: var(--text-1, #fff);
+}
+
+.settings-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Existing styles for categories/items assumed below */

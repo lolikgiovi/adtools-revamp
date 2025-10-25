@@ -141,17 +141,21 @@ export class RegisterPage {
           }
 
           const endpointCandidates = ["/register/verify", baseEnv ? `${baseEnv}/register/verify` : ""];
-          const installId =
-            typeof UsageTracker?.getInstallId === "function"
-              ? UsageTracker.getInstallId()
-              : localStorage.getItem("usage.installId") || this._fallbackInstallId();
+          const deviceId =
+            typeof UsageTracker?.getDeviceId === "function"
+              ? UsageTracker.getDeviceId()
+              : (localStorage.getItem("adtools.deviceId") || localStorage.getItem("usage.installId") || this._fallbackInstallId());
 
-          const payload = {
-            installId,
-            displayName: username,
-            email,
-            code,
-          };
+const platform = await detectPlatformAsync();
+const browser = await detectBrowserAsync();
+           const payload = {
+             deviceId,
+             displayName: username,
+             email,
+             code,
+platform,
+browser,
+           };
 
           submitBtn.disabled = true;
           submitBtn.textContent = "Verifying...";
@@ -215,10 +219,14 @@ export class RegisterPage {
 
 // Simple platform/browser detectors for install analytics
 function detectPlatform() {
-  return typeof window !== 'undefined' && typeof window.__TAURI__ !== 'undefined' ? 'tauri' : 'browser';
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+  const isTauri = (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) || /tauri/i.test(ua);
+  return isTauri ? 'Desktop' : 'Browser';
 }
 function detectBrowser() {
-  const ua = navigator.userAgent || '';
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+  const isTauri = (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) || /tauri/i.test(ua);
+  if (isTauri) return 'Tauri';
   if (/Firefox\//.test(ua)) return 'Firefox';
   if (/Edg\//.test(ua)) return 'Edge';
   if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return 'Chrome';
@@ -226,13 +234,42 @@ function detectBrowser() {
   if (/Chromium\//.test(ua)) return 'Chromium';
   return 'Unknown';
 }
-async function verifyOtp(email, code, installId, displayName) {
+
+async function detectPlatformAsync() {
+  try {
+    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+    if (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) {
+      return 'Desktop';
+    }
+    // Dynamic import succeeds only in Tauri
+    const mod = await import('@tauri-apps/api/core').catch(() => null);
+    if (mod && (mod.invoke || mod.default)) return 'Desktop';
+    return /tauri/i.test(ua) ? 'Desktop' : 'Browser';
+  } catch (_) {
+    return detectPlatform();
+  }
+}
+
+async function detectBrowserAsync() {
+  try {
+    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+    if (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) {
+      return 'Tauri';
+    }
+    const mod = await import('@tauri-apps/api/core').catch(() => null);
+    if (mod && (mod.invoke || mod.default)) return 'Tauri';
+    return detectBrowser();
+  } catch (_) {
+    return detectBrowser();
+  }
+}
+async function verifyOtp(email, code, deviceId, displayName) {
   const platform = detectPlatform();
   const browser = detectBrowser();
   const res = await fetch('/api/register/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code, installId, displayName, platform, browser }),
+    body: JSON.stringify({ email, code, deviceId, displayName, platform, browser }),
   });
   return res.json();
 }
