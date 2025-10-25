@@ -331,6 +331,14 @@ class UsageTracker {
       this._state = null;
     } catch (_) {}
   }
+  static getInstallId() {
+    if (this._state?.installId) return this._state.installId;
+    try {
+      return localStorage.getItem(this.INSTALL_ID_KEY) || this._getOrCreateInstallId();
+    } catch (_) {
+      return this._getOrCreateInstallId();
+    }
+  }
 }
 
 export { UsageTracker };

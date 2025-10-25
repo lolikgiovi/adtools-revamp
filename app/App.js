@@ -25,6 +25,7 @@ import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { RegisterPage } from "./pages/register/main.js";
 
 class App {
   constructor() {
@@ -63,6 +64,12 @@ class App {
     }
 
     this.initializeComponents();
+    // Apply sidebar title from stored username
+    try {
+      const titleEl = document.querySelector(".sidebar-title");
+      const username = localStorage.getItem("user.username");
+      if (titleEl && username) titleEl.textContent = username;
+    } catch (_) {}
     this.registerTools();
     this.buildIconRegistry();
     this.setupRoutes();
@@ -255,14 +262,26 @@ class App {
       this.showFeedback();
     });
 
-    // Set default route
-    this.router.setDefaultRoute("home");
+    // Register route for onboarding
+    this.router.register("register", () => {
+      const registerPage = new RegisterPage({ eventBus: this.eventBus });
+      registerPage.mount(this.mainContent);
+    });
+
+    // Set default route based on registration state
+    const registered = localStorage.getItem("user.registered") === "true";
+    this.router.setDefaultRoute(registered ? "home" : "register");
   }
 
   /**
    * Show home page
    */
   showHome() {
+    // Gate: require registration
+    if (localStorage.getItem("user.registered") !== "true") {
+      this.router.navigate("register");
+      return;
+    }
     // Update breadcrumb for home
     this.updateBreadcrumb("Home", true);
 
@@ -317,6 +336,11 @@ class App {
    * @param {string} toolId - Tool ID
    */
   showTool(toolId) {
+    // Gate: require registration
+    if (localStorage.getItem("user.registered") !== "true") {
+      this.router.navigate("register");
+      return;
+    }
     const tool = this.tools.get(toolId);
 
     if (!tool) {
@@ -507,6 +531,13 @@ class App {
       if (document.querySelector(".home-container")) {
         this.renderUsagePanel();
       }
+    });
+
+    // Update sidebar title when user registers
+    this.eventBus.on("user:registered", (data) => {
+      const titleEl = document.querySelector(".sidebar-title");
+      const username = data?.username || localStorage.getItem("user.username");
+      if (titleEl && username) titleEl.textContent = username;
     });
   }
 
