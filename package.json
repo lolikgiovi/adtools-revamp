@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:tauri": "vite build --mode tauri",
     "postbuild": "cp -R app dist/app",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "cf:dev": "npm run build && npx wrangler dev",
+    "cf:publish": "npm run build && npx wrangler publish"
   },
   "keywords": [],
   "author": "",

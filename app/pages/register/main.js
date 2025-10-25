@@ -35,15 +35,16 @@ export class RegisterPage {
       }
 
       try {
-        // Fetch whitelist from Cloudflare Pages (JSON array or { whitelistEmails: [] })
-        const WHITELIST_URL = "https://adtools.lolik.workers.dev/whitelist.json";
-        const whitelistUrl = WHITELIST_URL;
+        // Fetch whitelist from same-origin Worker (with env-based fallback for Tauri)
+        const baseEnv = (import.meta?.env?.VITE_WORKER_BASE || "").replace(/\/$/, "");
+        const fallback = baseEnv ? `${baseEnv}/whitelist.json` : "https://adtools.lolik.workers.dev/whitelist.json";
+        const WHITELIST_CANDIDATES = ["/whitelist.json", fallback];
         let whitelist = [];
-        if (whitelistUrl) {
+        for (const url of WHITELIST_CANDIDATES) {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(whitelistUrl, { signal: controller.signal, cache: "no-store" });
+            const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
             clearTimeout(timeoutId);
             if (res.ok) {
               const data = await res.json();
@@ -52,11 +53,10 @@ export class RegisterPage {
               else if (data && Array.isArray(data.allowedEmails)) whitelist = data.allowedEmails;
               else if (data && Array.isArray(data.emails)) whitelist = data.emails;
               else console.warn("Unexpected whitelist schema from URL");
-            } else {
-              throw new Error("Failed to fetch whitelist");
+              if (whitelist && whitelist.length) break;
             }
           } catch (err) {
-            console.warn("Whitelist fetch failed:", err);
+            // Try next candidate
           }
         }
 
@@ -74,16 +74,16 @@ export class RegisterPage {
           whitelist = lower;
         } catch (_) {}
 
-        // Fallback to cached whitelist if URL not configured
-        if (!whitelistUrl) {
+        // Fallback to cached whitelist when fetch failed
+        if (!Array.isArray(whitelist) || !whitelist.length) {
           try {
             const cached = JSON.parse(localStorage.getItem("config.whitelistEmails") || "[]");
             if (Array.isArray(cached) && cached.length) whitelist = cached;
           } catch (_) {}
         }
 
-        // Enforce whitelist when available
-        const allowed = whitelist.length ? whitelist.includes(email.toLowerCase()) : !whitelistUrl;
+        // Enforce whitelist when available; if none available, allow
+        const allowed = whitelist.length ? whitelist.includes(email.toLowerCase()) : true;
         if (!allowed) {
           errorEl.textContent = "Email is not whitelisted. Please contact admin.";
           return;
@@ -94,21 +94,21 @@ export class RegisterPage {
         localStorage.setItem("user.email", email);
         localStorage.setItem("user.registered", "true");
 
-        // Try to register with Cloudflare (best-effort)
-        const base = localStorage.getItem("config.analytics.endpoint") || "";
-        const endpoint = base ? `${base.replace(/\/$/, "")}/register` : "";
+        // Try to register with same-origin Worker (best-effort), fallback to env base
+        const endpointCandidates = ["/register", baseEnv ? `${baseEnv}/register` : ""];
         const installId =
           typeof UsageTracker?.getInstallId === "function"
             ? UsageTracker.getInstallId()
             : localStorage.getItem("usage.installId") || this._fallbackInstallId();
 
-        if (endpoint) {
-          const payload = {
-            installId,
-            displayName: username,
-            email,
-            timestamp: new Date().toISOString(),
-          };
+        const payload = {
+          installId,
+          displayName: username,
+          email,
+          timestamp: new Date().toISOString(),
+        };
+        let posted = false;
+        for (const endpoint of endpointCandidates.filter(Boolean)) {
           try {
             await fetch(endpoint, {
               method: "POST",
@@ -116,9 +116,12 @@ export class RegisterPage {
               body: JSON.stringify(payload),
               credentials: "omit",
             });
-          } catch (err) {
-            console.warn("Registration call failed, proceeding locally:", err);
-          }
+            posted = true;
+            break;
+          } catch (_) {}
+        }
+        if (!posted) {
+          console.warn("Registration call failed, proceeding locally");
         }
 
         // Notify app and move to home

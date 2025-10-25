@@ -21,6 +21,7 @@ import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from './core/UsageTracker.js';
+import { AnalyticsSender } from './core/AnalyticsSender.js';
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
@@ -531,6 +532,19 @@ class App {
       if (document.querySelector(".home-container")) {
         this.renderUsagePanel();
       }
+    });
+
+    // Send lightweight analytics on page changes
+    this.eventBus.on("page:changed", (data) => {
+      const page = data?.page || "unknown";
+      const action = page === "tool" ? `tool:${data?.toolId || ""}` : page;
+      try {
+        UsageTracker.track("page", action);
+      } catch (_) {}
+      try {
+        const installId = UsageTracker.getInstallId();
+        AnalyticsSender.send({ type: "page", page, toolId: data?.toolId || null, installId });
+      } catch (_) {}
     });
 
     // Update sidebar title when user registers
