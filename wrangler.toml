@@ -10,8 +10,15 @@ assets = { directory = "./dist" }
 [vars]
 DEV_MODE = "true"
 SECRET_SALT = "change-me-in-production"
-MAIL_FROM = "no-reply@adtools.local"
-MAIL_SUBJECT_PREFIX = "[AD Tools]"
+MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_SUBJECT_PREFIX = "[AD Tools - OTP]"
+
+# Production environment overrides
+[env.production]
+[env.production.vars]
+DEV_MODE = "false"
+MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_SUBJECT_PREFIX = "[AD Tools - OTP]"
 
 # KV bindings: fill in your IDs via Cloudflare dashboard or uncomment/edit below
 [[kv_namespaces]]

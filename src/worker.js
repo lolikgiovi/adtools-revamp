@@ -212,11 +212,11 @@ async function handleRegisterVerify(request, env) {
     await env.DB.prepare('UPDATE otps SET consumed_at = ? WHERE id = ?').bind(now, row.id).run();
 
     const salt = String(env.SECRET_SALT || '');
-    const emailHash = salt ? await hashEmail(email, salt) : email;
+    const emailHash = salt ? await hashEmail(email, salt) : null;
 
-    // Upsert user
+    // Upsert user (plain email as canonical identifier)
     let userId = null;
-    const existing = await env.DB.prepare('SELECT id FROM users WHERE email_hash = ?').bind(emailHash).first();
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
     if (existing?.id) {
       userId = existing.id;
       await env.DB
