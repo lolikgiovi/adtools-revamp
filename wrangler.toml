@@ -1,4 +1,4 @@
-name = "adtools-worker"
+name = "adtools"
 main = "src/worker.js"
 compatibility_date = "2024-10-01"
 workers_dev = true
@@ -7,10 +7,10 @@ workers_dev = true
 assets = { directory = "./dist" }
 
 # KV bindings: fill in your IDs via Cloudflare dashboard or uncomment/edit below
-# [[kv_namespaces]]
-# binding = "WHITELIST"
-# id = "<YOUR_PRODUCTION_WHITELIST_KV_ID>"
-# preview_id = "<YOUR_PREVIEW_WHITELIST_KV_ID>"
+[[kv_namespaces]]
+binding = "WHITELIST"
+id = "d1b16a8778cb4860bb6c1f63f6f51497"
+preview_id = "d1b16a8778cb4860bb6c1f63f6f51497"
 #
 # [[kv_namespaces]]
 # binding = "ANALYTICS"
