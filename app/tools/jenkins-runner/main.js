@@ -27,6 +27,7 @@ export class JenkinsRunner extends BaseTool {
     };
     this._logUnsubscribes = [];
     this.editor = null;
+    this.templateEditor = null;
   }
 
   getIconSvg() {
@@ -42,6 +43,7 @@ export class JenkinsRunner extends BaseTool {
     const jobInput = this.container.querySelector("#jenkins-job");
     const envSelect = this.container.querySelector("#jenkins-env");
     const sqlEditorContainer = this.container.querySelector("#jenkins-sql-editor");
+    const sqlPreviewEl = this.container.querySelector("#jenkins-sql-preview");
     const runBtn = this.container.querySelector("#jenkins-run");
     const statusEl = this.container.querySelector('[data-role="status"]');
     const hintEl = this.container.querySelector('[data-role="hint"]');
@@ -55,6 +57,27 @@ export class JenkinsRunner extends BaseTool {
     const runTab = this.container.querySelector("#jr-tab-run");
     const historyTab = this.container.querySelector("#jr-tab-history");
     const historyList = this.container.querySelector("#jr-history-list");
+    const templatesTabBtn = this.container.querySelector("#jr-tab-templates-btn");
+    const templatesTab = this.container.querySelector("#jr-tab-templates");
+    const templateNameInput = this.container.querySelector("#jr-template-name");
+    const templateNameErrorEl = this.container.querySelector("#jr-template-name-error");
+    const templateJobSelect = this.container.querySelector("#jr-template-job");
+    const templateEnvSelect = this.container.querySelector("#jr-template-env");
+    const templateEnvErrorEl = this.container.querySelector("#jr-template-env-error");
+    const templateSqlEditorContainer = this.container.querySelector("#jr-template-sql-editor");
+    const templateListEl = this.container.querySelector("#jr-template-list");
+    const templateSearchInput = this.container.querySelector("#jr-template-search");
+    const templateSortSelect = this.container.querySelector("#jr-template-sort");
+    const templateHintEl = this.container.querySelector("#jr-template-hint");
+    const templateCreateBtn = this.container.querySelector("#jr-template-create-btn");
+    const filterJobSelect = this.container.querySelector("#jr-template-filter-job");
+    const filterEnvSelect = this.container.querySelector("#jr-template-filter-env");
+    const templateModal = this.container.querySelector("#jr-template-modal");
+    const templateModalOverlay = this.container.querySelector("#jr-template-modal-overlay");
+    const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
+    const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
+    const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
+    const templateModalCancelBtn = this.container.querySelector("#jr-template-modal-cancel");
 
     // Map backend error strings to friendly guidance
     const toFriendlyError = (e) => {
@@ -67,6 +90,8 @@ export class JenkinsRunner extends BaseTool {
       }
       return String(e || "Unknown error");
     };
+
+    const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
     // Log helpers scoped to this tool instance
     // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
@@ -176,6 +201,28 @@ export class JenkinsRunner extends BaseTool {
       tabCompletion: "off",
     });
 
+    // Monaco for Templates (create/edit only)
+    if (templateSqlEditorContainer) {
+      this.templateEditor = createOracleEditor(templateSqlEditorContainer, {
+        value: "",
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        wordWrap: "on",
+        fontSize: 11,
+        tabSize: 2,
+        insertSpaces: true,
+        quickSuggestions: false,
+        suggestOnTriggerCharacters: false,
+        wordBasedSuggestions: false,
+        snippetSuggestions: "none",
+        parameterHints: { enabled: false },
+        inlineSuggest: { enabled: false },
+        acceptSuggestionOnEnter: "off",
+        tabCompletion: "off",
+      });
+    }
+
     const saveLastState = (patch = {}) => {
       const base = {
         jenkinsUrl: this.state.jenkinsUrl,
@@ -209,6 +256,19 @@ export class JenkinsRunner extends BaseTool {
       const hasUrl = !!this.state.jenkinsUrl;
       const hasSql = !!(this.editor && this.editor.getValue().trim().length >= 5);
       runBtn.disabled = !(validJob && hasEnv && hasUrl && hasSql);
+    };
+
+    // SQL preview toggle when running from a template
+    const showSqlPreview = (sqlText) => {
+      if (!sqlPreviewEl) return;
+      sqlPreviewEl.textContent = String(sqlText || "");
+      sqlPreviewEl.style.display = "block";
+      if (sqlEditorContainer) sqlEditorContainer.style.display = "none";
+    };
+    const hideSqlPreview = () => {
+      if (!sqlPreviewEl) return;
+      sqlPreviewEl.style.display = "none";
+      if (sqlEditorContainer) sqlEditorContainer.style.display = "block";
     };
 
     const refreshEnvChoices = async (retry = 0) => {
@@ -250,6 +310,244 @@ export class JenkinsRunner extends BaseTool {
         envSelect.disabled = false;
         toggleSubmitEnabled();
       }
+    };
+
+    // Templates: storage and rendering
+    const persistTemplatesKey = "tool:jenkins-runner:templates";
+    const loadTemplates = () => {
+      try {
+        const raw = localStorage.getItem(persistTemplatesKey) || "[]";
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch (_) {
+        return [];
+      }
+    };
+    const saveTemplates = (arr) => {
+      try {
+        localStorage.setItem(persistTemplatesKey, JSON.stringify(arr));
+      } catch (_) {}
+    };
+    const findTemplateByName = (name) => {
+      const arr = loadTemplates();
+      return arr.find((t) => (t?.name || "") === name) || null;
+    };
+
+    // Modal state
+    this.state.modalOpen = false;
+    this._modalPrevFocusEl = null;
+    const clearTemplateForm = () => {
+      if (templateNameInput) templateNameInput.value = "";
+      if (templateJobSelect) templateJobSelect.value = "tester-execute-query-new";
+      if (templateEnvSelect) templateEnvSelect.innerHTML = "";
+      if (this.templateEditor) this.templateEditor.setValue("");
+      if (templateNameErrorEl) templateNameErrorEl.style.display = "none";
+      if (templateEnvErrorEl) templateEnvErrorEl.style.display = "none";
+      this.state.editingTemplateName = null;
+    };
+
+    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    let focusTrapHandler = null;
+    const activateFocusTrap = (container) => {
+      const all = Array.from(container.querySelectorAll(focusableSelector)).filter((el) => !el.hasAttribute("disabled"));
+      const first = all[0];
+      const last = all[all.length - 1];
+      if (first) first.focus();
+      focusTrapHandler = (e) => {
+        if (e.key === "Tab") {
+          if (all.length === 0) return;
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        } else if (e.key === "Escape") {
+          closeTemplateModal(true);
+        }
+      };
+      container.addEventListener("keydown", focusTrapHandler);
+    };
+    const deactivateFocusTrap = (container) => {
+      if (focusTrapHandler) {
+        container.removeEventListener("keydown", focusTrapHandler);
+        focusTrapHandler = null;
+      }
+    };
+
+    const openTemplateModal = (mode = "create", tpl = null) => {
+      if (!templateModal || !templateModalOverlay) return;
+      this.state.modalOpen = true;
+      this._modalPrevFocusEl = document.activeElement;
+      templateModalOverlay.style.display = "block";
+      templateModal.style.display = "flex";
+      if (templateModalTitle) templateModalTitle.textContent = mode === "edit" ? "Edit Template" : "Create Template";
+      if (mode === "edit" && tpl) {
+        this.state.editingTemplateName = tpl.name || null;
+        if (templateNameInput) templateNameInput.value = tpl.name || "";
+        if (templateJobSelect) templateJobSelect.value = tpl.job || "tester-execute-query";
+        refreshTemplateEnvChoices().then(() => {
+          if (templateEnvSelect) templateEnvSelect.value = tpl.env || "";
+        });
+        if (this.templateEditor) this.templateEditor.setValue(tpl.sql || "");
+      } else {
+        clearTemplateForm();
+        refreshTemplateEnvChoices();
+      }
+      activateFocusTrap(templateModal);
+    };
+
+    const closeTemplateModal = (clear = true) => {
+      if (!templateModal || !templateModalOverlay) return;
+      this.state.modalOpen = false;
+      templateModalOverlay.style.display = "none";
+      templateModal.style.display = "none";
+      deactivateFocusTrap(templateModal);
+      if (clear) clearTemplateForm();
+      if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") {
+        this._modalPrevFocusEl.focus();
+      }
+    };
+
+    const refreshTemplateEnvChoices = async (retry = 0) => {
+      if (!templateEnvSelect) return;
+      const baseUrl = this.state.jenkinsUrl;
+      const job = templateJobSelect ? templateJobSelect.value.trim() : "";
+      if (!baseUrl) {
+        if (templateHintEl) templateHintEl.textContent = "Configure Jenkins URL in Settings first.";
+        return;
+      }
+      if (!job || !allowedJobs.has(job)) {
+        if (templateEnvErrorEl) {
+          templateEnvErrorEl.style.display = "block";
+          templateEnvErrorEl.textContent = "Select a valid Job type first.";
+        }
+        return;
+      }
+      try {
+        if (templateEnvErrorEl) templateEnvErrorEl.style.display = "none";
+        if (templateHintEl) templateHintEl.textContent = "Loading ENV choices…";
+        templateEnvSelect.classList.add("jr-loading");
+        templateEnvSelect.disabled = true;
+        const choices = await this.service.getEnvChoices(baseUrl, job);
+        const envs = Array.isArray(choices) ? choices : [];
+        templateEnvSelect.innerHTML = envs.map((c) => `<option value="${c}">${c}</option>`).join("");
+        if (templateHintEl) templateHintEl.textContent = "";
+      } catch (err) {
+        if (templateEnvErrorEl) {
+          templateEnvErrorEl.style.display = "block";
+          templateEnvErrorEl.textContent = toFriendlyError(err);
+        }
+        if (retry < 2) setTimeout(() => refreshTemplateEnvChoices(retry + 1), 1500);
+      } finally {
+        templateEnvSelect.classList.remove("jr-loading");
+        templateEnvSelect.disabled = false;
+      }
+    };
+
+    this.state.editingTemplateName = null;
+
+    const validateTemplateForm = () => {
+      let ok = true;
+      const name = (templateNameInput?.value || "").trim();
+      const job = (templateJobSelect?.value || "").trim();
+      const env = (templateEnvSelect?.value || "").trim();
+      const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
+
+      if (!name) {
+        ok = false;
+        if (templateNameErrorEl) {
+          templateNameErrorEl.style.display = "block";
+          templateNameErrorEl.textContent = "Template name is required.";
+        }
+      } else {
+        if (templateNameErrorEl) templateNameErrorEl.style.display = "none";
+      }
+      if (!allowedJobs.has(job)) {
+        ok = false;
+      }
+      if (!env) {
+        ok = false;
+        if (templateEnvErrorEl) {
+          templateEnvErrorEl.style.display = "block";
+          templateEnvErrorEl.textContent = "Select ENV.";
+        }
+      } else {
+        if (templateEnvErrorEl) templateEnvErrorEl.style.display = "none";
+      }
+      if (!sql || sql.length < 5) {
+        ok = false;
+        this.showError("SQL query is required and must be at least 5 characters.");
+      }
+
+      // uniqueness check if creating new or renaming
+      const existing = findTemplateByName(name);
+      if (!this.state.editingTemplateName && existing) {
+        ok = false;
+        if (templateNameErrorEl) {
+          templateNameErrorEl.style.display = "block";
+          templateNameErrorEl.textContent = "Template name must be unique.";
+        }
+      }
+      if (this.state.editingTemplateName && this.state.editingTemplateName !== name && existing) {
+        ok = false;
+        if (templateNameErrorEl) {
+          templateNameErrorEl.style.display = "block";
+          templateNameErrorEl.textContent = "Another template already uses this name.";
+        }
+      }
+      return ok;
+    };
+
+    const renderTemplates = () => {
+      if (!templateListEl) return;
+      const q = (templateSearchInput?.value || "").toLowerCase();
+      const sort = (templateSortSelect?.value || "updated_desc");
+      let arr = loadTemplates();
+      // Apply filters
+      const jobFilter = (filterJobSelect?.value || "all");
+      const envFilter = (filterEnvSelect?.value || "all");
+      if (jobFilter !== "all") arr = arr.filter((t) => t.job === jobFilter);
+      if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
+      if (q) {
+        arr = arr.filter((t) =>
+          [t.name, t.job, t.env].some((v) => String(v || "").toLowerCase().includes(q)) || String(t.sql || "").toLowerCase().includes(q)
+        );
+      }
+      // Populate env filter based on available templates
+      if (filterEnvSelect) {
+        const current = filterEnvSelect.value;
+        const envs = Array.from(new Set(arr.map((t) => t.env).filter(Boolean))).sort();
+        filterEnvSelect.innerHTML = '<option value="all">All Environments</option>' + envs.map((e) => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join("");
+        if ([...filterEnvSelect.options].some((o) => o.value === current)) {
+          filterEnvSelect.value = current;
+        }
+      }
+      arr.sort((a, b) => {
+        if (sort === "name_asc") return String(a.name).localeCompare(String(b.name));
+        if (sort === "name_desc") return String(b.name).localeCompare(String(a.name));
+        if (sort === "updated_asc") return new Date(a.updatedAt || a.createdAt || 0) - new Date(b.updatedAt || b.createdAt || 0);
+        return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+      });
+      const rows = arr
+        .map((t) => {
+          const updated = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
+          return `<tr>
+            <td title="${escHtml(t.name)}">${escHtml(t.name)}</td>
+            <td>${escHtml(t.job)}</td>
+            <td>${escHtml(t.env)}</td>
+            <td>${Number(t.version || 1)}</td>
+            <td>${updated}</td>
+            <td>
+              <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
+              <button class="btn btn-sm-xs jr-template-edit" data-name="${escHtml(t.name)}">Edit</button>
+              <button class="btn btn-sm-xs jr-template-delete" data-name="${escHtml(t.name)}">Delete</button>
+            </td>
+          </tr>`;
+        })
+        .join("");
+      templateListEl.innerHTML = rows || '<tr><td colspan="6">No templates saved yet.</td></tr>';
     };
 
     baseUrlInput.addEventListener("input", () => {
@@ -322,8 +620,12 @@ export class JenkinsRunner extends BaseTool {
       runTabBtn.setAttribute("aria-selected", "true");
       historyTabBtn.classList.remove("active");
       historyTabBtn.setAttribute("aria-selected", "false");
+      if (templatesTabBtn) templatesTabBtn.classList.remove("active");
+      if (templatesTabBtn) templatesTabBtn.setAttribute("aria-selected", "false");
       runTab.style.display = "grid";
       historyTab.style.display = "none";
+      if (templatesTab) templatesTab.style.display = "none";
+      hideSqlPreview();
     };
     const switchToHistory = () => {
       if (!runTabBtn || !historyTabBtn || !runTab || !historyTab) return;
@@ -332,12 +634,29 @@ export class JenkinsRunner extends BaseTool {
       runTabBtn.setAttribute("aria-selected", "false");
       historyTabBtn.classList.add("active");
       historyTabBtn.setAttribute("aria-selected", "true");
+      if (templatesTabBtn) templatesTabBtn.classList.remove("active");
+      if (templatesTabBtn) templatesTabBtn.setAttribute("aria-selected", "false");
       runTab.style.display = "none";
       historyTab.style.display = "block";
+      if (templatesTab) templatesTab.style.display = "none";
       renderHistory();
+    };
+    const switchToTemplates = () => {
+      if (!runTabBtn || !historyTabBtn || !runTab || !historyTab || !templatesTabBtn || !templatesTab) return;
+
+      runTabBtn.classList.remove("active");
+      runTabBtn.setAttribute("aria-selected", "false");
+      historyTabBtn.classList.remove("active");
+      historyTabBtn.setAttribute("aria-selected", "false");
+      templatesTabBtn.classList.add("active");
+      templatesTabBtn.setAttribute("aria-selected", "true");
+      runTab.style.display = "none";
+      historyTab.style.display = "none";
+      templatesTab.style.display = "block";
     };
     if (runTabBtn) runTabBtn.addEventListener("click", switchToRun);
     if (historyTabBtn) historyTabBtn.addEventListener("click", switchToHistory);
+    if (templatesTabBtn) templatesTabBtn.addEventListener("click", switchToTemplates);
 
     if (historyList)
       historyList.addEventListener("click", (e) => {
@@ -362,6 +681,121 @@ export class JenkinsRunner extends BaseTool {
           toggleSubmitEnabled();
         }
       });
+
+    // Templates: list interactions
+    if (templateListEl)
+      templateListEl.addEventListener("click", (e) => {
+        const t = e.target;
+        if (!t || !t.classList) return;
+        const name = t.getAttribute("data-name");
+        if (!name) return;
+        const tpl = findTemplateByName(name);
+        if (!tpl) return;
+        if (t.classList.contains("jr-template-run")) {
+          // Populate Run tab and show preview
+          if (tpl.job && allowedJobs.has(tpl.job)) {
+            jobInput.value = tpl.job;
+          }
+          if (tpl.env) {
+            // If env exists in current choices, set, else attempt refresh then set
+            if (this.state.envChoices.includes(tpl.env)) {
+              envSelect.value = tpl.env;
+            } else {
+              // Attempt to refresh env choices for the selected job, then set
+              refreshEnvChoices().then(() => {
+                if (this.state.envChoices.includes(tpl.env)) envSelect.value = tpl.env;
+              });
+            }
+          }
+          if (this.editor) {
+            this.editor.setValue(tpl.sql || "");
+          }
+          switchToRun();
+          showSqlPreview(tpl.sql || "");
+          saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
+          toggleSubmitEnabled();
+          try {
+            UsageTracker.trackFeature("jenkins-runner", "template_run_click", { name: tpl.name, job: tpl.job, env: tpl.env, sql_len: (tpl.sql || "").length });
+          } catch (_) {}
+        } else if (t.classList.contains("jr-template-edit")) {
+          // Open modal for editing
+          openTemplateModal("edit", tpl);
+        } else if (t.classList.contains("jr-template-delete")) {
+          const confirmed = window.confirm(`Delete template "${tpl.name}"?`);
+          if (!confirmed) return;
+          const arr = loadTemplates();
+          const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
+          if (idx >= 0) {
+            arr.splice(idx, 1);
+            saveTemplates(arr);
+            renderTemplates();
+            this.showSuccess("Template deleted.");
+          }
+        }
+      });
+
+    // Templates: modal handlers
+    if (templateModalSaveBtn)
+      templateModalSaveBtn.addEventListener("click", () => {
+        if (!validateTemplateForm()) return;
+        const name = (templateNameInput?.value || "").trim();
+        const job = (templateJobSelect?.value || "").trim();
+        const env = (templateEnvSelect?.value || "").trim();
+        const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
+        let arr = loadTemplates();
+        const now = new Date().toISOString();
+        const existingIdx = arr.findIndex((t) => (t?.name || "") === (this.state.editingTemplateName || name));
+        if (existingIdx >= 0) {
+          const prev = arr[existingIdx];
+          arr[existingIdx] = {
+            ...prev,
+            name,
+            job,
+            env,
+            sql,
+            version: Number(prev.version || 1) + 1,
+            updatedAt: now,
+          };
+          saveTemplates(arr);
+          this.showSuccess("Template updated.");
+        } else {
+          arr.push({ name, job, env, sql, version: 1, createdAt: now, updatedAt: now });
+          saveTemplates(arr);
+          this.showSuccess("Template saved.");
+        }
+        this.state.editingTemplateName = name;
+        renderTemplates();
+        closeTemplateModal(true);
+      });
+
+    if (templateModalCancelBtn)
+      templateModalCancelBtn.addEventListener("click", () => closeTemplateModal(true));
+    if (templateModalCloseBtn)
+      templateModalCloseBtn.addEventListener("click", () => closeTemplateModal(true));
+    if (templateModalOverlay)
+      templateModalOverlay.addEventListener("click", (e) => {
+        if (e.target === templateModalOverlay) closeTemplateModal(true);
+      });
+
+    if (templateCreateBtn)
+      templateCreateBtn.addEventListener("click", () => openTemplateModal("create", null));
+
+    if (templateSearchInput) templateSearchInput.addEventListener("input", renderTemplates);
+    if (templateSortSelect) templateSortSelect.addEventListener("change", renderTemplates);
+    if (filterJobSelect) filterJobSelect.addEventListener("change", renderTemplates);
+    if (filterEnvSelect) filterEnvSelect.addEventListener("change", renderTemplates);
+
+    if (templateJobSelect) templateJobSelect.addEventListener("change", () => {
+      if (!allowedJobs.has(templateJobSelect.value.trim())) return;
+      refreshTemplateEnvChoices();
+    });
+
+    // Initial env load for Templates if URL present
+    if (this.state.jenkinsUrl && templateJobSelect && allowedJobs.has(templateJobSelect.value.trim())) {
+      refreshTemplateEnvChoices();
+    }
+    // Initial render of templates list
+    renderTemplates();
 
     // Initial env load if URL and job valid
     if (this.state.jenkinsUrl && jobInput.value.trim().length) {
@@ -481,6 +915,10 @@ export class JenkinsRunner extends BaseTool {
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
+    }
+    if (this.templateEditor) {
+      this.templateEditor.dispose();
+      this.templateEditor = null;
     }
   }
 }

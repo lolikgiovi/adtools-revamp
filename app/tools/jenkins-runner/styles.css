@@ -135,6 +135,20 @@
   overflow: hidden;
 }
 
+/* Plain SQL preview (used when running templates) */
+.jr-sql-preview {
+  width: 100%;
+  min-height: 160px;
+  border: 1px solid var(--jr-border);
+  border-radius: 6px;
+  background: hsl(var(--card));
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  color: var(--jr-text);
+}
+
 .jr-actions {
   display: flex;
   justify-content: flex-end;
@@ -290,4 +304,103 @@
 }
 .jr-history-table tbody tr:hover {
   background: hsl(var(--muted) / 0.06);
+}
+
+/* Templates layout */
+.jr-templates {
+  display: block;
+}
+.jr-template-list {
+  background: var(--jr-panel);
+  border: 1px solid var(--jr-border);
+  border-radius: 8px;
+  padding: 12px;
+  width: 100%;
+}
+.jr-list-controls {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .jr-list-controls {
+    flex-wrap: wrap;
+  }
+}
+
+/* Modal overlay and dialog */
+.jr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+}
+.jr-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+.jr-modal-content {
+  background: hsl(var(--card));
+  border: 1px solid var(--jr-border);
+  border-radius: 10px;
+  width: min(880px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+}
+.jr-modal-header,
+.jr-modal-body,
+.jr-modal-footer {
+  padding: 16px;
+}
+.jr-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--jr-border);
+}
+.jr-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--jr-border);
+}
+.btn.btn-icon {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.btn.btn-icon:hover,
+.btn.btn-icon:focus {
+  filter: brightness(1.2);
+}
+
+/* Hover/selection states for template list */
+.jr-history-table tbody tr:focus-within {
+  outline: 2px solid var(--jr-focus);
+}
+.jr-history-table tbody tr.selected {
+  background: hsl(var(--muted) / 0.12);
 }
