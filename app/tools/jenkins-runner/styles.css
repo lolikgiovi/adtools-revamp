@@ -86,7 +86,8 @@
 .jr-input,
 .jr-textarea,
 .jr-input-readonly {
-  background: hsl(var(--card));
+  /* Use background-color so global select arrow background-image isn't reset */
+  background-color: hsl(var(--card));
   border: 1px solid var(--jr-border);
   color: var(--jr-text);
   border-radius: 6px;
@@ -120,6 +121,8 @@
   height: 36px;
   padding-top: 6px;
   padding-bottom: 6px;
+  /* Reserve space for global custom arrow */
+  padding-right: 1.5rem;
 }
 
 /* Monaco editor container for SQL */

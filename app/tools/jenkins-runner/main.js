@@ -169,6 +169,15 @@ export class JenkinsRunner extends BaseTool {
       fontSize: 12,
       tabSize: 2,
       insertSpaces: true,
+      // Disable Monaco suggestions/autocomplete in Jenkins Runner
+      quickSuggestions: false,
+      suggestOnTriggerCharacters: false,
+      wordBasedSuggestions: false,
+      snippetSuggestions: "none",
+      parameterHints: { enabled: false },
+      inlineSuggest: { enabled: false },
+      acceptSuggestionOnEnter: "off",
+      tabCompletion: "off",
     });
 
     const saveLastState = (patch = {}) => {

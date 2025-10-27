@@ -299,9 +299,15 @@ export class QuickQueryUI {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "off",
-      // Encourage suggestions during typing
-      quickSuggestions: { other: true, comments: false, strings: true },
-      suggestOnTriggerCharacters: true,
+      // Disable Monaco suggestions/autocomplete in Quick Query
+      quickSuggestions: false,
+      suggestOnTriggerCharacters: false,
+      wordBasedSuggestions: false,
+      snippetSuggestions: "none",
+      parameterHints: { enabled: false },
+      inlineSuggest: { enabled: false },
+      acceptSuggestionOnEnter: "off",
+      tabCompletion: "off",
     });
     // Sync initial word wrap label with current editor option
     const wordWrapButton = document.getElementById("toggleWordWrap");

@@ -311,6 +311,17 @@
   min-width: 0;
   padding: 4px 8px;
   box-sizing: border-box;
+  /* Neutralize Safari/WebKit UA styling and apply app theme */
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  line-height: 1.2;
+  /* Kill Safari default inner shadow / gradient */
+  box-shadow: none;
+  background-image: none;
 }
 
 #queryTypeSelect {
@@ -454,6 +465,16 @@
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+}
+
+/* Focus ring consistent with theme, bypass Safari default outline */
+#tableNameInput:focus,
+#tableNameInput:focus-visible {
+  outline: none !important;
+  border-color: hsl(var(--ring)) !important;
+  border-width: 1px !important;
+  box-shadow: none !important;
+  background-image: none !important;
 }
 
 /* Disable WebKit search decoration */
