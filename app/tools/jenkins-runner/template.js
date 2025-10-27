@@ -80,7 +80,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
         <div class="jr-template-list" aria-label="Templates section">
           <div class="jr-list-controls" role="toolbar" aria-label="Template controls">
             
-            <label>
+            <label class="jr-search-control">
               <span class="sr-only">Search</span>
               <input id="jr-template-search" type="text" class="jr-input" placeholder="Search templates" aria-label="Search templates" />
             </label>
