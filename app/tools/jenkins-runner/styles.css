@@ -198,7 +198,18 @@
   height: 240px;
   overflow: auto;
   white-space: pre-wrap;
+  /* Prevent ultra-long tokens from blowing out layout */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   color: var(--jr-text);
+}
+
+/* Contain potential horizontal overflow so other panels don't stretch */
+.jr-logs {
+  overflow: hidden;
 }
 
 .jr-hint {

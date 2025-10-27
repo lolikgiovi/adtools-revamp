@@ -69,8 +69,25 @@ export class JenkinsRunner extends BaseTool {
     };
 
     // Log helpers scoped to this tool instance
+    // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
+    const stripAnsi = (s) =>
+      String(s).replace(
+        /\u001B\[[0-9;?]*[ -\/]*[@-~]|\u001B[@-_][0-?]*[ -\/]*[@-~]/g,
+        ""
+      );
+    const removeControl = (s) => String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    // Drop content wrapped in ANSI SGR 8 (conceal) until reset (0m/28m/m)
+    const removeConcealedSegments = (s) => String(s).replace(/\u001B\[8m[\s\S]*?\u001B\[(?:0|28)?m/g, "");
+    const sanitizeLog = (s) => {
+      const noHidden = removeConcealedSegments(s);
+      const noAnsi = stripAnsi(noHidden);
+      const noCtrl = removeControl(noAnsi);
+      return noCtrl.replace(/\r/g, "\n");
+    };
+
     const appendLog = (text) => {
-      logsEl.textContent += text;
+      const safe = sanitizeLog(text);
+      logsEl.textContent += safe;
       logsEl.scrollTop = logsEl.scrollHeight;
     };
 
