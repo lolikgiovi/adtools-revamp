@@ -91,7 +91,13 @@ export class JenkinsRunner extends BaseTool {
       return String(e || "Unknown error");
     };
 
-    const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const escHtml = (s) =>
+      String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 
     // Log helpers scoped to this tool instance
     // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
@@ -503,23 +509,33 @@ export class JenkinsRunner extends BaseTool {
     const renderTemplates = () => {
       if (!templateListEl) return;
       const q = (templateSearchInput?.value || "").toLowerCase();
-      const sort = (templateSortSelect?.value || "updated_desc");
+      const sort = templateSortSelect?.value || "updated_desc";
       let arr = loadTemplates();
       // Apply filters
-      const jobFilter = (filterJobSelect?.value || "all");
-      const envFilter = (filterEnvSelect?.value || "all");
+      const jobFilter = filterJobSelect?.value || "all";
+      const envFilter = filterEnvSelect?.value || "all";
       if (jobFilter !== "all") arr = arr.filter((t) => t.job === jobFilter);
       if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
       if (q) {
-        arr = arr.filter((t) =>
-          [t.name, t.job, t.env].some((v) => String(v || "").toLowerCase().includes(q)) || String(t.sql || "").toLowerCase().includes(q)
+        arr = arr.filter(
+          (t) =>
+            [t.name, t.job, t.env].some((v) =>
+              String(v || "")
+                .toLowerCase()
+                .includes(q)
+            ) ||
+            String(t.sql || "")
+              .toLowerCase()
+              .includes(q)
         );
       }
       // Populate env filter based on available templates
       if (filterEnvSelect) {
         const current = filterEnvSelect.value;
         const envs = Array.from(new Set(arr.map((t) => t.env).filter(Boolean))).sort();
-        filterEnvSelect.innerHTML = '<option value="all">All Environments</option>' + envs.map((e) => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join("");
+        filterEnvSelect.innerHTML =
+          '<option value="all">All Environments</option>' +
+          envs.map((e) => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join("");
         if ([...filterEnvSelect.options].some((o) => o.value === current)) {
           filterEnvSelect.value = current;
         }
@@ -692,7 +708,7 @@ export class JenkinsRunner extends BaseTool {
         const tpl = findTemplateByName(name);
         if (!tpl) return;
         if (t.classList.contains("jr-template-run")) {
-          // Populate Run tab and show preview
+          // Populate Run tab and inject SQL into Monaco editor for editing
           if (tpl.job && allowedJobs.has(tpl.job)) {
             jobInput.value = tpl.job;
           }
@@ -709,13 +725,23 @@ export class JenkinsRunner extends BaseTool {
           }
           if (this.editor) {
             this.editor.setValue(tpl.sql || "");
+            // Place cursor at start and focus editor to allow immediate editing
+            try {
+              this.editor.setPosition({ lineNumber: 1, column: 1 });
+              this.editor.focus();
+            } catch (_) {}
           }
           switchToRun();
-          showSqlPreview(tpl.sql || "");
+          // Ensure preview stays hidden; editing occurs in Monaco
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           toggleSubmitEnabled();
           try {
-            UsageTracker.trackFeature("jenkins-runner", "template_run_click", { name: tpl.name, job: tpl.job, env: tpl.env, sql_len: (tpl.sql || "").length });
+            UsageTracker.trackFeature("jenkins-runner", "template_run_click", {
+              name: tpl.name,
+              job: tpl.job,
+              env: tpl.env,
+              sql_len: (tpl.sql || "").length,
+            });
           } catch (_) {}
         } else if (t.classList.contains("jr-template-edit")) {
           // Open modal for editing
@@ -768,27 +794,25 @@ export class JenkinsRunner extends BaseTool {
         closeTemplateModal(true);
       });
 
-    if (templateModalCancelBtn)
-      templateModalCancelBtn.addEventListener("click", () => closeTemplateModal(true));
-    if (templateModalCloseBtn)
-      templateModalCloseBtn.addEventListener("click", () => closeTemplateModal(true));
+    if (templateModalCancelBtn) templateModalCancelBtn.addEventListener("click", () => closeTemplateModal(true));
+    if (templateModalCloseBtn) templateModalCloseBtn.addEventListener("click", () => closeTemplateModal(true));
     if (templateModalOverlay)
       templateModalOverlay.addEventListener("click", (e) => {
         if (e.target === templateModalOverlay) closeTemplateModal(true);
       });
 
-    if (templateCreateBtn)
-      templateCreateBtn.addEventListener("click", () => openTemplateModal("create", null));
+    if (templateCreateBtn) templateCreateBtn.addEventListener("click", () => openTemplateModal("create", null));
 
     if (templateSearchInput) templateSearchInput.addEventListener("input", renderTemplates);
     if (templateSortSelect) templateSortSelect.addEventListener("change", renderTemplates);
     if (filterJobSelect) filterJobSelect.addEventListener("change", renderTemplates);
     if (filterEnvSelect) filterEnvSelect.addEventListener("change", renderTemplates);
 
-    if (templateJobSelect) templateJobSelect.addEventListener("change", () => {
-      if (!allowedJobs.has(templateJobSelect.value.trim())) return;
-      refreshTemplateEnvChoices();
-    });
+    if (templateJobSelect)
+      templateJobSelect.addEventListener("change", () => {
+        if (!allowedJobs.has(templateJobSelect.value.trim())) return;
+        refreshTemplateEnvChoices();
+      });
 
     // Initial env load for Templates if URL present
     if (this.state.jenkinsUrl && templateJobSelect && allowedJobs.has(templateJobSelect.value.trim())) {
