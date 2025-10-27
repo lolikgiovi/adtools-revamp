@@ -70,11 +70,7 @@ export class JenkinsRunner extends BaseTool {
 
     // Log helpers scoped to this tool instance
     // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
-    const stripAnsi = (s) =>
-      String(s).replace(
-        /\u001B\[[0-9;?]*[ -\/]*[@-~]|\u001B[@-_][0-?]*[ -\/]*[@-~]/g,
-        ""
-      );
+    const stripAnsi = (s) => String(s).replace(/\u001B\[[0-9;?]*[ -\/]*[@-~]|\u001B[@-_][0-?]*[ -\/]*[@-~]/g, "");
     const removeControl = (s) => String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
     // Drop content wrapped in ANSI SGR 8 (conceal) until reset (0m/28m/m)
     const removeConcealedSegments = (s) => String(s).replace(/\u001B\[8m[\s\S]*?\u001B\[(?:0|28)?m/g, "");
@@ -166,7 +162,7 @@ export class JenkinsRunner extends BaseTool {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "on",
-      fontSize: 12,
+      fontSize: 11,
       tabSize: 2,
       insertSpaces: true,
       // Disable Monaco suggestions/autocomplete in Jenkins Runner
@@ -312,7 +308,7 @@ export class JenkinsRunner extends BaseTool {
           const escTitle = sqlSummary.replace(/"/g, "&quot;");
           return `<tr><td>${ts}</td><td>${it.job || ""}</td><td>${
             it.env || ""
-          }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td><button class="jr-history-load" data-index="${i}">Load</button></td></tr>`;
+          }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td><button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button></td></tr>`;
         })
         .join("");
       if (historyList) historyList.innerHTML = rows || '<tr><td colspan="6">No history yet.</td></tr>';
@@ -388,17 +384,6 @@ export class JenkinsRunner extends BaseTool {
       if (!allowedJobs.has(job)) {
         this.showError("Invalid job name. Allowed: tester-execute-query or tester-execute-query-new.");
         return;
-      }
-      if (sql.length < 5) {
-        this.showError("SQL looks too short. Provide a valid SELECT.");
-        return;
-      }
-      const lowered = sql.toLowerCase();
-      for (const kw of ["insert", "update", "delete", "alter", "drop", "truncate"]) {
-        if (lowered.includes(kw)) {
-          this.showError("Only read-only queries allowed");
-          return;
-        }
       }
 
       runBtn.disabled = true;

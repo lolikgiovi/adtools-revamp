@@ -45,11 +45,7 @@ pub async fn fetch_env_choices(client: &Client, base_url: &str, job: &str, creds
 }
 
 pub async fn trigger_job(client: &Client, base_url: &str, job: &str, env: &str, sql_text: &str, creds: &Credentials) -> Result<String, String> {
-  let lowered = sql_text.to_lowercase();
-  for kw in ["insert","update","delete","alter","drop","truncate"] {
-    if lowered.contains(kw) { return Err("SQL contains forbidden statements".into()); }
-  }
-
+  
   // Build dynamic filename: username_adtools_yyyy_mm_dd.sql
   let username_raw = std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_else(|_| "user".to_string());
   let username: String = username_raw
