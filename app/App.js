@@ -20,8 +20,8 @@ import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
-import { UsageTracker } from './core/UsageTracker.js';
-import { AnalyticsSender } from './core/AnalyticsSender.js';
+import { UsageTracker } from "./core/UsageTracker.js";
+import { AnalyticsSender } from "./core/AnalyticsSender.js";
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
@@ -55,7 +55,7 @@ class App {
     try {
       window.resetUsageAnalytics = () => {
         UsageTracker.resetDev();
-        console.info('Usage analytics cleared. Reload to start clean.');
+        console.info("Usage analytics cleared. Reload to start clean.");
       };
     } catch (_) {}
     // Dev convenience: disable backup to avoid fallback
@@ -354,7 +354,10 @@ class App {
     // Runtime gate: respect requiresTauri
     const cfg = this.toolsConfigMap.get(tool.id);
     if (cfg && cfg.requiresTauri && !isTauri()) {
-      this.eventBus.emit("notification:error", { message: "This tool requires the desktop app (Tauri) and is hidden in the browser.", type: "error" });
+      this.eventBus.emit("notification:error", {
+        message: "This tool requires the desktop app (Tauri) and is hidden in the browser.",
+        type: "error",
+      });
       this.router.navigate("home");
       return;
     }
@@ -538,13 +541,29 @@ class App {
       }
     });
 
-
     // Update sidebar title when user registers
     this.eventBus.on("user:registered", (data) => {
       const titleEl = document.querySelector(".sidebar-title");
       const username = data?.username || localStorage.getItem("user.username");
       if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
     });
+
+    // In Tauri desktop app, suppress the default WebView right-click menu
+    // This keeps the UI cleaner and avoids native context items like "Look Up"
+    if (isTauri()) {
+      const preventContextMenu = (e) => {
+        try {
+          // Allow tools to opt-out by marking elements
+          // Example: element.setAttribute('data-allow-contextmenu', 'true')
+          const allow = e.target && e.target.closest && e.target.closest('[data-allow-contextmenu="true"]');
+          if (!allow) e.preventDefault();
+        } catch (_) {
+          e.preventDefault();
+        }
+      };
+      // Capture phase ensures we run before other handlers
+      document.addEventListener("contextmenu", preventContextMenu, { capture: true });
+    }
   }
 
   /**
@@ -553,7 +572,7 @@ class App {
    */
   handleKeyboardShortcuts(e) {
     // Ctrl/Cmd + /: Toggle sidebar
-    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+    if ((e.ctrlKey || e.metaKey) && e.key === "/") {
       e.preventDefault();
       this.sidebar.toggle();
     }
@@ -650,9 +669,7 @@ class App {
   buildMenuConfig() {
     return {
       config: [],
-      app: [
-        { id: "feedback", name: "Feedback", icon: "feedback", type: "page" },
-      ],
+      app: [{ id: "feedback", name: "Feedback", icon: "feedback", type: "page" }],
       footer: [{ id: "settings", name: "Settings", icon: "settings", type: "page" }],
     };
   }
@@ -711,7 +728,7 @@ class App {
       })
       .join("");
 
-    container.innerHTML = /*html*/`
+    container.innerHTML = /*html*/ `
       <div class="usage-panel">
         <div class="usage-panel-header">
           <h2>Usage Overview</h2>
