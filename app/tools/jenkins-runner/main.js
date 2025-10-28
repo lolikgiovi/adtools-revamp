@@ -1061,6 +1061,14 @@ export class JenkinsRunner extends BaseTool {
     const focusTemplateTagsInput = () => templateTagsInput && templateTagsInput.focus();
     if (templateTagsContainer && templateTagsInput && templateTagsSelectedEl && templateTagsSuggestionsEl) {
       let templateTagsActiveIndex = -1;
+      // Focus the input when clicking anywhere in the container except on controls
+      templateTagsContainer.addEventListener("mousedown", (e) => {
+        const isControl = e.target.closest(".jr-tag-remove, .jr-suggestion, input");
+        if (!isControl) {
+          e.preventDefault();
+          templateTagsInput?.focus();
+        }
+      });
       const updateSuggestions = debounce(() => {
         const all = collectAllTags();
         const q = normalizeTag(templateTagsInput.value);
@@ -1171,6 +1179,14 @@ export class JenkinsRunner extends BaseTool {
     };
     if (filterTagsContainer && filterTagsInput && filterTagsSelectedEl && filterTagsSuggestionsEl) {
       let filterTagsActiveIndex = -1;
+      // Focus behavior for filter container
+      filterTagsContainer.addEventListener("mousedown", (e) => {
+        const isControl = e.target.closest(".jr-tag-remove, .jr-suggestion, input");
+        if (!isControl) {
+          e.preventDefault();
+          filterTagsInput?.focus();
+        }
+      });
       const updateFilterSuggestions = debounce(() => {
         const all = collectAllTags();
         const q = normalizeTag(filterTagsInput.value);

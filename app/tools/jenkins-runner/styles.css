@@ -46,11 +46,22 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 10px; /* align horizontal padding with .jr-input */
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: var(--jr-panel);
   position: relative;
+  cursor: text; /* clicking container should feel like a text input */
+  min-height: 36px; /* match other input/select controls */
+  box-sizing: border-box; /* ensure height includes border like .jr-input */
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+.jr-tags-input:hover {
+  border-color: hsl(var(--muted-foreground) / 0.3); /* match .jr-input:hover */
+}
+.jr-tags-input:focus-within {
+  border-color: var(--jr-focus);
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
 }
 .jr-tags-input.jr-loading {
   opacity: 0.7;
@@ -58,8 +69,8 @@
 .jr-input-inline {
   border: none;
   outline: none;
-  flex: 1 1 120px;
-  min-width: 120px;
+  flex: 1 0 56px; /* shrink to allow chips on the left */
+  min-width: 56px;
   padding: 4px 2px;
   background: transparent;
   color: var(--jr-text);
@@ -68,6 +79,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
 }
 .jr-tag {
   display: inline-flex;
@@ -216,6 +228,19 @@
   font-size: 0.9rem; /* consistent text metrics */
   line-height: 1.2; /* avoid engine-specific defaults */
   min-height: 34px; /* align input and select heights */
+}
+.jr-tags-input .jr-input-inline {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  height: auto;
+  appearance: none;
+}
+.jr-tags-input .jr-input-inline:focus {
+  border: none;
+  box-shadow: none; /* suppress inner ring; container shows focus */
+  outline: none;
 }
 .jr-input:hover,
 .jr-textarea:hover,
