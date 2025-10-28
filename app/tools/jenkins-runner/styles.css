@@ -739,6 +739,30 @@
     grid-template-columns: 1fr;
   }
 }
+/* Compact layout when viewport height is tight */
+@media (max-height: 780px) {
+  .jr-modal-content {
+    max-height: 94vh; /* use more of the viewport height */
+  }
+  .jr-modal-header,
+  .jr-modal-body,
+  .jr-modal-footer {
+    padding: 12px; /* reduce vertical padding */
+  }
+  .jr-modal .jr-monaco-editor {
+    min-height: 160px; /* shrink editor height to fit */
+  }
+}
+@media (max-height: 640px) {
+  .jr-modal-header,
+  .jr-modal-body,
+  .jr-modal-footer {
+    padding: 10px; /* even more compact */
+  }
+  .jr-modal .jr-monaco-editor {
+    min-height: 120px;
+  }
+}
 .btn.btn-icon {
   background: transparent;
   border: none;
