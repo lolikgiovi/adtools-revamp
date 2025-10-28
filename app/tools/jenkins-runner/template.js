@@ -56,9 +56,6 @@ export const JenkinsRunnerTemplate = /*html*/ `
 
     <div id="jr-tab-history" role="tabpanel" aria-labelledby="jr-tab-history-btn" style="display:none">
       <div class="jr-history">
-        <div class="jr-log-header">
-          <span>Run History</span>
-        </div>
         <table class="jr-history-table" aria-label="Run History">
           <colgroup>
             <col class="jr-col-time" />

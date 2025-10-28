@@ -1,6 +1,7 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
       set_jenkins_username,
       set_jenkins_token,
@@ -8,7 +9,8 @@ pub fn run() {
       jenkins_get_env_choices,
       jenkins_trigger_job,
       jenkins_poll_queue_for_build,
-      jenkins_stream_logs
+      jenkins_stream_logs,
+      open_url
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -118,4 +120,9 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
   });
 
   Ok(())
+}
+// Open an external URL using the system default browser
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+  open::that(url).map_err(|e| e.to_string())
 }

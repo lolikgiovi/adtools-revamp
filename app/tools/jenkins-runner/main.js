@@ -5,6 +5,8 @@ import { getIconSvg } from "./icon.js";
 import "./styles.css";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { listen } from "@tauri-apps/api/event";
+import { isTauri } from "../../core/Runtime.js";
+import { invoke } from "@tauri-apps/api/core";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
 
 export class JenkinsRunner extends BaseTool {
@@ -118,6 +120,37 @@ export class JenkinsRunner extends BaseTool {
       const hh = String(hours).padStart(2, "0");
       return `${dd}/${mm}/${yyyy}, ${hh}:${minutes} ${ampm}`;
     };
+
+    // Open external URL in default browser with Tauri-aware fallbacks
+    const openExternalUrl = async (url) => {
+      if (!url) return;
+      if (isTauri()) {
+        try {
+          await invoke("open_url", { url });
+          return;
+        } catch (_) {}
+      }
+      try {
+        const win = window.open(url, "_blank", "noopener,noreferrer");
+        if (win) win.opener = null;
+      } catch (_) {}
+    };
+
+    // Wire build link to open externally in all runtimes
+    if (buildLink && !buildLink.dataset.externalHooked) {
+      buildLink.dataset.externalHooked = "true";
+      buildLink.addEventListener("click", (e) => {
+        const href = buildLink.getAttribute("href") || "";
+        // Prevent navigation if href is unset
+        if (!href || href === "#") {
+          e.preventDefault();
+          return;
+        }
+        // Always handle opening explicitly to ensure consistent behavior
+        e.preventDefault();
+        openExternalUrl(href);
+      });
+    }
 
     // Log helpers scoped to this tool instance
     // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
@@ -739,6 +772,15 @@ export class JenkinsRunner extends BaseTool {
     if (historyList)
       historyList.addEventListener("click", (e) => {
         const t = e.target;
+        // Handle clicks on history "Open" links to ensure external opening in Tauri/web
+        const link = t && (t.closest ? t.closest("a") : null);
+        if (link && link.href) {
+          e.preventDefault();
+          openExternalUrl(link.href);
+          return;
+        }
+
+        // Handle loading a past entry back into the Run tab
         if (t && t.classList && t.classList.contains("jr-history-load")) {
           const idx = Number(t.getAttribute("data-index"));
 
