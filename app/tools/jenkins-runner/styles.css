@@ -238,12 +238,14 @@
   outline: none;
   height: auto;
   appearance: none;
-  width: 100px;
 }
 .jr-tags-input .jr-input-inline:focus {
   border: none;
   box-shadow: none; /* suppress inner ring; container shows focus */
   outline: none;
+}
+#jr-tags-filter-input {
+  width: 100px;
 }
 .jr-input:hover,
 .jr-textarea:hover,
@@ -721,6 +723,21 @@
   justify-content: flex-end;
   gap: 8px;
   border-top: 1px solid var(--jr-border);
+}
+/* Modal: shrink ENV select to its content width */
+.jr-modal #jr-template-env.jr-input {
+  width: fit-content;
+  min-width: max-content;
+  align-self: flex-start;
+}
+/* Modal: widen Template Name and Tags, keep ENV compact */
+.jr-modal .jr-controls {
+  grid-template-columns: 2fr auto 2fr;
+}
+@media (max-width: 900px) {
+  .jr-modal .jr-controls {
+    grid-template-columns: 1fr;
+  }
 }
 .btn.btn-icon {
   background: transparent;

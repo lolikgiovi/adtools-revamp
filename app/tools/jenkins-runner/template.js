@@ -115,19 +115,12 @@ export const JenkinsRunnerTemplate = /*html*/ `
               <h3 id="jr-template-modal-title">Create Template</h3>
               <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
             </div>
-            <div class="jr-modal-body">
+              <div class="jr-modal-body">
               <div class="jr-controls">
                 <label class="jr-field">
                   <span>Template Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
                   <input id="jr-template-name" class="jr-input" type="text" placeholder="Unique name" aria-required="true" />
                   <div class="jr-error" id="jr-template-name-error" style="display:none"></div>
-                </label>
-                <label class="jr-field">
-                  <span>Job Type <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-                  <select id="jr-template-job" class="jr-input" aria-required="true">
-                    <option value="tester-execute-query-new">tester-execute-query-new</option>
-                    <option value="tester-execute-query">tester-execute-query</option>
-                  </select>
                 </label>
                 <label class="jr-field">
                   <span>ENV <span class="setting-required" title="Required" aria-hidden="true">*</span></span>

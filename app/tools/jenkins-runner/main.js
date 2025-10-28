@@ -285,6 +285,7 @@ export class JenkinsRunner extends BaseTool {
     };
 
     const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new"]);
+    const DEFAULT_JOB = "tester-execute-query-new";
 
     // Load Jenkins URL
     this.state.jenkinsUrl = this.service.loadJenkinsUrl();
@@ -504,7 +505,6 @@ export class JenkinsRunner extends BaseTool {
     this._modalPrevFocusEl = null;
     const clearTemplateForm = () => {
       if (templateNameInput) templateNameInput.value = "";
-      if (templateJobSelect) templateJobSelect.value = "tester-execute-query-new";
       if (templateEnvSelect) templateEnvSelect.innerHTML = "";
       if (this.templateEditor) this.templateEditor.setValue("");
       if (templateNameErrorEl) templateNameErrorEl.style.display = "none";
@@ -555,7 +555,6 @@ export class JenkinsRunner extends BaseTool {
       if (mode === "edit" && tpl) {
         this.state.editingTemplateName = tpl.name || null;
         if (templateNameInput) templateNameInput.value = tpl.name || "";
-        if (templateJobSelect) templateJobSelect.value = tpl.job || "tester-execute-query";
         refreshTemplateEnvChoices().then(() => {
           if (templateEnvSelect) templateEnvSelect.value = tpl.env || "";
         });
@@ -589,16 +588,9 @@ export class JenkinsRunner extends BaseTool {
     const refreshTemplateEnvChoices = async (retry = 0) => {
       if (!templateEnvSelect) return;
       const baseUrl = this.state.jenkinsUrl;
-      const job = templateJobSelect ? templateJobSelect.value.trim() : "";
+      const job = DEFAULT_JOB;
       if (!baseUrl) {
         if (templateHintEl) templateHintEl.textContent = "Configure Jenkins URL in Settings first.";
-        return;
-      }
-      if (!job || !allowedJobs.has(job)) {
-        if (templateEnvErrorEl) {
-          templateEnvErrorEl.style.display = "block";
-          templateEnvErrorEl.textContent = "Select a valid Job type first.";
-        }
         return;
       }
       try {
@@ -627,7 +619,6 @@ export class JenkinsRunner extends BaseTool {
     const validateTemplateForm = () => {
       let ok = true;
       const name = (templateNameInput?.value || "").trim();
-      const job = (templateJobSelect?.value || "").trim();
       const env = (templateEnvSelect?.value || "").trim();
       const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
 
@@ -639,9 +630,6 @@ export class JenkinsRunner extends BaseTool {
         }
       } else {
         if (templateNameErrorEl) templateNameErrorEl.style.display = "none";
-      }
-      if (!allowedJobs.has(job)) {
-        ok = false;
       }
       if (!env) {
         ok = false;
@@ -1016,7 +1004,6 @@ export class JenkinsRunner extends BaseTool {
       templateModalSaveBtn.addEventListener("click", () => {
         if (!validateTemplateForm()) return;
         const name = (templateNameInput?.value || "").trim();
-        const job = (templateJobSelect?.value || "").trim();
         const env = (templateEnvSelect?.value || "").trim();
         const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
         // Validate and normalize tags before saving
@@ -1026,6 +1013,7 @@ export class JenkinsRunner extends BaseTool {
         const existingIdx = arr.findIndex((t) => (t?.name || "") === (this.state.editingTemplateName || name));
         if (existingIdx >= 0) {
           const prev = arr[existingIdx];
+          const job = prev?.job || DEFAULT_JOB; // preserve existing job if present
           arr[existingIdx] = {
             ...prev,
             name,
@@ -1039,6 +1027,7 @@ export class JenkinsRunner extends BaseTool {
           saveTemplates(arr);
           this.showSuccess("Template updated.");
         } else {
+          const job = DEFAULT_JOB;
           arr.push({ name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false });
           saveTemplates(arr);
           this.showSuccess("Template saved.");
@@ -1300,14 +1289,8 @@ export class JenkinsRunner extends BaseTool {
       }
     });
 
-    if (templateJobSelect)
-      templateJobSelect.addEventListener("change", () => {
-        if (!allowedJobs.has(templateJobSelect.value.trim())) return;
-        refreshTemplateEnvChoices();
-      });
-
     // Initial env load for Templates if URL present
-    if (this.state.jenkinsUrl && templateJobSelect && allowedJobs.has(templateJobSelect.value.trim())) {
+    if (this.state.jenkinsUrl) {
       refreshTemplateEnvChoices();
     }
     // Initial render of templates list
