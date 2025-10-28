@@ -618,11 +618,18 @@ export class JenkinsRunner extends BaseTool {
           filterEnvSelect.value = current;
         }
       }
-      arr.sort((a, b) => {
+      // Sort: pinned first, then apply selected sort within groups
+      const compareBySort = (a, b) => {
         if (sort === "name_asc") return String(a.name).localeCompare(String(b.name));
         if (sort === "name_desc") return String(b.name).localeCompare(String(a.name));
         if (sort === "updated_asc") return new Date(a.updatedAt || a.createdAt || 0) - new Date(b.updatedAt || b.createdAt || 0);
         return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+      };
+      arr.sort((a, b) => {
+        const pinA = a && a.pinned ? 1 : 0;
+        const pinB = b && b.pinned ? 1 : 0;
+        if (pinB !== pinA) return pinB - pinA; // pinned first
+        return compareBySort(a, b);
       });
 
       const cards = arr
@@ -635,15 +642,20 @@ export class JenkinsRunner extends BaseTool {
           const sqlTitle = escHtml(sqlOneLine);
           const nameTitle = escHtml(String(t.name || ""));
           const envHtml = escHtml(String(t.env || ""));
+          const pinned = !!t.pinned;
           return /* html */ `
             <div class="jr-template-card" data-name="${escHtml(t.name)}" tabindex="0">
-              <div class="jr-card-name" title="${nameTitle}"><span class="jr-soft-label"></span> ${escHtml(t.name)}</div>
+              <div class="jr-card-name" title="${nameTitle}">
+                ${pinned ? '<span class="jr-pin" aria-label="Pinned" title="Pinned">★</span>' : ''}
+                <span class="jr-soft-label"></span> ${escHtml(t.name)}
+              </div>
               <div class="jr-card-meta">
                 <span class="jr-card-updated">${updated}</span>
                 ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
               </div>
               <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span> ${escHtml(sqlShort)}</div>
               <div class="jr-card-actions">
+                <button class="btn btn-sm-xs jr-template-pin" data-name="${escHtml(t.name)}">${pinned ? "Unpin" : "Pin"}</button>
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
                 <button class="btn btn-sm-xs jr-template-edit" data-name="${escHtml(t.name)}">View/Edit</button>
                 <button class="btn btn-sm-xs jr-template-delete" data-name="${escHtml(t.name)}">Delete</button>
@@ -811,6 +823,19 @@ export class JenkinsRunner extends BaseTool {
         if (!name) return;
         const tpl = findTemplateByName(name);
         if (!tpl) return;
+        if (t.classList.contains("jr-template-pin")) {
+          // Toggle pinned state and persist
+          const arr = loadTemplates();
+          const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
+          if (idx >= 0) {
+            const prev = arr[idx] || {};
+            arr[idx] = { ...prev, pinned: !prev.pinned, updatedAt: prev.updatedAt || prev.createdAt || new Date().toISOString() };
+            saveTemplates(arr);
+            renderTemplates();
+            this.showSuccess(arr[idx].pinned ? "Template pinned." : "Template unpinned.");
+          }
+          return;
+        }
         if (t.classList.contains("jr-template-run")) {
           // Populate Run tab and inject SQL into Monaco editor for editing
           if (tpl.job && allowedJobs.has(tpl.job)) {
@@ -889,7 +914,7 @@ export class JenkinsRunner extends BaseTool {
           saveTemplates(arr);
           this.showSuccess("Template updated.");
         } else {
-          arr.push({ name, job, env, sql, version: 1, createdAt: now, updatedAt: now });
+          arr.push({ name, job, env, sql, version: 1, createdAt: now, updatedAt: now, pinned: false });
           saveTemplates(arr);
           this.showSuccess("Template saved.");
         }
