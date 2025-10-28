@@ -110,14 +110,18 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <button id="jr-template-create-btn" class="btn btn-primary" aria-label="Create New Template">Create New Template</button>
           </div>
           <table class="jr-history-table" aria-label="Templates">
+            <colgroup>
+              <col class="jr-col-name" />
+              <col class="jr-col-env" />
+              <col class="jr-col-updated" />
+              <col class="jr-col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Job</th>
-                <th scope="col">ENV</th>
-                <th scope="col">Version</th>
-                <th scope="col">Updated</th>
-                <th scope="col">Actions</th>
+                <th scope="col"><div class="jr-col-center">ENV</div></th>
+                <th scope="col"><div class="jr-col-center">Updated</div></th>
+                <th scope="col"><div class="jr-col-center">Actions</div></th>
               </tr>
             </thead>
             <tbody id="jr-template-list"></tbody>

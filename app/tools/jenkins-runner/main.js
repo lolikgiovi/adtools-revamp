@@ -88,6 +88,10 @@ export class JenkinsRunner extends BaseTool {
       if (s.includes("http 401") || s.includes("unauthorized")) {
         return "Check Jenkins Username and Token in Settings";
       }
+      // Network/request errors when fetching Jenkins job or env details
+      if (s.includes("error sending request") && s.includes("/api/json")) {
+        return "Error fetching ENV type. Check your internal network connection and Jenkins availability.";
+      }
       return String(e || "Unknown error");
     };
 
@@ -551,19 +555,19 @@ export class JenkinsRunner extends BaseTool {
           const updated = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
           return `<tr>
             <td title="${escHtml(t.name)}">${escHtml(t.name)}</td>
-            <td>${escHtml(t.job)}</td>
-            <td>${escHtml(t.env)}</td>
-            <td>${Number(t.version || 1)}</td>
-            <td>${updated}</td>
+            <td><div class="jr-col-center">${escHtml(t.env)}</div></td>
+            <td><div class="jr-col-center">${updated}</div></td>
             <td>
-              <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
-              <button class="btn btn-sm-xs jr-template-edit" data-name="${escHtml(t.name)}">Edit</button>
-              <button class="btn btn-sm-xs jr-template-delete" data-name="${escHtml(t.name)}">Delete</button>
+              <div class="jr-col-center">
+                <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
+                <button class="btn btn-sm-xs jr-template-edit" data-name="${escHtml(t.name)}">View/Edit</button>
+                <button class="btn btn-sm-xs jr-template-delete" data-name="${escHtml(t.name)}">Delete</button>
+              </div>
             </td>
           </tr>`;
         })
         .join("");
-      templateListEl.innerHTML = rows || '<tr><td colspan="6">No templates saved yet.</td></tr>';
+      templateListEl.innerHTML = rows || '<tr><td colspan="4">No templates saved yet.</td></tr>';
     };
 
     baseUrlInput.addEventListener("input", () => {

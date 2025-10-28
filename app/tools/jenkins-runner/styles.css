@@ -294,13 +294,46 @@
 .jr-history-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto; /* allow content-driven sizing */
 }
 .jr-history-table th,
 .jr-history-table td {
   border-bottom: 1px solid var(--jr-border);
   padding: 8px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle; /* center items vertically within each row */
+}
+.jr-history-table th:first-child,
+.jr-history-table td:first-child {
+  /* Name column: expands to fill remaining space, wraps for responsiveness */
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Fit-to-content widths for non-Name columns via colgroup */
+.jr-history-table col.jr-col-env,
+.jr-history-table col.jr-col-updated,
+.jr-history-table col.jr-col-actions {
+  width: 0; /* shrink to min-content (content decides width) */
+}
+.jr-history-table col.jr-col-name {
+  width: auto; /* flexible, takes remaining space */
+}
+
+/* Centering wrappers for headers and cells (ENV, Updated, Actions) */
+.jr-history-table .jr-col-center {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: max-content; /* fit to content width */
+  margin: 0 auto; /* center within the cell */
+  text-align: center;
+  white-space: nowrap; /* avoid wrapping so width remains content-based */
+}
+
+/* Ensure action buttons don’t wrap oddly on narrow screens */
+.jr-history-table td:last-child .jr-col-center {
+  gap: 8px;
 }
 .jr-history-table tbody tr:hover {
   background: hsl(var(--muted) / 0.06);
