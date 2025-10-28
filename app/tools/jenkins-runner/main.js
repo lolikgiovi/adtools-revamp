@@ -73,12 +73,24 @@ export class JenkinsRunner extends BaseTool {
     const templateHintEl = this.container.querySelector("#jr-template-hint");
     const templateCreateBtn = this.container.querySelector("#jr-template-create-btn");
     const filterEnvSelect = this.container.querySelector("#jr-template-filter-env");
+    // Tags filter UI
+    const filterTagsContainer = this.container.querySelector("#jr-template-filter-tags");
+    const filterTagsInput = this.container.querySelector("#jr-tags-filter-input");
+    const filterTagsSelectedEl = this.container.querySelector("#jr-tags-filter-selected");
+    const filterTagsSuggestionsEl = this.container.querySelector("#jr-tags-filter-suggestions");
     const templateModal = this.container.querySelector("#jr-template-modal");
     const templateModalOverlay = this.container.querySelector("#jr-template-modal-overlay");
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
     const templateModalCancelBtn = this.container.querySelector("#jr-template-modal-cancel");
+    // Tags modal UI
+    const templateTagsContainer = this.container.querySelector("#jr-template-tags");
+    const templateTagsInput = this.container.querySelector("#jr-template-tags-input");
+    const templateTagsSelectedEl = this.container.querySelector("#jr-template-tags-selected");
+    const templateTagsSuggestionsEl = this.container.querySelector("#jr-template-tags-suggestions");
+    const templateTagsErrorEl = this.container.querySelector("#jr-template-tags-error");
+    const templateTagsHintEl = this.container.querySelector("#jr-template-tags-hint");
 
     // Map backend error strings to friendly guidance
     const toFriendlyError = (e) => {
@@ -103,6 +115,69 @@ export class JenkinsRunner extends BaseTool {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+
+    // Debounce helper
+    const debounce = (fn, ms = 150) => {
+      let t = null;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    };
+
+    // Tag helpers
+    const normalizeTag = (s) => String(s || "").trim().toLowerCase();
+    const isValidTag = (s) => /^[a-z0-9-]{1,24}$/.test(s);
+    const toValidTagOrNull = (s) => {
+      const t = normalizeTag(s);
+      return isValidTag(t) ? t : null;
+    };
+    const collectAllTags = () => {
+      const set = new Set();
+      const arr = loadTemplates();
+      for (const t of arr) {
+        const tags = Array.isArray(t?.tags) ? t.tags : [];
+        for (const tg of tags) {
+          const tt = normalizeTag(tg);
+          if (isValidTag(tt)) set.add(tt);
+        }
+      }
+      return Array.from(set).sort();
+    };
+    const renderSelectedChips = (containerEl, tags, removable = true) => {
+      if (!containerEl) return;
+      containerEl.innerHTML = (tags || [])
+        .map(
+          (tg) =>
+            `<span class="jr-tag" title="${escHtml(tg)}"><span>${escHtml(tg)}</span>${
+              removable
+                ? ` <button class="jr-tag-remove" data-tag="${escHtml(tg)}" aria-label="Remove tag ${escHtml(
+                    tg
+                  )}" title="Remove">×</button>`
+                : ""
+            }</span>`
+        )
+        .join("");
+    };
+    const renderSuggestions = (inputEl, suggestionsEl, list, activeIndex = -1) => {
+      if (!suggestionsEl) return;
+      if (!list || list.length === 0) {
+        suggestionsEl.style.display = "none";
+        suggestionsEl.innerHTML = "";
+        inputEl?.setAttribute("aria-expanded", "false");
+        return;
+      }
+      suggestionsEl.innerHTML = list
+        .map(
+          (s, i) =>
+            `<div class="jr-suggestion" role="option" data-value="${escHtml(s)}" aria-selected="${i === activeIndex ? "true" : "false"}" tabindex="-1">${escHtml(
+              s
+            )}</div>`
+        )
+        .join("");
+      suggestionsEl.style.display = "block";
+      inputEl?.setAttribute("aria-expanded", "true");
+    };
 
     // UI timestamp formatting: dd/mm/yyyy, hh:mm AM
     const formatTimestamp = (dateLike) => {
@@ -462,6 +537,9 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
+    // Modal tags state
+    let modalTags = [];
+
     const openTemplateModal = (mode = "create", tpl = null) => {
       if (!templateModal || !templateModalOverlay) return;
       this.state.modalOpen = true;
@@ -477,10 +555,17 @@ export class JenkinsRunner extends BaseTool {
           if (templateEnvSelect) templateEnvSelect.value = tpl.env || "";
         });
         if (this.templateEditor) this.templateEditor.setValue(tpl.sql || "");
+        // Set tags for edit
+        modalTags = Array.from(new Set((Array.isArray(tpl?.tags) ? tpl.tags : []).map((x) => normalizeTag(x)).filter(isValidTag)));
       } else {
         clearTemplateForm();
         refreshTemplateEnvChoices();
+        modalTags = [];
       }
+      // Initialize modal tags UI
+      if (templateTagsSelectedEl) renderSelectedChips(templateTagsSelectedEl, modalTags, true);
+      if (templateTagsInput) templateTagsInput.value = "";
+      if (templateTagsErrorEl) templateTagsErrorEl.style.display = "none";
       activateFocusTrap(templateModal);
     };
 
@@ -594,6 +679,29 @@ export class JenkinsRunner extends BaseTool {
       // Apply filters
       const envFilter = filterEnvSelect?.value || "all";
       if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
+      // Tag filter (ALL selected tags must be present)
+      const selectedTags = Array.isArray(this.state.filterTagsSelected) ? this.state.filterTagsSelected : [];
+      if (selectedTags.length > 0) {
+        // Build tag index for performance: tag => Set(name)
+        const tagIndex = new Map();
+        for (const t of arr) {
+          const tags = Array.isArray(t?.tags) ? t.tags : [];
+          for (const tg of tags) {
+            const key = normalizeTag(tg);
+            if (!isValidTag(key)) continue;
+            if (!tagIndex.has(key)) tagIndex.set(key, new Set());
+            tagIndex.get(key).add(t.name);
+          }
+        }
+        // Intersect sets for all selected tags
+        let candidate = null;
+        for (const tg of selectedTags) {
+          const set = tagIndex.get(tg) || new Set();
+          candidate = candidate ? new Set([...candidate].filter((x) => set.has(x))) : new Set(set);
+          if (candidate.size === 0) break;
+        }
+        if (candidate) arr = arr.filter((t) => candidate.has(t.name));
+      }
       if (q) {
         arr = arr.filter(
           (t) =>
@@ -642,6 +750,14 @@ export class JenkinsRunner extends BaseTool {
           const nameTitle = escHtml(String(t.name || ""));
           const envHtml = escHtml(String(t.env || ""));
           const pinned = !!t.pinned;
+          const tags = Array.isArray(t?.tags) ? t.tags.map((x) => normalizeTag(x)).filter(isValidTag) : [];
+          const maxShow = 3;
+          const shown = tags.slice(0, maxShow);
+          const hidden = tags.slice(maxShow);
+          const tagsHtml =
+            shown
+              .map((tg) => `<span class="jr-tag-badge" title="${escHtml(tg)}">${escHtml(tg)}</span>`)
+              .join(" ") + (hidden.length ? ` <span class="jr-tag-badge" title="${escHtml(hidden.join(", "))}">+${hidden.length}</span>` : "");
           return /* html */ `
             <div class="jr-template-card" data-name="${escHtml(t.name)}" tabindex="0">
               <div class="jr-card-name" title="${nameTitle}">
@@ -649,6 +765,7 @@ export class JenkinsRunner extends BaseTool {
                 <span class="jr-soft-label"></span> ${escHtml(t.name)}
               </div>
               <div class="jr-card-meta">
+                ${tags.length ? tagsHtml : ""}
                 ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
                 <span class="jr-card-updated">${updated}</span>
               </div>
@@ -896,6 +1013,8 @@ export class JenkinsRunner extends BaseTool {
         const job = (templateJobSelect?.value || "").trim();
         const env = (templateEnvSelect?.value || "").trim();
         const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
+        // Validate and normalize tags before saving
+        const tags = Array.from(new Set(modalTags.map((x) => normalizeTag(x)).filter(isValidTag)));
         let arr = loadTemplates();
         const now = new Date().toISOString();
         const existingIdx = arr.findIndex((t) => (t?.name || "") === (this.state.editingTemplateName || name));
@@ -907,13 +1026,14 @@ export class JenkinsRunner extends BaseTool {
             job,
             env,
             sql,
+            tags,
             version: Number(prev.version || 1) + 1,
             updatedAt: now,
           };
           saveTemplates(arr);
           this.showSuccess("Template updated.");
         } else {
-          arr.push({ name, job, env, sql, version: 1, createdAt: now, updatedAt: now, pinned: false });
+          arr.push({ name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false });
           saveTemplates(arr);
           this.showSuccess("Template saved.");
         }
@@ -934,6 +1054,170 @@ export class JenkinsRunner extends BaseTool {
     if (templateSearchInput) templateSearchInput.addEventListener("input", renderTemplates);
     if (templateSortSelect) templateSortSelect.addEventListener("change", renderTemplates);
     if (filterEnvSelect) filterEnvSelect.addEventListener("change", renderTemplates);
+
+    // ===== Tags modal control wiring =====
+    const focusTemplateTagsInput = () => templateTagsInput && templateTagsInput.focus();
+    if (templateTagsContainer && templateTagsInput && templateTagsSelectedEl && templateTagsSuggestionsEl) {
+      let templateTagsActiveIndex = -1;
+      const updateSuggestions = debounce(() => {
+        const all = collectAllTags();
+        const q = normalizeTag(templateTagsInput.value);
+        templateTagsContainer.classList.add("jr-loading");
+        templateTagsContainer.setAttribute("aria-busy", "true");
+        const filtered = all.filter((t) => (!q || t.includes(q)) && !modalTags.includes(t)).slice(0, 50);
+        templateTagsActiveIndex = filtered.length ? 0 : -1;
+        renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, filtered, templateTagsActiveIndex);
+        templateTagsContainer.classList.remove("jr-loading");
+        templateTagsContainer.removeAttribute("aria-busy");
+      }, 150);
+
+      const addTag = (raw) => {
+        const t = toValidTagOrNull(raw);
+        if (!t) {
+          if (templateTagsErrorEl) {
+            templateTagsErrorEl.style.display = "block";
+            templateTagsErrorEl.textContent = "Tags must be 1–24 chars, lowercase letters/digits/dash.";
+          }
+          return;
+        }
+        if (!modalTags.includes(t)) {
+          modalTags.push(t);
+          renderSelectedChips(templateTagsSelectedEl, modalTags, true);
+          if (templateTagsErrorEl) templateTagsErrorEl.style.display = "none";
+        }
+        if (templateTagsInput) templateTagsInput.value = "";
+        renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, []);
+        focusTemplateTagsInput();
+      };
+
+      templateTagsInput.addEventListener("input", updateSuggestions);
+      templateTagsInput.addEventListener("keydown", (e) => {
+        if (e.key === "," || e.key === "Enter") {
+          e.preventDefault();
+          // If suggestion is open and active, pick it; else add raw
+          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length && templateTagsActiveIndex >= 0 && templateTagsActiveIndex < items.length) {
+            addTag(items[templateTagsActiveIndex].getAttribute('data-value'));
+          } else {
+            addTag(templateTagsInput.value.replace(/,$/, ""));
+          }
+        } else if (e.key === "Backspace" && !templateTagsInput.value && modalTags.length) {
+          modalTags.pop();
+          renderSelectedChips(templateTagsSelectedEl, modalTags, true);
+        } else if (e.key === "ArrowDown") {
+          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length) {
+            e.preventDefault();
+            templateTagsActiveIndex = Math.min(items.length - 1, templateTagsActiveIndex + 1);
+            renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), templateTagsActiveIndex);
+          }
+        } else if (e.key === "ArrowUp") {
+          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length) {
+            e.preventDefault();
+            templateTagsActiveIndex = Math.max(0, templateTagsActiveIndex - 1);
+            renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), templateTagsActiveIndex);
+          }
+        } else if (e.key === "Escape") {
+          renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, []);
+        }
+      });
+      templateTagsSuggestionsEl.addEventListener("click", (e) => {
+        const t = e.target.closest(".jr-suggestion");
+        if (!t) return;
+        const val = t.getAttribute("data-value");
+        addTag(val);
+      });
+      templateTagsSelectedEl.addEventListener("click", (e) => {
+        const btn = e.target.closest(".jr-tag-remove");
+        if (!btn) return;
+        const val = btn.getAttribute("data-tag");
+        const idx = modalTags.indexOf(val);
+        if (idx >= 0) {
+          modalTags.splice(idx, 1);
+          renderSelectedChips(templateTagsSelectedEl, modalTags, true);
+        }
+      });
+    }
+
+    // ===== Tags filter control wiring =====
+    this.state.filterTagsSelected = [];
+    const rerenderAfterFilterChange = () => {
+      renderSelectedChips(filterTagsSelectedEl, this.state.filterTagsSelected, true);
+      renderTemplates();
+    };
+    if (filterTagsContainer && filterTagsInput && filterTagsSelectedEl && filterTagsSuggestionsEl) {
+      let filterTagsActiveIndex = -1;
+      const updateFilterSuggestions = debounce(() => {
+        const all = collectAllTags();
+        const q = normalizeTag(filterTagsInput.value);
+        filterTagsContainer.classList.add("jr-loading");
+        filterTagsContainer.setAttribute("aria-busy", "true");
+        const filtered = all.filter((t) => (!q || t.includes(q)) && !this.state.filterTagsSelected.includes(t)).slice(0, 100);
+        filterTagsActiveIndex = filtered.length ? 0 : -1;
+        renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, filtered, filterTagsActiveIndex);
+        filterTagsContainer.classList.remove("jr-loading");
+        filterTagsContainer.removeAttribute("aria-busy");
+      }, 150);
+
+      const addFilterTag = (raw) => {
+        const t = toValidTagOrNull(raw);
+        if (!t) return; // silent ignore for filter
+        if (!this.state.filterTagsSelected.includes(t)) {
+          this.state.filterTagsSelected.push(t);
+          rerenderAfterFilterChange();
+        }
+        filterTagsInput.value = "";
+        renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
+        filterTagsInput.focus();
+      };
+      filterTagsInput.addEventListener("input", updateFilterSuggestions);
+      filterTagsInput.addEventListener("keydown", (e) => {
+        if (e.key === "," || e.key === "Enter") {
+          e.preventDefault();
+          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length && filterTagsActiveIndex >= 0 && filterTagsActiveIndex < items.length) {
+            addFilterTag(items[filterTagsActiveIndex].getAttribute('data-value'));
+          } else {
+            addFilterTag(filterTagsInput.value.replace(/,$/, ""));
+          }
+        } else if (e.key === "Backspace" && !filterTagsInput.value && this.state.filterTagsSelected.length) {
+          this.state.filterTagsSelected.pop();
+          rerenderAfterFilterChange();
+        } else if (e.key === "ArrowDown") {
+          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length) {
+            e.preventDefault();
+            filterTagsActiveIndex = Math.min(items.length - 1, filterTagsActiveIndex + 1);
+            renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), filterTagsActiveIndex);
+          }
+        } else if (e.key === "ArrowUp") {
+          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          if (items.length) {
+            e.preventDefault();
+            filterTagsActiveIndex = Math.max(0, filterTagsActiveIndex - 1);
+            renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), filterTagsActiveIndex);
+          }
+        } else if (e.key === "Escape") {
+          renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
+        }
+      });
+      filterTagsSuggestionsEl.addEventListener("click", (e) => {
+        const t = e.target.closest(".jr-suggestion");
+        if (!t) return;
+        addFilterTag(t.getAttribute("data-value"));
+      });
+      filterTagsSelectedEl.addEventListener("click", (e) => {
+        const btn = e.target.closest(".jr-tag-remove");
+        if (!btn) return;
+        const val = btn.getAttribute("data-tag");
+        const idx = this.state.filterTagsSelected.indexOf(val);
+        if (idx >= 0) {
+          this.state.filterTagsSelected.splice(idx, 1);
+          rerenderAfterFilterChange();
+        }
+      });
+    }
 
     if (templateJobSelect)
       templateJobSelect.addEventListener("change", () => {

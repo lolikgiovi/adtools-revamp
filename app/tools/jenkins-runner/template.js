@@ -87,7 +87,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
               <span class="sr-only">Search</span>
               <input id="jr-template-search" type="text" class="jr-input" placeholder="Search templates" aria-label="Search templates" />
             </label>
-            <label>
+          <label>
               <span class="sr-only">Sort</span>
               <select id="jr-template-sort" class="jr-input" aria-label="Sort templates">
                 <option value="updated_desc">Updated (Newest)</option>
@@ -101,6 +101,14 @@ export const JenkinsRunnerTemplate = /*html*/ `
               <select id="jr-template-filter-env" class="jr-input" aria-label="Filter by ENV">
                 <option value="all">All Env</option>
               </select>
+            </label>
+            <label class="jr-tags-filter" aria-label="Filter by tags">
+              <span class="sr-only">Filter by Tags</span>
+              <div id="jr-template-filter-tags" class="jr-tags-input" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="jr-tags-filter-suggestions" aria-multiselectable="true">
+                <div id="jr-tags-filter-selected" class="jr-tags-selected" aria-live="polite"></div>
+                <input id="jr-tags-filter-input" type="text" class="jr-input jr-input-inline" placeholder="Tags" aria-autocomplete="list" aria-controls="jr-tags-filter-suggestions" aria-label="Add tag filter" />
+                <div id="jr-tags-filter-suggestions" class="jr-tags-suggestions" role="listbox" style="display:none"></div>
+              </div>
             </label>
           <button id="jr-template-create-btn" class="btn btn-primary" aria-label="Create New Template">New</button>
           </div>
@@ -133,6 +141,16 @@ export const JenkinsRunnerTemplate = /*html*/ `
                   <span>ENV <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
                   <select id="jr-template-env" class="jr-input" aria-required="true"></select>
                   <div class="jr-error" id="jr-template-env-error" style="display:none"></div>
+                </label>
+                <label class="jr-field">
+                  <span>Tags</span>
+                  <div id="jr-template-tags" class="jr-tags-input" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="jr-template-tags-suggestions" aria-multiselectable="true">
+                    <div id="jr-template-tags-selected" class="jr-tags-selected" aria-live="polite"></div>
+                    <input id="jr-template-tags-input" type="text" class="jr-input jr-input-inline" placeholder="Add tags (enter to add)" aria-autocomplete="list" aria-controls="jr-template-tags-suggestions" aria-label="Add tags" />
+                    <div id="jr-template-tags-suggestions" class="jr-tags-suggestions" role="listbox" style="display:none"></div>
+                  </div>
+                  <div class="jr-hint" id="jr-template-tags-hint"></div>
+                  <div class="jr-error" id="jr-template-tags-error" style="display:none"></div>
                 </label>
               </div>
               <div class="jr-sql">

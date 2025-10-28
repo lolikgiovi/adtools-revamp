@@ -40,6 +40,94 @@
   min-width: 0;
 }
 
+/* Tags input and badges */
+.jr-tags-input {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--jr-border);
+  border-radius: 6px;
+  background: var(--jr-panel);
+}
+.jr-tags-input.jr-loading {
+  opacity: 0.7;
+}
+.jr-input-inline {
+  border: none;
+  outline: none;
+  flex: 1 1 120px;
+  min-width: 120px;
+  padding: 4px 2px;
+  background: transparent;
+  color: var(--jr-text);
+}
+.jr-tags-selected {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.jr-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--jr-muted);
+  background: color-mix(in oklab, var(--jr-panel) 60%, var(--jr-border));
+  border: 1px solid var(--jr-border);
+  padding: 4px 6px;
+  border-radius: 999px;
+}
+.jr-tag .jr-tag-remove {
+  border: none;
+  background: transparent;
+  color: var(--jr-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.jr-tags-suggestions {
+  position: absolute;
+  z-index: 3;
+  margin-top: 4px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--jr-border);
+  border-radius: 6px;
+  background: var(--jr-panel);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 220px;
+}
+.jr-tags-suggestions .jr-suggestion {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.jr-tags-suggestions .jr-suggestion[aria-selected="true"],
+.jr-tags-suggestions .jr-suggestion:hover {
+  background: color-mix(in oklab, var(--jr-panel) 85%, var(--jr-border));
+}
+
+/* Tag badges on cards */
+.jr-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--jr-muted);
+  background: color-mix(in oklab, var(--jr-panel) 70%, var(--jr-border));
+  border: 1px solid var(--jr-border);
+  padding: 3px 6px;
+  border-radius: 999px;
+}
+.jr-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Ensure content inside the Run tab maintains vertical spacing between panels */
 #jr-tab-run {
   display: grid;
