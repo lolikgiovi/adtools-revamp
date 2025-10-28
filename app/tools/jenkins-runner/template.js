@@ -154,6 +154,23 @@ export const JenkinsRunnerTemplate = /*html*/ `
             </div>
           </div>
         </div>
+
+        <!-- Confirm Delete Modal -->
+        <div id="jr-confirm-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-confirm-modal-title" style="display:none">
+          <div class="jr-modal-content">
+            <div class="jr-modal-header">
+              <h3 id="jr-confirm-modal-title" class="jr-modal-title">Confirm Deletion</h3>
+              <button id="jr-confirm-close" class="btn btn-icon" aria-label="Close">✕</button>
+            </div>
+            <div class="jr-modal-body">
+              <p id="jr-confirm-message">Are you sure you want to delete this template?</p>
+            </div>
+            <div class="jr-modal-footer">
+              <button id="jr-confirm-delete-btn" class="btn btn-danger btn-sm-xs">Delete</button>
+              <button id="jr-confirm-cancel-btn" class="btn btn-sm-xs">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

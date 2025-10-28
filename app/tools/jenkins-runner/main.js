@@ -80,6 +80,12 @@ export class JenkinsRunner extends BaseTool {
     const filterTagsSuggestionsEl = this.container.querySelector("#jr-tags-filter-suggestions");
     const templateModal = this.container.querySelector("#jr-template-modal");
     const templateModalOverlay = this.container.querySelector("#jr-template-modal-overlay");
+    // Confirm modal elements
+    const confirmModal = this.container.querySelector("#jr-confirm-modal");
+    const confirmMsgEl = this.container.querySelector("#jr-confirm-message");
+    const confirmDeleteBtn = this.container.querySelector("#jr-confirm-delete-btn");
+    const confirmCancelBtn = this.container.querySelector("#jr-confirm-cancel-btn");
+    const confirmCloseBtn = this.container.querySelector("#jr-confirm-close");
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
@@ -514,7 +520,7 @@ export class JenkinsRunner extends BaseTool {
 
     const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
     let focusTrapHandler = null;
-    const activateFocusTrap = (container) => {
+    const activateFocusTrap = (container, onEscape) => {
       const all = Array.from(container.querySelectorAll(focusableSelector)).filter((el) => !el.hasAttribute("disabled"));
       const first = all[0];
       const last = all[all.length - 1];
@@ -530,7 +536,7 @@ export class JenkinsRunner extends BaseTool {
             first.focus();
           }
         } else if (e.key === "Escape") {
-          closeTemplateModal(true);
+          if (typeof onEscape === "function") onEscape();
         }
       };
       container.addEventListener("keydown", focusTrapHandler);
@@ -570,7 +576,7 @@ export class JenkinsRunner extends BaseTool {
       if (templateTagsSelectedEl) renderSelectedChips(templateTagsSelectedEl, modalTags, true);
       if (templateTagsInput) templateTagsInput.value = "";
       if (templateTagsErrorEl) templateTagsErrorEl.style.display = "none";
-      activateFocusTrap(templateModal);
+      activateFocusTrap(templateModal, () => closeTemplateModal(true));
     };
 
     const closeTemplateModal = (clear = true) => {
@@ -584,6 +590,35 @@ export class JenkinsRunner extends BaseTool {
         this._modalPrevFocusEl.focus();
       }
     };
+
+    // Confirm modal state/handlers
+    let _confirmHandler = null;
+    const openConfirmModal = (message, onConfirm) => {
+      if (!confirmModal || !templateModalOverlay) return;
+      this._modalPrevFocusEl = document.activeElement;
+      if (confirmMsgEl) confirmMsgEl.textContent = String(message || "Are you sure?");
+      templateModalOverlay.style.display = "block";
+      confirmModal.style.display = "flex";
+      _confirmHandler = typeof onConfirm === "function" ? onConfirm : null;
+      activateFocusTrap(confirmModal, () => closeConfirmModal());
+    };
+    const closeConfirmModal = () => {
+      if (!confirmModal || !templateModalOverlay) return;
+      confirmModal.style.display = "none";
+      templateModalOverlay.style.display = "none";
+      deactivateFocusTrap(confirmModal);
+      _confirmHandler = null;
+      if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
+    };
+
+    if (confirmDeleteBtn)
+      confirmDeleteBtn.addEventListener("click", () => {
+        const fn = _confirmHandler;
+        closeConfirmModal();
+        if (typeof fn === "function") fn();
+      });
+    if (confirmCancelBtn) confirmCancelBtn.addEventListener("click", () => closeConfirmModal());
+    if (confirmCloseBtn) confirmCloseBtn.addEventListener("click", () => closeConfirmModal());
 
     const refreshTemplateEnvChoices = async (retry = 0) => {
       if (!templateEnvSelect) return;
@@ -737,9 +772,15 @@ export class JenkinsRunner extends BaseTool {
           const updatedTs = t.updatedAt || t.createdAt || null;
           const updated = formatTimestamp(updatedTs);
           const sqlRaw = String(t.sql || "");
-          const sqlOneLine = sqlRaw.replace(/\s+/g, " ").trim();
-          const sqlShort = sqlOneLine.length > 120 ? sqlOneLine.slice(0, 117) + "..." : sqlOneLine;
-          const sqlTitle = escHtml(sqlOneLine);
+          const sqlTitle = escHtml(sqlRaw.replace(/\s+/g, " ").trim());
+          const sqlSnippet = (() => {
+            const trimmed = sqlRaw.trim().replace(/\r\n/g, "\n");
+            const lines = trimmed.split("\n");
+            const maxLines = 3;
+            let out = lines.slice(0, maxLines).join("\n");
+            if (lines.length > maxLines) out += " ..."; // explicit triple-dot ellipsis when truncated by line count
+            return out;
+          })();
           const nameTitle = escHtml(String(t.name || ""));
           const envHtml = escHtml(String(t.env || ""));
           const pinned = !!t.pinned;
@@ -761,7 +802,7 @@ export class JenkinsRunner extends BaseTool {
                 ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
                 <span class="jr-card-updated">${updated}</span>
               </div>
-              <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span> ${escHtml(sqlShort)}</div>
+              <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span><pre class="jr-card-snippet">${escHtml(sqlSnippet)}</pre></div>
               <div class="jr-card-actions">
                 <button class="btn btn-sm-xs jr-template-pin" data-name="${escHtml(t.name)}">${pinned ? "Unpin" : "Pin"}</button>
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
@@ -986,16 +1027,17 @@ export class JenkinsRunner extends BaseTool {
           // Open modal for editing
           openTemplateModal("edit", tpl);
         } else if (t.classList.contains("jr-template-delete")) {
-          const confirmed = window.confirm(`Delete template "${tpl.name}"?`);
-          if (!confirmed) return;
-          const arr = loadTemplates();
-          const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
-          if (idx >= 0) {
-            arr.splice(idx, 1);
-            saveTemplates(arr);
-            renderTemplates();
-            this.showSuccess("Template deleted.");
-          }
+          // Open custom confirmation modal before deleting
+          openConfirmModal(`Delete template "${tpl.name}"? This action cannot be undone.`, () => {
+            const arr = loadTemplates();
+            const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
+            if (idx >= 0) {
+              arr.splice(idx, 1);
+              saveTemplates(arr);
+              renderTemplates();
+              this.showSuccess("Template deleted.");
+            }
+          });
         }
       });
 
@@ -1144,7 +1186,10 @@ export class JenkinsRunner extends BaseTool {
           renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, []);
         }
       });
-      templateTagsSuggestionsEl.addEventListener("click", (e) => {
+      // Use mousedown to avoid losing the event due to focus/blur order
+      templateTagsSuggestionsEl.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const t = e.target.closest(".jr-suggestion");
         if (!t) return;
         const val = t.getAttribute("data-value");
@@ -1253,7 +1298,10 @@ export class JenkinsRunner extends BaseTool {
           renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
         }
       });
-      filterTagsSuggestionsEl.addEventListener("click", (e) => {
+      // Use mousedown to ensure selection happens before outside click handlers
+      filterTagsSuggestionsEl.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const t = e.target.closest(".jr-suggestion");
         if (!t) return;
         addFilterTag(t.getAttribute("data-value"));
