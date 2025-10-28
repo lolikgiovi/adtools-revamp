@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "vite --port 5174",
+    "dev": "vite --port 5173",
     "build": "vite build",
     "build:tauri": "vite build --mode tauri",
     "postbuild": "cp -R app dist/app",

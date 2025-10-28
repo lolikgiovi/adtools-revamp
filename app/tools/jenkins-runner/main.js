@@ -612,8 +612,7 @@ export class JenkinsRunner extends BaseTool {
         const current = filterEnvSelect.value;
         const envs = Array.from(new Set(arr.map((t) => t.env).filter(Boolean))).sort();
         filterEnvSelect.innerHTML =
-          '<option value="all">All Environments</option>' +
-          envs.map((e) => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join("");
+          '<option value="all">All Env</option>' + envs.map((e) => `<option value="${escHtml(e)}">${escHtml(e)}</option>`).join("");
         if ([...filterEnvSelect.options].some((o) => o.value === current)) {
           filterEnvSelect.value = current;
         }
@@ -646,12 +645,12 @@ export class JenkinsRunner extends BaseTool {
           return /* html */ `
             <div class="jr-template-card" data-name="${escHtml(t.name)}" tabindex="0">
               <div class="jr-card-name" title="${nameTitle}">
-                ${pinned ? '<span class="jr-pin" aria-label="Pinned" title="Pinned">★</span>' : ''}
+                ${pinned ? '<span class="jr-pin" aria-label="Pinned" title="Pinned">★</span>' : ""}
                 <span class="jr-soft-label"></span> ${escHtml(t.name)}
               </div>
               <div class="jr-card-meta">
-                <span class="jr-card-updated">${updated}</span>
                 ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
+                <span class="jr-card-updated">${updated}</span>
               </div>
               <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span> ${escHtml(sqlShort)}</div>
               <div class="jr-card-actions">

@@ -1,5 +1,5 @@
 [package]
-name = "ad_tools"
+name = "adtools"
 version = "0.1.0"
 description = "AD Tools Desktop App"
 authors = ["you"]
@@ -7,7 +7,7 @@ license = ""
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
-default-run = "ad_tools"
+default-run = "adtools"
 
 [lib]
 name = "ad_tools_lib"

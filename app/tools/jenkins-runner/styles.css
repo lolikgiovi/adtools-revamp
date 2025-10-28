@@ -351,11 +351,21 @@
 
 /* Fit-to-content widths for non-Name columns via colgroup */
 /* Fit-to-content widths for compact columns, query remains flexible */
-.jr-history-table col.jr-col-time { width: 18ch; }
-.jr-history-table col.jr-col-env { width: 12ch; }
-.jr-history-table col.jr-col-build { width: 12ch; }
-.jr-history-table col.jr-col-actions { width: 7ch; }
-.jr-history-table col.jr-col-query { width: auto; }
+.jr-history-table col.jr-col-time {
+  width: 18ch;
+}
+.jr-history-table col.jr-col-env {
+  width: 12ch;
+}
+.jr-history-table col.jr-col-build {
+  width: 12ch;
+}
+.jr-history-table col.jr-col-actions {
+  width: 7ch;
+}
+.jr-history-table col.jr-col-query {
+  width: auto;
+}
 
 /* Keep compact columns tight; let Query flex and wrap */
 .jr-history-table th:nth-child(1),

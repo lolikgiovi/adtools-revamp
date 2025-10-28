@@ -99,7 +99,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
             <label>
               <span class="sr-only">Filter by ENV</span>
               <select id="jr-template-filter-env" class="jr-input" aria-label="Filter by ENV">
-                <option value="all">All Environments</option>
+                <option value="all">All Env</option>
               </select>
             </label>
           <button id="jr-template-create-btn" class="btn btn-primary" aria-label="Create New Template">New</button>
