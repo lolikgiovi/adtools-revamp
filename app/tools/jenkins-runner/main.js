@@ -126,7 +126,10 @@ export class JenkinsRunner extends BaseTool {
     };
 
     // Tag helpers
-    const normalizeTag = (s) => String(s || "").trim().toLowerCase();
+    const normalizeTag = (s) =>
+      String(s || "")
+        .trim()
+        .toLowerCase();
     const isValidTag = (s) => /^[a-z0-9-]{1,24}$/.test(s);
     const toValidTagOrNull = (s) => {
       const t = normalizeTag(s);
@@ -170,9 +173,9 @@ export class JenkinsRunner extends BaseTool {
       suggestionsEl.innerHTML = list
         .map(
           (s, i) =>
-            `<div class="jr-suggestion" role="option" data-value="${escHtml(s)}" aria-selected="${i === activeIndex ? "true" : "false"}" tabindex="-1">${escHtml(
-              s
-            )}</div>`
+            `<div class="jr-suggestion" role="option" data-value="${escHtml(s)}" aria-selected="${
+              i === activeIndex ? "true" : "false"
+            }" tabindex="-1">${escHtml(s)}</div>`
         )
         .join("");
       suggestionsEl.style.display = "block";
@@ -755,9 +758,8 @@ export class JenkinsRunner extends BaseTool {
           const shown = tags.slice(0, maxShow);
           const hidden = tags.slice(maxShow);
           const tagsHtml =
-            shown
-              .map((tg) => `<span class="jr-tag-badge" title="${escHtml(tg)}">${escHtml(tg)}</span>`)
-              .join(" ") + (hidden.length ? ` <span class="jr-tag-badge" title="${escHtml(hidden.join(", "))}">+${hidden.length}</span>` : "");
+            shown.map((tg) => `<span class="jr-tag-badge" title="${escHtml(tg)}">${escHtml(tg)}</span>`).join(" ") +
+            (hidden.length ? ` <span class="jr-tag-badge" title="${escHtml(hidden.join(", "))}">+${hidden.length}</span>` : "");
           return /* html */ `
             <div class="jr-template-card" data-name="${escHtml(t.name)}" tabindex="0">
               <div class="jr-card-name" title="${nameTitle}">
@@ -1095,9 +1097,9 @@ export class JenkinsRunner extends BaseTool {
         if (e.key === "," || e.key === "Enter") {
           e.preventDefault();
           // If suggestion is open and active, pick it; else add raw
-          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
           if (items.length && templateTagsActiveIndex >= 0 && templateTagsActiveIndex < items.length) {
-            addTag(items[templateTagsActiveIndex].getAttribute('data-value'));
+            addTag(items[templateTagsActiveIndex].getAttribute("data-value"));
           } else {
             addTag(templateTagsInput.value.replace(/,$/, ""));
           }
@@ -1105,18 +1107,37 @@ export class JenkinsRunner extends BaseTool {
           modalTags.pop();
           renderSelectedChips(templateTagsSelectedEl, modalTags, true);
         } else if (e.key === "ArrowDown") {
-          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
-          if (items.length) {
-            e.preventDefault();
+          e.preventDefault();
+          let items = Array.from(templateTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
+          if (!items.length) {
+            // Open suggestions based on current query (empty => all tags)
+            const all = collectAllTags();
+            const q = normalizeTag(templateTagsInput.value);
+            const filtered = all
+              .filter((t) => (!q || t.includes(q)) && !modalTags.includes(t))
+              .slice(0, 50);
+            templateTagsActiveIndex = filtered.length ? 0 : -1;
+            renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, filtered, templateTagsActiveIndex);
+          } else {
             templateTagsActiveIndex = Math.min(items.length - 1, templateTagsActiveIndex + 1);
-            renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), templateTagsActiveIndex);
+            renderSuggestions(
+              templateTagsContainer,
+              templateTagsSuggestionsEl,
+              items.map((i) => i.getAttribute("data-value")),
+              templateTagsActiveIndex
+            );
           }
         } else if (e.key === "ArrowUp") {
-          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          const items = Array.from(templateTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
           if (items.length) {
             e.preventDefault();
             templateTagsActiveIndex = Math.max(0, templateTagsActiveIndex - 1);
-            renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), templateTagsActiveIndex);
+            renderSuggestions(
+              templateTagsContainer,
+              templateTagsSuggestionsEl,
+              items.map((i) => i.getAttribute("data-value")),
+              templateTagsActiveIndex
+            );
           }
         } else if (e.key === "Escape") {
           renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, []);
@@ -1175,9 +1196,9 @@ export class JenkinsRunner extends BaseTool {
       filterTagsInput.addEventListener("keydown", (e) => {
         if (e.key === "," || e.key === "Enter") {
           e.preventDefault();
-          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
           if (items.length && filterTagsActiveIndex >= 0 && filterTagsActiveIndex < items.length) {
-            addFilterTag(items[filterTagsActiveIndex].getAttribute('data-value'));
+            addFilterTag(items[filterTagsActiveIndex].getAttribute("data-value"));
           } else {
             addFilterTag(filterTagsInput.value.replace(/,$/, ""));
           }
@@ -1185,18 +1206,37 @@ export class JenkinsRunner extends BaseTool {
           this.state.filterTagsSelected.pop();
           rerenderAfterFilterChange();
         } else if (e.key === "ArrowDown") {
-          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
-          if (items.length) {
-            e.preventDefault();
+          e.preventDefault();
+          let items = Array.from(filterTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
+          if (!items.length) {
+            // Open suggestions based on current query (empty => all tags)
+            const all = collectAllTags();
+            const q = normalizeTag(filterTagsInput.value);
+            const filtered = all
+              .filter((t) => (!q || t.includes(q)) && !this.state.filterTagsSelected.includes(t))
+              .slice(0, 100);
+            filterTagsActiveIndex = filtered.length ? 0 : -1;
+            renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, filtered, filterTagsActiveIndex);
+          } else {
             filterTagsActiveIndex = Math.min(items.length - 1, filterTagsActiveIndex + 1);
-            renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), filterTagsActiveIndex);
+            renderSuggestions(
+              filterTagsContainer,
+              filterTagsSuggestionsEl,
+              items.map((i) => i.getAttribute("data-value")),
+              filterTagsActiveIndex
+            );
           }
         } else if (e.key === "ArrowUp") {
-          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll('.jr-suggestion'));
+          const items = Array.from(filterTagsSuggestionsEl.querySelectorAll(".jr-suggestion"));
           if (items.length) {
             e.preventDefault();
             filterTagsActiveIndex = Math.max(0, filterTagsActiveIndex - 1);
-            renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, items.map(i => i.getAttribute('data-value')), filterTagsActiveIndex);
+            renderSuggestions(
+              filterTagsContainer,
+              filterTagsSuggestionsEl,
+              items.map((i) => i.getAttribute("data-value")),
+              filterTagsActiveIndex
+            );
           }
         } else if (e.key === "Escape") {
           renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
@@ -1218,6 +1258,23 @@ export class JenkinsRunner extends BaseTool {
         }
       });
     }
+
+    // Dismiss suggestions when clicking outside inputs/suggestion containers
+    document.addEventListener("click", (e) => {
+      const target = e.target;
+      // Modal tags suggestions
+      if (templateTagsContainer && templateTagsSuggestionsEl) {
+        if (!templateTagsContainer.contains(target)) {
+          renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, []);
+        }
+      }
+      // Filter tags suggestions
+      if (filterTagsContainer && filterTagsSuggestionsEl) {
+        if (!filterTagsContainer.contains(target)) {
+          renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
+        }
+      }
+    });
 
     if (templateJobSelect)
       templateJobSelect.addEventListener("change", () => {

@@ -50,6 +50,7 @@
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: var(--jr-panel);
+  position: relative;
 }
 .jr-tags-input.jr-loading {
   opacity: 0.7;
@@ -91,14 +92,16 @@
 .jr-tags-suggestions {
   position: absolute;
   z-index: 3;
-  margin-top: 4px;
+  top: calc(100% + 6px);
+  left: 0;
   max-height: 180px;
   overflow: auto;
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: var(--jr-panel);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  min-width: 220px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  width: 100%;
+  max-width: 100%;
 }
 .jr-tags-suggestions .jr-suggestion {
   padding: 6px 10px;
@@ -688,4 +691,11 @@
 }
 .jr-history-table tbody tr.selected {
   background: hsl(var(--muted) / 0.12);
+}
+.jr-tags-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 160px;
+  min-width: 160px;
 }
