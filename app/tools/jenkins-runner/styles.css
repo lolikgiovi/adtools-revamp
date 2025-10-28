@@ -307,6 +307,25 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  flex-wrap: wrap; /* allow controls to wrap on small screens */
+  gap: 8px;
+}
+.jr-runbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.jr-runbar .btn {
+  height: 36px; /* match select height */
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+}
+.jr-runbar-errors {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 6px;
 }
 .jr-actions .btn {
   background: var(--jr-primary);
@@ -552,6 +571,7 @@
   grid-column: 1;
   grid-row: 1;
   font-weight: 600;
+  font-size: 14px;
   word-break: break-word;
 }
 .jr-card-meta {
@@ -568,6 +588,7 @@
   grid-row: 2;
   color: var(--jr-muted);
   word-break: break-word;
+  font-size: 12px;
 }
 .jr-card-actions {
   grid-column: 2;
@@ -581,8 +602,8 @@
   color: var(--jr-primary);
   border: 1px solid var(--jr-muted);
   border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 0.85rem;
+  padding: 0px 10px;
+  font-size: 11px;
 }
 .jr-soft-label {
   color: var(--jr-primary);

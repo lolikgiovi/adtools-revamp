@@ -10,31 +10,21 @@ export const JenkinsRunnerTemplate = /*html*/ `
     </div>
 
     <div id="jr-tab-run" role="tabpanel" aria-labelledby="jr-tab-run-btn">
-      <div class="jr-controls">
-        <label class="jr-field">
-          <span>Jenkins URL <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-          <input id="jenkins-baseurl" class="jr-input-readonly" type="text" placeholder="Set in Settings" aria-readonly="true" readonly />
-        </label>
-        <label class="jr-field">
-          <span>Job Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-          <select id="jenkins-job" class="jr-input">
-            <option value="tester-execute-query-new">tester-execute-query-new</option>
-            <option value="tester-execute-query">tester-execute-query</option>
-          </select>
-          <div class="jr-error" id="jenkins-job-error" style="display:none"></div>
-        </label>
-        <label class="jr-field">
-          <span>ENV Choice <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-          <select id="jenkins-env" class="jr-input"></select>
-          <div class="jr-error" id="jenkins-env-error" style="display:none"></div>
-        </label>
-      </div>
       <div class="jr-sql">
         <div class="jr-sql-header">
           <label for="jenkins-sql-editor"><span>SQL Query</span></label>
-          <div class="jr-actions">
+          <div class="jr-runbar" role="group" aria-label="Run settings">
+            <select id="jenkins-job" class="jr-input" aria-label="Job Name">
+              <option value="tester-execute-query-new">tester-execute-query-new</option>
+              <option value="tester-execute-query">tester-execute-query</option>
+            </select>
+            <select id="jenkins-env" class="jr-input" aria-label="ENV Choice"></select>
             <button id="jenkins-run" class="btn btn-primary btn-sm-xs">Run on Jenkins</button>
           </div>
+        </div>
+        <div class="jr-runbar-errors">
+          <div class="jr-error" id="jenkins-job-error" style="display:none"></div>
+          <div class="jr-error" id="jenkins-env-error" style="display:none"></div>
         </div>
         <div id="jenkins-sql-editor" class="jr-monaco-editor"></div>
         <pre id="jenkins-sql-preview" class="jr-sql-preview" style="display:none"></pre>

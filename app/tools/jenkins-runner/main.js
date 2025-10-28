@@ -288,7 +288,9 @@ export class JenkinsRunner extends BaseTool {
 
     // Load Jenkins URL
     this.state.jenkinsUrl = this.service.loadJenkinsUrl();
-    baseUrlInput.value = this.state.jenkinsUrl || "";
+    if (baseUrlInput) {
+      baseUrlInput.value = this.state.jenkinsUrl || "";
+    }
     if (!this.state.jenkinsUrl) {
       statusEl.textContent = "Configure Jenkins URL in Settings first.";
     }
@@ -784,10 +786,12 @@ export class JenkinsRunner extends BaseTool {
       templateListEl.innerHTML = cards || '<div class="jr-empty">No templates saved yet.</div>';
     };
 
-    baseUrlInput.addEventListener("input", () => {
-      statusEl.textContent = "Jenkins URL is managed in Settings.";
-      saveLastState({ jenkinsUrl: this.state.jenkinsUrl });
-    });
+    if (baseUrlInput) {
+      baseUrlInput.addEventListener("input", () => {
+        statusEl.textContent = "Jenkins URL is managed in Settings.";
+        saveLastState({ jenkinsUrl: this.state.jenkinsUrl });
+      });
+    }
 
     jobInput.addEventListener("change", () => {
       validateJobName();
