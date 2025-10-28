@@ -46,7 +46,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px 10px; /* align horizontal padding with .jr-input */
+  padding: 0px 10px; /* align horizontal padding with .jr-input */
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: var(--jr-panel);
@@ -69,8 +69,8 @@
 .jr-input-inline {
   border: none;
   outline: none;
-  flex: 1 0 56px; /* shrink to allow chips on the left */
-  min-width: 56px;
+  flex: 1 0 20px; /* shrink to allow chips on the left */
+  min-width: 20px;
   padding: 4px 2px;
   background: transparent;
   color: var(--jr-text);
@@ -230,12 +230,15 @@
   min-height: 34px; /* align input and select heights */
 }
 .jr-tags-input .jr-input-inline {
+  padding-right: 0px !important;
+  padding-left: 0px !important;
   border: none;
   background: transparent;
   box-shadow: none;
   outline: none;
   height: auto;
   appearance: none;
+  width: 100px;
 }
 .jr-tags-input .jr-input-inline:focus {
   border: none;
@@ -721,6 +724,6 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  flex: 1 1 160px;
-  min-width: 160px;
+  /* flex: 1 1 160px;
+  min-width: 160px; */
 }
