@@ -154,7 +154,7 @@ export class JenkinsRunner extends BaseTool {
           (tg) =>
             `<span class="jr-tag" title="${escHtml(tg)}"><span>${escHtml(tg)}</span>${
               removable
-                ? ` <button class="jr-tag-remove" data-tag="${escHtml(tg)}" aria-label="Remove tag ${escHtml(
+                ? ` <button type="button" class="jr-tag-remove" data-tag="${escHtml(tg)}" aria-label="Remove tag ${escHtml(
                     tg
                   )}" title="Remove">×</button>`
                 : ""
@@ -1150,6 +1150,8 @@ export class JenkinsRunner extends BaseTool {
         addTag(val);
       });
       templateTagsSelectedEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const btn = e.target.closest(".jr-tag-remove");
         if (!btn) return;
         const val = btn.getAttribute("data-tag");
@@ -1248,6 +1250,8 @@ export class JenkinsRunner extends BaseTool {
         addFilterTag(t.getAttribute("data-value"));
       });
       filterTagsSelectedEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const btn = e.target.closest(".jr-tag-remove");
         if (!btn) return;
         const val = btn.getAttribute("data-tag");
