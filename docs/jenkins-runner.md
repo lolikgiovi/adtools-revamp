@@ -1,6 +1,6 @@
 # Jenkins Query Runner
 
-This feature integrates with Jenkins to run read-only SQL queries through specially configured jobs, stream build logs live, and provide a secure workflow for credentials.
+This feature integrates with Jenkins to run SQL queries through specially configured jobs, stream build logs live, and provide a secure workflow for credentials.
 
 ## Overview
 

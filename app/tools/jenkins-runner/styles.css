@@ -6,9 +6,9 @@
   --jr-border: hsl(var(--border));
   --jr-text: hsl(var(--foreground));
   --jr-muted: hsl(var(--muted-foreground));
-  --jr-primary: hsl(var(--primary));
+  --jr-primary: hsl(var(--primary, 0 0% 0%));
   --jr-primary-contrast: hsl(var(--primary-foreground));
-  --jr-danger: #ff4d4f; /* no global destructive-dark/light split; keep semantic */
+  --jr-danger: hsl(var(--primary, 0 0% 0%));
   --jr-success: #4caf50; /* semantic green */
   --jr-focus: hsl(var(--ring));
 
@@ -17,12 +17,40 @@
   display: grid;
   grid-template-rows: auto 1fr auto auto; /* header removed */
   gap: 16px;
+  /* Use natural height so content can expand and page scrolls in main */
+  height: auto;
+  min-height: 0; /* enable children to shrink within containers */
+  overflow: visible; /* avoid clipping; let outer main handle scrolling */
+}
+
+/* Ensure children can shrink when main width changes (sidebar collapse/expand) */
+.jenkins-runner > * {
+  min-width: 0;
+}
+#jr-tab-run > * {
+  min-width: 0;
+}
+.jr-controls,
+.jr-sql,
+.jr-logs,
+.jr-templates {
+  min-width: 0;
+}
+.jr-field {
+  min-width: 0;
 }
 
 /* Ensure content inside the Run tab maintains vertical spacing between panels */
 #jr-tab-run {
   display: grid;
   gap: 16px;
+}
+/* Ensure tab panels can scroll within the available area */
+#jr-tab-run,
+#jr-tab-history,
+#jr-tab-templates {
+  min-height: 0; /* important for nested grid/flex children */
+  overflow: auto; /* avoid exceeding the window view */
 }
 
 /* Tabs at top with status on the right */
@@ -128,6 +156,8 @@
 /* Monaco editor container for SQL */
 .jr-monaco-editor {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 200px;
   border: 1px solid var(--jr-border);
   border-radius: 6px;
@@ -294,7 +324,7 @@
 .jr-history-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto; /* allow content-driven sizing */
+  table-layout: fixed; /* ensure colgroup widths are respected in WebKit */
 }
 .jr-history-table th,
 .jr-history-table td {
@@ -303,21 +333,40 @@
   text-align: left;
   vertical-align: middle; /* center items vertically within each row */
 }
-.jr-history-table th:first-child,
-.jr-history-table td:first-child {
-  /* Name column: expands to fill remaining space, wraps for responsiveness */
+.jr-history-table tbody td {
+  /* Reduce row content font size by exactly 2 points */
+  font-size: calc(1em - 2pt);
+}
+.jr-card-updated,
+.jr-timestamp {
+  /* Keep timestamp subtle; align to row sizing (2pt reduction) */
+  font-size: calc(1em - 2pt);
+}
+/* Allow Query column (3rd) to wrap for responsiveness */
+.jr-history-table th:nth-child(3),
+.jr-history-table td:nth-child(3) {
   white-space: normal;
   word-break: break-word;
 }
 
 /* Fit-to-content widths for non-Name columns via colgroup */
-.jr-history-table col.jr-col-env,
-.jr-history-table col.jr-col-updated,
-.jr-history-table col.jr-col-actions {
-  width: 0; /* shrink to min-content (content decides width) */
-}
-.jr-history-table col.jr-col-name {
-  width: auto; /* flexible, takes remaining space */
+/* Fit-to-content widths for compact columns, query remains flexible */
+.jr-history-table col.jr-col-time { width: 18ch; }
+.jr-history-table col.jr-col-env { width: 12ch; }
+.jr-history-table col.jr-col-build { width: 12ch; }
+.jr-history-table col.jr-col-actions { width: 7ch; }
+.jr-history-table col.jr-col-query { width: auto; }
+
+/* Keep compact columns tight; let Query flex and wrap */
+.jr-history-table th:nth-child(1),
+.jr-history-table td:nth-child(1),
+.jr-history-table th:nth-child(2),
+.jr-history-table td:nth-child(2),
+.jr-history-table th:nth-child(4),
+.jr-history-table td:nth-child(4),
+.jr-history-table th:nth-child(5),
+.jr-history-table td:nth-child(5) {
+  white-space: nowrap;
 }
 
 /* Centering wrappers for headers and cells (ENV, Updated, Actions) */
@@ -350,6 +399,83 @@
   padding: 12px;
   width: 100%;
 }
+.jr-template-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.jr-template-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 8px 16px;
+  border: 1px solid var(--jr-border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 10px 12px;
+  background: hsl(var(--card));
+}
+.jr-template-card:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--jr-focus / 0.3);
+}
+.jr-card-name {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+  word-break: break-word;
+}
+.jr-card-meta {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.jr-card-preview {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--jr-muted);
+  word-break: break-word;
+}
+.jr-card-actions {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  display: inline-flex;
+  gap: 8px;
+}
+.jr-chip {
+  display: inline-block;
+  color: var(--jr-primary);
+  border: 1px solid var(--jr-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.85rem;
+}
+.jr-soft-label {
+  color: var(--jr-primary);
+  font-weight: 500;
+}
+.jr-empty {
+  color: var(--jr-muted);
+  padding: 8px;
+}
+
+/* Buttons in card actions are compact */
+/* .jr-card-actions .btn {
+  background: transparent;
+  color: var(--jr-primary);
+  border: 1px solid var(--jr-border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 6px 10px;
+  font-weight: 600;
+}
+.jr-card-actions .btn:hover {
+  filter: brightness(1.1);
+} */
 .jr-list-controls {
   display: flex;
   justify-content: flex-start;

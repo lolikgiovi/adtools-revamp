@@ -12,7 +12,7 @@ export class JenkinsRunner extends BaseTool {
     super({
       id: "jenkins-runner",
       name: "Jenkins Query Runner",
-      description: "Run read-only SQL via a Jenkins job and stream logs",
+      description: "Run Oracle SQL Query via Jenkins job and stream the build logs",
       icon: "jenkins",
       category: "config",
       eventBus,
@@ -70,7 +70,6 @@ export class JenkinsRunner extends BaseTool {
     const templateSortSelect = this.container.querySelector("#jr-template-sort");
     const templateHintEl = this.container.querySelector("#jr-template-hint");
     const templateCreateBtn = this.container.querySelector("#jr-template-create-btn");
-    const filterJobSelect = this.container.querySelector("#jr-template-filter-job");
     const filterEnvSelect = this.container.querySelector("#jr-template-filter-env");
     const templateModal = this.container.querySelector("#jr-template-modal");
     const templateModalOverlay = this.container.querySelector("#jr-template-modal-overlay");
@@ -102,6 +101,23 @@ export class JenkinsRunner extends BaseTool {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+
+    // UI timestamp formatting: dd/mm/yyyy, hh:mm AM
+    const formatTimestamp = (dateLike) => {
+      if (!dateLike) return "";
+      const d = new Date(dateLike);
+      if (Number.isNaN(d.getTime())) return "";
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      if (hours === 0) hours = 12;
+      const hh = String(hours).padStart(2, "0");
+      return `${dd}/${mm}/${yyyy}, ${hh}:${minutes} ${ampm}`;
+    };
 
     // Log helpers scoped to this tool instance
     // Strip ANSI escape sequences and non-printable control chars so logs render cleanly.
@@ -232,6 +248,33 @@ export class JenkinsRunner extends BaseTool {
         tabCompletion: "off",
       });
     }
+
+    // Ensure editors re-layout when the sidebar collapses/expands or window resizes
+    const relayoutEditors = () => {
+      try {
+        if (this.editor && typeof this.editor.layout === "function") this.editor.layout();
+      } catch (_) {}
+      try {
+        if (this.templateEditor && typeof this.templateEditor.layout === "function") this.templateEditor.layout();
+      } catch (_) {}
+    };
+
+    // Listen for EventBus sidebar events if available
+    this._sidebarUnsubs = [];
+    if (this.eventBus) {
+      try {
+        this._sidebarUnsubs.push(this.eventBus.on("sidebar:collapsed", relayoutEditors));
+        this._sidebarUnsubs.push(this.eventBus.on("sidebar:expanded", relayoutEditors));
+        this._sidebarUnsubs.push(this.eventBus.on("sidebar:opened", relayoutEditors));
+        this._sidebarUnsubs.push(this.eventBus.on("sidebar:closed", relayoutEditors));
+      } catch (_) {}
+    }
+    // Also listen to DOM custom event for broader compatibility
+    this._sidebarDomListener = (e) => relayoutEditors();
+    document.addEventListener("sidebarStateChange", this._sidebarDomListener);
+    // Window resize safety net
+    this._resizeListener = () => relayoutEditors();
+    window.addEventListener("resize", this._resizeListener);
 
     const saveLastState = (patch = {}) => {
       const base = {
@@ -516,9 +559,7 @@ export class JenkinsRunner extends BaseTool {
       const sort = templateSortSelect?.value || "updated_desc";
       let arr = loadTemplates();
       // Apply filters
-      const jobFilter = filterJobSelect?.value || "all";
       const envFilter = filterEnvSelect?.value || "all";
-      if (jobFilter !== "all") arr = arr.filter((t) => t.job === jobFilter);
       if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
       if (q) {
         arr = arr.filter(
@@ -550,24 +591,34 @@ export class JenkinsRunner extends BaseTool {
         if (sort === "updated_asc") return new Date(a.updatedAt || a.createdAt || 0) - new Date(b.updatedAt || b.createdAt || 0);
         return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
       });
-      const rows = arr
+
+      const cards = arr
         .map((t) => {
-          const updated = t.updatedAt ? new Date(t.updatedAt).toLocaleString() : "";
-          return `<tr>
-            <td title="${escHtml(t.name)}">${escHtml(t.name)}</td>
-            <td><div class="jr-col-center">${escHtml(t.env)}</div></td>
-            <td><div class="jr-col-center">${updated}</div></td>
-            <td>
-              <div class="jr-col-center">
+          const updatedTs = t.updatedAt || t.createdAt || null;
+          const updated = formatTimestamp(updatedTs);
+          const sqlRaw = String(t.sql || "");
+          const sqlOneLine = sqlRaw.replace(/\s+/g, " ").trim();
+          const sqlShort = sqlOneLine.length > 120 ? sqlOneLine.slice(0, 117) + "..." : sqlOneLine;
+          const sqlTitle = escHtml(sqlOneLine);
+          const nameTitle = escHtml(String(t.name || ""));
+          const envHtml = escHtml(String(t.env || ""));
+          return /* html */ `
+            <div class="jr-template-card" data-name="${escHtml(t.name)}" tabindex="0">
+              <div class="jr-card-name" title="${nameTitle}"><span class="jr-soft-label"></span> ${escHtml(t.name)}</div>
+              <div class="jr-card-meta">
+                <span class="jr-card-updated">${updated}</span>
+                ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
+              </div>
+              <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span> ${escHtml(sqlShort)}</div>
+              <div class="jr-card-actions">
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
                 <button class="btn btn-sm-xs jr-template-edit" data-name="${escHtml(t.name)}">View/Edit</button>
                 <button class="btn btn-sm-xs jr-template-delete" data-name="${escHtml(t.name)}">Delete</button>
               </div>
-            </td>
-          </tr>`;
+            </div>`;
         })
         .join("");
-      templateListEl.innerHTML = rows || '<tr><td colspan="4">No templates saved yet.</td></tr>';
+      templateListEl.innerHTML = cards || '<div class="jr-empty">No templates saved yet.</div>';
     };
 
     baseUrlInput.addEventListener("input", () => {
@@ -620,16 +671,16 @@ export class JenkinsRunner extends BaseTool {
         .map((it, i) => {
           const sqlSummary = (it.sql || "").split("\n")[0];
           const short = sqlSummary.length > 120 ? sqlSummary.slice(0, 117) + "..." : sqlSummary;
-          const ts = it.timestamp ? new Date(it.timestamp).toLocaleString() : "";
+          const ts = formatTimestamp(it.timestamp);
           const build = it.buildNumber ? `#${it.buildNumber}` : "";
           const buildLinkHtml = it.buildUrl ? `<a href="${it.buildUrl}" target="_blank" rel="noopener">Open</a>` : "";
           const escTitle = sqlSummary.replace(/"/g, "&quot;");
-          return `<tr><td>${ts}</td><td>${it.job || ""}</td><td>${
+          return `<tr><td class="jr-timestamp">${ts}</td><td>${
             it.env || ""
           }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td><button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button></td></tr>`;
         })
         .join("");
-      if (historyList) historyList.innerHTML = rows || '<tr><td colspan="6">No history yet.</td></tr>';
+      if (historyList) historyList.innerHTML = rows || '<tr><td colspan="5">No history yet.</td></tr>';
     };
 
     // Tab switching
@@ -646,6 +697,13 @@ export class JenkinsRunner extends BaseTool {
       historyTab.style.display = "none";
       if (templatesTab) templatesTab.style.display = "none";
       hideSqlPreview();
+      // Ensure Monaco editor recalculates dimensions when Run tab becomes visible
+      try {
+        // Use microtask to run after style changes apply
+        Promise.resolve().then(() => {
+          if (this.editor && typeof this.editor.layout === "function") this.editor.layout();
+        });
+      } catch (_) {}
     };
     const switchToHistory = () => {
       if (!runTabBtn || !historyTabBtn || !runTab || !historyTab) return;
@@ -809,7 +867,6 @@ export class JenkinsRunner extends BaseTool {
 
     if (templateSearchInput) templateSearchInput.addEventListener("input", renderTemplates);
     if (templateSortSelect) templateSortSelect.addEventListener("change", renderTemplates);
-    if (filterJobSelect) filterJobSelect.addEventListener("change", renderTemplates);
     if (filterEnvSelect) filterEnvSelect.addEventListener("change", renderTemplates);
 
     if (templateJobSelect)
@@ -930,6 +987,39 @@ export class JenkinsRunner extends BaseTool {
         runBtn.disabled = false;
       }
     });
+  }
+
+  onUnmount() {
+    try {
+      if (this._sidebarUnsubs && Array.isArray(this._sidebarUnsubs)) {
+        this._sidebarUnsubs.forEach((off) => {
+          try {
+            typeof off === "function" && off();
+          } catch (_) {}
+        });
+        this._sidebarUnsubs = [];
+      }
+      if (this._sidebarDomListener) {
+        document.removeEventListener("sidebarStateChange", this._sidebarDomListener);
+        this._sidebarDomListener = null;
+      }
+      if (this._resizeListener) {
+        window.removeEventListener("resize", this._resizeListener);
+        this._resizeListener = null;
+      }
+      if (this.editor && typeof this.editor.dispose === "function") {
+        try {
+          this.editor.dispose();
+        } catch (_) {}
+        this.editor = null;
+      }
+      if (this.templateEditor && typeof this.templateEditor.dispose === "function") {
+        try {
+          this.templateEditor.dispose();
+        } catch (_) {}
+        this.templateEditor = null;
+      }
+    } catch (_) {}
   }
 
   onDeactivate() {

@@ -567,6 +567,8 @@ textarea:-webkit-autofill:focus {
 .main-content {
   flex: 1;
   padding: 1rem;
+  /* Allow nested flex/grid children to shrink and scroll correctly */
+  min-height: 0;
 }
 
 .content-wrapper {
@@ -838,9 +840,9 @@ textarea:-webkit-autofill:focus {
 }
 
 .btn-primary {
-  background: hsl(var(--primary));
+  background: hsl(var(--primary, 0 0% 0%));
   color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
+  border-color: hsl(var(--primary, 0 0% 0%));
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -867,7 +869,7 @@ textarea:-webkit-autofill:focus {
 
 .btn-outline:hover:not(:disabled) {
   background: hsl(var(--muted));
-  border-color: hsl(var(--primary));
+  border-color: hsl(var(--primary, 0 0% 0%));
 }
 
 .btn-sm {
@@ -878,6 +880,16 @@ textarea:-webkit-autofill:focus {
 .btn-sm svg {
   width: 0.875rem;
   height: 0.875rem;
+}
+
+/* Extra-small compact button size used across tools */
+.btn-sm-xs {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+.btn-sm-xs svg {
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .btn-icon {
@@ -1221,9 +1233,9 @@ body.global-search-open {
 }
 
 .btn-primary {
-  background: hsl(var(--primary));
+  background: hsl(var(--primary, 0 0% 0%));
   color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
+  border-color: hsl(var(--primary, 0 0% 0%));
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -1250,17 +1262,7 @@ body.global-search-open {
 
 .btn-outline:hover:not(:disabled) {
   background: hsl(var(--muted));
-  border-color: hsl(var(--primary));
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.btn-sm svg {
-  width: 0.875rem;
-  height: 0.875rem;
+  border-color: hsl(var(--primary, 0 0% 0%));
 }
 
 .btn-icon {

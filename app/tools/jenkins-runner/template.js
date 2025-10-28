@@ -33,7 +33,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
         <div class="jr-sql-header">
           <label for="jenkins-sql-editor"><span>SQL Query</span></label>
           <div class="jr-actions">
-            <button id="jenkins-run" class="btn btn-primary">Run on Jenkins</button>
+            <button id="jenkins-run" class="btn btn-primary btn-sm-xs">Run on Jenkins</button>
           </div>
         </div>
         <div id="jenkins-sql-editor" class="jr-monaco-editor"></div>
@@ -60,12 +60,18 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <span>Run History</span>
         </div>
         <table class="jr-history-table" aria-label="Run History">
+          <colgroup>
+            <col class="jr-col-time" />
+            <col class="jr-col-env" />
+            <col class="jr-col-query" />
+            <col class="jr-col-build" />
+            <col class="jr-col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th>Time</th>
-              <th>Job</th>
               <th>ENV</th>
-              <th>SQL</th>
+              <th>Query</th>
               <th>Build</th>
               <th>Actions</th>
             </tr>
@@ -94,38 +100,14 @@ export const JenkinsRunnerTemplate = /*html*/ `
               </select>
             </label>
             <label>
-              <span class="sr-only">Filter by Job</span>
-              <select id="jr-template-filter-job" class="jr-input" aria-label="Filter by Job">
-                <option value="all">All Jobs</option>
-                <option value="tester-execute-query-new">tester-execute-query-new</option>
-                <option value="tester-execute-query">tester-execute-query</option>
-              </select>
-            </label>
-            <label>
               <span class="sr-only">Filter by ENV</span>
               <select id="jr-template-filter-env" class="jr-input" aria-label="Filter by ENV">
                 <option value="all">All Environments</option>
               </select>
             </label>
-          <button id="jr-template-create-btn" class="btn btn-primary" aria-label="Create New Template">Create New Template</button>
+          <button id="jr-template-create-btn" class="btn btn-primary" aria-label="Create New Template">New</button>
           </div>
-          <table class="jr-history-table" aria-label="Templates">
-            <colgroup>
-              <col class="jr-col-name" />
-              <col class="jr-col-env" />
-              <col class="jr-col-updated" />
-              <col class="jr-col-actions" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col"><div class="jr-col-center">ENV</div></th>
-                <th scope="col"><div class="jr-col-center">Updated</div></th>
-                <th scope="col"><div class="jr-col-center">Actions</div></th>
-              </tr>
-            </thead>
-            <tbody id="jr-template-list"></tbody>
-          </table>
+          <div id="jr-template-list" class="jr-template-cards" aria-label="Templates list"></div>
         </div>
 
         <!-- Modal overlay and dialog -->
@@ -134,7 +116,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <div class="jr-modal-content">
             <div class="jr-modal-header">
               <h3 id="jr-template-modal-title">Create Template</h3>
-              <button id="jr-template-modal-close" class="btn btn-icon" aria-label="Close modal" title="Close">×</button>
+              <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
             </div>
             <div class="jr-modal-body">
               <div class="jr-controls">
@@ -165,8 +147,8 @@ export const JenkinsRunnerTemplate = /*html*/ `
               </div>
             </div>
             <div class="jr-modal-footer">
-              <button id="jr-template-modal-save" class="btn btn-primary">Save</button>
-              <button id="jr-template-modal-cancel" class="btn">Cancel</button>
+              <button id="jr-template-modal-save" class="btn btn-primary btn-sm-xs">Save</button>
+              <button id="jr-template-modal-cancel" class="btn btn-sm-xs">Cancel</button>
             </div>
           </div>
         </div>
