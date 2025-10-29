@@ -54,18 +54,6 @@
             "required": true,
             "minLength": 8
           }
-        },
-        {
-          "key": "secure.jira.token",
-          "storageKey": "secure.jira.token",
-          "label": "JIRA Token",
-          "type": "secret",
-          "default": "",
-          "description": "Enter a new token to replace the existing one. Copy is disabled; only full replacement is allowed.",
-          "validation": {
-            "required": true,
-            "minLength": 8
-          }
         }
       ]
     }
