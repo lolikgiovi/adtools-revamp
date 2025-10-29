@@ -122,7 +122,7 @@
 }
 .jr-tags-suggestions .jr-suggestion[aria-selected="true"],
 .jr-tags-suggestions .jr-suggestion:hover {
-  background: color-mix(in oklab, var(--jr-panel) 85%, var(--jr-border));
+  background: color-mix(in oklab, var(--jr-panel) 25%, var(--jr-border));
 }
 
 /* Tag badges on cards */
@@ -146,14 +146,15 @@
 /* Ensure content inside the Run tab maintains vertical spacing between panels */
 #jr-tab-run {
   display: grid;
-  gap: 16px;
+  /* ease density slightly for better breathing room */
+  gap: 14px;
 }
 /* Ensure tab panels can scroll within the available area */
 #jr-tab-run,
 #jr-tab-history,
 #jr-tab-templates {
   min-height: 0; /* important for nested grid/flex children */
-  overflow: auto; /* avoid exceeding the window view */
+  overflow: visible; /* let outer .main handle scrolling; avoid clipping */
 }
 
 /* Tabs at top with status on the right */
@@ -196,7 +197,8 @@
   background: var(--jr-panel);
   border: 1px solid var(--jr-border);
   border-radius: 8px;
-  padding: 12px;
+  /* compact panel padding while keeping touch targets comfortable */
+  padding: 10px;
 }
 
 .jr-controls {
@@ -279,10 +281,21 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  min-height: 200px;
+  /* make editor meaningfully larger while staying responsive */
+  min-height: clamp(300px, 40vh, 520px);
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: hsl(var(--card));
+  /* allow Monaco floating widgets (hover, suggest) to render outside */
+  overflow: visible;
+}
+
+/* Preserve rounded corners on the editor canvas while letting widgets overflow */
+.jr-monaco-editor .monaco-editor,
+.jr-monaco-editor .monaco-editor .overflow-guard {
+  border-radius: 6px;
+}
+.jr-monaco-editor .monaco-editor .overflow-guard {
   overflow: hidden;
 }
 
@@ -308,6 +321,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* restore a bit more spacing below header */
   margin-bottom: 8px;
   flex-wrap: wrap; /* allow controls to wrap on small screens */
   gap: 8px;
@@ -382,7 +396,8 @@
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   padding: 12px;
-  height: 240px;
+  /* larger logs area that scales with viewport */
+  height: clamp(260px, 32vh, 480px);
   overflow: auto;
   white-space: pre-wrap;
   /* Prevent ultra-long tokens from blowing out layout */
@@ -396,7 +411,8 @@
 
 /* Contain potential horizontal overflow so other panels don't stretch */
 .jr-logs {
-  overflow: hidden;
+  /* avoid clipping of dynamic content; inner pre has its own scroll */
+  overflow: visible;
 }
 
 .jr-hint {

@@ -167,8 +167,8 @@
 .quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
   height: 28px;
   font-size: 12px;
-  width: 150px;
-  flex: 0 0 150px; /* fixed width as defined */
+  width: 120px;
+  flex: 0 0 120px; /* fixed width as defined */
   border-radius: calc(var(--radius) - 2px);
 }
 .quick-query-left-panel .button-group:first-of-type #tableNameInput {
@@ -582,17 +582,17 @@
 }
 
 .file-button .file-name {
-  font-size: 14px;
+  font-size: 12px;
   color: hsl(var(--foreground));
   font-weight: 500;
   white-space: nowrap;
-  /* overflow: hidden; */
+  overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80%;
+  /* max-width: 80%; */
 }
 
 .file-button .file-size {
-  font-size: 12px;
+  font-size: 11px;
   color: hsl(var(--muted-foreground));
   margin-left: 10px;
 }
@@ -622,6 +622,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow: auto;
 }
 
 .copy-filename {
@@ -867,7 +868,7 @@
   color: hsl(var(--muted-foreground));
   text-align: center;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.05s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.05s ease;
 }
 
 .empty-file-button:hover,
@@ -875,7 +876,6 @@
   background-color: hsl(var(--muted));
   border-color: hsl(var(--ring));
   outline: none;
-  box-shadow: 0 0 0 2px hsl(var(--ring));
   color: hsl(var(--foreground));
 }
 
