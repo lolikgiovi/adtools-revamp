@@ -15,12 +15,12 @@
   color: var(--jr-text);
   background: var(--jr-bg);
   display: grid;
-  grid-template-rows: auto 1fr auto auto; /* header removed */
-  gap: 16px;
-  /* Use natural height so content can expand and page scrolls in main */
-  height: auto;
+  grid-template-rows: auto 1fr; /* sticky tabs + scrollable content */
+  gap: 12px;
+  /* Make this tool its own scroll container so tabs can stick */
+  height: 100%;
   min-height: 0; /* enable children to shrink within containers */
-  overflow: visible; /* avoid clipping; let outer main handle scrolling */
+  overflow: auto; /* only the selected tab content scrolls */
 }
 
 /* Ensure children can shrink when main width changes (sidebar collapse/expand) */
@@ -146,15 +146,14 @@
 /* Ensure content inside the Run tab maintains vertical spacing between panels */
 #jr-tab-run {
   display: grid;
-  /* ease density slightly for better breathing room */
-  gap: 14px;
+  gap: 10px;
 }
 /* Ensure tab panels can scroll within the available area */
 #jr-tab-run,
 #jr-tab-history,
 #jr-tab-templates {
-  min-height: 0; /* important for nested grid/flex children */
-  overflow: visible; /* let outer .main handle scrolling; avoid clipping */
+  min-height: 0; /* allow grid/flex children to shrink */
+  overflow: auto; /* tab panels become the scrollable content region */
 }
 
 /* Tabs at top with status on the right */
@@ -165,6 +164,10 @@
   gap: 8px;
   border-bottom: 1px solid var(--jr-border);
   margin-bottom: 8px;
+  position: sticky; /* keep tabs visible when scrolling content */
+  top: 0;
+  z-index: 2;
+  background: var(--jr-bg);
 }
 .jr-tabs-left {
   display: inline-flex;
@@ -281,8 +284,8 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  /* make editor meaningfully larger while staying responsive */
-  min-height: clamp(300px, 40vh, 520px);
+  /* reduce default height so Run tab fits without page scroll */
+  min-height: clamp(240px, 36vh, 400px);
   border: 1px solid var(--jr-border);
   border-radius: 6px;
   background: hsl(var(--card));
@@ -397,7 +400,7 @@
   border-radius: 6px;
   padding: 12px;
   /* larger logs area that scales with viewport */
-  height: clamp(260px, 32vh, 480px);
+  height: clamp(220px, 28vh, 360px);
   overflow: auto;
   white-space: pre-wrap;
   /* Prevent ultra-long tokens from blowing out layout */
@@ -418,6 +421,12 @@
 .jr-hint {
   color: var(--jr-muted);
   font-size: 0.9rem;
+  display: block;
+  margin-top: 6px;
+  /* Ensure longer guidance wraps cleanly and never gets clipped */
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Loading state */
@@ -467,6 +476,15 @@
 @media (max-width: 900px) {
   .jr-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+/* On short viewports, make Run tab scroll internally to avoid content cutoff */
+@media (max-height: 680px) {
+  #jr-tab-run {
+    overflow: auto;
+    /* Prevent bottom border from appearing clipped when Run tab scrolls */
+    padding-bottom: 10px;
   }
 }
 

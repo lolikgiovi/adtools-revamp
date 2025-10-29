@@ -67,7 +67,6 @@ export class JenkinsRunner extends BaseTool {
     const sqlPreviewEl = this.container.querySelector("#jenkins-sql-preview");
     const runBtn = this.container.querySelector("#jenkins-run");
     const statusEl = this.container.querySelector('[data-role="status"]');
-    const hintEl = this.container.querySelector('[data-role="hint"]');
     const logsEl = this.container.querySelector("#jenkins-logs");
     const buildLink = this.container.querySelector("#jenkins-build-link");
     const jobErrorEl = this.container.querySelector("#jenkins-job-error");
@@ -118,7 +117,7 @@ export class JenkinsRunner extends BaseTool {
     const templateTagsHintEl = this.container.querySelector("#jr-template-tags-hint");
 
     // Map backend error strings to friendly guidance
-    const toFriendlyError = (e) => {
+    const errorMapping = (e) => {
       const s = String(e || "").toLowerCase();
       if (s.includes("user") && s.includes("invalid") && s.includes("empty")) {
         return "Set Jenkins Username on Settings first";
@@ -324,8 +323,8 @@ export class JenkinsRunner extends BaseTool {
     // Token presence hint
     const hasToken = await this.service.hasToken();
     if (!hasToken) {
-      hintEl.style.display = "block";
-      hintEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
+      envErrorEl.style.display = "block";
+      envErrorEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
     const persistEnvKey = "tool:jenkins-runner:env";
@@ -508,7 +507,7 @@ export class JenkinsRunner extends BaseTool {
         const msg = `Failed to load environments${retry ? ` (attempt ${retry + 1})` : ""}`;
         statusEl.textContent = msg;
         envErrorEl.style.display = "block";
-        envErrorEl.textContent = toFriendlyError(err);
+        envErrorEl.textContent = errorMapping(err);
         if (retry < 2) {
           setTimeout(() => refreshEnvChoices(retry + 1), 1500);
         }
@@ -674,7 +673,7 @@ export class JenkinsRunner extends BaseTool {
       } catch (err) {
         if (templateEnvErrorEl) {
           templateEnvErrorEl.style.display = "block";
-          templateEnvErrorEl.textContent = toFriendlyError(err);
+          templateEnvErrorEl.textContent = errorMapping(err);
         }
         if (retry < 2) setTimeout(() => refreshTemplateEnvChoices(retry + 1), 1500);
       } finally {
@@ -836,7 +835,9 @@ export class JenkinsRunner extends BaseTool {
                 ${envHtml ? `<span class="jr-chip" title="Environment">${envHtml}</span>` : ""}
                 <span class="jr-card-updated">${updated}</span>
               </div>
-              <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span><pre class="jr-card-snippet">${escHtml(sqlSnippet)}</pre></div>
+              <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span><pre class="jr-card-snippet">${escHtml(
+            sqlSnippet
+          )}</pre></div>
               <div class="jr-card-actions">
                 <button class="btn btn-sm-xs jr-template-pin" data-name="${escHtml(t.name)}">${pinned ? "Unpin" : "Pin"}</button>
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
@@ -1241,9 +1242,7 @@ export class JenkinsRunner extends BaseTool {
             // Open suggestions based on current query (empty => all tags)
             const all = collectAllTags();
             const q = normalizeTag(templateTagsInput.value);
-            const filtered = all
-              .filter((t) => (!q || t.includes(q)) && !modalTags.includes(t))
-              .slice(0, 50);
+            const filtered = all.filter((t) => (!q || t.includes(q)) && !modalTags.includes(t)).slice(0, 50);
             templateTagsActiveIndex = filtered.length ? 0 : -1;
             renderSuggestions(templateTagsContainer, templateTagsSuggestionsEl, filtered, templateTagsActiveIndex);
           } else {
@@ -1353,9 +1352,7 @@ export class JenkinsRunner extends BaseTool {
             // Open suggestions based on current query (empty => all tags)
             const all = collectAllTags();
             const q = normalizeTag(filterTagsInput.value);
-            const filtered = all
-              .filter((t) => (!q || t.includes(q)) && !this.state.filterTagsSelected.includes(t))
-              .slice(0, 100);
+            const filtered = all.filter((t) => (!q || t.includes(q)) && !this.state.filterTagsSelected.includes(t)).slice(0, 100);
             filterTagsActiveIndex = filtered.length ? 0 : -1;
             renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, filtered, filterTagsActiveIndex);
           } else {
@@ -1528,9 +1525,9 @@ export class JenkinsRunner extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Trigger failed";
         try {
-          UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(toFriendlyError(err) || ""), job, env });
+          UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(errorMapping(err) || ""), job, env });
         } catch (_) {}
-        this.showError(toFriendlyError(err));
+        this.showError(errorMapping(err));
         runBtn.disabled = false;
       }
     });

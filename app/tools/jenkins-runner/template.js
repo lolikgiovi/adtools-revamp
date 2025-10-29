@@ -41,7 +41,6 @@ export const JenkinsRunnerTemplate = /*html*/ `
         </div>
         <pre id="jenkins-logs" class="jr-log"></pre>
       </div>
-      <div class="jr-hint" data-role="hint" style="display:none"></div>
     </div>
 
     <div id="jr-tab-history" role="tabpanel" aria-labelledby="jr-tab-history-btn" style="display:none">
