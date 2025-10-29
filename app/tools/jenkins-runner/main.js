@@ -69,7 +69,6 @@ export class JenkinsRunner extends BaseTool {
     const statusEl = this.container.querySelector('[data-role="status"]');
     const logsEl = this.container.querySelector("#jenkins-logs");
     const buildLink = this.container.querySelector("#jenkins-build-link");
-    const jobErrorEl = this.container.querySelector("#jenkins-job-error");
     const envErrorEl = this.container.querySelector("#jenkins-env-error");
     const buildNumEl = this.container.querySelector("#jenkins-build-number");
     const runTabBtn = this.container.querySelector("#jr-tab-run-btn");
@@ -310,6 +309,7 @@ export class JenkinsRunner extends BaseTool {
 
     const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new"]);
     const DEFAULT_JOB = "tester-execute-query-new";
+    const hasToken = await this.service.hasToken();
 
     // Load Jenkins URL
     this.state.jenkinsUrl = this.service.loadJenkinsUrl();
@@ -318,13 +318,8 @@ export class JenkinsRunner extends BaseTool {
     }
     if (!this.state.jenkinsUrl) {
       statusEl.textContent = "Configure Jenkins URL in Settings first.";
-    }
-
-    // Token presence hint
-    const hasToken = await this.service.hasToken();
-    if (!hasToken) {
-      envErrorEl.style.display = "block";
-      envErrorEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
+    } else if (!hasToken) {
+      statusEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
     const persistEnvKey = "tool:jenkins-runner:env";
@@ -444,24 +439,11 @@ export class JenkinsRunner extends BaseTool {
     };
     saveLastState();
 
-    // Validate job name
-    const validateJobName = () => {
-      const name = jobInput.value.trim();
-      if (!allowedJobs.has(name)) {
-        jobErrorEl.style.display = "block";
-        jobErrorEl.textContent = "Invalid job name. Allowed: tester-execute-query or tester-execute-query-new.";
-        return false;
-      }
-      jobErrorEl.style.display = "none";
-      return true;
-    };
-
     const toggleSubmitEnabled = () => {
-      const validJob = validateJobName();
       const hasEnv = !!envSelect.value;
       const hasUrl = !!this.state.jenkinsUrl;
       const hasSql = !!(this.editor && this.editor.getValue().trim().length >= 5);
-      runBtn.disabled = !(validJob && hasEnv && hasUrl && hasSql);
+      runBtn.disabled = !(hasEnv && hasUrl && hasSql);
     };
 
     // SQL preview toggle when running from a template
@@ -858,7 +840,6 @@ export class JenkinsRunner extends BaseTool {
     }
 
     jobInput.addEventListener("change", () => {
-      validateJobName();
       toggleSubmitEnabled();
       saveLastState({ job: jobInput.value.trim() });
       if (allowedJobs.has(jobInput.value.trim())) refreshEnvChoices();
@@ -1425,11 +1406,7 @@ export class JenkinsRunner extends BaseTool {
     }
     // Initial render of templates list
     renderTemplates();
-
-    // Initial env load if URL and job valid
-    if (this.state.jenkinsUrl && jobInput.value.trim().length) {
-      if (validateJobName()) refreshEnvChoices();
-    }
+    refreshEnvChoices();
 
     runBtn.addEventListener("click", async () => {
       const baseUrl = this.state.jenkinsUrl;
