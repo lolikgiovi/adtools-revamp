@@ -603,6 +603,15 @@ class App {
       this.globalSearch?.open();
     }
 
+    // Cmd + R: Reload page
+    if (e.metaKey && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      try {
+        window.location.reload();
+      } catch (_) {}
+      return;
+    }
+
     // Escape: Close modals/overlays
     if (e.key === "Escape") {
       this.eventBus.emit("escape:pressed");

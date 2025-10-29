@@ -594,7 +594,6 @@ textarea:-webkit-autofill:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.5rem;
-  margin-top: 2rem;
 }
 
 .tool-card {
@@ -675,7 +674,6 @@ textarea:-webkit-autofill:focus {
 
 .home-header {
   text-align: center;
-  margin-bottom: 3rem;
 }
 
 .home-header h1 {
