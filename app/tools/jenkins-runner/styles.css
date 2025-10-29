@@ -517,7 +517,8 @@
   width: 12ch;
 }
 .jr-history-table col.jr-col-actions {
-  width: 7ch;
+  /* widen to fit multiple compact buttons */
+  width: 26ch;
 }
 .jr-history-table col.jr-col-query {
   width: auto;

@@ -907,7 +907,12 @@ export class JenkinsRunner extends BaseTool {
           const escTitle = sqlSummary.replace(/"/g, "&quot;");
           return `<tr><td class="jr-timestamp">${ts}</td><td>${
             it.env || ""
-          }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td><button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button></td></tr>`;
+          }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td>
+            <div class="jr-col-center">
+              <button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button>
+              <button class="btn btn-sm-xs jr-history-save-template" data-index="${i}">Save as Template</button>
+            </div>
+          </td></tr>`;
         })
         .join("");
       if (historyList) historyList.innerHTML = rows || '<tr><td colspan="5">No history yet.</td></tr>';
@@ -996,6 +1001,52 @@ export class JenkinsRunner extends BaseTool {
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           switchToRun();
           toggleSubmitEnabled();
+        }
+
+        // Handle saving a past entry as a template
+        if (t && t.classList && t.classList.contains("jr-history-save-template")) {
+          const idx = Number(t.getAttribute("data-index"));
+
+          const arr = loadHistory();
+          const it = arr[idx];
+          if (!it) return;
+
+          // Switch to Templates tab and open create modal
+          switchToTemplates();
+          openTemplateModal("create");
+
+          // Inject the query into the modal's Monaco editor
+          if (this.templateEditor) {
+            try {
+              this.templateEditor.setValue(it.sql || "");
+            } catch (_) {}
+          }
+
+          // Derive template name from first "INTO schema.table" occurrence
+          try {
+            const sql = String(it.sql || "");
+            const match = sql.match(/\bINTO\s+([a-z0-9_]+\.[a-z0-9_]+)\b/i);
+            const derivedName = match ? match[1] : "";
+            if (templateNameInput && derivedName) {
+              templateNameInput.value = derivedName;
+              if (templateNameErrorEl) templateNameErrorEl.style.display = "none";
+            }
+          } catch (_) {}
+
+          // Bring ENV from History into the Template modal (after choices refresh)
+          try {
+            const targetEnv = it.env || "";
+            refreshTemplateEnvChoices().then(() => {
+              if (templateEnvSelect && targetEnv) {
+                templateEnvSelect.value = targetEnv;
+              }
+            });
+          } catch (_) {}
+
+          // Track usage of Save as Template action
+          try {
+            UsageTracker.track("jenkins_runner.history.save_as_template");
+          } catch (_) {}
         }
       });
 
