@@ -50,6 +50,14 @@
           "type": "boolean",
           "default": false,
           "description": "Opt into beta channel updates (uses manifest/beta.json)."
+        },
+        {
+          "key": "update.check",
+          "storageKey": "update.check",
+          "label": "Check for Update",
+          "type": "action",
+          "buttonLabel": "Check Now",
+          "description": "Manually check for updates and show banner if available."
         }
       ]
     },

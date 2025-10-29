@@ -25,11 +25,12 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.1.0",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "handsontable": "^16.0.0",
     "html-minifier": "^4.0.0",
     "monaco-editor": "^0.54.0",
     "qrcode": "^1.5.4",
-    "velocityjs": "^2.1.5",
-    "@tauri-apps/api": "^2.1.0"
+    "velocityjs": "^2.1.5"
   }
 }

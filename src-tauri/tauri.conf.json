@@ -27,5 +27,13 @@
     "active": true,
     "targets": ["app", "dmg"],
     "icon": ["icons/icon.icns", "icons/icon.png"]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://adtools.lolik.workers.dev/manifest/stable.json"
+      ],
+      "pubkey": "PLEASE_REPLACE_WITH_ED25519_PUBLIC_KEY"
+    }
   }
 }

@@ -77,9 +77,41 @@ class SettingsPage {
 
     // Bind toolbar actions
     root.querySelector('.settings-reload')?.addEventListener('click', () => this.reloadConfig());
+    root.querySelector('.settings-check-update')?.addEventListener('click', () => this.handleManualCheckUpdate());
     this.searchInput?.addEventListener('input', () => this.applySearch());
 
     await this.reloadConfig();
+  }
+
+  async handleManualCheckUpdate() {
+    const btn = this.container?.querySelector('.settings-check-update');
+    const original = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+    }
+    try {
+      const { checkUpdate, getCurrentVersionSafe } = await import('../../core/Updater.js');
+      const current = await getCurrentVersionSafe();
+      const result = await checkUpdate();
+      if (result?.error) {
+        this.eventBus?.emit?.('notification:error', { message: `Update check failed: ${result.error}` });
+      } else if (result?.available) {
+        this.eventBus?.emit?.('notification:success', { message: `Update available: v${result.version}` });
+        // Request UI to show the optional update banner
+        this.eventBus?.emit?.('update:show-banner', { result });
+      } else {
+        this.eventBus?.emit?.('notification:info', { message: `You're up to date (v${current})` });
+        this.eventBus?.emit?.('update:hide-banner');
+      }
+    } catch (err) {
+      this.eventBus?.emit?.('notification:error', { message: `Update check failed: ${String(err)}` });
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = original || 'Check for Update';
+      }
+    }
   }
 
   async reloadConfig() {
@@ -194,6 +226,35 @@ class SettingsPage {
       input.addEventListener('change', () => {
         const newVal = !!input.checked;
         this.service.setValue(storageKey, 'boolean', newVal, item.apply);
+      });
+      wrapper.appendChild(row);
+      return wrapper;
+    }
+
+    // Action-type items render as a button that performs the action
+    if (item.type === 'action') {
+      row.innerHTML = `
+        <div class="setting-name">${item.label}</div>
+        <div class="setting-control"><button type="button" class="btn btn-primary setting-action-btn">${item.buttonLabel || 'Run'}</button></div>
+      `;
+      const btn = row.querySelector('.setting-action-btn');
+      btn.addEventListener('click', async () => {
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Running…';
+        try {
+          // Currently only known action: update.check
+          if (item.key === 'update.check') {
+            await this.handleManualCheckUpdate();
+          } else {
+            this.eventBus?.emit?.('notification:info', { message: 'Action executed' });
+          }
+        } catch (err) {
+          this.eventBus?.emit?.('notification:error', { message: String(err) || 'Action failed' });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original || 'Run';
+        }
       });
       wrapper.appendChild(row);
       return wrapper;
