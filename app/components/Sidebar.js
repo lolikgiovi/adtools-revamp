@@ -413,6 +413,14 @@ class Sidebar {
         }
       });
     }
+
+    // After tools render, ensure the current route is highlighted (handles reload/deep links)
+    try {
+      const current = (this.router && typeof this.router.getCurrentRoute === "function")
+        ? this.router.getCurrentRoute()
+        : (window.location.hash ? window.location.hash.slice(1).split("/")[0] : "");
+      if (current) this.updateActiveItem(current);
+    } catch (_) {}
   }
 
   async renderMenuGroups() {
@@ -486,6 +494,14 @@ class Sidebar {
     renderGroup("config", this.menuConfig?.config);
     renderGroup("app", this.menuConfig?.app);
     renderGroup("footer", this.menuConfig?.footer);
+
+    // After groups render, ensure the current route/page is highlighted (handles reload)
+    try {
+      const current = (this.router && typeof this.router.getCurrentRoute === "function")
+        ? this.router.getCurrentRoute()
+        : (window.location.hash ? window.location.hash.slice(1).split("/")[0] : "");
+      if (current) this.updateActiveItem(current);
+    } catch (_) {}
   }
 
   /**
