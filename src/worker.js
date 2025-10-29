@@ -81,7 +81,7 @@ function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Range, X-ADTOOLS-Update-Channel',
+    'Access-Control-Allow-Headers': 'Content-Type, Range, If-None-Match, If-Range, X-ADTOOLS-Update-Channel',
     'Access-Control-Expose-Headers': 'ETag, Content-Length, Accept-Ranges, Content-Range',
     'Vary': 'Origin',
   };
@@ -545,16 +545,27 @@ async function handleManifestRequest(request, env) {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() },
       });
     }
-    const headers = {
+    const etag = head.httpEtag || head.etag || undefined;
+    const baseHeaders = {
       'Cache-Control': 'public, max-age=60',
-      'ETag': head.httpEtag || head.etag || undefined,
-      'Content-Type': 'application/json',
-      'Content-Length': String(head.size || ''),
+      'ETag': etag,
       'Accept-Ranges': 'bytes',
       ...corsHeaders(),
     };
+
+    // Conditional: If-None-Match -> 304 Not Modified
+    const inm = request.headers.get('If-None-Match');
+    const inmMatch = inm && etag && inm.split(',').map((s) => s.trim()).some((t) => t === '*' || t === etag);
+    if (inmMatch) {
+      return new Response(null, { status: 304, headers: { ...baseHeaders } });
+    }
+
+    // HEAD with no conditional match
     if (request.method === 'HEAD') {
-      return new Response(null, { status: 200, headers });
+      return new Response(null, {
+        status: 200,
+        headers: { ...baseHeaders, 'Content-Type': 'application/json', 'Content-Length': String(head.size || '') },
+      });
     }
     const obj = await env.UPDATES.get(key);
     if (!obj || !obj.body) {
@@ -563,7 +574,10 @@ async function handleManifestRequest(request, env) {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() },
       });
     }
-    return new Response(obj.body, { status: 200, headers });
+    return new Response(obj.body, {
+      status: 200,
+      headers: { ...baseHeaders, 'Content-Type': 'application/json', 'Content-Length': String(head.size || '') },
+    });
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 500,
@@ -596,6 +610,14 @@ async function handleArtifactRequest(request, env) {
 
     if (request.method === 'HEAD' && !range) {
       return new Response(null, { status: 200, headers: { ...common, 'Content-Length': String(total) } });
+    }
+
+    // If a Range header is present but unsatisfiable/invalid, return 416 with size
+    if (rangeHeader && !range) {
+      return new Response('Requested Range Not Satisfiable', {
+        status: 416,
+        headers: { ...common, 'Content-Range': `bytes */${total}` },
+      });
     }
 
     if (range) {
