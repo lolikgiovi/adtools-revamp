@@ -31,6 +31,29 @@
       ]
     },
     {
+      "id": "updates",
+      "label": "Check for Update",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "update.autoCheck",
+          "storageKey": "update.autoCheck",
+          "label": "Check for Auto Update",
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, the app checks at startup and scheduled times."
+        },
+        {
+          "key": "update.allowBeta",
+          "storageKey": "update.allowBeta",
+          "label": "Allow Beta Update",
+          "type": "boolean",
+          "default": false,
+          "description": "Opt into beta channel updates (uses manifest/beta.json)."
+        }
+      ]
+    },
+    {
       "id": "credentials",
       "label": "Credential Management",
       "initiallyExpanded": true,
