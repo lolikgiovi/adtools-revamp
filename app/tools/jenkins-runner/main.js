@@ -40,6 +40,25 @@ export class JenkinsRunner extends BaseTool {
     return JenkinsRunnerTemplate;
   }
 
+  // Receive route data passed by App.showTool and inject into editor
+  onRouteData(data) {
+    try {
+      const sql = (data && (data.sql || data.query)) || "";
+      if (!sql) return;
+      // If editor is ready, set immediately; otherwise stash for onMount
+      if (this.editor && typeof this.editor.setValue === "function") {
+        this.editor.setValue(sql);
+      } else {
+        this._pendingSql = sql;
+      }
+      try {
+        UsageTracker.trackEvent("jenkins-runner", "sql_injected", { source: "quick-query", length: sql.length });
+      } catch (_) {}
+    } catch (err) {
+      console.error("Failed to apply route data to Jenkins Runner:", err);
+    }
+  }
+
   async onMount() {
     const baseUrlInput = this.container.querySelector("#jenkins-baseurl");
     const jobInput = this.container.querySelector("#jenkins-job");
@@ -346,6 +365,21 @@ export class JenkinsRunner extends BaseTool {
       acceptSuggestionOnEnter: "off",
       tabCompletion: "off",
     });
+
+    // Apply any pending SQL routed from Quick Query or session storage
+    try {
+      const injected = this._pendingSql || null;
+      if (injected && this.editor && typeof this.editor.setValue === "function") {
+        this.editor.setValue(injected);
+        this._pendingSql = null;
+      } else {
+        const sess = sessionStorage.getItem("jenkinsRunner.injectSql") || "";
+        if (sess && this.editor && typeof this.editor.setValue === "function") {
+          this.editor.setValue(sess);
+          sessionStorage.removeItem("jenkinsRunner.injectSql");
+        }
+      }
+    } catch (_) {}
 
     // Monaco for Templates (create/edit only)
     if (templateSqlEditorContainer) {

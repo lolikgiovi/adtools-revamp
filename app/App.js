@@ -39,6 +39,8 @@ class App {
     this.mainContent = null;
     this.iconRegistry = new Map();
     this.toolsConfigMap = new Map();
+    // Temporary store for route navigation data payloads
+    this._routeData = {};
 
     this.init();
   }
@@ -250,8 +252,11 @@ class App {
 
     // Tool routes
     this.tools.forEach((tool, toolId) => {
-      this.router.register(toolId, () => {
-        this.showTool(toolId);
+      this.router.register(toolId, (ctx) => {
+        const data = this._routeData?.[toolId] || null;
+        this.showTool(toolId, data);
+        // Clear one-time data after consumption to avoid stale injections
+        if (data) this._routeData[toolId] = null;
       });
     });
 
@@ -338,7 +343,7 @@ class App {
     this.eventBus.emit("page:changed", { page: "home" });
   }
 
-  showTool(toolId) {
+  showTool(toolId, routeData = null) {
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
@@ -373,6 +378,12 @@ class App {
 
     if (this.mainContent) {
       tool.mount(this.mainContent);
+      // Pass any route data to tool if it supports it
+      try {
+        if (routeData && typeof tool.onRouteData === "function") {
+          tool.onRouteData(routeData);
+        }
+      } catch (_) {}
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId });
@@ -546,6 +557,15 @@ class App {
       const titleEl = document.querySelector(".sidebar-title");
       const username = data?.username || localStorage.getItem("user.username");
       if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+    });
+
+    // Capture route data payloads from navigations
+    this.eventBus.on("route:change", ({ path, data }) => {
+      try {
+        if (path && typeof path === "string") {
+          this._routeData[path] = data || null;
+        }
+      } catch (_) {}
     });
 
     // In Tauri desktop app, suppress the default WebView right-click menu

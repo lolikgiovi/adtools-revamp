@@ -42,6 +42,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <button id="toggleWordWrap" class="btn btn-primary">Word Wrap: Off</button>
                     <button id="copySQL" class="btn btn-primary">Copy SQL</button>
                     <button id="downloadSQL" class="btn btn-primary">Download SQL</button>
+                    <button id="executeInJenkinsRunner" class="btn btn-primary">Execute in Jenkins Runner</button>
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>

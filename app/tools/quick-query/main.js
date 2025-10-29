@@ -199,6 +199,9 @@ export class QuickQueryUI {
       downloadSQL: {
         click: () => this.handleDownloadSql(),
       },
+      executeInJenkinsRunner: {
+        click: () => this.handleExecuteInJenkinsRunner(),
+      },
       toggleWordWrapButton: {
         click: () => this.handleToggleWordWrap(),
       },
@@ -521,6 +524,36 @@ export class QuickQueryUI {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  handleExecuteInJenkinsRunner() {
+    try {
+      const sql = (this.editor?.getValue() || "").trim();
+      if (!sql) {
+        this.showError("No SQL to execute. Please generate or write a query first.");
+        return;
+      }
+
+      // Navigate to Jenkins Runner and pass current SQL via router data
+      if (window?.app?.router) {
+        window.app.router.navigate("jenkins-runner", { sql });
+      } else if (window?.app) {
+        // Fallback: simple navigation without data
+        window.app.navigateToTool("jenkins-runner");
+        // As a fallback, store SQL in session for Jenkins Runner to consume if implemented
+        try {
+          sessionStorage.setItem("jenkinsRunner.injectSql", sql);
+        } catch (_) {}
+      }
+
+      // Track usage of cross-tool execution
+      try {
+        UsageTracker.trackEvent("quick-query", "execute_in_jenkins_runner", { length: sql.length });
+      } catch (_) {}
+    } catch (err) {
+      console.error("Failed to execute in Jenkins Runner:", err);
+      this.showError("Failed to navigate to Jenkins Runner");
+    }
   }
 
   handleToggleWordWrap() {
