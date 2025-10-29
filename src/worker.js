@@ -9,6 +9,27 @@ export default {
       return new Response(null, { headers: corsHeaders() });
     }
 
+    // Dev-only: seed local R2 with a sample manifest and artifact
+    if (url.pathname === '/dev/seed-update') {
+      if (String(env.DEV_MODE || '') !== 'true') {
+        return new Response('Not Found', { status: 404, headers: corsHeaders() });
+      }
+      if (method !== 'POST') return methodNotAllowed();
+      return handleDevSeedUpdate(request, env);
+    }
+
+    // Updater: static manifest by channel (e.g., /manifest/stable.json)
+    if (url.pathname.startsWith('/manifest/')) {
+      if (method !== 'GET' && method !== 'HEAD') return methodNotAllowed();
+      return handleManifestRequest(request, env);
+    }
+
+    // Updater: immutable artifact streaming with range support under /releases/*
+    if (url.pathname.startsWith('/releases/')) {
+      if (method !== 'GET' && method !== 'HEAD') return methodNotAllowed();
+      return handleArtifactRequest(request, env);
+    }
+
     // API routes
     if (url.pathname === '/whitelist.json') {
       return handleWhitelist(env);
@@ -52,15 +73,17 @@ export default {
       }
     }
 
-    return new Response('Not Found', { status: 404 });
+    return new Response('Not Found', { status: 404, headers: corsHeaders() });
   },
 };
 
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Range, X-ADTOOLS-Update-Channel',
+    'Access-Control-Expose-Headers': 'ETag, Content-Length, Accept-Ranges, Content-Range',
+    'Vary': 'Origin',
   };
 }
 
@@ -498,4 +521,184 @@ function detectBrowserFromUA(ua) {
   if (/Safari\//i.test(s) && !/Chrome\//i.test(s)) return 'Safari';
   if (/Chromium\//i.test(s)) return 'Chromium';
   return 'Unknown';
+}
+
+// =========================
+// Updater endpoints (Phase 1)
+// =========================
+
+async function handleManifestRequest(request, env) {
+  try {
+    const url = new URL(request.url);
+    const channelFile = url.pathname.split('/').pop() || '';
+    if (!/^[a-z]+\.json$/i.test(channelFile)) {
+      return new Response(JSON.stringify({ ok: false, error: 'Invalid manifest path' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      });
+    }
+    const key = `manifest/${channelFile}`;
+    const head = await env.UPDATES?.head(key);
+    if (!head) {
+      return new Response(JSON.stringify({ ok: false, error: 'Manifest not found', key }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() },
+      });
+    }
+    const headers = {
+      'Cache-Control': 'public, max-age=60',
+      'ETag': head.httpEtag || head.etag || undefined,
+      'Content-Type': 'application/json',
+      'Content-Length': String(head.size || ''),
+      'Accept-Ranges': 'bytes',
+      ...corsHeaders(),
+    };
+    if (request.method === 'HEAD') {
+      return new Response(null, { status: 200, headers });
+    }
+    const obj = await env.UPDATES.get(key);
+    if (!obj || !obj.body) {
+      return new Response(JSON.stringify({ ok: false, error: 'Manifest missing' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() },
+      });
+    }
+    return new Response(obj.body, { status: 200, headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    });
+  }
+}
+
+async function handleArtifactRequest(request, env) {
+  const url = new URL(request.url);
+  const key = url.pathname.replace(/^\/+/, ''); // releases/...
+  try {
+    const head = await env.UPDATES?.head(key);
+    if (!head) {
+      return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain', ...corsHeaders() } });
+    }
+    const total = head.size || 0;
+    const etag = head.httpEtag || head.etag || undefined;
+    const ct = contentTypeForKey(key, head);
+
+    const rangeHeader = request.headers.get('Range');
+    const range = parseRange(rangeHeader, total);
+    const common = {
+      'Accept-Ranges': 'bytes',
+      'ETag': etag,
+      'Content-Type': ct,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      ...corsHeaders(),
+    };
+
+    if (request.method === 'HEAD' && !range) {
+      return new Response(null, { status: 200, headers: { ...common, 'Content-Length': String(total) } });
+    }
+
+    if (range) {
+      const { start, end } = range;
+      if (start >= total) {
+        return new Response('Requested Range Not Satisfiable', {
+          status: 416,
+          headers: { ...common, 'Content-Range': `bytes */${total}` },
+        });
+      }
+      const length = end - start + 1;
+      const obj = await env.UPDATES.get(key, { range: { offset: start, length } });
+      if (!obj || !obj.body) {
+        return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain', ...corsHeaders() } });
+      }
+      return new Response(request.method === 'HEAD' ? null : obj.body, {
+        status: 206,
+        headers: {
+          ...common,
+          'Content-Length': String(length),
+          'Content-Range': `bytes ${start}-${end}/${total}`,
+        },
+      });
+    }
+
+    const obj = await env.UPDATES.get(key);
+    if (!obj || !obj.body) {
+      return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain', ...corsHeaders() } });
+    }
+    return new Response(obj.body, { status: 200, headers: { ...common, 'Content-Length': String(total) } });
+  } catch (err) {
+    return new Response('Server Error', { status: 500, headers: { 'Content-Type': 'text/plain', ...corsHeaders() } });
+  }
+}
+
+function parseRange(header, size) {
+  if (!header || !/^bytes=/.test(header)) return null;
+  const m = header.match(/^bytes=(\d*)-(\d*)$/);
+  if (!m) return null;
+  let start = m[1] === '' ? null : Number(m[1]);
+  let end = m[2] === '' ? null : Number(m[2]);
+  if (Number.isNaN(start)) start = null;
+  if (Number.isNaN(end)) end = null;
+  if (start === null && end === null) return null;
+  if (start === null) {
+    const length = Math.min(Number(end), size);
+    return { start: size - length, end: size - 1 };
+  }
+  if (end === null || end >= size) end = size - 1;
+  if (start > end) return null;
+  return { start, end };
+}
+
+function contentTypeForKey(key, head) {
+  const hinted = head?.httpMetadata?.contentType || head?.httpMetadata?.content_type || '';
+  if (hinted) return hinted;
+  if (/\.json$/i.test(key)) return 'application/json';
+  if (/\.gz$/i.test(key)) return 'application/gzip';
+  if (/\.tar$/i.test(key)) return 'application/x-tar';
+  if (/\.dmg$/i.test(key)) return 'application/x-apple-diskimage';
+  return 'application/octet-stream';
+}
+
+async function handleDevSeedUpdate(request, env) {
+  try {
+    if (!env.UPDATES || typeof env.UPDATES.put !== 'function') {
+      return new Response(JSON.stringify({ ok: false, error: 'R2 not bound as UPDATES' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      });
+    }
+    const origin = new URL(request.url).origin;
+    const version = '0.0.1';
+    const channel = 'stable';
+    const arch = 'aarch64';
+    const artifactKey = `releases/${version}/${channel}/${arch}/test.bin`;
+    const manifestKey = `manifest/${channel}.json`;
+    const artifactBody = new TextEncoder().encode('hello world');
+    await env.UPDATES.put(artifactKey, artifactBody, {
+      httpMetadata: { contentType: 'application/octet-stream' },
+    });
+    const manifest = {
+      version,
+      minVersion: '0.0.0',
+      notes: 'Seeded manifest',
+      pub_date: new Date().toISOString(),
+      platforms: {
+        [arch]: {
+          signature: 'TEST_SIGNATURE',
+          url: `${origin}/releases/${version}/${channel}/${arch}/test.bin`,
+        },
+      },
+    };
+    await env.UPDATES.put(manifestKey, JSON.stringify(manifest), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+    return new Response(JSON.stringify({ ok: true, manifestKey, artifactKey }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    });
+  }
 }
