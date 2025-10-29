@@ -10,7 +10,8 @@ pub fn run() {
       jenkins_trigger_job,
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
-      open_url
+      open_url,
+      get_arch
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -125,4 +126,10 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
   open::that(url).map_err(|e| e.to_string())
+}
+
+// Report the current target architecture, e.g., "aarch64" or "x86_64"
+#[tauri::command]
+fn get_arch() -> String {
+  std::env::consts::ARCH.to_string()
 }

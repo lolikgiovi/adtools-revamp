@@ -27,26 +27,49 @@ class SettingsPage {
     this.categoriesRoot = root.querySelector('.settings-categories');
     this.searchInput = root.querySelector('#settings-search');
 
-    // Populate runtime status badge
+    // Populate runtime status badge (desktop arch-aware when available)
     try {
       const { getRuntime } = await import('../../core/Runtime.js');
-      const setBadge = (rt) => {
+      const setBadge = (rt, arch) => {
         const badge = root.querySelector('#runtime-status');
         if (!badge) return;
         const isDesktop = rt === 'tauri';
-        badge.textContent = isDesktop ? 'Desktop' : 'Web App';
+        let text = isDesktop ? 'Desktop' : 'Web App';
+        if (isDesktop && typeof arch === 'string') {
+          const a = arch.toLowerCase();
+          if (a.includes('aarch64') || a.includes('arm64')) text = 'Desktop - Apple Silicon';
+          else if (a.includes('x86_64') || a.includes('amd64') || a.includes('x64')) text = 'Desktop - Intel';
+        }
+        badge.textContent = text;
         badge.setAttribute('data-state', isDesktop ? 'desktop' : 'web');
-        badge.setAttribute('title', isDesktop ? 'Running in Tauri (Desktop)' : 'Running in Browser');
+        const titleSuffix = isDesktop ? text : 'Browser';
+        badge.setAttribute('title', isDesktop ? `Running in Tauri (${titleSuffix})` : 'Running in Browser');
       };
       const runtime = getRuntime();
       setBadge(runtime);
+      // If desktop, try to get arch via Tauri backend
+      if (runtime === 'tauri') {
+        try {
+          const arch = await invoke('get_arch');
+          setBadge(runtime, arch);
+        } catch (_) {
+          // silent fallback to generic Desktop
+        }
+      }
       // One-time delayed re-check in case Tauri globals arrive slightly later
       if (!this._runtimeRetrySettings && runtime !== 'tauri') {
         this._runtimeRetrySettings = true;
-        setTimeout(() => {
+        setTimeout(async () => {
           try {
             const rt2 = getRuntime();
-            if (rt2 === 'tauri') setBadge(rt2);
+            if (rt2 === 'tauri') {
+              try {
+                const arch2 = await invoke('get_arch');
+                setBadge(rt2, arch2);
+              } catch (_) {
+                setBadge(rt2);
+              }
+            }
           } catch (_) {}
         }, 200);
       }
@@ -199,10 +222,12 @@ class SettingsPage {
     panel.className = 'setting-edit-panel';
     panel.style.display = 'none';
     panel.innerHTML = `
-      ${this.service.inputForType(item.type, item)}
-      <div class="setting-actions">
-        <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
-        <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+      <div class="setting-edit-row">
+        ${this.service.inputForType(item.type, item)}
+        <div class="setting-actions">
+          <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
+          <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+        </div>
       </div>
       <div class="setting-error" aria-live="polite"></div>
     `;

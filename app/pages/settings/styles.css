@@ -120,9 +120,11 @@
 }
 .setting-edit-panel {
   margin-top: 0.5rem;
-  display: none;
-  align-items: center;
+  display: none; /* shown as flex inline when editing */
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.5rem;
+  width: 100%;
 }
 .setting-label {
   min-width: 140px;
@@ -246,6 +248,17 @@
   align-items: center;
   gap: 0.5rem;
 }
+/* First row: input + buttons */
+.setting-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+.setting-edit-row .setting-input {
+  flex: 1;
+  width: 100%;
+}
 .setting-label {
   min-width: 140px;
   color: var(--text-secondary, #555);
@@ -256,14 +269,23 @@
   line-height: 1.2;
   box-sizing: border-box;
 }
+.setting-edit-panel .setting-input {
+  width: 100%;
+}
 .setting-actions {
   display: flex;
   gap: 0.5rem;
-  align-self: flex-end;
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+.setting-edit-row .setting-actions {
+  align-self: auto;
+  flex-shrink: 0;
 }
 .setting-error {
   color: #d32f2f;
   font-size: 0.85rem;
+  min-height: 1em;
 }
 
 /* Responsive */
