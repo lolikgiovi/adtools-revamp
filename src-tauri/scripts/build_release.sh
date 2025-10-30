@@ -6,8 +6,9 @@ set -euo pipefail
 # - Writes manifests stable.json and beta.json including generated signatures
 # - Output directory: src-tauri/releases/YYYY-MM-DD_HH-MM/
 
-ROOT_DIR="$(cd "$(dirname "$0")"/.. && pwd)"
-SRC_TAURI_DIR="$ROOT_DIR/src-tauri"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_TAURI_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$SRC_TAURI_DIR/.." && pwd)"
 RELEASES_DIR="$SRC_TAURI_DIR/releases"
 KEY_DIR="$ROOT_DIR/keys"
 KEY_FILE="$KEY_DIR/updater.key"
@@ -30,10 +31,14 @@ read_version_from_conf() {
 ensure_prereqs() {
   if [[ ! -f "$KEY_FILE" ]]; then
     echo "ERROR: Missing updater key at $KEY_FILE" >&2
+    echo "       Expected: repo-root/keys/updater.key (Ed25519 private key)" >&2
+    echo "       Also required: repo-root/keys/passphrase.key (matching passphrase)" >&2
+    echo "       See docs/update.md → Quick Start — Release Scripts for setup." >&2
     exit 1
   fi
   if [[ ! -f "$PASSPHRASE_FILE" ]]; then
     echo "ERROR: Missing passphrase file at $PASSPHRASE_FILE" >&2
+    echo "       Create repo-root/keys/passphrase.key containing your key's passphrase." >&2
     exit 1
   fi
   if ! command -v npx >/dev/null 2>&1; then
@@ -47,6 +52,7 @@ ensure_prereqs() {
 }
 
 build_tauri_targets() {
+  # Ensure we run Node/Vite/Tauri from the repository root (one level above src-tauri)
   pushd "$ROOT_DIR" >/dev/null
   echo "Building web assets (vite build --mode tauri)..."
   npm run build:tauri
@@ -85,8 +91,18 @@ compress_app() {
 
 sign_file() {
   local file="$1" key="$2" passphrase="$3"
-  # Tauri signer outputs base64 signature to stdout
-  npx tauri signer sign -w "$key" -p "$passphrase" "$file" | tr -d '\n'
+  # Capture signer output and extract only the base64 public signature.
+  # Some versions print human-friendly text; we need just the base64 token.
+  local out sig
+  out="$(npx tauri signer sign -f "$key" -p "$passphrase" "$file")"
+  if echo "$out" | grep -q "Public signature:"; then
+    # Capture lines following the header until a blank line or the trailing note
+    sig="$(echo "$out" | awk '/Public signature:/{flag=1;next} flag && NF{print} /Make sure/{flag=0}' | tr -d '\r\n')"
+  else
+    # Fallback: use the last non-empty line (expected to be the signature)
+    sig="$(echo "$out" | awk 'NF{line=$0} END{print line}')"
+  fi
+  printf "%s" "$sig"
 }
 
 write_manifest() {
@@ -117,7 +133,8 @@ main() {
   ensure_prereqs
 
   local version timestamp_dir release_dir passphrase
-  passphrase="$(cat "$PASSPHRASE_FILE")"
+  # Read passphrase as raw text, preserve spaces, strip trailing newlines/CR
+  passphrase="$(tr -d '\r\n' < "$PASSPHRASE_FILE")"
   version="$VERSION_ARG"
   if [[ -z "$version" ]]; then
     version="$(read_version_from_conf "$TAURI_CONF")"

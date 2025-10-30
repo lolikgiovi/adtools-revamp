@@ -3,7 +3,8 @@
 // - Desktop-only: web runtime does not participate in update checks or UI
 
 import { isTauri } from "./Runtime.js";
-import { invoke, relaunch } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 function getBooleanSetting(key, fallback) {
   try {
@@ -186,33 +187,7 @@ export async function performUpdate(progressCb, stageCb) {
     // fallthrough
   }
 
-  // Fallback: Tauri 1 updater API
-  try {
-    const api = await import(/* @vite-ignore */ "@tauri-apps/api/updater");
-    if (api && typeof api.checkUpdate === "function") {
-      const { checkUpdate, installUpdate, onUpdaterEvent } = api;
-      const unlisten = await onUpdaterEvent(({ status }) => {
-        // Map coarse statuses to stages
-        if (status === "PENDING") setStage("downloading");
-        else if (status === "DONE") setStage("installing");
-        else if (status === "ERROR") setStage("error");
-      });
-      setStage("checking");
-      const info = await checkUpdate();
-      if (!info?.shouldUpdate) {
-        setStage("uptodate");
-        await unlisten();
-        return false;
-      }
-      setStage("downloading");
-      await installUpdate();
-      setStage("restarting");
-      await unlisten();
-      return true;
-    }
-  } catch (_) {
-    // fallthrough
-  }
+  // No legacy fallback: project depends on Tauri v2 plugin-updater
 
   // Neither updater API is available
   return false;

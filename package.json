@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "cf:dev": "npm run build && npx wrangler dev",
-    "cf:publish": "npm run build && npx wrangler publish"
+    "cf:publish": "npm run build && npx wrangler publish",
+    "release:build": "bash src-tauri/scripts/build_release.sh",
+    "release:upload": "bash src-tauri/scripts/upload_to_r2.sh"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +30,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-updater": "^2.9.0",
+    "@tauri-apps/plugin-process": "^2.3.0",
     "handsontable": "^16.0.0",
     "html-minifier": "^4.0.0",
     "monaco-editor": "^0.54.0",

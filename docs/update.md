@@ -36,6 +36,42 @@ This document is the end-to-end technical development plan to implement and oper
 - Allow optional and forced updates via manifest policy (`minVersion`).
 - Ensure short-cached manifests and immutable artifacts for safe rollout/rollback.
 
+## Quick Start — Release Scripts
+
+These commands streamline building signed macOS releases and publishing them to Cloudflare R2.
+
+Prerequisites
+- `@tauri-apps/cli` installed and working (`npx tauri --version`).
+- `wrangler` installed and authenticated (`npm i -g wrangler`, `wrangler whoami`).
+- Updater keys present: `keys/updater.key` and `keys/passphrase.key`.
+- Passphrase file can contain spaces; write it raw without quotes (e.g., `Saya suka makan ayam goreng`).
+
+Build a release
+- `npm run release:build [-- <version>]`
+- If `<version>` is omitted, the script reads it from `src-tauri/tauri.conf.json`.
+- Outputs to `src-tauri/releases/<YYYY-MM-DD_HH-MM>/` with:
+  - `darwin-aarch64/ADTools-<version>-mac-arm64.(app.tar.gz|app.tar.gz.sig|dmg)`
+  - `darwin-x86_64/ADTools-<version>-mac-intel.(app.tar.gz|app.tar.gz.sig|dmg)`
+  - `stable.json` and `beta.json` manifests with signatures.
+
+Upload to Cloudflare R2
+- `npm run release:upload -- <release_dir> [version] [bucket]`
+- `version` defaults from the manifest if omitted; `bucket` defaults to `adtools-updates`.
+- Uploads manifests to `update/<channel>.json` and artifacts to `releases/<version>/<channel>/<arch>/`.
+
+Endpoint Note
+- The Worker now serves manifests from `GET /update/<channel>.json` and stores them under `update/` in R2.
+- Previous references to `manifest/<channel>.json` are superseded; artifacts remain under `releases/`.
+
+Verify
+- `curl -I https://adtools.lolik.workers.dev/update/stable.json`
+- `curl -I https://adtools.lolik.workers.dev/releases/<version>/stable/darwin-aarch64/ADTools-<version>-mac-arm64.app.tar.gz`
+
+Example Flow
+- `npm run release:build -- 1.2.3`
+- `npm run release:upload -- src-tauri/releases/2025-10-30_12-34 1.2.3`
+
+
 ## Functional Requirements
 
 - Channels
