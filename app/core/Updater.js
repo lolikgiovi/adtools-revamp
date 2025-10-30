@@ -1,9 +1,9 @@
-// Updater core (Phase 2)
+// Updater core (Phase 2, desktop-only)
 // - Provides: checkUpdate, performUpdate, evaluatePolicy, getCurrentVersionSafe, setupAutoUpdate
-// - Works in web and Tauri; gracefully degrades when updater plugin/APIs are unavailable
+// - Desktop-only: web runtime does not participate in update checks or UI
 
 import { isTauri } from "./Runtime.js";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, relaunch } from "@tauri-apps/api/core";
 
 function getBooleanSetting(key, fallback) {
   try {
@@ -53,23 +53,23 @@ async function detectArch() {
   if (isTauri()) {
     try {
       const arch = await invoke("get_arch");
-      // Normalize common outputs to expected worker labels
-      if (arch === "aarch64" || arch === "arm64") return "aarch64";
-      if (arch === "x86_64" || arch === "x64" || arch === "amd64") return "x86_64";
-      return String(arch || "").trim() || "aarch64";
+      // Normalize to plugin-updater platform keys (darwin-*)
+      if (arch === "aarch64" || arch === "arm64") return "darwin-aarch64";
+      if (arch === "x86_64" || arch === "x64" || arch === "amd64") return "darwin-x86_64";
+      const a = String(arch || "").trim().toLowerCase();
+      if (a.includes("arm") || a.includes("aarch")) return "darwin-aarch64";
+      return "darwin-x86_64";
     } catch (_) {
       // fallthrough
     }
   }
-  // Browser best-effort
-  const ua = navigator.userAgent || "";
-  if (/arm64|aarch64|Apple M\d|Apple\s?Silicon/i.test(ua)) return "aarch64";
-  if (/x86_64|x64|Intel|amd64/i.test(ua)) return "x86_64";
-  return "aarch64";
+  // Browser: not used (web does not support updates); return a sensible default
+  return "darwin-aarch64";
 }
 
 async function fetchManifest(channel) {
-  const url = `https://adtools.lolik.workers.dev/manifest/${channel}.json`;
+  // Unify on plugin-updater JSON schema served at /update/<channel>.json
+  const url = `https://adtools.lolik.workers.dev/update/${channel}.json`;
   const res = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json" },
@@ -86,8 +86,7 @@ export async function getCurrentVersionSafe() {
   // Prefer Tauri app version when available
   if (isTauri()) {
     try {
-      const apiAppMod = "@tauri-apps/api/app";
-      const { getVersion } = await import(apiAppMod);
+      const { getVersion } = await import(/* @vite-ignore */ "@tauri-apps/api/app");
       return await getVersion();
     } catch (_) {
       // ignore
@@ -102,6 +101,10 @@ export async function getCurrentVersionSafe() {
 }
 
 export async function evaluatePolicy() {
+  // Desktop-only: web runtime does not enforce or check update policy
+  if (!isTauri()) {
+    return { autoCheck: false, mustForce: false, forceMinVersion: undefined, current: "0.0.0", channel: "stable" };
+  }
   const channel = getChannelFromSettings();
   const current = await getCurrentVersionSafe();
   let minVersion = undefined;
@@ -117,6 +120,12 @@ export async function evaluatePolicy() {
 }
 
 export async function checkUpdate(opts = {}) {
+  // Desktop-only: return unsupported for web runtime
+  if (!isTauri()) {
+    const current = opts.current || (await getCurrentVersionSafe());
+    const channel = opts.channel || getChannelFromSettings();
+    return { available: false, version: undefined, current, channel, arch: undefined, error: "unsupported: web runtime" };
+  }
   const channel = opts.channel || getChannelFromSettings();
   const current = opts.current || (await getCurrentVersionSafe());
   const arch = opts.arch || (await detectArch());
@@ -125,8 +134,14 @@ export async function checkUpdate(opts = {}) {
     const { manifest, etag } = await fetchManifest(channel);
     const latest = manifest?.version || manifest?.latest || undefined;
     const available = Boolean(latest && semverGt(latest, current));
-    const url = manifest?.artifacts?.[arch]?.url || manifest?.url || undefined;
-    const signature = manifest?.artifacts?.[arch]?.signature || manifest?.signature || undefined;
+    // Unified schema: plugin-updater style platforms with darwin-* keys; support fallback mapping
+    const platformEntry = manifest?.platforms?.[arch]
+      || manifest?.platforms?.[arch.replace("darwin-", "")] // tolerate old keys
+      || undefined;
+    const base = "https://adtools.lolik.workers.dev";
+    const normalizeUrl = (u) => (typeof u === "string" && u.startsWith("/") ? base + u : u);
+    const url = normalizeUrl(platformEntry?.url || manifest?.url || undefined);
+    const signature = platformEntry?.signature || manifest?.signature || undefined;
     return { available, version: latest, current, channel, arch, url, signature, manifest, etag };
   } catch (err) {
     return { available: false, current, channel, arch, error: String(err) };
@@ -151,8 +166,7 @@ export async function performUpdate(progressCb, stageCb) {
 
   // Preferred path: Tauri 2 plugin-updater
   try {
-    const v2UpdaterMod = "@tauri-apps/plugin-updater";
-    const updater = await import(v2UpdaterMod);
+    const updater = await import(/* @vite-ignore */ "@tauri-apps/plugin-updater");
     if (updater && typeof updater.check === "function") {
       setStage("checking");
       const update = await updater.check();
@@ -165,8 +179,6 @@ export async function performUpdate(progressCb, stageCb) {
         setProgress(loaded || 0, total || 0);
       });
       setStage("restarting");
-      const apiProcessMod = "@tauri-apps/api/process";
-      const { relaunch } = await import(apiProcessMod);
       await relaunch();
       return true;
     }
@@ -176,8 +188,7 @@ export async function performUpdate(progressCb, stageCb) {
 
   // Fallback: Tauri 1 updater API
   try {
-    const v1UpdaterMod = "@tauri-apps/api/updater";
-    const api = await import(v1UpdaterMod);
+    const api = await import(/* @vite-ignore */ "@tauri-apps/api/updater");
     if (api && typeof api.checkUpdate === "function") {
       const { checkUpdate, installUpdate, onUpdaterEvent } = api;
       const unlisten = await onUpdaterEvent(({ status }) => {
@@ -217,6 +228,13 @@ export function setupAutoUpdate(options = {}) {
     } catch (_) {}
   };
 
+  // Desktop-only: no scheduling or events on web
+  if (!isTauri()) {
+    return {
+      cancel() {}
+    };
+  }
+
   const runOptionalCheck = async () => {
     try {
       const res = await checkUpdate();
@@ -231,11 +249,8 @@ export function setupAutoUpdate(options = {}) {
     try {
       const policy = await evaluatePolicy();
       if (!policy.mustForce) return false;
-      if (!isTauri()) {
-        emit("update:forced", { policy, unsupported: true });
-        return false;
-      }
       emit("update:forced", { policy, unsupported: false });
+      console.log("Forced update enforced");
       const ok = await performUpdate(
         (loaded, total) => emit("update:progress", { loaded, total }),
         (stage) => emit("update:stage", { stage })

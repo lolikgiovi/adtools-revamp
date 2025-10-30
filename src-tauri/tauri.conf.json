@@ -30,7 +30,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://adtools.lolik.workers.dev/manifest/stable.json"],
+      "endpoints": ["https://adtools.lolik.workers.dev/update/stable.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEyOTlCMTkwNkM1MjNBNzgKUldSNE9sSnNrTEdaRWhyUjBOam9SMGtqYVUwN0FhUWZGZXlIT1o5TGdBRldWRnZ4WEkvR3psdDkK"
     }
   }

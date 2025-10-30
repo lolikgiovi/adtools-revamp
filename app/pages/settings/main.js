@@ -46,6 +46,7 @@ class SettingsPage {
         badge.setAttribute('title', isDesktop ? `Running in Tauri (${titleSuffix})` : 'Running in Browser');
       };
       const runtime = getRuntime();
+      this.runtime = runtime;
       setBadge(runtime);
       // If desktop, try to get arch via Tauri backend
       if (runtime === 'tauri') {
@@ -69,6 +70,7 @@ class SettingsPage {
               } catch (_) {
                 setBadge(rt2);
               }
+              this.runtime = rt2;
             }
           } catch (_) {}
         }, 200);
@@ -84,6 +86,12 @@ class SettingsPage {
   }
 
   async handleManualCheckUpdate() {
+    // Desktop-only: short-circuit on web runtime
+    const rt0 = this.runtime || 'web';
+    if (rt0 !== 'tauri') {
+      this.eventBus?.emit?.('notification:info', { message: 'Updates are available on Desktop only.' });
+      return;
+    }
     const btn = this.container?.querySelector('.settings-check-update');
     const original = btn ? btn.textContent : '';
     if (btn) {
@@ -91,8 +99,34 @@ class SettingsPage {
       btn.textContent = 'Checking…';
     }
     try {
-      const { checkUpdate, getCurrentVersionSafe } = await import('../../core/Updater.js');
+      const { checkUpdate, getCurrentVersionSafe, evaluatePolicy, performUpdate } = await import('../../core/Updater.js');
       const current = await getCurrentVersionSafe();
+
+      // First, evaluate forced-update policy; if required, run the forced path
+      try {
+        const policy = await evaluatePolicy();
+        if (policy?.mustForce) {
+          const { isTauri } = await import('../../core/Runtime.js');
+          if (!isTauri()) {
+            this.eventBus?.emit?.('update:forced', { policy, unsupported: true });
+            this.eventBus?.emit?.('notification:error', { message: 'A forced update is required, but desktop runtime is not available.' });
+          } else {
+            this.eventBus?.emit?.('update:forced', { policy, unsupported: false });
+            const ok = await performUpdate(
+              (loaded, total) => this.eventBus?.emit?.('update:progress', { loaded, total }),
+              (stage) => this.eventBus?.emit?.('update:stage', { stage })
+            );
+            if (!ok) {
+              this.eventBus?.emit?.('update:error', { message: 'Update not available or install failed' });
+            }
+          }
+          return; // do not proceed to optional check when forced path is evaluated
+        }
+      } catch (_) {
+        // If policy evaluation fails, fall through to optional check
+      }
+
+      // Optional update check path
       const result = await checkUpdate();
       if (result?.error) {
         this.eventBus?.emit?.('notification:error', { message: `Update check failed: ${result.error}` });
@@ -117,17 +151,23 @@ class SettingsPage {
   async reloadConfig() {
     const cfg = await this.service.loadConfig();
     this.currentConfig = cfg;
-    this.renderCategories(cfg.categories || []);
+    const rt = this.runtime || 'web';
+    const cats = (cfg.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+    this.renderCategories(cats);
   }
 
   applySearch() {
     const q = (this.searchInput?.value || '').trim().toLowerCase();
     if (!q) {
-      this.renderCategories(this.currentConfig?.categories || []);
+      const rt = this.runtime || 'web';
+      const cats = (this.currentConfig?.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+      this.renderCategories(cats);
       return;
     }
     const filtered = this.filterConfig(this.currentConfig, q);
-    this.renderCategories(filtered.categories);
+    const rt = this.runtime || 'web';
+    const cats = (filtered.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+    this.renderCategories(cats);
   }
 
   filterConfig(config, q) {

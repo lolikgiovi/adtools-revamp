@@ -18,8 +18,8 @@ export default {
       return handleDevSeedUpdate(request, env);
     }
 
-    // Updater: static manifest by channel (e.g., /manifest/stable.json)
-    if (url.pathname.startsWith('/manifest/')) {
+    // Updater: static manifest by channel under /update/*
+    if (url.pathname.startsWith('/update/')) {
       if (method !== 'GET' && method !== 'HEAD') return methodNotAllowed();
       return handleManifestRequest(request, env);
     }
@@ -537,7 +537,7 @@ async function handleManifestRequest(request, env) {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });
     }
-    const key = `manifest/${channelFile}`;
+    const key = `update/${channelFile}`;
     const head = await env.UPDATES?.head(key);
     if (!head) {
       return new Response(JSON.stringify({ ok: false, error: 'Manifest not found', key }), {
@@ -694,7 +694,7 @@ async function handleDevSeedUpdate(request, env) {
     const channel = 'stable';
     const arch = 'aarch64';
     const artifactKey = `releases/${version}/${channel}/${arch}/test.bin`;
-    const manifestKey = `manifest/${channel}.json`;
+    const manifestKey = `update/${channel}.json`;
     const artifactBody = new TextEncoder().encode('hello world');
     await env.UPDATES.put(artifactKey, artifactBody, {
       httpMetadata: { contentType: 'application/octet-stream' },
