@@ -42,6 +42,13 @@ class App {
     // Temporary store for route navigation data payloads
     this._routeData = {};
 
+    // Update UI elements
+    this._updateBannerEl = null;
+    this._updateModalEl = null;
+    this._updateStage = null;
+    this._updateLoaded = 0;
+    this._updateTotal = 0;
+
     this.init();
   }
 
@@ -578,6 +585,29 @@ class App {
       } catch (_) {}
     });
 
+    // Update integration events
+    this.eventBus.on("update:show-banner", ({ result }) => {
+      this.renderUpdateBanner(result);
+    });
+    this.eventBus.on("update:hide-banner", () => {
+      this.removeUpdateBanner();
+    });
+    this.eventBus.on("update:forced", ({ policy, unsupported }) => {
+      this.showForcedUpdateModal(policy, unsupported);
+    });
+    this.eventBus.on("update:error", ({ message }) => {
+      // Surface error and reflect error state in UI
+      this.showNotification(message || "Update error", "error");
+      const stage = this._updateStage || "error";
+      this.updateStageBoth(stage);
+    });
+    this.eventBus.on("update:stage", ({ stage }) => {
+      this.updateStageBoth(stage);
+    });
+    this.eventBus.on("update:progress", ({ loaded, total }) => {
+      this.updateProgressBoth(loaded, total);
+    });
+
     // In Tauri desktop app, suppress the default WebView right-click menu
     // This keeps the UI cleaner and avoids native context items like "Look Up"
     if (isTauri()) {
@@ -593,6 +623,212 @@ class App {
       };
       // Capture phase ensures we run before other handlers
       document.addEventListener("contextmenu", preventContextMenu, { capture: true });
+    }
+  }
+
+  getHeaderActions() {
+    return document.querySelector(".header-actions");
+  }
+
+  renderUpdateBanner(result) {
+    const container = this.getHeaderActions();
+    if (!container) return;
+    // Create banner if not exists
+    if (!this._updateBannerEl) {
+      const el = document.createElement("div");
+      el.className = "update-banner";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      // Insert before reload button to appear left of it
+      const reloadBtn = container.querySelector(".header-reload");
+      if (reloadBtn) {
+        container.insertBefore(el, reloadBtn);
+      } else {
+        container.appendChild(el);
+      }
+      this._updateBannerEl = el;
+    }
+
+    const version = result?.version ? String(result.version) : "";
+    const channel = result?.channel ? String(result.channel) : "";
+    const label = version ? `Update available: v${version}${channel ? ` (${channel})` : ""}` : "Update available";
+
+    this._updateBannerEl.innerHTML = /*html*/ `
+      <div class="update-banner-content">
+        <span class="update-banner-label">${label}</span>
+        <div class="update-banner-actions">
+          <button type="button" class="btn btn-sm btn-primary update-banner-update">Update Now</button>
+          <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
+        </div>
+      </div>
+      <div class="update-banner-progress" aria-hidden="true">
+        <div class="update-banner-progressbox"><div class="update-banner-progressbar" style="width: 0%"></div></div>
+        <span class="update-banner-stage">Ready</span>
+      </div>
+    `;
+
+    this.attachUpdateBannerEvents();
+  }
+
+  attachUpdateBannerEvents() {
+    if (!this._updateBannerEl) return;
+    const updateBtn = this._updateBannerEl.querySelector(".update-banner-update");
+    const laterBtn = this._updateBannerEl.querySelector(".update-banner-later");
+    if (updateBtn) {
+      updateBtn.onclick = async () => {
+        if (!isTauri()) {
+          this.eventBus.emit("notification:error", { message: "Updates are available on Desktop only." });
+          return;
+        }
+        updateBtn.disabled = true;
+        laterBtn && (laterBtn.disabled = true);
+        try {
+          const { performUpdate } = await import("./core/Updater.js");
+          const ok = await performUpdate(
+            (loaded, total) => this.eventBus.emit("update:progress", { loaded, total }),
+            (stage) => this.eventBus.emit("update:stage", { stage })
+          );
+          if (!ok) {
+            this.eventBus.emit("update:error", { message: "Update not available or install failed" });
+          }
+        } catch (err) {
+          this.eventBus.emit("update:error", { message: String(err) || "Update failed" });
+        } finally {
+          updateBtn.disabled = false;
+          laterBtn && (laterBtn.disabled = false);
+        }
+      };
+    }
+    if (laterBtn) {
+      laterBtn.onclick = () => {
+        this.removeUpdateBanner();
+      };
+    }
+  }
+
+  removeUpdateBanner() {
+    if (this._updateBannerEl && this._updateBannerEl.parentNode) {
+      try {
+        this._updateBannerEl.parentNode.removeChild(this._updateBannerEl);
+      } catch (_) {}
+    }
+    this._updateBannerEl = null;
+  }
+
+  showForcedUpdateModal(policy, unsupported) {
+    // Ensure only one modal exists
+    if (!this._updateModalEl) {
+      const overlay = document.createElement("div");
+      overlay.className = "update-overlay";
+      const modal = document.createElement("div");
+      modal.className = "update-modal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "update-modal-title");
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      this._updateModalEl = overlay;
+
+      // Prevent background scroll
+      try {
+        document.body.classList.add("update-modal-open");
+      } catch (_) {}
+    }
+
+    const current = policy?.current ? String(policy.current) : "";
+    const min = policy?.forceMinVersion ? String(policy.forceMinVersion) : "";
+    const title = unsupported ? "Update required (Desktop only)" : "Update required";
+    const desc = unsupported
+      ? "A forced update is required, but the desktop runtime is not available in the browser. Please run AD Tools desktop to continue."
+      : `A mandatory update is required to continue. Current: v${current || "?"}, minimum required: v${min || "?"}.`;
+
+    const inner = `
+      <div class="update-modal-header">
+        <h3 id="update-modal-title">${title}</h3>
+      </div>
+      <div class="update-modal-body">
+        <p class="update-modal-desc">${desc}</p>
+        <div class="update-modal-progress">
+          <div class="update-modal-progressbox"><div class="update-modal-progressbar" style="width:0%"></div></div>
+          <span class="update-modal-stage">Waiting…</span>
+        </div>
+      </div>
+      <div class="update-modal-footer">
+        ${unsupported ? '<button type="button" class="btn btn-sm btn-secondary update-modal-close">Dismiss</button>' : ""}
+      </div>
+    `;
+    const modalNode = this._updateModalEl.querySelector(".update-modal");
+    if (modalNode) modalNode.innerHTML = inner;
+
+    const closeBtn = this._updateModalEl.querySelector(".update-modal-close");
+    if (closeBtn) {
+      closeBtn.onclick = () => this.hideForcedUpdateModal();
+    }
+
+    this._updateModalEl.classList.add("open");
+  }
+
+  hideForcedUpdateModal() {
+    if (this._updateModalEl) {
+      try {
+        this._updateModalEl.classList.remove("open");
+        this._updateModalEl.parentNode && this._updateModalEl.parentNode.removeChild(this._updateModalEl);
+      } catch (_) {}
+      this._updateModalEl = null;
+    }
+    try {
+      document.body.classList.remove("update-modal-open");
+    } catch (_) {}
+  }
+
+  updateStageBoth(stage) {
+    this._updateStage = stage;
+    // Banner stage
+    if (this._updateBannerEl) {
+      const stageEl = this._updateBannerEl.querySelector(".update-banner-stage");
+      const progressBox = this._updateBannerEl.querySelector(".update-banner-progress");
+      if (stageEl) stageEl.textContent = this.#formatStage(stage);
+      if (progressBox) {
+        const show = stage && stage !== "uptodate";
+        if (show) progressBox.setAttribute("aria-hidden", "false");
+        else progressBox.setAttribute("aria-hidden", "true");
+      }
+    }
+    // Modal stage
+    if (this._updateModalEl) {
+      const stageEl = this._updateModalEl.querySelector(".update-modal-stage");
+      if (stageEl) stageEl.textContent = this.#formatStage(stage);
+    }
+  }
+
+  updateProgressBoth(loaded, total) {
+    this._updateLoaded = loaded || 0;
+    this._updateTotal = total || 0;
+    const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((loaded / total) * 100))) : 0;
+    // Banner progress
+    if (this._updateBannerEl) {
+      const bar = this._updateBannerEl.querySelector(".update-banner-progressbar");
+      if (bar) bar.style.width = `${pct}%`;
+    }
+    // Modal progress
+    if (this._updateModalEl) {
+      const bar = this._updateModalEl.querySelector(".update-modal-progressbar");
+      if (bar) bar.style.width = `${pct}%`;
+    }
+  }
+
+  #formatStage(stage) {
+    switch (stage) {
+      case "checking":
+        return "Checking…";
+      case "downloading":
+        return "Downloading…";
+      case "restarting":
+        return "Restarting…";
+      case "uptodate":
+        return "Up to date";
+      default:
+        return stage ? String(stage) : "";
     }
   }
 

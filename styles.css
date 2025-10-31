@@ -1430,6 +1430,138 @@ body.global-search-open {
   }
 }
 
+/* Update UI (banner + modal) */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: hsl(var(--bg-secondary));
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+}
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.update-banner-label {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+}
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.update-banner-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+.update-banner-progress[aria-hidden="true"] {
+  display: none;
+}
+.update-banner-progressbox {
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+.update-banner-progressbar {
+  height: 100%;
+  width: 0%;
+  background: hsl(var(--primary));
+}
+.update-banner-stage {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 950;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.update-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.update-modal-open {
+  overflow: hidden;
+}
+.update-modal {
+  position: fixed;
+  top: 18vh;
+  left: 50%;
+  transform: translate(-50%, -10px);
+  width: min(720px, 92vw);
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px hsl(var(--shadow));
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  padding: 1rem;
+}
+.update-overlay.open .update-modal {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.update-modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: hsl(var(--text-primary));
+}
+.update-modal-desc {
+  color: hsl(var(--text-secondary));
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.update-modal-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.update-modal-progressbox {
+  width: 100%;
+  max-width: 420px;
+  height: 6px;
+  border-radius: 3px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+.update-modal-progressbar {
+  height: 100%;
+  width: 0%;
+  background: hsl(var(--primary));
+}
+.update-modal-stage {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.85rem;
+}
+.update-modal-footer {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  .update-modal {
+    top: 8vh;
+    width: 96vw;
+  }
+}
+
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {
   * {
