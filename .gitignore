@@ -56,3 +56,6 @@ keys/
 
 # releases app
 src-tauri/releases/
+
+# rust analyzer
+target
