@@ -100,8 +100,8 @@ export class SchemaValidationService {
       throw new Error("Incomplete data. Please fill in both schema and data sheets.");
     }
 
-    const schemaFieldNames = schemaData.map((row) => row[0].toLowerCase());
-    const inputFieldNames = inputData[0].map((field) => field?.toLowerCase());
+    const schemaFieldNames = schemaData.map((row) => row[0]);
+    const inputFieldNames = inputData[0].map((field) => field?.trim());
 
     // Check for empty field names in data input
     const emptyColumnIndex = inputFieldNames.findIndex((field) => !field);
@@ -130,7 +130,7 @@ export class SchemaValidationService {
         missingInSchemaCount: missingInSchema.length,
         missingInDataCount: missingInData.length,
       });
-      throw new Error(`Field Mismatch Error:<br>${errors.join("<br>")}`);
+      throw new Error(`Field Mismatch Error:<br>${errors.join("<br>")}<br>Note: Oracle treat reserved keywords as case sensitive`);
     }
 
     return true;
