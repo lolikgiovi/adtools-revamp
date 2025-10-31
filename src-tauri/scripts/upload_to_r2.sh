@@ -17,6 +17,12 @@ RELEASE_DIR="${1:-}"
 VERSION_ARG="${2:-}"
 BUCKET="${3:-adtools-updates}"
 
+# Use Cloudflare remote API by default. Set WRANGLER_LOCAL=1 to use local.
+WRANGLER_REMOTE_FLAG="--remote"
+if [[ "${WRANGLER_LOCAL:-}" == "1" ]]; then
+  WRANGLER_REMOTE_FLAG=""
+fi
+
 if [[ -z "$RELEASE_DIR" ]]; then
   echo "Usage: $0 <release_dir> [version] [bucket]" >&2
   exit 1
@@ -58,7 +64,7 @@ echo "Uploading manifests to bucket '$BUCKET'..."
 for ch in stable beta; do
   mf="$RELEASE_DIR/$ch.json"
   if [[ -f "$mf" ]]; then
-    wrangler r2 object put "$BUCKET/update/$ch.json" --file="$mf"
+    wrangler r2 object put "$BUCKET/update/$ch.json" $WRANGLER_REMOTE_FLAG --file="$mf"
   else
     echo "WARN: manifest missing: $mf" >&2
   fi
@@ -73,19 +79,19 @@ upload_artifact() {
   dmg_path="$RELEASE_DIR/$arch_dir/ADTools-$VERSION-$base_name.dmg"
 
   if [[ -f "$tar_path" ]]; then
-    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.app.tar.gz" --file="$tar_path"
+    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.app.tar.gz" $WRANGLER_REMOTE_FLAG --file="$tar_path"
   else
     echo "ERROR: Missing tarball: $tar_path" >&2
     exit 1
   fi
   if [[ -f "$sig_path" ]]; then
-    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.app.tar.gz.sig" --file="$sig_path"
+    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.app.tar.gz.sig" $WRANGLER_REMOTE_FLAG --file="$sig_path"
   else
     echo "ERROR: Missing signature: $sig_path" >&2
     exit 1
   fi
   if [[ -f "$dmg_path" ]]; then
-    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.dmg" --file="$dmg_path"
+    wrangler r2 object put "$BUCKET/releases/$VERSION/$channel/$arch_key/ADTools-$VERSION-$base_name.dmg" $WRANGLER_REMOTE_FLAG --file="$dmg_path"
   else
     echo "WARN: DMG not found: $dmg_path (skipping)" >&2
   fi

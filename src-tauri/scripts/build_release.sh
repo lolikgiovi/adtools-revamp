@@ -13,6 +13,7 @@ RELEASES_DIR="$SRC_TAURI_DIR/releases"
 KEY_DIR="$ROOT_DIR/keys"
 KEY_FILE="$KEY_DIR/updater.key"
 PASSPHRASE_FILE="$KEY_DIR/passphrase.key"
+BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
 
 # Resolve version: CLI arg $1 overrides tauri.conf.json version
 VERSION_ARG="${1:-}"
@@ -86,7 +87,9 @@ compress_app() {
   local app_parent app_name
   app_parent="$(dirname "$app_dir")"
   app_name="$(basename "$app_dir")"
-  tar -czf "$out_file" -C "$app_parent" "$app_name"
+  # Create a tarball without macOS extended attributes or AppleDouble files to avoid `._` entries.
+  # This prevents plugin-updater from mistakenly unpacking `._AD Tools.app`.
+  COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --exclude='.DS_Store' --exclude='._*' -czf "$out_file" -C "$app_parent" "$app_name"
 }
 
 sign_file() {
@@ -96,11 +99,16 @@ sign_file() {
   local out sig
   out="$(npx tauri signer sign -f "$key" -p "$passphrase" "$file")"
   if echo "$out" | grep -q "Public signature:"; then
-    # Capture lines following the header until a blank line or the trailing note
-    sig="$(echo "$out" | awk '/Public signature:/{flag=1;next} flag && NF{print} /Make sure/{flag=0}' | tr -d '\r\n')"
+    # Read from the "Public signature:" section and stop before the trailing note.
+    # Select the first pure base64 line to avoid concatenating any human text.
+    sig="$(printf "%s" "$out" \
+      | sed -n '/Public signature:/,$p' \
+      | sed '/Make sure/q' \
+      | grep -E '^[A-Za-z0-9+/=]+$' \
+      | head -n 1)"
   else
-    # Fallback: use the last non-empty line (expected to be the signature)
-    sig="$(echo "$out" | awk 'NF{line=$0} END{print line}')"
+    # Fallback: find the first pure base64-looking line anywhere in the output.
+    sig="$(printf "%s" "$out" | grep -E '^[A-Za-z0-9+/=]+$' | head -n 1)"
   fi
   printf "%s" "$sig"
 }
@@ -118,11 +126,11 @@ write_manifest() {
   "platforms": {
     "darwin-aarch64": {
       "signature": "$sig_arm64",
-      "url": "/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz"
+      "url": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz"
     },
     "darwin-x86_64": {
       "signature": "$sig_x64",
-      "url": "/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz"
+      "url": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz"
     }
   }
 }

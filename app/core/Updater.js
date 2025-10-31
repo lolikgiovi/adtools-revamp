@@ -180,7 +180,27 @@ export async function performUpdate(progressCb, stageCb) {
         setProgress(loaded || 0, total || 0);
       });
       setStage("restarting");
-      await relaunch();
+      // Robust restart sequence: plugin-process → core app → window reload (dev fallback)
+      try {
+        await relaunch();
+        return true;
+      } catch (e1) {
+        try {
+          const appApi = await import(/* @vite-ignore */ "@tauri-apps/api/app");
+          if (appApi?.relaunch) {
+            await appApi.relaunch();
+            return true;
+          }
+        } catch (e2) {
+          // Dev-mode fallback: a full relaunch can fail when running under cargo
+          // Reloading the window keeps the session alive enough for local testing
+          console.warn("Relaunch failed; falling back to window reload", e1);
+          try {
+            window.location.reload();
+            return true;
+          } catch (_) {}
+        }
+      }
       return true;
     }
   } catch (_) {

@@ -8,7 +8,9 @@
     "core:webview:allow-internal-toggle-devtools",
     "updater:default",
     "updater:allow-check",
-    "updater:allow-install"
+    "updater:allow-install",
+    "process:allow-restart",
+    "process:default"
   ],
   "platforms": ["macOS"]
 }

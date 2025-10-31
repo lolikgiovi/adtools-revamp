@@ -88,14 +88,14 @@ class App {
     this.bindGlobalEvents();
 
     // Setup auto-update checks and forced-update handling (Phase 2)
-    ;(async () => {
+    (async () => {
       try {
-        const { setupAutoUpdate } = await import('./core/Updater.js')
-        this._updaterHandle = setupAutoUpdate({ eventBus: this.eventBus })
+        const { setupAutoUpdate } = await import("./core/Updater.js");
+        this._updaterHandle = setupAutoUpdate({ eventBus: this.eventBus });
       } catch (_) {
         // Silently ignore if module fails to load
       }
-    })()
+    })();
 
     console.log("AD Tools app initialized successfully");
   }
@@ -653,7 +653,7 @@ class App {
 
     // Cancel any scheduled updater timers
     try {
-      this._updaterHandle && typeof this._updaterHandle.cancel === 'function' && this._updaterHandle.cancel();
+      this._updaterHandle && typeof this._updaterHandle.cancel === "function" && this._updaterHandle.cancel();
     } catch (_) {}
 
     // Deactivate current tool
