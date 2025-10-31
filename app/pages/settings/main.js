@@ -46,6 +46,7 @@ class SettingsPage {
         badge.setAttribute('title', isDesktop ? `Running in Tauri (${titleSuffix})` : 'Running in Browser');
       };
       const runtime = getRuntime();
+      this.runtime = runtime;
       setBadge(runtime);
       // If desktop, try to get arch via Tauri backend
       if (runtime === 'tauri') {
@@ -69,6 +70,7 @@ class SettingsPage {
               } catch (_) {
                 setBadge(rt2);
               }
+              this.runtime = rt2;
             }
           } catch (_) {}
         }, 200);
@@ -77,25 +79,95 @@ class SettingsPage {
 
     // Bind toolbar actions
     root.querySelector('.settings-reload')?.addEventListener('click', () => this.reloadConfig());
+    root.querySelector('.settings-check-update')?.addEventListener('click', () => this.handleManualCheckUpdate());
     this.searchInput?.addEventListener('input', () => this.applySearch());
 
     await this.reloadConfig();
   }
 
+  async handleManualCheckUpdate() {
+    // Desktop-only: short-circuit on web runtime
+    const rt0 = this.runtime || 'web';
+    if (rt0 !== 'tauri') {
+      this.eventBus?.emit?.('notification:info', { message: 'Updates are available on Desktop only.' });
+      return;
+    }
+    const btn = this.container?.querySelector('.settings-check-update');
+    const original = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+    }
+    try {
+      const { checkUpdate, getCurrentVersionSafe, evaluatePolicy, performUpdate } = await import('../../core/Updater.js');
+      const current = await getCurrentVersionSafe();
+
+      // First, evaluate forced-update policy; if required, run the forced path
+      try {
+        const policy = await evaluatePolicy();
+        if (policy?.mustForce) {
+          const { isTauri } = await import('../../core/Runtime.js');
+          if (!isTauri()) {
+            this.eventBus?.emit?.('update:forced', { policy, unsupported: true });
+            this.eventBus?.emit?.('notification:error', { message: 'A forced update is required, but desktop runtime is not available.' });
+          } else {
+            this.eventBus?.emit?.('update:forced', { policy, unsupported: false });
+            const ok = await performUpdate(
+              (loaded, total) => this.eventBus?.emit?.('update:progress', { loaded, total }),
+              (stage) => this.eventBus?.emit?.('update:stage', { stage })
+            );
+            if (!ok) {
+              this.eventBus?.emit?.('update:error', { message: 'Update not available or install failed' });
+            }
+          }
+          return; // do not proceed to optional check when forced path is evaluated
+        }
+      } catch (_) {
+        // If policy evaluation fails, fall through to optional check
+      }
+
+      // Optional update check path
+      const result = await checkUpdate();
+      if (result?.error) {
+        this.eventBus?.emit?.('notification:error', { message: `Update check failed: ${result.error}` });
+      } else if (result?.available) {
+        this.eventBus?.emit?.('notification:success', { message: `Update available: v${result.version}` });
+        // Request UI to show the optional update banner
+        this.eventBus?.emit?.('update:show-banner', { result });
+      } else {
+        this.eventBus?.emit?.('notification:info', { message: `You're up to date (v${current})` });
+        this.eventBus?.emit?.('update:hide-banner');
+      }
+    } catch (err) {
+      this.eventBus?.emit?.('notification:error', { message: `Update check failed: ${String(err)}` });
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = original || 'Check for Update';
+      }
+    }
+  }
+
   async reloadConfig() {
     const cfg = await this.service.loadConfig();
     this.currentConfig = cfg;
-    this.renderCategories(cfg.categories || []);
+    const rt = this.runtime || 'web';
+    const cats = (cfg.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+    this.renderCategories(cats);
   }
 
   applySearch() {
     const q = (this.searchInput?.value || '').trim().toLowerCase();
     if (!q) {
-      this.renderCategories(this.currentConfig?.categories || []);
+      const rt = this.runtime || 'web';
+      const cats = (this.currentConfig?.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+      this.renderCategories(cats);
       return;
     }
     const filtered = this.filterConfig(this.currentConfig, q);
-    this.renderCategories(filtered.categories);
+    const rt = this.runtime || 'web';
+    const cats = (filtered.categories || []).filter((c) => !(c.id === 'updates' && rt !== 'tauri'));
+    this.renderCategories(cats);
   }
 
   filterConfig(config, q) {
@@ -194,6 +266,35 @@ class SettingsPage {
       input.addEventListener('change', () => {
         const newVal = !!input.checked;
         this.service.setValue(storageKey, 'boolean', newVal, item.apply);
+      });
+      wrapper.appendChild(row);
+      return wrapper;
+    }
+
+    // Action-type items render as a button that performs the action
+    if (item.type === 'action') {
+      row.innerHTML = `
+        <div class="setting-name">${item.label}</div>
+        <div class="setting-control"><button type="button" class="btn btn-primary setting-action-btn">${item.buttonLabel || 'Run'}</button></div>
+      `;
+      const btn = row.querySelector('.setting-action-btn');
+      btn.addEventListener('click', async () => {
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Running…';
+        try {
+          // Currently only known action: update.check
+          if (item.key === 'update.check') {
+            await this.handleManualCheckUpdate();
+          } else {
+            this.eventBus?.emit?.('notification:info', { message: 'Action executed' });
+          }
+        } catch (err) {
+          this.eventBus?.emit?.('notification:error', { message: String(err) || 'Action failed' });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original || 'Run';
+        }
       });
       wrapper.appendChild(row);
       return wrapper;

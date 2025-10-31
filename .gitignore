@@ -49,3 +49,13 @@ src-tauri/gen/
 
 # Wrangler local state (dev-time)
 .wrangler/*
+
+# keys
+keys/
+*.key
+
+# releases app
+src-tauri/releases/
+
+# rust analyzer
+target

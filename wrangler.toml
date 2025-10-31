@@ -4,7 +4,7 @@ compatibility_date = "2024-10-01"
 workers_dev = true
 
 # Serve built assets from Vite's dist directory
-assets = { directory = "./dist" }
+assets = { directory = "./dist", binding = "ASSETS" }
 
 # Environment variables
 [vars]
@@ -13,6 +13,12 @@ SECRET_SALT = "change-me-in-production"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
+ALLOWED_ORIGINS = "http://localhost:5173,tauri://localhost"
+
+# R2 bucket for updater manifests and artifacts
+[[r2_buckets]]
+binding = "UPDATES"
+bucket_name = "adtools-updates"
 
 # Production environment overrides
 [env.production]

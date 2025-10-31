@@ -1,9 +1,9 @@
 export function isTauri() {
   try {
-    const g = typeof globalThis !== 'undefined' ? globalThis : {};
-    const w = typeof window !== 'undefined' ? window : g;
-    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-    const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};
+    const g = typeof globalThis !== "undefined" ? globalThis : {};
+    const w = typeof window !== "undefined" ? window : g;
+    const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
+    const env = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
 
     // Build-time/env hints (present in tauri builds or CLI-driven dev)
     const envHints = !!(env.TAURI || env.TAURI_PLATFORM || env.TAURI_ARCH || env.TAURI_FAMILY);
@@ -21,5 +21,5 @@ export function isTauri() {
 }
 
 export function getRuntime() {
-  return isTauri() ? 'tauri' : 'web';
+  return isTauri() ? "tauri" : "web";
 }
