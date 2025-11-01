@@ -103,6 +103,20 @@ export class JenkinsRunner extends BaseTool {
     const confirmDeleteBtn = this.container.querySelector("#jr-confirm-delete-btn");
     const confirmCancelBtn = this.container.querySelector("#jr-confirm-cancel-btn");
     const confirmCloseBtn = this.container.querySelector("#jr-confirm-close");
+    // Split modal elements
+    const splitModal = this.container.querySelector("#jr-split-modal");
+    const splitModalOverlay = this.container.querySelector("#jr-split-modal-overlay");
+    const splitModalCloseBtn = this.container.querySelector("#jr-split-modal-close");
+    const splitCancelBtn = this.container.querySelector("#jr-split-cancel");
+    const splitExecuteAllBtn = this.container.querySelector("#jr-split-execute-all");
+    const splitChunksList = this.container.querySelector("#jr-split-chunks-list");
+    const splitChunkLabel = this.container.querySelector("#jr-split-chunk-label");
+    const splitProgressEl = this.container.querySelector("#jr-split-progress");
+    const splitResultsEl = this.container.querySelector("#jr-split-results");
+    const splitMiniLogsEl = this.container.querySelector("#jr-split-mini-log");
+    const splitPrevBtn = this.container.querySelector("#jr-split-prev");
+    const splitNextBtn = this.container.querySelector("#jr-split-next");
+    const splitEditorContainer = this.container.querySelector("#jr-split-editor");
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
@@ -270,6 +284,13 @@ export class JenkinsRunner extends BaseTool {
       const safe = sanitizeLog(text);
       logsEl.textContent += safe;
       logsEl.scrollTop = logsEl.scrollHeight;
+      // Mirror logs to split modal mini log when active
+      try {
+        if (splitMiniLogsEl && this.state && this.state.split && this.state.split.started) {
+          splitMiniLogsEl.textContent += safe;
+          splitMiniLogsEl.scrollTop = splitMiniLogsEl.scrollHeight;
+        }
+      } catch (_) {}
     };
 
     const clearLogListeners = () => {
@@ -288,6 +309,14 @@ export class JenkinsRunner extends BaseTool {
           const data = ev?.payload || {};
           const chunk = typeof data === "string" ? data : data.chunk || "";
           appendLog(chunk);
+          // Detect oversize error surfaced by Jenkins job
+          try {
+            const s = String(chunk || "").toLowerCase();
+            if (s.includes("argument list too long")) {
+              this.state.lastRunArgListTooLong = true;
+              statusEl.textContent = "Query too long. Detected 'Argument list too long'.";
+            }
+          } catch (_) {}
         })
       );
       this._logUnsubscribes.push(
@@ -623,6 +652,15 @@ export class JenkinsRunner extends BaseTool {
       templateModalOverlay.style.display = "none";
       deactivateFocusTrap(confirmModal);
       _confirmHandler = null;
+      // Revert labels if they were customized for Split warning
+      const titleEl = this.container.querySelector("#jr-confirm-modal-title");
+      if (titleEl && titleEl.textContent === "Large Query Detected") {
+        titleEl.textContent = "Confirm Deletion";
+      }
+      if (confirmDeleteBtn && confirmDeleteBtn.textContent === "Confirm Split") {
+        confirmDeleteBtn.textContent = "Delete";
+        confirmDeleteBtn.className = "btn btn-danger btn-sm-xs";
+      }
       if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
     };
 
@@ -634,6 +672,116 @@ export class JenkinsRunner extends BaseTool {
       });
     if (confirmCancelBtn) confirmCancelBtn.addEventListener("click", () => closeConfirmModal());
     if (confirmCloseBtn) confirmCloseBtn.addEventListener("click", () => closeConfirmModal());
+
+    // ===== Split size warning (uses confirm modal) =====
+    const openSplitSizeWarning = (onConfirm) => {
+      const titleEl = this.container.querySelector("#jr-confirm-modal-title");
+      if (titleEl) titleEl.textContent = "Large Query Detected";
+      if (confirmDeleteBtn) {
+        confirmDeleteBtn.textContent = "Confirm Split";
+        confirmDeleteBtn.className = "btn btn-primary btn-sm-xs";
+      }
+      if (confirmCancelBtn) confirmCancelBtn.textContent = "Cancel";
+      openConfirmModal("Your query size is larger than Jenkins threshold (90 KB), split query into chunks?", () => {
+        closeConfirmModal();
+        if (typeof onConfirm === "function") onConfirm();
+      });
+    };
+
+    // ===== Split modal state & helpers =====
+    this.splitEditor = null;
+    this.state.split = { chunks: [], sizes: [], index: 0, statuses: [], started: false };
+
+    const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
+
+    const renderSplitChunksList = () => {
+      if (!splitChunksList) return;
+      splitChunksList.innerHTML = "";
+      const { chunks, sizes, index, statuses } = this.state.split;
+      chunks.forEach((chunk, i) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "button");
+        li.setAttribute("tabindex", "0");
+        li.className = i === index ? "active" : "";
+        const name = document.createElement("span");
+        name.textContent = `Chunk ${i + 1}`;
+        const size = document.createElement("span");
+        size.className = "jr-chunk-size";
+        size.textContent = bytesToKB(sizes[i] || calcUtf8Bytes(chunk));
+        if (statuses[i]) {
+          const st = document.createElement("span");
+          st.className = "jr-chunk-size";
+          st.textContent = ` · ${statuses[i]}`;
+          size.appendChild(st);
+        }
+        li.appendChild(name);
+        li.appendChild(size);
+        li.addEventListener("click", () => {
+          this.state.split.index = i;
+          updateSplitCurrentView();
+        });
+        li.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            this.state.split.index = i;
+            updateSplitCurrentView();
+          }
+        });
+        splitChunksList.appendChild(li);
+      });
+    };
+
+    const updateSplitCurrentView = () => {
+      const { chunks, index } = this.state.split;
+      if (splitChunkLabel) splitChunkLabel.textContent = `Chunk ${index + 1} of ${chunks.length}`;
+      if (this.splitEditor && chunks[index] != null) {
+        this.splitEditor.setValue(chunks[index]);
+        try {
+          this.splitEditor.layout();
+        } catch (_) {}
+      }
+      renderSplitChunksList();
+    };
+
+    const openSplitModal = (chunks) => {
+      if (!splitModal || !splitModalOverlay) return;
+      this.state.split.chunks = chunks.slice();
+      this.state.split.sizes = chunks.map((c) => calcUtf8Bytes(c));
+      this.state.split.index = 0;
+      this.state.split.statuses = new Array(chunks.length).fill("");
+      this.state.split.started = false;
+      this._modalPrevFocusEl = document.activeElement;
+      splitModalOverlay.style.display = "block";
+      splitModal.style.display = "flex";
+      activateFocusTrap(splitModal, () => closeSplitModal());
+      if (splitEditorContainer && !this.splitEditor) {
+        this.splitEditor = createOracleEditor(splitEditorContainer, {
+          value: chunks[0] || "",
+          automaticLayout: true,
+          readOnly: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          fontSize: 11,
+          tabSize: 2,
+          insertSpaces: true,
+          quickSuggestions: false,
+          suggestOnTriggerCharacters: false,
+        });
+      }
+      if (splitMiniLogsEl) {
+        splitMiniLogsEl.textContent = "";
+      }
+      updateSplitCurrentView();
+    };
+
+    const closeSplitModal = () => {
+      if (!splitModal || !splitModalOverlay) return;
+      splitModalOverlay.style.display = "none";
+      splitModal.style.display = "none";
+      deactivateFocusTrap(splitModal);
+      if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
+    };
 
     const refreshTemplateEnvChoices = async (retry = 0) => {
       if (!templateEnvSelect) return;
@@ -879,17 +1027,45 @@ export class JenkinsRunner extends BaseTool {
     };
     const renderHistory = () => {
       const arr = loadHistory();
-      const rows = arr
-        .map((it, i) => {
-          const sqlSummary = (it.sql || "").split("\n")[0];
-          const short = sqlSummary.length > 120 ? sqlSummary.slice(0, 117) + "..." : sqlSummary;
+      // Helper: build preview from SQL per rules
+      const makePreview = (sqlRaw) => {
+        try {
+          let s = String(sqlRaw || "");
+          // Remove SET DEFINE OFF; (case-insensitive, leading spaces allowed)
+          s = s.replace(/^\s*SET\s+DEFINE\s+OFF;?\s*$/gim, "");
+          // Replace empty lines with a single space, collapse to one line
+          const lines = s.split(/\r?\n/);
+          const joined = lines
+            .map((ln) => {
+              const t = ln.trim();
+              return t.length === 0 ? " " : t;
+            })
+            .join(" ");
+          const oneLine = joined.replace(/\s+/g, " ").trim();
+          const maxHistoryPreviewChars = 70;
+          return oneLine.length > maxHistoryPreviewChars ? oneLine.slice(0, maxHistoryPreviewChars - 3) + "..." : oneLine;
+        } catch (_) {
+          return "";
+        }
+      };
+      // Sort by time DESC while preserving original indices for actions
+      const sorted = arr
+        .map((it, i) => ({ it, i }))
+        .sort((a, b) => {
+          const ta = new Date(a.it.timestamp || 0).getTime();
+          const tb = new Date(b.it.timestamp || 0).getTime();
+          return tb - ta;
+        });
+      const rows = sorted
+        .map(({ it, i }) => {
+          const preview = makePreview(it.sql || "");
           const ts = formatTimestamp(it.timestamp);
           const build = it.buildNumber ? `#${it.buildNumber}` : "";
           const buildLinkHtml = it.buildUrl ? `<a href="${it.buildUrl}" target="_blank" rel="noopener">Open</a>` : "";
-          const escTitle = sqlSummary.replace(/"/g, "&quot;");
+          const escTitle = preview.replace(/"/g, "&quot;");
           return `<tr><td class="jr-timestamp">${ts}</td><td>${
             it.env || ""
-          }</td><td title="${escTitle}">${short}</td><td>${build} ${buildLinkHtml}</td><td>
+          }</td><td title="${escTitle}">${preview}</td><td>${build} ${buildLinkHtml}</td><td>
             <div class="jr-col-center">
               <button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button>
               <button class="btn btn-sm-xs jr-history-save-template" data-index="${i}">Save as Template</button>
@@ -1159,6 +1335,30 @@ export class JenkinsRunner extends BaseTool {
     if (templateSortSelect) templateSortSelect.addEventListener("change", renderTemplates);
     if (filterEnvSelect) filterEnvSelect.addEventListener("change", renderTemplates);
 
+    // ===== Split modal controls =====
+    if (splitModalCloseBtn) splitModalCloseBtn.addEventListener("click", () => closeSplitModal());
+    if (splitCancelBtn) splitCancelBtn.addEventListener("click", () => closeSplitModal());
+    if (splitModalOverlay)
+      splitModalOverlay.addEventListener("click", (e) => {
+        if (e.target === splitModalOverlay) closeSplitModal();
+      });
+    if (splitPrevBtn)
+      splitPrevBtn.addEventListener("click", () => {
+        const { index } = this.state.split;
+        if (index > 0) {
+          this.state.split.index = index - 1;
+          updateSplitCurrentView();
+        }
+      });
+    if (splitNextBtn)
+      splitNextBtn.addEventListener("click", () => {
+        const { index, chunks } = this.state.split;
+        if (index < chunks.length - 1) {
+          this.state.split.index = index + 1;
+          updateSplitCurrentView();
+        }
+      });
+
     // ===== Tags modal control wiring =====
     const focusTemplateTagsInput = () => templateTagsInput && templateTagsInput.focus();
     if (templateTagsContainer && templateTagsInput && templateTagsSelectedEl && templateTagsSuggestionsEl) {
@@ -1408,15 +1608,324 @@ export class JenkinsRunner extends BaseTool {
     renderTemplates();
     refreshEnvChoices();
 
+    // ===== SQL size & chunking helpers =====
+    const MAX_SQL_BYTES = 90 * 1024; // 90KB limit
+    const calcUtf8Bytes = (s) => {
+      try {
+        return new TextEncoder().encode(String(s || "")).length;
+      } catch (_) {
+        // Fallback for environments without TextEncoder
+        return Buffer.from(String(s || ""), "utf8").length;
+      }
+    };
+
+    // Split SQL into statements on semicolons, respecting quotes and comments
+    const splitSqlStatementsSafely = (sql) => {
+      const src = String(sql || "").replace(/\r\n/g, "\n");
+      const out = [];
+      let cur = "";
+      let i = 0;
+      let inSingle = false;
+      let inDouble = false;
+      let inLineComment = false; // -- comment
+      let inBlockComment = false; // /* ... */
+      while (i < src.length) {
+        const ch = src[i];
+        const next = i + 1 < src.length ? src[i + 1] : "";
+        // Handle end of line comment
+        if (inLineComment) {
+          cur += ch;
+          if (ch === "\n") inLineComment = false;
+          i++;
+          continue;
+        }
+        // Handle end of block comment
+        if (inBlockComment) {
+          cur += ch;
+          if (ch === "*" && next === "/") {
+            cur += next;
+            i += 2;
+            inBlockComment = false;
+            continue;
+          }
+          i++;
+          continue;
+        }
+        // Start of comments
+        if (!inSingle && !inDouble) {
+          if (ch === "-" && next === "-") {
+            cur += ch + next;
+            i += 2;
+            inLineComment = true;
+            continue;
+          }
+          if (ch === "/" && next === "*") {
+            cur += ch + next;
+            i += 2;
+            inBlockComment = true;
+            continue;
+          }
+        }
+        // Toggle quotes (simple detection; does not handle all edge cases)
+        if (!inDouble && ch === "'" && src[i - 1] !== "\\") {
+          inSingle = !inSingle;
+        } else if (!inSingle && ch === '"' && src[i - 1] !== "\\") {
+          inDouble = !inDouble;
+        }
+        // Statement boundary only if not inside quotes/comments
+        if (!inSingle && !inDouble && ch === ";") {
+          cur += ch;
+          out.push(cur.trim());
+          cur = "";
+          i++;
+          continue;
+        }
+        cur += ch;
+        i++;
+      }
+      if (cur.trim()) out.push(cur.trim());
+      // Ensure statements end with semicolon when appropriate
+      return out.map((s) => (s.endsWith(";") ? s : s + ";"));
+    };
+
+    // Pre-process statements per new rules:
+    // 1) Remove any 'SET DEFINE OFF;' statements (case-insensitive)
+    // 2) Remove standalone SELECT statements that contain a FROM clause
+    // 3) Normalize whitespace and semicolons
+    const preprocessStatements = (stmts) => {
+      const out = [];
+      for (let s of stmts) {
+        const t = String(s || "").trim();
+        // Drop statements that are SET DEFINE OFF (with or without semicolon)
+        if (/^SET\s+DEFINE\s+OFF\s*;?$/i.test(t)) continue;
+        // Drop standalone SELECT ... FROM statements (avoid touching subqueries in other statements)
+        if (/^SELECT\b[\s\S]*?\bFROM\b[\s\S]*$/i.test(t)) continue;
+        // Clean double semicolons and excessive blank lines
+        let cleaned = t.replace(/;\s*;+$/g, ";").replace(/\n{3,}/g, "\n\n");
+        if (!cleaned.endsWith(";")) cleaned += ";";
+        out.push(cleaned);
+      }
+      return out;
+    };
+
+    const groupStatementsIntoChunks = (stmts, maxBytes) => {
+      const HEADER = "SET DEFINE OFF;";
+      const prefix = HEADER + "\n";
+      const chunks = [];
+      let cur = ""; // accumulate body without header
+      for (const st of stmts) {
+        // Ensure a single statement with header fits
+        if (calcUtf8Bytes(prefix + st) > maxBytes) {
+          return { chunks: [], oversizeStatement: st };
+        }
+        const combinedBody = cur ? cur + "\n" + st : st;
+        const candidateWithHeader = prefix + combinedBody;
+        if (calcUtf8Bytes(candidateWithHeader) <= maxBytes) {
+          cur = combinedBody;
+        } else {
+          if (cur) chunks.push(prefix + cur);
+          cur = st;
+        }
+      }
+      if (cur) chunks.push(prefix + cur);
+      return { chunks, oversizeStatement: null };
+    };
+
+    const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+      return new Promise((resolve, reject) => {
+        let unlisten = null;
+        let timer = setTimeout(() => {
+          try {
+            if (typeof unlisten === "function") unlisten();
+          } catch (_) {}
+          reject(new Error("Log streaming timeout"));
+        }, timeoutMs);
+        listen("jenkins:log-complete", (ev) => {
+          const payload = ev?.payload || {};
+          const bn = typeof payload === "object" ? payload.build_number : null;
+          if (Number(bn) === Number(buildNumber)) {
+            clearTimeout(timer);
+            try {
+              if (typeof unlisten === "function") unlisten();
+            } catch (_) {}
+            resolve();
+          }
+        })
+          .then((un) => {
+            unlisten = un;
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    };
+
     runBtn.addEventListener("click", async () => {
       const baseUrl = this.state.jenkinsUrl;
       const job = jobInput.value.trim();
       const env = envSelect.value;
       const sql = this.editor ? this.editor.getValue().trim() : "";
+      const totalBytes = calcUtf8Bytes(sql);
       try {
         UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length });
       } catch (_) {}
 
+      // If the SQL is oversize, allow the user to preview and split first
+      if (totalBytes > MAX_SQL_BYTES) {
+        openSplitSizeWarning(async () => {
+          try {
+            const stmts = splitSqlStatementsSafely(sql);
+            const pre = preprocessStatements(stmts);
+            const { chunks, oversizeStatement } = groupStatementsIntoChunks(pre, MAX_SQL_BYTES);
+            if (oversizeStatement) {
+              statusEl.textContent = "Cannot run: a single SQL statement exceeds 90KB.";
+              this.showError("One statement is too large to send safely. Please reduce the statement size or run via an alternate method.");
+              return;
+            }
+            openSplitModal(chunks);
+            if (splitProgressEl) {
+              if (!baseUrl || !env) {
+                splitProgressEl.textContent = `Prepared ${chunks.length} chunks. Set Jenkins URL and pick ENV to enable execution.`;
+                if (splitExecuteAllBtn) splitExecuteAllBtn.disabled = true;
+              } else {
+                splitProgressEl.textContent = `Prepared ${chunks.length} chunks. Ready to execute.`;
+                if (splitExecuteAllBtn) splitExecuteAllBtn.disabled = false;
+              }
+            }
+            const deriveChunkTitle = (sqlStr, index) => {
+              try {
+                const m = String(sqlStr || "").match(/\bINTO\s+([a-z0-9_]+\.[a-z0-9_]+)\b/i);
+                const base = m ? m[1] : `Chunk ${index + 1}`;
+                return `${base} - ${index + 1}`;
+              } catch (_) {
+                return `Chunk ${index + 1}`;
+              }
+            };
+            // Bind Execute All once
+            if (splitExecuteAllBtn && !splitExecuteAllBtn.dataset.bound) {
+              splitExecuteAllBtn.dataset.bound = "true";
+              splitExecuteAllBtn.addEventListener("click", async () => {
+                if (!this.state.jenkinsUrl || !envSelect.value) {
+                  this.showError("Select Jenkins URL and ENV in the toolbar to execute.");
+                  return;
+                }
+                try {
+                  splitExecuteAllBtn.disabled = true;
+                  this.state.split.started = true;
+                  // Initialize logs for split execution
+                  logsEl.textContent = "";
+                  if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                  let lastBuildUrl = null;
+                  for (let idx = 0; idx < chunks.length; idx++) {
+                    const chunkSql = chunks[idx];
+                    // Seed a history entry per chunk with table-derived title
+                    const arrSeed = loadHistory();
+                    const chunkTitle = deriveChunkTitle(chunkSql, idx);
+                    arrSeed.push({
+                      timestamp: new Date().toISOString(),
+                      job,
+                      env,
+                      sql: chunkSql,
+                      title: chunkTitle,
+                      buildNumber: null,
+                      buildUrl: null,
+                    });
+                    const histIndex = arrSeed.length - 1;
+                    saveHistory(arrSeed);
+                    renderHistory();
+                    this.state.split.statuses[idx] = "running";
+                    renderSplitChunksList();
+                    appendLog(`\n=== Running chunk ${idx + 1}/${chunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                    this.state.lastRunArgListTooLong = false;
+                    const queueUrl = await this.service.triggerJob(baseUrl, job, env, chunkSql);
+                    this.state.queueUrl = queueUrl;
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} queued. Polling…`;
+                    // Poll until build starts
+                    let attempts = 0;
+                    let buildNumber = null;
+                    let executableUrl = null;
+                    while (!buildNumber && attempts <= 30) {
+                      attempts++;
+                      try {
+                        const res = await this.service.pollQueue(baseUrl, queueUrl);
+                        buildNumber = res.buildNumber || null;
+                        executableUrl = res.executableUrl || null;
+                        if (!buildNumber) await new Promise((r) => setTimeout(r, 2000));
+                      } catch (err) {
+                        if (splitProgressEl) splitProgressEl.textContent = `Polling error on chunk ${idx + 1}`;
+                        this.state.split.statuses[idx] = "failed";
+                        renderSplitChunksList();
+                        this.showError(String(err));
+                        splitExecuteAllBtn.disabled = false;
+                        return;
+                      }
+                    }
+                    if (!buildNumber) {
+                      if (splitProgressEl) splitProgressEl.textContent = `Polling timeout on chunk ${idx + 1}`;
+                      this.state.split.statuses[idx] = "timeout";
+                      renderSplitChunksList();
+                      splitExecuteAllBtn.disabled = false;
+                      return;
+                    }
+                    this.state.buildNumber = buildNumber;
+                    this.state.executableUrl = executableUrl;
+                    if (buildNumEl) {
+                      buildNumEl.textContent = String(buildNumber);
+                      buildNumEl.style.display = "inline-flex";
+                    }
+                    if (executableUrl) {
+                      buildLink.href = executableUrl;
+                      buildLink.style.display = "inline-block";
+                      lastBuildUrl = executableUrl;
+                    }
+                    // Update this chunk’s history entry with build info
+                    try {
+                      const arrUpdate = loadHistory();
+                      if (arrUpdate[histIndex]) {
+                        arrUpdate[histIndex].buildNumber = buildNumber || null;
+                        arrUpdate[histIndex].buildUrl = executableUrl || arrUpdate[histIndex].buildUrl;
+                        saveHistory(arrUpdate);
+                        renderHistory();
+                      }
+                    } catch (_) {}
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
+                    await subscribeToLogs();
+                    await this.service.streamLogs(baseUrl, job, buildNumber);
+                    await waitForBuildCompletion(buildNumber);
+                    if (this.state.lastRunArgListTooLong) {
+                      if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
+                      this.state.split.statuses[idx] = "error";
+                      renderSplitChunksList();
+                      this.showError(
+                        "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                      );
+                      splitExecuteAllBtn.disabled = false;
+                      return;
+                    }
+                    this.state.split.statuses[idx] = "success";
+                    renderSplitChunksList();
+                    appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
+                  }
+                  renderHistory();
+                  statusEl.textContent = "All chunks completed.";
+                  if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
+                  // Final status is shown in progress and logs
+                  splitExecuteAllBtn.disabled = false;
+                } catch (err) {
+                  splitExecuteAllBtn.disabled = false;
+                  this.showError(errorMapping(err));
+                }
+              });
+            }
+          } catch (err) {
+            this.showError(errorMapping(err));
+          }
+        });
+        return;
+      }
+
+      // Validate prerequisites for immediate run path
       if (!baseUrl || !job || !env) {
         this.showError("Select Jenkins URL, enter Job, and choose ENV");
         return;
@@ -1428,7 +1937,6 @@ export class JenkinsRunner extends BaseTool {
 
       runBtn.disabled = true;
       try {
-        statusEl.textContent = "Triggering job…";
         logsEl.textContent = "";
         buildLink.style.display = "none";
         if (buildNumEl) {
@@ -1436,69 +1944,215 @@ export class JenkinsRunner extends BaseTool {
           buildNumEl.textContent = "";
         }
 
-        // Save last state and append history entry
+        // Save state
         saveLastState();
-        const newEntry = { timestamp: new Date().toISOString(), job, env, sql, buildNumber: null, buildUrl: null };
-        const hist = loadHistory();
-        hist.push(newEntry);
-        saveHistory(hist);
 
-        const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
-        this.state.queueUrl = queueUrl;
-
-        statusEl.textContent = "Queued. Polling…";
-
-        let attempts = 0;
-        const poll = async () => {
-          attempts++;
-          try {
-            const { buildNumber, executableUrl } = await this.service.pollQueue(baseUrl, queueUrl);
-            if (buildNumber) {
-              this.state.buildNumber = buildNumber;
-              this.state.executableUrl = executableUrl;
-              if (buildNumEl) {
-                buildNumEl.textContent = String(buildNumber);
-                buildNumEl.style.display = "inline-flex";
-              }
-              if (executableUrl) {
-                buildLink.href = executableUrl;
-                buildLink.style.display = "inline-block";
-              }
-
-              // Update latest history entry with build info
-              const arr = loadHistory();
-              if (arr.length) {
-                const last = arr[arr.length - 1];
-                last.buildNumber = buildNumber;
-                last.buildUrl = executableUrl || last.buildUrl;
-                saveHistory(arr);
-              }
-
-              statusEl.textContent = `Build #${buildNumber} started. Streaming logs…`;
-              await subscribeToLogs();
-              await this.service.streamLogs(baseUrl, job, buildNumber);
-              runBtn.disabled = false;
-              renderHistory();
-              return;
-            }
-            if (attempts > 30) {
-              statusEl.textContent = "Polling timeout";
-
-              runBtn.disabled = false;
-              return;
-            }
-          } catch (err) {
-            statusEl.textContent = "Polling error";
+        if (totalBytes <= MAX_SQL_BYTES) {
+          // Seed history for single-run (non-split)
+          const histEntry = { timestamp: new Date().toISOString(), job, env, sql, buildNumber: null, buildUrl: null };
+          const hist = loadHistory();
+          hist.push(histEntry);
+          saveHistory(hist);
+          statusEl.textContent = "Triggering job…";
+          const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
+          this.state.queueUrl = queueUrl;
+          statusEl.textContent = "Queued. Polling…";
+          let attempts = 0;
+          const pollOnce = async () => {
+            attempts++;
             try {
-              UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(err || "") });
-            } catch (_) {}
-            this.showError(String(err));
-            runBtn.disabled = false;
-            return;
-          }
-          setTimeout(poll, 2000);
-        };
-        poll();
+              const { buildNumber, executableUrl } = await this.service.pollQueue(baseUrl, queueUrl);
+              if (buildNumber) {
+                this.state.buildNumber = buildNumber;
+                this.state.executableUrl = executableUrl;
+                if (buildNumEl) {
+                  buildNumEl.textContent = String(buildNumber);
+                  buildNumEl.style.display = "inline-flex";
+                }
+                if (executableUrl) {
+                  buildLink.href = executableUrl;
+                  buildLink.style.display = "inline-block";
+                }
+                // Update history with build
+                const arr = loadHistory();
+                if (arr.length) {
+                  const last = arr[arr.length - 1];
+                  last.buildNumber = buildNumber;
+                  last.buildUrl = executableUrl || last.buildUrl;
+                  saveHistory(arr);
+                }
+                statusEl.textContent = `Build #${buildNumber} started. Streaming logs…`;
+                await subscribeToLogs();
+                await this.service.streamLogs(baseUrl, job, buildNumber);
+                await waitForBuildCompletion(buildNumber);
+                runBtn.disabled = false;
+                renderHistory();
+                return;
+              }
+              if (attempts > 30) {
+                statusEl.textContent = "Polling timeout";
+                runBtn.disabled = false;
+                return;
+              }
+            } catch (err) {
+              statusEl.textContent = "Polling error";
+              try {
+                UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(err || "") });
+              } catch (_) {}
+              this.showError(String(err));
+              runBtn.disabled = false;
+              return;
+            }
+            setTimeout(pollOnce, 2000);
+          };
+          await pollOnce();
+        } else {
+          // Oversize: ask to split, then show Split modal and allow Execute All
+          openSplitSizeWarning(async () => {
+            try {
+              const stmts = splitSqlStatementsSafely(sql);
+              const pre = preprocessStatements(stmts);
+              const { chunks, oversizeStatement } = groupStatementsIntoChunks(pre, MAX_SQL_BYTES);
+              if (oversizeStatement) {
+                statusEl.textContent = "Cannot run: a single SQL statement exceeds 90KB.";
+                this.showError(
+                  "One statement is too large to send safely. Please reduce the statement size or run via an alternate method."
+                );
+                runBtn.disabled = false;
+                return;
+              }
+              openSplitModal(chunks);
+              if (splitProgressEl) splitProgressEl.textContent = `Prepared ${chunks.length} chunks. Ready to execute.`;
+              const deriveChunkTitle = (sqlStr, index) => {
+                try {
+                  const m = String(sqlStr || "").match(/\bINTO\s+([a-z0-9_]+\.[a-z0-9_]+)\b/i);
+                  const base = m ? m[1] : `Chunk ${index + 1}`;
+                  return `${base} - ${index + 1}`;
+                } catch (_) {
+                  return `Chunk ${index + 1}`;
+                }
+              };
+              // Bind Execute All once
+              if (splitExecuteAllBtn && !splitExecuteAllBtn.dataset.bound) {
+                splitExecuteAllBtn.dataset.bound = "true";
+                splitExecuteAllBtn.addEventListener("click", async () => {
+                  try {
+                    splitExecuteAllBtn.disabled = true;
+                    this.state.split.started = true;
+                    // Initialize logs for split execution
+                    logsEl.textContent = "";
+                    if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                    let lastBuildUrl = null;
+                    for (let idx = 0; idx < chunks.length; idx++) {
+                      const chunkSql = chunks[idx];
+                      // Seed a history entry per chunk with table-derived title
+                      const arrSeed = loadHistory();
+                      const chunkTitle = deriveChunkTitle(chunkSql, idx);
+                      arrSeed.push({
+                        timestamp: new Date().toISOString(),
+                        job,
+                        env,
+                        sql: chunkSql,
+                        title: chunkTitle,
+                        buildNumber: null,
+                        buildUrl: null,
+                      });
+                      const histIndex = arrSeed.length - 1;
+                      saveHistory(arrSeed);
+                      renderHistory();
+                      this.state.split.statuses[idx] = "running";
+                      renderSplitChunksList();
+                      appendLog(`\n=== Running chunk ${idx + 1}/${chunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                      this.state.lastRunArgListTooLong = false;
+                      const queueUrl = await this.service.triggerJob(baseUrl, job, env, chunkSql);
+                      this.state.queueUrl = queueUrl;
+                      if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} queued. Polling…`;
+                      // Poll until build starts
+                      let attempts = 0;
+                      let buildNumber = null;
+                      let executableUrl = null;
+                      while (!buildNumber && attempts <= 30) {
+                        attempts++;
+                        try {
+                          const res = await this.service.pollQueue(baseUrl, queueUrl);
+                          buildNumber = res.buildNumber || null;
+                          executableUrl = res.executableUrl || null;
+                          if (!buildNumber) await new Promise((r) => setTimeout(r, 2000));
+                        } catch (err) {
+                          if (splitProgressEl) splitProgressEl.textContent = `Polling error on chunk ${idx + 1}`;
+                          this.state.split.statuses[idx] = "failed";
+                          renderSplitChunksList();
+                          this.showError(String(err));
+                          splitExecuteAllBtn.disabled = false;
+                          return;
+                        }
+                      }
+                      if (!buildNumber) {
+                        if (splitProgressEl) splitProgressEl.textContent = `Polling timeout on chunk ${idx + 1}`;
+                        this.state.split.statuses[idx] = "timeout";
+                        renderSplitChunksList();
+                        splitExecuteAllBtn.disabled = false;
+                        return;
+                      }
+                      this.state.buildNumber = buildNumber;
+                      this.state.executableUrl = executableUrl;
+                      if (buildNumEl) {
+                        buildNumEl.textContent = String(buildNumber);
+                        buildNumEl.style.display = "inline-flex";
+                      }
+                      if (executableUrl) {
+                        buildLink.href = executableUrl;
+                        buildLink.style.display = "inline-block";
+                        lastBuildUrl = executableUrl;
+                      }
+                      // Update this chunk’s history entry with build info
+                      try {
+                        const arrUpdate = loadHistory();
+                        if (arrUpdate[histIndex]) {
+                          arrUpdate[histIndex].buildNumber = buildNumber || null;
+                          arrUpdate[histIndex].buildUrl = executableUrl || arrUpdate[histIndex].buildUrl;
+                          saveHistory(arrUpdate);
+                          renderHistory();
+                        }
+                      } catch (_) {}
+                      if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
+                      await subscribeToLogs();
+                      await this.service.streamLogs(baseUrl, job, buildNumber);
+                      await waitForBuildCompletion(buildNumber);
+                      if (this.state.lastRunArgListTooLong) {
+                        if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
+                        this.state.split.statuses[idx] = "error";
+                        renderSplitChunksList();
+                        this.showError(
+                          "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                        );
+                        splitExecuteAllBtn.disabled = false;
+                        return;
+                      }
+                      this.state.split.statuses[idx] = "success";
+                      renderSplitChunksList();
+                      appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
+                    }
+                    renderHistory();
+                    statusEl.textContent = "All chunks completed.";
+                    if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
+                    // Final status is shown in progress and logs
+                    splitExecuteAllBtn.disabled = false;
+                  } catch (err) {
+                    splitExecuteAllBtn.disabled = false;
+                    this.showError(errorMapping(err));
+                  }
+                });
+              }
+            } catch (err) {
+              this.showError(errorMapping(err));
+            } finally {
+              runBtn.disabled = false;
+            }
+          });
+          // Do not start execution immediately; user proceeds from Split modal
+          return;
+        }
       } catch (err) {
         statusEl.textContent = "Trigger failed";
         try {

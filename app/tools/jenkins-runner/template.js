@@ -106,69 +106,109 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <div id="jr-template-list" class="jr-template-cards" aria-label="Templates list"></div>
         </div>
 
-        <!-- Modal overlay and dialog -->
-        <div id="jr-template-modal-overlay" class="jr-modal-overlay" style="display:none" aria-hidden="true"></div>
-        <div id="jr-template-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-template-modal-title" style="display:none">
-          <div class="jr-modal-content">
-            <div class="jr-modal-header">
-              <h3 id="jr-template-modal-title">Create Template</h3>
-              <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
-            </div>
-              <div class="jr-modal-body">
-              <div class="jr-controls">
-                <label class="jr-field">
-                  <span>Template Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-                  <input id="jr-template-name" class="jr-input" type="text" placeholder="Unique name" aria-required="true" />
-                  <div class="jr-error" id="jr-template-name-error" style="display:none"></div>
-                </label>
-                <label class="jr-field">
-                  <span>ENV <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
-                  <select id="jr-template-env" class="jr-input" aria-required="true"></select>
-                  <div class="jr-error" id="jr-template-env-error" style="display:none"></div>
-                </label>
-                <label class="jr-field">
-                  <span>Tags</span>
-                  <div id="jr-template-tags" class="jr-tags-input" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="jr-template-tags-suggestions" aria-multiselectable="true">
-                    <div id="jr-template-tags-selected" class="jr-tags-selected" aria-live="polite"></div>
-                    <div class="jr-tags-anchor">
-                      <input id="jr-template-tags-input" type="text" class="jr-input jr-input-inline" placeholder="Add tags (enter to add)" aria-autocomplete="list" aria-controls="jr-template-tags-suggestions" aria-label="Add tags" />
-                      <div id="jr-template-tags-suggestions" class="jr-tags-suggestions" role="listbox" style="display:none"></div>
-                    </div>
-                  </div>
-                  <div class="jr-hint" id="jr-template-tags-hint"></div>
-                  <div class="jr-error" id="jr-template-tags-error" style="display:none"></div>
-                </label>
-              </div>
-              <div class="jr-sql">
-                <div class="jr-sql-header">
-                  <label for="jr-template-sql-editor"><span>SQL Query (Template)</span></label>
+      </div>
+    </div>
+    <!-- Global Modals and Overlays (moved outside hidden template tab) -->
+    <!-- Template Modal Overlay and Dialog -->
+    <div id="jr-template-modal-overlay" class="jr-modal-overlay" style="display:none" aria-hidden="true"></div>
+    <div id="jr-template-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-template-modal-title" style="display:none">
+      <div class="jr-modal-content">
+        <div class="jr-modal-header">
+          <h3 id="jr-template-modal-title">Create Template</h3>
+          <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+        </div>
+          <div class="jr-modal-body">
+          <div class="jr-controls">
+            <label class="jr-field">
+              <span>Template Name <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
+              <input id="jr-template-name" class="jr-input" type="text" placeholder="Unique name" aria-required="true" />
+              <div class="jr-error" id="jr-template-name-error" style="display:none"></div>
+            </label>
+            <label class="jr-field">
+              <span>ENV <span class="setting-required" title="Required" aria-hidden="true">*</span></span>
+              <select id="jr-template-env" class="jr-input" aria-required="true"></select>
+              <div class="jr-error" id="jr-template-env-error" style="display:none"></div>
+            </label>
+            <label class="jr-field">
+              <span>Tags</span>
+              <div id="jr-template-tags" class="jr-tags-input" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="jr-template-tags-suggestions" aria-multiselectable="true">
+                <div id="jr-template-tags-selected" class="jr-tags-selected" aria-live="polite"></div>
+                <div class="jr-tags-anchor">
+                  <input id="jr-template-tags-input" type="text" class="jr-input jr-input-inline" placeholder="Add tags (enter to add)" aria-autocomplete="list" aria-controls="jr-template-tags-suggestions" aria-label="Add tags" />
+                  <div id="jr-template-tags-suggestions" class="jr-tags-suggestions" role="listbox" style="display:none"></div>
                 </div>
-                <div id="jr-template-sql-editor" class="jr-monaco-editor"></div>
-                <div class="jr-hint" id="jr-template-hint"></div>
               </div>
+              <div class="jr-hint" id="jr-template-tags-hint"></div>
+              <div class="jr-error" id="jr-template-tags-error" style="display:none"></div>
+            </label>
+          </div>
+          <div class="jr-sql">
+            <div class="jr-sql-header">
+              <label for="jr-template-sql-editor"><span>SQL Query (Template)</span></label>
             </div>
-            <div class="jr-modal-footer">
-              <button id="jr-template-modal-save" class="btn btn-primary btn-sm-xs">Save</button>
-              <button id="jr-template-modal-cancel" class="btn btn-sm-xs">Cancel</button>
-            </div>
+            <div id="jr-template-sql-editor" class="jr-monaco-editor"></div>
+            <div class="jr-hint" id="jr-template-hint"></div>
           </div>
         </div>
+        <div class="jr-modal-footer">
+          <button id="jr-template-modal-save" class="btn btn-primary btn-sm-xs">Save</button>
+          <button id="jr-template-modal-cancel" class="btn btn-sm-xs">Cancel</button>
+        </div>
+      </div>
+    </div>
 
-        <!-- Confirm Delete Modal -->
-        <div id="jr-confirm-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-confirm-modal-title" style="display:none">
-          <div class="jr-modal-content">
-            <div class="jr-modal-header">
-              <h3 id="jr-confirm-modal-title" class="jr-modal-title">Confirm Deletion</h3>
-              <button id="jr-confirm-close" class="btn btn-icon" aria-label="Close">✕</button>
+    <!-- Confirm Delete Modal -->
+    <div id="jr-confirm-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-confirm-modal-title" style="display:none">
+      <div class="jr-modal-content">
+        <div class="jr-modal-header">
+          <h3 id="jr-confirm-modal-title" class="jr-modal-title">Confirm Deletion</h3>
+          <button id="jr-confirm-close" class="btn btn-icon" aria-label="Close">✕</button>
+        </div>
+        <div class="jr-modal-body">
+          <p id="jr-confirm-message">Are you sure you want to delete this template?</p>
+        </div>
+        <div class="jr-modal-footer">
+          <button id="jr-confirm-delete-btn" class="btn btn-danger btn-sm-xs">Delete</button>
+          <button id="jr-confirm-cancel-btn" class="btn btn-sm-xs">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split Query Modal Overlay -->
+    <div id="jr-split-modal-overlay" class="jr-modal-overlay" style="display:none" aria-hidden="true"></div>
+    <!-- Split Query Modal -->
+    <div id="jr-split-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-split-modal-title" style="display:none">
+      <div class="jr-modal-content jr-split-modal-content">
+        <div class="jr-modal-header">
+          <h3 id="jr-split-modal-title" class="jr-modal-title">Split Query</h3>
+          <button id="jr-split-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+        </div>
+        <div class="jr-modal-body jr-split-body" aria-live="polite">
+          <aside class="jr-split-sidebar" aria-label="Chunk navigation">
+            <div class="jr-split-summary">
+              <div id="jr-split-chunk-label" class="jr-split-chunk-label">Chunk 1 of 1</div>
+              <div id="jr-split-progress" class="jr-split-progress" aria-live="polite"></div>
             </div>
-            <div class="jr-modal-body">
-              <p id="jr-confirm-message">Are you sure you want to delete this template?</p>
+            <nav class="jr-split-nav" aria-label="Chunks list">
+              <ul id="jr-split-chunks-list" class="jr-split-chunks-list"></ul>
+            </nav>
+            <div class="jr-split-controls">
+              <button id="jr-split-prev" class="btn btn-sm-xs" aria-label="Previous chunk">Prev</button>
+              <button id="jr-split-next" class="btn btn-sm-xs" aria-label="Next chunk">Next</button>
             </div>
-            <div class="jr-modal-footer">
-              <button id="jr-confirm-delete-btn" class="btn btn-danger btn-sm-xs">Delete</button>
-              <button id="jr-confirm-cancel-btn" class="btn btn-sm-xs">Cancel</button>
+          </aside>
+          <section class="jr-split-editor-panel" aria-label="Chunk content">
+            <div class="jr-sql-header">
+              <label for="jr-split-editor"><span>SQL Chunk</span></label>
             </div>
-          </div>
+          <div id="jr-split-editor" class="jr-monaco-editor" aria-readonly="true"></div>
+          <div class="jr-hint">Chunks are read-only; use the main editor to modify.</div>
+          <pre id="jr-split-mini-log" class="jr-mini-log" aria-live="polite"></pre>
+        </section>
+      </div>
+        <div class="jr-modal-footer jr-split-footer">
+          <button id="jr-split-execute-all" class="btn btn-primary btn-sm-xs">Execute All</button>
+          <button id="jr-split-cancel" class="btn btn-sm-xs">Cancel</button>
         </div>
       </div>
     </div>
