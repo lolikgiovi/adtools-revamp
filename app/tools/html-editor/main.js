@@ -150,6 +150,7 @@ class HTMLTemplateTool extends BaseTool {
     const btnClear = document.getElementById("btnClearHtml");
     const btnReload = document.getElementById("btnReloadPreview");
     const btnCloseVtl = document.getElementById("btnCloseVtl");
+    const btnResetVtl = document.getElementById("btnResetVtl");
 
     if (btnFormat) {
       btnFormat.addEventListener("click", async () => {
@@ -174,8 +175,8 @@ class HTMLTemplateTool extends BaseTool {
         const html = this.editor.getValue();
         const allVars = extractVtlVariables(html);
         const vars = allVars.filter((v) => v !== "baseUrl");
-        const panel = document.getElementById("vtlPanel");
-        const content = document.getElementById("vtlContent");
+        const modal = document.getElementById("vtlModal");
+        const content = document.getElementById("vtlModalBody");
         if (content) {
           content.innerHTML = "";
           if (!vars.length) {
@@ -231,14 +232,38 @@ class HTMLTemplateTool extends BaseTool {
             });
           }
         }
-        if (panel) panel.style.display = "block";
+        if (modal) modal.style.display = "block";
       });
     }
 
     if (btnCloseVtl) {
       btnCloseVtl.addEventListener("click", () => {
-        const panel = document.getElementById("vtlPanel");
-        if (panel) panel.style.display = "none";
+        const modal = document.getElementById("vtlModal");
+        if (modal) modal.style.display = "none";
+      });
+    }
+
+    if (btnResetVtl) {
+      btnResetVtl.addEventListener("click", () => {
+        const html = this.editor.getValue();
+        const vars = extractVtlVariables(html).filter((v) => v !== "baseUrl");
+        // Unset stored values so rendering falls back to variable names
+        vars.forEach((v) => {
+          try {
+            delete this.vtlValues[v];
+          } catch (_) {
+            this.vtlValues[v] = null;
+          }
+        });
+        const inputs = document.querySelectorAll("#vtlModalBody .vtl-input");
+        inputs.forEach((input) => {
+          input.value = "";
+        });
+        try {
+          localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
+        } catch (_) {}
+        // Re-render preview to show default variable tokens again
+        this.renderPreview(this.editor.getValue(), true);
       });
     }
 

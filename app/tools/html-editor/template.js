@@ -14,6 +14,18 @@ export const HTMLTemplateToolTemplate = /* html */ `
           </div>
         </div>
         <div id="htmlEditor" class="monaco-editor-container"></div>
+
+        <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
+        <div id="vtlModal" class="vtl-modal" role="dialog" aria-modal="false" aria-label="VTL Variables" style="display:none;">
+          <div class="vtl-modal-header">
+            <h4 class="vtl-modal-title">VTL Variables</h4>
+            <div style="display:flex;gap:.5rem;align-items:center;">
+              <button id="btnResetVtl" class="btn btn-sm" title="Reset All">Reset</button>
+              <button id="btnCloseVtl" class="btn btn-sm" title="Close VTL">Close</button>
+            </div>
+          </div>
+          <div id="vtlModalBody" class="vtl-modal-body"></div>
+        </div>
       </div>
 
       <!-- Removed resizer for fixed split -->
@@ -34,12 +46,5 @@ export const HTMLTemplateToolTemplate = /* html */ `
       </div>
     </div>
 
-    <div id="vtlPanel" class="vtl-panel" style="display:none;margin-top:.5rem;border:1px solid hsl(var(--border));border-radius:8px;padding:.75rem;background:hsl(var(--card));">
-      <div class="vtl-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-        <h4 style="margin:0;font-size:14px;">VTL Variables</h4>
-        <button id="btnCloseVtl" class="btn btn-sm">Close</button>
-      </div>
-      <div id="vtlContent" class="vtl-content" style="display:flex;flex-direction:column;gap:.5rem;"></div>
-    </div>
   </div>
 `;
