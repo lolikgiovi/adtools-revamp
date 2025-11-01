@@ -5,6 +5,10 @@ export const SQLInClauseTemplate = /* html */ `
         <div class="pane-header">
           <h3>Input</h3>
           <span class="hint">Enter items, one per line</span>
+          <div class="editor-actions" style="display:flex;align-items:center;gap:.5rem;">
+            <button id="sqlInPasteBtn" class="btn btn-sm" title="Paste from clipboard">Paste</button>
+            <button id="sqlInClearBtn" class="btn btn-sm" title="Clear editor">Clear</button>
+          </div>
         </div>
         <div id="sqlInEditor" class="monaco-editor-container"></div>
       </div>

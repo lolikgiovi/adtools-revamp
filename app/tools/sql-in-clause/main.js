@@ -118,6 +118,45 @@ class SQLInClauseTool extends BaseTool {
       });
     }
 
+    const pasteBtn = container.querySelector("#sqlInPasteBtn");
+    if (pasteBtn) {
+      pasteBtn.addEventListener("click", async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (typeof text === "string" && text.length > 0) {
+            this.editor?.setValue(text);
+            this.updateOutput();
+            this.showSuccess("Pasted from clipboard");
+            try {
+              UsageTracker.trackFeature("sql-in-clause", "paste", { len: text.length }, 1000);
+            } catch (_) {}
+          } else {
+            this.showError("Clipboard is empty");
+          }
+        } catch (err) {
+          this.showError("Failed to paste from clipboard");
+          console.error("Paste error:", err);
+        }
+      });
+    }
+
+    const clearBtn = container.querySelector("#sqlInClearBtn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        try {
+          this.editor?.setValue("");
+          this.updateOutput();
+          this.showSuccess("Cleared editor");
+          try {
+            UsageTracker.trackFeature("sql-in-clause", "clear", "", 1000);
+          } catch (_) {}
+        } catch (err) {
+          this.showError("Failed to clear editor");
+          console.error("Clear error:", err);
+        }
+      });
+    }
+
     this.toggleSelectDetails();
   }
 
