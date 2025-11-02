@@ -16,9 +16,7 @@ import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
 import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
-import { getIconSvg as getFeedbackIconSvg } from "./pages/feedback/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
-import { FeedbackPage } from "./pages/feedback/main.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from "./core/UsageTracker.js";
 import { AnalyticsSender } from "./core/AnalyticsSender.js";
@@ -171,7 +169,6 @@ class App {
     });
     // Page and action icons
     this.iconRegistry.set("settings", () => getSettingsIconSvg());
-    this.iconRegistry.set("feedback", () => getFeedbackIconSvg());
     this.iconRegistry.set("signout", () => getSignoutIconSvg());
   }
 
@@ -282,10 +279,7 @@ class App {
       this.showSettings();
     });
 
-    // Feedback route
-    this.router.register("feedback", () => {
-      this.showFeedback();
-    });
+    // Feedback route removed
 
     // Register route for onboarding
     this.router.register("register", () => {
@@ -425,24 +419,7 @@ class App {
     this.eventBus.emit("page:changed", { page: "settings" });
   }
 
-  showFeedback() {
-    // Update breadcrumb for feedback
-    this.updateBreadcrumb("Feedback");
-
-    // Ensure no tool is active
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
-
-    if (this.mainContent) {
-      const feedbackPage = new FeedbackPage({ eventBus: this.eventBus });
-      feedbackPage.mount(this.mainContent);
-    }
-
-    // Emit page change
-    this.eventBus.emit("page:changed", { page: "feedback" });
-  }
+  // Feedback page removed
 
   /**
    * Navigate to a tool (public method for global access)
@@ -921,14 +898,7 @@ class App {
       type: "page",
       icon: "settings",
     });
-    items.push({
-      id: "feedback",
-      name: "Feedback",
-      description: "Send feedback",
-      route: "feedback",
-      type: "page",
-      icon: "feedback",
-    });
+    // Feedback removed from global search
 
     // Tools
     this.tools.forEach((tool) => {
@@ -949,7 +919,7 @@ class App {
   buildMenuConfig() {
     return {
       config: [],
-      app: [{ id: "feedback", name: "Feedback", icon: "feedback", type: "page" }],
+      // App group removed
       footer: [{ id: "settings", name: "Settings", icon: "settings", type: "page" }],
     };
   }
