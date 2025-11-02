@@ -65,6 +65,17 @@ export class QuickQueryUI {
     this.init();
   }
 
+  // Compute available height for the data spreadsheet viewport
+  computeDataTableHeight() {
+    const headerEl = document.querySelector(".main-header");
+    const headerHeight = headerEl?.offsetHeight || 57; // default header height fallback
+    // Reserve a small buffer for paddings/margins within the Quick Query layout
+    const buffer = 16;
+    const viewport = window.innerHeight || 800;
+    const height = Math.max(240, viewport - headerHeight - buffer);
+    return height;
+  }
+
   async init() {
     try {
       // Configure Monaco workers and Oracle SQL language via shared module
@@ -113,6 +124,16 @@ export class QuickQueryUI {
 
       this.initializeSpreadsheets();
       this.initializeEditor();
+
+      // Update the data table height responsively
+      const resizeHandler = () => {
+        if (this.dataTable) {
+          this.dataTable.updateSettings({ height: this.computeDataTableHeight() });
+        }
+      };
+      window.addEventListener("resize", resizeHandler);
+      // Initial height update after mount
+      resizeHandler();
 
       // Make sure files container is visible initially
       if (this.elements.filesContainer) {
@@ -349,6 +370,8 @@ export class QuickQueryUI {
 
     const dataTableConfig = {
       ...initialDataTableSpecification,
+      // Constrain the internal viewport height to keep headers visible while scrolling
+      height: this.computeDataTableHeight(),
       afterChange: (changes, source) => {
         if (!changes || source === "loadData") return; // Skip if no changes or if change is from loading data
 

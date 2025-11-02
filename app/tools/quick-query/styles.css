@@ -72,8 +72,12 @@
   overflow: visible;
 }
 
+/* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
-  overflow-x: auto;
+  /* Keep the table within the visible viewport minus app header */
+  max-height: calc(100vh - 57px);
+  overflow: auto; /* enable vertical and horizontal scroll inside container */
+  overscroll-behavior: contain; /* prevent scroll chaining to the page */
 }
 
 /* Hide scrollbar in spreadsheet-data */
@@ -250,9 +254,6 @@
   text-overflow: ellipsis;
 }
 
-/* Restore Handsontable's default layout for accurate hit-testing */
-/* Removed forced width and table-layout overrides to ensure clicks register */
-
 /* Ensure theme class selector also picks up compact vars */
 .quick-query-tool-container #spreadsheet-data .handsontable.ht-theme-main,
 .quick-query-tool-container #spreadsheet-schema .handsontable.ht-theme-main {
@@ -408,7 +409,8 @@
 
 #tableNameInput {
   width: 100%;
-  max-width: 486px;
+  height: 28px;
+  max-width: 372px;
   min-width: 0;
   padding: 4px 8px;
   box-sizing: border-box;

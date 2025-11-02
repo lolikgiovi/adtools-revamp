@@ -251,6 +251,8 @@ export const initialDataTableSpecification = {
   colHeaders: true,
   rowHeaders: true,
   height: "auto",
+  // Freeze the first data row (index 0) so it stays visible while scrolling
+  fixedRowsTop: 1,
   licenseKey: "non-commercial-and-evaluation",
   // Use modern Handsontable theme (auto dark/light)
   themeName: "ht-theme-main",
