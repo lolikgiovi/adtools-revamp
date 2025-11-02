@@ -338,6 +338,8 @@
 .settings-page {
   display: flex;
   flex-direction: column;
+  /* Provide breathing room at the bottom so content doesn’t butt up against the viewport edge */
+  padding-bottom: 16px;
 }
 
 .settings-header {
