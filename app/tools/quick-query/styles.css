@@ -171,16 +171,6 @@
   flex: 0 0 120px; /* fixed width as defined */
   border-radius: calc(var(--radius) - 2px);
 }
-.quick-query-left-panel .button-group:first-of-type #tableNameInput {
-  height: 28px;
-  font-size: 12px;
-  flex: 1 1 100%; /* take full width when wrapped */
-  width: 100%;
-  border-radius: calc(var(--radius) - 2px);
-  max-width: none; /* override global cap to allow full line */
-  padding: 4px 8px;
-  box-sizing: border-box;
-}
 
 /* Bottom toolbar: wrap buttons and place tip on its own line */
 .content-b .button-group {
@@ -201,14 +191,6 @@
 .quick-query-left-panel .quick-query-search.button-group {
   flex-wrap: nowrap;
   white-space: nowrap;
-}
-
-/* Allow the tableName input to shrink and remain inline */
-.quick-query-search.button-group #tableNameInput {
-  flex: 1 1 auto;
-  width: auto;
-  max-width: none;
-  min-width: 0;
 }
 
 /* Allow the tip text to truncate in data-controls when no-wrap */
@@ -265,7 +247,7 @@
   padding: 0 6px !important;
   line-height: 15px !important;
   white-space: normal !important;
-  word-break: break-word !important;
+  text-overflow: ellipsis;
 }
 
 /* Restore Handsontable's default layout for accurate hit-testing */
@@ -303,29 +285,6 @@
 .handsontable .wtBorder,
 .handsontable .wtHolder {
   border-radius: 4px;
-}
-
-#tableNameInput {
-  width: 100%;
-  max-width: 486px;
-  min-width: 0;
-  padding: 4px 8px;
-  box-sizing: border-box;
-  /* Neutralize Safari/WebKit UA styling and apply app theme */
-  -webkit-appearance: none;
-  appearance: none;
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  line-height: 1.2;
-  /* Kill Safari default inner shadow / gradient */
-  box-shadow: none;
-  background-image: none;
-}
-
-#queryTypeSelect {
-  width: 150px;
 }
 
 #errorMessages {
@@ -399,18 +358,6 @@
   max-height: calc(80vh - 70px); /* Account for header */
 }
 
-.schema-group {
-  margin-bottom: 16px;
-}
-
-.schema-group-header {
-  background: hsl(var(--muted));
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
 .schema-item {
   display: flex;
   justify-content: space-between;
@@ -459,12 +406,25 @@
   font-style: italic;
 }
 
-/* Table Name Search Styles */
 #tableNameInput {
-  /* Disable browser's search suggestions */
+  width: 100%;
+  max-width: 486px;
+  min-width: 0;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  flex: 1 1 50%;
+  /* Neutralize Safari/WebKit UA styling and apply app theme */
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  line-height: 1.2;
+  /* Kill Safari default inner shadow / gradient */
+  box-shadow: none;
+  background-image: none;
 }
 
 /* Focus ring consistent with theme, bypass Safari default outline */
@@ -499,6 +459,15 @@
 
 .schema-group {
   border-bottom: 1px solid #eee;
+  margin-bottom: 16px;
+}
+
+.schema-group-header {
+  background: hsl(var(--muted));
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .schema-group:last-child {
@@ -521,10 +490,6 @@
 }
 
 .search-result-item:hover,
-.search-result-item.selected {
-  background-color: hsl(var(--accent));
-}
-
 .search-result-item.selected {
   background-color: hsl(var(--muted));
 }
