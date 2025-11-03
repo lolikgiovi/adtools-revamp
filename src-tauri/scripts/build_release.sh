@@ -14,6 +14,8 @@ KEY_DIR="$ROOT_DIR/keys"
 KEY_FILE="$KEY_DIR/updater.key"
 PASSPHRASE_FILE="$KEY_DIR/passphrase.key"
 BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
+# Trim trailing slash to avoid double slashes in URLs
+BASE_URL="${BASE_URL%/}"
 
 # Resolve version: CLI arg $1 overrides tauri.conf.json version
 VERSION_ARG="${1:-}"
@@ -25,8 +27,21 @@ timestamp() {
 
 read_version_from_conf() {
   local conf="$1"
-  # naive JSON parse for "version": "x.y.z"
-  grep -E '"version"\s*:\s*"' "$conf" | sed -E 's/.*"version"\s*:\s*"([^"]+)".*/\1/' | head -n1
+  # Prefer jq for robust JSON parsing; fallback to grep/sed when jq is unavailable
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.version // empty' "$conf"
+  else
+    grep -E '"version"[[:space:]]*:[[:space:]]*"' "$conf" \
+      | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+      | head -n1
+  fi
+}
+
+# Sanitize arbitrary version strings that may accidentally include JSON fragments
+sanitize_version() {
+  local v="$1"
+  # If it looks like a JSON line, extract the quoted value; otherwise pass through
+  echo "$v" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
 }
 
 ensure_prereqs() {
@@ -49,6 +64,20 @@ ensure_prereqs() {
   if ! command -v tar >/dev/null 2>&1; then
     echo "ERROR: tar not found" >&2
     exit 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "INFO: jq not found; falling back to grep/sed for version parsing and skipping JSON validation." >&2
+  fi
+}
+
+# Validate JSON file using jq when available
+validate_json() {
+  local conf="$1"
+  if command -v jq >/dev/null 2>&1; then
+    if ! jq -e '.' "$conf" >/dev/null 2>&1; then
+      echo "ERROR: Invalid JSON in $conf" >&2
+      exit 1
+    fi
   fi
 }
 
@@ -126,11 +155,13 @@ write_manifest() {
   "platforms": {
     "darwin-aarch64": {
       "signature": "$sig_arm64",
-      "url": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz"
+      "url": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz",
+      "installer": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.dmg"
     },
     "darwin-x86_64": {
       "signature": "$sig_x64",
-      "url": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz"
+      "url": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz",
+      "installer": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.dmg"
     }
   }
 }
@@ -140,12 +171,21 @@ JSON
 main() {
   ensure_prereqs
 
+  validate_json "$TAURI_CONF"
+
   local version timestamp_dir release_dir passphrase
   # Read passphrase as raw text, preserve spaces, strip trailing newlines/CR
   passphrase="$(tr -d '\r\n' < "$PASSPHRASE_FILE")"
   version="$VERSION_ARG"
   if [[ -z "$version" ]]; then
     version="$(read_version_from_conf "$TAURI_CONF")"
+  fi
+  # Final guard to strip any accidental JSON fragments
+  version="$(sanitize_version "$version")"
+  # Basic validation to catch obvious parsing failures
+  if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,2}([-a-zA-Z0-9\.]+)?$ ]]; then
+    echo "ERROR: Parsed version '$version' is invalid. Check tauri.conf.json or pass a version argument." >&2
+    exit 1
   fi
   if [[ -z "$version" ]]; then
     echo "ERROR: Unable to determine version; pass it as first argument" >&2

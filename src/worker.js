@@ -30,18 +30,6 @@ export default {
       return handleArtifactRequest(request, env);
     }
 
-    // Installer script hosted in R2
-    if (url.pathname === "/install.sh") {
-      if (method !== "GET" && method !== "HEAD") return methodNotAllowed();
-      return handleInstallScriptRequest(request, env);
-    }
-
-    // Alias endpoint: redirect to latest DMG for given arch/channel
-    if (url.pathname === "/releases/latest") {
-      if (method !== "GET") return methodNotAllowed();
-      return handleLatestReleaseRedirect(request, env);
-    }
-
     // API routes
     if (url.pathname === "/whitelist.json") {
       return handleWhitelist(env);
@@ -760,94 +748,6 @@ async function handleArtifactRequest(request, env) {
   }
 }
 
-async function handleInstallScriptRequest(request, env) {
-  try {
-    const key = "install/install.sh"; // store script under install/
-    const head = await env.UPDATES?.head(key);
-    if (!head) {
-      return new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain", ...corsHeaders() } });
-    }
-    const obj = await env.UPDATES.get(key);
-    if (!obj || !obj.body) {
-      return new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain", ...corsHeaders() } });
-    }
-    const baseHeaders = {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "public, max-age=300",
-      ...corsHeaders(),
-    };
-    if (request.method === "HEAD") {
-      return new Response(null, { status: 200, headers: { ...baseHeaders, "Content-Length": String(head.size || 0) } });
-    }
-    return new Response(obj.body, { status: 200, headers: { ...baseHeaders, "Content-Length": String(head.size || 0) } });
-  } catch (err) {
-    return new Response("Server Error", { status: 500, headers: { "Content-Type": "text/plain", ...corsHeaders() } });
-  }
-}
-
-async function handleLatestReleaseRedirect(request, env) {
-  try {
-    const url = new URL(request.url);
-    const channel = (url.searchParams.get("channel") || "stable").toLowerCase();
-    const archKey = (url.searchParams.get("arch") || "darwin-aarch64").toLowerCase(); // darwin-aarch64 | darwin-x86_64
-    const baseName = archKey.includes("aarch64") ? "mac-arm64" : "mac-intel";
-
-    // Read manifest server-side to get latest version without exposing signature
-    const manifestKey = `update/${channel}.json`;
-    const mf = await env.UPDATES?.get(manifestKey);
-    if (!mf || !mf.text) {
-      return new Response(JSON.stringify({ ok: false, error: "Manifest not found", channel }), {
-        status: 404,
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
-    let version = null;
-    try {
-      const txt = await mf.text();
-      const data = JSON.parse(txt);
-      version = String(data.version || "").trim();
-    } catch (_) {}
-    if (!version) {
-      return new Response(JSON.stringify({ ok: false, error: "Version not found in manifest" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
-
-    // Prefer DMG; fallback to tar.gz if DMG missing
-    const dmgKey = `releases/${version}/${channel}/${archKey}/ADTools-${version}-${baseName}.dmg`;
-    const headDmg = await env.UPDATES?.head(dmgKey);
-    let targetKey = dmgKey;
-    if (!headDmg) {
-      const tarKey = `releases/${version}/${channel}/${archKey}/ADTools-${version}-${baseName}.app.tar.gz`;
-      const headTar = await env.UPDATES?.head(tarKey);
-      if (!headTar) {
-        return new Response(JSON.stringify({ ok: false, error: "No artifact found for latest", version, archKey }), {
-          status: 404,
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        });
-      }
-      targetKey = tarKey;
-    }
-
-    const origin = new URL(request.url).origin;
-    const location = `${origin}/${targetKey}`;
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: location,
-        "Cache-Control": "no-store",
-        ...corsHeaders(),
-      },
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
-    });
-  }
-}
-
 function parseRange(header, size) {
   if (!header || !/^bytes=/.test(header)) return null;
   const m = header.match(/^bytes=(\d*)-(\d*)$/);
@@ -894,13 +794,6 @@ async function handleDevSeedUpdate(request, env) {
     await env.UPDATES.put(artifactKey, artifactBody, {
       httpMetadata: { contentType: "application/octet-stream" },
     });
-    // Seed installer script for local/dev testing
-    try {
-      const installScript = `#!/usr/bin/env bash\nset -euo pipefail\n\n# Dev installer stub\necho 'This is a dev installer. Replace with real script in R2.'\n`;
-      await env.UPDATES.put("install/install.sh", installScript, {
-        httpMetadata: { contentType: "text/plain" },
-      });
-    } catch (_) {}
     const manifest = {
       version,
       minVersion: "0.0.0",
@@ -916,7 +809,7 @@ async function handleDevSeedUpdate(request, env) {
     await env.UPDATES.put(manifestKey, JSON.stringify(manifest), {
       httpMetadata: { contentType: "application/json" },
     });
-    return new Response(JSON.stringify({ ok: true, manifestKey, artifactKey, installKey: "install/install.sh" }), {
+    return new Response(JSON.stringify({ ok: true, manifestKey, artifactKey }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {
