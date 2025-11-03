@@ -10,22 +10,22 @@ AD Tools uses a local-first strategy with Cloudflare D1 as the durable backup. T
 ## D1 Tables
 
 ### users
-- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `id` TEXT PRIMARY KEY (UUID v4)
 - `email` TEXT UNIQUE NOT NULL
 - `created_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
 - `last_seen` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
 
 Example upsert:
 ```
-INSERT INTO users(email, created_time, last_seen)
-VALUES (?, ?, ?)
+INSERT INTO users(id, email, created_time, last_seen)
+VALUES (?, ?, ?, ?)
 ON CONFLICT(email) DO UPDATE SET
   last_seen = excluded.last_seen;
 ```
 
 ### device
 - `device_id` TEXT PRIMARY KEY
-- `user_id` INTEGER NOT NULL REFERENCES users(id)
+- `user_id` TEXT NOT NULL REFERENCES users(id)
 - `platform` TEXT NULL (e.g., `web`, `tauri`)
 - `created_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
 - `last_seen` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
@@ -53,25 +53,36 @@ Recommended indexes:
 - `CREATE INDEX idx_events_feature_action_time ON events(feature_id, action, created_time);`
 
 ### daily_usage
+- Purpose: daily usage totals per feature, not bound to a user.
 - `day` TEXT NOT NULL (`YYYY-MM-DD`)
-- `user_id` INTEGER NOT NULL REFERENCES users(id)
 - `tool_id` TEXT NOT NULL
 - `action` TEXT NOT NULL
 - `count` INTEGER NOT NULL DEFAULT 0
 - `updated_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
 
 Primary key and indexes:
-- `PRIMARY KEY(day, user_id, tool_id, action)`
+- `PRIMARY KEY(day, tool_id, action)`
 - `CREATE INDEX idx_daily_usage_tool_day ON daily_usage(tool_id, day);`
 
 Upsert increment:
 ```
-INSERT INTO daily_usage(day, user_id, tool_id, action, count, updated_time)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT(day, user_id, tool_id, action) DO UPDATE SET
+INSERT INTO daily_usage(day, tool_id, action, count, updated_time)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(day, tool_id, action) DO UPDATE SET
   count = daily_usage.count + excluded.count,
   updated_time = excluded.updated_time;
 ```
+
+### user_usage
+- Purpose: cumulative usage totals per user and feature across devices.
+- `user_id` TEXT NOT NULL REFERENCES users(id)
+- `tool_id` TEXT NOT NULL
+- `count` INTEGER NOT NULL DEFAULT 0
+- `updated_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
+
+Primary key and indexes:
+- `PRIMARY KEY(user_id, tool_id)`
+- Optional index: `CREATE INDEX idx_user_usage_tool ON user_usage(tool_id);`
 
 ### otp
 - `id` INTEGER PRIMARY KEY AUTOINCREMENT
@@ -100,7 +111,8 @@ Notes:
 ## Client Storage and Flush Policy
 - Local queues in `localStorage`:
   - `ad.events.queue`: array of event objects `{ device_id, feature_id, action, properties, created_time }`.
-  - `ad.daily_usage.queue`: array of usage objects `{ day, user_id, tool_id, action, count, updated_time }`.
+  - `ad.daily_usage.queue`: array of usage objects `{ day, tool_id, action, count, updated_time }`.
+  - `ad.user_usage.queue`: array of usage objects `{ user_id, tool_id, count, updated_time }`.
 - Flush triggers:
   - Hourly timer (primary cadence).
   - Lifecycle: `visibilitychange`, `beforeunload`, and `online` events.
@@ -132,10 +144,17 @@ Notes:
   "daily_usage": [
     {
       "day": "2025-11-03",
-      "user_id": 42,
       "tool_id": "quick-query",
       "action": "run",
       "count": 12,
+      "updated_time": "2025-11-03 11:00:00+07:00"
+    }
+  ],
+  "user_usage": [
+    {
+      "user_id": "uuid-user-...",
+      "tool_id": "quick-query",
+      "count": 120,
       "updated_time": "2025-11-03 11:00:00+07:00"
     }
   ]
@@ -145,7 +164,7 @@ Notes:
 ```
 {
   "ok": true,
-  "inserted": {"events": 10, "daily_usage": 3},
+  "inserted": {"events": 10, "daily_usage": 3, "user_usage": 2},
   "deduplicated": {"events": 2}
 }
 ```
@@ -153,14 +172,16 @@ Notes:
   - Validate payload sizes and sanitize `properties`.
   - Wrap inserts in a transaction.
   - `events`: simple inserts using `created_time`.
-  - `daily_usage`: upsert increment using the composite PK.
+  - `daily_usage`: upsert increment using `(day, tool_id, action)`.
+  - `user_usage`: upsert increment using `(user_id, tool_id)`.
 
 ## Indexing Guidance
-- `daily_usage(day, user_id, tool_id, action)` composite primary key for fast upserts.
+- `daily_usage(day, tool_id, action)` composite primary key for fast upserts.
 - Additional read indexes:
   - `idx_daily_usage_tool_day(tool_id, day)` for daily tool summaries.
-  - `idx_events_device_time(device_id, created_time)` for device timelines.
-  - `idx_events_feature_action_time(feature_id, action, created_time)` for feature/action trend queries.
+  - `idx_user_usage_tool(tool_id)` for per-feature user totals.
+- `idx_events_device_time(device_id, created_time)` for device timelines.
+- `idx_events_feature_action_time(feature_id, action, created_time)` for feature/action trend queries.
 
 ## Privacy and Content Hygiene
 - `properties` must be JSON and free from PII.
@@ -174,4 +195,5 @@ Notes:
 ## Alignment With Implementation
 - This document adopts GMT+7 suffix timestamps and introduces `events.created_time` and `daily_usage.day` as explicit time dimensions.
 - Registration and device linkage are upsert-based to avoid races.
+- Users have UUID v4 IDs; relationships use `TEXT` foreign keys.
 - The batch endpoint contract supports hourly and lifecycle-based flushes with idempotency.

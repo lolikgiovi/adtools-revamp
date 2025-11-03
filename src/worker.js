@@ -98,6 +98,23 @@ function methodNotAllowed() {
   });
 }
 
+function allowedEmailDomains(env) {
+  const raw = String(env.ALLOWED_EMAIL_DOMAINS || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(/[,\s]+/)
+    .map((d) => String(d || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isEmailDomainAllowed(email, env) {
+  const parts = String(email || "").toLowerCase().split("@");
+  const domain = parts.length > 1 ? parts[1] : "";
+  const allowed = allowedEmailDomains(env);
+  if (!allowed.length) return true; // no restriction configured
+  return allowed.includes(domain);
+}
+
 async function handleWhitelist(env) {
   try {
     const flag = String(env.WHITELIST_ENABLED ?? "true").toLowerCase();
@@ -213,6 +230,13 @@ async function handleRegisterRequestOtp(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
 
+    if (!isEmailDomainAllowed(normalized, env)) {
+      return new Response(JSON.stringify({ ok: false, error: "Email domain not allowed" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const nowTs = tsGmt7();
     const expiresTs = tsGmt7(10 * 60 * 1000); // +10 minutes
@@ -289,6 +313,13 @@ async function handleRegisterVerify(request, env) {
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
         status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    if (!isEmailDomainAllowed(email, env)) {
+      return new Response(JSON.stringify({ ok: false, error: "Email domain not allowed" }), {
+        status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
@@ -502,9 +533,11 @@ async function handleAnalyticsBatchPost(request, env) {
     const deviceId = String(data.device_id || data.deviceId || "");
     const events = Array.isArray(data.events) ? data.events : [];
     const daily = Array.isArray(data.daily_usage) ? data.daily_usage : [];
+    const userTotals = Array.isArray(data.user_usage) ? data.user_usage : [];
 
     let insertedEvents = 0;
     let upsertsDaily = 0;
+    let upsertsUserTotals = 0;
     if (env.DB) {
       for (const ev of events) {
         try {
@@ -522,22 +555,36 @@ async function handleAnalyticsBatchPost(request, env) {
       for (const du of daily) {
         try {
           const day = String(du.day || dayGmt7());
-          const userId = String(du.user_id || "");
           const toolId = String(du.tool_id || du.feature_id || "unknown");
           const action = String(du.action || "unknown");
           const count = Number(du.count || 0) || 0;
           const updatedTime = String(du.updated_time || tsGmt7Plain());
           await env.DB.prepare(
-            "INSERT INTO daily_usage (day, user_id, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day, user_id, tool_id, action) DO UPDATE SET count = daily_usage.count + excluded.count, updated_time = excluded.updated_time"
+            "INSERT INTO daily_usage (day, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?) ON CONFLICT(day, tool_id, action) DO UPDATE SET count = daily_usage.count + excluded.count, updated_time = excluded.updated_time"
           )
-            .bind(day, userId, toolId, action, count, updatedTime)
+            .bind(day, toolId, action, count, updatedTime)
             .run();
           upsertsDaily++;
         } catch (_) {}
       }
+
+      for (const uu of userTotals) {
+        try {
+          const userId = String(uu.user_id || "");
+          const toolId = String(uu.tool_id || uu.feature_id || "unknown");
+          const count = Number(uu.count || 0) || 0;
+          const updatedTime = String(uu.updated_time || tsGmt7Plain());
+          await env.DB.prepare(
+            "INSERT INTO user_usage (user_id, tool_id, count, updated_time) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, tool_id) DO UPDATE SET count = user_usage.count + excluded.count, updated_time = excluded.updated_time"
+          )
+            .bind(userId, toolId, count, updatedTime)
+            .run();
+          upsertsUserTotals++;
+        } catch (_) {}
+      }
     }
 
-    return new Response(JSON.stringify({ ok: true, inserted: { events: insertedEvents, daily_usage: upsertsDaily } }), {
+    return new Response(JSON.stringify({ ok: true, inserted: { events: insertedEvents, daily_usage: upsertsDaily, user_usage: upsertsUserTotals } }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {

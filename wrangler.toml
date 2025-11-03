@@ -14,6 +14,7 @@ MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_ORIGINS = "http://localhost:5173,tauri://localhost"
+ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
 
 # R2 bucket for updater manifests and artifacts
 [[r2_buckets]]
@@ -27,6 +28,7 @@ DEV_MODE = "false"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
+ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
 
 # KV bindings: fill in your IDs via Cloudflare dashboard or uncomment/edit below
 [[kv_namespaces]]

@@ -98,6 +98,7 @@ export class RegisterPage {
           const endpointCandidates = ["/register/request-otp", baseEnv ? `${baseEnv}/register/request-otp` : ""];
           let devCode = null;
           let requested = false;
+          let blocked = false;
           for (const endpoint of endpointCandidates.filter(Boolean)) {
             try {
               const res = await fetch(endpoint, {
@@ -111,10 +112,23 @@ export class RegisterPage {
                 devCode = resp?.devCode || null;
                 requested = true;
                 break;
+              } else if (res.status === 403) {
+                blocked = true;
+                let msg = "Email domain not allowed";
+                try {
+                  const resp = await res.json();
+                  if (resp && typeof resp.error === "string" && resp.error) msg = resp.error;
+                } catch (_) {}
+                errorEl.textContent = msg || "Email domain not allowed. Use your @bankmandiri.co.id email.";
+                break;
               }
             } catch (_) {}
           }
           submitBtn.disabled = false;
+          if (blocked) {
+            submitBtn.textContent = "Continue";
+            return;
+          }
           if (!requested) {
             submitBtn.textContent = "Continue";
             errorEl.textContent = "Failed to send code. Please try again.";
@@ -161,6 +175,7 @@ browser,
           submitBtn.textContent = "Verifying...";
           let verified = false;
           let userId = null;
+          let blockedVerify = false;
           for (const endpoint of endpointCandidates.filter(Boolean)) {
             try {
               const res = await fetch(endpoint, {
@@ -176,12 +191,24 @@ browser,
                   userId = resp?.userId || null;
                   break;
                 }
+              } else if (res.status === 403) {
+                blockedVerify = true;
+                let msg = "Email domain not allowed";
+                try {
+                  const resp = await res.json();
+                  if (resp && typeof resp.error === "string" && resp.error) msg = resp.error;
+                } catch (_) {}
+                errorEl.textContent = msg || "Email domain not allowed. Use your @bankmandiri.co.id email.";
+                break;
               }
             } catch (_) {}
           }
           submitBtn.disabled = false;
           submitBtn.textContent = "Verify & Continue";
 
+          if (blockedVerify) {
+            return;
+          }
           if (!verified) {
             errorEl.textContent = "Verification failed. Check the code and try again.";
             return;
