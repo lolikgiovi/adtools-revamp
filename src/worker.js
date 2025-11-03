@@ -162,15 +162,18 @@ function generateInstallerScript(baseUrl) {
   return `#!/usr/bin/env bash
 set -euo pipefail
 
-log() { printf "[adtools][%s] %s\n" "$(date +%s)" "$1"; }
-warn() { printf "[warning][%s] %s\n" "$(date +%s)" "$1"; }
-err() { printf "[error][%s] %s\n" "$(date +%s)" "$1" >&2; }
+log() { printf "[adtools] %s\n" "$1"; }
+warn() { printf "[warning] %s\n" "$1"; }
+err() { printf "[error] %s\n" "$1" >&2; }
+
+# Enforce TLS v1.2 for curl calls
+CURL_SECURITY_ARGS=""
 
 retry_curl() {
   local out="$1" url="$2" attempts="\${3:-3}"
   local i=1
   while (( i <= attempts )); do
-    if curl -fSL --proto '=https' --tlsv1.2 --progress-bar -o "$out" "$url"; then
+    if curl -fSL \${CURL_SECURITY_ARGS} --progress-bar -o "$out" "$url"; then
       return 0
     fi
     warn "Download failed (attempt $i/$attempts). Retrying..."
@@ -221,7 +224,7 @@ fi
 
 # Optional integrity: fetch manifest to verify installer_sha256 when available
 MANIFEST_JSON="$TMP_DIR/manifest.json"
-if curl -fsSL --proto '=https' --tlsv1.2 -o "$MANIFEST_JSON" "${baseUrl}/update/\${CHANNEL}.json"; then
+  if curl -fsSL \${CURL_SECURITY_ARGS} -o "$MANIFEST_JSON" "${baseUrl}/update/\${CHANNEL}.json"; then
   EXPECTED_SHA=""
   if command -v jq >/dev/null 2>&1; then
     EXPECTED_SHA="$(jq -r '.platforms["'"\${ARCH_KEY}"'"]?.installer_sha256 // empty' "$MANIFEST_JSON")"

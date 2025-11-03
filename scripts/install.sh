@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-log() { printf "[adtools][%s] %s\n" "$(date +%s)" "$1"; }
-warn() { printf "[warning][%s] %s\n" "$(date +%s)" "$1"; }
-err() { printf "[error][%s] %s\n" "$(date +%s)" "$1" >&2; }
+log() { printf "[adtools] %s\n" "$1"; }
+warn() { printf "[warning] %s\n" "$1"; }
+err() { printf "[error] %s\n" "$1" >&2; }
 
 BASE_URL="https://adtools.lolik.workers.dev"
 
-# Enforce HTTPS always
-CURL_SECURITY_ARGS="--proto '=https' --tlsv1.2"
+# No extra curl security flags; rely on https URLs and system defaults
+CURL_SECURITY_ARGS=""
 
 retry_curl() {
   local out="$1" url="$2" attempts="${3:-3}"
