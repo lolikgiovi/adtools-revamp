@@ -329,14 +329,16 @@ async function handleRegisterVerify(request, env) {
 
     const salt = String(env.SECRET_SALT || "");
 
-    // Upsert user (unique by email)
+    // Upsert user (unique by email) with UUID id
+    const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+    const newUserId = existingUser?.id || crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO users (email, created_time, last_seen) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen"
+      "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen"
     )
-      .bind(email, tsGmt7Plain(), tsGmt7Plain())
+      .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain())
       .run();
     const userRow = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
-    const userId = userRow?.id || null;
+    const userId = userRow?.id || newUserId;
 
     await env.DB.prepare(
       "INSERT INTO device (device_id, user_id, platform, created_time, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen"
@@ -520,7 +522,7 @@ async function handleAnalyticsBatchPost(request, env) {
       for (const du of daily) {
         try {
           const day = String(du.day || dayGmt7());
-          const userId = Number(du.user_id);
+          const userId = String(du.user_id || "");
           const toolId = String(du.tool_id || du.feature_id || "unknown");
           const action = String(du.action || "unknown");
           const count = Number(du.count || 0) || 0;
