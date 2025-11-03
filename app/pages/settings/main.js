@@ -1,6 +1,7 @@
 import { SettingsTemplate } from './template.js';
 import './styles.css';
 import { SettingsService } from './service.js';
+import { openOtpOverlay } from '../../components/OtpOverlay.js';
 import { invoke } from '@tauri-apps/api/core';
 
 class SettingsPage {
@@ -85,66 +86,38 @@ class SettingsPage {
     await this.reloadConfig();
   }
 
-  openOtpModal() {
-    const modal = this.container?.querySelector('.otp-modal');
-    if (!modal) return;
-    const status = modal.querySelector('.otp-email-status');
-    const err = modal.querySelector('.otp-error');
-    const input = modal.querySelector('.otp-code-input');
-    const btnReq = modal.querySelector('.otp-request');
-    const btnConfirm = modal.querySelector('.otp-confirm');
-    const btnClose = modal.querySelector('.otp-close');
-
+  async openOtpModal() {
     const email = localStorage.getItem('user.email') || '';
     if (!email) {
-      status.textContent = '';
-      err.textContent = 'No registered email found. Please register first.';
-      btnReq.disabled = true;
-      btnConfirm.disabled = true;
-    } else {
-      status.textContent = `We will send an OTP to: ${email}`;
-      err.textContent = '';
-      btnReq.disabled = false;
-      btnConfirm.disabled = false;
+      this.eventBus?.emit?.('notification:error', { message: 'No registered email found. Please register first.' });
+      return;
     }
-    input.value = '';
-
-    const onClose = () => {
-      modal.hidden = true;
-      btnReq.removeEventListener('click', onReq);
-      btnConfirm.removeEventListener('click', onConfirm);
-      btnClose.removeEventListener('click', onClose);
-    };
-    const onReq = async () => {
-      err.textContent = '';
-      try {
-        await this.#requestOtp(email);
-        this.eventBus?.emit?.('notification:success', { message: 'OTP sent. Check your email.' });
-      } catch (e) {
-        err.textContent = String(e?.message || e || 'Failed to request OTP');
+    try {
+      const { token, kvValue } = await openOtpOverlay({
+        email,
+        requestEndpoint: '/register/request-otp',
+        verifyEndpoint: '/register/verify',
+        rateLimitMs: 60_000,
+        storageScope: 'settings-defaults',
+        kvKey: 'settings/defaults',
+      });
+      // Prefer KV value provided by overlay; fallback to manual fetch if needed
+      let defaults = kvValue;
+      if (defaults === undefined && token) {
+        const res = await fetch('/api/kv/get?key=settings/defaults', { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j?.ok) throw new Error(j?.error || 'KV access failure');
+        defaults = j.value;
       }
-    };
-    const onConfirm = async () => {
-      err.textContent = '';
-      const code = (input.value || '').trim();
-      if (!/^[0-9]{6}$/.test(code)) {
-        err.textContent = 'Please enter a 6-digit OTP code.';
-        return;
+      await this.applyDefaultsFromKv(defaults);
+      await this.reloadConfig();
+      this.eventBus?.emit?.('notification:success', { message: 'Default settings loaded.' });
+    } catch (e) {
+      // Closed or error
+      if (String(e?.message || e) !== 'Closed') {
+        this.eventBus?.emit?.('notification:error', { message: String(e?.message || e || 'Failed to load defaults') });
       }
-      try {
-        const { token } = await this.#verifyOtp(email, code);
-        await this.#loadDefaultsWithToken(token);
-        this.eventBus?.emit?.('notification:success', { message: 'Default settings loaded.' });
-        modal.hidden = true;
-      } catch (e) {
-        err.textContent = String(e?.message || e || 'Verification failed');
-      }
-    };
-
-    btnReq.addEventListener('click', onReq);
-    btnConfirm.addEventListener('click', onConfirm);
-    btnClose.addEventListener('click', onClose);
-    modal.hidden = false;
+    }
   }
 
   async #requestOtp(email) {

@@ -8,7 +8,7 @@ assets = { directory = "./dist", binding = "ASSETS" }
 
 # Environment variables
 [vars]
-DEV_MODE = "true"
+DEV_MODE = "false"
 SECRET_SALT = "change-me-in-production"
 MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
