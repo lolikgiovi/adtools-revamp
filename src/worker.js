@@ -57,6 +57,12 @@ export default {
       return handleRegisterVerify(request, env);
     }
 
+    // Secure KV fetch (requires OTP session token)
+    if (url.pathname === "/api/kv/get") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleKvGet(request, env);
+    }
+
     if (url.pathname === "/register") {
       if (method !== "POST") return methodNotAllowed();
       return handleRegister(request, env);
@@ -496,6 +502,22 @@ async function handleRegisterRequestOtp(request, env) {
       });
     }
 
+    // Rate-limit OTP requests per email using KV (10 min window, max 3)
+    try {
+      if (env.adtools) {
+        const rlKey = `otp:rl:${normalized}`;
+        const rlRaw = await env.adtools.get(rlKey);
+        const rl = rlRaw ? JSON.parse(rlRaw) : { count: 0 };
+        if (rl.count >= 3) {
+          return new Response(JSON.stringify({ ok: false, error: "Too many OTP requests. Try later." }), {
+            status: 429,
+            headers: { "Content-Type": "application/json", ...corsHeaders() },
+          });
+        }
+        await env.adtools.put(rlKey, JSON.stringify({ count: rl.count + 1, updatedAt: tsGmt7() }), { expirationTtl: 10 * 60 });
+      }
+    } catch (_) {}
+
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const nowTs = tsGmt7();
     const expiresTs = tsGmt7(10 * 60 * 1000); // +10 minutes
@@ -518,7 +540,9 @@ async function handleRegisterRequestOtp(request, env) {
     const sent = !!(sendResult && sendResult.ok);
 
     const payload =
-      String(env.DEV_MODE || "") === "true" ? { ok: true, devCode: code, mailSent: sent, mailStatus: sendResult } : { ok: true };
+      String(env.DEV_MODE || "") === "true"
+        ? { ok: true, devCode: code, mailSent: sent, mailStatus: sendResult, expiresAt: expiresTs }
+        : { ok: true, expiresAt: expiresTs };
 
     return new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -636,7 +660,15 @@ async function handleRegisterVerify(request, env) {
       .bind(deviceId, userId, platform, tsGmt7Plain(), tsGmt7Plain())
       .run();
 
-    return new Response(JSON.stringify({ ok: true, userId }), {
+    // Create short-lived session token to authorize KV access (10 min TTL)
+    let token = crypto.randomUUID();
+    try {
+      if (env.adtools) {
+        await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 10 * 60 });
+      }
+    } catch (_) {}
+
+    return new Response(JSON.stringify({ ok: true, userId, token }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {
@@ -746,6 +778,76 @@ async function handleAnalyticsGet(request, env) {
   } catch (err) {
     return new Response(JSON.stringify({ events: [] }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// Secure KV getter: Authorization required; restrict keys to 'settings/' prefix
+async function handleKvGet(request, env) {
+  try {
+    if (!isOriginAllowed(request, env)) {
+      return new Response(JSON.stringify({ ok: false, error: "Origin not allowed" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+    const auth = request.headers.get("Authorization") || "";
+    const m = auth.match(/^Bearer\s+(.+)$/i);
+    const token = m ? m[1] : "";
+    if (!token || !env.adtools) {
+      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    const session = await env.adtools.get(`session:${token}`);
+    if (!session) {
+      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    const url = new URL(request.url);
+    const key = url.searchParams.get("key") || "";
+    if (!/^settings\//.test(key)) {
+      return new Response(JSON.stringify({ ok: false, error: "Key not allowed" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    let val;
+    try {
+      val = await env.adtools.get(key);
+    } catch (_) {
+      return new Response(JSON.stringify({ ok: false, error: "KV access failure" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    if (val == null) {
+      return new Response(JSON.stringify({ ok: false, error: "Not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(val);
+    } catch (_) {
+      parsed = val;
+    }
+    return new Response(JSON.stringify({ ok: true, key, value: parsed }), {
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders(),
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
     });
   }
 }

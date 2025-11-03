@@ -8,6 +8,7 @@ export default defineConfig({
       '/register': 'http://localhost:8787',
       '/analytics': 'http://localhost:8787',
       '/whitelist.json': 'http://localhost:8787',
+      '/api': 'http://localhost:8787',
     },
   },
   resolve: {

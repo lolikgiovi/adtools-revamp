@@ -281,8 +281,7 @@ export function createOracleEditor(container, options = {}) {
     scrollBeyondLastLine: false,
     wordWrap: "on",
     fontSize: 12,
-    quickSuggestions: { other: true, comments: false, strings: true },
-    suggestOnTriggerCharacters: true,
+    suggestOnTriggerCharacters: false,
   };
   const editor = monaco.editor.create(container, { ...defaults, ...options });
   const model = editor.getModel();

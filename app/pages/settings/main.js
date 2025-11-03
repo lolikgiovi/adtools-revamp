@@ -78,11 +78,183 @@ class SettingsPage {
     } catch (_) {}
 
     // Bind toolbar actions
-    root.querySelector('.settings-reload')?.addEventListener('click', () => this.reloadConfig());
+    root.querySelector('.settings-load-defaults')?.addEventListener('click', () => this.openOtpModal());
     root.querySelector('.settings-check-update')?.addEventListener('click', () => this.handleManualCheckUpdate());
     this.searchInput?.addEventListener('input', () => this.applySearch());
 
     await this.reloadConfig();
+  }
+
+  openOtpModal() {
+    const modal = this.container?.querySelector('.otp-modal');
+    if (!modal) return;
+    const status = modal.querySelector('.otp-email-status');
+    const err = modal.querySelector('.otp-error');
+    const input = modal.querySelector('.otp-code-input');
+    const btnReq = modal.querySelector('.otp-request');
+    const btnConfirm = modal.querySelector('.otp-confirm');
+    const btnClose = modal.querySelector('.otp-close');
+
+    const email = localStorage.getItem('user.email') || '';
+    if (!email) {
+      status.textContent = '';
+      err.textContent = 'No registered email found. Please register first.';
+      btnReq.disabled = true;
+      btnConfirm.disabled = true;
+    } else {
+      status.textContent = `We will send an OTP to: ${email}`;
+      err.textContent = '';
+      btnReq.disabled = false;
+      btnConfirm.disabled = false;
+    }
+    input.value = '';
+
+    const onClose = () => {
+      modal.hidden = true;
+      btnReq.removeEventListener('click', onReq);
+      btnConfirm.removeEventListener('click', onConfirm);
+      btnClose.removeEventListener('click', onClose);
+    };
+    const onReq = async () => {
+      err.textContent = '';
+      try {
+        await this.#requestOtp(email);
+        this.eventBus?.emit?.('notification:success', { message: 'OTP sent. Check your email.' });
+      } catch (e) {
+        err.textContent = String(e?.message || e || 'Failed to request OTP');
+      }
+    };
+    const onConfirm = async () => {
+      err.textContent = '';
+      const code = (input.value || '').trim();
+      if (!/^[0-9]{6}$/.test(code)) {
+        err.textContent = 'Please enter a 6-digit OTP code.';
+        return;
+      }
+      try {
+        const { token } = await this.#verifyOtp(email, code);
+        await this.#loadDefaultsWithToken(token);
+        this.eventBus?.emit?.('notification:success', { message: 'Default settings loaded.' });
+        modal.hidden = true;
+      } catch (e) {
+        err.textContent = String(e?.message || e || 'Verification failed');
+      }
+    };
+
+    btnReq.addEventListener('click', onReq);
+    btnConfirm.addEventListener('click', onConfirm);
+    btnClose.addEventListener('click', onClose);
+    modal.hidden = false;
+  }
+
+  async #requestOtp(email) {
+    if (!email) throw new Error('Missing email in localStorage');
+    const endpoint = '/register/request-otp';
+    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error || `Network error (${res.status})`);
+    }
+    const j = await res.json().catch(() => ({}));
+    // Dev-mode convenience: prefill OTP if provided by backend
+    try {
+      if (j?.devCode) {
+        const input = this.container?.querySelector('.otp-code-input');
+        const status = this.container?.querySelector('.otp-email-status');
+        if (input) input.value = String(j.devCode);
+        if (status) status.textContent += ' (Dev: OTP auto-filled)';
+      }
+    } catch (_) {}
+    return j;
+  }
+
+  async #verifyOtp(email, code) {
+    const endpoint = '/register/verify';
+    const payload = { email, code };
+    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j?.ok) {
+      throw new Error(j?.error || 'Invalid OTP');
+    }
+    if (!j?.token) throw new Error('Authorization token missing');
+    return j;
+  }
+
+  async #loadDefaultsWithToken(token) {
+    const res = await fetch('/api/kv/get?key=settings/defaults', { headers: { Authorization: `Bearer ${token}` } });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j?.ok) {
+      throw new Error(j?.error || 'KV access failure');
+    }
+    await this.applyDefaultsFromKv(j.value);
+    await this.reloadConfig();
+  }
+
+  async applyDefaultsFromKv(val) {
+    if (!val) return;
+
+    // Normalize KV value: it may be a JSON string or a structured object/array
+    let data = val;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (_) {
+        return; // invalid JSON payload
+      }
+    }
+
+    // Helper to sanitize simple string values (trim stray backticks/spaces)
+    const sanitize = (s) => {
+      try {
+        let x = String(s ?? '').trim();
+        x = x.replace(/^`+|`+$/g, '');
+        return x;
+      } catch (_) {
+        return String(s ?? '');
+      }
+    };
+
+    // If KV value is an array of objects, store each entry by its key.
+    // If the value itself is an array, store it directly (JSON) under the parent key.
+    if (Array.isArray(data)) {
+      for (const entry of data) {
+        if (!entry || typeof entry !== 'object') continue;
+        for (const [k, v] of Object.entries(entry)) {
+          if (Array.isArray(v)) {
+            try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {}
+          } else if (v && typeof v === 'object') {
+            try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {}
+          } else {
+            try { localStorage.setItem(k, sanitize(v)); } catch (_) {}
+          }
+        }
+      }
+      return;
+    }
+
+    // Fallback: object mapping { key: value } -> persist via SettingsService with type awareness
+    if (data && typeof data === 'object') {
+      const getType = (key) => {
+        const findInCats = (cats) => {
+          for (const cat of cats || []) {
+            for (const item of cat.items || []) {
+              if (item.key === key) return item.type || 'string';
+            }
+            const t = findInCats(cat.categories || []);
+            if (t) return t;
+          }
+          return null;
+        };
+        return findInCats(this.currentConfig?.categories || []) || 'string';
+      };
+      for (const [key, value] of Object.entries(data)) {
+        const type = getType(key);
+        if (type === 'secret') continue;
+        try {
+          this.service.setValue(key, type, value);
+        } catch (_) {}
+      }
+    }
   }
 
   async handleManualCheckUpdate() {

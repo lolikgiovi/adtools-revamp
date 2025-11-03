@@ -108,8 +108,7 @@ class HTMLTemplateTool extends BaseTool {
       formatOnType: true,
       tabSize: 2,
       insertSpaces: true,
-      quickSuggestions: { other: true, comments: false, strings: true },
-      suggestOnTriggerCharacters: true,
+      suggestOnTriggerCharacters: false,
     });
 
     // Load saved content from localStorage

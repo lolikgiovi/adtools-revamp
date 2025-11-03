@@ -73,6 +73,7 @@ class JSONTools extends BaseTool {
       formatOnType: true,
       tabSize: 2,
       insertSpaces: true,
+      suggestOnTriggerCharacters: false,
     });
 
     // Load saved content from localStorage
