@@ -12,6 +12,7 @@ class UsageTracker {
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static FLUSH_DELAY_MS = 300; // debounce writes
+  static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // hourly remote flush
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
@@ -20,6 +21,7 @@ class UsageTracker {
   static _flushTimer = null;
   static _debounceTimers = new Map();
   static _eventBus = null;
+  static _batchTimer = null;
 
   /** Initialize tracker (optional), sets event bus and attaches lifecycle hooks */
   static init(eventBus = null) {
@@ -40,6 +42,14 @@ class UsageTracker {
     // Load after flags applied so fallback behaves correctly
     this._state = this._loadFromStorage();
 
+    // Start hourly batch flush for remote analytics
+    try {
+      if (this._batchTimer) clearInterval(this._batchTimer);
+      this._batchTimer = setInterval(() => {
+        this._flushBatch().catch(() => {});
+      }, this.BATCH_FLUSH_INTERVAL_MS);
+    } catch (_) {}
+
     // Ensure flush on unload to prevent data loss
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", () => {
@@ -47,6 +57,18 @@ class UsageTracker {
           this.flushSync();
         } catch (_) {}
       });
+
+      // Opportunistic batch flush when tab is hidden or connection resumes
+      try {
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            this._flushBatch().catch(() => {});
+          }
+        });
+        window.addEventListener("online", () => {
+          this._flushBatch().catch(() => {});
+        });
+      } catch (_) {}
     }
   }
 
@@ -170,7 +192,7 @@ class UsageTracker {
 
     try {
       const deviceId = this.getDeviceId();
-      AnalyticsSender.send({ type: featureKey, action: actionKey, event_name: `${featureKey}.${actionKey}`, deviceId, properties: meta, ts: ev.ts });
+      // No immediate network send; rely on hourly batch flush
     } catch (_) {}
   }
 
@@ -326,8 +348,104 @@ class UsageTracker {
       counts: {},
       events: [],
       daily: {},
+      dailySent: {},
       integrity: null,
     };
+  }
+
+  // Convert ISO string to plain "YYYY-MM-DD HH:MM:SS" in GMT+7
+  static _isoToGmt7Plain(iso) {
+    try {
+      const d = iso ? new Date(iso) : new Date();
+      const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const Y = shifted.getUTCFullYear();
+      const M = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+      const D = String(shifted.getUTCDate()).padStart(2, '0');
+      const h = String(shifted.getUTCHours()).padStart(2, '0');
+      const m = String(shifted.getUTCMinutes()).padStart(2, '0');
+      const s = String(shifted.getUTCSeconds()).padStart(2, '0');
+      return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+    } catch (_) {
+      const d = new Date();
+      const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const Y = shifted.getUTCFullYear();
+      const M = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+      const D = String(shifted.getUTCDate()).padStart(2, '0');
+      const h = String(shifted.getUTCHours()).padStart(2, '0');
+      const m = String(shifted.getUTCMinutes()).padStart(2, '0');
+      const s = String(shifted.getUTCSeconds()).padStart(2, '0');
+      return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+    }
+  }
+
+  static _nowGmt7Plain() {
+    return this._isoToGmt7Plain(new Date().toISOString());
+  }
+
+  // Build batch payload with event records and daily_usage deltas
+  static _toBatchPayload() {
+    const s = this._state || this._createEmptyState();
+    const deviceId = s.deviceId || this.getDeviceId();
+
+    const events = (Array.isArray(s.events) ? s.events : []).map(ev => ({
+      type: ev.featureId,
+      action: ev.action,
+      event_name: `${ev.featureId}.${ev.action}`,
+      device_id: deviceId,
+      properties: ev.meta || {},
+      created_time: this._isoToGmt7Plain(ev.ts || new Date().toISOString()),
+    }));
+
+    const today = new Date().toISOString().slice(0, 10);
+    const alreadySent = (s.dailySent && s.dailySent[today]) ? s.dailySent[today] : {};
+    const current = (s.daily && s.daily[today]) ? s.daily[today] : {};
+    const daily_usage = [];
+    // Build per-row entries matching worker/schema: tool_id + action + count
+    for (const [k, v] of Object.entries(current)) {
+      const prev = Number(alreadySent[k] || 0);
+      const now = Number(v || 0);
+      if (now > prev) {
+        const count = now - prev;
+        const [tool_id, action] = String(k).split('.')
+          .map(x => x || 'unknown');
+        let user_id = null;
+        try {
+          const uid = localStorage.getItem('user.id');
+          user_id = uid ? String(uid) : null;
+        } catch (_) {}
+        daily_usage.push({
+          day: today,
+          device_id: deviceId,
+          user_id,
+          tool_id,
+          action,
+          count,
+          updated_time: this._nowGmt7Plain(),
+        });
+      }
+    }
+
+    return { events, daily_usage };
+  }
+
+  // Send batch to backend and update local snapshots
+  static async _flushBatch() {
+    if (!this._enabled) return;
+    try {
+      const payload = this._toBatchPayload();
+      if ((payload.events && payload.events.length) || (payload.daily_usage && payload.daily_usage.length)) {
+        await AnalyticsSender.sendBatch(payload);
+        // After successful send, clear events and update dailySent snapshot for today
+        const today = new Date().toISOString().slice(0, 10);
+        this._state.events = [];
+        this._state.dailySent = this._state.dailySent || {};
+        this._state.dailySent[today] = (this._state.daily && this._state.daily[today]) ? { ...this._state.daily[today] } : {};
+        // Persist local storage changes immediately
+        this.flushSync();
+      }
+    } catch (_) {
+      // Swallow errors; will retry on next interval
+    }
   }
 
   static _getOrCreateDeviceId() {
