@@ -5,7 +5,7 @@ log() { printf "[adtools][%s] %s\n" "$(date +%s)" "$1"; }
 warn() { printf "[warning][%s] %s\n" "$(date +%s)" "$1"; }
 err() { printf "[error][%s] %s\n" "$(date +%s)" "$1" >&2; }
 
-BASE_URL="${BASE_URL:-http://adtools.lolik.workers.dev}"
+BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
 
 # Enforce HTTPS in production, allow HTTP in local dev
 CURL_SECURITY_ARGS="--proto '=https' --tlsv1.2"
@@ -97,7 +97,7 @@ log "Saved installer to $DEST_DMG"
 
 MOUNT_DIR="$TMP_DIR/mount"
 mkdir -p "$MOUNT_DIR"
-if ! hdiutil attach "$DEST_DMG" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautofsck -noverbose; then
+if ! hdiutil attach "$DEST_DMG" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautofsck; then
   err "Failed to mount DMG. Ensure the DMG is valid and not corrupted."
   exit 1
 fi
