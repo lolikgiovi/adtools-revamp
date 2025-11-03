@@ -143,7 +143,7 @@ sign_file() {
 }
 
 write_manifest() {
-  local out_json="$1" version="$2" channel="$3" sig_arm64="$4" sig_x64="$5"
+  local out_json="$1" version="$2" channel="$3" sig_arm64="$4" sig_x64="$5" sha_arm64="$6" sha_x64="$7"
   local pubdate
   pubdate="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   cat > "$out_json" <<JSON
@@ -156,12 +156,14 @@ write_manifest() {
     "darwin-aarch64": {
       "signature": "$sig_arm64",
       "url": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz",
-      "installer": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.dmg"
+      "installer": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.dmg",
+      "installer_sha256": "${sha_arm64}"
     },
     "darwin-x86_64": {
       "signature": "$sig_x64",
       "url": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz",
-      "installer": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.dmg"
+      "installer": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.dmg",
+      "installer_sha256": "${sha_x64}"
     }
   }
 }
@@ -221,9 +223,30 @@ main() {
   echo "$SIG_ARM64" > "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz.sig"
   echo "$SIG_X64" > "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz.sig"
 
+  # Compute installer DMG checksums (optional if DMG exists)
+  sha256_file() {
+    local f="$1"
+    if command -v shasum >/dev/null 2>&1; then
+      shasum -a 256 "$f" | awk '{print $1}'
+    elif command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$f" | awk '{print $1}'
+    else
+      openssl dgst -sha256 "$f" | awk '{print $2}'
+    fi
+  }
+  local SHA_ARM64 SHA_X64
+  SHA_ARM64=""
+  SHA_X64=""
+  if [[ -f "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.dmg" ]]; then
+    SHA_ARM64="$(sha256_file "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.dmg")"
+  fi
+  if [[ -f "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.dmg" ]]; then
+    SHA_X64="$(sha256_file "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.dmg")"
+  fi
+
   # Write manifests for both channels
-  write_manifest "$release_dir/stable.json" "$version" "stable" "$SIG_ARM64" "$SIG_X64"
-  write_manifest "$release_dir/beta.json" "$version" "beta" "$SIG_ARM64" "$SIG_X64"
+  write_manifest "$release_dir/stable.json" "$version" "stable" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+  write_manifest "$release_dir/beta.json" "$version" "beta" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
 
   echo "Release built: $release_dir"
   echo "Artifacts:"

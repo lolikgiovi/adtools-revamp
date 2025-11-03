@@ -35,6 +35,7 @@ ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
 binding = "WHITELIST"
 id = "d1b16a8778cb4860bb6c1f63f6f51497"
 preview_id = "d1b16a8778cb4860bb6c1f63f6f51497"
+
 #
 # [[kv_namespaces]]
 # binding = "ANALYTICS"
