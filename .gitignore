@@ -48,7 +48,7 @@ src-tauri/gen/
 *.dmg
 
 # Wrangler local state (dev-time)
-.wrangler/*
+.wrangler/
 
 # keys
 keys/
@@ -58,4 +58,4 @@ keys/
 src-tauri/releases/
 
 # rust analyzer
-target
+target/
