@@ -250,7 +250,7 @@ log "Saved installer to $DEST_DMG"
 
 MOUNT_DIR="$TMP_DIR/mount"
 mkdir -p "$MOUNT_DIR"
-if ! hdiutil attach "$DEST_DMG" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautofsck -noverbose; then
+if ! hdiutil attach "$DEST_DMG" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautofsck; then
   err "Failed to mount DMG. Ensure the DMG is valid and not corrupted."
   exit 1
 fi

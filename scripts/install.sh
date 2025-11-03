@@ -5,13 +5,10 @@ log() { printf "[adtools][%s] %s\n" "$(date +%s)" "$1"; }
 warn() { printf "[warning][%s] %s\n" "$(date +%s)" "$1"; }
 err() { printf "[error][%s] %s\n" "$(date +%s)" "$1" >&2; }
 
-BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
+BASE_URL="https://adtools.lolik.workers.dev"
 
-# Enforce HTTPS in production, allow HTTP in local dev
+# Enforce HTTPS always
 CURL_SECURITY_ARGS="--proto '=https' --tlsv1.2"
-if [[ "$BASE_URL" =~ ^http:// ]]; then
-  CURL_SECURITY_ARGS=""
-fi
 
 retry_curl() {
   local out="$1" url="$2" attempts="${3:-3}"
