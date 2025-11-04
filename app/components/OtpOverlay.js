@@ -1,6 +1,6 @@
 // Reusable OTP overlay component for vanilla JS apps
 // Usage: import { openOtpOverlay } from './OtpOverlay.js';
-// const { token, kvValue } = await openOtpOverlay({ email, kvKey: 'settings/defaults' });
+// const { token, kvValue } = await openOtpOverlay({ email, kvKey: 'default-config' });
 
 function createElement(html) {
   const tpl = document.createElement('template');
@@ -98,7 +98,9 @@ export async function openOtpOverlay({
         disableWithCountdown(btnReq, rateLimitMs);
         err.textContent = '';
         try {
-          const res = await fetch(requestEndpoint, {
+          const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
+          const reqUrl = BASE ? `${BASE}${requestEndpoint}` : requestEndpoint;
+          const res = await fetch(reqUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email }),
@@ -123,7 +125,9 @@ export async function openOtpOverlay({
           return;
         }
         try {
-          const res = await fetch(verifyEndpoint, {
+          const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
+          const verUrl = BASE ? `${BASE}${verifyEndpoint}` : verifyEndpoint;
+          const res = await fetch(verUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, code }),
@@ -134,7 +138,8 @@ export async function openOtpOverlay({
 
           let kvValue = undefined;
           if (kvKey) {
-            const res2 = await fetch(`/api/kv/get?key=${encodeURIComponent(kvKey)}`, {
+            const kvUrl = BASE ? `${BASE}/api/kv/get?key=${encodeURIComponent(kvKey)}` : `/api/kv/get?key=${encodeURIComponent(kvKey)}`;
+            const res2 = await fetch(kvUrl, {
               headers: { Authorization: `Bearer ${j.token}` },
             });
             const j2 = await res2.json().catch(() => ({}));

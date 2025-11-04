@@ -58,7 +58,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
-      "requiresTauri": false,
+      "requiresTauri": true,
       "order": 55
     },
     {

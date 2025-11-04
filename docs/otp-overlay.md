@@ -26,7 +26,7 @@ const { token, kvValue } = await openOtpOverlay({
   verifyEndpoint: '/register/verify',
   rateLimitMs: 60_000,
   storageScope: 'settings-defaults',
-  kvKey: 'settings/defaults',
+  kvKey: 'default-config',
 });
 
 // Apply kvValue if provided
@@ -39,7 +39,7 @@ const { token, kvValue } = await openOtpOverlay({
 - `verifyEndpoint`: Endpoint to verify OTP (default `/register/verify`).
 - `rateLimitMs`: Cooldown in ms for the request button (default `60000`).
 - `storageScope`: LocalStorage key suffix to scope cooldown per use case.
-- `kvKey`: Optional KV key to fetch after verification (e.g., `settings/defaults`).
+- `kvKey`: Optional KV key to fetch after verification (e.g., `default-config`).
 - `onClose`: Optional callback fired when overlay closes.
 
 ## UI/UX

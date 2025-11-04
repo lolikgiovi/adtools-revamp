@@ -782,7 +782,7 @@ async function handleAnalyticsGet(request, env) {
   }
 }
 
-// Secure KV getter: Authorization required; restrict keys to 'settings/' prefix
+// Secure KV getter: Authorization required; allow general keys with reserved exclusions
 async function handleKvGet(request, env) {
   try {
     if (!isOriginAllowed(request, env)) {
@@ -808,8 +808,9 @@ async function handleKvGet(request, env) {
       });
     }
     const url = new URL(request.url);
-    const key = url.searchParams.get("key") || "";
-    if (!/^settings\//.test(key)) {
+    let key = url.searchParams.get("key") || "";
+    // Block access to reserved internal keys
+    if (/^(session:|otp:)/.test(key)) {
       return new Response(JSON.stringify({ ok: false, error: "Key not allowed" }), {
         status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
@@ -817,7 +818,31 @@ async function handleKvGet(request, env) {
     }
     let val;
     try {
+      // Try exact key first
       val = await env.adtools.get(key);
+      // Compatibility fallback: try prefixed/unprefixed variants
+      if (val == null) {
+        if (/^settings\//.test(key)) {
+          const alternate = key.replace(/^settings\//, "");
+          if (alternate) {
+            val = await env.adtools.get(alternate);
+          }
+          // Additional fallback: map settings/defaults -> default-config for legacy deployments
+          if (val == null && key === "settings/defaults") {
+            val = await env.adtools.get("default-config");
+          }
+        } else {
+          const alternate = `settings/${key}`;
+          val = await env.adtools.get(alternate);
+          // Additional specific fallbacks for historical keys
+          if (val == null && key === "default-config") {
+            val = await env.adtools.get("settings/defaults");
+          }
+          if (val == null && key === "quick-query-default-schema") {
+            val = await env.adtools.get("settings/quick-query-default-schema");
+          }
+        }
+      }
     } catch (_) {
       return new Response(JSON.stringify({ ok: false, error: "KV access failure" }), {
         status: 500,
