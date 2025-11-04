@@ -12,6 +12,7 @@ import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
+import { importSchemasPayload } from "./services/SchemaImportService.js";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -844,65 +845,7 @@ export class QuickQueryUI {
       }
     };
 
-    const importPayload = (payload) => {
-      let importCount = 0;
-
-      const saveOne = (schemaName, tableName, schema) => {
-        if (!schemaName || !tableName) return;
-        const fullName = `${schemaName}.${tableName}`;
-        let rows = null;
-        if (isArraySchema(schema)) {
-          rows = schema;
-        } else if (schema && typeof schema === "object") {
-          rows = convertJsonSchemaToRows(schema);
-        }
-        if (rows && this.localStorageService.saveSchema(fullName, rows)) {
-          importCount += 1;
-        }
-      };
-
-      // Helper: handle nested schema objects like { tables: { tableName: schemaJson } }
-      const importSchemaObject = (schemaName, obj) => {
-        if (!obj || typeof obj !== "object") return;
-        // Preferred: explicit tables property
-        if (obj.tables && typeof obj.tables === "object") {
-          Object.entries(obj.tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
-          return;
-        }
-        // Fallback: treat direct properties that look like table schemas
-        Object.entries(obj).forEach(([k, v]) => {
-          if (k === "columns" || k === "pk" || k === "unique" || k === "last_updated") return; // skip meta keys
-          if (isArraySchema(v) || (v && typeof v === "object" && (v.columns || v.pk || v.unique))) {
-            saveOne(schemaName, k, v);
-          }
-        });
-      };
-
-      // Shape A: { schemaName: { tableName: schema } } or { schemaName: { tables: { ... } } }
-      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-        const entries = Object.entries(payload);
-        const looksLikeSchemasMap = entries.every(([, v]) => typeof v === "object");
-        if (looksLikeSchemasMap) {
-          entries.forEach(([schemaName, schemaObj]) => importSchemaObject(schemaName, schemaObj));
-          return importCount;
-        }
-      }
-
-      // Shape B: { schema: "name", tables: { tableName: schema } }
-      if (payload && typeof payload === "object" && payload.tables && typeof payload.tables === "object") {
-        const schemaName = payload.schema || payload.schemaName;
-        Object.entries(payload.tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
-        return importCount;
-      }
-
-      // Shape C: single table { schemaName, tableName, schema }
-      if (payload && typeof payload === "object" && payload.schema && payload.table && payload.schemaData) {
-        saveOne(payload.schema, payload.table, payload.schemaData);
-        return importCount;
-      }
-
-      throw new Error("Unsupported KV schema format");
-    };
+    // Import helper moved to SchemaImportService for testability
 
     try {
       const { token, kvValue } = await openOtpOverlay({
@@ -931,7 +874,7 @@ export class QuickQueryUI {
       }
       if (!value) throw new Error("No default schema found in KV");
 
-      const count = importPayload(value);
+      const count = importSchemasPayload(value, this.localStorageService);
       this.updateSavedSchemasList();
       if (!count) {
         throw new Error("No default table schemas imported. Verify KV format.");
