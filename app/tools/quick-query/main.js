@@ -897,12 +897,12 @@ export class QuickQueryUI {
         verifyEndpoint: "/register/verify",
         rateLimitMs: 60_000,
         storageScope: "quick-query-default-schema",
-        kvKey: "quick-query-default-schema",
+        kvKey: "settings/quick-query-default-schema",
       });
 
       let value = kvValue;
       if (value === undefined && token) {
-        const res = await fetch(`/api/kv/get?key=quick-query-default-schema`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`/api/kv/get?key=settings/quick-query-default-schema`, { headers: { Authorization: `Bearer ${token}` } });
         const j = await res.json().catch(() => ({}));
         if (!res.ok || !j?.ok) throw new Error(j?.error || "KV access failure");
         value = j.value;
