@@ -10,6 +10,8 @@ function createElement(html) {
 
 function nowMs() { return Date.now(); }
 
+import { SessionTokenStore } from '../core/SessionTokenStore.js';
+
 export async function openOtpOverlay({
   email,
   requestEndpoint = '/register/request-otp',
@@ -18,7 +20,48 @@ export async function openOtpOverlay({
   storageScope = 'default', // scope for localStorage cooldown
   kvKey, // optional: if provided, fetch KV after verification
   onClose,
+  // Centralized behavior: prefer using cached session token before showing UI
+  preferCachedToken = true,
+  // Optional override for token TTL; defaults to 10 minutes, or env value if provided
+  tokenTtlMs,
 } = {}) {
+  // Early return with cached token if still valid, optionally fetching KV
+  if (preferCachedToken) {
+    try {
+      const ttlDefault = Number(import.meta?.env?.VITE_SESSION_TTL_MS || 0) || 600_000; // 10 minutes
+      const ttl = typeof tokenTtlMs === 'number' && tokenTtlMs > 0 ? tokenTtlMs : ttlDefault;
+      const token = SessionTokenStore.getToken();
+      const issuedAt = SessionTokenStore.getIssuedAt();
+      const isFresh = token && issuedAt && (Date.now() - issuedAt) < ttl;
+      if (isFresh) {
+        const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
+        if (kvKey) {
+          const kvUrl = BASE ? `${BASE}/api/kv/get?key=${encodeURIComponent(kvKey)}` : `/api/kv/get?key=${encodeURIComponent(kvKey)}`;
+          try {
+            const res = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
+            const j = await res.json().catch(() => ({}));
+            if (res.ok && j?.ok) {
+              return { token, kvValue: j.value };
+            }
+            // If unauthorized or token invalid, fall through to UI flow
+            if (res.status === 401 || String(j?.error || '').toLowerCase().includes('unauthorized')) {
+              // proceed to OTP overlay UI
+            } else {
+              // For other errors, still fall back to OTP UI rather than failing hard
+            }
+          } catch (_) {
+            // Network or parsing error → fall through to OTP UI
+          }
+        } else {
+          // No KV needed; return token directly
+          return { token };
+        }
+      }
+    } catch (_) {
+      // Ignore and fall through to OTP UI
+    }
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const overlay = createElement(`
@@ -146,6 +189,9 @@ export async function openOtpOverlay({
             if (!res2.ok || !j2?.ok) throw new Error(j2?.error || 'KV access failure');
             kvValue = j2.value;
           }
+
+          // Persist session token for reuse while valid
+          try { SessionTokenStore.saveToken(j.token); } catch (_) {}
 
           cleanup();
           resolve({ token: j.token, kvValue });

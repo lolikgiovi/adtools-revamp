@@ -93,6 +93,9 @@ class SettingsPage {
       return;
     }
     try {
+      const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
+      const kvUrl = BASE ? `${BASE}/api/kv/get?key=default-config` : "/api/kv/get?key=default-config";
+
       const { token, kvValue } = await openOtpOverlay({
         email,
         requestEndpoint: "/register/request-otp",
@@ -100,17 +103,18 @@ class SettingsPage {
         rateLimitMs: 60_000,
         storageScope: "settings-defaults",
         kvKey: "default-config",
+        // centralized overlay will try cached token first
+        preferCachedToken: true,
       });
-      // Prefer KV value provided by overlay; fallback to manual fetch if needed
+
       let defaults = kvValue;
       if (defaults === undefined && token) {
-        const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
-        const kvUrl = BASE ? `${BASE}/api/kv/get?key=default-config` : "/api/kv/get?key=default-config";
-        const res = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j?.ok) throw new Error(j?.error || "KV access failure");
-        defaults = j.value;
+        const res2 = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const j2 = await res2.json().catch(() => ({}));
+        if (!res2.ok || !j2?.ok) throw new Error(j2?.error || "KV access failure");
+        defaults = j2.value;
       }
+
       await this.applyDefaultsFromKv(defaults);
       await this.reloadConfig();
       this.eventBus?.emit?.("notification:success", { message: "Default settings loaded." });

@@ -426,6 +426,7 @@ export class QuickQueryUI {
     if (this.elements.errorMessages) {
       this.elements.errorMessages.innerHTML = message;
       this.elements.errorMessages.style.display = "block";
+      this.elements.errorMessages.style.color = "red";
     }
   }
 
@@ -723,10 +724,12 @@ export class QuickQueryUI {
 
         const loadBtn = document.createElement("button");
         loadBtn.textContent = "Load";
+        loadBtn.className = "btn-sm-xs";
         loadBtn.addEventListener("click", () => this.handleLoadSchema(table.fullName));
 
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete";
+        deleteBtn.className = "btn-sm-xs";
         deleteBtn.addEventListener("click", () => this.handleDeleteSchema(table.fullName));
 
         actionsDiv.appendChild(loadBtn);
@@ -848,6 +851,9 @@ export class QuickQueryUI {
     // Import helper moved to SchemaImportService for testability
 
     try {
+      const BASE = (import.meta?.env?.VITE_WORKER_BASE || "").trim();
+      const kvUrl = BASE ? `${BASE}/api/kv/get?key=quick-query-default-schema` : `/api/kv/get?key=quick-query-default-schema`;
+
       const { token, kvValue } = await openOtpOverlay({
         email,
         requestEndpoint: "/register/request-otp",
@@ -855,16 +861,16 @@ export class QuickQueryUI {
         rateLimitMs: 60_000,
         storageScope: "quick-query-default-schema",
         kvKey: "quick-query-default-schema",
+        // centralized overlay will try cached token first
+        preferCachedToken: true,
       });
 
       let value = kvValue;
       if (value === undefined && token) {
-        const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
-        const kvUrl = BASE ? `${BASE}/api/kv/get?key=quick-query-default-schema` : `/api/kv/get?key=quick-query-default-schema`;
-        const res = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j?.ok) throw new Error(j?.error || "KV access failure");
-        value = j.value;
+        const res2 = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const j2 = await res2.json().catch(() => ({}));
+        if (!res2.ok || !j2?.ok) throw new Error(j2?.error || "KV access failure");
+        value = j2.value;
       }
 
       if (typeof value === "string") {
