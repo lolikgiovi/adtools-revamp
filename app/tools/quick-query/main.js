@@ -11,6 +11,7 @@ import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { openOtpOverlay } from "../../components/OtpOverlay.js";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -183,6 +184,7 @@ export class QuickQueryUI {
       exportSchemasButton: document.getElementById("exportSchemas"),
       clearAllSchemasButton: document.getElementById("clearAllSchemas"),
       importSchemasButton: document.getElementById("importSchemas"),
+      importDefaultSchemaButton: document.getElementById("importDefaultSchema"),
 
       // Container elements
       tableSearchContainer: null,
@@ -293,6 +295,9 @@ export class QuickQueryUI {
       },
       exportSchemasButton: {
         click: () => this.handleExportSchemas(),
+      },
+      importDefaultSchemaButton: {
+        click: () => this.handleImportDefaultSchemaFromKv(),
       },
       clearAllSchemasButton: {
         click: () => this.handleClearAllSchemas(),
@@ -802,6 +807,126 @@ export class QuickQueryUI {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  async handleImportDefaultSchemaFromKv() {
+    const email = localStorage.getItem("user.email") || "";
+    if (!email) {
+      this.showError("No registered email found. Please register first.");
+      return;
+    }
+
+    const isArraySchema = (schema) => {
+      return (
+        Array.isArray(schema) &&
+        schema.every(
+          (row) =>
+            Array.isArray(row) &&
+            row.length >= 3 &&
+            typeof row[0] === "string" &&
+            typeof row[1] === "string" &&
+            typeof row[2] === "string"
+        )
+      );
+    };
+
+    const convertJsonSchemaToRows = (schemaJson) => {
+      try {
+        const rows = [];
+        const columns = schemaJson?.columns || {};
+        const pkSet = new Set(Array.isArray(schemaJson?.pk) ? schemaJson.pk : []);
+        Object.entries(columns).forEach(([fieldName, def]) => {
+          const dataType = def?.type || "";
+          const nullable = def?.nullable || "Yes";
+          const defVal = typeof def?.default !== "undefined" ? def.default : null;
+          const pkFlag = pkSet.has(fieldName) ? "Yes" : "No";
+          rows.push([fieldName, dataType, nullable, defVal, null, pkFlag]);
+        });
+        return rows;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const importPayload = (payload) => {
+      let importCount = 0;
+      const saveOne = (schemaName, tableName, schema) => {
+        if (!schemaName || !tableName) return;
+        const fullName = `${schemaName}.${tableName}`;
+        let rows = null;
+        if (isArraySchema(schema)) {
+          rows = schema;
+        } else if (schema && typeof schema === "object") {
+          rows = convertJsonSchemaToRows(schema);
+        }
+        if (rows && this.localStorageService.saveSchema(fullName, rows)) {
+          importCount += 1;
+        }
+      };
+
+      // Shape A: { schemaName: { tableName: schema } }
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const entries = Object.entries(payload);
+        const looksLikeSchemasMap = entries.every(([, v]) => typeof v === "object");
+        if (looksLikeSchemasMap) {
+          entries.forEach(([schemaName, tables]) => {
+            if (tables && typeof tables === "object") {
+              Object.entries(tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
+            }
+          });
+          return importCount;
+        }
+      }
+
+      // Shape B: { schema: "name", tables: { tableName: schema } }
+      if (payload && typeof payload === "object" && payload.tables && typeof payload.tables === "object") {
+        const schemaName = payload.schema || payload.schemaName;
+        Object.entries(payload.tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
+        return importCount;
+      }
+
+      // Shape C: single table { schemaName, tableName, schema }
+      if (payload && typeof payload === "object" && payload.schema && payload.table && payload.schemaData) {
+        saveOne(payload.schema, payload.table, payload.schemaData);
+        return importCount;
+      }
+
+      throw new Error("Unsupported KV schema format");
+    };
+
+    try {
+      const { token, kvValue } = await openOtpOverlay({
+        email,
+        requestEndpoint: "/register/request-otp",
+        verifyEndpoint: "/register/verify",
+        rateLimitMs: 60_000,
+        storageScope: "quick-query-default-schema",
+        kvKey: "settings/quick-query-default-schema",
+      });
+
+      let value = kvValue;
+      if (value === undefined && token) {
+        const res = await fetch(`/api/kv/get?key=settings/quick-query-default-schema`, { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j?.ok) throw new Error(j?.error || "KV access failure");
+        value = j.value;
+      }
+
+      if (typeof value === "string") {
+        try { value = JSON.parse(value); } catch (_) {}
+      }
+      if (!value) throw new Error("No default schema found in KV");
+
+      const count = importPayload(value);
+      this.updateSavedSchemasList();
+      this.showSuccess(`Successfully imported ${count} default table schemas`);
+      setTimeout(() => this.clearError(), 3000);
+    } catch (e) {
+      if (String(e?.message || e) !== "Closed") {
+        this.showError(`Failed to import default schema: ${String(e?.message || e)}`);
+        UsageTracker.trackEvent("quick-query", "ui_error", { type: "kv_import_failed", message: String(e?.message || e) });
+      }
+    }
   }
 
   setupTableNameSearch() {

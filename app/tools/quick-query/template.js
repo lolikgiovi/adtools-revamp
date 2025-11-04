@@ -67,6 +67,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="schema-modal-header">
             <h3>Saved Schemas</h3>
             <div class="schema-modal-actions">
+                <button id="importDefaultSchema" class="btn btn-primary">Import Default Schema</button>
                 <button id="clearAllSchemas" class="btn btn-primary">Clear All</button>
                 <button id="exportSchemas" class="btn btn-primary">Export</button>
                 <button id="importSchemas" class="btn btn-primary">Import</button>
