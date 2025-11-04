@@ -821,11 +821,7 @@ export class QuickQueryUI {
         Array.isArray(schema) &&
         schema.every(
           (row) =>
-            Array.isArray(row) &&
-            row.length >= 3 &&
-            typeof row[0] === "string" &&
-            typeof row[1] === "string" &&
-            typeof row[2] === "string"
+            Array.isArray(row) && row.length >= 3 && typeof row[0] === "string" && typeof row[1] === "string" && typeof row[2] === "string"
         )
       );
     };
@@ -901,19 +897,21 @@ export class QuickQueryUI {
         verifyEndpoint: "/register/verify",
         rateLimitMs: 60_000,
         storageScope: "quick-query-default-schema",
-        kvKey: "settings/quick-query-default-schema",
+        kvKey: "quick-query-default-schema",
       });
 
       let value = kvValue;
       if (value === undefined && token) {
-        const res = await fetch(`/api/kv/get?key=settings/quick-query-default-schema`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`/api/kv/get?key=quick-query-default-schema`, { headers: { Authorization: `Bearer ${token}` } });
         const j = await res.json().catch(() => ({}));
         if (!res.ok || !j?.ok) throw new Error(j?.error || "KV access failure");
         value = j.value;
       }
 
       if (typeof value === "string") {
-        try { value = JSON.parse(value); } catch (_) {}
+        try {
+          value = JSON.parse(value);
+        } catch (_) {}
       }
       if (!value) throw new Error("No default schema found in KV");
 
@@ -1280,7 +1278,11 @@ export class QuickQueryUI {
       this.clearError();
     } catch (error) {
       this.showError(`Error processing attachments: ${error.message}`);
-      UsageTracker.trackEvent("quick-query", "ui_error", { type: "attachments_processing_failed", message: error.message, files: (this.processedFiles || []).length });
+      UsageTracker.trackEvent("quick-query", "ui_error", {
+        type: "attachments_processing_failed",
+        message: error.message,
+        files: (this.processedFiles || []).length,
+      });
     }
   }
 
