@@ -320,9 +320,11 @@
 .schema-modal {
   background: hsl(var(--background));
   border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
+  width: 92%;
+  max-width: 800px;
   max-height: 80vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -332,6 +334,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
 }
 
 .schema-modal-header h3 {
@@ -349,14 +352,28 @@
   background-color: hsl(var(--background));
 }
 
+.schema-modal-header .overlay-close-button {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+}
+
 .overlay-close-button:hover {
   background-color: hsl(var(--background));
+}
+
+.schema-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .schema-modal-content {
   padding: 16px;
   overflow-y: auto;
-  max-height: calc(80vh - 70px); /* Account for header */
+  flex: 1;
 }
 
 .schema-item {

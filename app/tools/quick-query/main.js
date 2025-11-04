@@ -846,6 +846,7 @@ export class QuickQueryUI {
 
     const importPayload = (payload) => {
       let importCount = 0;
+
       const saveOne = (schemaName, tableName, schema) => {
         if (!schemaName || !tableName) return;
         const fullName = `${schemaName}.${tableName}`;
@@ -860,16 +861,29 @@ export class QuickQueryUI {
         }
       };
 
-      // Shape A: { schemaName: { tableName: schema } }
+      // Helper: handle nested schema objects like { tables: { tableName: schemaJson } }
+      const importSchemaObject = (schemaName, obj) => {
+        if (!obj || typeof obj !== "object") return;
+        // Preferred: explicit tables property
+        if (obj.tables && typeof obj.tables === "object") {
+          Object.entries(obj.tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
+          return;
+        }
+        // Fallback: treat direct properties that look like table schemas
+        Object.entries(obj).forEach(([k, v]) => {
+          if (k === "columns" || k === "pk" || k === "unique" || k === "last_updated") return; // skip meta keys
+          if (isArraySchema(v) || (v && typeof v === "object" && (v.columns || v.pk || v.unique))) {
+            saveOne(schemaName, k, v);
+          }
+        });
+      };
+
+      // Shape A: { schemaName: { tableName: schema } } or { schemaName: { tables: { ... } } }
       if (payload && typeof payload === "object" && !Array.isArray(payload)) {
         const entries = Object.entries(payload);
         const looksLikeSchemasMap = entries.every(([, v]) => typeof v === "object");
         if (looksLikeSchemasMap) {
-          entries.forEach(([schemaName, tables]) => {
-            if (tables && typeof tables === "object") {
-              Object.entries(tables).forEach(([tableName, schema]) => saveOne(schemaName, tableName, schema));
-            }
-          });
+          entries.forEach(([schemaName, schemaObj]) => importSchemaObject(schemaName, schemaObj));
           return importCount;
         }
       }
@@ -919,6 +933,9 @@ export class QuickQueryUI {
 
       const count = importPayload(value);
       this.updateSavedSchemasList();
+      if (!count) {
+        throw new Error("No default table schemas imported. Verify KV format.");
+      }
       this.showSuccess(`Successfully imported ${count} default table schemas`);
       setTimeout(() => this.clearError(), 3000);
     } catch (e) {
