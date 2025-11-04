@@ -1,5 +1,6 @@
 import { UsageTracker } from "../../../core/UsageTracker.js";
-const STORAGE_KEY = "quickquery_schemas";
+const SCHEMA_STORAGE_KEY = "tool:quick-query:schema";
+const DATA_STORAGE_KEY = "tool:quick-query:data";
 const ORACLE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_$#]*$/;
 const MAX_SCHEMA_LENGTH = 30;
 const MAX_TABLE_LENGTH = 128;
@@ -7,7 +8,8 @@ const MAX_CACHED_ROWS = 100;
 
 export class LocalStorageService {
   constructor() {
-    this.STORAGE_KEY = STORAGE_KEY;
+    this.SCHEMA_STORAGE_KEY = SCHEMA_STORAGE_KEY;
+    this.DATA_STORAGE_KEY = DATA_STORAGE_KEY;
   }
 
   // Storage Helper Functions
@@ -20,23 +22,66 @@ export class LocalStorageService {
     return { schemaName, tableName };
   }
 
-  getStorageData() {
+  // Unified helpers for separated schema/data storage
+  getSchemaStore() {
     try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      if (!data) {
-        return {
-          schemas: {},
-          lastUpdated: new Date().toISOString(),
-        };
+      const raw = localStorage.getItem(this.SCHEMA_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      // Basic shape validation: { schema: { tables: { table: { columns, pk, unique } } } }
+      if (typeof parsed !== "object" || parsed === null) {
+        UsageTracker.trackEvent("quick-query", "storage_error", { type: "schema_corrupted" });
+        return {};
       }
-      return JSON.parse(data);
+      return parsed;
     } catch (error) {
-      console.error("Error reading storage:", error);
-      UsageTracker.trackEvent("quick-query", "storage_error", { type: "read_failed", message: error.message });
-      return {
-        schemas: {},
-        lastUpdated: new Date().toISOString(),
-      };
+      console.error("Error reading schema store:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "schema_read_failed", message: error.message });
+      return {};
+    }
+  }
+
+  getDataStore() {
+    try {
+      const raw = localStorage.getItem(this.DATA_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      // Basic shape validation: { schema: { table: { rows: [...] } } }
+      if (typeof parsed !== "object" || parsed === null) {
+        UsageTracker.trackEvent("quick-query", "storage_error", { type: "data_corrupted" });
+        return {};
+      }
+      return parsed;
+    } catch (error) {
+      console.error("Error reading data store:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "data_read_failed", message: error.message });
+      return {};
+    }
+  }
+
+  saveSchemaStore(store) {
+    try {
+      const payload = JSON.stringify(store);
+      localStorage.setItem(this.SCHEMA_STORAGE_KEY, payload);
+      return true;
+    } catch (error) {
+      console.error("Error saving schema store:", error);
+      const type = (error && String(error.name || "").toLowerCase().includes("quota")) ? "quota_exceeded" : "schema_write_failed";
+      UsageTracker.trackEvent("quick-query", "storage_error", { type, message: error.message });
+      return false;
+    }
+  }
+
+  saveDataStore(store) {
+    try {
+      const payload = JSON.stringify(store);
+      localStorage.setItem(this.DATA_STORAGE_KEY, payload);
+      return true;
+    } catch (error) {
+      console.error("Error saving data store:", error);
+      const type = (error && String(error.name || "").toLowerCase().includes("quota")) ? "quota_exceeded" : "data_write_failed";
+      UsageTracker.trackEvent("quick-query", "storage_error", { type, message: error.message });
+      return false;
     }
   }
 
@@ -56,19 +101,40 @@ export class LocalStorageService {
   saveSchema(fullTableName, schemaData, tableData = null) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
-      const storageData = this.getStorageData();
 
-      if (!storageData.schemas[schemaName]) {
-        storageData.schemas[schemaName] = { tables: {} };
+      // 1) Convert schemaData (array-of-arrays) into new schema JSON shape
+      const tableSchema = this._convertArraySchemaToJson(schemaData);
+      if (!tableSchema) {
+        UsageTracker.trackEvent("quick-query", "validation_error", { type: "invalid_schema_format" });
+        throw new Error("Invalid schema format");
       }
 
-      storageData.schemas[schemaName].tables[tableName] = {
-        schema: schemaData,
-        data: tableData ? tableData.slice(0, MAX_CACHED_ROWS) : null,
-        timestamp: new Date().toISOString(),
-      };
+      const now = new Date().toISOString();
+      tableSchema.last_updated = now;
 
-      return this.saveStorageData(storageData);
+      const schemaStore = this.getSchemaStore();
+      schemaStore[schemaName] = schemaStore[schemaName] || { tables: {} };
+      schemaStore[schemaName].tables[tableName] = tableSchema;
+
+      const schemaSaved = this.saveSchemaStore(schemaStore);
+      if (!schemaSaved) return false;
+
+      // 2) Optional: handle data table saving separately
+      const dataStore = this.getDataStore();
+      dataStore[schemaName] = dataStore[schemaName] || {};
+      if (tableData) {
+        const tableRows = this._convertArrayDataToJsonRows(tableData, tableSchema);
+        dataStore[schemaName][tableName] = { rows: tableRows.slice(0, MAX_CACHED_ROWS), last_updated: now };
+      } else {
+        // Ensure last_updated is also persisted in data store even without rows
+        const existing = dataStore[schemaName][tableName];
+        dataStore[schemaName][tableName] = { rows: Array.isArray(existing?.rows) ? existing.rows : [], last_updated: now };
+      }
+
+      const dataSaved = this.saveDataStore(dataStore);
+      if (!dataSaved) return false;
+
+      return true;
     } catch (error) {
       console.error("Error saving schema:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "save_schema_failed", message: error.message });
@@ -79,19 +145,18 @@ export class LocalStorageService {
   loadSchema(fullTableName, includeData = false) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
-      const storageData = this.getStorageData();
-      const tableInfo = storageData.schemas[schemaName]?.tables[tableName];
+      const schemaStore = this.getSchemaStore();
+      const schemaJson = schemaStore?.[schemaName]?.tables?.[tableName];
+      if (!schemaJson) return null;
 
-      if (!tableInfo) return null;
+      const arraySchema = this._convertJsonSchemaToArray(schemaJson);
+      if (!includeData) return arraySchema;
 
-      if (!includeData) {
-        return tableInfo.schema;
-      }
+      const dataStore = this.getDataStore();
+      const tableDataObj = dataStore?.[schemaName]?.[tableName] || null;
+      const arrayData = tableDataObj ? this._convertJsonRowsToArray(tableDataObj.rows, arraySchema) : null;
 
-      return {
-        schema: tableInfo.schema,
-        data: tableInfo.data || null,
-      };
+      return { schema: arraySchema, data: arrayData };
     } catch (error) {
       console.error("Error loading schema:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "load_schema_failed", message: error.message });
@@ -102,16 +167,24 @@ export class LocalStorageService {
   updateTableData(fullTableName, tableData) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
-      const storageData = this.getStorageData();
-
-      if (!storageData.schemas[schemaName]?.tables[tableName]) {
+      const schemaStore = this.getSchemaStore();
+      if (!schemaStore?.[schemaName]?.tables?.[tableName]) {
         return false;
       }
 
-      storageData.schemas[schemaName].tables[tableName].data = tableData.slice(0, MAX_CACHED_ROWS);
-      storageData.schemas[schemaName].tables[tableName].timestamp = new Date().toISOString();
+      const tableSchema = schemaStore[schemaName].tables[tableName];
+      const dataStore = this.getDataStore();
+      const tableRows = this._convertArrayDataToJsonRows(tableData, tableSchema);
+      const now = new Date().toISOString();
+      dataStore[schemaName] = dataStore[schemaName] || {};
+      dataStore[schemaName][tableName] = { rows: tableRows.slice(0, MAX_CACHED_ROWS), last_updated: now };
 
-      return this.saveStorageData(storageData);
+      // Keep schema store's last_updated in sync to represent last activity
+      schemaStore[schemaName].tables[tableName].last_updated = now;
+
+      const dataSaved = this.saveDataStore(dataStore);
+      const schemaSaved = this.saveSchemaStore(schemaStore);
+      return dataSaved && schemaSaved;
     } catch (error) {
       console.error("Error updating table data:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "update_table_data_failed", message: error.message });
@@ -122,18 +195,29 @@ export class LocalStorageService {
   deleteSchema(fullTableName) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
-      const storageData = this.getStorageData();
+      const schemaStore = this.getSchemaStore();
+      const dataStore = this.getDataStore();
 
-      if (storageData.schemas[schemaName]?.tables[tableName]) {
-        delete storageData.schemas[schemaName].tables[tableName];
-
-        if (Object.keys(storageData.schemas[schemaName].tables).length === 0) {
-          delete storageData.schemas[schemaName];
+      let changed = false;
+      if (schemaStore?.[schemaName]?.tables?.[tableName]) {
+        delete schemaStore[schemaName].tables[tableName];
+        changed = true;
+        if (Object.keys(schemaStore[schemaName].tables).length === 0) {
+          delete schemaStore[schemaName];
         }
-
-        return this.saveStorageData(storageData);
       }
-      return false;
+      if (dataStore?.[schemaName]?.[tableName]) {
+        delete dataStore[schemaName][tableName];
+        if (Object.keys(dataStore[schemaName]).length === 0) {
+          delete dataStore[schemaName];
+        }
+        changed = true;
+      }
+
+      if (!changed) return false;
+      const a = this.saveSchemaStore(schemaStore);
+      const b = this.saveDataStore(dataStore);
+      return a && b;
     } catch (error) {
       console.error("Error deleting schema:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "delete_schema_failed", message: error.message });
@@ -143,10 +227,11 @@ export class LocalStorageService {
 
   clearAllSchemas() {
     try {
-      localStorage.removeItem(this.STORAGE_KEY);
+      localStorage.removeItem(this.SCHEMA_STORAGE_KEY);
+      localStorage.removeItem(this.DATA_STORAGE_KEY);
       return true;
     } catch (error) {
-      console.error("Error clearing schemas:", error);
+      console.error("Error clearing schemas/data:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "clear_schemas_failed", message: error.message });
       return false;
     }
@@ -154,21 +239,35 @@ export class LocalStorageService {
 
   // Query Functions
   getAllTables() {
-    const storageData = this.getStorageData();
+    const schemaStore = this.getSchemaStore();
+    const dataStore = this.getDataStore();
     const allTables = [];
 
-    Object.entries(storageData.schemas).forEach(([schemaName, schemaData]) => {
-      Object.entries(schemaData.tables).forEach(([tableName, tableData]) => {
+    Object.entries(schemaStore || {}).forEach(([schemaName, schemaData]) => {
+      const tables = schemaData?.tables || {};
+      Object.keys(tables).forEach((tableName) => {
+        const sLU = tables[tableName]?.last_updated || null;
+        const dLU = dataStore?.[schemaName]?.[tableName]?.last_updated || null;
+        let lastUpdated = null;
+        if (sLU && dLU) {
+          lastUpdated = new Date(dLU).getTime() > new Date(sLU).getTime() ? dLU : sLU;
+        } else {
+          lastUpdated = sLU || dLU || null;
+        }
         allTables.push({
           fullName: `${schemaName}.${tableName}`,
           schemaName,
           tableName,
-          timestamp: tableData.timestamp,
+          lastUpdated,
         });
       });
     });
 
-    return allTables.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Sort alphabetically to ensure consistent ordering without timestamps
+    return allTables.sort((a, b) => {
+      if (a.schemaName === b.schemaName) return a.tableName.localeCompare(b.tableName);
+      return a.schemaName.localeCompare(b.schemaName);
+    });
   }
 
   // Schema searching functions
@@ -274,41 +373,121 @@ export class LocalStorageService {
   searchSavedSchemas(searchTerm) {
     if (!searchTerm) return [];
 
-    const storageData = this.getStorageData();
+    const schemaStore = this.getSchemaStore();
     const results = [];
 
-    Object.entries(storageData.schemas).forEach(([schemaName, schemaData]) => {
+    Object.entries(schemaStore || {}).forEach(([schemaName, schemaData]) => {
       if (!this.validateOracleName(schemaName, "schema")) return;
-
-      // Generate abbreviations and variations to match against
       const abbrs = this.getSchemaAbbreviations(schemaName);
-
-      Object.entries(schemaData.tables).forEach(([tableName, tableData]) => {
+      const tables = schemaData?.tables || {};
+      Object.keys(tables).forEach((tableName) => {
         if (!this.validateOracleName(tableName, "table")) return;
-
         const fullName = `${schemaName}.${tableName}`;
         const regex = this.sqlLikeToRegex(searchTerm);
-
         if (regex.test(schemaName) || regex.test(tableName) || regex.test(fullName) || abbrs.some((abbr) => regex.test(abbr))) {
-          results.push({
-            fullName,
-            schemaName,
-            tableName,
-            timestamp: tableData.timestamp,
-          });
+          results.push({ fullName, schemaName, tableName });
         }
       });
     });
-
-    return results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Alphabetical sort for consistency
+    return results.sort((a, b) => {
+      if (a.schemaName === b.schemaName) return a.tableName.localeCompare(b.tableName);
+      return a.schemaName.localeCompare(b.schemaName);
+    });
   }
 
   validateSchemaFormat(data) {
-    if (!Array.isArray(data) || data.length === 0) return false;
+    // Keep legacy validation for UI arrays
+    if (Array.isArray(data)) {
+      if (data.length === 0) return false;
+      const hasHeaderRow = Array.isArray(data[0]) && data[0].length >= 2;
+      const hasDataRow = Array.isArray(data[1]) && data[1].length >= 2;
+      return hasHeaderRow && hasDataRow;
+    }
+    // New schema JSON validation (partial): { tables: { ... } }
+    if (typeof data === "object" && data !== null) {
+      const hasTables = Object.values(data).every((schema) => typeof schema === "object");
+      return hasTables;
+    }
+    return false;
+  }
 
-    const hasHeaderRow = Array.isArray(data[0]) && data[0].length >= 2;
-    const hasDataRow = Array.isArray(data[1]) && data[1].length >= 2;
+  // ---------------------- Converters ----------------------
+  _convertArraySchemaToJson(schemaArray) {
+    try {
+      if (!Array.isArray(schemaArray) || schemaArray.length === 0) return null;
+      const columns = {};
+      const pk = [];
+      const unique = [];
+      schemaArray.forEach((row) => {
+        const [fieldName, dataType, nullable, _default, _order, pkFlag] = row;
+        if (!fieldName || !dataType || !nullable) return; // basic guard
+        columns[fieldName] = {};
+        columns[fieldName].type = String(dataType);
+        if (typeof _default !== "undefined" && _default !== null && _default !== "") {
+          columns[fieldName].default = _default;
+        }
+        columns[fieldName].nullable = String(nullable);
+        const pkVal = (pkFlag ?? "").toString().trim().toLowerCase();
+        if (pkVal === "yes" || pkVal === "y") pk.push(fieldName);
+      });
+      return { columns, pk, unique };
+    } catch (e) {
+      return null;
+    }
+  }
 
-    return hasHeaderRow && hasDataRow;
+  _convertJsonSchemaToArray(schemaJson) {
+    const rows = [];
+    const columns = schemaJson?.columns || {};
+    const pkSet = new Set(schemaJson?.pk || []);
+    Object.entries(columns).forEach(([fieldName, def]) => {
+      const dataType = def?.type || "";
+      const nullable = def?.nullable || "Yes";
+      const defVal = typeof def?.default !== "undefined" ? def.default : null;
+      const pkFlag = pkSet.has(fieldName) ? "Yes" : "No";
+      rows.push([fieldName, dataType, nullable, defVal, null, pkFlag]);
+    });
+    return rows;
+  }
+
+  _convertArrayDataToJsonRows(tableData, tableSchema) {
+    try {
+      if (!Array.isArray(tableData) || tableData.length === 0) return [];
+      const header = Array.isArray(tableData[0]) ? tableData[0] : [];
+      // Validate: header fields must exist in schema columns
+      const columns = Object.keys(tableSchema?.columns || {});
+      const missing = header.filter((h) => !columns.includes(h));
+      if (missing.length > 0) {
+        UsageTracker.trackEvent("quick-query", "validation_error", { type: "header_fields_missing", missing });
+        throw new Error(`Data columns missing in schema: ${missing.join(", ")}`);
+      }
+      const rows = [];
+      tableData.slice(1).forEach((row) => {
+        // Skip entirely empty rows
+        if (!Array.isArray(row) || row.every((cell) => cell === null || cell === "")) return;
+        const obj = {};
+        header.forEach((fieldName, idx) => {
+          const val = row[idx];
+          if (val === null || typeof val === "undefined" || val === "") {
+            obj[fieldName] = null;
+          } else {
+            obj[fieldName] = String(val);
+          }
+        });
+        rows.push(obj);
+      });
+      return rows;
+    } catch (e) {
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "convert_data_failed", message: e.message });
+      return [];
+    }
+  }
+
+  _convertJsonRowsToArray(rows, arraySchema) {
+    // Recreate a 2D array with header row from schema fields order
+    const header = arraySchema.map((r) => r[0]);
+    const dataRows = (rows || []).map((obj) => header.map((field) => (obj[field] === null || typeof obj[field] === "undefined" ? null : obj[field])));
+    return [header, ...dataRows];
   }
 }

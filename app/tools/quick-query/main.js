@@ -706,7 +706,8 @@ export class QuickQueryUI {
 
         const timestampDiv = document.createElement("div");
         timestampDiv.className = "schema-timestamp";
-        timestampDiv.textContent = new Date(table.timestamp).toLocaleString();
+        const ts = table.lastUpdated ? new Date(table.lastUpdated) : null;
+        timestampDiv.textContent = ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : "";
 
         infoDiv.appendChild(nameDiv);
         infoDiv.appendChild(timestampDiv);

@@ -113,6 +113,48 @@ Notes:
   - `ad.events.queue`: array of event objects `{ device_id, feature_id, action, properties, created_time }`.
   - `ad.daily_usage.queue`: array of usage objects `{ day, tool_id, action, count, updated_time }`.
   - `ad.user_usage.queue`: array of usage objects `{ user_id, tool_id, count, updated_time }`.
+  - Quick Query storage (schema/data separated):
+    - `tool:quick-query:schema`: JSON object using the new schema model (see `app/tools/quick-query/new_data_model_schema.json`). Example:
+```
+{
+  "inhouse_forex": {
+    "tables": {
+      "rate_tiering": {
+        "last_updated": "2025-11-04T08:55:00.000Z",
+        "columns": {
+          "RATE_TIERING_ID": { "type": "VARCHAR2(36)", "nullable": "No" },
+          "CURRENCY_ISO_CODE": { "type": "VARCHAR2(10)", "nullable": "No" },
+          "MIN_AMOUNT": { "type": "NUMBER(20,2)", "nullable": "Yes" },
+          "MAX_AMOUNT": { "type": "NUMBER(20,2)", "nullable": "Yes" },
+          "TIERING_GROUP": { "type": "VARCHAR2(36)", "nullable": "No" }
+        },
+        "pk": ["RATE_TIERING_ID", "CURRENCY_ISO_CODE", "TIERING_GROUP"],
+        "unique": []
+      }
+    }
+  }
+}
+```
+    - `tool:quick-query:data`: JSON object using the new data model (see `app/tools/quick-query/new_data_model_data.json`). Example:
+```
+{
+  "inhouse_forex": {
+    "rate_tiering": {
+      "last_updated": "2025-11-04T08:55:00.000Z",
+      "rows": [
+        {
+          "RATE_TIERING_ID": "RT-UUID-001",
+          "CURRENCY_ISO_CODE": "USD",
+          "MIN_AMOUNT": "0",
+          "MAX_AMOUNT": "10000",
+          "TIERING_GROUP": "RETAIL"
+        }
+      ]
+    }
+  }
+}
+```
+  - Notes: schema and data keys are written independently; if storage quota is exceeded, writes fail gracefully and are tracked via `UsageTracker`.
 - Flush triggers:
   - Hourly timer (primary cadence).
   - Lifecycle: `visibilitychange`, `beforeunload`, and `online` events.
@@ -192,8 +234,13 @@ Notes:
 - On D1 outages, queue remains client-side and retries on next flush.
 - Optionally, use KV as a temporary buffer with a TTL, then reconcile to D1 when healthy.
 
+### Quick Query Storage Failure Handling
+- Missing/Corrupted schema/data: the app treats missing keys or invalid JSON as empty stores and records a `storage_error` event.
+- Quota exceeded: write operations catch `QuotaExceededError` and return `false` without throwing; UI shows an error message.
+
 ## Alignment With Implementation
 - This document adopts GMT+7 suffix timestamps and introduces `events.created_time` and `daily_usage.day` as explicit time dimensions.
 - Registration and device linkage are upsert-based to avoid races.
 - Users have UUID v4 IDs; relationships use `TEXT` foreign keys.
 - The batch endpoint contract supports hourly and lifecycle-based flushes with idempotency.
+ - Quick Query tool stores schema and data separately under `tool:quick-query:schema` and `tool:quick-query:data`, with UI conversions handled transparently.
