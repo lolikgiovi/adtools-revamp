@@ -660,11 +660,11 @@ async function handleRegisterVerify(request, env) {
       .bind(deviceId, userId, platform, tsGmt7Plain(), tsGmt7Plain())
       .run();
 
-    // Create short-lived session token to authorize KV access (10 min TTL)
+    // Create short-lived session token to authorize KV access (6-hour TTL)
     let token = crypto.randomUUID();
     try {
       if (env.adtools) {
-        await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 10 * 60 });
+        await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 6 * 60 * 60 });
       }
     } catch (_) {}
 

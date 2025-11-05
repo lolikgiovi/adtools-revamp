@@ -50,3 +50,4 @@ const { token, kvValue } = await openOtpOverlay({
 ## Notes
 
 - CSS classes reuse Settings module styles (`.otp-modal`, `.otp-dialog`, etc.). Ensure styles are loaded in modules that use this overlay.
+ - Session token TTL defaults to 6 hours. You can override via `VITE_SESSION_TTL_MS` (milliseconds) or pass `tokenTtlMs` to `openOtpOverlay`. The backend KV session TTL is also 6 hours; keep frontend and backend aligned to avoid unexpected 401s.

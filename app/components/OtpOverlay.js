@@ -22,13 +22,13 @@ export async function openOtpOverlay({
   onClose,
   // Centralized behavior: prefer using cached session token before showing UI
   preferCachedToken = true,
-  // Optional override for token TTL; defaults to 10 minutes, or env value if provided
+  // Optional override for token TTL; defaults to 6 hours, or env value if provided
   tokenTtlMs,
 } = {}) {
   // Early return with cached token if still valid, optionally fetching KV
   if (preferCachedToken) {
     try {
-      const ttlDefault = Number(import.meta?.env?.VITE_SESSION_TTL_MS || 0) || 600_000; // 10 minutes
+      const ttlDefault = Number(import.meta?.env?.VITE_SESSION_TTL_MS || 0) || 6 * 60 * 60 * 1000; // 6 hours
       const ttl = typeof tokenTtlMs === 'number' && tokenTtlMs > 0 ? tokenTtlMs : ttlDefault;
       const token = SessionTokenStore.getToken();
       const issuedAt = SessionTokenStore.getIssuedAt();
