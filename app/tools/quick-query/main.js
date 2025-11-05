@@ -1045,8 +1045,30 @@ export class QuickQueryUI {
     });
   }
 
+  // Sanitize table name input to allow only uppercase letters and valid Oracle characters
+  // Allowed: A-Z, 0-9, underscore (_), dollar ($), hash (#), single dot (.) as schema/table separator
+  sanitizeTableInputValue(value) {
+    if (typeof value !== "string") return "";
+    let v = value.toUpperCase();
+    // Remove all characters not in the allowed set
+    v = v.replace(/[^A-Z0-9._$#]/g, "");
+    // Ensure only a single dot is present (keep the first dot, remove subsequent ones)
+    const dotIndex = v.indexOf(".");
+    if (dotIndex !== -1) {
+      v = v.slice(0, dotIndex + 1) + v.slice(dotIndex + 1).replace(/\./g, "");
+    }
+    return v;
+  }
+
   handleSearchInput(event) {
-    const input = event.target.value.trim();
+    const el = this.elements.tableNameInput;
+    const raw = el.value;
+    const sanitized = this.sanitizeTableInputValue(raw);
+    if (sanitized !== raw) {
+      // Replace the value with sanitized content; caret is moved to end for simplicity
+      el.value = sanitized;
+    }
+    const input = sanitized.trim();
     this.elements.tableNameInput.style.borderColor = "";
 
     if (!input) {
