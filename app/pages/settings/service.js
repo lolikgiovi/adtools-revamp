@@ -1,3 +1,5 @@
+import { getRuntime } from "../../core/Runtime.js";
+
 class SettingsService {
   constructor({ eventBus, themeManager } = {}) {
     this.eventBus = eventBus;
@@ -21,6 +23,8 @@ class SettingsService {
 
   shouldShowCategory(cat) {
     if (!cat) return false;
+    // Hide when category requires Tauri but runtime is web
+    if (cat.requiresTauri && getRuntime() !== "tauri") return false;
     if (Array.isArray(cat.roles) && cat.roles.length) {
       return cat.roles.includes(this.userRole);
     }
@@ -29,6 +33,8 @@ class SettingsService {
 
   shouldShowItem(item) {
     if (!item) return false;
+    // Hide when item requires Tauri but runtime is web
+    if (item.requiresTauri && getRuntime() !== "tauri") return false;
     if (Array.isArray(item.roles) && item.roles.length) {
       return item.roles.includes(this.userRole);
     }

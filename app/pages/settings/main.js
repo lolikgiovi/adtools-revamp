@@ -81,8 +81,6 @@ class SettingsPage {
     // Bind toolbar actions
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
     root.querySelector(".settings-check-update")?.addEventListener("click", () => this.handleManualCheckUpdate());
-    this.searchInput?.addEventListener("input", () => this.applySearch());
-
     await this.reloadConfig();
   }
 
@@ -93,7 +91,7 @@ class SettingsPage {
       return;
     }
     try {
-      const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
+      const BASE = (import.meta?.env?.VITE_WORKER_BASE || "").trim();
       const kvUrl = BASE ? `${BASE}/api/kv/get?key=default-config` : "/api/kv/get?key=default-config";
 
       const { token, kvValue } = await openOtpOverlay({
@@ -124,55 +122,6 @@ class SettingsPage {
         this.eventBus?.emit?.("notification:error", { message: String(e?.message || e || "Failed to load defaults") });
       }
     }
-  }
-
-  async #requestOtp(email) {
-    if (!email) throw new Error("Missing email in localStorage");
-    const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
-    const endpoint = "/register/request-otp";
-    const reqUrl = BASE ? `${BASE}${endpoint}` : endpoint;
-    const res = await fetch(reqUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error || `Network error (${res.status})`);
-    }
-    const j = await res.json().catch(() => ({}));
-    // Dev-mode convenience: prefill OTP if provided by backend
-    try {
-      if (j?.devCode) {
-        const input = this.container?.querySelector(".otp-code-input");
-        const status = this.container?.querySelector(".otp-email-status");
-        if (input) input.value = String(j.devCode);
-        if (status) status.textContent += " (Dev: OTP auto-filled)";
-      }
-    } catch (_) {}
-    return j;
-  }
-
-  async #verifyOtp(email, code) {
-    const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
-    const endpoint = "/register/verify";
-    const verUrl = BASE ? `${BASE}${endpoint}` : endpoint;
-    const payload = { email, code };
-    const res = await fetch(verUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok || !j?.ok) {
-      throw new Error(j?.error || "Invalid OTP");
-    }
-    if (!j?.token) throw new Error("Authorization token missing");
-    return j;
-  }
-
-  async #loadDefaultsWithToken(token) {
-    const BASE = (import.meta?.env?.VITE_WORKER_BASE || '').trim();
-    const kvUrl = BASE ? `${BASE}/api/kv/get?key=default-config` : "/api/kv/get?key=default-config";
-    const res = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok || !j?.ok) {
-      throw new Error(j?.error || "KV access failure");
-    }
-    await this.applyDefaultsFromKv(j.value);
-    await this.reloadConfig();
   }
 
   async applyDefaultsFromKv(val) {
@@ -315,21 +264,8 @@ class SettingsPage {
     const cfg = await this.service.loadConfig();
     this.currentConfig = cfg;
     const rt = this.runtime || "web";
-    const cats = (cfg.categories || []).filter((c) => !(c.id === "updates" && rt !== "tauri"));
-    this.renderCategories(cats);
-  }
-
-  applySearch() {
-    const q = (this.searchInput?.value || "").trim().toLowerCase();
-    if (!q) {
-      const rt = this.runtime || "web";
-      const cats = (this.currentConfig?.categories || []).filter((c) => !(c.id === "updates" && rt !== "tauri"));
-      this.renderCategories(cats);
-      return;
-    }
-    const filtered = this.filterConfig(this.currentConfig, q);
-    const rt = this.runtime || "web";
-    const cats = (filtered.categories || []).filter((c) => !(c.id === "updates" && rt !== "tauri"));
+    // Filter categories dynamically based on requiresTauri flag
+    const cats = (cfg.categories || []).filter((c) => !(c && c.requiresTauri && rt !== "tauri"));
     this.renderCategories(cats);
   }
 
