@@ -83,9 +83,12 @@ export class QuickQueryUI {
   hasEnoughRows(minRows = 20) {
     try {
       if (!this.dataTable) return false;
-      const count = typeof this.dataTable.countRows === "function"
-        ? this.dataTable.countRows()
-        : (Array.isArray(this.dataTable.getData()) ? this.dataTable.getData().length : 0);
+      const count =
+        typeof this.dataTable.countRows === "function"
+          ? this.dataTable.countRows()
+          : Array.isArray(this.dataTable.getData())
+          ? this.dataTable.getData().length
+          : 0;
       const dataRows = Math.max(0, count - 1); // exclude fixed header row
       return dataRows > minRows;
     } catch (_) {
@@ -631,11 +634,6 @@ export class QuickQueryUI {
           sessionStorage.setItem("jenkinsRunner.injectSql", sql);
         } catch (_) {}
       }
-
-      // Track usage of cross-tool execution
-      try {
-        UsageTracker.trackEvent("quick-query", "execute_in_jenkins_runner", { length: sql.length });
-      } catch (_) {}
     } catch (err) {
       console.error("Failed to execute in Jenkins Runner:", err);
       this.showError("Failed to navigate to Jenkins Runner");
@@ -738,9 +736,7 @@ export class QuickQueryUI {
     const tablesToRender = Array.isArray(filteredTables) ? filteredTables : allTables;
 
     if (tablesToRender.length === 0) {
-      const message = Array.isArray(filteredTables)
-        ? 'No matching results'
-        : 'No saved schemas';
+      const message = Array.isArray(filteredTables) ? "No matching results" : "No saved schemas";
       this.elements.savedSchemasList.innerHTML = `<div class="no-schemas">${message}</div>`;
       return;
     }

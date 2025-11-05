@@ -51,9 +51,6 @@ export class JenkinsRunner extends BaseTool {
       } else {
         this._pendingSql = sql;
       }
-      try {
-        UsageTracker.trackEvent("jenkins-runner", "sql_injected", { source: "quick-query", length: sql.length });
-      } catch (_) {}
     } catch (err) {
       console.error("Failed to apply route data to Jenkins Runner:", err);
     }
@@ -143,6 +140,74 @@ export class JenkinsRunner extends BaseTool {
         return "Error fetching ENV type. Check your internal network connection and Jenkins availability.";
       }
       return String(e || "Unknown error");
+    };
+
+    // Validate that the SQL ends statements with semicolons (outside quotes/comments)
+    // Returns { ok: true } or { ok: false, line: number, message: string }
+    const validateSemicolons = (sql) => {
+      const src = String(sql || "").replace(/\r\n/g, "\n");
+      let inSingle = false;
+      let inDouble = false;
+      let inLineComment = false;
+      let inBlockComment = false;
+      let line = 1;
+      let hadContentSinceSemicolon = false;
+      let lastContentLine = 1;
+      for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        const next = i + 1 < src.length ? src[i + 1] : "";
+        // Track newlines early
+        if (ch === "\n") line++;
+        // Handle existing comment modes
+        if (inLineComment) {
+          if (ch === "\n") inLineComment = false;
+          continue;
+        }
+        if (inBlockComment) {
+          if (ch === "*" && next === "/") {
+            inBlockComment = false;
+            i++; // skip '/'
+          }
+          continue;
+        }
+        // Start comments if not in quotes
+        if (!inSingle && !inDouble) {
+          if (ch === "-" && next === "-") {
+            inLineComment = true;
+            i++; // skip second '-'
+            continue;
+          }
+          if (ch === "/" && next === "*") {
+            inBlockComment = true;
+            i++; // skip '*'
+            continue;
+          }
+        }
+        // Toggle quotes
+        if (!inDouble && ch === "'" && src[i - 1] !== "\\") {
+          inSingle = !inSingle;
+          continue;
+        }
+        if (!inSingle && ch === '"' && src[i - 1] !== "\\") {
+          inDouble = !inDouble;
+          continue;
+        }
+        // Only evaluate statement/content outside quotes/comments
+        if (!inSingle && !inDouble) {
+          if (ch === ";") {
+            hadContentSinceSemicolon = false;
+            continue;
+          }
+          if (!/\s/.test(ch)) {
+            hadContentSinceSemicolon = true;
+            lastContentLine = line;
+          }
+        }
+      }
+      if (hadContentSinceSemicolon) {
+        return { ok: false, line: lastContentLine, message: `Missing semicolon at end of statement (line ${lastContentLine}).` };
+      }
+      return { ok: true };
     };
 
     const escHtml = (s) =>
@@ -1817,11 +1882,19 @@ export class JenkinsRunner extends BaseTool {
         UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length });
       } catch (_) {}
 
+      // Require statements to end with semicolon; show the line if missing
+      const semi = validateSemicolons(sql);
+      if (!semi.ok) {
+        statusEl.textContent = semi.message;
+        this.showError("Error: missing semicolon");
+        return;
+      }
+
       // Safety validation: disallow DROP and UPDATE/DELETE without WHERE
       const safety = validateSqlSafety(sql);
       if (!safety.ok) {
-        statusEl.textContent = "Unsafe SQL: contains DROP or UPDATE/DELETE without WHERE clause";
-        this.showError(safety.message || "Unsafe SQL detected.");
+        statusEl.textContent = safety.message;
+        this.showError("Unsafe SQL");
         return;
       }
 
