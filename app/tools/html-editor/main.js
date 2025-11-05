@@ -97,7 +97,7 @@ class HTMLTemplateTool extends BaseTool {
 
     const container = document.getElementById("htmlEditor");
     this.editor = monaco.editor.create(container, {
-      value: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, $user.name!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`,
+      value: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`,
       language: "html",
       theme: "vs-dark",
       automaticLayout: true,
