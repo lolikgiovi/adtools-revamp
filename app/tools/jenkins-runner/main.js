@@ -1731,6 +1731,52 @@ export class JenkinsRunner extends BaseTool {
       return { chunks, oversizeStatement: null };
     };
 
+    // Strip SQL comments for safety checks (basic; ignores edge cases in quoted strings)
+    const stripSqlComments = (src) => {
+      let s = String(src || "");
+      // Remove block comments and line comments
+      s = s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
+      // Remove simple quoted strings to avoid false positives (best-effort)
+      s = s.replace(/'[^']*'/g, "''");
+      s = s.replace(/"[^"]*"/g, '""');
+      return s;
+    };
+
+    // Validate that no DROP appears and UPDATE/DELETE include WHERE (case-insensitive)
+    const validateSqlSafety = (sql) => {
+      try {
+        const stmts = splitSqlStatementsSafely(sql);
+        for (let st of stmts) {
+          const cleaned = stripSqlComments(st).trim();
+          if (!cleaned) continue;
+          const lc = cleaned.toLowerCase();
+          const norm = lc.replace(/\s+/g, " ");
+          // Reject any usage of DROP anywhere in the statement
+          if (/\bdrop\b/i.test(cleaned)) {
+            return { ok: false, message: "DROP statements are not allowed." };
+          }
+          // UPDATE must have WHERE after SET
+          if (/^\s*update\b/i.test(cleaned)) {
+            const idxSet = norm.indexOf(" set ");
+            const hasWhere = idxSet >= 0 ? norm.indexOf(" where ", idxSet) !== -1 : false;
+            if (!hasWhere) {
+              return { ok: false, message: "UPDATE must include a WHERE clause." };
+            }
+          }
+          // DELETE must have WHERE
+          if (/^\s*delete\b/i.test(cleaned)) {
+            if (norm.indexOf(" where ") === -1) {
+              return { ok: false, message: "DELETE must include a WHERE clause." };
+            }
+          }
+        }
+        return { ok: true };
+      } catch (e) {
+        // If safety check errors, fail closed
+        return { ok: false, message: "Unable to validate SQL safety." };
+      }
+    };
+
     const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
       return new Promise((resolve, reject) => {
         let unlisten = null;
@@ -1770,6 +1816,14 @@ export class JenkinsRunner extends BaseTool {
       try {
         UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length });
       } catch (_) {}
+
+      // Safety validation: disallow DROP and UPDATE/DELETE without WHERE
+      const safety = validateSqlSafety(sql);
+      if (!safety.ok) {
+        statusEl.textContent = "Unsafe SQL: contains DROP or UPDATE/DELETE without WHERE clause";
+        this.showError(safety.message || "Unsafe SQL detected.");
+        return;
+      }
 
       // If the SQL is oversize, allow the user to preview and split first
       if (totalBytes > MAX_SQL_BYTES) {
