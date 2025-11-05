@@ -10,6 +10,14 @@ export class LocalStorageService {
   constructor() {
     this.SCHEMA_STORAGE_KEY = SCHEMA_STORAGE_KEY;
     this.DATA_STORAGE_KEY = DATA_STORAGE_KEY;
+    // In-memory search index (rebuilt when schema store changes)
+    this._index = {
+      dirty: true,
+      schemas: new Map(), // schemaName -> { abbrs: string[], tables: Set<string> }
+      tables: new Map(), // fullName -> { schemaName, tableName, abbrs: string[] }
+      schemaAbbrIndex: new Map(), // abbr -> Set<schemaName>
+      tableAbbrIndex: new Map(), // abbr -> Set<fullName>
+    };
   }
 
   // Storage Helper Functions
@@ -63,6 +71,8 @@ export class LocalStorageService {
     try {
       const payload = JSON.stringify(store);
       localStorage.setItem(this.SCHEMA_STORAGE_KEY, payload);
+      // Mark index dirty so it can be rebuilt lazily on next search
+      this._index.dirty = true;
       return true;
     } catch (error) {
       console.error("Error saving schema store:", error);
@@ -217,6 +227,7 @@ export class LocalStorageService {
       if (!changed) return false;
       const a = this.saveSchemaStore(schemaStore);
       const b = this.saveDataStore(dataStore);
+      this._index.dirty = true;
       return a && b;
     } catch (error) {
       console.error("Error deleting schema:", error);
@@ -229,6 +240,7 @@ export class LocalStorageService {
     try {
       localStorage.removeItem(this.SCHEMA_STORAGE_KEY);
       localStorage.removeItem(this.DATA_STORAGE_KEY);
+      this._index.dirty = true;
       return true;
     } catch (error) {
       console.error("Error clearing schemas/data:", error);
@@ -365,30 +377,168 @@ export class LocalStorageService {
           .join("");
         abbrs.add(prefix + consonants);
       }
+
+      // Cross-part progressive prefixes: allow longer prefix from previous part(s)
+      // Example: saving_plan -> "sap" ("sa" + "p"), "sapla" ("sa" + "pla")
+      if (index > 0) {
+        const prev = parts[index - 1].toLowerCase();
+        const prevMax = Math.min(4, prev.length);
+        const currMax = Math.min(4, word.length);
+        for (let pLen = 2; pLen <= prevMax; pLen++) {
+          const prevPrefix = prev.slice(0, pLen);
+          for (let cLen = 1; cLen <= currMax; cLen++) {
+            abbrs.add(prevPrefix + word.slice(0, cLen));
+          }
+        }
+      }
     });
 
     return Array.from(abbrs);
   }
 
-  searchSavedSchemas(searchTerm) {
-    if (!searchTerm) return [];
+  // Table name abbreviations extend schema rules with an extra pattern:
+  // full first word + first letters of the next word(s), e.g.,
+  // "app_config" -> "appc", "appco", "appcon", "appconf".
+  getTableAbbreviations(tableName) {
+    const lower = (tableName || "").toLowerCase();
+    if (!lower) return [];
+    const parts = lower.split("_").filter(Boolean);
+    const abbrs = new Set();
 
+    // Acronym of first letters (e.g., user_account -> ua)
+    abbrs.add(parts.map((p) => p[0]?.toLowerCase()).join(""));
+
+    if (parts.length === 1) {
+      const word = parts[0];
+      for (let i = 1; i <= Math.min(4, word.length); i++) {
+        abbrs.add(word.slice(0, i));
+      }
+      const consonants = word.replace(/[aeiou]/g, "");
+      if (consonants) abbrs.add(consonants);
+    } else {
+      // Progressive prefixes using initials of previous words
+      parts.forEach((part, index) => {
+        const word = part;
+        for (let i = 1; i <= Math.min(4, word.length); i++) {
+          if (index === 0) {
+            abbrs.add(word.slice(0, i));
+          } else {
+            const prefix = parts
+              .slice(0, index)
+              .map((p) => p[0]?.toLowerCase())
+              .join("");
+            abbrs.add(prefix + word.slice(0, i));
+          }
+        }
+        const consonants = word.replace(/[aeiou]/g, "");
+        if (index === 0) {
+          if (consonants) abbrs.add(consonants);
+        } else {
+          const prefix = parts
+            .slice(0, index)
+            .map((p) => p[0]?.toLowerCase())
+            .join("");
+          if (consonants) abbrs.add(prefix + consonants);
+        }
+      });
+
+      // Extension: first word in full + progressive prefixes of the second
+      const first = parts[0];
+      const second = parts[1];
+      if (first && second) {
+        for (let i = 1; i <= Math.min(4, second.length); i++) {
+          abbrs.add(first + second.slice(0, i));
+        }
+      }
+    }
+
+    return Array.from(abbrs);
+  }
+
+  // Build the in-memory index from the persisted schema store
+  rebuildIndex() {
     const schemaStore = this.getSchemaStore();
-    const results = [];
+    const schemas = new Map();
+    const tables = new Map();
+    const schemaAbbrIndex = new Map();
+    const tableAbbrIndex = new Map();
 
     Object.entries(schemaStore || {}).forEach(([schemaName, schemaData]) => {
-      if (!this.validateOracleName(schemaName, "schema")) return;
       const abbrs = this.getSchemaAbbreviations(schemaName);
-      const tables = schemaData?.tables || {};
-      Object.keys(tables).forEach((tableName) => {
-        if (!this.validateOracleName(tableName, "table")) return;
+      const tableSet = new Set();
+      schemas.set(schemaName, { abbrs, tables: tableSet });
+      abbrs.forEach((abbr) => {
+        const set = schemaAbbrIndex.get(abbr) || new Set();
+        set.add(schemaName);
+        schemaAbbrIndex.set(abbr, set);
+      });
+
+      const tablesObj = schemaData?.tables || {};
+      Object.keys(tablesObj).forEach((tableName) => {
         const fullName = `${schemaName}.${tableName}`;
-        const regex = this.sqlLikeToRegex(searchTerm);
-        if (regex.test(schemaName) || regex.test(tableName) || regex.test(fullName) || abbrs.some((abbr) => regex.test(abbr))) {
+        const tabbrs = this.getTableAbbreviations(tableName);
+        tableSet.add(tableName);
+        tables.set(fullName, { schemaName, tableName, abbrs: tabbrs });
+        tabbrs.forEach((abbr) => {
+          const set = tableAbbrIndex.get(abbr) || new Set();
+          set.add(fullName);
+          tableAbbrIndex.set(abbr, set);
+        });
+      });
+    });
+
+    this._index = { dirty: false, schemas, tables, schemaAbbrIndex, tableAbbrIndex };
+  }
+
+  searchSavedSchemas(searchTerm) {
+    if (!searchTerm) return [];
+    if (this._index.dirty) this.rebuildIndex();
+    const results = [];
+    const hasDot = searchTerm.includes(".");
+    let schemaRegex = null;
+    let tableRegex = null;
+    let tableWildcard = false;
+    if (hasDot) {
+      const [schemaTerm = "", tableTerm = ""] = searchTerm.split(".");
+      schemaRegex = this.sqlLikeToRegex(schemaTerm);
+      tableWildcard = (tableTerm.trim() === "");
+      tableRegex = tableWildcard ? null : this.sqlLikeToRegex(tableTerm);
+    }
+    // Use the in-memory index for faster matching
+    if (hasDot) {
+      this._index.schemas.forEach((schemaInfo, schemaName) => {
+        if (!this.validateOracleName(schemaName, "schema")) return;
+        const schemaMatch = schemaRegex.test(schemaName) || schemaInfo.abbrs.some((abbr) => schemaRegex.test(abbr));
+        if (!schemaMatch) return;
+        schemaInfo.tables.forEach((tableName) => {
+          if (!this.validateOracleName(tableName, "table")) return;
+          const fullName = `${schemaName}.${tableName}`;
+          if (tableWildcard) {
+            results.push({ fullName, schemaName, tableName });
+          } else {
+            const tInfo = this._index.tables.get(fullName);
+            const tMatch = tableRegex.test(tableName) || (tInfo?.abbrs || []).some((abbr) => tableRegex.test(abbr));
+            if (tMatch) results.push({ fullName, schemaName, tableName });
+          }
+        });
+      });
+    } else {
+      const regex = this.sqlLikeToRegex(searchTerm);
+      this._index.tables.forEach((tInfo, fullName) => {
+        const { schemaName, tableName, abbrs } = tInfo;
+        const sInfo = this._index.schemas.get(schemaName);
+        const sAbbrs = sInfo?.abbrs || [];
+        if (
+          regex.test(schemaName) ||
+          regex.test(tableName) ||
+          regex.test(fullName) ||
+          sAbbrs.some((abbr) => regex.test(abbr)) ||
+          abbrs.some((abbr) => regex.test(abbr))
+        ) {
           results.push({ fullName, schemaName, tableName });
         }
       });
-    });
+    }
     // Alphabetical sort for consistency
     return results.sort((a, b) => {
       if (a.schemaName === b.schemaName) return a.tableName.localeCompare(b.tableName);

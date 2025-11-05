@@ -11,6 +11,7 @@ import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { importSchemasPayload } from "./services/SchemaImportService.js";
 
@@ -78,6 +79,28 @@ export class QuickQueryUI {
     return height;
   }
 
+  // Determine if the table has more than a threshold of data rows (exclude header row)
+  hasEnoughRows(minRows = 20) {
+    try {
+      if (!this.dataTable) return false;
+      const count = typeof this.dataTable.countRows === "function"
+        ? this.dataTable.countRows()
+        : (Array.isArray(this.dataTable.getData()) ? this.dataTable.getData().length : 0);
+      const dataRows = Math.max(0, count - 1); // exclude fixed header row
+      return dataRows > minRows;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Apply height dynamically: 'auto' until >threshold rows, static height otherwise
+  applyDataTableHeight() {
+    if (!this.dataTable) return;
+    const useStatic = this.hasEnoughRows(20);
+    const targetHeight = useStatic ? this.computeDataTableHeight() : "auto";
+    this.dataTable.updateSettings({ height: targetHeight });
+  }
+
   async init() {
     try {
       // Configure Monaco workers and Oracle SQL language via shared module
@@ -96,6 +119,18 @@ export class QuickQueryUI {
 
       // Initialize UI components
       this.bindElements();
+
+      // Desktop-only: show button but disable it in web, with native tooltip
+      try {
+        const execBtn = document.getElementById("executeInJenkinsRunner");
+        if (execBtn) {
+          const isDesktop = isTauri();
+          execBtn.disabled = !isDesktop;
+          execBtn.title = isDesktop ? "" : "Only available on AD Tools Desktop";
+          execBtn.setAttribute("aria-disabled", (!isDesktop).toString());
+        }
+      } catch (_) {}
+
       this.clearError();
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
@@ -130,7 +165,7 @@ export class QuickQueryUI {
       // Update the data table height responsively
       const resizeHandler = () => {
         if (this.dataTable) {
-          this.dataTable.updateSettings({ height: this.computeDataTableHeight() });
+          this.applyDataTableHeight();
         }
       };
       window.addEventListener("resize", resizeHandler);
@@ -377,22 +412,29 @@ export class QuickQueryUI {
     const dataTableConfig = {
       ...initialDataTableSpecification,
       // Constrain the internal viewport height to keep headers visible while scrolling
-      height: this.computeDataTableHeight(),
+      height: "auto",
       afterChange: (changes, source) => {
-        if (!changes || source === "loadData") return; // Skip if no changes or if change is from loading data
+        // Always re-evaluate height after any change, including loadData
+        this.applyDataTableHeight();
+
+        // Persist data only for user edits (skip loadData)
+        if (!changes || source === "loadData") return;
 
         const tableName = this.elements.tableNameInput.value.trim();
         if (!tableName) return; // Skip if no table name
 
-        // Only save if there are actual changes
         if (changes.length > 0) {
           const currentData = this.dataTable.getData();
           this.localStorageService.updateTableData(tableName, currentData);
         }
       },
+      afterCreateRow: () => this.applyDataTableHeight(),
+      afterRemoveRow: () => this.applyDataTableHeight(),
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+    // Apply initial height based on current content
+    this.applyDataTableHeight();
   }
 
   updateDataSpreadsheet() {
@@ -419,6 +461,8 @@ export class QuickQueryUI {
       });
       this.dataTable.loadData(newData);
     }
+    // Re-apply height after reloading data
+    this.applyDataTableHeight();
   }
 
   // Error handling methods
@@ -524,6 +568,7 @@ export class QuickQueryUI {
         colHeaders: true,
         minCols: 1,
       });
+      this.applyDataTableHeight();
     }
 
     if (this.editor) {
@@ -613,6 +658,7 @@ export class QuickQueryUI {
     }
 
     this.dataTable.loadData(currentData);
+    this.applyDataTableHeight();
   }
 
   handleAddDataRow() {
@@ -622,12 +668,14 @@ export class QuickQueryUI {
     const newRow = Array(columnCount).fill(null);
     const newData = [...currentData, newRow];
     this.dataTable.loadData(newData);
+    this.applyDataTableHeight();
   }
 
   handleRemoveDataRow() {
     const currentData = this.dataTable.getData();
     const newData = currentData.slice(0, -1);
     this.dataTable.loadData(newData);
+    this.applyDataTableHeight();
   }
 
   handleClearData() {
@@ -636,6 +684,7 @@ export class QuickQueryUI {
     const newData = [fieldNames, Array(fieldNames.length).fill(null)];
 
     this.dataTable.loadData(newData);
+    this.applyDataTableHeight();
   }
 
   handleAddNewSchemaRow() {
@@ -754,9 +803,11 @@ export class QuickQueryUI {
       // Load cached data if available
       if (result.data) {
         this.dataTable.loadData(result.data);
+        this.applyDataTableHeight();
       } else {
         this.handleAddFieldNames();
         this.handleClearData();
+        this.applyDataTableHeight();
       }
 
       this.elements.schemaOverlay.classList.add("hidden");
@@ -943,11 +994,36 @@ export class QuickQueryUI {
       return;
     }
 
+    // Support table-only searches:
+    // - If input starts with '.', treat it as table-only (e.g., '.appc')
+    // - If input has no '.', also treat as table-only
+    if (input.startsWith(".")) {
+      const tableTerm = input.slice(1).trim();
+      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+        return;
+      }
+      const results = this.localStorageService.searchSavedSchemas(tableTerm);
+      this.showSearchDropdown(results);
+      return;
+    }
+
+    if (!input.includes(".")) {
+      if (!this.localStorageService.validateOracleName(input, "table")) {
+        return;
+      }
+      const results = this.localStorageService.searchSavedSchemas(input);
+      this.showSearchDropdown(results);
+      return;
+    }
+
     const parts = input.split(".");
-    if (
-      !this.localStorageService.validateOracleName(parts[0], "schema") ||
-      !this.localStorageService.validateOracleName(parts[1], "table")
-    ) {
+    const schemaPart = parts[0];
+    const tablePart = parts[1];
+    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+      return;
+    }
+    const tableValidation = tablePart === "" ? undefined : tablePart; // allow empty table part when dot present
+    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
       return;
     }
 
