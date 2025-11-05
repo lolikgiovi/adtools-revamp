@@ -8,7 +8,7 @@ export const JSONToolsTemplate = /* html */ `
     <div class="json-tools-header">
         <div class="json-tools-tabs">
             <button class="json-tab-button active" data-tab="validator">Validator</button>
-            <button class="json-tab-button" data-tab="prettify">Prettify</button>
+            <button class="json-tab-button" data-tab="prettify">Beautify</button>
             <button class="json-tab-button" data-tab="minify">Minify</button>
             <button class="json-tab-button" data-tab="stringify">Stringify</button>
             <button class="json-tab-button" data-tab="unstringify">Unstringify</button>
@@ -39,7 +39,7 @@ export const JSONToolsTemplate = /* html */ `
                     <button class="btn-copy-output" title="Copy Output">Copy</button>
                 </div>
             </div>
-            <div id="json-output" class="json-output"></div>
+            <div id="json-output" class="json-editor"></div>
         </div>
     </div>
     

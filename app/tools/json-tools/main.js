@@ -21,6 +21,7 @@ class JSONTools extends BaseTool {
       eventBus: eventBus,
     });
     this.editor = null;
+    this.outputEditor = null;
     this.currentTab = "validator";
     this.isErrorPanelCollapsed = false;
   }
@@ -60,8 +61,24 @@ class JSONTools extends BaseTool {
       },
     };
 
-    // Create Monaco Editor instance via ESM import
+    // Create Monaco Editor instance via ESM import (left/input)
     this.editor = monaco.editor.create(document.getElementById("json-editor"), {
+      value: "",
+      language: "json",
+      theme: "vs-dark",
+      automaticLayout: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      formatOnPaste: true,
+      formatOnType: true,
+      tabSize: 2,
+      insertSpaces: true,
+      suggestOnTriggerCharacters: false,
+    });
+
+    // Create Monaco Editor for the right/output panel (editable)
+    this.outputEditor = monaco.editor.create(document.getElementById("json-output"), {
       value: "",
       language: "json",
       theme: "vs-dark",
@@ -133,7 +150,7 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-copy-output").addEventListener("click", () => {
       this.clearErrors();
-      const output = document.getElementById("json-output").textContent;
+      const output = this.outputEditor ? this.outputEditor.getValue() : "";
       this.copyToClipboard(output);
     });
 
@@ -165,7 +182,7 @@ class JSONTools extends BaseTool {
     const actionButton = document.querySelector(".btn-action-primary");
     const buttonTexts = {
       validator: "Validate",
-      prettify: "Prettify",
+      prettify: "Beautify",
       minify: "Minify",
       stringify: "Stringify",
       unstringify: "Unstringify",
@@ -241,81 +258,61 @@ class JSONTools extends BaseTool {
   validateJSON() {
     UsageTracker.trackFeature("json-tools", "validate");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.validate(content);
     if (res.error) {
-      output.textContent = "❌ Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.className = "json-output success";
       this.showSuccess("JSON is valid ✅");
-      output.textContent = res.result;
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   prettifyJSON() {
     UsageTracker.trackFeature("json-tools", "prettify");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.prettify(content);
     if (res.error) {
-      output.textContent = "Error: Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   minifyJSON() {
     UsageTracker.trackFeature("json-tools", "minify");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.minify(content);
     if (res.error) {
-      output.textContent = "Error: Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   stringifyJSON() {
     UsageTracker.trackFeature("json-tools", "stringify");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.stringify(content);
     if (res.error) {
-      output.textContent = "Error: Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   unstringifyJSON() {
     UsageTracker.trackFeature("json-tools", "unstringify");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.unstringify(content);
     if (res.error) {
-      output.textContent = "Error: Invalid JSON string";
-      output.className = "json-output error";
       this.showError("JSON Unstringify Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
       this.clearErrors();
     }
   }
@@ -323,32 +320,24 @@ class JSONTools extends BaseTool {
   escapeJSON() {
     UsageTracker.trackFeature("json-tools", "escape");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.escape(content);
     if (res.error) {
-      output.textContent = "Error: Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   unescapeJSON() {
     UsageTracker.trackFeature("json-tools", "unescape");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
 
     const res = JSONToolsService.unescape(content);
     if (res.error) {
-      output.textContent = "Error: Invalid escaped JSON string";
-      output.className = "json-output error";
       this.showError("JSON Unescape Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
       this.clearErrors();
     }
   }
@@ -356,53 +345,63 @@ class JSONTools extends BaseTool {
   extractKeys() {
     UsageTracker.trackFeature("json-tools", "extract_keys");
     const content = this.editor.getValue().trim();
-    const output = document.getElementById("json-output");
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;
 
     const res = JSONToolsService.extractKeys(content, extractType === "paths");
     if (res.error) {
-      output.textContent = "Error: Invalid JSON";
-      output.className = "json-output error";
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
-      output.textContent = res.result;
-      output.className = "json-output success";
+      this.outputEditor.setValue(res.result || "");
     }
   }
 
   // getAllKeys and getErrorPosition are now provided by JSONToolsService
 
   showError(title, message, position = null) {
-    const outputSection = document.getElementById("json-output");
-
     let locationText = "";
+    let line = null;
+    let column = null;
     if (position !== null) {
       const content = this.editor.getValue();
       const lines = content.substring(0, position).split("\n");
-      const line = lines.length;
-      const column = lines[lines.length - 1].length + 1;
-      locationText = `<div class="error-location">Line ${line}, Column ${column}</div>`;
+      line = lines.length;
+      column = lines[lines.length - 1].length + 1;
+      locationText = `Line ${line}, Column ${column}`;
     }
 
-    outputSection.innerHTML = `
-            <div class="error-message">${title}</div>
-            ${message ? `<div>${message}</div>` : ""}
-            ${locationText}
-        `;
+    const parts = [title, message].filter(Boolean).join(": ");
+    const composed = locationText ? `${parts}\n${locationText}` : parts;
+    if (this.outputEditor) this.outputEditor.setValue(composed || "");
+
+    // Add a simple marker to the input editor to hint error position
+    try {
+      const model = this.editor && this.editor.getModel ? this.editor.getModel() : null;
+      if (model) {
+        const markers = [];
+        if (line !== null && column !== null) {
+          markers.push({
+            severity: monaco.MarkerSeverity.Error,
+            message: message || title || "Error",
+            startLineNumber: line,
+            startColumn: column,
+            endLineNumber: line,
+            endColumn: column + 1,
+          });
+        }
+        monaco.editor.setModelMarkers(model, "json-tools", markers);
+      }
+    } catch (_) {}
   }
 
   clearErrors() {
-    // Only clear output if it contains error messages, not successful results
-    const output = document.getElementById("json-output");
-    if (output.className.includes("error") || output.innerHTML.includes("error-message")) {
-      this.clearOutput();
-    }
+    try {
+      const model = this.editor && this.editor.getModel ? this.editor.getModel() : null;
+      if (model) monaco.editor.setModelMarkers(model, "json-tools", []);
+    } catch (_) {}
   }
 
   clearOutput() {
-    const output = document.getElementById("json-output");
-    output.textContent = "";
-    output.className = "json-output";
+    if (this.outputEditor) this.outputEditor.setValue("");
   }
 
   async copyToClipboard(text) {
@@ -422,6 +421,17 @@ class JSONTools extends BaseTool {
     } catch (error) {
       this.showError("Failed to paste from clipboard", "Make sure you have granted clipboard permissions.");
       console.error("Clipboard error:", error);
+    }
+  }
+
+  onUnmount() {
+    if (this.editor) {
+      this.editor.dispose();
+      this.editor = null;
+    }
+    if (this.outputEditor) {
+      this.outputEditor.dispose();
+      this.outputEditor = null;
     }
   }
 }
