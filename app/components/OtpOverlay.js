@@ -179,6 +179,9 @@ export async function openOtpOverlay({
           if (!res.ok || !j?.ok) throw new Error(j?.error || 'Invalid OTP');
           if (!j?.token) throw new Error('Authorization token missing');
 
+          // Persist session token immediately after successful verification
+          try { SessionTokenStore.saveToken(j.token); } catch (_) {}
+
           let kvValue = undefined;
           if (kvKey) {
             const kvUrl = BASE ? `${BASE}/api/kv/get?key=${encodeURIComponent(kvKey)}` : `/api/kv/get?key=${encodeURIComponent(kvKey)}`;
@@ -189,9 +192,6 @@ export async function openOtpOverlay({
             if (!res2.ok || !j2?.ok) throw new Error(j2?.error || 'KV access failure');
             kvValue = j2.value;
           }
-
-          // Persist session token for reuse while valid
-          try { SessionTokenStore.saveToken(j.token); } catch (_) {}
 
           cleanup();
           resolve({ token: j.token, kvValue });

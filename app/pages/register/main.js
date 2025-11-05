@@ -1,6 +1,8 @@
 import { RegisterTemplate } from "./template.js";
 import "./styles.css";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { SessionTokenStore } from "../../core/SessionTokenStore.js";
+import { isTauri } from "../../core/Runtime.js";
 
 export class RegisterPage {
   constructor({ eventBus } = {}) {
@@ -25,7 +27,7 @@ export class RegisterPage {
       const usernameInput = container.querySelector("#reg-username");
       const emailInput = container.querySelector("#reg-email");
       const otpInput = container.querySelector("#reg-otp");
-      const username = ((usernameInput.value || "").trim()).slice(0, 15);
+      const username = (usernameInput.value || "").trim().slice(0, 15);
       const email = (emailInput.value || "").trim();
 
       const emailOk = /.+@.+\..+/.test(email);
@@ -70,7 +72,11 @@ export class RegisterPage {
           // Normalize and cache whitelist locally
           try {
             const lower = (whitelist || [])
-              .map((e) => String(e || "").trim().toLowerCase())
+              .map((e) =>
+                String(e || "")
+                  .trim()
+                  .toLowerCase()
+              )
               .filter(Boolean);
             localStorage.setItem("config.whitelistEmails", JSON.stringify(lower));
             localStorage.setItem("config.whitelistFetchedAt", new Date().toISOString());
@@ -158,24 +164,23 @@ export class RegisterPage {
           const deviceId =
             typeof UsageTracker?.getDeviceId === "function"
               ? UsageTracker.getDeviceId()
-              : (localStorage.getItem("adtools.deviceId") || localStorage.getItem("usage.installId") || this._fallbackInstallId());
+              : localStorage.getItem("adtools.deviceId") || localStorage.getItem("usage.installId") || this._fallbackInstallId();
 
-const platform = await detectPlatformAsync();
-const browser = await detectBrowserAsync();
-           const payload = {
-             deviceId,
-             displayName: username,
-             email,
-             code,
-platform,
-browser,
-           };
+          const platform = isTauri() ? "Desktop (Tauri)" : "Browser";
+          const payload = {
+            deviceId,
+            displayName: username,
+            email,
+            code,
+            platform,
+          };
 
           submitBtn.disabled = true;
           submitBtn.textContent = "Verifying...";
           let verified = false;
           let userId = null;
           let blockedVerify = false;
+          let sessionToken = null;
           for (const endpoint of endpointCandidates.filter(Boolean)) {
             try {
               const res = await fetch(endpoint, {
@@ -189,6 +194,7 @@ browser,
                 if (resp?.ok) {
                   verified = true;
                   userId = resp?.userId || null;
+                  sessionToken = resp?.token || null;
                   break;
                 }
               } else if (res.status === 403) {
@@ -213,6 +219,11 @@ browser,
             errorEl.textContent = "Verification failed. Check the code and try again.";
             return;
           }
+
+          // Persist session token for OTP-auth KV access while valid
+          try {
+            if (sessionToken) SessionTokenStore.saveToken(sessionToken);
+          } catch (_) {}
 
           // Persist locally after verification
           try {
@@ -242,61 +253,4 @@ browser,
     }
     return id;
   }
-}
-
-// Simple platform/browser detectors for install analytics
-function detectPlatform() {
-  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-  const isTauri = (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) || /tauri/i.test(ua);
-  return isTauri ? 'Desktop' : 'Browser';
-}
-function detectBrowser() {
-  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-  const isTauri = (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) || /tauri/i.test(ua);
-  if (isTauri) return 'Tauri';
-  if (/Firefox\//.test(ua)) return 'Firefox';
-  if (/Edg\//.test(ua)) return 'Edge';
-  if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) return 'Chrome';
-  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'Safari';
-  if (/Chromium\//.test(ua)) return 'Chromium';
-  return 'Unknown';
-}
-
-async function detectPlatformAsync() {
-  try {
-    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-    if (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) {
-      return 'Desktop';
-    }
-    // Dynamic import succeeds only in Tauri
-    const mod = await import('@tauri-apps/api/core').catch(() => null);
-    if (mod && (mod.invoke || mod.default)) return 'Desktop';
-    return /tauri/i.test(ua) ? 'Desktop' : 'Browser';
-  } catch (_) {
-    return detectPlatform();
-  }
-}
-
-async function detectBrowserAsync() {
-  try {
-    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
-    if (typeof window !== 'undefined' && (window.__TAURI__ !== undefined || window.__TAURI_IPC__ !== undefined || window.__TAURI_METADATA__ !== undefined)) {
-      return 'Tauri';
-    }
-    const mod = await import('@tauri-apps/api/core').catch(() => null);
-    if (mod && (mod.invoke || mod.default)) return 'Tauri';
-    return detectBrowser();
-  } catch (_) {
-    return detectBrowser();
-  }
-}
-async function verifyOtp(email, code, deviceId, displayName) {
-  const platform = detectPlatform();
-  const browser = detectBrowser();
-  const res = await fetch('/api/register/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code, deviceId, displayName, platform, browser }),
-  });
-  return res.json();
 }

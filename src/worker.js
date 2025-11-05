@@ -566,32 +566,26 @@ async function handleRegisterVerify(request, env) {
     const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || "").trim();
     const ua = request.headers.get("User-Agent") || "";
     const payloadPlatform = String(data.platform || "").trim();
-    const payloadBrowser = String(data.browser || "").trim();
-    const tauriHint =
-      /tauri/i.test(ua) ||
-      /tauri/i.test(payloadPlatform) ||
-      /tauri/i.test(payloadBrowser) ||
-      (payloadPlatform === "Desktop" && (!payloadBrowser || /unknown/i.test(payloadBrowser)));
-    let platform = tauriHint ? "Desktop" : payloadPlatform || "Browser";
-    const browserUA = /Firefox\//i.test(ua)
-      ? "Firefox"
-      : /Edg\//i.test(ua)
-      ? "Edge"
-      : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
-      ? "Chrome"
-      : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
-      ? "Safari"
-      : /Chromium\//i.test(ua)
-      ? "Chromium"
-      : "Unknown";
-    const browserFromPayload = payloadBrowser && !/unknown/i.test(payloadBrowser) ? payloadBrowser : null;
-    let browser = tauriHint ? "Tauri" : browserFromPayload || browserUA;
-    if (!tauriHint && (!payloadBrowser || /unknown/i.test(payloadBrowser)) && (!payloadPlatform || /browser/i.test(payloadPlatform))) {
-      platform = "Desktop";
-      browser = "Tauri";
+    // Decide platform label:
+    // - If payload indicates Tauri desktop, preserve it as-is
+    // - Otherwise, categorize platform using User-Agent into browser types
+    let platform;
+    if (/^desktop\s*\(tauri\)$/i.test(payloadPlatform) || /tauri/i.test(payloadPlatform)) {
+      platform = payloadPlatform || "Desktop (Tauri)";
+    } else {
+      platform = /Firefox\//i.test(ua)
+        ? "Firefox"
+        : /Edg\//i.test(ua)
+        ? "Edge"
+        : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
+        ? "Chrome"
+        : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
+        ? "Safari"
+        : /Chromium\//i.test(ua)
+        ? "Chromium"
+        : "Unknown";
     }
     const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
-    const displayName = String(data.displayName || "").trim();
 
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
@@ -640,8 +634,6 @@ async function handleRegisterVerify(request, env) {
 
     // Consume the code
     await env.DB.prepare("UPDATE otp SET consumed_at = ? WHERE id = ?").bind(tsGmt7Plain(), row.id).run();
-
-    const salt = String(env.SECRET_SALT || "");
 
     // Upsert user (unique by email) with UUID id
     const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
