@@ -76,7 +76,13 @@ export class LocalStorageService {
       return true;
     } catch (error) {
       console.error("Error saving schema store:", error);
-      const type = (error && String(error.name || "").toLowerCase().includes("quota")) ? "quota_exceeded" : "schema_write_failed";
+      const type =
+        error &&
+        String(error.name || "")
+          .toLowerCase()
+          .includes("quota")
+          ? "quota_exceeded"
+          : "schema_write_failed";
       UsageTracker.trackEvent("quick-query", "storage_error", { type, message: error.message });
       return false;
     }
@@ -89,7 +95,13 @@ export class LocalStorageService {
       return true;
     } catch (error) {
       console.error("Error saving data store:", error);
-      const type = (error && String(error.name || "").toLowerCase().includes("quota")) ? "quota_exceeded" : "data_write_failed";
+      const type =
+        error &&
+        String(error.name || "")
+          .toLowerCase()
+          .includes("quota")
+          ? "quota_exceeded"
+          : "data_write_failed";
       UsageTracker.trackEvent("quick-query", "storage_error", { type, message: error.message });
       return false;
     }
@@ -313,7 +325,14 @@ export class LocalStorageService {
   }
 
   sqlLikeToRegex(pattern) {
-    return new RegExp("^" + pattern.replace(/%/g, ".*").replace(/_/g, ".").replace(/\[/g, "\\[").replace(/\]/g, "\\]") + "$", "i");
+    // If no SQL wildcards provided, default to prefix matching (starts-with)
+    const hasWildcards = /[%_]/.test(pattern);
+    if (hasWildcards) {
+      return new RegExp("^" + pattern.replace(/%/g, ".*").replace(/_/g, ".").replace(/\[/g, "\\[").replace(/\]/g, "\\]") + "$", "i");
+    }
+    // Escape regex meta for safety, then perform prefix match
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("^" + escaped + ".*$", "i");
   }
 
   getSchemaAbbreviations(schemaName) {
@@ -408,6 +427,17 @@ export class LocalStorageService {
     // Acronym of first letters (e.g., user_account -> ua)
     abbrs.add(parts.map((p) => p[0]?.toLowerCase()).join(""));
 
+    // Consonant-first initials chain across parts (e.g., bo_export_map -> bxm)
+    if (parts.length > 1) {
+      const consonantInitials = parts
+        .map((p) => {
+          const c = p.replace(/[aeiou]/g, "");
+          return (c[0] || p[0] || "").toLowerCase();
+        })
+        .join("");
+      if (consonantInitials) abbrs.add(consonantInitials);
+    }
+
     if (parts.length === 1) {
       const word = parts[0];
       for (let i = 1; i <= Math.min(4, word.length); i++) {
@@ -501,7 +531,7 @@ export class LocalStorageService {
     if (hasDot) {
       const [schemaTerm = "", tableTerm = ""] = searchTerm.split(".");
       schemaRegex = this.sqlLikeToRegex(schemaTerm);
-      tableWildcard = (tableTerm.trim() === "");
+      tableWildcard = tableTerm.trim() === "";
       tableRegex = tableWildcard ? null : this.sqlLikeToRegex(tableTerm);
     }
     // Use the in-memory index for faster matching
@@ -637,7 +667,9 @@ export class LocalStorageService {
   _convertJsonRowsToArray(rows, arraySchema) {
     // Recreate a 2D array with header row from schema fields order
     const header = arraySchema.map((r) => r[0]);
-    const dataRows = (rows || []).map((obj) => header.map((field) => (obj[field] === null || typeof obj[field] === "undefined" ? null : obj[field])));
+    const dataRows = (rows || []).map((obj) =>
+      header.map((field) => (obj[field] === null || typeof obj[field] === "undefined" ? null : obj[field]))
+    );
     return [header, ...dataRows];
   }
 }

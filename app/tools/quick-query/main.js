@@ -189,6 +189,7 @@ export class QuickQueryUI {
       tableNameInput: document.getElementById("tableNameInput"),
       queryTypeSelect: document.getElementById("queryTypeSelect"),
       schemaFileInput: document.getElementById("schemaFileInput"),
+      savedSchemasSearch: document.getElementById("savedSchemasSearch"),
 
       // Schema editor elements
       schemaContainer: document.getElementById("spreadsheet-schema"),
@@ -238,6 +239,9 @@ export class QuickQueryUI {
       tableNameInput: {
         input: (e) => this.handleSearchInput(e),
         keydown: (e) => this.handleSearchKeyDown(e),
+      },
+      savedSchemasSearch: {
+        input: (e) => this.handleSavedSchemasSearchInput(e),
       },
       queryTypeSelect: {
         change: () => this.handleGenerateQuery(),
@@ -323,6 +327,13 @@ export class QuickQueryUI {
       showSavedSchemasButton: {
         click: () => {
           this.elements.schemaOverlay.classList.remove("hidden");
+          if (this.elements.savedSchemasSearch) {
+            this.elements.savedSchemasSearch.value = "";
+          }
+          // Ensure latest abbreviations are indexed (e.g., 'svc' for 'service')
+          if (this.localStorageService && typeof this.localStorageService.rebuildIndex === "function") {
+            this.localStorageService.rebuildIndex();
+          }
           this.updateSavedSchemasList();
         },
       },
@@ -722,15 +733,19 @@ export class QuickQueryUI {
   }
 
   // Schema management methods
-  updateSavedSchemasList() {
+  updateSavedSchemasList(filteredTables) {
     const allTables = this.localStorageService.getAllTables();
+    const tablesToRender = Array.isArray(filteredTables) ? filteredTables : allTables;
 
-    if (allTables.length === 0) {
-      this.elements.savedSchemasList.innerHTML = '<div class="no-schemas">No saved schemas</div>';
+    if (tablesToRender.length === 0) {
+      const message = Array.isArray(filteredTables)
+        ? 'No matching results'
+        : 'No saved schemas';
+      this.elements.savedSchemasList.innerHTML = `<div class="no-schemas">${message}</div>`;
       return;
     }
 
-    const groupedTables = allTables.reduce((groups, table) => {
+    const groupedTables = tablesToRender.reduce((groups, table) => {
       if (!groups[table.schemaName]) {
         groups[table.schemaName] = [];
       }
@@ -791,6 +806,52 @@ export class QuickQueryUI {
 
       this.elements.savedSchemasList.appendChild(groupDiv);
     });
+  }
+
+  handleSavedSchemasSearchInput(event) {
+    const input = event.target.value.trim();
+
+    // Empty search: show all saved schemas
+    if (!input) {
+      this.updateSavedSchemasList();
+      return;
+    }
+
+    // Table-only search when input starts with '.'
+    if (input.startsWith(".")) {
+      const tableTerm = input.slice(1).trim();
+      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+        return;
+      }
+      const results = this.localStorageService.searchSavedSchemas(tableTerm);
+      this.updateSavedSchemasList(results);
+      return;
+    }
+
+    // Table-only search when no '.' present
+    if (!input.includes(".")) {
+      if (!this.localStorageService.validateOracleName(input, "table")) {
+        return;
+      }
+      const results = this.localStorageService.searchSavedSchemas(input);
+      this.updateSavedSchemasList(results);
+      return;
+    }
+
+    // Schema.table search when '.' present
+    const parts = input.split(".");
+    const schemaPart = parts[0];
+    const tablePart = parts[1];
+    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+      return;
+    }
+    const tableValidation = tablePart === "" ? undefined : tablePart;
+    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
+      return;
+    }
+
+    const results = this.localStorageService.searchSavedSchemas(input);
+    this.updateSavedSchemasList(results);
   }
 
   handleLoadSchema(fullName) {
