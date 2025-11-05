@@ -12,7 +12,7 @@ class UsageTracker {
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static FLUSH_DELAY_MS = 300; // debounce writes
-  static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // hourly remote flush
+  static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // hourly remote flush (default)
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
@@ -42,12 +42,12 @@ class UsageTracker {
     // Load after flags applied so fallback behaves correctly
     this._state = this._loadFromStorage();
 
-    // Start hourly batch flush for remote analytics
+    // Start periodic batch flush for remote analytics
     try {
       if (this._batchTimer) clearInterval(this._batchTimer);
       this._batchTimer = setInterval(() => {
         this._flushBatch().catch(() => {});
-      }, this.BATCH_FLUSH_INTERVAL_MS);
+      }, this._getBatchIntervalMs());
     } catch (_) {}
 
     // Ensure flush on unload to prevent data loss
@@ -70,6 +70,19 @@ class UsageTracker {
         });
       } catch (_) {}
     }
+  }
+
+  static _getBatchIntervalMs() {
+    // Allow overrides via env or localStorage for quicker testing
+    try {
+      const envMs = Number(import.meta?.env?.VITE_USAGE_BATCH_INTERVAL_MS);
+      if (Number.isFinite(envMs) && envMs > 0) return envMs;
+    } catch (_) {}
+    try {
+      const ls = Number(localStorage.getItem('usage.analytics.batch.interval.ms'));
+      if (Number.isFinite(ls) && ls > 0) return ls;
+    } catch (_) {}
+    return this.BATCH_FLUSH_INTERVAL_MS;
   }
 
   /** Track a usage event (simple: increment counts and daily, flush immediately) */
@@ -400,6 +413,7 @@ class UsageTracker {
     const alreadySent = (s.dailySent && s.dailySent[today]) ? s.dailySent[today] : {};
     const current = (s.daily && s.daily[today]) ? s.daily[today] : {};
     const daily_usage = [];
+    const userTotals = new Map();
     // Build per-row entries matching worker/schema: tool_id + action + count
     for (const [k, v] of Object.entries(current)) {
       const prev = Number(alreadySent[k] || 0);
@@ -422,10 +436,25 @@ class UsageTracker {
           count,
           updated_time: this._nowGmt7Plain(),
         });
+
+        // Aggregate per-tool user totals for user_usage upsert
+        if (user_id) {
+          const key = `${user_id}::${tool_id}`;
+          const prevTotal = userTotals.get(key) || 0;
+          userTotals.set(key, prevTotal + count);
+        }
       }
     }
 
-    return { events, daily_usage };
+    // Convert aggregated map into user_usage array for server upsert
+    const user_usage = [];
+    const nowPlain = this._nowGmt7Plain();
+    for (const [key, cnt] of userTotals.entries()) {
+      const [user_id, tool_id] = key.split('::');
+      user_usage.push({ user_id, tool_id, count: cnt, updated_time: nowPlain });
+    }
+
+    return { events, daily_usage, user_usage };
   }
 
   // Send batch to backend and update local snapshots
@@ -433,7 +462,7 @@ class UsageTracker {
     if (!this._enabled) return;
     try {
       const payload = this._toBatchPayload();
-      if ((payload.events && payload.events.length) || (payload.daily_usage && payload.daily_usage.length)) {
+      if ((payload.events && payload.events.length) || (payload.daily_usage && payload.daily_usage.length) || (payload.user_usage && payload.user_usage.length)) {
         await AnalyticsSender.sendBatch(payload);
         // After successful send, clear events and update dailySent snapshot for today
         const today = new Date().toISOString().slice(0, 10);

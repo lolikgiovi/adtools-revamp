@@ -56,6 +56,12 @@ class App {
   init() {
     this.setupDOM();
     this.buildToolsConfigMap();
+    // Dev: speed up analytics batch interval for quicker feedback
+    if (import.meta?.env?.DEV) {
+      try {
+        localStorage.setItem("usage.analytics.batch.interval.ms", String(15 * 60 * 1000));
+      } catch (_) {}
+    }
     // Initialize usage tracking early with the app event bus
     UsageTracker.init(this.eventBus);
     // Always expose a global reset helper so it’s callable from console
