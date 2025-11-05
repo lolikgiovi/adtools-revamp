@@ -294,6 +294,27 @@ export class LocalStorageService {
     });
   }
 
+  // Return the most recently updated table based solely on the data store
+  getMostRecentDataTable() {
+    try {
+      const dataStore = this.getDataStore();
+      let best = null;
+      Object.entries(dataStore || {}).forEach(([schemaName, tables]) => {
+        Object.entries(tables || {}).forEach(([tableName, info]) => {
+          const ts = info?.last_updated ? new Date(info.last_updated).getTime() : -1;
+          if (!best || ts > best.ts) {
+            best = { ts, schemaName, tableName, fullName: `${schemaName}.${tableName}`, lastUpdated: info?.last_updated || null };
+          }
+        });
+      });
+      if (!best) return null;
+      const { fullName, schemaName, tableName, lastUpdated } = best;
+      return { fullName, schemaName, tableName, lastUpdated };
+    } catch (_) {
+      return null;
+    }
+  }
+
   // Schema searching functions
   getByteLength(str) {
     return new TextEncoder().encode(str).length;
@@ -571,7 +592,17 @@ export class LocalStorageService {
   }
 
   searchSavedSchemas(searchTerm) {
-    if (!searchTerm) return [];
+    // When search is empty, return recent tables to enable default suggestions
+    if (!searchTerm) {
+      const tables = this.getAllTables();
+      return tables.sort((a, b) => {
+        const aTs = a.lastUpdated ? new Date(a.lastUpdated).getTime() : -1;
+        const bTs = b.lastUpdated ? new Date(b.lastUpdated).getTime() : -1;
+        if (bTs !== aTs) return bTs - aTs; // newest first
+        if (a.schemaName === b.schemaName) return a.tableName.localeCompare(b.tableName);
+        return a.schemaName.localeCompare(b.schemaName);
+      });
+    }
     if (this._index.dirty) this.rebuildIndex();
     const results = [];
     const hasDot = searchTerm.includes(".");

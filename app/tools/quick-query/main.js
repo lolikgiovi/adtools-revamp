@@ -1205,10 +1205,24 @@ export class QuickQueryUI {
   }
 
   loadMostRecentSchema() {
+    // Prefer last activity from data store to restore the most recent working table
+    const recentFromData = this.localStorageService.getMostRecentDataTable();
+    if (recentFromData && recentFromData.fullName) {
+      this.handleLoadSchema(recentFromData.fullName);
+      return;
+    }
+
+    // Fallback: choose the most recent by timestamp across all tables
     const allTables = this.localStorageService.getAllTables();
     if (allTables.length > 0) {
-      const mostRecent = allTables[0];
-      this.handleLoadSchema(mostRecent.fullName);
+      const mostRecent = allTables.reduce((best, t) => {
+        const ts = t.lastUpdated ? new Date(t.lastUpdated).getTime() : -1;
+        if (!best || ts > best.ts) return { t, ts };
+        return best;
+      }, null);
+      if (mostRecent?.t?.fullName) {
+        this.handleLoadSchema(mostRecent.t.fullName);
+      }
     }
   }
 
