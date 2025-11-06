@@ -3,6 +3,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
+    .manage(CredentialManager::new())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
       set_jenkins_username,
@@ -13,7 +14,16 @@ pub fn run() {
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
       open_url,
-      get_arch
+      get_arch,
+      // Oracle feature (optional) commands
+      check_oracle_client_ready,
+      prime_oracle_client,
+      set_oracle_credentials,
+      get_oracle_credentials,
+      test_oracle_connection,
+      fetch_table_metadata,
+      compare_configurations,
+      export_comparison_result
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -29,6 +39,9 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 pub mod jenkins;
+pub mod oracle;
+use oracle::commands::*;
+use oracle::credentials::CredentialManager;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
