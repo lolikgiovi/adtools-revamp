@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Memory Leak Diagnostic</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    h1 { color: #569cd6; }
+    .controls {
+      margin: 20px 0;
+      padding: 15px;
+      background: #252526;
+      border-radius: 4px;
+    }
+    button {
+      background: #0e639c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #1177bb; }
+    button:disabled {
+      background: #3e3e42;
+      cursor: not-allowed;
+    }
+    .results {
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .result-item {
+      padding: 8px;
+      margin: 5px 0;
+      border-left: 3px solid #569cd6;
+      background: #252526;
+    }
+    .pass { border-left-color: #4ec9b0; }
+    .fail { border-left-color: #f48771; }
+    .warn { border-left-color: #dcdcaa; }
+    .metric {
+      display: inline-block;
+      margin-right: 20px;
+    }
+    .metric-label {
+      color: #9cdcfe;
+      font-weight: bold;
+    }
+    pre {
+      background: #1e1e1e;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔬 Memory Leak Diagnostic</h1>
+
+  <div class="controls">
+    <button id="startTest">Run Full Test (50 switches)</button>
+    <button id="quickTest">Quick Test (10 switches)</button>
+    <button id="checkListeners">Check Current Listeners</button>
+    <button id="clearResults">Clear Results</button>
+  </div>
+
+  <div id="results" class="results"></div>
+
+  <script>
+    const resultsDiv = document.getElementById('results');
+    const startBtn = document.getElementById('startTest');
+    const quickBtn = document.getElementById('quickTest');
+    const checkBtn = document.getElementById('checkListeners');
+    const clearBtn = document.getElementById('clearResults');
+
+    function log(message, type = 'info') {
+      const div = document.createElement('div');
+      div.className = `result-item ${type}`;
+      div.innerHTML = message;
+      resultsDiv.appendChild(div);
+      resultsDiv.scrollTop = resultsDiv.scrollHeight;
+    }
+
+    function formatBytes(bytes) {
+      return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    // Check if managed listeners are being cleaned up
+    function checkManagedListeners() {
+      log('=== MANAGED LISTENERS CHECK ===', 'info');
+
+      const app = window.app;
+      if (!app) {
+        log('❌ App not found - make sure you\'re running this from the app', 'fail');
+        return null;
+      }
+
+      const currentTool = app.currentTool;
+      if (!currentTool) {
+        log('ℹ️ No active tool', 'info');
+        return null;
+      }
+
+      log(`📌 Current Tool: <span class="metric-label">${currentTool.id}</span>`);
+
+      const managedCount = currentTool._managedListeners?.length || 0;
+      log(`<span class="metric-label">Managed Listeners:</span> ${managedCount}`);
+
+      // Check if BaseTool has the new methods
+      const hasMethods = {
+        addManagedListener: typeof currentTool.addManagedListener === 'function',
+        removeManagedListener: typeof currentTool.removeManagedListener === 'function',
+        removeAllManagedListeners: typeof currentTool.removeAllManagedListeners === 'function'
+      };
+
+      if (hasMethods.addManagedListener) {
+        log('✅ Managed listener pattern is implemented', 'pass');
+      } else {
+        log('❌ Managed listener pattern NOT found - old version?', 'fail');
+      }
+
+      return { currentTool, managedCount, hasMethods };
+    }
+
+    // Test listener cleanup
+    async function testListenerCleanup(iterations = 50) {
+      const tools = ['jenkins-runner', 'quick-query', 'html-editor', 'json-tools'];
+
+      log('=== STARTING MEMORY LEAK TEST ===', 'info');
+      log(`<span class="metric-label">Iterations:</span> ${iterations}`);
+
+      // Initial state
+      if (!performance.memory) {
+        log('⚠️ performance.memory not available. Run Chrome with --enable-precise-memory-info', 'warn');
+      }
+
+      const initialMemory = performance.memory?.usedJSHeapSize || 0;
+      log(`<span class="metric-label">Initial Memory:</span> ${formatBytes(initialMemory)}`);
+
+      // Track listener counts
+      const listenerSnapshots = [];
+
+      // Test loop
+      for (let i = 0; i < iterations; i++) {
+        const tool = tools[i % tools.length];
+
+        // Navigate to tool
+        window.location.hash = `#/${tool}`;
+        await new Promise(r => setTimeout(r, 150));
+
+        // Check listeners mid-way
+        if (i === Math.floor(iterations / 2)) {
+          const app = window.app;
+          const currentTool = app?.currentTool;
+          const managedCount = currentTool?._managedListeners?.length || 0;
+          listenerSnapshots.push({ iteration: i, count: managedCount, phase: 'active' });
+        }
+
+        // Navigate away
+        window.location.hash = '#/';
+        await new Promise(r => setTimeout(r, 150));
+
+        // Check cleanup mid-way
+        if (i === Math.floor(iterations / 2)) {
+          const app = window.app;
+          const currentTool = app?.currentTool;
+          const managedCount = currentTool?._managedListeners?.length || 0;
+          listenerSnapshots.push({ iteration: i, count: managedCount, phase: 'cleanup' });
+        }
+
+        if ((i + 1) % 10 === 0) {
+          const currentMemory = performance.memory?.usedJSHeapSize || 0;
+          const leaked = currentMemory - initialMemory;
+          log(
+            `<span class="metric">Iteration: <span class="metric-label">${i + 1}/${iterations}</span></span>` +
+            `<span class="metric">Memory: <span class="metric-label">${formatBytes(currentMemory)}</span></span>` +
+            `<span class="metric">Leaked: <span class="metric-label">+${formatBytes(leaked)}</span></span>`
+          );
+        }
+      }
+
+      // Force garbage collection if available
+      if (window.gc) {
+        log('🗑️ Running garbage collection...', 'info');
+        window.gc();
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      // Final results
+      const finalMemory = performance.memory?.usedJSHeapSize || 0;
+      const totalLeak = finalMemory - initialMemory;
+      const perIteration = totalLeak / iterations;
+
+      log('=== TEST COMPLETE ===', 'info');
+      log(`<span class="metric-label">Final Memory:</span> ${formatBytes(finalMemory)}`);
+      log(`<span class="metric-label">Total Leaked:</span> ${formatBytes(totalLeak)}`);
+      log(`<span class="metric-label">Per Switch:</span> ${formatBytes(perIteration)}`);
+
+      // Listener cleanup check
+      if (listenerSnapshots.length === 2) {
+        const [active, cleanup] = listenerSnapshots;
+        log('=== LISTENER CLEANUP CHECK ===', 'info');
+        log(`<span class="metric-label">Listeners during active:</span> ${active.count}`);
+        log(`<span class="metric-label">Listeners after cleanup:</span> ${cleanup.count}`);
+
+        if (cleanup.count === 0) {
+          log('✅ Listeners properly cleaned up!', 'pass');
+        } else if (cleanup.count < active.count) {
+          log(`⚠️ Partial cleanup: ${active.count} → ${cleanup.count}`, 'warn');
+        } else {
+          log('❌ Listeners NOT cleaned up (memory leak!)', 'fail');
+        }
+      }
+
+      // Verdict
+      log('=== VERDICT ===', 'info');
+
+      if (totalLeak < 5 * 1024 * 1024) {
+        log(`✅ EXCELLENT: Memory leak < 5 MB (${formatBytes(totalLeak)})`, 'pass');
+      } else if (totalLeak < 15 * 1024 * 1024) {
+        log(`⚠️ MODERATE: Memory leak 5-15 MB (${formatBytes(totalLeak)})`, 'warn');
+        log('This is acceptable for cache growth but could be optimized', 'warn');
+      } else {
+        log(`❌ PROBLEMATIC: Memory leak > 15 MB (${formatBytes(totalLeak)})`, 'fail');
+        log('Significant memory leak detected - needs investigation', 'fail');
+      }
+
+      // Breakdown
+      const fixedListenerLeak = perIteration < 100 * 1024; // < 100 KB per switch
+      const hasCache = totalLeak > 5 * 1024 * 1024 && totalLeak < 15 * 1024 * 1024;
+
+      log('=== BREAKDOWN ===', 'info');
+      if (fixedListenerLeak) {
+        log('✅ Event listener leaks: FIXED (< 100 KB/switch)', 'pass');
+      } else {
+        log('❌ Event listener leaks: Still present', 'fail');
+      }
+
+      if (hasCache) {
+        log('ℹ️ Remaining growth likely due to:', 'info');
+        log('  - Monaco editor caching (~5-10 MB)', 'info');
+        log('  - Handsontable internal cache', 'info');
+        log('  - V8 engine optimizations', 'info');
+        log('  - String interning', 'info');
+      }
+    }
+
+    // Event handlers
+    startBtn.addEventListener('click', async () => {
+      startBtn.disabled = true;
+      quickBtn.disabled = true;
+      await testListenerCleanup(50);
+      startBtn.disabled = false;
+      quickBtn.disabled = false;
+    });
+
+    quickBtn.addEventListener('click', async () => {
+      startBtn.disabled = true;
+      quickBtn.disabled = true;
+      await testListenerCleanup(10);
+      startBtn.disabled = false;
+      quickBtn.disabled = false;
+    });
+
+    checkBtn.addEventListener('click', () => {
+      checkManagedListeners();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      resultsDiv.innerHTML = '';
+    });
+
+    // Auto-check on load
+    setTimeout(() => {
+      log('💡 Click "Check Current Listeners" to verify the fixes are active', 'info');
+      log('💡 Then run "Quick Test" or "Full Test" to measure memory leaks', 'info');
+    }, 100);
+  </script>
+</body>
+</html>

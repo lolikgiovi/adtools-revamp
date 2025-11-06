@@ -12,6 +12,7 @@ class BaseTool {
     this.container = null;
     this.isActive = false;
     this.eventBus = config.eventBus;
+    this._managedListeners = []; // Track all listeners for automatic cleanup
 
     this.init();
   }
@@ -71,6 +72,7 @@ class BaseTool {
     if (!this.isActive) return;
 
     this.isActive = false;
+    this.removeAllManagedListeners(); // Auto-cleanup all managed listeners
     this.onDeactivate();
 
     if (this.eventBus) {
@@ -92,6 +94,41 @@ class BaseTool {
    */
   onDeactivate() {
     // Default behavior
+  }
+
+  /**
+   * Add an event listener that will be automatically cleaned up on deactivation
+   * @param {EventTarget} target - DOM element or window/document
+   * @param {string} event - Event name
+   * @param {Function} handler - Event handler
+   * @param {Object} options - addEventListener options
+   */
+  addManagedListener(target, event, handler, options = {}) {
+    target.addEventListener(event, handler, options);
+    this._managedListeners.push({ target, event, handler, options });
+  }
+
+  /**
+   * Remove a specific managed listener
+   * @param {EventTarget} target - DOM element or window/document
+   * @param {string} event - Event name
+   * @param {Function} handler - Event handler
+   */
+  removeManagedListener(target, event, handler) {
+    target.removeEventListener(event, handler);
+    this._managedListeners = this._managedListeners.filter(
+      (l) => !(l.target === target && l.event === event && l.handler === handler)
+    );
+  }
+
+  /**
+   * Remove all managed listeners (called automatically on deactivate)
+   */
+  removeAllManagedListeners() {
+    this._managedListeners.forEach(({ target, event, handler, options }) => {
+      target.removeEventListener(event, handler, options);
+    });
+    this._managedListeners = [];
   }
 
   /**

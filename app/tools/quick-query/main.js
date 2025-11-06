@@ -38,15 +38,23 @@ export class QuickQuery extends BaseTool {
   }
 
   onMount() {
-    this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this));
+    this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this), this);
+  }
+
+  onDeactivate() {
+    // Cleanup QuickQueryUI resources
+    if (this.ui && typeof this.ui.cleanup === 'function') {
+      this.ui.cleanup();
+    }
   }
 }
 
 export class QuickQueryUI {
-  constructor(container, updateHeaderTitle, copyToClipboard) {
+  constructor(container, updateHeaderTitle, copyToClipboard, toolInstance = null) {
     this.container = container;
     this.copyToClipboard = copyToClipboard;
     this.updateHeaderTitle = updateHeaderTitle;
+    this.toolInstance = toolInstance; // Reference to parent tool for managed listeners
     this.editor = null;
     this.schemaTable = null;
     this.dataTable = null;
@@ -58,6 +66,7 @@ export class QuickQueryUI {
     this.isGuideActive = false;
     this.isAttachmentActive = false;
     this.processedFiles = [];
+    this._resizeHandler = null; // Store handler reference for cleanup
 
     // Initialize search state
     this.searchState = {
@@ -166,14 +175,19 @@ export class QuickQueryUI {
       this.initializeEditor();
 
       // Update the data table height responsively
-      const resizeHandler = () => {
+      this._resizeHandler = () => {
         if (this.dataTable) {
           this.applyDataTableHeight();
         }
       };
-      window.addEventListener("resize", resizeHandler);
+      // Use managed listener if available, otherwise fallback to direct listener
+      if (this.toolInstance && typeof this.toolInstance.addManagedListener === 'function') {
+        this.toolInstance.addManagedListener(window, "resize", this._resizeHandler);
+      } else {
+        window.addEventListener("resize", this._resizeHandler);
+      }
       // Initial height update after mount
-      resizeHandler();
+      this._resizeHandler();
 
       // Make sure files container is visible initially
       if (this.elements.filesContainer) {
@@ -1675,6 +1689,47 @@ export class QuickQueryUI {
   }
   closeFilePreview() {
     this.elements.filePreviewOverlay.classList.add("hidden");
+  }
+
+  /**
+   * Cleanup method called when tool is deactivated
+   * Disposes resources and removes event listeners to prevent memory leaks
+   */
+  cleanup() {
+    // Cleanup resize handler if not using managed listeners
+    if (this._resizeHandler && (!this.toolInstance || !this.toolInstance.addManagedListener)) {
+      window.removeEventListener("resize", this._resizeHandler);
+    }
+    this._resizeHandler = null;
+
+    // Dispose Monaco editor
+    if (this.editor) {
+      try {
+        this.editor.dispose();
+      } catch (e) {
+        console.warn("Failed to dispose editor:", e);
+      }
+      this.editor = null;
+    }
+
+    // Destroy Handsontable instances
+    if (this.schemaTable) {
+      try {
+        this.schemaTable.destroy();
+      } catch (e) {
+        console.warn("Failed to destroy schema table:", e);
+      }
+      this.schemaTable = null;
+    }
+
+    if (this.dataTable) {
+      try {
+        this.dataTable.destroy();
+      } catch (e) {
+        console.warn("Failed to destroy data table:", e);
+      }
+      this.dataTable = null;
+    }
   }
 }
 

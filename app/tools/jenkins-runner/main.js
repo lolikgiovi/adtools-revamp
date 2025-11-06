@@ -511,12 +511,12 @@ export class JenkinsRunner extends BaseTool {
         this._sidebarUnsubs.push(this.eventBus.on("sidebar:closed", relayoutEditors));
       } catch (_) {}
     }
-    // Also listen to DOM custom event for broader compatibility
+    // Also listen to DOM custom event for broader compatibility (using managed listeners)
     this._sidebarDomListener = (e) => relayoutEditors();
-    document.addEventListener("sidebarStateChange", this._sidebarDomListener);
-    // Window resize safety net
+    this.addManagedListener(document, "sidebarStateChange", this._sidebarDomListener);
+    // Window resize safety net (using managed listeners)
     this._resizeListener = () => relayoutEditors();
-    window.addEventListener("resize", this._resizeListener);
+    this.addManagedListener(window, "resize", this._resizeListener);
 
     const saveLastState = (patch = {}) => {
       const base = {
@@ -1076,6 +1076,7 @@ export class JenkinsRunner extends BaseTool {
 
     // History persistence and rendering
     const persistHistoryKey = "tool:jenkins-runner:history";
+    const MAX_HISTORY_ENTRIES = 100; // Limit history to prevent unbounded growth
     const loadHistory = () => {
       try {
         const raw = localStorage.getItem(persistHistoryKey) || "[]";
@@ -1087,7 +1088,9 @@ export class JenkinsRunner extends BaseTool {
     };
     const saveHistory = (arr) => {
       try {
-        localStorage.setItem(persistHistoryKey, JSON.stringify(arr));
+        // Trim to max size (keep most recent entries)
+        const trimmed = arr.length > MAX_HISTORY_ENTRIES ? arr.slice(-MAX_HISTORY_ENTRIES) : arr;
+        localStorage.setItem(persistHistoryKey, JSON.stringify(trimmed));
       } catch (_) {}
     };
     const renderHistory = () => {
@@ -1648,8 +1651,8 @@ export class JenkinsRunner extends BaseTool {
       });
     }
 
-    // Dismiss suggestions when clicking outside inputs/suggestion containers
-    document.addEventListener("click", (e) => {
+    // Dismiss suggestions when clicking outside inputs/suggestion containers (using managed listener)
+    this.addManagedListener(document, "click", (e) => {
       const target = e.target;
       // Modal tags suggestions
       if (templateTagsContainer && templateTagsSuggestionsEl) {
@@ -2325,13 +2328,25 @@ export class JenkinsRunner extends BaseTool {
   }
 
   onDeactivate() {
-    // Cleanup listeners
+    // Cleanup Tauri event listeners
     try {
       for (const un of this._logUnsubscribes) {
         un();
       }
     } catch (_) {}
     this._logUnsubscribes = [];
+
+    // Cleanup sidebar event bus listeners
+    if (this._sidebarUnsubs) {
+      try {
+        for (const unsub of this._sidebarUnsubs) {
+          if (typeof unsub === 'function') unsub();
+        }
+      } catch (_) {}
+      this._sidebarUnsubs = [];
+    }
+
+    // Dispose Monaco editors to free memory
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -2340,5 +2355,11 @@ export class JenkinsRunner extends BaseTool {
       this.templateEditor.dispose();
       this.templateEditor = null;
     }
+    if (this.state?.split?.editor) {
+      this.state.split.editor.dispose();
+      this.state.split.editor = null;
+    }
+
+    // Managed listeners (window, document) are automatically cleaned up by BaseTool.deactivate()
   }
 }

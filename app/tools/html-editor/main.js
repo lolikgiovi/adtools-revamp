@@ -66,7 +66,9 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   onUnmount() {
-    // Removed resizer cleanup for fixed split
+    // Cleanup resizer event listeners
+    this.cleanupResizer();
+
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;

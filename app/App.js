@@ -26,6 +26,7 @@ import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
+import { Sanitizer } from "./core/Sanitizer.js";
 
 class App {
   constructor() {
@@ -125,7 +126,14 @@ class App {
     const list = toolsConfig && toolsConfig.tools ? toolsConfig.tools : [];
     this.toolsConfigMap.clear();
     list.forEach((cfg) => {
-      if (cfg && cfg.id) this.toolsConfigMap.set(cfg.id, cfg);
+      if (cfg && cfg.id) {
+        // Validate: reject HTML in tool names/descriptions to prevent XSS
+        if (!Sanitizer.isHTMLFree(cfg.name) || !Sanitizer.isHTMLFree(cfg.description)) {
+          console.error(`Invalid tool config (HTML detected): ${cfg.id}`);
+          return; // Skip this tool
+        }
+        this.toolsConfigMap.set(cfg.id, cfg);
+      }
     });
   }
 
@@ -333,13 +341,16 @@ class App {
       })
       .map((tool) => {
         const metadata = tool.getMetadata();
+        const safeName = Sanitizer.escapeHTML(metadata.name);
+        const safeDesc = Sanitizer.escapeHTML(metadata.description);
+        const safeId = Sanitizer.escapeHTML(metadata.id);
         return `
-            <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
+            <div class="tool-card" data-tool="${safeId}" onclick="app.navigateToTool('${safeId}')">
               <div class="tool-card-icon">
                 ${this.getToolIcon(metadata.icon)}
               </div>
-              <h3 class="tool-card-title">${metadata.name}</h3>
-              <p class="tool-card-description">${metadata.description}</p>
+              <h3 class="tool-card-title">${safeName}</h3>
+              <p class="tool-card-description">${safeDesc}</p>
             </div>
           `;
       })
@@ -492,20 +503,30 @@ class App {
       existingNotifications[0].remove();
     }
 
-    // Create notification element
+    // Create notification element safely
     const notification = document.createElement("div");
     notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-            <div class="notification-content">
-                <span class="notification-message">${message}</span>
-                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-        `;
+
+    const content = document.createElement("div");
+    content.className = "notification-content";
+
+    const messageSpan = document.createElement("span");
+    messageSpan.className = "notification-message";
+    messageSpan.textContent = message; // Safe: textContent auto-escapes
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "notification-close";
+    closeBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    `; // SVG is trusted
+    closeBtn.onclick = () => notification.remove();
+
+    content.appendChild(messageSpan);
+    content.appendChild(closeBtn);
+    notification.appendChild(content);
 
     // Add to container
     container.appendChild(notification);
@@ -527,18 +548,20 @@ class App {
    * Bind global events
    */
   bindGlobalEvents() {
-    // Handle window resize
-    window.addEventListener("resize", () => {
+    // Handle window resize (store reference for cleanup)
+    this._boundResize = () => {
       this.eventBus.emit("window:resize", {
         width: window.innerWidth,
         height: window.innerHeight,
       });
-    });
+    };
+    window.addEventListener("resize", this._boundResize);
 
-    // Handle keyboard shortcuts
-    document.addEventListener("keydown", (e) => {
+    // Handle keyboard shortcuts (store reference for cleanup)
+    this._boundKeydown = (e) => {
       this.handleKeyboardShortcuts(e);
-    });
+    };
+    document.addEventListener("keydown", this._boundKeydown);
 
     // Handle theme changes
     this.eventBus.on("theme:change", (data) => {
@@ -594,7 +617,7 @@ class App {
     // In Tauri desktop app, suppress the default WebView right-click menu
     // This keeps the UI cleaner and avoids native context items like "Look Up"
     if (isTauri()) {
-      const preventContextMenu = (e) => {
+      this._boundPreventContextMenu = (e) => {
         try {
           // Allow tools to opt-out by marking elements
           // Example: element.setAttribute('data-allow-contextmenu', 'true')
@@ -605,7 +628,7 @@ class App {
         }
       };
       // Capture phase ensures we run before other handlers
-      document.addEventListener("contextmenu", preventContextMenu, { capture: true });
+      document.addEventListener("contextmenu", this._boundPreventContextMenu, { capture: true });
     }
   }
 
@@ -632,10 +655,11 @@ class App {
       this._updateBannerEl = el;
     }
 
-    const version = result?.version ? String(result.version) : "";
-    const channel = result?.channel ? String(result.channel) : "";
+    const version = Sanitizer.escapeHTML(result?.version || "");
+    const channel = Sanitizer.escapeHTML(result?.channel || "");
     const label = version ? `Update available: v${version}${channel ? ` (${channel})` : ""}` : "Update available";
 
+    // label is now safe to use in innerHTML
     this._updateBannerEl.innerHTML = /*html*/ `
       <div class="update-banner-content">
         <span class="update-banner-label">${label}</span>
@@ -867,7 +891,18 @@ class App {
    * Destroy the application
    */
   destroy() {
-    // Cleanup event listeners
+    // Remove global event listeners
+    if (this._boundResize) {
+      window.removeEventListener("resize", this._boundResize);
+    }
+    if (this._boundKeydown) {
+      document.removeEventListener("keydown", this._boundKeydown);
+    }
+    if (this._boundPreventContextMenu) {
+      document.removeEventListener("contextmenu", this._boundPreventContextMenu, { capture: true });
+    }
+
+    // Cleanup event bus listeners
     this.eventBus.clear();
 
     // Cancel any scheduled updater timers
