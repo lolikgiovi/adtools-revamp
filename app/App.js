@@ -29,6 +29,7 @@ import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
+import { CompareConfigTool } from "./tools/compare-config/main.js";
 
 class App {
   constructor() {
@@ -256,6 +257,10 @@ class App {
     // Register Jenkins Runner
     const jenkinsRunner = new JenkinsRunner(this.eventBus);
     this.registerTool(jenkinsRunner);
+
+    // Register Compare Config
+    const compareConfig = new CompareConfigTool(this.eventBus);
+    this.registerTool(compareConfig);
 
     // Add more tools here as they are implemented
   }

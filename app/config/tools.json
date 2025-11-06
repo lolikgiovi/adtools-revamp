@@ -84,6 +84,17 @@
       "order": 60
     },
     {
+      "id": "compare-config",
+      "name": "Compare Config",
+      "category": "config",
+      "icon": "database",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "requiresTauri": false,
+      "order": 65
+    },
+    {
       "id": "splunk-template",
       "name": "Splunk Template",
       "category": "config",
