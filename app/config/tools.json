@@ -1,4 +1,16 @@
 {
+  "categories": [
+    {
+      "id": "config",
+      "name": "Config",
+      "order": 10
+    },
+    {
+      "id": "general",
+      "name": "General",
+      "order": 20
+    }
+  ],
   "tools": [
     {
       "id": "uuid-generator",

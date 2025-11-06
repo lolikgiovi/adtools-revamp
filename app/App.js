@@ -26,6 +26,7 @@ import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
+import { categorizeTool } from "./core/Categories.js";
 
 class App {
   constructor() {
@@ -37,6 +38,7 @@ class App {
     this.mainContent = null;
     this.iconRegistry = new Map();
     this.toolsConfigMap = new Map();
+    this.categoriesConfigMap = new Map();
     // Temporary store for route navigation data payloads
     this._routeData = {};
 
@@ -56,6 +58,7 @@ class App {
   init() {
     this.setupDOM();
     this.buildToolsConfigMap();
+    this.buildCategoriesConfigMap();
     // Dev: speed up analytics batch interval for quicker feedback
     if (import.meta?.env?.DEV) {
       try {
@@ -129,6 +132,20 @@ class App {
     });
   }
 
+  buildCategoriesConfigMap() {
+    const cats = toolsConfig && Array.isArray(toolsConfig.categories) ? toolsConfig.categories : [];
+    this.categoriesConfigMap.clear();
+    if (cats.length > 0) {
+      cats.forEach((c) => {
+        if (c && c.id) this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
+      });
+    } else {
+      // Fallback defaults
+      this.categoriesConfigMap.set("config", { id: "config", name: "Config", order: 10 });
+      this.categoriesConfigMap.set("general", { id: "general", name: "General", order: 20 });
+    }
+  }
+
   /**
    * Initialize core components
    */
@@ -140,6 +157,7 @@ class App {
       getIcon: this.getToolIcon.bind(this),
       menuConfig: this.buildMenuConfig(),
       toolsConfigMap: this.toolsConfigMap,
+      categoriesMap: this.categoriesConfigMap,
     });
 
     // Initialize breadcrumb
@@ -318,30 +336,47 @@ class App {
       this._runtimeRetryHome = true;
       setTimeout(() => this.showHome(), 150);
     }
-    const toolCards = Array.from(this.tools.values())
-      .filter((tool) => {
-        const cfg = this.toolsConfigMap.get(tool.id);
-        const enabled = cfg ? cfg.enabled !== false : true;
-        const showOnHome = cfg ? cfg.showOnHome !== false : true;
-        const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
-        return enabled && showOnHome && requiresTauriOk;
-      })
-      .sort((a, b) => {
-        const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
-        const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
-        return ca - cb;
-      })
-      .map((tool) => {
-        const metadata = tool.getMetadata();
-        return `
-            <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
-              <div class="tool-card-icon">
-                ${this.getToolIcon(metadata.icon)}
+    const eligibleTools = Array.from(this.tools.values()).filter((tool) => {
+      const cfg = this.toolsConfigMap.get(tool.id);
+      const enabled = cfg ? cfg.enabled !== false : true;
+      const showOnHome = cfg ? cfg.showOnHome !== false : true;
+      const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
+      return enabled && showOnHome && requiresTauriOk;
+    });
+
+    const grouped = eligibleTools.reduce((acc, tool) => {
+      const md = tool.getMetadata();
+      const cat = categorizeTool(md);
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(tool);
+      return acc;
+    }, {});
+
+    const sortedCategoryIds = Array.from(this.categoriesConfigMap.values())
+      .sort((a, b) => a.order - b.order)
+      .map((c) => c.id);
+
+    const toolCards = sortedCategoryIds
+      .flatMap((catId) => {
+        const toolsInCat = grouped[catId] || [];
+        return toolsInCat
+          .sort((a, b) => {
+            const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
+            const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
+            return ca - cb;
+          })
+          .map((tool) => {
+            const metadata = tool.getMetadata();
+            return `
+              <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
+                <div class="tool-card-icon">
+                  ${this.getToolIcon(metadata.icon)}
+                </div>
+                <h3 class="tool-card-title">${metadata.name}</h3>
+                <p class="tool-card-description">${metadata.description}</p>
               </div>
-              <h3 class="tool-card-title">${metadata.name}</h3>
-              <p class="tool-card-description">${metadata.description}</p>
-            </div>
-          `;
+            `;
+          });
       })
       .join("");
 

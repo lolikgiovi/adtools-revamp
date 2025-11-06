@@ -10,6 +10,7 @@ class Sidebar {
     this.getIcon = typeof config.getIcon === "function" ? config.getIcon : null;
     this.menuConfig = config.menuConfig || { app: [], config: [], footer: [] };
     this.toolsConfigMap = config.toolsConfigMap || new Map();
+    this.categoriesMap = config.categoriesMap || new Map();
 
     // State management - matching script.js
     this.state = {
@@ -341,9 +342,8 @@ class Sidebar {
    * Render tools in the sidebar
    */
   async renderTools() {
-    const applicationGroup = document.querySelector('.sidebar-group[data-category="application"] .sidebar-menu');
-
-    if (!applicationGroup) return;
+    const sidebarContent = document.querySelector(".sidebar-content");
+    if (!sidebarContent) return;
 
     const { categorizeTool } = await import("../core/Categories.js");
     const { isTauri } = await import("../core/Runtime.js");
@@ -371,9 +371,7 @@ class Sidebar {
 
     const toolsByCategory = sourceTools.reduce((acc, tool) => {
       const cat = categorizeTool(tool);
-      if (!acc[cat]) {
-        acc[cat] = [];
-      }
+      if (!acc[cat]) acc[cat] = [];
       acc[cat].push(tool);
       return acc;
     }, {});
@@ -386,8 +384,27 @@ class Sidebar {
       return svgString;
     };
 
-    if (toolsByCategory.general) {
-      applicationGroup.innerHTML = toolsByCategory.general
+    // Build category groups dynamically based on categoriesMap order
+    const categoriesList = Array.from(this.categoriesMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    // Clear existing category groups inside sidebar-content
+    sidebarContent.innerHTML = "";
+
+    categoriesList.forEach((cat) => {
+      const groupEl = document.createElement("div");
+      groupEl.className = "sidebar-group";
+      groupEl.setAttribute("data-category", String(cat.id));
+      groupEl.innerHTML = `
+        <div class="sidebar-group-label">${cat.name || cat.id}</div>
+        <div class="sidebar-group-content">
+          <div class="sidebar-menu" data-category="${cat.id}"></div>
+        </div>
+      `;
+      sidebarContent.appendChild(groupEl);
+
+      const menuEl = groupEl.querySelector(".sidebar-menu");
+      const list = toolsByCategory[cat.id] || [];
+      menuEl.innerHTML = list
         .map((tool) => {
           const rawSvg = this.getIcon ? this.getIcon(tool.icon) : this.getToolIcon(tool.icon);
           const svg = ensureSvgClass(rawSvg);
@@ -402,23 +419,19 @@ class Sidebar {
         })
         .join("");
 
-      applicationGroup.querySelectorAll(".sidebar-menu-item").forEach((item) => {
-        const button = item.querySelector(".sidebar-menu-button");
-        if (button) {
-          button.addEventListener("click", (e) => {
-            e.preventDefault();
-            const toolId = item.dataset.tool;
-            this.selectTool(toolId);
-          });
-        }
+      menuEl.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
+        button.addEventListener("click", (e) => this.handleMenuClick(e));
       });
-    }
+    });
 
     // After tools render, ensure the current route is highlighted (handles reload/deep links)
     try {
-      const current = (this.router && typeof this.router.getCurrentRoute === "function")
-        ? this.router.getCurrentRoute()
-        : (window.location.hash ? window.location.hash.slice(1).split("/")[0] : "");
+      const current =
+        this.router && typeof this.router.getCurrentRoute === "function"
+          ? this.router.getCurrentRoute()
+          : window.location.hash
+          ? window.location.hash.slice(1).split("/")[0]
+          : "";
       if (current) this.updateActiveItem(current);
     } catch (_) {}
   }
@@ -491,16 +504,42 @@ class Sidebar {
       });
     };
 
-    renderGroup("config", this.menuConfig?.config);
+    // Category groups are rendered dynamically in renderTools(); only render non-category groups here
     renderGroup("app", this.menuConfig?.app);
     renderGroup("footer", this.menuConfig?.footer);
 
+    // Category labels are set during dynamic group creation
+
     // After groups render, ensure the current route/page is highlighted (handles reload)
     try {
-      const current = (this.router && typeof this.router.getCurrentRoute === "function")
-        ? this.router.getCurrentRoute()
-        : (window.location.hash ? window.location.hash.slice(1).split("/")[0] : "");
+      const current =
+        this.router && typeof this.router.getCurrentRoute === "function"
+          ? this.router.getCurrentRoute()
+          : window.location.hash
+          ? window.location.hash.slice(1).split("/")[0]
+          : "";
       if (current) this.updateActiveItem(current);
+    } catch (_) {}
+  }
+
+  updateCategoryLabels() {
+    try {
+      // Config group label
+      const configMenu = document.querySelector('.sidebar-menu[data-group="config"]');
+      const configGroup = configMenu ? configMenu.closest(".sidebar-group") : null;
+      const configLabel = configGroup ? configGroup.querySelector(".sidebar-group-label") : null;
+      if (configLabel) {
+        const cfg = this.categoriesMap.get("config");
+        configLabel.textContent = cfg && cfg.name ? cfg.name : "Config";
+      }
+
+      // General group label (application section)
+      const generalGroup = document.querySelector('.sidebar-group[data-category="application"]');
+      const generalLabel = generalGroup ? generalGroup.querySelector(".sidebar-group-label") : null;
+      if (generalLabel) {
+        const gen = this.categoriesMap.get("general");
+        generalLabel.textContent = gen && gen.name ? gen.name : "General";
+      }
     } catch (_) {}
   }
 
