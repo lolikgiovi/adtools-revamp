@@ -21,6 +21,7 @@
 10. [Testing Strategy](#10-testing-strategy)
 11. [Deployment Plan](#11-deployment-plan)
 12. [Future Enhancements](#12-future-enhancements)
+13. [Implementation Plan](#13-implementation-plan)
 
 ---
 
@@ -3763,6 +3764,157 @@ pub fn run() {
 - **Virtual Scrolling:** Handle 10,000+ record comparisons
 - **Caching:** Cache metadata and recent comparisons
 - **Logging:** Structured logging for debugging
+---
+
+## 13. Implementation Plan
+
+This phased plan prioritizes backend foundations first, then frontend integration, so we can validate core capabilities early and iterate safely. Each phase has clear deliverables and exit criteria.
+
+### Phase 0 — Scaffolding & Guardrails (Backend)
+
+- Objectives
+  - Create module scaffolding, commands, and capability gating with graceful degradation.
+- Scope
+  - Add `src-tauri/src/oracle/` with modules: `client.rs`, `commands.rs`, `types.rs`.
+  - Implement stubs that return structured "NotReady" states when Oracle client is missing.
+  - Add `credentials.rs` with `CredentialManager` skeleton using `keyring` crate.
+  - Wire commands in `src-tauri/src/lib.rs` and ensure app builds in both modes: without/with client.
+  - Add structured error types and logging helpers.
+- Deliverables
+  - Build passes; commands callable and return well-formed NotReady responses.
+- Exit Criteria
+  - App starts; `check_oracle_client_ready` returns `installed: false` without crashing; all other commands respond with gated errors.
+
+### Phase 1 — Client Detection & Priming (Backend)
+
+- Objectives
+  - Reliably detect Oracle Instant Client and prime process environment for `rust-oracle`.
+- Scope
+  - Implement `client.rs` to:
+    - Detect architecture (ARM/x86_64) and expected library files (`libclntsh.dylib`, etc.).
+    - Resolve installed path, defaulting to `~/Documents/adtools_library/oracle/<arch>/`.
+    - Validate presence and return rich status (`installed`, `version`, `lib_paths`).
+  - Implement `prime_oracle_client` to set env vars as needed (e.g., `DYLD_LIBRARY_PATH`).
+  - Robust error messaging and tracing for misconfiguration.
+- Deliverables
+  - `check_oracle_client_ready` and `prime_oracle_client` return accurate, testable results.
+- Exit Criteria
+  - With client installed, `check_oracle_client_ready` → ready; `prime_oracle_client` succeeds; otherwise clear guidance messages.
+
+### Phase 2 — Credentials & Connection Management (Backend)
+
+- Objectives
+  - Securely store/retrieve credentials and verify connectivity.
+- Scope
+  - Implement `CredentialManager` using `keyring` (namespaced per-connection).
+  - Commands: `set_oracle_credentials`, `get_oracle_credentials`, `test_oracle_connection`.
+  - Define `ConnectionConfig` in `types.rs` (host, port, service name, schema, username alias).
+  - Implement non-blocking connection test using `oracle` crate; return normalized errors.
+- Deliverables
+  - Credentials round-trip and connection tests from Tauri commands.
+- Exit Criteria
+  - Saving, retrieving, and testing connections works for at least one valid instance; clear error for invalid instances.
+
+### Phase 3 — Metadata & Query Execution (Backend)
+
+- Objectives
+  - Fetch table metadata and execute sanitized queries against Env1/Env2.
+- Scope
+  - Commands: `fetch_table_metadata` (list columns/types), optional `list_tables`.
+  - Implement `sanitize.rs` to enforce type-safe JSON conversion:
+    - NUMBER/DATE/CLOB/BLOB/RAW handling, control character stripping, size limits.
+    - `[BINARY DATA]` markers for non-text.
+  - Query execution helpers that accept table name, WHERE clause, and selected fields.
+- Deliverables
+  - Reliable metadata retrieval and sanitized row fetching for both environments.
+- Exit Criteria
+  - Returns deterministic metadata and sanitized samples on real tables; handles empty results and large text safely.
+
+### Phase 4 — Comparison Engine & Exporters (Backend)
+
+- Objectives
+  - Compute diffs in Rust and produce display-ready results and exports.
+- Scope
+  - Implement `comparison.rs`:
+    - Key-based alignment (primary keys from WHERE or inferred unique columns).
+    - Field-by-field comparison; text-aware diffs for strings; exact compare for non-text.
+    - Produce diff markup segments (safe HTML spans per spec colors) and summary metrics.
+  - Commands: `compare_configurations`, `export_comparison_result` (JSON, CSV, HTML) to `~/Documents/adtools_library/comparisons/`.
+- Deliverables
+  - Deterministic comparison output and working exporters.
+- Exit Criteria
+  - Unit tests cover matching/differing/unique cases; exports open correctly and match in-app results.
+
+### Phase 5 — Settings Integration (Frontend)
+
+- Objectives
+  - Provide Oracle Connections UI in Settings with secure credential flows.
+- Scope
+  - Extend `app/pages/settings/` to include "Oracle Database Connections":
+    - Form for host/port/service/schema; credentials managed via Tauri commands.
+    - Saved connections list with `[Test] [Save] [Delete]` actions.
+  - Persist non-sensitive fields client-side; credentials only via keychain.
+  - Status indicators and error banners via EventBus.
+- Deliverables
+  - Usable Settings page to manage connections end-to-end.
+- Exit Criteria
+  - Add/test/delete works; status reflects backend results; no sensitive data stored in plain text.
+
+### Phase 6 — Compare Config Tool UI (Frontend)
+
+- Objectives
+  - Build the tool UI under `app/tools/compare-config/` following BaseTool.
+- Scope
+  - Client check gate: call `check_oracle_client_ready`; disable UI when not ready; show install guide with copy-command.
+  - Environment selection from saved settings; auto-fill and status badges.
+  - Table selection and metadata preview; WHERE clause input; field multi-select with select/deselect-all.
+  - Execute comparison: progress indicator; result views (Expandable Rows, Vertical Cards, Master-Detail Split).
+  - Render backend diff markup; filters/search; export actions wired to backend.
+  - Error handling with actionable messages; "Check Again" to re-run readiness.
+- Deliverables
+  - Fully working UI path from selection → comparison → visualization → export.
+- Exit Criteria
+  - End-to-end flow succeeds on real environments; disabled state and guidance appear when client not installed.
+
+### Phase 7 — Testing & QA
+
+- Objectives
+  - Validate performance, correctness, and robustness across scenarios.
+- Scope
+  - Rust unit tests for detection, sanitization, diff engine, and exporters.
+  - Tauri integration tests for command surfaces and error mapping.
+  - Frontend vitest for gating, state transitions, and rendering; manual E2E checks.
+  - Performance sweeps on large text fields and 10k+ rows (where feasible) with virtualized rendering plan noted.
+- Deliverables
+  - Green test suite and performance notes.
+- Exit Criteria
+  - All tests pass locally and in CI; known limits documented; no UI thread blocking on typical datasets.
+
+### Phase 8 — Packaging & Documentation
+
+- Objectives
+  - Ship the feature cleanly without bundling Oracle client; document fully.
+- Scope
+  - Update `src-tauri/tauri.conf.json` capabilities; ensure optional module loading.
+  - Include installation script references and troubleshooting guide.
+  - Update `docs/user-guide/compare-config.md` and `docs/developer/oracle-integration.md`.
+  - CI updates to run backend tests even when client is absent; skip integration tests as needed.
+- Deliverables
+  - Build artifacts and updated documentation.
+- Exit Criteria
+  - `npx tauri dev` works both with and without client; docs clearly explain install and usage.
+
+### Phase 9 — Observability & Post-Launch
+
+- Objectives
+  - Add usage tracking and structured logs for maintenance.
+- Scope
+  - Instrument command invocations and outcomes via `UsageTracker`/AnalyticsSender.
+  - Structured logs for comparison runs and export paths; privacy-preserving metrics.
+- Deliverables
+  - Metrics visible; logs aid troubleshooting without sensitive data leaks.
+- Exit Criteria
+  - Basic dashboards or log inspection show healthy usage and error rates.
 
 ---
 
