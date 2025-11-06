@@ -71,6 +71,22 @@ export class CompareConfigTool extends BaseTool {
     el("btnCompare").addEventListener("click", () => this.compare());
     el("btnExportJson").addEventListener("click", () => this.exportResult("json"));
     el("btnExportCsv").addEventListener("click", () => this.exportResult("csv"));
+
+    // Filters
+    ["fltMatches", "fltDifferences", "fltOnlyEnv1", "fltOnlyEnv2"].forEach((id) => {
+      const box = el(id);
+      if (box) box.addEventListener("change", () => this.applyFilters());
+    });
+
+    // Presets
+    el("btnSavePreset").addEventListener("click", () => this.savePreset());
+    el("btnApplyPreset").addEventListener("click", () => this.applySelectedPreset());
+    el("btnDeletePreset").addEventListener("click", () => this.deleteSelectedPreset());
+    this.refreshPresetsSelect();
+
+    // CSV Preview
+    el("btnPreviewCsv").addEventListener("click", () => this.previewCsv());
+    el("btnDownloadCsv").addEventListener("click", () => this.downloadCsvBrowser());
   }
 
   getEnvConfig(idx) {
@@ -218,23 +234,24 @@ export class CompareConfigTool extends BaseTool {
 
       const comps = Array.isArray(json.comparisons) ? json.comparisons : [];
       const fields = Array.isArray(json.fields) ? json.fields : [];
-
-      const rowsHtml = comps.map((c) => {
-        const pk = c.key ? JSON.stringify(c.key) : "{}";
+      const filtered = this.filterComparisons(comps);
+      const rowsHtml = filtered.map((c) => {
+        const pkObj = c.primary_key || {};
+        const pk = JSON.stringify(pkObj);
         const status = c.status || "";
         let body = "";
         if (status === "Differ") {
-          const diffs = c.differences || {};
-          const items = Object.keys(diffs)
-            .map((k) => `<li><strong>${k}</strong>: <span class="diff-left">${diffs[k].env1 ?? ""}</span> → <span class="diff-right">${diffs[k].env2 ?? ""}</span></li>`)
+          const diffs = Array.isArray(c.differences) ? c.differences : [];
+          const items = diffs
+            .map((d) => `<li><strong>${d.field}</strong>: <span class="diff-left">${d.env1 ?? ""}</span> → <span class="diff-right">${d.env2 ?? ""}</span></li>`)
             .join("");
           body = `<ul class="cc-diffs">${items}</ul>`;
         } else if (status === "OnlyInEnv1") {
-          const v = c.env1 || {};
+          const v = c.env1_data || {};
           const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
           body = `<div class="cc-only cc-only1"><ul>${items}</ul></div>`;
         } else if (status === "OnlyInEnv2") {
-          const v = c.env2 || {};
+          const v = c.env2_data || {};
           const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
           body = `<div class="cc-only cc-only2"><ul>${items}</ul></div>`;
         } else {
@@ -260,6 +277,198 @@ export class CompareConfigTool extends BaseTool {
       });
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  filterComparisons(list) {
+    try {
+      const showMatches = !!el("fltMatches")?.checked;
+      const showDiff = !!el("fltDifferences")?.checked;
+      const showOnly1 = !!el("fltOnlyEnv1")?.checked;
+      const showOnly2 = !!el("fltOnlyEnv2")?.checked;
+      return list.filter((c) => {
+        const s = (c.status || "").toLowerCase();
+        if (s === "match") return showMatches;
+        if (s === "differ") return showDiff;
+        if (s === "onlyinenv1") return showOnly1;
+        if (s === "onlyinenv2") return showOnly2;
+        return true;
+      });
+    } catch (_) {
+      return list;
+    }
+  }
+
+  applyFilters() {
+    if (!this.lastResult) return;
+    this.renderResult(this.lastResult);
+  }
+
+  getPresetPayload() {
+    return {
+      env1: this.getEnvConfig(1),
+      env2: this.getEnvConfig(2),
+      table: el("cmpTable").value.trim(),
+      fields: parseFields(el("cmpFields").value),
+      where: el("cmpWhere").value.trim(),
+    };
+  }
+
+  refreshPresetsSelect() {
+    try {
+      const select = el("presetSelect");
+      if (!select) return;
+      const presets = JSON.parse(localStorage.getItem("compare-config.presets") || "[]");
+      select.innerHTML = presets
+        .map((p, i) => `<option value="${i}">${p.name}</option>`)
+        .join("");
+    } catch (_) {}
+  }
+
+  savePreset() {
+    const statusEl = el("presetStatus");
+    try {
+      const name = el("presetName").value.trim();
+      if (!name) { this.showError("Enter a preset name"); return; }
+      const payload = this.getPresetPayload();
+      const presets = JSON.parse(localStorage.getItem("compare-config.presets") || "[]");
+      presets.push({ name, payload });
+      localStorage.setItem("compare-config.presets", JSON.stringify(presets));
+      this.refreshPresetsSelect();
+      statusEl.textContent = "Saved.";
+      this.showSuccess("Preset saved");
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      this.showError(`Save preset failed: ${e}`);
+    }
+  }
+
+  applySelectedPreset() {
+    const statusEl = el("presetStatus");
+    try {
+      const idx = parseInt(el("presetSelect").value, 10);
+      const presets = JSON.parse(localStorage.getItem("compare-config.presets") || "[]");
+      const p = presets[idx];
+      if (!p) { this.showError("No preset selected"); return; }
+      const { env1, env2, table, fields, where } = p.payload || {};
+      // Populate Env1
+      el("env1Id").value = env1?.id || "";
+      el("env1User").value = ""; // do not override username from keychain
+      el("env1Pass").value = ""; // never store passwords in presets
+      el("env1Host").value = env1?.host || "";
+      el("env1Port").value = String(env1?.port ?? 1521);
+      el("env1Service").value = env1?.service_name || "";
+      el("env1Schema").value = env1?.schema || "";
+      // Populate Env2
+      el("env2Id").value = env2?.id || "";
+      el("env2User").value = "";
+      el("env2Pass").value = "";
+      el("env2Host").value = env2?.host || "";
+      el("env2Port").value = String(env2?.port ?? 1521);
+      el("env2Service").value = env2?.service_name || "";
+      el("env2Schema").value = env2?.schema || "";
+      // Compare fields
+      el("cmpTable").value = table || "";
+      el("cmpFields").value = (Array.isArray(fields) ? fields.join(",") : "");
+      el("cmpWhere").value = where || "";
+      statusEl.textContent = "Applied.";
+      this.showSuccess("Preset applied");
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      this.showError(`Apply preset failed: ${e}`);
+    }
+  }
+
+  deleteSelectedPreset() {
+    const statusEl = el("presetStatus");
+    try {
+      const idx = parseInt(el("presetSelect").value, 10);
+      const presets = JSON.parse(localStorage.getItem("compare-config.presets") || "[]");
+      if (isNaN(idx) || !presets[idx]) { this.showError("Select a preset to delete"); return; }
+      presets.splice(idx, 1);
+      localStorage.setItem("compare-config.presets", JSON.stringify(presets));
+      this.refreshPresetsSelect();
+      statusEl.textContent = "Deleted.";
+      this.showSuccess("Preset deleted");
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      this.showError(`Delete preset failed: ${e}`);
+    }
+  }
+
+  toCsv(json) {
+    try {
+      const rows = [];
+      const comps = Array.isArray(json.comparisons) ? json.comparisons : [];
+      comps.forEach((c) => {
+        const key = c.key || c.primary_key || {};
+        const status = c.status || "";
+        if (status === "Differ") {
+          const diffs = c.differences || {};
+          Object.keys(diffs).forEach((field) => {
+            const env1 = diffs[field]?.env1 ?? "";
+            const env2 = diffs[field]?.env2 ?? "";
+            rows.push({ key: JSON.stringify(key), status, field, env1, env2 });
+          });
+        } else if (status === "OnlyInEnv1") {
+          const v = c.env1 || c.env1_data || {};
+          Object.keys(v).forEach((field) => {
+            const env1 = v[field] ?? "";
+            rows.push({ key: JSON.stringify(key), status, field, env1, env2: "" });
+          });
+        } else if (status === "OnlyInEnv2") {
+          const v = c.env2 || c.env2_data || {};
+          Object.keys(v).forEach((field) => {
+            const env2 = v[field] ?? "";
+            rows.push({ key: JSON.stringify(key), status, field, env1: "", env2 });
+          });
+        }
+      });
+      const header = ["primary_key", "status", "field", "env1", "env2"]; 
+      const lines = [header.join(",")].concat(
+        rows.map((r) => [r.key, r.status, r.field, this.csvEscape(r.env1), this.csvEscape(r.env2)].join(","))
+      );
+      return lines.join("\n");
+    } catch (e) {
+      return `Error generating CSV: ${e}`;
+    }
+  }
+
+  csvEscape(val) {
+    const s = String(val ?? "");
+    if (/[,"\n]/.test(s)) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  previewCsv() {
+    const statusEl = el("csvStatus");
+    const area = el("csvPreview");
+    if (!this.lastResult) { this.showError("Run a comparison first"); return; }
+    const csv = this.toCsv(this.lastResult);
+    area.value = csv;
+    statusEl.textContent = "Preview generated.";
+  }
+
+  downloadCsvBrowser() {
+    if (!this.lastResult) { this.showError("Run a comparison first"); return; }
+    try {
+      const csv = this.toCsv(this.lastResult);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dt = new Date();
+      const ts = dt.toISOString().replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `comparison-${ts}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      this.showSuccess("CSV downloaded");
+    } catch (e) {
+      this.showError(`Download failed: ${e}`);
     }
   }
 

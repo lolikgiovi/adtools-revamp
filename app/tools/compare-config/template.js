@@ -66,6 +66,24 @@ export const CompareConfigTemplate = /* html */ `
           <button id="btnExportCsv" class="btn" disabled>Export CSV</button>
           <span id="compareStatus" class="cc-status"></span>
         </div>
+        <div class="cc-row cc-filters">
+          <label class="cc-check"><input type="checkbox" id="fltMatches" /> Show Matches</label>
+          <label class="cc-check"><input type="checkbox" id="fltDifferences" checked /> Show Differences</label>
+          <label class="cc-check"><input type="checkbox" id="fltOnlyEnv1" checked /> Only Env1</label>
+          <label class="cc-check"><input type="checkbox" id="fltOnlyEnv2" checked /> Only Env2</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-section">
+      <h3>Presets</h3>
+      <div class="cc-row">
+        <input id="presetName" type="text" placeholder="Preset name" />
+        <button id="btnSavePreset" class="btn">Save Preset</button>
+        <select id="presetSelect" class="cc-select"></select>
+        <button id="btnApplyPreset" class="btn">Apply</button>
+        <button id="btnDeletePreset" class="btn">Delete</button>
+        <span id="presetStatus" class="cc-status"></span>
       </div>
     </div>
 
@@ -73,6 +91,14 @@ export const CompareConfigTemplate = /* html */ `
       <h3>Results</h3>
       <div id="cmpSummary" class="cc-summary"></div>
       <div id="cmpResults" class="cc-results"></div>
+      <div class="cc-csv">
+        <div class="cc-row">
+          <button id="btnPreviewCsv" class="btn">Generate CSV Preview</button>
+          <button id="btnDownloadCsv" class="btn">Download CSV (browser)</button>
+          <span id="csvStatus" class="cc-status"></span>
+        </div>
+        <textarea id="csvPreview" rows="8" readonly placeholder="CSV preview will appear here..."></textarea>
+      </div>
     </div>
   </div>
 `;

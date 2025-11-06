@@ -29,6 +29,39 @@ This document captures what’s implemented so far for the Compare Config featur
   - Sanitizes identifiers and flags suspicious WHERE clauses (for later query helpers).
   - Files: `src-tauri/src/oracle/{types.rs, sanitize.rs, query.rs}`, command in `commands.rs`.
 
+## Phase 5 — Frontend UI (Compare Config Tool)
+
+- Implemented a new tool at `app/tools/compare-config/` with `main.js`, `template.js`, and `styles.css`.
+- Registers in the app via `app/App.js` and `app/config/tools.json` (category `config`, icon `database`).
+- UI capabilities:
+  - Oracle client readiness check and priming.
+  - Env1/Env2 credential management (Keychain) and connectivity tests.
+  - Compare form (table, fields, optional WHERE) with results summary and detailed per-key rows.
+  - Export buttons wired to `export_comparison_result` (JSON and CSV) with clipboard path copy.
+
+Notes:
+- The tool is gated by runtime detection (`isTauri()`); desktop-only actions are disabled on pure web.
+- Parameter names in `invoke` match Rust commands (snake_case where required).
+
+## Phase 6 — UI Enhancements
+
+- Filters: Toggle visibility for `Match`, `Differ`, `OnlyInEnv1`, and `OnlyInEnv2` to focus on relevant results.
+- Presets: Save/apply/delete compare presets (Env configs, table, fields, WHERE) to `localStorage`.
+- CSV Preview: Client-side CSV generation mirroring backend format for quick inspection and browser download.
+
+Usage (Frontend):
+
+```js
+// Filters: check/uncheck the four toggles and results list updates immediately
+// Presets: enter a name, click Save; select from dropdown and Apply/Delete
+// CSV Preview: click Generate CSV Preview to fill the textarea; Download CSV saves via browser
+```
+
+Implementation files:
+- `app/tools/compare-config/main.js` — filters, presets, CSV preview/download; invokes Tauri commands.
+- `app/tools/compare-config/template.js` — updated template with filters, presets, preview area.
+- `app/tools/compare-config/styles.css` — styles for clean layout.
+
 ## Implemented Tauri Commands (v2)
 
 These are exposed via the Tauri command handler in `src-tauri/src/lib.rs`:
@@ -224,6 +257,14 @@ Notes:
 - `fields` allow narrowing the diff to relevant columns, improving performance.
 - `where_clause` is passed through after a safety check; advanced parameterized filters are future work.
 - For tables without PKs, the first selected field is used as an alignment key.
+
+### Frontend Testing (Phase 5/6)
+
+- Start the dev server (`npm run dev`) or ensure it’s already running on port `5173`.
+- Open `http://localhost:5173/`, navigate to `Compare Config`.
+- Use `Check & Prime Client`, set/get credentials for Env1/Env2, and test connections.
+- Fill `Table`, `Fields`, optional `WHERE`; click `Compare`.
+- Use Filters and Presets as needed; preview/download CSV; export via Tauri for desktop file writes.
 
 ## Commands Registry
 

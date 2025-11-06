@@ -6,6 +6,9 @@
 .cc-form input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
 .cc-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; }
 .cc-compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cc-filters { margin-top: 8px; }
+.cc-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.cc-select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
 .btn { padding: 6px 10px; border-radius: 6px; border: 1px solid #aaa; background: #f5f5f5; cursor: pointer; }
 .btn-primary { background: #2563eb; color: white; border-color: #1d4ed8; }
 .btn-secondary { background: #64748b; color: white; border-color: #475569; }
@@ -26,3 +29,5 @@
 .diff-right { color: #0ea5e9; }
 .cc-key { background: #f6f6f6; padding: 2px 6px; border-radius: 4px; }
 .cc-empty { color: #777; font-style: italic; }
+.cc-csv { margin-top: 12px; }
+#csvPreview { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
