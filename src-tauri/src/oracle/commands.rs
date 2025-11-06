@@ -4,6 +4,7 @@ use crate::oracle::client;
 use crate::oracle::credentials::CredentialManager;
 use crate::oracle::types::{OracleClientStatus, OracleConnectionConfig, OracleCredentialStatus};
 use crate::oracle::query;
+use crate::oracle::comparison;
 
 // Readiness
 #[tauri::command]
@@ -81,17 +82,49 @@ pub async fn fetch_table_metadata(_state: tauri::State<'_, CredentialManager>, c
 // Comparison (stubbed in Phase 0)
 #[tauri::command]
 pub async fn compare_configurations(
-  _env1: OracleConnectionConfig,
-  _env2: OracleConnectionConfig,
-  _table: String,
-  _where_clause: Option<String>,
-  _fields: Option<Vec<String>>,
+  env1: OracleConnectionConfig,
+  env2: OracleConnectionConfig,
+  table: String,
+  where_clause: Option<String>,
+  fields: Option<Vec<String>>,
 ) -> Result<serde_json::Value, String> {
-  Err("Oracle client not ready; cannot compare configurations".into())
+  let status = client::detect_client();
+  if !status.installed { return Err("Oracle client not ready; cannot compare configurations".into()); }
+
+  client::prime()?;
+
+  let res = tauri::async_runtime::spawn_blocking(move || {
+    let cm = CredentialManager::new();
+    let field_slice = fields.as_ref().map(|v| v.as_slice());
+    comparison::compare(&cm, &env1, &env2, &table, where_clause.as_deref(), field_slice)
+      .and_then(|val| serde_json::to_value(val).map_err(|e| e.to_string()))
+  })
+  .await
+  .map_err(|e| e.to_string())?;
+
+  res
 }
 
 // Export (stubbed in Phase 0)
 #[tauri::command]
-pub fn export_comparison_result(_format: String, _payload: String) -> Result<String, String> {
-  Err("Oracle client not ready; cannot export comparison result".into())
+pub fn export_comparison_result(format: String, payload: String) -> Result<String, String> {
+  // Parse payload
+  let json: serde_json::Value = serde_json::from_str(&payload).map_err(|e| e.to_string())?;
+
+  // Determine output content
+  let (content, ext) = match format.to_lowercase().as_str() {
+    "json" => (serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?, "json"),
+    "csv" => (comparison::to_csv(&json)?, "csv"),
+    other => return Err(format!("Unsupported export format: {}", other)),
+  };
+
+  // Destination path: ~/Documents/adtools_library/comparisons
+  let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+  let dir = format!("{}/Documents/adtools_library/comparisons", home);
+  std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+  let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+  let path = format!("{}/comparison-{}.{}", dir, timestamp, ext);
+  std::fs::write(&path, content).map_err(|e| e.to_string())?;
+  Ok(path)
 }

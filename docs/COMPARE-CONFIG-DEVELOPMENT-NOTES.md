@@ -39,8 +39,8 @@ These are exposed via the Tauri command handler in `src-tauri/src/lib.rs`:
 - `get_oracle_credentials(connection_id) -> { connection_id, username?, has_password }`
 - `test_oracle_connection(config: { id, host, port, service_name, schema? }) -> bool`
 - `fetch_table_metadata(config, schema?, table) -> { schema?, table, columns: [...] }`
-- `compare_configurations(...) -> JSON` (stub; Phase 4)
-- `export_comparison_result(format, payload) -> String` (stub; Phase 4)
+- `compare_configurations(env1, env2, table, where_clause?, fields?) -> JSON`
+- `export_comparison_result(format, payload) -> String`
 
 Notes:
 - Commands are guarded — if client is not detected, they return readable errors.
@@ -161,13 +161,69 @@ const meta = await invoke('fetch_table_metadata', {
 - No credentials written to disk or logs; only in-memory access during connection.
 - Feature is optional; app remains functional without Oracle client.
 
-## Next Steps (Phase 4)
+## Phase 4 — Comparison & Export
 
-- Implement `compare_configurations`:
-  - Fetch rows from Env1/Env2 with sanitized field set and optional WHERE.
-  - Align by primary key and produce per-field differences and summary.
-  - Return display-ready JSON with diff markers per spec.
-- Implement `export_comparison_result` to write JSON/CSV to `~/Documents/adtools_library/comparisons/`.
+Implemented a comparison engine and exporter focusing on safe, display-ready outputs:
+
+- Row fetching: builds a `SELECT` with type-aware expressions (e.g., `TO_CHAR` for numbers/dates, `DBMS_LOB.SUBSTR` for CLOB, `RAWTOHEX` for RAW) and aliases back to the original column names. Identifiers are sanitized; suspicious `WHERE` clauses are rejected.
+- Primary key alignment: uses dictionary views to detect PK columns; falls back to the first selected field if none found.
+- JSON result shape:
+
+```jsonc
+{
+  "env1": "UAT1",
+  "env2": "PROD1",
+  "table": "CONFIGS",
+  "timestamp": "2025-11-06T12:34:56Z",
+  "summary": { "total": 10, "matches": 7, "differences": 2, "only_env1": 1, "only_env2": 0 },
+  "fields": ["ID", "KEY", "VALUE"],
+  "primary_key": ["ID"],
+  "comparisons": [
+    { "primary_key": { "ID": "42" }, "status": "Match", "env1_data": { "ID": "42", "KEY": "X", "VALUE": "A" }, "env2_data": { "ID": "42", "KEY": "X", "VALUE": "A" } },
+    { "primary_key": { "ID": "43" }, "status": "Differ", "differences": [ { "field": "VALUE", "env1": "B", "env2": "C" } ], "env1_data": { "ID": "43", "KEY": "Y", "VALUE": "B" }, "env2_data": { "ID": "43", "KEY": "Y", "VALUE": "C" } },
+    { "primary_key": { "ID": "99" }, "status": "OnlyInEnv1", "env1_data": { "ID": "99", "KEY": "Z", "VALUE": "K" }, "env2_data": null }
+  ]
+}
+```
+
+- CSV export: generates a differences-focused CSV with columns `primary_key,status,field,env1,env2`. Files are saved to `~/Documents/adtools_library/comparisons/comparison-YYYYMMDD-HHMMSS.csv`.
+
+### Backend Testing (Phase 4)
+
+```js
+import { invoke } from '@tauri-apps/api/core';
+
+// Ensure client is ready
+const ready = await invoke('check_oracle_client_ready');
+if (!ready.installed) throw new Error('Oracle client not installed');
+await invoke('prime_oracle_client');
+
+// Compare two environments
+const result = await invoke('compare_configurations', {
+  env1: { id: 'UAT1', host: 'db-uat1.company.com', port: 1521, service_name: 'ORCLPDB1', schema: 'APP_SCHEMA' },
+  env2: { id: 'PROD1', host: 'db-prod1.company.com', port: 1521, service_name: 'ORCLPDB1', schema: 'APP_SCHEMA' },
+  table: 'CONFIGS',
+  where_clause: "KEY IN ('X','Y','Z')", // optional; rejected if suspicious
+  fields: ['ID', 'KEY', 'VALUE']        // optional; defaults to all columns
+});
+
+// Export JSON
+const jsonPath = await invoke('export_comparison_result', {
+  format: 'json',
+  payload: JSON.stringify(result)
+});
+
+// Export CSV (differences only)
+const csvPath = await invoke('export_comparison_result', {
+  format: 'csv',
+  payload: JSON.stringify(result)
+});
+```
+
+Notes:
+- `fields` allow narrowing the diff to relevant columns, improving performance.
+- `where_clause` is passed through after a safety check; advanced parameterized filters are future work.
+- For tables without PKs, the first selected field is used as an alignment key.
 
 ## Commands Registry
 
