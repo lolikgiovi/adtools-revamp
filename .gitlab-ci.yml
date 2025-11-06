@@ -10,7 +10,7 @@ sync_to_github:
     - git config --global user.email "ci@gitlab.com"
 
     # Add GitHub remote
-    - git remote add github https://$GITHUB_USERNAME:$GITHUB_TOKEN@github.com/lolikgiovi/adtools.git
+    - git remote add github https://$GITHUB_USERNAME:$GITHUB_TOKEN@github.com/lolikgiovi/adtools-revamp.git
 
     # Create a local branch that points to the current commit
     - git checkout -b main
