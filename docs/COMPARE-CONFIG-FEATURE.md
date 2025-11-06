@@ -38,7 +38,7 @@ This document specifies the implementation of a database configuration compariso
 - Support flexible primary key definition via WHERE clause
 - Allow selective field comparison or all fields
 - Display differences with multiple visualization options
-- **Character/word-level diff highlighting with color-coded visualization** (NEW)
+- Character/word-level diff highlighting with color-coded visualization
 - Export comparison results
 - Integrate Oracle Instant Client for local execution (optional, user-installed)
 - Provide installation script and guidance for Oracle client setup
@@ -50,14 +50,14 @@ This document specifies the implementation of a database configuration compariso
 - Provide flexible, user-defined comparison criteria
 - Support operational and deployment workflows
 - Maintain security best practices with credential management
-- **Gracefully handle Oracle client availability with clear installation guidance**
-- **Keep the feature entirely optional - app works perfectly without it**
-- **Never bundle Oracle client - user-driven installation only**
-- **Provide visual diff highlighting for instant identification of differences**
+- Gracefully handle Oracle client availability with clear installation guidance
+- Keep the feature entirely optional - app works perfectly without it
+- Never bundle Oracle client - user-driven installation only
+- Provide visual diff highlighting for instant identification of differences
 
 ### 1.4 Key Features
 
-**🎨 Visual Diff Highlighting (NEW)**
+🎨 Visual Diff Highlighting
 
 The comparison results include **character/word-level diff highlighting** to instantly identify what changed between environments:
 
@@ -138,17 +138,21 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │   │ connect to Oracle databases. The client is NOT       │  │
 │   │ bundled with AD Tools due to licensing and size.     │  │
 │   │                                                       │  │
-│   │ Installation Steps:                                  │  │
-│   │ 1. Download Oracle Instant Client Basic Light        │  │
-│   │    for your architecture (arm64/x86_64)              │  │
-│   │    from: oracle.com/database/technologies/...        │  │
+│   │ Installation (One Command):                          │  │
 │   │                                                       │  │
-│   │ 2. Run the installation script:                      │  │
-│   │    ./scripts/install-oracle-client.sh /path/to.zip   │  │
+│   │ Open Terminal and run:                               │  │
 │   │                                                       │  │
-│   │ 3. Restart AD Tools                                  │  │
+│   │   curl -fsSL https://adtools.lolik.workers.dev/      │  │
+│   │   install-oracle-instant-client.sh | bash            │  │
 │   │                                                       │  │
-│   │ [📋 Copy Download URL]  [📖 View Full Guide]         │  │
+│   │ This will:                                           │  │
+│   │ • Auto-detect your Mac architecture (ARM/Intel)      │  │
+│   │ • Download Oracle client from official Oracle site   │  │
+│   │ • Install to ~/Documents/adtools_library/            │  │
+│   │                                                       │  │
+│   │ Then restart AD Tools to enable the feature.         │  │
+│   │                                                       │  │
+│   │ [📋 Copy Command]  [📖 Troubleshooting]              │  │
 │   │                                                       │  │
 │   │ Note: Oracle client is ~80MB. Installation requires  │  │
 │   │ no admin privileges.                                 │  │
@@ -1525,49 +1529,45 @@ export class CompareConfigTool extends BaseTool {
           </p>
 
           <div class="installation-steps">
-            <h3>Installation Steps:</h3>
+            <h3>Quick Installation (One Command):</h3>
 
-            <div class="step">
+            <div class="step step-primary">
               <div class="step-number">1</div>
               <div class="step-content">
-                <h4>Download Oracle Instant Client</h4>
-                <p>Download <strong>Basic Light</strong> package for your architecture:</p>
-                <div class="download-links">
-                  <a href="https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html"
-                     target="_blank"
-                     class="download-btn">
-                    Apple Silicon (M1/M2/M3)
-                  </a>
-                  <a href="https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html"
-                     target="_blank"
-                     class="download-btn">
-                    Intel (x86_64)
-                  </a>
-                </div>
-                <p class="note">Note: You'll need an Oracle account (free registration)</p>
+                <h4>Run Installation Command</h4>
+                <p>Open Terminal and paste this command:</p>
+                <pre class="code-block"><code>curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash</code></pre>
+                <button id="copy-install-command" class="btn-secondary btn-small">
+                  📋 Copy Command
+                </button>
+                <p class="note">
+                  This will automatically detect your Mac architecture (ARM/Intel) and
+                  download the correct Oracle Instant Client from Oracle's official site.
+                </p>
               </div>
             </div>
 
             <div class="step">
               <div class="step-number">2</div>
               <div class="step-content">
-                <h4>Run Installation Script</h4>
-                <p>Open Terminal and run:</p>
-                <pre class="code-block"><code>cd /Applications/AD\\ Tools.app/Contents/Resources
-./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip</code></pre>
-                <button id="copy-install-command" class="btn-secondary btn-small">
-                  📋 Copy Command
-                </button>
-              </div>
-            </div>
-
-            <div class="step">
-              <div class="step-number">3</div>
-              <div class="step-content">
                 <h4>Restart AD Tools</h4>
-                <p>Close and reopen AD Tools. The feature will be automatically enabled.</p>
+                <p>Once installation completes, quit AD Tools completely (⌘Q) and reopen it.
+                   The feature will be automatically enabled.</p>
               </div>
             </div>
+          </div>
+
+          <div class="installation-details">
+            <details>
+              <summary>What does this command do?</summary>
+              <ul>
+                <li>✓ Detects your Mac architecture (Apple Silicon or Intel)</li>
+                <li>✓ Downloads Oracle Instant Client from Oracle's official site</li>
+                <li>✓ Installs to ~/Documents/adtools_library/instantclient/</li>
+                <li>✓ Verifies installation integrity</li>
+                <li>✓ No admin privileges required</li>
+              </ul>
+            </details>
           </div>
 
           <div class="installation-info">
@@ -1596,7 +1596,7 @@ export class CompareConfigTool extends BaseTool {
 
     // Attach event listeners
     document.getElementById("copy-install-command")?.addEventListener("click", () => {
-      const command = `cd /Applications/AD\\ Tools.app/Contents/Resources\n./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip`;
+      const command = `curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash`;
       navigator.clipboard.writeText(command);
       this.showSuccess("Installation command copied to clipboard!");
     });
@@ -2718,49 +2718,45 @@ showInstallationGuide() {
         </p>
 
         <div class="installation-steps">
-          <h3>Installation Steps:</h3>
+          <h3>Quick Installation (One Command):</h3>
 
-          <div class="step">
+          <div class="step step-primary">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h4>Download Oracle Instant Client</h4>
-              <p>Download <strong>Basic Light</strong> package for your architecture:</p>
-              <div class="download-links">
-                <a href="https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html"
-                   target="_blank"
-                   class="download-btn">
-                  Apple Silicon (M1/M2/M3)
-                </a>
-                <a href="https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html"
-                   target="_blank"
-                   class="download-btn">
-                  Intel (x86_64)
-                </a>
-              </div>
-              <p class="note">Note: You'll need an Oracle account (free registration)</p>
+              <h4>Run Installation Command</h4>
+              <p>Open Terminal and paste this command:</p>
+              <pre class="code-block"><code>curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash</code></pre>
+              <button id="copy-install-command" class="btn-secondary btn-small">
+                📋 Copy Command
+              </button>
+              <p class="note">
+                This will automatically detect your Mac architecture (ARM/Intel) and
+                download the correct Oracle Instant Client from Oracle's official site.
+              </p>
             </div>
           </div>
 
           <div class="step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>Run Installation Script</h4>
-              <p>Open Terminal and run:</p>
-              <pre class="code-block"><code>cd /Applications/AD\\ Tools.app/Contents/Resources
-./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip</code></pre>
-              <button id="copy-install-command" class="btn-secondary btn-small">
-                📋 Copy Command
-              </button>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-number">3</div>
-            <div class="step-content">
               <h4>Restart AD Tools</h4>
-              <p>Close and reopen AD Tools. The feature will be automatically enabled.</p>
+              <p>Once installation completes, quit AD Tools completely (⌘Q) and reopen it.
+                 The feature will be automatically enabled.</p>
             </div>
           </div>
+        </div>
+
+        <div class="installation-details">
+          <details>
+            <summary>What does this command do?</summary>
+            <ul>
+              <li>✓ Detects your Mac architecture (Apple Silicon or Intel)</li>
+              <li>✓ Downloads Oracle Instant Client from Oracle's official site</li>
+              <li>✓ Installs to ~/Documents/adtools_library/instantclient/</li>
+              <li>✓ Verifies installation integrity</li>
+              <li>✓ No admin privileges required</li>
+            </ul>
+          </details>
         </div>
 
         <div class="installation-info">
@@ -2789,7 +2785,7 @@ showInstallationGuide() {
 
   // Attach event listeners
   document.getElementById('copy-install-command')?.addEventListener('click', () => {
-    const command = `cd /Applications/AD\\ Tools.app/Contents/Resources\n./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip`;
+    const command = `curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash`;
     navigator.clipboard.writeText(command);
     this.showSuccess('Installation command copied to clipboard!');
   });
@@ -2949,6 +2945,17 @@ showTroubleshootingModal() {
   border-left: 4px solid #667eea;
 }
 
+.step-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f0f4ff;
+  border-left: 4px solid #4f46e5;
+}
+
+.step-primary .code-block {
+  background: #1e1e1e;
+  border: 2px solid #4f46e5;
+}
+
 .step-number {
   flex-shrink: 0;
   width: 40px;
@@ -3061,9 +3068,63 @@ showTroubleshootingModal() {
   color: #d32f2f;
   margin-bottom: 0.5rem;
 }
+
+.installation-details {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.installation-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #667eea;
+  padding: 0.5rem;
+  user-select: none;
+}
+
+.installation-details summary:hover {
+  color: #4f46e5;
+}
+
+.installation-details ul {
+  margin-top: 1rem;
+  padding-left: 1.5rem;
+}
+
+.installation-details li {
+  color: #333;
+  line-height: 1.8;
+  padding: 0.25rem 0;
+}
 ```
 
-### 7.2 Installation Script (scripts/install-oracle-client.sh)
+### 7.2 Automated Installation via One-Line Command
+
+**Simplified Installation Process:**
+
+Users are presented with a single command to install Oracle Instant Client:
+
+```bash
+curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash
+```
+
+**What This Command Does:**
+
+1. Downloads the installation script from Cloudflare Workers storage
+2. Automatically detects the user's architecture (ARM64 or x86_64)
+3. Downloads the appropriate Oracle Instant Client from Oracle's official site
+4. Installs it to `~/Documents/adtools_library/instantclient/`
+5. Verifies the installation
+
+**Script Location:**
+
+The script is hosted at: `https://adtools.lolik.workers.dev/install-oracle-instant-client.sh`
+
+The same script is also bundled in the app repository at `scripts/install-oracle-instant-client.sh` for reference and manual execution.
+
+### 7.3 Installation Script Implementation (scripts/install-oracle-instant-client.sh)
 
 ```bash
 #!/usr/bin/env bash
@@ -3693,7 +3754,6 @@ pub fn run() {
 
 ### 12.1 Phase 2
 
-- **Saved Comparison Profiles:** Save connection pairs and settings
 - **3+ Environment Comparison:** Compare more than 2 environments
 
 ### 12.3 Technical Debt

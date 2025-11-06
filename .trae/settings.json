@@ -1,0 +1,29 @@
+{
+  // Reduce CPU & RAM usage
+  "rust-analyzer.procMacro.enable": false,
+  "rust-analyzer.cargo.buildScripts.enable": false,
+  "rust-analyzer.checkOnSave.enable": false,
+
+  // Don’t load extra features unless needed
+  "rust-analyzer.cargo.allFeatures": false,
+  "rust-analyzer.cargo.features": "none",
+  "rust-analyzer.cargo.noDefaultFeatures": true,
+
+  // Exclude large dirs from indexing
+  "rust-analyzer.files.excludeDirs": [
+    "target",
+    "node_modules",
+    ".git"
+  ],
+  "files.watcherExclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/.git": true
+  },
+
+  // Optional: turn off inlay type hints (saves memory)
+  "rust-analyzer.inlayHints.enable": false,
+
+  // Optional: disable semantic highlighting (small perf win)
+  "editor.semanticHighlighting.enabled": false
+}
