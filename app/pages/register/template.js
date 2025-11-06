@@ -5,7 +5,7 @@ export const RegisterTemplate = /* html */ `
       <p class="register-desc">Enter your details, then verify via email OTP.</p>
       <form class="register-form" novalidate>
         <div class="register-field">
-          <label for="reg-username">Username</label>
+          <label for="reg-username">Display Name</label>
           <input type="text" id="reg-username" class="register-input" placeholder="Input Username" aria-label="Username" maxlength="15" required />
         </div>
         <div class="register-field">

@@ -32,7 +32,7 @@ export class RegisterPage {
 
       const emailOk = /.+@.+\..+/.test(email);
       if (username.length < 2) {
-        errorEl.textContent = "Please enter a valid username (2+ characters).";
+        errorEl.textContent = "Please enter a valid Display Name.";
         return;
       }
       if (!emailOk) {

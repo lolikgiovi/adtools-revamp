@@ -794,10 +794,17 @@ export class LocalStorageService {
 
   _convertJsonRowsToArray(rows, arraySchema) {
     // Recreate a 2D array with header row from schema fields order
-    const header = arraySchema.map((r) => r[0]);
-    const dataRows = (rows || []).map((obj) =>
-      header.map((field) => (obj[field] === null || typeof obj[field] === "undefined" ? null : obj[field]))
-    );
+    const header = Array.isArray(arraySchema) ? arraySchema.map((r) => r[0]) : [];
+    const dataRows = Array.isArray(rows)
+      ? rows.map((obj) => header.map((field) => (obj?.[field] == null ? null : obj[field])))
+      : [];
+
+    // If there are no stored data rows, treat it as a new empty row
+    // so the spreadsheet always shows a writable row under the header.
+    if (dataRows.length === 0) {
+      dataRows.push(Array(header.length).fill(null));
+    }
+
     return [header, ...dataRows];
   }
 }

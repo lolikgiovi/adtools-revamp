@@ -28,10 +28,10 @@ class SettingsPage {
     this.categoriesRoot = root.querySelector(".settings-categories");
     this.searchInput = root.querySelector("#settings-search");
 
-    // Populate runtime status badge (desktop arch-aware when available)
+    // Populate runtime status badge (desktop arch-aware; include version when available)
     try {
       const { getRuntime } = await import("../../core/Runtime.js");
-      const setBadge = (rt, arch) => {
+      const setBadge = (rt, arch, version) => {
         const badge = root.querySelector("#runtime-status");
         if (!badge) return;
         const isDesktop = rt === "tauri";
@@ -41,6 +41,9 @@ class SettingsPage {
           if (a.includes("aarch64") || a.includes("arm64")) text = "Desktop - Apple Silicon";
           else if (a.includes("x86_64") || a.includes("amd64") || a.includes("x64")) text = "Desktop - Intel";
         }
+        if (isDesktop && typeof version === "string" && version.trim()) {
+          text = `v.${version.trim()} - ${text}`;
+        }
         badge.textContent = text;
         badge.setAttribute("data-state", isDesktop ? "desktop" : "web");
         const titleSuffix = isDesktop ? text : "Browser";
@@ -49,11 +52,14 @@ class SettingsPage {
       const runtime = getRuntime();
       this.runtime = runtime;
       setBadge(runtime);
-      // If desktop, try to get arch via Tauri backend
+      // If desktop, try to get arch via Tauri backend and app version via Tauri API
       if (runtime === "tauri") {
         try {
-          const arch = await invoke("get_arch");
-          setBadge(runtime, arch);
+          const archPromise = invoke("get_arch").catch(() => undefined);
+          const { getVersion } = await import("@tauri-apps/api/app");
+          const versionPromise = getVersion().catch(() => undefined);
+          const [arch, version] = await Promise.all([archPromise, versionPromise]);
+          setBadge(runtime, arch, version);
         } catch (_) {
           // silent fallback to generic Desktop
         }
@@ -66,8 +72,11 @@ class SettingsPage {
             const rt2 = getRuntime();
             if (rt2 === "tauri") {
               try {
-                const arch2 = await invoke("get_arch");
-                setBadge(rt2, arch2);
+                const arch2Promise = invoke("get_arch").catch(() => undefined);
+                const { getVersion } = await import("@tauri-apps/api/app");
+                const version2Promise = getVersion().catch(() => undefined);
+                const [arch2, version2] = await Promise.all([arch2Promise, version2Promise]);
+                setBadge(rt2, arch2, version2);
               } catch (_) {
                 setBadge(rt2);
               }
