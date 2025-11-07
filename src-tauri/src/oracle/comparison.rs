@@ -148,3 +148,49 @@ pub fn to_csv(payload: &Value) -> Result<String, String> {
   }
   Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::json;
+
+  #[test]
+  fn test_to_csv_differences_only() {
+    let payload = json!({
+      "comparisons": [
+        {
+          "primary_key": {"ID": "42"},
+          "status": "Match",
+          "env1_data": {"ID": "42", "KEY": "X", "VALUE": "A"},
+          "env2_data": {"ID": "42", "KEY": "X", "VALUE": "A"}
+        },
+        {
+          "primary_key": {"ID": "43"},
+          "status": "Differ",
+          "differences": [
+            {"field": "VALUE", "env1": "B", "env2": "C"},
+            {"field": "KEY", "env1": "Y", "env2": "Y2"}
+          ],
+          "env1_data": {"ID": "43", "KEY": "Y", "VALUE": "B"},
+          "env2_data": {"ID": "43", "KEY": "Y2", "VALUE": "C"}
+        },
+        {
+          "primary_key": {"ID": "99"},
+          "status": "OnlyInEnv1",
+          "env1_data": {"ID": "99", "KEY": "Z", "VALUE": "K"},
+          "env2_data": null
+        }
+      ]
+    });
+
+    let csv = to_csv(&payload).expect("csv");
+    let lines: Vec<&str> = csv.trim_end().split('\n').collect();
+    assert_eq!(lines[0], "primary_key,status,field,env1,env2");
+    // Only differences should be included: 2 rows
+    assert_eq!(lines.len(), 1 + 2);
+    assert!(lines[1].contains("Differ"));
+    assert!(lines[2].contains("Differ"));
+    // primary_key JSON should be quoted and single quotes inside
+    assert!(lines[1].starts_with("\"{'") || lines[1].starts_with("\"{\""));
+  }
+}

@@ -401,32 +401,34 @@ export class CompareConfigTool extends BaseTool {
       const rows = [];
       const comps = Array.isArray(json.comparisons) ? json.comparisons : [];
       comps.forEach((c) => {
-        const key = c.key || c.primary_key || {};
+        const keyObj = c.primary_key || {};
+        const key = JSON.stringify(keyObj);
         const status = c.status || "";
         if (status === "Differ") {
-          const diffs = c.differences || {};
-          Object.keys(diffs).forEach((field) => {
-            const env1 = diffs[field]?.env1 ?? "";
-            const env2 = diffs[field]?.env2 ?? "";
-            rows.push({ key: JSON.stringify(key), status, field, env1, env2 });
+          const diffs = Array.isArray(c.differences) ? c.differences : [];
+          diffs.forEach((d) => {
+            const field = d.field ?? "";
+            const env1 = d.env1 ?? "";
+            const env2 = d.env2 ?? "";
+            rows.push({ key, status, field, env1, env2 });
           });
         } else if (status === "OnlyInEnv1") {
-          const v = c.env1 || c.env1_data || {};
+          const v = c.env1_data || {};
           Object.keys(v).forEach((field) => {
             const env1 = v[field] ?? "";
-            rows.push({ key: JSON.stringify(key), status, field, env1, env2: "" });
+            rows.push({ key, status, field, env1, env2: "" });
           });
         } else if (status === "OnlyInEnv2") {
-          const v = c.env2 || c.env2_data || {};
+          const v = c.env2_data || {};
           Object.keys(v).forEach((field) => {
             const env2 = v[field] ?? "";
-            rows.push({ key: JSON.stringify(key), status, field, env1: "", env2 });
+            rows.push({ key, status, field, env1: "", env2 });
           });
         }
       });
       const header = ["primary_key", "status", "field", "env1", "env2"]; 
       const lines = [header.join(",")].concat(
-        rows.map((r) => [r.key, r.status, r.field, this.csvEscape(r.env1), this.csvEscape(r.env2)].join(","))
+        rows.map((r) => [r.key.replace(/"/g, "'"), r.status, r.field.replace(/"/g, "'"), this.csvEscape(r.env1), this.csvEscape(r.env2)].join(","))
       );
       return lines.join("\n");
     } catch (e) {
