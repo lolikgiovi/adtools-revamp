@@ -27,6 +27,7 @@ export class CompareConfigTool extends BaseTool {
       eventBus,
     });
     this.lastResult = null;
+    this.viewMode = "rows"; // rows | cards | master
   }
 
   render() {
@@ -37,23 +38,11 @@ export class CompareConfigTool extends BaseTool {
     // Gate on Tauri availability
     const tauri = isTauri();
     const disableAll = (msg) => {
-      [
-        "btnCheckPrime",
-        "btnSetCreds1",
-        "btnGetCreds1",
-        "btnTestConn1",
-        "btnSetCreds2",
-        "btnGetCreds2",
-        "btnTestConn2",
-        "btnCompare",
-        "btnExportJson",
-        "btnExportCsv",
-      ].forEach((id) => {
-        const b = el(id);
-        if (b) b.disabled = true;
-      });
+      this.toggleUIEnabled(false);
       const cs = el("clientStatus");
       if (cs) cs.textContent = msg;
+      const guide = el("clientGuide");
+      if (guide) guide.style.display = "";
     };
 
     if (!tauri) {
@@ -91,6 +80,104 @@ export class CompareConfigTool extends BaseTool {
     // CSV Preview
     el("btnPreviewCsv").addEventListener("click", () => this.previewCsv());
     el("btnDownloadCsv").addEventListener("click", () => this.downloadCsvBrowser());
+
+    // Saved connections dropdowns
+    const s1 = el("env1Saved");
+    const s2 = el("env2Saved");
+    if (s1) s1.addEventListener("change", () => this.applySavedConnection(1));
+    if (s2) s2.addEventListener("change", () => this.applySavedConnection(2));
+    this.refreshSavedConnectionsSelects();
+
+    // Metadata + fields multi-select
+    const btnMeta = el("btnLoadMetadata");
+    if (btnMeta) btnMeta.addEventListener("click", () => this.loadMetadata());
+    const selAll = el("btnSelectAllFields");
+    const deselAll = el("btnDeselectAllFields");
+    if (selAll) selAll.addEventListener("click", () => this.selectAllFields(true));
+    if (deselAll) deselAll.addEventListener("click", () => this.selectAllFields(false));
+
+    // View mode toggles
+    const vRows = el("viewRows");
+    const vCards = el("viewCards");
+    const vMaster = el("viewMaster");
+    if (vRows) vRows.addEventListener("click", () => this.setViewMode("rows"));
+    if (vCards) vCards.addEventListener("click", () => this.setViewMode("cards"));
+    if (vMaster) vMaster.addEventListener("click", () => this.setViewMode("master"));
+
+    // Search filter
+    const search = el("cmpSearch");
+    if (search) search.addEventListener("input", () => this.applyFilters());
+
+    // Copy install command
+    const copyCmdBtn = el("btnCopyInstallCmd");
+    if (copyCmdBtn) {
+      copyCmdBtn.addEventListener("click", () => {
+        const cmdEl = el("clientInstallCmd");
+        const text = cmdEl ? cmdEl.textContent : "bash scripts/install-oracle-instant-client.sh";
+        this.copyToClipboard(text, copyCmdBtn);
+      });
+    }
+
+    // Auto-check client readiness and gate UI
+    this.toggleUIEnabled(false);
+    await this.ensureClientReady();
+  }
+
+  toggleUIEnabled(enabled) {
+    const ids = [
+      "btnSetCreds1",
+      "btnGetCreds1",
+      "btnTestConn1",
+      "btnSetCreds2",
+      "btnGetCreds2",
+      "btnTestConn2",
+      "btnCompare",
+      "btnExportJson",
+      "btnExportCsv",
+      "btnSavePreset",
+      "btnApplyPreset",
+      "btnDeletePreset",
+      "btnPreviewCsv",
+      "btnDownloadCsv",
+      "btnLoadMetadata",
+      "btnSelectAllFields",
+      "btnDeselectAllFields",
+      "viewRows",
+      "viewCards",
+      "viewMaster",
+      "env1Saved",
+      "env2Saved",
+      "presetSelect",
+    ];
+    ids.forEach((id) => {
+      const b = el(id);
+      if (b) b.disabled = !enabled;
+    });
+    // Status visibility
+    const guide = el("clientGuide");
+    if (guide) guide.style.display = enabled ? "none" : "";
+  }
+
+  async ensureClientReady() {
+    const statusEl = el("clientStatus");
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const status = await invoke("check_oracle_client_ready");
+      if (!status.installed) {
+        statusEl.textContent = status.message || "Oracle client not detected";
+        this.toggleUIEnabled(false);
+        try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "client_not_installed", message: String(status.message || "Oracle client not detected") }); } catch (_) {}
+        return false;
+      }
+      statusEl.textContent = "Client detected.";
+      this.toggleUIEnabled(true);
+      return true;
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      this.toggleUIEnabled(false);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "ensure_ready", message: String(e) }); } catch (_) {}
+      return false;
+    }
   }
 
   getEnvConfig(idx) {
@@ -108,6 +195,64 @@ export class CompareConfigTool extends BaseTool {
     };
   }
 
+  // Saved connections management
+  getSavedConnections() {
+    try {
+      const raw = localStorage.getItem("compare-config.savedConnections") || "{}";
+      const obj = JSON.parse(raw);
+      return typeof obj === "object" && obj ? obj : {};
+    } catch (_) { return {}; }
+  }
+
+  setSavedConnections(obj) {
+    try { localStorage.setItem("compare-config.savedConnections", JSON.stringify(obj || {})); } catch (_) {}
+  }
+
+  refreshSavedConnectionsSelects() {
+    const saved = this.getSavedConnections();
+    const ids = Object.keys(saved);
+    const opts = ids.map((id) => `<option value="${id}">${id}</option>`).join("");
+    const s1 = el("env1Saved");
+    const s2 = el("env2Saved");
+    if (s1) s1.innerHTML = `<option value="">-- Select --</option>${opts}`;
+    if (s2) s2.innerHTML = `<option value="">-- Select --</option>${opts}`;
+    const st1 = el("env1SavedStatus");
+    const st2 = el("env2SavedStatus");
+    if (st1) st1.textContent = ids.length ? "Available" : "No saved connections";
+    if (st2) st2.textContent = ids.length ? "Available" : "No saved connections";
+  }
+
+  applySavedConnection(idx) {
+    const sel = el(`env${idx}Saved`);
+    const statusEl = el(`env${idx}SavedStatus`);
+    if (!sel) return;
+    const id = sel.value;
+    const saved = this.getSavedConnections();
+    const cfg = saved[id];
+    if (!id || !cfg) {
+      if (statusEl) statusEl.textContent = "None";
+      return;
+    }
+    el(`env${idx}Id`).value = cfg.id || id;
+    el(`env${idx}Host`).value = cfg.host || "";
+    el(`env${idx}Port`).value = String(cfg.port ?? 1521);
+    el(`env${idx}Service`).value = cfg.service_name || "";
+    el(`env${idx}Schema`).value = cfg.schema || "";
+    if (statusEl) statusEl.textContent = "Applied";
+    this.showSuccess(`Applied saved connection '${id}' to Env${idx}`);
+  }
+
+  saveCurrentConnection(idx) {
+    const cfg = this.getEnvConfig(idx);
+    if (!cfg.id) return; // require id
+    const saved = this.getSavedConnections();
+    saved[cfg.id] = cfg;
+    this.setSavedConnections(saved);
+    this.refreshSavedConnectionsSelects();
+    const statusEl = el(`env${idx}SavedStatus`);
+    if (statusEl) statusEl.textContent = "Saved";
+  }
+
   async checkAndPrime() {
     const statusEl = el("clientStatus");
     try {
@@ -117,17 +262,22 @@ export class CompareConfigTool extends BaseTool {
         statusEl.textContent = status.message || "Oracle client not detected";
         this.showError(status.message || "Oracle client not detected");
         try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "client_not_installed", message: String(status.message || "Oracle client not detected") }); } catch (_) {}
+        this.toggleUIEnabled(false);
         return;
       }
       statusEl.textContent = "Client detected. Priming...";
       await invoke("prime_oracle_client");
       statusEl.textContent = "Client primed and ready.";
       this.showSuccess("Oracle client primed");
+      this.toggleUIEnabled(true);
+      const btn = el("btnCheckPrime");
+      if (btn) btn.textContent = "Check Again";
     } catch (e) {
       console.error(e);
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Prime failed: ${e}`);
       try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "check_and_prime", message: String(e) }); } catch (_) {}
+      this.toggleUIEnabled(false);
     }
   }
 
@@ -187,6 +337,10 @@ export class CompareConfigTool extends BaseTool {
       const ok = await invoke("test_oracle_connection", { config: cfg });
       statusEl.textContent = ok ? "Connection OK" : "Connection failed";
       if (ok) this.showSuccess("Connection succeeded"); else this.showError("Connection failed");
+      if (ok) {
+        // Save this connection for future selection
+        this.saveCurrentConnection(idx);
+      }
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Test failed: ${e}`);
@@ -196,10 +350,11 @@ export class CompareConfigTool extends BaseTool {
 
   async compare() {
     const statusEl = el("compareStatus");
+    const spinner = el("ccSpinner");
     const env1 = this.getEnvConfig(1);
     const env2 = this.getEnvConfig(2);
     const table = el("cmpTable").value.trim();
-    const fields = parseFields(el("cmpFields").value);
+    const fields = this.getSelectedFields();
     const where = el("cmpWhere").value.trim();
 
     if (!env1.id || !env2.id || !table) {
@@ -210,12 +365,14 @@ export class CompareConfigTool extends BaseTool {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       statusEl.textContent = "Comparing...";
+      if (spinner) spinner.hidden = false;
+      el("btnCompare").disabled = true;
       const result = await invoke("compare_configurations", {
         env1,
         env2,
         table,
         where_clause: where ? where : null,
-        fields: fields.length ? fields : null,
+        fields: Array.isArray(fields) && fields.length ? fields : null,
       });
       this.lastResult = result;
       statusEl.textContent = "Compared.";
@@ -223,10 +380,16 @@ export class CompareConfigTool extends BaseTool {
       this.renderResult(result);
       el("btnExportJson").disabled = false;
       el("btnExportCsv").disabled = false;
+      // Persist connections for dropdowns
+      this.saveCurrentConnection(1);
+      this.saveCurrentConnection(2);
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Compare failed: ${e}`);
       try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "compare", table: table || "", message: String(e) }); } catch (_) {}
+    } finally {
+      if (spinner) spinner.hidden = true;
+      el("btnCompare").disabled = false;
     }
   }
 
@@ -248,41 +411,15 @@ export class CompareConfigTool extends BaseTool {
       const comps = Array.isArray(json.comparisons) ? json.comparisons : [];
       const fields = Array.isArray(json.fields) ? json.fields : [];
       const filtered = this.filterComparisons(comps);
-      const rowsHtml = filtered.map((c) => {
-        const pkObj = c.primary_key || {};
-        const pk = JSON.stringify(pkObj);
-        const status = c.status || "";
-        let body = "";
-        if (status === "Differ") {
-          const diffs = Array.isArray(c.differences) ? c.differences : [];
-          const items = diffs
-            .map((d) => `<li><strong>${d.field}</strong>: <span class="diff-left">${d.env1 ?? ""}</span> → <span class="diff-right">${d.env2 ?? ""}</span></li>`)
-            .join("");
-          body = `<ul class="cc-diffs">${items}</ul>`;
-        } else if (status === "OnlyInEnv1") {
-          const v = c.env1_data || {};
-          const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
-          body = `<div class="cc-only cc-only1"><ul>${items}</ul></div>`;
-        } else if (status === "OnlyInEnv2") {
-          const v = c.env2_data || {};
-          const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
-          body = `<div class="cc-only cc-only2"><ul>${items}</ul></div>`;
-        } else {
-          body = `<div class="cc-match">All selected fields match.</div>`;
-        }
-        return `
-          <div class="cc-row-item">
-            <div class="cc-row-head">
-              <span class="cc-badge cc-${status.toLowerCase()}">${status}</span>
-              <code class="cc-key">${pk}</code>
-              <button class="btn btn-xs" data-copy='${pk}'>Copy Key</button>
-            </div>
-            ${body}
-          </div>
-        `;
-      }).join("");
-
-      resultsEl.innerHTML = rowsHtml || "<div class='cc-empty'>No results.</div>";
+      let html = "";
+      if (this.viewMode === "rows") {
+        html = filtered.map((c) => this.renderRowItem(c, fields)).join("");
+      } else if (this.viewMode === "cards") {
+        html = `<div class="cc-results-cards">${filtered.map((c) => this.renderCardItem(c, fields)).join("")}</div>`;
+      } else if (this.viewMode === "master") {
+        html = this.renderMasterDetail(filtered, fields);
+      }
+      resultsEl.innerHTML = html || "<div class='cc-empty'>No results.</div>";
 
       // Bind copy buttons
       resultsEl.querySelectorAll("button[data-copy]").forEach((b) => {
@@ -294,19 +431,117 @@ export class CompareConfigTool extends BaseTool {
     }
   }
 
+  renderRowItem(c, fields) {
+    const pkObj = c.primary_key || {};
+    const pk = JSON.stringify(pkObj);
+    const status = c.status || "";
+    let body = "";
+    if (status === "Differ") {
+      const diffs = Array.isArray(c.differences) ? c.differences : [];
+      const items = diffs
+        .map((d) => `<li><strong>${d.field}</strong>: <span class="diff-left">${d.env1 ?? ""}</span> → <span class="diff-right">${d.env2 ?? ""}</span></li>`)
+        .join("");
+      body = `<ul class="cc-diffs">${items}</ul>`;
+    } else if (status === "OnlyInEnv1") {
+      const v = c.env1_data || {};
+      const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
+      body = `<div class="cc-only cc-only1"><ul>${items}</ul></div>`;
+    } else if (status === "OnlyInEnv2") {
+      const v = c.env2_data || {};
+      const items = fields.map((f) => `<li><strong>${f}</strong>: ${v[f] ?? ""}</li>`).join("");
+      body = `<div class="cc-only cc-only2"><ul>${items}</ul></div>`;
+    } else {
+      body = `<div class="cc-match">All selected fields match.</div>`;
+    }
+    return `
+      <div class="cc-row-item">
+        <div class="cc-row-head">
+          <span class="cc-badge cc-${status.toLowerCase()}">${status}</span>
+          <code class="cc-key">${pk}</code>
+          <button class="btn btn-xs" data-copy='${pk}'>Copy Key</button>
+        </div>
+        ${body}
+      </div>
+    `;
+  }
+
+  renderCardItem(c, fields) {
+    const pkObj = c.primary_key || {};
+    const pk = JSON.stringify(pkObj);
+    const status = c.status || "";
+    let body = "";
+    if (status === "Differ") {
+      const diffs = Array.isArray(c.differences) ? c.differences : [];
+      body = diffs.map((d) => `<div><strong>${d.field}</strong><div><span class="diff-left">${d.env1 ?? ""}</span> → <span class="diff-right">${d.env2 ?? ""}</span></div></div>`).join("");
+    } else if (status === "OnlyInEnv1") {
+      const v = c.env1_data || {};
+      body = fields.map((f) => `<div><strong>${f}</strong><div>${v[f] ?? ""}</div></div>`).join("");
+    } else if (status === "OnlyInEnv2") {
+      const v = c.env2_data || {};
+      body = fields.map((f) => `<div><strong>${f}</strong><div>${v[f] ?? ""}</div></div>`).join("");
+    } else {
+      body = `<div class="cc-match">All selected fields match.</div>`;
+    }
+    return `
+      <div class="cc-row-item">
+        <div class="cc-row-head">
+          <span class="cc-badge cc-${status.toLowerCase()}">${status}</span>
+          <code class="cc-key">${pk}</code>
+          <button class="btn btn-xs" data-copy='${pk}'>Copy Key</button>
+        </div>
+        <div class="cc-card-body">${body}</div>
+      </div>
+    `;
+  }
+
+  renderMasterDetail(list, fields) {
+    const items = list.map((c, idx) => {
+      const pk = JSON.stringify(c.primary_key || {});
+      const status = c.status || "";
+      return `<button class="btn btn-outline btn-sm" data-idx="${idx}"><span class="cc-badge cc-${status.toLowerCase()}">${status}</span> ${pk}</button>`;
+    }).join("");
+    const first = list[0];
+    const detail = first ? this.renderRowItem(first, fields) : "<div class='cc-empty'>No selection.</div>";
+    const html = `
+      <div class="cc-master-detail" style="display:grid;grid-template-columns:240px 1fr;gap:0.5rem;align-items:start;">
+        <div class="cc-master" style="display:flex;flex-direction:column;gap:0.25rem;">${items || "<div class='cc-empty'>No results.</div>"}</div>
+        <div class="cc-detail">${detail}</div>
+      </div>
+    `;
+    // After injecting, wire selection
+    const resultsEl = el("cmpResults");
+    setTimeout(() => {
+      const master = resultsEl.querySelectorAll(".cc-master button[data-idx]");
+      const detailEl = resultsEl.querySelector(".cc-detail");
+      master.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = parseInt(btn.getAttribute("data-idx"), 10);
+          const c = list[i];
+          detailEl.innerHTML = this.renderRowItem(c, fields);
+          detailEl.querySelectorAll("button[data-copy]").forEach((b) => {
+            b.addEventListener("click", () => this.copyToClipboard(b.getAttribute("data-copy"), b));
+          });
+        });
+      });
+    }, 0);
+    return html;
+  }
+
   filterComparisons(list) {
     try {
       const showMatches = !!el("fltMatches")?.checked;
       const showDiff = !!el("fltDifferences")?.checked;
       const showOnly1 = !!el("fltOnlyEnv1")?.checked;
       const showOnly2 = !!el("fltOnlyEnv2")?.checked;
+      const q = (el("cmpSearch")?.value || "").trim().toLowerCase();
       return list.filter((c) => {
         const s = (c.status || "").toLowerCase();
         if (s === "match") return showMatches;
         if (s === "differ") return showDiff;
         if (s === "onlyinenv1") return showOnly1;
         if (s === "onlyinenv2") return showOnly2;
-        return true;
+        const keyStr = JSON.stringify(c.primary_key || {}).toLowerCase();
+        return q ? keyStr.includes(q) : true;
       });
     } catch (_) {
       return list;
@@ -316,6 +551,107 @@ export class CompareConfigTool extends BaseTool {
   applyFilters() {
     if (!this.lastResult) return;
     this.renderResult(this.lastResult);
+  }
+
+  // View mode switching
+  setViewMode(mode) {
+    this.viewMode = mode;
+    const ids = ["viewRows", "viewCards", "viewMaster"];
+    ids.forEach((id) => {
+      const btn = el(id);
+      if (!btn) return;
+      const isActive = (id === "viewRows" && mode === "rows") || (id === "viewCards" && mode === "cards") || (id === "viewMaster" && mode === "master");
+      btn.classList.toggle("btn-outline", !isActive);
+    });
+    if (this.lastResult) this.renderResult(this.lastResult);
+  }
+
+  // Metadata fetching and field selection UI
+  async loadMetadata() {
+    const statusEl = el("metadataStatus");
+    const env1 = this.getEnvConfig(1);
+    const table = el("cmpTable").value.trim();
+    if (!env1.id || !env1.host || !env1.service_name || !table) {
+      this.showError("Provide Env1 (id, host, service), and Table");
+      return;
+    }
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      statusEl.textContent = "Loading metadata...";
+      const meta = await invoke("fetch_table_metadata", { config: env1, schema: env1.schema, table });
+      statusEl.textContent = "Loaded.";
+      this.renderMetadata(meta);
+      this.renderFieldsFromMetadata(meta);
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      this.showError(`Metadata load failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "fetch_table_metadata", table: table || "", message: String(e) }); } catch (_) {}
+    }
+  }
+
+  renderMetadata(meta) {
+    const p = el("metadataPreview");
+    if (!p) return;
+    try {
+      const cols = Array.isArray(meta.columns) ? meta.columns : [];
+      const rows = cols.map((c) => {
+        const len = c.data_length != null ? `(${c.data_length})` : "";
+        const nullable = c.nullable ? "NULL" : "NOT NULL";
+        const def = c.data_default ? ` DEFAULT ${c.data_default}` : "";
+        const pk = c.is_primary_key ? " • PK" : "";
+        return `<div><code>${c.name}</code> — ${c.data_type}${len} — ${nullable}${def}${pk}</div>`;
+      }).join("");
+      p.innerHTML = rows || "<div class='cc-empty'>No columns.</div>";
+    } catch (e) {
+      p.innerHTML = `<div class='cc-empty'>Metadata render failed: ${e}</div>`;
+    }
+  }
+
+  renderFieldsFromMetadata(meta) {
+    const list = el("fieldsList");
+    if (!list) return;
+    try {
+      const cols = Array.isArray(meta.columns) ? meta.columns : [];
+      list.innerHTML = cols.map((c) => {
+        const checked = "checked"; // default select all on load
+        return `<label class="cc-field-item"><input type="checkbox" class="cc-field-check" data-field="${c.name}" ${checked}> <span>${c.name}</span></label>`;
+      }).join("");
+      // Update text field to reflect selection
+      const fields = cols.map((c) => c.name);
+      el("cmpFields").value = fields.join(",");
+      // Wire checkbox change to sync text
+      list.querySelectorAll("input.cc-field-check").forEach((inp) => {
+        inp.addEventListener("change", () => this.syncFieldsTextFromChecks());
+      });
+    } catch (e) {
+      list.innerHTML = `<div class='cc-empty'>Fields render failed: ${e}</div>`;
+    }
+  }
+
+  selectAllFields(checked) {
+    const list = el("fieldsList");
+    if (!list) return;
+    list.querySelectorAll("input.cc-field-check").forEach((inp) => {
+      inp.checked = !!checked;
+    });
+    this.syncFieldsTextFromChecks();
+  }
+
+  syncFieldsTextFromChecks() {
+    const list = el("fieldsList");
+    if (!list) return;
+    const fields = Array.from(list.querySelectorAll("input.cc-field-check:checked")).map((i) => i.getAttribute("data-field"));
+    el("cmpFields").value = fields.join(",");
+  }
+
+  getSelectedFields() {
+    const list = el("fieldsList");
+    if (list) {
+      const checks = Array.from(list.querySelectorAll("input.cc-field-check:checked"));
+      const fields = checks.map((i) => i.getAttribute("data-field"));
+      if (fields.length) return fields;
+    }
+    return parseFields(el("cmpFields").value);
   }
 
   getPresetPayload() {
