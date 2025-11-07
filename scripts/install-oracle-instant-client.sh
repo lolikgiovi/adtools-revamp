@@ -28,9 +28,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="$HOME/Documents/adtools_library/instantclient"
+# Allow override via env var; provide sandbox fallback inside workspace when restricted
+DEFAULT_INSTALL_DIR="$HOME/Documents/adtools_library/instantclient"
+INSTALL_DIR="${ADTOOLS_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+SANDBOX_DIR="$PWD/.adtools_sandbox/instantclient"
 TEMP_DIR=$(mktemp -d)
-VERSION="23_3"  # Oracle Instant Client version
+VERSION="23.3"  # Oracle Instant Client version (dot notation per Oracle site)
+INSTALL_MODE="zip"  # 'dmg' for ARM64 preferred
 
 # Cleanup on exit
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -99,12 +103,16 @@ detect_architecture() {
         arm64)
             print_success "Detected: Apple Silicon (ARM64)"
             ORACLE_ARCH="arm64"
-            DOWNLOAD_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.arm64-${VERSION}.zip"
+            BASIC_DMG_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basic-macos-arm64.dmg"
+            # ZIP fallbacks if DMG fails
+            BASIC_LITE_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.arm64-${VERSION}.zip"
+            BASIC_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basic-macos.arm64-${VERSION}.zip"
             ;;
         x86_64)
             print_success "Detected: Intel (x86_64)"
             ORACLE_ARCH="x64"
-            DOWNLOAD_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.x64-${VERSION}.zip"
+            BASIC_LITE_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.x64-${VERSION}.zip"
+            BASIC_URL="https://download.oracle.com/otn_software/mac/instantclient/instantclient-basic-macos.x64-${VERSION}.zip"
             ;;
         *)
             print_error "Unsupported architecture: $ARCH"
@@ -125,61 +133,144 @@ check_existing_installation() {
         fi
 
         print_info "Removing existing installation..."
-        rm -rf "$INSTALL_DIR"
-        print_success "Existing installation removed"
+        if rm -rf "$INSTALL_DIR" 2>/dev/null; then
+            print_success "Existing installation removed"
+        else
+            print_warning "Unable to remove '$INSTALL_DIR' (sandbox restriction)."
+            print_info "Using sandbox install directory: $SANDBOX_DIR"
+            INSTALL_DIR="$SANDBOX_DIR"
+            mkdir -p "$INSTALL_DIR"
+        fi
     fi
 }
 
 download_instant_client() {
     print_info "Downloading Oracle Instant Client ${VERSION}..."
-    echo -e "${BLUE}   URL: $DOWNLOAD_URL${NC}"
 
+    # Prefer DMG on ARM64
+    if [[ "$ORACLE_ARCH" == "arm64" ]]; then
+        DMG_FILE="$TEMP_DIR/instantclient-basic-macos-arm64.dmg"
+        echo -e "${BLUE}   URL: $BASIC_DMG_URL${NC}"
+        if curl --fail -L --progress-bar "$BASIC_DMG_URL" -o "$DMG_FILE"; then
+            local size
+            size=$(stat -f%z "$DMG_FILE" 2>/dev/null || echo 0)
+            if [[ "$size" -lt 10485760 ]]; then # expect DMG > 10MB
+                print_warning "Downloaded DMG is unexpectedly small (${size} bytes)."
+            fi
+            INSTALL_MODE="dmg"
+            print_success "DMG download completed ($(du -h "$DMG_FILE" | cut -f1))"
+            return 0
+        else
+            print_warning "DMG download failed; falling back to ZIP packages"
+        fi
+    fi
+
+    # ZIP path (ARM64 fallback or Intel default)
     ZIP_FILE="$TEMP_DIR/instantclient.zip"
 
-    # Download with progress bar
-    if curl -L --progress-bar "$DOWNLOAD_URL" -o "$ZIP_FILE"; then
-        print_success "Download completed"
-    else
-        print_error "Download failed"
-        print_info "Please check your internet connection or try again later"
+    try_download_zip() {
+        local url="$1"
+        echo -e "${BLUE}   URL: $url${NC}"
+        if curl --fail -L --progress-bar "$url" -o "$ZIP_FILE"; then
+            return 0
+        else
+            return 1
+        fi
+    }
+
+    # First try Basic Lite, then fallback to Basic
+    if ! try_download_zip "$BASIC_LITE_URL"; then
+        print_warning "Basic Lite download failed; trying Basic package..."
+        if ! try_download_zip "$BASIC_URL"; then
+            print_error "Download failed for both Basic Lite and Basic packages"
+            print_info "Please check your internet connection or try again later"
+            exit 1
+        fi
+    fi
+
+    # Verify ZIP
+    if [[ ! -f "$ZIP_FILE" ]]; then
+        print_error "Downloaded file not found"
+        exit 1
+    fi
+    local zsize
+    zsize=$(stat -f%z "$ZIP_FILE" 2>/dev/null || echo 0)
+    if [[ "$zsize" -lt 1048576 ]]; then
+        print_warning "Downloaded file is unexpectedly small (${zsize} bytes)."
+        local mime
+        mime=$(file -b --mime-type "$ZIP_FILE" 2>/dev/null || echo "unknown")
+        if [[ "$mime" != "application/zip" ]]; then
+            print_error "Downloaded content is not a ZIP (mime: $mime). Oracle may have changed the URL."
+            exit 1
+        fi
+    fi
+    if ! head -c 2 "$ZIP_FILE" | grep -q "PK"; then
+        print_error "Downloaded file is not a valid ZIP (missing PK signature)"
         exit 1
     fi
 
-    # Verify download
-    if [[ ! -f "$ZIP_FILE" ]] || [[ ! -s "$ZIP_FILE" ]]; then
-        print_error "Downloaded file is invalid or empty"
-        exit 1
-    fi
-
-    print_success "Download verified ($(du -h "$ZIP_FILE" | cut -f1))"
+    INSTALL_MODE="zip"
+    print_success "ZIP download verified ($(du -h "$ZIP_FILE" | cut -f1))"
 }
 
 extract_and_install() {
-    print_info "Extracting Oracle Instant Client..."
-
     # Create installation directory
-    mkdir -p "$INSTALL_DIR"
-
-    # Extract
-    if unzip -q "$ZIP_FILE" -d "$TEMP_DIR"; then
-        print_success "Extraction completed"
+    if mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+        :
     else
-        print_error "Extraction failed"
-        exit 1
+        print_warning "Cannot create install directory '$INSTALL_DIR' (sandbox restriction)."
+        print_info "Falling back to sandbox directory: $SANDBOX_DIR"
+        INSTALL_DIR="$SANDBOX_DIR"
+        mkdir -p "$INSTALL_DIR"
     fi
 
-    # Find the extracted directory (usually instantclient_XX_X)
-    EXTRACTED_DIR=$(find "$TEMP_DIR" -type d -name "instantclient_*" | head -n 1)
+    if [[ "$INSTALL_MODE" == "dmg" ]]; then
+        print_info "Mounting DMG and running installer..."
+        if hdiutil mount "$DMG_FILE" >/dev/null; then
+            VOL_PATH=$(find /Volumes -maxdepth 1 -type d -name "instantclient-basic-macos.arm64*" | head -n 1)
+            if [[ -z "$VOL_PATH" ]]; then
+                print_error "Unable to locate mounted volume for DMG"
+                exit 1
+            fi
+            if bash "$VOL_PATH/install_ic.sh"; then
+                print_success "DMG installer completed"
+            else
+                print_error "DMG installer failed"
+                hdiutil unmount "$VOL_PATH" >/dev/null 2>&1 || true
+                exit 1
+            fi
+            hdiutil unmount "$VOL_PATH" >/dev/null 2>&1 || true
 
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-        print_error "Could not find extracted directory"
-        exit 1
+            EXTRACTED_DIR=$(find "$HOME/Downloads" -maxdepth 1 -type d -name "instantclient_*" | head -n 1)
+            if [[ -z "$EXTRACTED_DIR" ]]; then
+                print_error "Could not find installed Instant Client directory in Downloads"
+                exit 1
+            fi
+            print_info "Installing to: $INSTALL_DIR"
+            cp -R "$EXTRACTED_DIR"/* "$INSTALL_DIR/"
+        else
+            print_error "Failed to mount DMG"
+            exit 1
+        fi
+    else
+        print_info "Extracting ZIP package..."
+        if unzip -q "$ZIP_FILE" -d "$TEMP_DIR"; then
+            print_success "Extraction completed"
+        else
+            print_error "Extraction failed"
+            exit 1
+        fi
+        EXTRACTED_DIR=$(find "$TEMP_DIR" -type d -name "instantclient_*" | head -n 1)
+        if [[ -z "$EXTRACTED_DIR" ]]; then
+            print_error "Could not find extracted directory"
+            exit 1
+        fi
+        print_info "Installing to: $INSTALL_DIR"
+        cp -R "$EXTRACTED_DIR"/* "$INSTALL_DIR/"
     fi
 
-    print_info "Installing to: $INSTALL_DIR"
-
-    # Move files to installation directory
-    cp -R "$EXTRACTED_DIR"/* "$INSTALL_DIR/"
+    # Remove quarantine attributes for smooth loading
+    xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
 
     print_success "Installation completed"
 }

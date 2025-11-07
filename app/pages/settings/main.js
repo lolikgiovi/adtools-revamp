@@ -451,6 +451,20 @@ class SettingsPage {
         </div>
         <div class="setting-error" aria-live="polite"></div>
       `;
+    } else if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+      panel.innerHTML = `
+        <div class="credentials-editor">
+          <div class="cred-rows"></div>
+          <div class="cred-actions">
+            <button type="button" class="btn kv-add" data-action="cred-add">Add Credential</button>
+          </div>
+          <div class="setting-actions">
+            <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
+            <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="setting-error" aria-live="polite"></div>
+      `;
     } else {
       panel.innerHTML = `
         <div class="setting-edit-row">
@@ -471,6 +485,7 @@ class SettingsPage {
     let input = null;
     let kvContainer = null;
     let connContainer = null;
+    let credContainer = null;
     if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
       connContainer = panel.querySelector(".connections-editor");
       // Populate existing rows from kvlist pairs
@@ -485,12 +500,32 @@ class SettingsPage {
           try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
           const rowData = {
             key: String(pair?.key || ""),
+            username: String(valObj?.username || ""),
+            password: "",
             host: String(valObj?.host || ""),
             port: valObj?.port !== undefined ? Number(valObj.port) : "",
             service_name: String(valObj?.service_name || valObj?.serviceName || ""),
-            password: String(valObj?.password || ""),
           };
           this.#connAddRow(connContainer, item, rowData);
+        }
+      }
+    } else if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+      credContainer = panel.querySelector(".credentials-editor");
+      const arr = Array.isArray(current) ? current : [];
+      const rowsRoot = credContainer.querySelector(".cred-rows");
+      rowsRoot.innerHTML = "";
+      if (!arr.length) {
+        this.#credAddRow(credContainer, item);
+      } else {
+        for (const pair of arr) {
+          let valObj = pair?.value;
+          try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
+          const rowData = {
+            key: String(pair?.key || ""),
+            username: String(valObj?.username || ""),
+            password: "",
+          };
+          this.#credAddRow(credContainer, item, rowData);
         }
       }
     } else if (item.type === "kvlist") {
@@ -512,13 +547,24 @@ class SettingsPage {
         const result = [];
         rows.forEach((row) => {
           const key = row.querySelector(".conn-key")?.value?.trim() || "";
+          const username = row.querySelector(".conn-user")?.value?.trim() || "";
+          const password = row.querySelector(".conn-pass")?.value?.trim() || "";
           const host = row.querySelector(".conn-host")?.value?.trim() || "";
           const portStr = row.querySelector(".conn-port")?.value?.trim() || "";
           const port = portStr === "" ? undefined : Number(portStr);
           const service_name = row.querySelector(".conn-service")?.value?.trim() || "";
-          const password = row.querySelector(".conn-pass")?.value?.trim() || "";
           // Allow empty row while editing; validator will handle required checks
-          result.push({ key, value: { host, port, service_name, password } });
+          result.push({ key, value: { host, port, service_name, username, password } });
+        });
+        return result;
+      }
+      if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+        const rows = credContainer?.querySelectorAll?.(".cred-row") || [];
+        const result = [];
+        rows.forEach((row) => {
+          const key = row.querySelector(".cred-key")?.value?.trim() || "";
+          const username = row.querySelector(".cred-user")?.value?.trim() || "";
+          result.push({ key, value: { username } });
         });
         return result;
       }
@@ -528,7 +574,38 @@ class SettingsPage {
 
     const validateAndToggle = () => {
       const value = getCurrentEditValue();
-      const { valid, message } = this.service.validate(value, item.type, item.validation || {});
+      let { valid, message } = this.service.validate(value, item.type, item.validation || {});
+      // Additional validation: secure oracle credentials must have key and username
+      if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+        const rows = credContainer?.querySelectorAll?.(".cred-row") || [];
+        for (const row of rows) {
+          const key = row.querySelector(".cred-key")?.value?.trim() || "";
+          const user = row.querySelector(".cred-user")?.value?.trim() || "";
+          const pass = row.querySelector(".cred-pass")?.value?.trim() || "";
+          if (!key && !user && !pass) continue; // allow empty row
+          if (!key) { valid = false; message = "Connection ID is required"; break; }
+          if (!user) { valid = false; message = "Username is required"; break; }
+        }
+      } else if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+        // All fields mandatory: name, username, password, host, port, service
+        const rows = connContainer?.querySelectorAll?.(".conn-row") || [];
+        for (const row of rows) {
+          const key = row.querySelector(".conn-key")?.value?.trim() || "";
+          const user = row.querySelector(".conn-user")?.value?.trim() || "";
+          const pass = row.querySelector(".conn-pass")?.value?.trim() || "";
+          const host = row.querySelector(".conn-host")?.value?.trim() || "";
+          const portStr = row.querySelector(".conn-port")?.value?.trim() || "";
+          const svc = row.querySelector(".conn-service")?.value?.trim() || "";
+          if (!key && !user && !pass && !host && !portStr && !svc) continue; // allow empty row
+          const port = Number(portStr);
+          if (!key) { valid = false; message = "Connection Name is required"; break; }
+          if (!user) { valid = false; message = "Username is required"; break; }
+          if (!pass) { valid = false; message = "Password is required"; break; }
+          if (!host) { valid = false; message = "Host is required"; break; }
+          if (!portStr || Number.isNaN(port) || port <= 0) { valid = false; message = "Valid port is required"; break; }
+          if (!svc) { valid = false; message = "Service is required"; break; }
+        }
+      }
       errorEl.textContent = valid ? "" : message;
       confirmBtn.disabled = !valid;
     };
@@ -543,6 +620,20 @@ class SettingsPage {
         }
         if (e.target.getAttribute("data-role") === "conn-remove") {
           const rowEl = e.target.closest(".conn-row");
+          rowEl?.remove();
+          validateAndToggle();
+        }
+      });
+      panel.addEventListener("input", validateAndToggle);
+    } else if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+      panel.addEventListener("click", (e) => {
+        const action = e.target.getAttribute("data-action");
+        if (action === "cred-add") {
+          this.#credAddRow(credContainer, item);
+          validateAndToggle();
+        }
+        if (e.target.getAttribute("data-role") === "cred-remove") {
+          const rowEl = e.target.closest(".cred-row");
           rowEl?.remove();
           validateAndToggle();
         }
@@ -572,8 +663,11 @@ class SettingsPage {
       panel.style.display = "flex";
       if (item.type === "kvlist") {
         const firstConn = panel.querySelector(".conn-key");
+        const firstCred = panel.querySelector(".cred-key");
         if (firstConn) {
           firstConn.focus();
+        } else if (firstCred) {
+          firstCred.focus();
         } else {
           const firstKey = panel.querySelector(".kv-key");
           firstKey?.focus();
@@ -616,12 +710,32 @@ class SettingsPage {
               try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
               const rowData = {
                 key: String(pair?.key || ""),
+                username: String(valObj?.username || ""),
+                password: "",
                 host: String(valObj?.host || ""),
                 port: valObj?.port !== undefined ? Number(valObj.port) : "",
                 service_name: String(valObj?.service_name || valObj?.serviceName || ""),
-                password: String(valObj?.password || ""),
               };
               this.#connAddRow(connContainer, item, rowData);
+            }
+          }
+        } else if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+          const storedArr = this.service.getValue(storageKey, item.type, item.default);
+          const rowsRoot = credContainer.querySelector(".cred-rows");
+          rowsRoot.innerHTML = "";
+          const arr = Array.isArray(storedArr) ? storedArr : [];
+          if (!arr.length) {
+            this.#credAddRow(credContainer, item);
+          } else {
+            for (const pair of arr) {
+              let valObj = pair?.value;
+              try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
+              const rowData = {
+                key: String(pair?.key || ""),
+                username: String(valObj?.username || ""),
+                password: "",
+              };
+              this.#credAddRow(credContainer, item, rowData);
             }
           }
         } else if (item.type === "kvlist") {
@@ -670,6 +784,92 @@ class SettingsPage {
             return;
           }
           stored = this.service.setValue(storageKey, "string", value, item.apply);
+        } else if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+          // Store connection details (including username) and save passwords via Keychain
+          try {
+            const rt = this.runtime || "web";
+            const sanitized = (Array.isArray(value) ? value : []).map(({ key, value: v }) => {
+              let obj = v;
+              try { if (typeof obj === "string") obj = JSON.parse(obj); } catch (_) {}
+              const { host = "", port, service_name = "", username = "" } = obj || {};
+              return { key, value: { host, port, service_name, username } };
+            });
+            // Persist without passwords
+            stored = this.service.setValue(storageKey, "kvlist", sanitized, item.apply);
+            // Set credentials in keychain per non-empty row
+            if (rt === "tauri") {
+              const rows = connContainer?.querySelectorAll?.(".conn-row") || [];
+              for (const row of rows) {
+                const connectionId = row.querySelector(".conn-key")?.value?.trim() || "";
+                const username = row.querySelector(".conn-user")?.value?.trim() || "";
+                const password = row.querySelector(".conn-pass")?.value?.trim() || "";
+                if (!connectionId && !username && !password) continue; // skip empty
+                if (!connectionId || !username || !password) { errorEl.textContent = "All fields are required"; return; }
+                try {
+                  await invoke("set_oracle_credentials", { connection_id: connectionId, username, password });
+                } catch (err) {
+                  const msg = String(err || "");
+                  if (msg.includes("missing required key connectionId") || msg.includes("connectionId")) {
+                    try {
+                      await invoke("set_oracle_credentials", { connectionId: connectionId, username, password });
+                    } catch (err2) {
+                      errorEl.textContent = String(err2);
+                      return;
+                    }
+                  } else {
+                    errorEl.textContent = String(err);
+                    return;
+                  }
+                }
+              }
+            } else {
+              // In web runtime, inform user but continue storing non-secret details
+              errorEl.textContent = "Passwords can only be saved on the Desktop app.";
+            }
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+        } else if (item.type === "kvlist" && storageKey === "secure.oracle.credentials") {
+          // Persist usernames (without passwords). Only set secrets via Tauri when available.
+          try {
+            // Save usernames for display
+            stored = this.service.setValue(storageKey, "kvlist", value, item.apply);
+            const rows = credContainer?.querySelectorAll?.(".cred-row") || [];
+            const rt = this.runtime || "web";
+            for (const row of rows) {
+              const connectionId = row.querySelector(".cred-key")?.value?.trim() || "";
+              const username = row.querySelector(".cred-user")?.value?.trim() || "";
+              const password = row.querySelector(".cred-pass")?.value?.trim() || "";
+              if (!connectionId && !username && !password) continue; // skip empty
+              if (!connectionId || !username) continue; // enforce required fields
+              if (password) {
+                if (rt === "tauri") {
+                  try {
+                    await invoke("set_oracle_credentials", { connection_id: connectionId, username, password });
+                  } catch (err) {
+                    const msg = String(err || "");
+                    if (msg.includes("missing required key connectionId") || msg.includes("connectionId")) {
+                      try {
+                        await invoke("set_oracle_credentials", { connectionId: connectionId, username, password });
+                      } catch (err2) {
+                        errorEl.textContent = String(err2);
+                      }
+                    } else {
+                      // Show error but continue updating display
+                      errorEl.textContent = String(err);
+                    }
+                  }
+                } else {
+                  // Web runtime: cannot store secrets; inform user but do not block
+                  errorEl.textContent = "Passwords can only be saved on the Desktop app.";
+                }
+              }
+            }
+          } catch (err) {
+            errorEl.textContent = String(err);
+            // Do not block display update for username persistence
+          }
         } else {
           stored = this.service.setValue(storageKey, item.type, value, item.apply);
         }
@@ -692,27 +892,48 @@ class SettingsPage {
     return wrapper;
   }
 
-  #connAddRow(container, item, rowData = { key: "", host: "", port: "", service_name: "", password: "" }) {
+  #connAddRow(container, item, rowData = { key: "", username: "", password: "", host: "", port: "", service_name: "" }) {
     const rows = container.querySelector(".connections-rows");
     const row = document.createElement("div");
     row.className = "conn-row";
     row.innerHTML = `
       <div class="conn-grid">
         <label class="conn-cell"><span>Name</span><input type="text" class="conn-key" placeholder="${item.keyPlaceholder || "Connection Name"}" aria-label="Connection Name"></label>
+        <label class="conn-cell"><span>Username</span><input type="text" class="conn-user" placeholder="db_user" aria-label="Username"></label>
+        <label class="conn-cell"><span>Password</span><input type="password" class="conn-pass" placeholder="Set to update" aria-label="Password"></label>
         <label class="conn-cell"><span>Host</span><input type="text" class="conn-host" placeholder="db.example.com" aria-label="Host"></label>
         <label class="conn-cell"><span>Port</span><input type="number" class="conn-port" placeholder="1521" aria-label="Port" min="1"></label>
         <label class="conn-cell"><span>Service</span><input type="text" class="conn-service" placeholder="ORCLPDB1" aria-label="Service Name"></label>
-        <label class="conn-cell"><span>Password</span><input type="password" class="conn-pass" placeholder="Optional" aria-label="Password"></label>
       </div>
       <div class="conn-actions">
         <button type="button" class="btn btn-outline btn-sm conn-remove" data-role="conn-remove" aria-label="Remove">Remove</button>
       </div>
     `;
     row.querySelector(".conn-key").value = rowData.key || "";
+    row.querySelector(".conn-user").value = rowData.username || "";
+    row.querySelector(".conn-pass").value = rowData.password || "";
     row.querySelector(".conn-host").value = rowData.host || "";
     row.querySelector(".conn-port").value = rowData.port === undefined || rowData.port === null ? "" : String(rowData.port);
     row.querySelector(".conn-service").value = rowData.service_name || "";
-    row.querySelector(".conn-pass").value = rowData.password || "";
+    rows.appendChild(row);
+  }
+  #credAddRow(container, item, rowData = { key: "", username: "", password: "" }) {
+    const rows = container.querySelector(".cred-rows");
+    const row = document.createElement("div");
+    row.className = "cred-row";
+    row.innerHTML = `
+      <div class="cred-grid">
+        <label class="cred-cell"><span>Connection ID</span><input type="text" class="cred-key" placeholder="${item.keyPlaceholder || "Connection ID"}" aria-label="Connection ID"></label>
+        <label class="cred-cell"><span>Username</span><input type="text" class="cred-user" placeholder="db_user" aria-label="Username"></label>
+        <label class="cred-cell"><span>Password</span><input type="password" class="cred-pass" placeholder="Set to update" aria-label="Password"></label>
+      </div>
+      <div class="cred-actions">
+        <button type="button" class="btn btn-outline btn-sm cred-remove" data-role="cred-remove" aria-label="Remove">Remove</button>
+      </div>
+    `;
+    row.querySelector(".cred-key").value = rowData.key || "";
+    row.querySelector(".cred-user").value = rowData.username || "";
+    row.querySelector(".cred-pass").value = rowData.password || "";
     rows.appendChild(row);
   }
   #kvAddRow(container, item, rowData = { key: "", value: "" }) {
@@ -811,8 +1032,13 @@ class SettingsPage {
         const host = String(val.host || "").trim();
         const port = val.port !== undefined ? Number(val.port) : undefined;
         const svc = String(val.service_name || val.serviceName || "").trim();
+        const user = String(val.username || "").trim();
         const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
-        if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}`;
+        if (host && svc) {
+          const prefix = user ? `${esc(user)}@` : "";
+          return `${prefix}${esc(host)}${esc(portStr)}/${esc(svc)}`;
+        }
+        if (user) return esc(user);
       } else {
         const s = String(val ?? "").trim();
         if (s.startsWith("{") && s.endsWith("}")) {
@@ -821,8 +1047,13 @@ class SettingsPage {
             const host = String(o.host || "").trim();
             const port = o.port !== undefined ? Number(o.port) : undefined;
             const svc = String(o.service_name || o.serviceName || "").trim();
+            const user = String(o.username || "").trim();
             const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
-            if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}`;
+            if (host && svc) {
+              const prefix = user ? `${esc(user)}@` : "";
+              return `${prefix}${esc(host)}${esc(portStr)}/${esc(svc)}`;
+            }
+            if (user) return esc(user);
           } catch (_) {}
         }
         // fallback to raw, truncated for readability

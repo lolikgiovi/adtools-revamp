@@ -52,11 +52,7 @@ export class CompareConfigTool extends BaseTool {
 
     // Wire actions
     el("btnCheckPrime").addEventListener("click", () => this.checkAndPrime());
-    el("btnSetCreds1").addEventListener("click", () => this.setCreds(1));
-    el("btnGetCreds1").addEventListener("click", () => this.getCreds(1));
     el("btnTestConn1").addEventListener("click", () => this.testConn(1));
-    el("btnSetCreds2").addEventListener("click", () => this.setCreds(2));
-    el("btnGetCreds2").addEventListener("click", () => this.getCreds(2));
     el("btnTestConn2").addEventListener("click", () => this.testConn(2));
     el("btnCompare").addEventListener("click", () => {
       try { UsageTracker.trackFeature("compare-config", "compare"); } catch (_) {}
@@ -133,11 +129,7 @@ export class CompareConfigTool extends BaseTool {
 
   toggleUIEnabled(enabled) {
     const ids = [
-      "btnSetCreds1",
-      "btnGetCreds1",
       "btnTestConn1",
-      "btnSetCreds2",
-      "btnGetCreds2",
       "btnTestConn2",
       "btnCompare",
       "btnExportJson",
@@ -158,15 +150,11 @@ export class CompareConfigTool extends BaseTool {
       "presetSelect",
       // Inputs and text fields
       "env1Id",
-      "env1User",
-      "env1Pass",
       "env1Host",
       "env1Port",
       "env1Service",
       "env1Schema",
       "env2Id",
-      "env2User",
-      "env2Pass",
       "env2Host",
       "env2Port",
       "env2Service",
@@ -344,49 +332,7 @@ export class CompareConfigTool extends BaseTool {
     }
   }
 
-  async setCreds(idx) {
-    const statusEl = el(`credsStatus${idx}`);
-    const id = el(`env${idx}Id`).value.trim();
-    const username = el(`env${idx}User`).value.trim();
-    const password = el(`env${idx}Pass`).value;
-    if (!id || !username || !password) {
-      this.showError("Provide connection ID, username, and password");
-      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "set_creds_invalid", idx }); } catch (_) {}
-      return;
-    }
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_oracle_credentials", { connection_id: id, username, password });
-      statusEl.textContent = "Saved to keychain.";
-      this.showSuccess("Credentials saved");
-      this.refreshEnvSummary(idx);
-    } catch (e) {
-      statusEl.textContent = `Error: ${e}`;
-      this.showError(`Save failed: ${e}`);
-      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "set_creds", idx, message: String(e) }); } catch (_) {}
-    }
-  }
-
-  async getCreds(idx) {
-    const statusEl = el(`credsStatus${idx}`);
-    const id = el(`env${idx}Id`).value.trim();
-    if (!id) { this.showError("Provide connection ID"); try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "get_creds_invalid", idx }); } catch (_) {} return; }
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const res = await invoke("get_oracle_credentials", { connection_id: id });
-      if (res && res.username) {
-        el(`env${idx}User`).value = res.username;
-        statusEl.textContent = res.hasPassword ? "Password found." : "Password missing.";
-        this.refreshEnvSummary(idx);
-      } else {
-        statusEl.textContent = "No credentials stored.";
-      }
-    } catch (e) {
-      statusEl.textContent = `Error: ${e}`;
-      this.showError(`Lookup failed: ${e}`);
-      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "get_creds", idx, message: String(e) }); } catch (_) {}
-    }
-  }
+  // Credential management moved to Settings page
 
   async refreshEnvSummary(idx) {
     const sumEl = el(`env${idx}Summary`);
@@ -402,14 +348,24 @@ export class CompareConfigTool extends BaseTool {
     }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const res = await invoke("get_oracle_credentials", { connection_id: id });
+      let res;
+      try {
+        res = await invoke("get_oracle_credentials", { connection_id: id });
+      } catch (err) {
+        const msg = String(err || "");
+        if (msg.includes("missing required key connectionId") || msg.includes("connectionId")) {
+          res = await invoke("get_oracle_credentials", { connectionId: id });
+        } else {
+          throw err;
+        }
+      }
       if (res && res.username) {
         sumEl.textContent = `${id}: Login using ${res.username} on ${hostStr}`;
       } else {
-        sumEl.textContent = `${id}: Credentials missing — host ${hostStr}`;
+        sumEl.textContent = `${id}: Credentials missing — set in Settings (host ${hostStr})`;
       }
     } catch (_) {
-      sumEl.textContent = `${id}: Credentials lookup error — host ${hostStr}`;
+      sumEl.textContent = `${id}: Credentials missing — set in Settings (host ${hostStr})`;
     }
   }
 
@@ -426,14 +382,27 @@ export class CompareConfigTool extends BaseTool {
       statusEl.textContent = "Testing...";
       // Pre-check credentials presence
       try {
-        const creds = await invoke("get_oracle_credentials", { connection_id: cfg.id });
-        if (!creds || !creds.hasPassword) {
-          statusEl.textContent = "Password missing";
-          this.showError("Password missing — set credentials before testing");
+        let creds;
+        try {
+          creds = await invoke("get_oracle_credentials", { connection_id: cfg.id });
+        } catch (err) {
+          const msg = String(err || "");
+          if (msg.includes("missing required key connectionId") || msg.includes("connectionId")) {
+            creds = await invoke("get_oracle_credentials", { connectionId: cfg.id });
+          } else {
+            throw err;
+          }
+        }
+        const hasPwd = creds ? !!(creds.has_password ?? creds.hasPassword) : false;
+        if (!creds || !hasPwd) {
+          statusEl.textContent = "Credentials missing";
+          this.showError("Credentials missing — set in Settings before testing");
           return;
         }
       } catch (_) {
-        // Continue and let backend surface a readable error
+        statusEl.textContent = "Credentials missing";
+        this.showError("Credentials missing — set in Settings before testing");
+        return;
       }
       const ok = await invoke("test_oracle_connection", { config: cfg });
       statusEl.textContent = ok ? "Connection OK" : "Connection failed";
@@ -832,16 +801,14 @@ export class CompareConfigTool extends BaseTool {
       const { env1, env2, table, fields, where } = p.payload || {};
       // Populate Env1
       el("env1Id").value = env1?.id || "";
-      el("env1User").value = ""; // do not override username from keychain
-      el("env1Pass").value = ""; // never store passwords in presets
+      // credentials are managed in Settings; no username/password inputs here
       el("env1Host").value = env1?.host || "";
       el("env1Port").value = String(env1?.port ?? 1521);
       el("env1Service").value = env1?.service_name || "";
       el("env1Schema").value = env1?.schema || "";
       // Populate Env2
       el("env2Id").value = env2?.id || "";
-      el("env2User").value = "";
-      el("env2Pass").value = "";
+      // credentials are managed in Settings; no username/password inputs here
       el("env2Host").value = env2?.host || "";
       el("env2Port").value = String(env2?.port ?? 1521);
       el("env2Service").value = env2?.service_name || "";

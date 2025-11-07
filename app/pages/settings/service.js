@@ -46,7 +46,8 @@ class SettingsService {
     if (raw === null || raw === "null") {
       if (type === "boolean" && defaultValue === "system") {
         try {
-          const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const prefersDark =
+            typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
           return !!prefersDark;
         } catch (_) {
           return false;
@@ -54,7 +55,8 @@ class SettingsService {
       }
       if (type === "enum" && defaultValue === "system") {
         try {
-          const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const prefersDark =
+            typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
           return prefersDark ? "dark" : "light";
         } catch (_) {
           return "light";
@@ -127,7 +129,7 @@ class SettingsService {
     }
 
     this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
-    return type === 'kvlist' ? (Array.isArray(value) ? value : []) : storeVal;
+    return type === "kvlist" ? (Array.isArray(value) ? value : []) : storeVal;
   }
 
   validate(value, type, rules = {}) {
@@ -157,8 +159,8 @@ class SettingsService {
               const host = String(obj.host || "").trim();
               const service = String(obj.service_name || obj.serviceName || "").trim();
               const port = obj.port;
-              if (!host) return { valid: false, message: "JSON must include host" };
-              if (!service) return { valid: false, message: "JSON must include service_name" };
+              if (!host) return { valid: false, message: "must include host" };
+              if (!service) return { valid: false, message: "must include service_name" };
               if (port !== undefined && Number.isNaN(Number(port))) return { valid: false, message: "port must be a number" };
             } catch (_) {
               return { valid: false, message: "Invalid JSON format" };
@@ -166,7 +168,7 @@ class SettingsService {
           } else {
             try {
               const u = new URL(v);
-              if (!u.protocol.startsWith('http')) return { valid: false, message: "URL must be http(s)" };
+              if (!u.protocol.startsWith("http")) return { valid: false, message: "URL must be http(s)" };
             } catch (_) {
               return { valid: false, message: "Invalid URL format" };
             }
@@ -176,8 +178,10 @@ class SettingsService {
       }
       case "secret":
       case "string": {
-        if (typeof rules.minLength === "number" && String(value).length < rules.minLength) return { valid: false, message: `Min length is ${rules.minLength}` };
-        if (typeof rules.maxLength === "number" && String(value).length > rules.maxLength) return { valid: false, message: `Max length is ${rules.maxLength}` };
+        if (typeof rules.minLength === "number" && String(value).length < rules.minLength)
+          return { valid: false, message: `Min length is ${rules.minLength}` };
+        if (typeof rules.maxLength === "number" && String(value).length > rules.maxLength)
+          return { valid: false, message: `Max length is ${rules.maxLength}` };
         if (rules.pattern) {
           try {
             const re = new RegExp(rules.pattern, rules.patternFlags || undefined);
@@ -204,7 +208,7 @@ class SettingsService {
 
   inputForType(type, item) {
     switch (type) {
-      case 'boolean': {
+      case "boolean": {
         // Daisy-like toggle styling
         return `
           <label class="switch">
@@ -213,7 +217,7 @@ class SettingsService {
           </label>
         `;
       }
-      case 'kvlist': {
+      case "kvlist": {
         return `
           <div class="kvlist">
             <div class="kv-rows"></div>
@@ -223,7 +227,7 @@ class SettingsService {
           </div>
         `;
       }
-      case 'secret': {
+      case "secret": {
         // Stricter security: no show/hide or copy; only replacement
         return `
           <input type="password" class="setting-input" placeholder="Enter new token" aria-label="${item.label}">

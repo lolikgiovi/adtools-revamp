@@ -103,10 +103,14 @@ The script automatically:
 
 ## Oracle Download URLs
 
-The script downloads from these official Oracle URLs:
+For macOS ARM64 (Apple Silicon), the installer now uses the official DMG package and falls back to ZIP if needed:
 
-- **ARM64 (Apple Silicon)**: `https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.arm64-23_3.zip`
-- **x86_64 (Intel)**: `https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.x64-23_3.zip`
+- **ARM64 (Apple Silicon) – DMG (preferred)**: `https://download.oracle.com/otn_software/mac/instantclient/instantclient-basic-macos-arm64.dmg`
+- **ARM64 (fallback ZIP)**: `https://download.oracle.com/otn_software/mac/instantclient/instantclient-basic-macos.arm64-23.3.zip` and `instantclient-basiclite-macos.arm64-23.3.zip`
+- **Intel x86_64**: ZIP packages, e.g. `https://download.oracle.com/otn_software/mac/instantclient/instantclient-basiclite-macos.x64-23.3.zip`
+
+Check the Oracle page for the latest version and package availability:
+`https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html`.
 
 ## Security Considerations
 

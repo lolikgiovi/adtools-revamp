@@ -33,6 +33,7 @@
     {
       "id": "oracle",
       "label": "Oracle Database Connections",
+      "requiresTauri": true,
       "initiallyExpanded": false,
       "items": [
         {
@@ -42,8 +43,8 @@
           "type": "kvlist",
           "default": [],
           "keyPlaceholder": "Connection Name (e.g., UAT1)",
-          "valuePlaceholder": "Connection JSON (host/port/service_name/password)",
-          "description": "Configure Oracle connections as JSON objects. Example: {\"host\":\"db-uat1.company.com\",\"port\":1521,\"service_name\":\"ORCLPDB1\",\"schema\":\"APP_SCHEMA\"}",
+          "valuePlaceholder": "Connection JSON (host/port/service_name/username)",
+          "description": "Configure Oracle connections and credentials. Username is stored with the connection; password is stored securely in macOS Keychain.",
           "validation": {
             "jsonValue": true
           }

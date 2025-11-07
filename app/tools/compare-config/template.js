@@ -34,13 +34,6 @@ export const CompareConfigTemplate = /* html */ `
           <details id="env1Details" class="cc-details">
             <summary>Show Details</summary>
             <label>Connection ID<input id="env1Id" type="text" placeholder="UAT1" /></label>
-            <label>Username<input id="env1User" type="text" placeholder="scott" /></label>
-            <label>Password<input id="env1Pass" type="password" placeholder="tiger" /></label>
-            <div class="cc-row">
-              <button id="btnSetCreds1" class="btn btn-sm btn-outline">Set Credentials</button>
-              <button id="btnGetCreds1" class="btn btn-sm btn-outline">Get Credentials</button>
-              <span id="credsStatus1" class="cc-status"></span>
-            </div>
             <label>Host<input id="env1Host" type="text" placeholder="db-uat1.company.com" /></label>
             <label>Port<input id="env1Port" type="number" value="1521" /></label>
             <label>Service Name<input id="env1Service" type="text" placeholder="ORCLPDB1" /></label>
@@ -66,13 +59,6 @@ export const CompareConfigTemplate = /* html */ `
           <details id="env2Details" class="cc-details">
             <summary>Show Details</summary>
             <label>Connection ID<input id="env2Id" type="text" placeholder="PROD1" /></label>
-            <label>Username<input id="env2User" type="text" placeholder="scott" /></label>
-            <label>Password<input id="env2Pass" type="password" placeholder="tiger" /></label>
-            <div class="cc-row">
-              <button id="btnSetCreds2" class="btn btn-sm btn-outline">Set Credentials</button>
-              <button id="btnGetCreds2" class="btn btn-sm btn-outline">Get Credentials</button>
-              <span id="credsStatus2" class="cc-status"></span>
-            </div>
             <label>Host<input id="env2Host" type="text" placeholder="db-prod1.company.com" /></label>
             <label>Port<input id="env2Port" type="number" value="1521" /></label>
             <label>Service Name<input id="env2Service" type="text" placeholder="ORCLPDB1" /></label>
