@@ -70,19 +70,17 @@ This document specifies the implementation of a database configuration compariso
 
 **🎨 Visual Diff Highlighting **
 
-The comparison results include **character/word-level diff highlighting** to instantly identify what changed between environments:
+The comparison results include **value-level diff highlighting** to instantly identify differences between environments:
 
-- **Green highlighting**: Text added or changed in Environment 2
-- **Red highlighting** (with strikethrough): Text removed or changed from Environment 1
-- **Yellow highlighting**: Modified text (for complex changes)
-- **No highlighting**: Identical text in both environments
+- **Soft red highlighting** (in Environment 2): Value differs from Environment 1
+- **No highlighting**: Value is identical in both environments
 
-This provides a Git-like diff experience directly in the comparison table, eliminating the need for manual scanning and reducing cognitive load.
+This provides a clean comparison view directly in the comparison table, eliminating the need for manual scanning and reducing cognitive load. Unlike Git diffs, this is a side-by-side configuration comparison where neither environment is considered the "source of truth" - they simply represent different configuration scenarios (e.g., different deployment stages or feature configurations).
 
 **Example:**
 
-- **Env1**: `timeout = `<span style="background:#f8d7da">~~5000~~</span>` ms`
-- **Env2**: `timeout = `<span style="background:#d4edda">**8000**</span>` ms`
+- **Env1**: `timeout = 5000 ms` (no highlight)
+- **Env2**: `timeout = `<span style="background:#ffe6e6; color: black;">8000 ms</span> (soft red highlight indicating difference)
 
 See [Section 6.7](#67-diff-highlighting-example) for detailed examples.
 
@@ -536,22 +534,12 @@ class ConfigComparison {
   }
 }
 
-// Field difference with diff chunks
+// Field difference
 class FieldDifference {
-  constructor(fieldName, env1Value, env2Value, env1DiffChunks, env2DiffChunks) {
+  constructor(fieldName, env1Value, env2Value) {
     this.field_name = fieldName;
     this.env1_value = env1Value;
     this.env2_value = env2Value;
-    this.env1_diff_chunks = env1DiffChunks; // Array of DiffChunk
-    this.env2_diff_chunks = env2DiffChunks; // Array of DiffChunk
-  }
-}
-
-// Diff chunk for character-level highlighting
-class DiffChunk {
-  constructor(text, chunkType) {
-    this.text = text;
-    this.chunk_type = chunkType; // "Same" | "Added" | "Removed" | "Modified"
   }
 }
 ```
@@ -623,30 +611,12 @@ pub enum ComparisonStatus {
     OnlyInEnv2,
 }
 
-/// Field-level difference with character-level highlighting
+/// Field-level difference
 #[derive(Debug, Serialize)]
 pub struct FieldDifference {
     pub field_name: String,
     pub env1_value: Option<String>,
     pub env2_value: Option<String>,
-    /// Character-level diff chunks for highlighting (see DiffChunk)
-    pub env1_diff_chunks: Option<Vec<DiffChunk>>,
-    pub env2_diff_chunks: Option<Vec<DiffChunk>>,
-}
-
-/// Represents a chunk of text with its diff type for highlighting
-#[derive(Debug, Serialize, Clone)]
-pub struct DiffChunk {
-    pub text: String,
-    pub chunk_type: DiffChunkType,
-}
-
-#[derive(Debug, Serialize, Clone, PartialEq)]
-pub enum DiffChunkType {
-    Same,      // No change (no highlighting)
-    Added,     // Text added (green)
-    Removed,   // Text removed (red)
-    Modified,  // Text changed (yellow)
 }
 
 /// Table metadata
@@ -2916,37 +2886,45 @@ Add these styles to `app/tools/compare-config/styles.css` for color-coded diff h
 
 When comparing two configuration values:
 
-**Environment 1 (Reference):**
+**Environment 1 (UAT1):**
 
 ```
 timeout = 5000 retry_count = 3 enable_cache = true
 ```
 
-**Environment 2 (Comparison):**
+**Environment 2 (UAT2):**
 
 ```
 timeout = 8000 retry_count = 3 enable_cache = false
 ```
 
-**Rendered Diff View:**
+**Rendered Comparison View:**
 
-| Field          | Environment 1                                                                                                                                                                                                                          | Environment 2                                                                                                                                                               |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config_value` | timeout = <span style="background:#f8d7da; color:#721c24; text-decoration:line-through;">**5000**</span> retry_count = 3 enable_cache = <span style="background:#f8d7da; color:#721c24; text-decoration:line-through;">**true**</span> | timeout = <span style="background:#d4edda; color:#155724;">**8000**</span> retry_count = 3 enable_cache = <span style="background:#d4edda; color:#155724;">**false**</span> |
+| Field          | Environment 1 (UAT1)                               | Environment 2 (UAT2)                                                                                                                          |
+| -------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config_value` | timeout = 5000 retry_count = 3 enable_cache = true | timeout = <span style="background:#ffe6e6;">**8000**</span> retry_count = 3 enable_cache = <span style="background:#ffe6e6;">**false**</span> |
 
 **Color Legend:**
 
-- **Green** (`diff-added`): Text added or changed in Environment 2
-- **Red** (`diff-removed`): Text removed or changed from Environment 1
-- **Yellow** (`diff-modified`): Text modified (optional, for complex changes)
-- **No highlighting**: Text is identical in both environments
+- **Soft red background** (`#ffe6e6`): Value in Environment 2 differs from Environment 1
+- **No highlighting**: Value is identical in both environments
+
+**Note on Design Philosophy:**
+
+This is NOT a Git-style diff (with additions/deletions). The comparison shows two independent configuration states side-by-side:
+
+- Environment 1 might represent a production configuration
+- Environment 2 might represent a staging configuration
+- Neither is "before" or "after" - they are simply different scenarios
+
+The soft red highlighting in Environment 2 simply indicates "this value differs from Environment 1" without implying one is correct and the other is wrong.
 
 **Benefits:**
 
-1. **Instant Visual Feedback**: Users immediately see what changed
-2. **Word/Character-Level Precision**: Highlights exact differences, not just entire fields
+1. **Instant Visual Feedback**: Users immediately see which values differ
+2. **Value-Level Precision**: Highlights differing values clearly
 3. **Reduces Cognitive Load**: No need to manually scan and compare long strings
-4. **Professional UX**: Similar to Git diffs, familiar to developers
+4. **Clean UX**: Simple side-by-side comparison without Git-style change semantics
 
 ---
 
