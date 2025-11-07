@@ -42,7 +42,7 @@
           "type": "kvlist",
           "default": [],
           "keyPlaceholder": "Connection Name (e.g., UAT1)",
-          "valuePlaceholder": "Connection JSON (host/port/service_name/schema)",
+          "valuePlaceholder": "Connection JSON (host/port/service_name/password)",
           "description": "Configure Oracle connections as JSON objects. Example: {\"host\":\"db-uat1.company.com\",\"port\":1521,\"service_name\":\"ORCLPDB1\",\"schema\":\"APP_SCHEMA\"}",
           "validation": {
             "jsonValue": true

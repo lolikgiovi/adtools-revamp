@@ -35,8 +35,30 @@
 .cc-diffs { margin: 0; padding-left: 1rem; }
 .diff-left { color: hsl(var(--destructive)); }
 .diff-right { color: hsl(var(--primary)); }
+/* Granular diff highlighting */
+.diff-same { color: hsl(var(--foreground)); }
+.diff-added { background: hsl(140 70% 35% / 0.12); color: hsl(140 70% 24%); border-radius: 3px; padding: 0 1px; }
+.diff-removed { background: hsl(0 80% 40% / 0.12); color: hsl(0 80% 38%); text-decoration: line-through; border-radius: 3px; padding: 0 1px; }
+.diff-modified { background: hsl(45 100% 50% / 0.18); color: hsl(35 85% 30%); border-radius: 3px; padding: 0 1px; }
 .cc-key { background: hsl(var(--muted)); padding: 0.15rem 0.5rem; border-radius: calc(var(--radius) - 3px); color: hsl(var(--muted-foreground)); }
 .cc-empty { color: hsl(var(--muted-foreground)); font-style: italic; }
+
+/* Status badges */
+.cc-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+}
+.cc-badge.cc-match { background: hsl(140 70% 35% / 0.12); color: hsl(140 70% 24%); border-color: hsl(140 70% 35% / 0.35); }
+.cc-badge.cc-differ { background: hsl(0 80% 40% / 0.12); color: hsl(0 80% 38%); border-color: hsl(0 80% 40% / 0.35); }
+.cc-badge.cc-onlyinenv1 { background: hsl(250 85% 60% / 0.14); color: hsl(250 55% 35%); border-color: hsl(250 85% 60% / 0.35); }
+.cc-badge.cc-onlyinenv2 { background: hsl(200 80% 50% / 0.14); color: hsl(200 65% 30%); border-color: hsl(200 80% 50% / 0.35); }
 
 /* Install guide and copy row */
 .cc-guide { margin-top: 0.5rem; padding: 0.6rem; border: 1px dashed hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--muted)); }

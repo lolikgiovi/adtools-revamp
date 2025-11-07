@@ -436,16 +436,33 @@ class SettingsPage {
     const panel = document.createElement("div");
     panel.className = "setting-edit-panel";
     panel.style.display = "none";
-    panel.innerHTML = `
-      <div class="setting-edit-row">
-        ${this.service.inputForType(item.type, item)}
-        <div class="setting-actions">
-          <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
-          <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+    // Custom editor for Oracle connections (form-based), replacing raw JSON kvlist editing
+    if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+      panel.innerHTML = `
+        <div class="connections-editor">
+          <div class="connections-rows"></div>
+          <div class="connections-actions">
+            <button type="button" class="btn kv-add" data-action="conn-add">Add Connection</button>
+          </div>
+          <div class="setting-actions">
+            <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
+            <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+          </div>
         </div>
-      </div>
-      <div class="setting-error" aria-live="polite"></div>
-    `;
+        <div class="setting-error" aria-live="polite"></div>
+      `;
+    } else {
+      panel.innerHTML = `
+        <div class="setting-edit-row">
+          ${this.service.inputForType(item.type, item)}
+          <div class="setting-actions">
+            <button class="btn btn-primary btn-sm setting-confirm" data-action="confirm" disabled>Confirm</button>
+            <button class="btn btn-secondary btn-sm setting-cancel" data-action="cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="setting-error" aria-live="polite"></div>
+      `;
+    }
 
     const confirmBtn = panel.querySelector(".setting-confirm");
     const errorEl = panel.querySelector(".setting-error");
@@ -453,13 +470,35 @@ class SettingsPage {
     // Special handling per type
     let input = null;
     let kvContainer = null;
-    if (item.type === "kvlist") {
+    let connContainer = null;
+    if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+      connContainer = panel.querySelector(".connections-editor");
+      // Populate existing rows from kvlist pairs
+      const arr = Array.isArray(current) ? current : [];
+      const rowsRoot = connContainer.querySelector(".connections-rows");
+      rowsRoot.innerHTML = "";
+      if (!arr.length) {
+        this.#connAddRow(connContainer, item);
+      } else {
+        for (const pair of arr) {
+          let valObj = pair?.value;
+          try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
+          const rowData = {
+            key: String(pair?.key || ""),
+            host: String(valObj?.host || ""),
+            port: valObj?.port !== undefined ? Number(valObj.port) : "",
+            service_name: String(valObj?.service_name || valObj?.serviceName || ""),
+            password: String(valObj?.password || ""),
+          };
+          this.#connAddRow(connContainer, item, rowData);
+        }
+      }
+    } else if (item.type === "kvlist") {
       kvContainer = panel.querySelector(".kvlist");
       this.applyInitialInputValue(kvContainer, "kvlist", current, item);
     } else {
       input = panel.querySelector(".setting-input");
       if (item.type === "secret") {
-        // Plain text only for initial set (no existing value)
         input.type = current === undefined || current === null || current === "" ? "text" : "password";
       } else {
         this.applyInitialInputValue(input, item.type, current);
@@ -467,6 +506,22 @@ class SettingsPage {
     }
 
     const getCurrentEditValue = () => {
+      if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+        // Extract structured rows into kvlist pairs with JSON objects
+        const rows = connContainer?.querySelectorAll?.(".conn-row") || [];
+        const result = [];
+        rows.forEach((row) => {
+          const key = row.querySelector(".conn-key")?.value?.trim() || "";
+          const host = row.querySelector(".conn-host")?.value?.trim() || "";
+          const portStr = row.querySelector(".conn-port")?.value?.trim() || "";
+          const port = portStr === "" ? undefined : Number(portStr);
+          const service_name = row.querySelector(".conn-service")?.value?.trim() || "";
+          const password = row.querySelector(".conn-pass")?.value?.trim() || "";
+          // Allow empty row while editing; validator will handle required checks
+          result.push({ key, value: { host, port, service_name, password } });
+        });
+        return result;
+      }
       if (item.type === "kvlist") return this.extractInputValue(kvContainer, "kvlist", item);
       return this.extractInputValue(input, item.type);
     };
@@ -478,8 +533,22 @@ class SettingsPage {
       confirmBtn.disabled = !valid;
     };
 
-    // Bind kvlist actions
-    if (item.type === "kvlist") {
+    // Bind actions for editors
+    if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+      panel.addEventListener("click", (e) => {
+        const action = e.target.getAttribute("data-action");
+        if (action === "conn-add") {
+          this.#connAddRow(connContainer, item);
+          validateAndToggle();
+        }
+        if (e.target.getAttribute("data-role") === "conn-remove") {
+          const rowEl = e.target.closest(".conn-row");
+          rowEl?.remove();
+          validateAndToggle();
+        }
+      });
+      panel.addEventListener("input", validateAndToggle);
+    } else if (item.type === "kvlist") {
       panel.addEventListener("click", (e) => {
         const action = e.target.getAttribute("data-action");
         if (action === "kv-add") {
@@ -502,8 +571,13 @@ class SettingsPage {
       wrapper.dataset.editing = "true";
       panel.style.display = "flex";
       if (item.type === "kvlist") {
-        const firstKey = panel.querySelector(".kv-key");
-        firstKey?.focus();
+        const firstConn = panel.querySelector(".conn-key");
+        if (firstConn) {
+          firstConn.focus();
+        } else {
+          const firstKey = panel.querySelector(".kv-key");
+          firstKey?.focus();
+        }
       } else {
         input?.focus();
       }
@@ -528,7 +602,29 @@ class SettingsPage {
       if (!action) return;
 
       if (action === "cancel") {
-        if (item.type === "kvlist") {
+        if (item.type === "kvlist" && storageKey === "config.oracle.connections") {
+          // Reset connections editor to stored value
+          const storedArr = this.service.getValue(storageKey, item.type, item.default);
+          const rowsRoot = connContainer.querySelector(".connections-rows");
+          rowsRoot.innerHTML = "";
+          const arr = Array.isArray(storedArr) ? storedArr : [];
+          if (!arr.length) {
+            this.#connAddRow(connContainer, item);
+          } else {
+            for (const pair of arr) {
+              let valObj = pair?.value;
+              try { if (typeof valObj === "string") valObj = JSON.parse(valObj); } catch (_) {}
+              const rowData = {
+                key: String(pair?.key || ""),
+                host: String(valObj?.host || ""),
+                port: valObj?.port !== undefined ? Number(valObj.port) : "",
+                service_name: String(valObj?.service_name || valObj?.serviceName || ""),
+                password: String(valObj?.password || ""),
+              };
+              this.#connAddRow(connContainer, item, rowData);
+            }
+          }
+        } else if (item.type === "kvlist") {
           this.applyInitialInputValue(kvContainer, "kvlist", this.service.getValue(storageKey, item.type, item.default), item);
         } else {
           const resetVal = this.service.getValue(storageKey, item.type, item.default);
@@ -596,6 +692,29 @@ class SettingsPage {
     return wrapper;
   }
 
+  #connAddRow(container, item, rowData = { key: "", host: "", port: "", service_name: "", password: "" }) {
+    const rows = container.querySelector(".connections-rows");
+    const row = document.createElement("div");
+    row.className = "conn-row";
+    row.innerHTML = `
+      <div class="conn-grid">
+        <label class="conn-cell"><span>Name</span><input type="text" class="conn-key" placeholder="${item.keyPlaceholder || "Connection Name"}" aria-label="Connection Name"></label>
+        <label class="conn-cell"><span>Host</span><input type="text" class="conn-host" placeholder="db.example.com" aria-label="Host"></label>
+        <label class="conn-cell"><span>Port</span><input type="number" class="conn-port" placeholder="1521" aria-label="Port" min="1"></label>
+        <label class="conn-cell"><span>Service</span><input type="text" class="conn-service" placeholder="ORCLPDB1" aria-label="Service Name"></label>
+        <label class="conn-cell"><span>Password</span><input type="password" class="conn-pass" placeholder="Optional" aria-label="Password"></label>
+      </div>
+      <div class="conn-actions">
+        <button type="button" class="btn btn-outline btn-sm conn-remove" data-role="conn-remove" aria-label="Remove">Remove</button>
+      </div>
+    `;
+    row.querySelector(".conn-key").value = rowData.key || "";
+    row.querySelector(".conn-host").value = rowData.host || "";
+    row.querySelector(".conn-port").value = rowData.port === undefined || rowData.port === null ? "" : String(rowData.port);
+    row.querySelector(".conn-service").value = rowData.service_name || "";
+    row.querySelector(".conn-pass").value = rowData.password || "";
+    rows.appendChild(row);
+  }
   #kvAddRow(container, item, rowData = { key: "", value: "" }) {
     const rows = container.querySelector(".kv-rows");
     const row = document.createElement("div");
@@ -687,21 +806,28 @@ class SettingsPage {
     const esc = (s) =>
       String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     const formatVal = (val) => {
-      const s = String(val ?? "").trim();
-      if (s.startsWith("{") && s.endsWith("}")) {
-        try {
-          const o = JSON.parse(s);
-          const host = String(o.host || "").trim();
-          const port = o.port !== undefined ? Number(o.port) : undefined;
-          const svc = String(o.service_name || o.serviceName || "").trim();
-          const schema = String(o.schema || "").trim();
-          const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
-          const schemaStr = schema ? ` [${schema}]` : "";
-          if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}${esc(schemaStr)}`;
-        } catch (_) {}
+      // Support object values directly or JSON strings
+      if (val && typeof val === "object") {
+        const host = String(val.host || "").trim();
+        const port = val.port !== undefined ? Number(val.port) : undefined;
+        const svc = String(val.service_name || val.serviceName || "").trim();
+        const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
+        if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}`;
+      } else {
+        const s = String(val ?? "").trim();
+        if (s.startsWith("{") && s.endsWith("}")) {
+          try {
+            const o = JSON.parse(s);
+            const host = String(o.host || "").trim();
+            const port = o.port !== undefined ? Number(o.port) : undefined;
+            const svc = String(o.service_name || o.serviceName || "").trim();
+            const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
+            if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}`;
+          } catch (_) {}
+        }
+        // fallback to raw, truncated for readability
+        return esc(s.length > 120 ? s.slice(0, 117) + "…" : s);
       }
-      // fallback to raw, truncated for readability
-      return esc(s.length > 120 ? s.slice(0, 117) + "…" : s);
     };
     return `
       <div class="kvlist-preview">

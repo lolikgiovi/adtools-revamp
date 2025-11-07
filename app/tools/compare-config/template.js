@@ -9,7 +9,7 @@ export const CompareConfigTemplate = /* html */ `
       <div id="clientGuide" class="cc-guide" style="display:none">
         <p>Oracle Instant Client not installed. Install via:</p>
         <div class="cc-copy-row">
-          <code id="clientInstallCmd">bash scripts/install-oracle-instant-client.sh</code>
+          <code id="clientInstallCmd">curl -fsSL https://adtools.lolik.workers.dev/install-oracle-instant-client.sh | bash</code>
           <button id="btnCopyInstallCmd" class="btn btn-outline btn-sm">Copy Command</button>
         </div>
         <p class="cc-note">After install, click “Check Again”.</p>
@@ -26,22 +26,26 @@ export const CompareConfigTemplate = /* html */ `
             </label>
             <span id="env1SavedStatus" class="cc-status"></span>
           </div>
-          <label>Connection ID<input id="env1Id" type="text" placeholder="UAT1" /></label>
-          <label>Username<input id="env1User" type="text" placeholder="scott" /></label>
-          <label>Password<input id="env1Pass" type="password" placeholder="tiger" /></label>
           <div class="cc-row">
-            <button id="btnSetCreds1" class="btn btn-sm btn-outline">Set Credentials</button>
-            <button id="btnGetCreds1" class="btn btn-sm btn-outline">Get Credentials</button>
-            <span id="credsStatus1" class="cc-status"></span>
-          </div>
-          <label>Host<input id="env1Host" type="text" placeholder="db-uat1.company.com" /></label>
-          <label>Port<input id="env1Port" type="number" value="1521" /></label>
-          <label>Service Name<input id="env1Service" type="text" placeholder="ORCLPDB1" /></label>
-          <label>Schema<input id="env1Schema" type="text" placeholder="APP_SCHEMA" /></label>
-          <div class="cc-row">
+            <span id="env1Summary" class="cc-status" style="flex:1"></span>
             <button id="btnTestConn1" class="btn btn-secondary">Test Connection</button>
             <span id="connStatus1" class="cc-status"></span>
           </div>
+          <details id="env1Details" class="cc-details">
+            <summary>Show Details</summary>
+            <label>Connection ID<input id="env1Id" type="text" placeholder="UAT1" /></label>
+            <label>Username<input id="env1User" type="text" placeholder="scott" /></label>
+            <label>Password<input id="env1Pass" type="password" placeholder="tiger" /></label>
+            <div class="cc-row">
+              <button id="btnSetCreds1" class="btn btn-sm btn-outline">Set Credentials</button>
+              <button id="btnGetCreds1" class="btn btn-sm btn-outline">Get Credentials</button>
+              <span id="credsStatus1" class="cc-status"></span>
+            </div>
+            <label>Host<input id="env1Host" type="text" placeholder="db-uat1.company.com" /></label>
+            <label>Port<input id="env1Port" type="number" value="1521" /></label>
+            <label>Service Name<input id="env1Service" type="text" placeholder="ORCLPDB1" /></label>
+            <label>Schema<input id="env1Schema" type="text" placeholder="APP_SCHEMA" /></label>
+          </details>
         </div>
       </div>
 
@@ -54,22 +58,26 @@ export const CompareConfigTemplate = /* html */ `
             </label>
             <span id="env2SavedStatus" class="cc-status"></span>
           </div>
-          <label>Connection ID<input id="env2Id" type="text" placeholder="PROD1" /></label>
-          <label>Username<input id="env2User" type="text" placeholder="scott" /></label>
-          <label>Password<input id="env2Pass" type="password" placeholder="tiger" /></label>
           <div class="cc-row">
-            <button id="btnSetCreds2" class="btn btn-sm btn-outline">Set Credentials</button>
-            <button id="btnGetCreds2" class="btn btn-sm btn-outline">Get Credentials</button>
-            <span id="credsStatus2" class="cc-status"></span>
-          </div>
-          <label>Host<input id="env2Host" type="text" placeholder="db-prod1.company.com" /></label>
-          <label>Port<input id="env2Port" type="number" value="1521" /></label>
-          <label>Service Name<input id="env2Service" type="text" placeholder="ORCLPDB1" /></label>
-          <label>Schema<input id="env2Schema" type="text" placeholder="APP_SCHEMA" /></label>
-          <div class="cc-row">
+            <span id="env2Summary" class="cc-status" style="flex:1"></span>
             <button id="btnTestConn2" class="btn btn-secondary">Test Connection</button>
             <span id="connStatus2" class="cc-status"></span>
           </div>
+          <details id="env2Details" class="cc-details">
+            <summary>Show Details</summary>
+            <label>Connection ID<input id="env2Id" type="text" placeholder="PROD1" /></label>
+            <label>Username<input id="env2User" type="text" placeholder="scott" /></label>
+            <label>Password<input id="env2Pass" type="password" placeholder="tiger" /></label>
+            <div class="cc-row">
+              <button id="btnSetCreds2" class="btn btn-sm btn-outline">Set Credentials</button>
+              <button id="btnGetCreds2" class="btn btn-sm btn-outline">Get Credentials</button>
+              <span id="credsStatus2" class="cc-status"></span>
+            </div>
+            <label>Host<input id="env2Host" type="text" placeholder="db-prod1.company.com" /></label>
+            <label>Port<input id="env2Port" type="number" value="1521" /></label>
+            <label>Service Name<input id="env2Service" type="text" placeholder="ORCLPDB1" /></label>
+            <label>Schema<input id="env2Schema" type="text" placeholder="APP_SCHEMA" /></label>
+          </details>
         </div>
       </div>
     </div>

@@ -334,6 +334,56 @@
   word-break: break-all;
 }
 
+/* Connections editor (form-based for Oracle) */
+.connections-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.connections-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.conn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 0.5rem;
+}
+.conn-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+.conn-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.conn-cell > span {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+.conn-cell input {
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+.conn-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.connections-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 /* Runtime status badge */
 .settings-page {
   display: flex;
