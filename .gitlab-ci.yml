@@ -1,5 +1,32 @@
 stages:
+  - test
   - deploy
+
+test_web:
+  stage: test
+  image: node:20
+  variables:
+    CI: "true"
+  cache:
+    key: web-node-modules
+    paths:
+      - node_modules/
+  script:
+    - npm ci
+    - npm test -- --coverage --run
+
+test_rust:
+  stage: test
+  image: rust:1.77
+  cache:
+    key: rust-cargo-cache
+    paths:
+      - /usr/local/cargo/registry
+      - /usr/local/cargo/git
+      - src-tauri/target
+  script:
+    - cd src-tauri
+    - cargo test --all --locked
 
 sync_to_github:
   stage: deploy
