@@ -100,8 +100,8 @@ rm -rf "$TEMP_DIR"
 echo -e "${GREEN}Setting permissions...${NC}"
 chmod -R 755 "$INSTALL_DIR"
 
-# Create necessary symlinks
-echo -e "${GREEN}Creating symlinks...${NC}"
+# Create necessary symlinks in installation directory
+echo -e "${GREEN}Creating symlinks in installation directory...${NC}"
 cd "$INSTALL_DIR"
 
 # Find the actual libclntsh.dylib version (e.g., libclntsh.dylib.23.1)
@@ -113,12 +113,38 @@ if [ -n "$ACTUAL_LIB" ]; then
     echo -e "${GREEN}Created symlink: libclntsh.dylib -> $(basename "$ACTUAL_LIB")${NC}"
 fi
 
+# Create ~/lib directory and symlink Oracle libraries there
+# This allows the Tauri app to find Oracle libraries via rpath without sudo
+echo ""
+echo -e "${GREEN}Setting up ~/lib for Oracle libraries...${NC}"
+LIB_DIR="$HOME/lib"
+mkdir -p "$LIB_DIR"
+
+# Symlink key Oracle libraries to ~/lib
+echo -e "${GREEN}Creating symlinks in ~/lib...${NC}"
+ln -sf "$INSTALL_DIR/libclntsh.dylib" "$LIB_DIR/"
+ln -sf "$INSTALL_DIR/libclntsh.dylib.23.1" "$LIB_DIR/" 2>/dev/null || true
+ln -sf "$INSTALL_DIR/libclntshcore.dylib" "$LIB_DIR/"
+ln -sf "$INSTALL_DIR/libclntshcore.dylib.23.1" "$LIB_DIR/" 2>/dev/null || true
+ln -sf "$INSTALL_DIR/libnnz.dylib" "$LIB_DIR/" 2>/dev/null || true
+ln -sf "$INSTALL_DIR/libnnz23.dylib" "$LIB_DIR/" 2>/dev/null || true
+
+# Symlink all other .dylib files found
+for dylib in "$INSTALL_DIR"/*.dylib*; do
+    if [ -f "$dylib" ]; then
+        filename=$(basename "$dylib")
+        ln -sf "$dylib" "$LIB_DIR/$filename" 2>/dev/null || true
+    fi
+done
+
+echo -e "${GREEN}✓ Symlinks created in ~/lib${NC}"
+
 # Verify installation
 echo ""
 echo -e "${GREEN}=== Verification ===${NC}"
 
 if [ -f "$INSTALL_DIR/libclntsh.dylib" ]; then
-    echo -e "${GREEN}✓ libclntsh.dylib found${NC}"
+    echo -e "${GREEN}✓ libclntsh.dylib found in installation directory${NC}"
 
     # Check architecture matches
     INSTALLED_ARCH=$(file "$INSTALL_DIR/libclntsh.dylib" | grep -o "arm64\|x86_64")
@@ -146,12 +172,31 @@ else
     exit 1
 fi
 
+# Verify ~/lib symlinks
+if [ -L "$LIB_DIR/libclntsh.dylib" ]; then
+    echo -e "${GREEN}✓ ~/lib symlinks created successfully${NC}"
+    SYMLINK_COUNT=$(find "$LIB_DIR" -name "*.dylib*" -type l | wc -l)
+    echo -e "${GREEN}✓ $SYMLINK_COUNT Oracle library symlinks in ~/lib${NC}"
+else
+    echo -e "${YELLOW}⚠ Warning: ~/lib symlinks may not have been created${NC}"
+    echo -e "${YELLOW}  You may need to create them manually${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}=== Installation Complete! ===${NC}"
 echo -e "${GREEN}Oracle Instant Client installed at:${NC}"
 echo -e "${YELLOW}$INSTALL_DIR${NC}"
 echo ""
+echo -e "${GREEN}Libraries also symlinked to:${NC}"
+echo -e "${YELLOW}$LIB_DIR${NC}"
+echo -e "${GREEN}This allows AD Tools to find Oracle libraries without sudo.${NC}"
+echo ""
 echo -e "${GREEN}You can now use the Compare Config feature in AD Tools.${NC}"
 echo -e "${GREEN}Please restart AD Tools if it's currently running.${NC}"
+echo ""
+echo -e "${YELLOW}Note: If you encounter library loading issues, ensure:${NC}"
+echo -e "${YELLOW}  1. AD Tools was rebuilt after running this script${NC}"
+echo -e "${YELLOW}  2. The ~/lib directory exists and contains Oracle library symlinks${NC}"
+echo -e "${YELLOW}  3. You've restarted AD Tools to pick up the new libraries${NC}"
 
 exit 0

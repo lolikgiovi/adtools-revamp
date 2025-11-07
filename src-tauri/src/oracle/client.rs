@@ -74,6 +74,9 @@ pub fn check_client_ready(custom_path: Option<&str>) -> bool {
 /// to it in the static ORACLE_CLIENT mutex. This ensures the library remains
 /// loaded for the lifetime of the application.
 ///
+/// This also sets DYLD_LIBRARY_PATH (macOS) / LD_LIBRARY_PATH (Linux) to help
+/// the oracle crate find the library when creating connections.
+///
 /// # Arguments
 /// * `custom_path` - Optional custom directory path
 ///
@@ -91,11 +94,34 @@ pub fn prime_client(custom_path: Option<&str>) -> Result<(), String> {
         ));
     }
 
-    // Load the library
+    // IMPORTANT: Set the library path BEFORE loading the library
+    // This helps the oracle crate find it later
+    #[cfg(target_os = "macos")]
+    {
+        std::env::set_var("DYLD_LIBRARY_PATH", client_dir.to_string_lossy().to_string());
+        log::info!("Set DYLD_LIBRARY_PATH in prime_client to: {:?}", client_dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::env::set_var("LD_LIBRARY_PATH", client_dir.to_string_lossy().to_string());
+        log::info!("Set LD_LIBRARY_PATH in prime_client to: {:?}", client_dir);
+    }
+
+    // Load the library with RTLD_GLOBAL flag to make symbols available globally
+    // This is crucial for the oracle crate to find and use the already-loaded library
+    #[cfg(unix)]
     let library = unsafe {
-        libloading::Library::new(&lib_path).map_err(|e| {
-            format!("Failed to load Oracle client library: {}", e)
-        })?
+        use libloading::os::unix::{Library as UnixLibrary, RTLD_NOW, RTLD_GLOBAL};
+        let unix_lib = UnixLibrary::open(Some(&lib_path), RTLD_NOW | RTLD_GLOBAL)
+            .map_err(|e| format!("Failed to load Oracle client library: {}", e))?;
+        libloading::Library::from(unix_lib)
+    };
+
+    #[cfg(not(unix))]
+    let library = unsafe {
+        libloading::Library::new(&lib_path)
+            .map_err(|e| format!("Failed to load Oracle client library: {}", e))?
     };
 
     // Store in static reference
@@ -106,7 +132,7 @@ pub fn prime_client(custom_path: Option<&str>) -> Result<(), String> {
 
     *guard = Some(library);
 
-    log::info!("Oracle client library loaded successfully from: {:?}", lib_path);
+    log::info!("Oracle client library loaded successfully with RTLD_GLOBAL from: {:?}", lib_path);
     Ok(())
 }
 

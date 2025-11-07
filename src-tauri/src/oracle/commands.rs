@@ -5,6 +5,7 @@
 use super::client::{check_client_ready, prime_client};
 use super::models::{ConnectionConfig, Credentials};
 use super::connection::DatabaseConnection;
+use crate::credentials::CredentialManager;
 
 /// Checks if Oracle Instant Client is ready to use
 ///
@@ -37,14 +38,15 @@ pub fn prime_oracle_client() -> Result<(), String> {
 /// # Returns
 /// Success message if connection works, error message otherwise
 ///
-/// NOTE: Phase 1 implementation - basic validation only.
-/// Full Oracle connectivity will be added in Phase 2.
+/// Phase 2: Full implementation with actual Oracle connectivity
 #[tauri::command]
 pub fn test_oracle_connection(
     config: ConnectionConfig,
     username: String,
     password: String,
 ) -> Result<String, String> {
+    log::info!("Testing Oracle connection for: {}", config.name);
+
     // Validate inputs
     config.validate()?;
 
@@ -56,9 +58,31 @@ pub fn test_oracle_connection(
     conn.test_connection()?;
 
     Ok(format!(
-        "Connection to {} successful (Phase 1 validation)",
+        "Connection to {} successful",
         config.connection_string()
     ))
+}
+
+/// Tests an Oracle database connection using saved credentials
+///
+/// # Arguments
+/// * `connection_name` - Name of the saved connection (to retrieve credentials from keychain)
+/// * `config` - Connection configuration
+///
+/// # Returns
+/// Success message if connection works, error message otherwise
+#[tauri::command]
+pub fn test_oracle_connection_saved(
+    connection_name: String,
+    config: ConnectionConfig,
+) -> Result<String, String> {
+    log::info!("Testing saved Oracle connection: {}", connection_name);
+
+    // Retrieve credentials from keychain
+    let (username, password) = CredentialManager::get_oracle_credentials(&connection_name)?;
+
+    // Use the existing test function
+    test_oracle_connection(config, username, password)
 }
 
 /// Fetches available schemas from a database

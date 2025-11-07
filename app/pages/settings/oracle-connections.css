@@ -1,0 +1,166 @@
+/* Oracle Connections UI Styles */
+
+.oracle-connections-ui {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.oracle-connections-list {
+  width: 100%;
+}
+
+.connections-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  background: var(--bg-secondary, #f8f9fa);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.connections-table thead {
+  background: var(--bg-tertiary, #e9ecef);
+}
+
+.connections-table th,
+.connections-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.connections-table th {
+  font-weight: 600;
+  color: var(--text-secondary, #495057);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.connections-table tbody tr:hover {
+  background: var(--bg-hover, #f1f3f5);
+}
+
+.connections-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.connection-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status-active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-missing {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.actions-cell .btn {
+  margin-right: 0.5rem;
+}
+
+.actions-cell .btn:last-child {
+  margin-right: 0;
+}
+
+.oracle-connections-actions {
+  margin-top: 1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  background: var(--bg-secondary, #f8f9fa);
+  border-radius: 8px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+/* Connection Form */
+.oracle-connection-form {
+  background: var(--bg-secondary, #f8f9fa);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.oracle-connection-form .form-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary, #212529);
+}
+
+.oracle-connection-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.oracle-connection-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--text-primary, #212529);
+}
+
+.oracle-connection-form .form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color, #ced4da);
+  border-radius: 4px;
+  font-size: 1rem;
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #212529);
+}
+
+.oracle-connection-form .form-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #0066cc);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.oracle-connection-form small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-tertiary, #6c757d);
+  font-size: 0.875rem;
+}
+
+.oracle-connection-form .form-status {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.oracle-connection-form .form-status.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.oracle-connection-form .form-status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.oracle-connection-form .form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
