@@ -2,6 +2,7 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { isTauri } from "../../core/Runtime.js";
 import { CompareConfigTemplate } from "./template.js";
 import "./styles.css";
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 function parseFields(str) {
   if (!str) return [];
@@ -68,7 +69,10 @@ export class CompareConfigTool extends BaseTool {
     el("btnSetCreds2").addEventListener("click", () => this.setCreds(2));
     el("btnGetCreds2").addEventListener("click", () => this.getCreds(2));
     el("btnTestConn2").addEventListener("click", () => this.testConn(2));
-    el("btnCompare").addEventListener("click", () => this.compare());
+    el("btnCompare").addEventListener("click", () => {
+      try { UsageTracker.trackFeature("compare-config", "compare"); } catch (_) {}
+      this.compare();
+    });
     el("btnExportJson").addEventListener("click", () => this.exportResult("json"));
     el("btnExportCsv").addEventListener("click", () => this.exportResult("csv"));
 
@@ -112,6 +116,7 @@ export class CompareConfigTool extends BaseTool {
       if (!status.installed) {
         statusEl.textContent = status.message || "Oracle client not detected";
         this.showError(status.message || "Oracle client not detected");
+        try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "client_not_installed", message: String(status.message || "Oracle client not detected") }); } catch (_) {}
         return;
       }
       statusEl.textContent = "Client detected. Priming...";
@@ -122,6 +127,7 @@ export class CompareConfigTool extends BaseTool {
       console.error(e);
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Prime failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "check_and_prime", message: String(e) }); } catch (_) {}
     }
   }
 
@@ -132,6 +138,7 @@ export class CompareConfigTool extends BaseTool {
     const password = el(`env${idx}Pass`).value;
     if (!id || !username || !password) {
       this.showError("Provide connection ID, username, and password");
+      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "set_creds_invalid", idx }); } catch (_) {}
       return;
     }
     try {
@@ -142,13 +149,14 @@ export class CompareConfigTool extends BaseTool {
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Save failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "set_creds", idx, message: String(e) }); } catch (_) {}
     }
   }
 
   async getCreds(idx) {
     const statusEl = el(`credsStatus${idx}`);
     const id = el(`env${idx}Id`).value.trim();
-    if (!id) { this.showError("Provide connection ID"); return; }
+    if (!id) { this.showError("Provide connection ID"); try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "get_creds_invalid", idx }); } catch (_) {} return; }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const res = await invoke("get_oracle_credentials", { connection_id: id });
@@ -161,6 +169,7 @@ export class CompareConfigTool extends BaseTool {
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Lookup failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "get_creds", idx, message: String(e) }); } catch (_) {}
     }
   }
 
@@ -169,6 +178,7 @@ export class CompareConfigTool extends BaseTool {
     const cfg = this.getEnvConfig(idx);
     if (!cfg.id || !cfg.host || !cfg.service_name) {
       this.showError("Provide id, host, and service name");
+      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "test_conn_invalid", idx }); } catch (_) {}
       return;
     }
     try {
@@ -180,6 +190,7 @@ export class CompareConfigTool extends BaseTool {
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Test failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "test_conn", idx, message: String(e) }); } catch (_) {}
     }
   }
 
@@ -193,6 +204,7 @@ export class CompareConfigTool extends BaseTool {
 
     if (!env1.id || !env2.id || !table) {
       this.showError("Provide Env1, Env2, and Table");
+      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "validation_failed", reason: "missing_envs_or_table", table: table || "" }); } catch (_) {}
       return;
     }
     try {
@@ -214,6 +226,7 @@ export class CompareConfigTool extends BaseTool {
     } catch (e) {
       statusEl.textContent = `Error: ${e}`;
       this.showError(`Compare failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "compare", table: table || "", message: String(e) }); } catch (_) {}
     }
   }
 
@@ -277,6 +290,7 @@ export class CompareConfigTool extends BaseTool {
       });
     } catch (e) {
       console.error(e);
+      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "render_failed", message: String(e?.message || e) }); } catch (_) {}
     }
   }
 
@@ -447,14 +461,14 @@ export class CompareConfigTool extends BaseTool {
   previewCsv() {
     const statusEl = el("csvStatus");
     const area = el("csvPreview");
-    if (!this.lastResult) { this.showError("Run a comparison first"); return; }
+    if (!this.lastResult) { this.showError("Run a comparison first"); try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "csv_preview_no_result" }); } catch (_) {} return; }
     const csv = this.toCsv(this.lastResult);
     area.value = csv;
     statusEl.textContent = "Preview generated.";
   }
 
   downloadCsvBrowser() {
-    if (!this.lastResult) { this.showError("Run a comparison first"); return; }
+    if (!this.lastResult) { this.showError("Run a comparison first"); try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "csv_download_no_result" }); } catch (_) {} return; }
     try {
       const csv = this.toCsv(this.lastResult);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -471,11 +485,12 @@ export class CompareConfigTool extends BaseTool {
       this.showSuccess("CSV downloaded");
     } catch (e) {
       this.showError(`Download failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "csv_download_failed", message: String(e) }); } catch (_) {}
     }
   }
 
   async exportResult(fmt) {
-    if (!this.lastResult) { this.showError("Run a comparison first"); return; }
+    if (!this.lastResult) { this.showError("Run a comparison first"); try { UsageTracker.trackEvent("compare-config", "ui_error", { type: "export_no_result", fmt }); } catch (_) {} return; }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const payload = JSON.stringify(this.lastResult);
@@ -484,6 +499,7 @@ export class CompareConfigTool extends BaseTool {
       await this.copyToClipboard(path);
     } catch (e) {
       this.showError(`Export failed: ${e}`);
+      try { UsageTracker.trackEvent("compare-config", "tauri_error", { action: "export", fmt, message: String(e) }); } catch (_) {}
     }
   }
 }
