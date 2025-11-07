@@ -197,6 +197,32 @@ export class CompareConfigTool extends BaseTool {
 
   // Saved connections management
   getSavedConnections() {
+    // Prefer Settings-managed list at key `config.oracle.connections` (kvlist of {key, value(JSON)})
+    try {
+      const settingsRaw = localStorage.getItem("config.oracle.connections");
+      if (settingsRaw) {
+        const arr = JSON.parse(settingsRaw);
+        if (Array.isArray(arr)) {
+          const map = {};
+          for (const entry of arr) {
+            if (!entry || typeof entry !== "object") continue;
+            const name = String(entry.key || "").trim();
+            let val = entry.value;
+            try { if (typeof val === "string") val = JSON.parse(val); } catch (_) {}
+            if (!name || !val || typeof val !== "object") continue;
+            const host = String(val.host || "").trim();
+            const port = Number(val.port || 1521);
+            const service_name = String(val.service_name || val.serviceName || "").trim();
+            const schema = val.schema ? String(val.schema).trim() : null;
+            if (!host || !service_name) continue;
+            map[name] = { id: name, host, port: Number.isNaN(port) ? 1521 : port, service_name, schema };
+          }
+          // If we built any, return them
+          if (Object.keys(map).length) return map;
+        }
+      }
+    } catch (_) {}
+    // Fallback to tool-local storage
     try {
       const raw = localStorage.getItem("compare-config.savedConnections") || "{}";
       const obj = JSON.parse(raw);

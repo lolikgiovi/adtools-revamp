@@ -31,6 +31,26 @@
       ]
     },
     {
+      "id": "oracle",
+      "label": "Oracle Database Connections",
+      "initiallyExpanded": false,
+      "items": [
+        {
+          "key": "oracle.connections",
+          "storageKey": "config.oracle.connections",
+          "label": "Database Connections",
+          "type": "kvlist",
+          "default": [],
+          "keyPlaceholder": "Connection Name (e.g., UAT1)",
+          "valuePlaceholder": "Connection JSON (host/port/service_name/schema)",
+          "description": "Configure Oracle connections as JSON objects. Example: {\"host\":\"db-uat1.company.com\",\"port\":1521,\"service_name\":\"ORCLPDB1\",\"schema\":\"APP_SCHEMA\"}",
+          "validation": {
+            "jsonValue": true
+          }
+        }
+      ]
+    },
+    {
       "id": "updates",
       "label": "Check for Update",
       "requiresTauri": true,

@@ -145,15 +145,31 @@ class SettingsService {
       }
       case "kvlist": {
         const rows = Array.isArray(value) ? value : [];
-        for (const { key, value: url } of rows) {
-          if (!key && !url) continue; // allow empty row while editing
-          if (!key) return { valid: false, message: "Environment is required" };
-          if (!url) return { valid: false, message: "Base URL is required" };
-          try {
-            const u = new URL(url);
-            if (!u.protocol.startsWith('http')) return { valid: false, message: "URL must be http(s)" };
-          } catch (_) {
-            return { valid: false, message: "Invalid URL format" };
+        const asJson = !!rules.jsonValue;
+        for (const { key, value: v } of rows) {
+          if (!key && !v) continue; // allow empty row while editing
+          if (!key) return { valid: false, message: asJson ? "Connection name is required" : "Environment is required" };
+          if (!v) return { valid: false, message: asJson ? "Connection JSON is required" : "Base URL is required" };
+          if (asJson) {
+            try {
+              const obj = typeof v === "string" ? JSON.parse(v) : v;
+              if (!obj || typeof obj !== "object") throw new Error("Invalid JSON");
+              const host = String(obj.host || "").trim();
+              const service = String(obj.service_name || obj.serviceName || "").trim();
+              const port = obj.port;
+              if (!host) return { valid: false, message: "JSON must include host" };
+              if (!service) return { valid: false, message: "JSON must include service_name" };
+              if (port !== undefined && Number.isNaN(Number(port))) return { valid: false, message: "port must be a number" };
+            } catch (_) {
+              return { valid: false, message: "Invalid JSON format" };
+            }
+          } else {
+            try {
+              const u = new URL(v);
+              if (!u.protocol.startsWith('http')) return { valid: false, message: "URL must be http(s)" };
+            } catch (_) {
+              return { valid: false, message: "Invalid URL format" };
+            }
           }
         }
         return { valid: true };

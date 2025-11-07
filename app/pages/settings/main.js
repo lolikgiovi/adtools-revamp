@@ -600,9 +600,12 @@ class SettingsPage {
     const rows = container.querySelector(".kv-rows");
     const row = document.createElement("div");
     row.className = "kv-row";
+    const isJson = !!(item?.validation && item.validation.jsonValue);
+    const valueType = isJson ? "text" : "url";
+    const valueAria = isJson ? "Connection JSON" : "Base URL";
     row.innerHTML = `
-      <input type="text" class="kv-key" placeholder="${item.keyPlaceholder || "Environment"}" aria-label="Environment"/>
-      <input type="url" class="kv-value" placeholder="${item.valuePlaceholder || "Base URL"}" aria-label="Base URL"/>
+      <input type="text" class="kv-key" placeholder="${item.keyPlaceholder || (isJson ? "Connection Name" : "Environment")}" aria-label="${isJson ? "Connection Name" : "Environment"}"/>
+      <input type="${valueType}" class="kv-value" placeholder="${item.valuePlaceholder || (isJson ? "Connection JSON" : "Base URL")}" aria-label="${valueAria}"/>
       <button type="button" class="btn btn-outline btn-sm kv-remove" data-role="kv-remove" aria-label="Remove">Remove</button>
     `;
     row.querySelector(".kv-key").value = rowData.key || "";
@@ -683,6 +686,23 @@ class SettingsPage {
     if (!pairs || pairs.length === 0) return "(Empty, add new one)";
     const esc = (s) =>
       String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    const formatVal = (val) => {
+      const s = String(val ?? "").trim();
+      if (s.startsWith("{") && s.endsWith("}")) {
+        try {
+          const o = JSON.parse(s);
+          const host = String(o.host || "").trim();
+          const port = o.port !== undefined ? Number(o.port) : undefined;
+          const svc = String(o.service_name || o.serviceName || "").trim();
+          const schema = String(o.schema || "").trim();
+          const portStr = port && !Number.isNaN(port) ? `:${port}` : "";
+          const schemaStr = schema ? ` [${schema}]` : "";
+          if (host && svc) return `${esc(host)}${esc(portStr)}/${esc(svc)}${esc(schemaStr)}`;
+        } catch (_) {}
+      }
+      // fallback to raw, truncated for readability
+      return esc(s.length > 120 ? s.slice(0, 117) + "…" : s);
+    };
     return `
       <div class="kvlist-preview">
         ${pairs
@@ -691,7 +711,7 @@ class SettingsPage {
           <div class="kvlist-preview-row">
             <span class="kvlist-env">${esc(p.key)}</span>
             <span class="kvlist-arrow">→</span>
-            <span class="kvlist-url">${esc(p.value)}</span>
+            <span class="kvlist-url">${formatVal(p.value)}</span>
           </div>
         `
           )

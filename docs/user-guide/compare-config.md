@@ -32,13 +32,21 @@ If installation fails, use the local script:
 
 ## Using the Tool
 
-1. Configure Env 1 and Env 2 (ID, host, port, service, optional schema).
-2. Set credentials securely via `Set Credentials` and test connections.
-3. Enter `Table`, optional `Fields` (comma-separated), and `WHERE` clause.
+1. Define saved connections in Settings:
+   - Open Settings → "Oracle Database Connections".
+   - Add a connection using a name and JSON value, for example:
+     - `{ "host": "db-uat1.company.com", "port": 1521, "service_name": "ORCLPDB1", "schema": "APP_SCHEMA" }`
+   - The list in Settings is used to populate Env 1/Env 2 dropdowns.
+2. Select Env 1 and Env 2 in Compare Config:
+   - Use the "Saved Connection" dropdowns to pick your environments.
+   - Click `Set Credentials` to store username/password securely (macOS Keychain).
+   - Click `Test Connection` to verify access; the tool shows status as Success, Fail, or Error.
+3. Enter `Table` and optional `WHERE` clause.
+   - Field selection is optional; you can run comparisons without editing fields.
 4. Click `Compare` to run the comparison.
 5. Inspect summary metrics and detailed rows:
    - Status: `Match`, `Differ`, `OnlyInEnv1`, `OnlyInEnv2`
-   - Filters to focus on specific statuses
+   - Use filters to focus on specific statuses
 6. Export:
    - JSON/CSV via backend export (saved to `~/Documents/adtools_library/comparisons/`)
    - Client-side CSV preview and download in the browser
