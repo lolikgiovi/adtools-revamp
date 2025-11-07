@@ -1,9 +1,12 @@
 # Database Configuration Comparison Feature - Technical Specification
 
-**Version:** 2.0
-**Date:** November 6, 2025
+**Version:** 3.0
+**Date:** November 7, 2025
 **Project:** AD Tools (Tauri Desktop Application)
 **Feature:** Oracle Database Configuration Comparison with Instant Client Integration
+
+**Status:** Ready for Implementation
+**Implementation Reference:** See [Section 13: Implementation Plan](#13-implementation-plan)
 
 ---
 
@@ -21,6 +24,14 @@
 10. [Testing Strategy](#10-testing-strategy)
 11. [Deployment Plan](#11-deployment-plan)
 12. [Future Enhancements](#12-future-enhancements)
+13. **[Implementation Plan](#13-implementation-plan)** ⭐ **NEW**
+    - [Phase 1: Oracle Client Integration & Foundation](#132-phase-1-oracle-client-integration--foundation)
+    - [Phase 2: Connection Management](#133-phase-2-connection-management-settings-integration)
+    - [Phase 3: Schema & Table Discovery](#134-phase-3-schema--table-discovery-metadata-operations)
+    - [Phase 4: Data Fetching & Comparison Engine](#135-phase-4-data-fetching--comparison-engine-core-feature)
+    - [Phase 5: Results Display & Export](#136-phase-5-results-display--export-ui--output)
+    - [Integration & Testing](#137-integration--testing-final-phase)
+    - [Implementation Checklist](#138-implementation-checklist)
 
 ---
 
@@ -38,9 +49,9 @@ This document specifies the implementation of a database configuration compariso
 - Support flexible primary key definition via WHERE clause
 - Allow selective field comparison or all fields
 - Display differences with multiple visualization options
-- **Character/word-level diff highlighting with color-coded visualization** (NEW)
+- **Character/word-level diff highlighting with color-coded visualization**
 - Export comparison results
-- Integrate Oracle Instant Client for local execution (optional, user-installed)
+- Integrate Oracle Instant Client for local execution (optional, user-installed if they want to use this feature)
 - Provide installation script and guidance for Oracle client setup
 - Gracefully degrade when Oracle client is not installed
 
@@ -57,7 +68,7 @@ This document specifies the implementation of a database configuration compariso
 
 ### 1.4 Key Features
 
-**🎨 Visual Diff Highlighting (NEW)**
+**🎨 Visual Diff Highlighting **
 
 The comparison results include **character/word-level diff highlighting** to instantly identify what changed between environments:
 
@@ -69,12 +80,13 @@ The comparison results include **character/word-level diff highlighting** to ins
 This provides a Git-like diff experience directly in the comparison table, eliminating the need for manual scanning and reducing cognitive load.
 
 **Example:**
+
 - **Env1**: `timeout = `<span style="background:#f8d7da">~~5000~~</span>` ms`
 - **Env2**: `timeout = `<span style="background:#d4edda">**8000**</span>` ms`
 
 See [Section 6.7](#67-diff-highlighting-example) for detailed examples.
 
-**🔒 Comprehensive Data Sanitization (NEW)**
+**🔒 Comprehensive Data Sanitization **
 
 All Oracle query results are sanitized in the backend before reaching the frontend:
 
@@ -127,6 +139,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 ├─────────────────────────────────────────────────────────────┤
 │ User opens Compare Config tool                              │
 │ → App checks: invoke('check_oracle_client_ready')          │
+│ → Checks for: ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib │
 │                                                              │
 │ IF Oracle Client NOT INSTALLED:                             │
 │   ┌─────────────────────────────────────────────────────┐  │
@@ -138,20 +151,24 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │   │ connect to Oracle databases. The client is NOT       │  │
 │   │ bundled with AD Tools due to licensing and size.     │  │
 │   │                                                       │  │
-│   │ Installation Steps:                                  │  │
-│   │ 1. Download Oracle Instant Client Basic Light        │  │
-│   │    for your architecture (arm64/x86_64)              │  │
-│   │    from: oracle.com/database/technologies/...        │  │
+│   │ Automatic Installation:                              │  │
 │   │                                                       │  │
-│   │ 2. Run the installation script:                      │  │
-│   │    ./scripts/install-oracle-client.sh /path/to.zip   │  │
+│   │ Copy and run this command in Terminal:               │  │
 │   │                                                       │  │
-│   │ 3. Restart AD Tools                                  │  │
+│   │ ┌─────────────────────────────────────────────────┐ │  │
+│   │ │ curl -fsSL https://adtools.lolik.workers.dev/   │ │  │
+│   │ │ install-oracle.sh | bash                        │ │  │
+│   │ └─────────────────────────────────────────────────┘ │  │
 │   │                                                       │  │
-│   │ [📋 Copy Download URL]  [📖 View Full Guide]         │  │
+│   │ [📋 Copy Install Command]  [📖 View Full Guide]      │  │
 │   │                                                       │  │
-│   │ Note: Oracle client is ~80MB. Installation requires  │  │
-│   │ no admin privileges.                                 │  │
+│   │ The script will:                                     │  │
+│   │ • Detect your architecture (Apple Silicon/Intel)     │  │
+│   │ • Download Oracle Instant Client (~80MB)             │  │
+│   │ • Install to ~/Documents/adtools_library/oracle_instantclient │  │
+│   │ • No sudo/admin privileges required                  │  │
+│   │                                                       │  │
+│   │ After installation, click "Check Installation" below.│  │
 │   └─────────────────────────────────────────────────────┘  │
 │   • All form inputs: DISABLED                               │
 │   • "Compare" button: DISABLED                              │
@@ -164,6 +181,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │ Oracle Client INSTALLED & READY                             │
 ├─────────────────────────────────────────────────────────────┤
 │ → App calls: invoke('prime_oracle_client')                 │
+│ → Loads from: ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib │
 │ → Success: Feature unlocked, forms enabled                  │
 │ → User can now proceed with comparison                      │
 └─────────────────────────────────────────────────────────────┘
@@ -183,7 +201,6 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │ │ Host:         db-uat1.company.com                       │ │
 │ │ Port:         1521                                      │ │
 │ │ Service Name: ORCLPDB1                                  │ │
-│ │ Schema:       APP_SCHEMA                                │ │
 │ │ Username:     ******** (keychain)                       │ │
 │ │ Password:     ******** (keychain)                       │ │
 │ │ [Test] [Save] [Delete]                      Status: ✓   │ │
@@ -195,6 +212,9 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │ • PROD - db-prod.company.com ✓                              │
 │                                                              │
 │ [+ Add New Connection]                                       │
+│                                                              │
+│ Note: Schema and table selection happens in the Compare     │
+│ Config tool after connecting to the database.               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -210,7 +230,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │    • UAT2 - db-uat2.company.com                             │
 │    • PROD - db-prod.company.com                             │
 │                                                              │
-│ - Select "UAT1" → auto-fills all connection details         │
+│ - Select "UAT1" → establishes connection                    │
 │ - Credentials loaded from keychain automatically            │
 │ - Status: ✓ Connected                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -224,21 +244,41 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 │    • UAT2 - db-uat2.company.com ← Selected                  │
 │    • PROD - db-prod.company.com                             │
 │                                                              │
-│ - Select "UAT2" → auto-fills all connection details         │
+│ - Select "UAT2" → establishes connection                    │
 │ - Credentials loaded from keychain automatically            │
 │ - Status: ✓ Connected                                       │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 3: Select Table to Compare                            │
+│ Step 3: Select Schema                                       │
 ├─────────────────────────────────────────────────────────────┤
-│ - Browse tables from Env1 schema (optional)                 │
-│ - Or enter table name directly                              │
-│ - Fetch table properties to preview columns                 │
+│ - After connection, fetch list of available schemas         │
+│ - Dropdown shows schemas user has access to:                │
+│   [Select Schema ▼]                                          │
+│    • APP_SCHEMA                                             │
+│    • CONFIG_SCHEMA                                          │
+│    • SYS (read-only)                                        │
+│                                                              │
+│ - Select "APP_SCHEMA" for both environments                 │
+│ - OR select different schemas for each environment          │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 4: Define Primary Key Filter (WHERE Clause)           │
+│ Step 4: Select Table to Compare                            │
+├─────────────────────────────────────────────────────────────┤
+│ - After schema selection, fetch list of tables              │
+│ - Dropdown shows tables in selected schema:                 │
+│   [Select Table ▼]                                           │
+│    • APP_CONFIG                                             │
+│    • FEATURE_FLAGS                                          │
+│    • SYSTEM_PARAMETERS                                      │
+│                                                              │
+│ - Select table (e.g., "APP_CONFIG")                         │
+│ - Fetch table metadata to preview columns and PK            │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 5: Define Record Filter (WHERE Clause)                │
 ├─────────────────────────────────────────────────────────────┤
 │ - Text field for WHERE clause definition                    │
 │ - Examples:                                                  │
@@ -249,7 +289,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 5: Select Fields to Compare                           │
+│ Step 6: Select Fields to Compare                           │
 ├─────────────────────────────────────────────────────────────┤
 │ - Multi-select checkbox list of columns                     │
 │ - "Select All" / "Deselect All" shortcuts                   │
@@ -258,7 +298,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 6: Execute Comparison                                  │
+│ Step 7: Execute Comparison                                  │
 ├─────────────────────────────────────────────────────────────┤
 │ - Click "Compare Configurations"                            │
 │ - Backend fetches data from both environments               │
@@ -267,7 +307,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 7: View Results                                        │
+│ Step 8: View Results                                        │
 ├─────────────────────────────────────────────────────────────┤
 │ - Summary statistics (matching, differing, unique)          │
 │ - Choose view mode:                                          │
@@ -279,7 +319,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 8: Export (Optional)                                   │
+│ Step 9: Export (Optional)                                   │
 ├─────────────────────────────────────────────────────────────┤
 │ - Export to JSON, CSV, or HTML                              │
 │ - Save to ~/Documents/adtools_library/comparisons/          │
@@ -290,6 +330,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 ### 2.4 Settings Configuration Details
 
 **Add to `app/pages/settings/config.json`:**
+Example: (We might need new JSON design since the UI will be rendering the table form for names)
 
 ```json
 {
@@ -307,7 +348,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
       "default": [],
       "keyPlaceholder": "Connection Name",
       "valuePlaceholder": "Connection Details (JSON)",
-      "description": "Configure Oracle database connections. Format: {\"host\": \"...\", \"port\": 1521, \"service_name\": \"...\", \"schema\": \"...\"}",
+      "description": "Configure Oracle database connections. Format: {\"host\": \"...\", \"port\": 1521, \"service_name\": \"...\"}. Note: Schema and table selection happens in the Compare Config tool.",
       "validation": {
         "jsonValue": true
       }
@@ -326,7 +367,6 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
     host: "db-uat1.company.com",
     port: 1521,
     service_name: "ORCLPDB1",
-    schema: "APP_SCHEMA",
     lastTested: "2025-11-06T14:30:00Z",
     status: "active",
   },
@@ -335,7 +375,6 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
     host: "db-uat2.company.com",
     port: 1521,
     service_name: "ORCLPDB2",
-    schema: "APP_SCHEMA",
     lastTested: "2025-11-06T14:31:00Z",
     status: "active",
   },
@@ -406,7 +445,7 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
                             ↕
 ┌─────────────────────────────────────────────────────────────┐
 │                 Oracle Instant Client                       │
-│  ~/Documents/adtools_library/instantclient/                 │
+│  ~/Documents/adtools_library/oracle_instantclient/          │
 │  └─ libclntsh.dylib      (Loaded at runtime)               │
 └─────────────────────────────────────────────────────────────┘
                             ↕
@@ -452,22 +491,23 @@ See [Section 5.4](#54-comparison-engine-comparisonrs) for technical details.
 ```javascript
 // Connection configuration
 class ConnectionConfig {
-  constructor(name, host, port, serviceName, schema) {
+  constructor(name, host, port, serviceName) {
     this.name = name; // Display name (e.g., "UAT1")
     this.host = host; // Database host
     this.port = port; // Port (default 1521)
     this.serviceName = serviceName; // Oracle service name
-    this.schema = schema; // Schema/owner
   }
 }
 
 // Comparison request
 class ComparisonRequest {
-  constructor(env1, env2, tableName, whereClause, fields) {
+  constructor(env1, env2, env1Schema, env2Schema, tableName, whereClause, fields) {
     this.env1_name = env1.name;
     this.env1_connection = env1;
+    this.env1_schema = env1Schema; // Schema selected in UI
     this.env2_name = env2.name;
     this.env2_connection = env2;
+    this.env2_schema = env2Schema; // Schema selected in UI
     this.table_name = tableName;
     this.where_clause = whereClause; // Optional SQL WHERE clause
     this.fields = fields; // Array of field names or null for all
@@ -528,7 +568,6 @@ pub struct ConnectionConfig {
     pub host: String,
     pub port: u16,
     pub service_name: String,
-    pub schema: String,
 }
 
 /// Comparison request from frontend
@@ -536,8 +575,10 @@ pub struct ConnectionConfig {
 pub struct ComparisonRequest {
     pub env1_name: String,
     pub env1_connection: ConnectionConfig,
+    pub env1_schema: String,           // Schema selected in UI
     pub env2_name: String,
     pub env2_connection: ConnectionConfig,
+    pub env2_schema: String,           // Schema selected in UI
     pub table_name: String,
     pub where_clause: Option<String>,  // Optional WHERE clause
     pub fields: Option<Vec<String>>,   // Optional field list (null = all)
@@ -689,6 +730,7 @@ pub fn prime_client(custom_dir: Option<String>) -> Result<(), String> {
 }
 
 /// Resolve Oracle client library path
+/// Default installation path: ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib
 fn resolve_client_path(custom_dir: Option<String>) -> Result<PathBuf, String> {
     let base_dir = if let Some(custom) = custom_dir {
         PathBuf::from(custom)
@@ -698,7 +740,7 @@ fn resolve_client_path(custom_dir: Option<String>) -> Result<PathBuf, String> {
         PathBuf::from(home)
             .join("Documents")
             .join("adtools_library")
-            .join("instantclient")
+            .join("oracle_instantclient")
     };
 
     Ok(base_dir.join("libclntsh.dylib"))
@@ -741,6 +783,55 @@ impl DatabaseConnection {
             .query_row("SELECT 1 FROM dual", &[])
             .map_err(|e| format!("Connection test failed: {}", e))?;
         Ok(())
+    }
+
+    /// Fetch list of schemas user has access to
+    pub fn fetch_schemas(&self) -> Result<Vec<String>, String> {
+        let sql = r#"
+            SELECT DISTINCT OWNER
+            FROM   ALL_TABLES
+            WHERE  OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS',
+                                 'WMSYS', 'EXFSYS', 'CTXSYS', 'XDB', 'ANONYMOUS',
+                                 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS', 'DVSYS',
+                                 'DVF', 'AUDSYS', 'OJVMSYS', 'GSMADMIN_INTERNAL')
+            ORDER BY OWNER
+        "#;
+
+        let rows = self.conn
+            .query(sql, &[])
+            .map_err(|e| format!("Failed to fetch schemas: {}", e))?;
+
+        let mut schemas = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let schema: String = row.get(0).map_err(|e| format!("Schema error: {}", e))?;
+            schemas.push(schema);
+        }
+
+        Ok(schemas)
+    }
+
+    /// Fetch list of tables in a schema
+    pub fn fetch_tables(&self, owner: &str) -> Result<Vec<String>, String> {
+        let sql = r#"
+            SELECT TABLE_NAME
+            FROM   ALL_TABLES
+            WHERE  OWNER = :owner
+            ORDER BY TABLE_NAME
+        "#;
+
+        let rows = self.conn
+            .query(sql, &[&owner])
+            .map_err(|e| format!("Failed to fetch tables: {}", e))?;
+
+        let mut tables = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let table: String = row.get(0).map_err(|e| format!("Table error: {}", e))?;
+            tables.push(table);
+        }
+
+        Ok(tables)
     }
 
     /// Fetch table metadata
@@ -1292,8 +1383,36 @@ pub async fn test_oracle_connection(
 }
 
 #[tauri::command]
+pub async fn fetch_schemas(
+    config: ConnectionConfig,
+    credential_manager: State<'_, CredentialManager>,
+) -> Result<Vec<String>, String> {
+    let creds = credential_manager
+        .get_oracle_credentials(&config.name)
+        .map_err(|e| format!("Failed to get credentials: {}", e))?;
+
+    let conn = DatabaseConnection::new(&config, &creds)?;
+    conn.fetch_schemas()
+}
+
+#[tauri::command]
+pub async fn fetch_tables(
+    config: ConnectionConfig,
+    schema: String,
+    credential_manager: State<'_, CredentialManager>,
+) -> Result<Vec<String>, String> {
+    let creds = credential_manager
+        .get_oracle_credentials(&config.name)
+        .map_err(|e| format!("Failed to get credentials: {}", e))?;
+
+    let conn = DatabaseConnection::new(&config, &creds)?;
+    conn.fetch_tables(&schema)
+}
+
+#[tauri::command]
 pub async fn fetch_table_metadata(
     config: ConnectionConfig,
+    schema: String,
     table_name: String,
     credential_manager: State<'_, CredentialManager>,
 ) -> Result<TableMetadata, String> {
@@ -1302,7 +1421,7 @@ pub async fn fetch_table_metadata(
         .map_err(|e| format!("Failed to get credentials: {}", e))?;
 
     let conn = DatabaseConnection::new(&config, &creds)?;
-    conn.fetch_table_metadata(&config.schema, &table_name)
+    conn.fetch_table_metadata(&schema, &table_name)
 }
 
 #[tauri::command]
@@ -1325,7 +1444,7 @@ pub async fn compare_configurations(
 
     // Fetch metadata to determine primary key
     let metadata = conn1.fetch_table_metadata(
-        &request.env1_connection.schema,
+        &request.env1_schema,
         &request.table_name,
     )?;
 
@@ -1335,14 +1454,14 @@ pub async fn compare_configurations(
 
     // Fetch records from both environments
     let env1_records = conn1.fetch_records(
-        &request.env1_connection.schema,
+        &request.env1_schema,
         &request.table_name,
         request.where_clause.as_deref(),
         request.fields.as_deref(),
     )?;
 
     let env2_records = conn2.fetch_records(
-        &request.env2_connection.schema,
+        &request.env2_schema,
         &request.table_name,
         request.where_clause.as_deref(),
         request.fields.as_deref(),
@@ -1461,6 +1580,10 @@ export class CompareConfigTool extends BaseTool {
     this.state = {
       env1: null,
       env2: null,
+      env1Schema: "",
+      env2Schema: "",
+      schemas: [],
+      tables: [],
       tableName: "",
       whereClause: "",
       selectedFields: [],
@@ -1525,47 +1648,35 @@ export class CompareConfigTool extends BaseTool {
           </p>
 
           <div class="installation-steps">
-            <h3>Installation Steps:</h3>
+            <h3>Quick Installation:</h3>
 
             <div class="step">
               <div class="step-number">1</div>
               <div class="step-content">
-                <h4>Download Oracle Instant Client</h4>
-                <p>Download <strong>Basic Light</strong> package for your architecture:</p>
-                <div class="download-links">
-                  <a href="https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html"
-                     target="_blank"
-                     class="download-btn">
-                    Apple Silicon (M1/M2/M3)
-                  </a>
-                  <a href="https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html"
-                     target="_blank"
-                     class="download-btn">
-                    Intel (x86_64)
-                  </a>
-                </div>
-                <p class="note">Note: You'll need an Oracle account (free registration)</p>
+                <h4>Run Installation Command</h4>
+                <p>Open Terminal and copy-paste this command:</p>
+                <pre class="code-block"><code>curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash</code></pre>
+                <button id="copy-install-command" class="btn-secondary btn-small">
+                  📋 Copy Command
+                </button>
+                <p class="note"><strong>What it does:</strong></p>
+                <ul class="compact-list">
+                  <li>✓ Detects your architecture (Apple Silicon/Intel)</li>
+                  <li>✓ Downloads Oracle Instant Client (~80MB)</li>
+                  <li>✓ Installs to ~/Documents/adtools_library/oracle_instantclient</li>
+                  <li>✓ No sudo/admin privileges required</li>
+                </ul>
               </div>
             </div>
 
             <div class="step">
               <div class="step-number">2</div>
               <div class="step-content">
-                <h4>Run Installation Script</h4>
-                <p>Open Terminal and run:</p>
-                <pre class="code-block"><code>cd /Applications/AD\\ Tools.app/Contents/Resources
-./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip</code></pre>
-                <button id="copy-install-command" class="btn-secondary btn-small">
-                  📋 Copy Command
+                <h4>Check Installation</h4>
+                <p>After the script completes, click the button below to verify:</p>
+                <button id="check-again-btn" class="btn-primary">
+                  🔄 Check Installation Status
                 </button>
-              </div>
-            </div>
-
-            <div class="step">
-              <div class="step-number">3</div>
-              <div class="step-content">
-                <h4>Restart AD Tools</h4>
-                <p>Close and reopen AD Tools. The feature will be automatically enabled.</p>
               </div>
             </div>
           </div>
@@ -1574,16 +1685,14 @@ export class CompareConfigTool extends BaseTool {
             <h4>Technical Details:</h4>
             <ul>
               <li><strong>Installation Size:</strong> ~80MB</li>
-              <li><strong>Installation Location:</strong> ~/Documents/adtools_library/instantclient</li>
+              <li><strong>Installation Location:</strong> ~/Documents/adtools_library/oracle_instantclient</li>
               <li><strong>Admin Rights:</strong> Not required</li>
-              <li><strong>Automatic Updates:</strong> No (manual updates only)</li>
+              <li><strong>Script Source:</strong> Hosted on Cloudflare Workers R2</li>
+              <li><strong>Safe to Run:</strong> Script only downloads from oracle.com and extracts to user directory</li>
             </ul>
           </div>
 
           <div class="installation-actions">
-            <button id="check-again-btn" class="btn-primary">
-              🔄 Check Installation Status
-            </button>
             <button id="view-troubleshooting" class="btn-secondary">
               📖 Troubleshooting Guide
             </button>
@@ -1596,7 +1705,7 @@ export class CompareConfigTool extends BaseTool {
 
     // Attach event listeners
     document.getElementById("copy-install-command")?.addEventListener("click", () => {
-      const command = `cd /Applications/AD\\ Tools.app/Contents/Resources\n./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip`;
+      const command = `curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash`;
       navigator.clipboard.writeText(command);
       this.showSuccess("Installation command copied to clipboard!");
     });
@@ -1648,36 +1757,51 @@ export class CompareConfigTool extends BaseTool {
         <h3>Troubleshooting Oracle Client Installation</h3>
 
         <div class="troubleshooting-item">
+          <h4>❌ Installation script fails to download</h4>
+          <p>Solution: Check your internet connection and try again:</p>
+          <pre><code>curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash</code></pre>
+          <p>If still failing, check if the Workers endpoint is accessible:</p>
+          <pre><code>curl -I https://adtools.lolik.workers.dev/install-oracle.sh</code></pre>
+        </div>
+
+        <div class="troubleshooting-item">
           <h4>❌ "Architecture mismatch" error</h4>
-          <p>Solution: Make sure you downloaded the correct package:</p>
-          <ul>
-            <li>Apple Silicon Macs (M1/M2/M3): Use ARM64 package</li>
-            <li>Intel Macs: Use x86_64 package</li>
-          </ul>
+          <p>The installation script should auto-detect your architecture.</p>
           <p>Check your architecture: <code>uname -m</code></p>
+          <ul>
+            <li>arm64 = Apple Silicon (M1/M2/M3)</li>
+            <li>x86_64 = Intel Mac</li>
+          </ul>
+          <p>If the script downloaded the wrong version, manually remove it and re-run:</p>
+          <pre><code>rm -rf ~/Documents/adtools_library/oracle_instantclient
+curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash</code></pre>
         </div>
 
         <div class="troubleshooting-item">
           <h4>❌ "libclntsh.dylib not found"</h4>
           <p>Solution: Verify installation location:</p>
-          <pre><code>ls ~/Documents/adtools_library/instantclient/libclntsh.dylib</code></pre>
+          <pre><code>ls ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib</code></pre>
           <p>If missing, re-run the installation script.</p>
-        </div>
-
-        <div class="troubleshooting-item">
-          <h4>❌ "Permission denied"</h4>
-          <p>Solution: Ensure the script is executable:</p>
-          <pre><code>chmod +x ./scripts/install-oracle-client.sh</code></pre>
         </div>
 
         <div class="troubleshooting-item">
           <h4>❌ Feature still not available after installation</h4>
           <p>Solution:</p>
           <ol>
+            <li>Verify installation: <code>ls ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib</code></li>
             <li>Completely quit AD Tools (⌘Q)</li>
             <li>Reopen AD Tools</li>
             <li>Navigate back to Compare Config tool</li>
+            <li>Click "Check Installation Status"</li>
           </ol>
+        </div>
+
+        <div class="troubleshooting-item">
+          <h4>❌ "Permission denied" during installation</h4>
+          <p>The script should NOT require sudo. If you see permission errors:</p>
+          <pre><code>mkdir -p ~/Documents/adtools_library
+chmod -R u+w ~/Documents/adtools_library</code></pre>
+          <p>Then re-run the installation script.</p>
         </div>
 
         <div class="troubleshooting-item">
@@ -1706,9 +1830,14 @@ export class CompareConfigTool extends BaseTool {
       this.onConnectionSelected("env2", e.target.value);
     });
 
-    // Fetch table metadata
-    document.getElementById("fetch-metadata")?.addEventListener("click", () => {
-      this.fetchTableMetadata();
+    // Schema selection
+    document.getElementById("schema-select")?.addEventListener("change", (e) => {
+      this.onSchemaSelected(e.target.value);
+    });
+
+    // Table selection
+    document.getElementById("table-select")?.addEventListener("change", (e) => {
+      this.onTableSelected(e.target.value);
     });
 
     // Compare button
@@ -1851,8 +1980,10 @@ export class CompareConfigTool extends BaseTool {
     const request = {
       env1_name: this.state.env1.name,
       env1_connection: this.state.env1,
+      env1_schema: this.state.env1Schema,
       env2_name: this.state.env2.name,
       env2_connection: this.state.env2,
+      env2_schema: this.state.env2Schema,
       table_name: this.state.tableName,
       where_clause: whereClause,
       fields: this.state.selectedFields.length > 0 ? this.state.selectedFields : null,
@@ -1879,22 +2010,27 @@ export class CompareConfigTool extends BaseTool {
 
   validateComparisonRequest() {
     if (!this.state.env1) {
-      this.showError("Please configure and test Environment 1");
+      this.showError("Please select Environment 1 connection");
       return false;
     }
 
     if (!this.state.env2) {
-      this.showError("Please configure and test Environment 2");
+      this.showError("Please select Environment 2 connection");
+      return false;
+    }
+
+    if (!this.state.env1Schema) {
+      this.showError("Please select a schema");
       return false;
     }
 
     if (!this.state.tableName) {
-      this.showError("Please enter a table name");
+      this.showError("Please select a table");
       return false;
     }
 
     if (!this.state.metadata) {
-      this.showError("Please fetch table metadata first");
+      this.showError("Please wait for table metadata to load");
       return false;
     }
 
@@ -1986,7 +2122,6 @@ export class CompareConfigTool extends BaseTool {
       host: document.getElementById(`${prefix}-host`)?.value || "",
       port: parseInt(document.getElementById(`${prefix}-port`)?.value) || 1521,
       service_name: document.getElementById(`${prefix}-service`)?.value || "",
-      schema: document.getElementById(`${prefix}-schema`)?.value || "",
     };
   }
 
@@ -2045,7 +2180,7 @@ export class CompareConfigTool extends BaseTool {
     }
   }
 
-  onConnectionSelected(envKey, connectionName) {
+  async onConnectionSelected(envKey, connectionName) {
     const connections = CompareService.getSavedConnections();
     const conn = connections.find((c) => c.name === connectionName);
 
@@ -2055,11 +2190,13 @@ export class CompareConfigTool extends BaseTool {
         host: conn.host,
         port: conn.port,
         service_name: conn.service_name,
-        schema: conn.schema,
       };
 
       // Update UI to show connection details
       this.displayConnectionInfo(envKey, conn);
+
+      // Fetch schemas after successful connection
+      await this.fetchSchemas();
     }
   }
 
@@ -2070,9 +2207,141 @@ export class CompareConfigTool extends BaseTool {
         <div class="connection-info">
           <span class="connection-badge status-active">✓ ${conn.name}</span>
           <span class="connection-detail">${conn.host}:${conn.port}/${conn.service_name}</span>
-          <span class="connection-detail">Schema: ${conn.schema}</span>
         </div>
       `;
+    }
+  }
+
+  async fetchSchemas() {
+    if (!this.state.env1) {
+      this.showError("Please select Environment 1 connection first");
+      return;
+    }
+
+    try {
+      this.state.isLoading = true;
+      this.updateLoadingState("Fetching schemas...");
+
+      const schemas = await invoke("fetch_schemas", {
+        config: this.state.env1,
+      });
+
+      this.state.schemas = schemas;
+      this.renderSchemaDropdown(schemas);
+      this.showSuccess(`Found ${schemas.length} accessible schemas`);
+    } catch (error) {
+      this.showError(`Failed to fetch schemas: ${error}`);
+    } finally {
+      this.state.isLoading = false;
+      this.updateLoadingState(null);
+    }
+  }
+
+  renderSchemaDropdown(schemas) {
+    const schemaSelect = document.getElementById("schema-select");
+    if (!schemaSelect) return;
+
+    schemaSelect.innerHTML = '<option value="">-- Select Schema --</option>';
+    schemas.forEach((schema) => {
+      const option = document.createElement("option");
+      option.value = schema;
+      option.textContent = schema;
+      schemaSelect.appendChild(option);
+    });
+
+    schemaSelect.disabled = false;
+  }
+
+  async onSchemaSelected(schemaName) {
+    if (!schemaName) return;
+
+    // Store selected schema for both environments (can be different if needed)
+    this.state.env1Schema = schemaName;
+    this.state.env2Schema = schemaName;
+
+    // Fetch tables in the selected schema
+    await this.fetchTables(schemaName);
+  }
+
+  async fetchTables(schema) {
+    if (!this.state.env1) {
+      this.showError("Please select Environment 1 connection first");
+      return;
+    }
+
+    try {
+      this.state.isLoading = true;
+      this.updateLoadingState("Fetching tables...");
+
+      const tables = await invoke("fetch_tables", {
+        config: this.state.env1,
+        schema,
+      });
+
+      this.state.tables = tables;
+      this.renderTableDropdown(tables);
+      this.showSuccess(`Found ${tables.length} tables in ${schema}`);
+    } catch (error) {
+      this.showError(`Failed to fetch tables: ${error}`);
+    } finally {
+      this.state.isLoading = false;
+      this.updateLoadingState(null);
+    }
+  }
+
+  renderTableDropdown(tables) {
+    const tableSelect = document.getElementById("table-select");
+    if (!tableSelect) return;
+
+    tableSelect.innerHTML = '<option value="">-- Select Table --</option>';
+    tables.forEach((table) => {
+      const option = document.createElement("option");
+      option.value = table;
+      option.textContent = table;
+      tableSelect.appendChild(option);
+    });
+
+    tableSelect.disabled = false;
+  }
+
+  async onTableSelected(tableName) {
+    if (!tableName) return;
+
+    this.state.tableName = tableName;
+
+    // Fetch table metadata to show columns
+    await this.fetchTableMetadata(tableName);
+  }
+
+  async fetchTableMetadata(tableName) {
+    if (!this.state.env1) {
+      this.showError("Please select Environment 1 connection first");
+      return;
+    }
+
+    if (!this.state.env1Schema) {
+      this.showError("Please select a schema first");
+      return;
+    }
+
+    try {
+      this.state.isLoading = true;
+      this.updateLoadingState("Fetching table metadata...");
+
+      const metadata = await invoke("fetch_table_metadata", {
+        config: this.state.env1,
+        schema: this.state.env1Schema,
+        tableName,
+      });
+
+      this.state.metadata = metadata;
+      this.renderFieldSelection(metadata);
+      this.showSuccess(`Fetched metadata for ${metadata.columns.length} columns`);
+    } catch (error) {
+      this.showError(`Failed to fetch metadata: ${error}`);
+    } finally {
+      this.state.isLoading = false;
+      this.updateLoadingState(null);
     }
   }
 
@@ -2166,13 +2435,24 @@ export function getTemplate() {
           </p>
         </section>
 
-        <!-- Table Selection -->
+        <!-- Schema and Table Selection -->
         <section class="table-config">
-          <h3>Table Configuration</h3>
+          <h3>Schema and Table Selection</h3>
           <div class="form-row">
-            <input type="text" id="table-name" placeholder="Table Name" />
-            <button id="fetch-metadata" class="btn-secondary">Fetch Metadata</button>
+            <label for="schema-select">Select Schema:</label>
+            <select id="schema-select" class="schema-select" disabled>
+              <option value="">-- Select Schema --</option>
+            </select>
           </div>
+          <div class="form-row">
+            <label for="table-select">Select Table:</label>
+            <select id="table-select" class="table-select" disabled>
+              <option value="">-- Select Table --</option>
+            </select>
+          </div>
+          <p class="help-text">
+            Schema and table dropdowns will populate after connecting to both environments.
+          </p>
         </section>
 
         <!-- WHERE Clause -->
@@ -2509,7 +2789,7 @@ Add these styles to `app/tools/compare-config/styles.css` for color-coded diff h
 
 .diff-table .col-env-value {
   width: 40%;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-family: "Monaco", "Menlo", "Consolas", monospace;
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -2637,28 +2917,32 @@ Add these styles to `app/tools/compare-config/styles.css` for color-coded diff h
 When comparing two configuration values:
 
 **Environment 1 (Reference):**
+
 ```
 timeout = 5000 retry_count = 3 enable_cache = true
 ```
 
 **Environment 2 (Comparison):**
+
 ```
 timeout = 8000 retry_count = 3 enable_cache = false
 ```
 
 **Rendered Diff View:**
 
-| Field | Environment 1 | Environment 2 |
-|-------|---------------|---------------|
+| Field          | Environment 1                                                                                                                                                                                                                          | Environment 2                                                                                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `config_value` | timeout = <span style="background:#f8d7da; color:#721c24; text-decoration:line-through;">**5000**</span> retry_count = 3 enable_cache = <span style="background:#f8d7da; color:#721c24; text-decoration:line-through;">**true**</span> | timeout = <span style="background:#d4edda; color:#155724;">**8000**</span> retry_count = 3 enable_cache = <span style="background:#d4edda; color:#155724;">**false**</span> |
 
 **Color Legend:**
+
 - **Green** (`diff-added`): Text added or changed in Environment 2
 - **Red** (`diff-removed`): Text removed or changed from Environment 1
 - **Yellow** (`diff-modified`): Text modified (optional, for complex changes)
 - **No highlighting**: Text is identical in both environments
 
 **Benefits:**
+
 1. **Instant Visual Feedback**: Users immediately see what changed
 2. **Word/Character-Level Precision**: Highlights exact differences, not just entire fields
 3. **Reduces Cognitive Load**: No need to manually scan and compare long strings
@@ -2668,9 +2952,185 @@ timeout = 8000 retry_count = 3 enable_cache = false
 
 ## 7. Oracle Instant Client Integration
 
-### 7.1 Client Not Installed - UI Behavior
+### 7.1 Installation System Architecture
 
-**Design Philosophy:** The Compare Config tool is an optional feature. When Oracle Instant Client is not installed, the tool should:
+**Design Philosophy:** The Compare Config tool is an optional feature. Oracle Instant Client is NOT bundled with AD Tools due to:
+
+- **Licensing Restrictions**: Oracle's distribution terms prohibit bundling
+- **Size Constraints**: ~80MB would significantly increase app download size
+- **Architecture Variations**: Different binaries for Apple Silicon vs Intel
+
+**Installation Flow:**
+
+1. **User-initiated**: Installation only happens when user accesses Compare Config tool
+2. **Automated script**: Single command fetches and installs the correct architecture
+3. **Non-privileged**: No sudo/admin rights required
+4. **User directory**: Installs to `~/Documents/adtools_library/oracle_instantclient`
+
+**Components:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Cloudflare Workers R2 (CDN)                                 │
+│ https://adtools.lolik.workers.dev/install-oracle.sh         │
+│ • Hosts installation script                                 │
+│ • Public GET endpoint                                       │
+│ • No authentication required                                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ curl -fsSL | bash
+┌─────────────────────────────────────────────────────────────┐
+│ install-oracle.sh (Bash Script)                             │
+│ • Detects architecture (uname -m)                           │
+│ • Downloads Oracle Instant Client from oracle.com           │
+│ • Extracts to ~/Documents/adtools_library/oracle_instantclient │
+│ • Sets up dylib symlinks                                    │
+│ • No sudo required                                          │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ ~/Documents/adtools_library/oracle_instantclient/           │
+│ ├── libclntsh.dylib.19.1                                    │
+│ ├── libclntsh.dylib -> libclntsh.dylib.19.1                │
+│ ├── libnnz19.dylib                                          │
+│ └── ... (other Oracle libs)                                 │
+└─────────────────────────────────────────────────────────────┘
+                            ↑
+┌─────────────────────────────────────────────────────────────┐
+│ AD Tools (Tauri)                                            │
+│ • Checks: ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib │
+│ • Loads library at runtime via libloading                   │
+│ • Enables Compare Config feature if found                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Cloudflare Workers R2 Setup
+
+**File Storage:**
+
+Upload `install-oracle.sh` to Cloudflare Workers R2 bucket:
+
+```bash
+# Using Wrangler CLI
+wrangler r2 object put adtools-scripts/install-oracle.sh --file=./install-oracle.sh --content-type="text/x-shellscript"
+```
+
+**Workers Endpoint (`workers/adtools-scripts/index.js`):**
+
+```javascript
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    // Only allow GET requests
+    if (request.method !== "GET") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    // Serve install-oracle.sh
+    if (url.pathname === "/install-oracle.sh") {
+      const object = await env.ADTOOLS_SCRIPTS.get("install-oracle.sh");
+
+      if (object === null) {
+        return new Response("Script not found", { status: 404 });
+      }
+
+      return new Response(object.body, {
+        headers: {
+          "Content-Type": "text/x-shellscript",
+          "Cache-Control": "public, max-age=3600",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
+
+    return new Response("Not found", { status: 404 });
+  },
+};
+```
+
+**Deployment:**
+
+```bash
+# Deploy Workers endpoint
+wrangler deploy
+
+# Verify endpoint
+curl -I https://adtools.lolik.workers.dev/install-oracle.sh
+```
+
+### 7.3 Installation Script (`install-oracle.sh`)
+
+**Script Requirements:**
+
+- Detect macOS architecture (arm64/x86_64)
+- Download Oracle Instant Client Basic Light from oracle.com
+- Extract to user directory without sudo
+- Create necessary symlinks
+- Validate installation
+
+**Script Outline:**
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🔧 Oracle Instant Client Installation Script"
+echo "=============================================="
+
+# Detect architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+  DOWNLOAD_URL="https://download.oracle.com/otn_software/mac/instantclient/198000/instantclient-basic-macos.arm64-19.8.0.0.0dbru.zip"
+elif [ "$ARCH" = "x86_64" ]; then
+  DOWNLOAD_URL="https://download.oracle.com/otn_software/mac/instantclient/198000/instantclient-basic-macos.x64-19.8.0.0.0dbru.zip"
+else
+  echo "❌ Unsupported architecture: $ARCH"
+  exit 1
+fi
+
+echo "✓ Detected architecture: $ARCH"
+
+# Create installation directory
+INSTALL_DIR="$HOME/Documents/adtools_library/oracle_instantclient"
+mkdir -p "$INSTALL_DIR"
+
+echo "✓ Installation directory: $INSTALL_DIR"
+
+# Download Instant Client
+TEMP_ZIP="/tmp/instantclient.zip"
+echo "📥 Downloading Oracle Instant Client (~80MB)..."
+curl -L -o "$TEMP_ZIP" "$DOWNLOAD_URL"
+
+echo "✓ Download complete"
+
+# Extract
+echo "📦 Extracting..."
+unzip -q -o "$TEMP_ZIP" -d "$INSTALL_DIR"
+
+# Move files from nested directory
+if [ -d "$INSTALL_DIR/instantclient_19_8" ]; then
+  mv "$INSTALL_DIR"/instantclient_19_8/* "$INSTALL_DIR/"
+  rmdir "$INSTALL_DIR/instantclient_19_8"
+fi
+
+# Create symlink for libclntsh.dylib
+cd "$INSTALL_DIR"
+if [ ! -L "libclntsh.dylib" ]; then
+  ln -s libclntsh.dylib.19.1 libclntsh.dylib
+fi
+
+echo "✓ Installation complete!"
+echo ""
+echo "Installation location: $INSTALL_DIR"
+echo "Restart AD Tools to enable Compare Config feature."
+
+# Cleanup
+rm "$TEMP_ZIP"
+```
+
+### 7.4 Client Not Installed - UI Behavior
+
+**When Oracle Instant Client is not installed, the tool should:**
 
 1. Display a prominent, friendly installation guide
 2. Disable all comparison functionality
@@ -2718,47 +3178,35 @@ showInstallationGuide() {
         </p>
 
         <div class="installation-steps">
-          <h3>Installation Steps:</h3>
+          <h3>Quick Installation:</h3>
 
           <div class="step">
             <div class="step-number">1</div>
             <div class="step-content">
-              <h4>Download Oracle Instant Client</h4>
-              <p>Download <strong>Basic Light</strong> package for your architecture:</p>
-              <div class="download-links">
-                <a href="https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html"
-                   target="_blank"
-                   class="download-btn">
-                  Apple Silicon (M1/M2/M3)
-                </a>
-                <a href="https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html"
-                   target="_blank"
-                   class="download-btn">
-                  Intel (x86_64)
-                </a>
-              </div>
-              <p class="note">Note: You'll need an Oracle account (free registration)</p>
+              <h4>Run Installation Command</h4>
+              <p>Open Terminal and copy-paste this command:</p>
+              <pre class="code-block"><code>curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash</code></pre>
+              <button id="copy-install-command" class="btn-secondary btn-small">
+                📋 Copy Command
+              </button>
+              <p class="note"><strong>What it does:</strong></p>
+              <ul class="compact-list">
+                <li>✓ Detects your architecture (Apple Silicon/Intel)</li>
+                <li>✓ Downloads Oracle Instant Client (~80MB)</li>
+                <li>✓ Installs to ~/Documents/adtools_library/oracle_instantclient</li>
+                <li>✓ No sudo/admin privileges required</li>
+              </ul>
             </div>
           </div>
 
           <div class="step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>Run Installation Script</h4>
-              <p>Open Terminal and run:</p>
-              <pre class="code-block"><code>cd /Applications/AD\\ Tools.app/Contents/Resources
-./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip</code></pre>
-              <button id="copy-install-command" class="btn-secondary btn-small">
-                📋 Copy Command
+              <h4>Check Installation</h4>
+              <p>After the script completes, click the button below to verify:</p>
+              <button id="check-again-btn" class="btn-primary">
+                🔄 Check Installation Status
               </button>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <h4>Restart AD Tools</h4>
-              <p>Close and reopen AD Tools. The feature will be automatically enabled.</p>
             </div>
           </div>
         </div>
@@ -2767,16 +3215,14 @@ showInstallationGuide() {
           <h4>Technical Details:</h4>
           <ul>
             <li><strong>Installation Size:</strong> ~80MB</li>
-            <li><strong>Installation Location:</strong> ~/Documents/adtools_library/instantclient</li>
+            <li><strong>Installation Location:</strong> ~/Documents/adtools_library/oracle_instantclient</li>
             <li><strong>Admin Rights:</strong> Not required</li>
-            <li><strong>Automatic Updates:</strong> No (manual updates only)</li>
+            <li><strong>Script Source:</strong> Hosted on Cloudflare Workers R2</li>
+            <li><strong>Safe to Run:</strong> Script only downloads from oracle.com and extracts to user directory</li>
           </ul>
         </div>
 
         <div class="installation-actions">
-          <button id="check-again-btn" class="btn-primary">
-            🔄 Check Installation Status
-          </button>
           <button id="view-troubleshooting" class="btn-secondary">
             📖 Troubleshooting Guide
           </button>
@@ -2789,7 +3235,7 @@ showInstallationGuide() {
 
   // Attach event listeners
   document.getElementById('copy-install-command')?.addEventListener('click', () => {
-    const command = `cd /Applications/AD\\ Tools.app/Contents/Resources\n./scripts/install-oracle-client.sh ~/Downloads/instantclient-*.zip`;
+    const command = `curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash`;
     navigator.clipboard.writeText(command);
     this.showSuccess('Installation command copied to clipboard!');
   });
@@ -2855,7 +3301,7 @@ showTroubleshootingModal() {
       <div class="troubleshooting-item">
         <h4>❌ "libclntsh.dylib not found"</h4>
         <p>Solution: Verify installation location:</p>
-        <pre><code>ls ~/Documents/adtools_library/instantclient/libclntsh.dylib</code></pre>
+        <pre><code>ls ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib</code></pre>
         <p>If missing, re-run the installation script.</p>
       </div>
 
@@ -3070,10 +3516,10 @@ showTroubleshootingModal() {
 set -euo pipefail
 
 # Oracle Instant Client Installer for AD Tools
-# Installs Oracle Instant Client to ~/Documents/adtools_library/instantclient
+# Installs Oracle Instant Client to ~/Documents/adtools_library/oracle_instantclient
 
 ARCH="$(uname -m)"
-TARGET="$HOME/Documents/adtools_library/instantclient"
+TARGET="$HOME/Documents/adtools_library/oracle_instantclient"
 CONF_DIR="$HOME/.adtools"
 ZIP_PATH="${1:-}"
 
@@ -3297,28 +3743,34 @@ The backend performs comprehensive data sanitization on all Oracle query results
 #### Type-Based Sanitization (see `sanitize_oracle_value()` in [Section 5.3](#53-database-connection-connectionrs)):
 
 1. **String Types** (VARCHAR2, CHAR, NVARCHAR2, NCHAR):
+
    - Remove control characters (except `\n` and `\t`)
    - Truncate strings > 10MB with `[TRUNCATED]` marker
    - Prevents malformed Unicode from crashing the UI
 
 2. **Number Types** (NUMBER, FLOAT):
+
    - Convert to string to preserve precision (Oracle NUMBER supports arbitrary precision)
    - Prevents floating-point precision issues in JavaScript
 
 3. **Date/Timestamp Types**:
+
    - Convert to ISO 8601 string format
    - Ensures consistent date rendering across timezones
 
 4. **CLOB** (Character Large Object):
+
    - Remove control characters
    - Truncate > 1MB with `[CLOB TRUNCATED]` marker
    - Prevents UI freezing on massive text fields
 
 5. **BLOB** (Binary Large Object):
+
    - Display as `[BLOB - binary data not displayed]`
    - Binary data is not suitable for text comparison
 
 6. **RAW/LONG RAW** (Binary):
+
    - Display as `[BINARY DATA]`
    - Prevents binary injection attacks
 
@@ -3598,7 +4050,7 @@ describe("CompareConfigTool", () => {
       "label": "Custom Instant Client Path",
       "type": "string",
       "default": "",
-      "description": "Optional: Override default Oracle Instant Client location (~/Documents/adtools_library/instantclient)",
+      "description": "Optional: Override default Oracle Instant Client location (~/Documents/adtools_library/oracle_instantclient)",
       "validation": {
         "pattern": "^(/|~/).*"
       }
@@ -3706,6 +4158,1030 @@ pub fn run() {
 
 ---
 
+## 13. Implementation Plan
+
+**IMPORTANT: All implementation work MUST refer to this specification document ([docs/COMPARE-CONFIG-FEATURE.md](./COMPARE-CONFIG-FEATURE.md)) as the single source of truth.**
+
+### 13.1 Overview
+
+This feature will be implemented in **5 phases**, each building on the previous phase. Each phase includes specific deliverables, testing requirements, and acceptance criteria.
+
+**Total Estimated Timeline:** 4-6 weeks (depending on testing and iteration)
+
+**Key Principles:**
+
+- ✅ Each phase must be fully tested before moving to the next
+- ✅ Backend implementation before frontend (API-first approach)
+- ✅ Continuous integration with existing AD Tools architecture
+- ✅ Regular commits with clear messages referencing phase and task numbers
+
+---
+
+### 13.2 Phase 1: Oracle Client Integration & Foundation
+
+**Duration:** 1 week
+**Goal:** Establish Oracle Instant Client infrastructure and basic connectivity
+
+#### 13.2.1 Backend Tasks
+
+**Task 1.1: Project Structure Setup**
+
+- [ ] Create `src-tauri/src/oracle/` directory
+- [ ] Create module files: `mod.rs`, `client.rs`, `connection.rs`, `models.rs`, `commands.rs`, `comparison.rs`
+- [ ] Add Oracle dependencies to `Cargo.toml`:
+  - `oracle = "0.6"`
+  - `libloading = "0.8"`
+  - `keyring = "2.0"`
+- [ ] Register oracle module in `src-tauri/src/lib.rs`
+
+**Task 1.2: Oracle Client Detection (client.rs)**
+
+- [ ] Implement `check_client_ready()` function
+  - Check for `~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib`
+  - Verify library is valid and loadable
+  - Return boolean status
+- [ ] Implement `prime_client()` function
+  - Load Oracle client library using `libloading`
+  - Store reference in static `ORACLE_CLIENT` mutex
+  - Handle errors gracefully
+- [ ] Implement `resolve_client_path()` helper
+  - Support custom directory parameter
+  - Default to `~/Documents/adtools_library/oracle_instantclient/`
+
+**Task 1.3: Tauri Commands (commands.rs)**
+
+- [ ] Create `check_oracle_client_ready` command
+- [ ] Create `prime_oracle_client` command
+- [ ] Register commands in `src-tauri/src/lib.rs` invoke_handler
+- [ ] Test commands return correct status
+
+**Task 1.4: Installation Script & R2 Setup**
+
+- [ ] Create `install-oracle.sh` bash script
+- [ ] Script should:
+  - Detect architecture automatically (uname -m)
+  - Download Oracle Instant Client from oracle.com (no user download needed)
+  - Extract to `~/Documents/adtools_library/oracle_instantclient/`
+  - Create necessary symlinks (libclntsh.dylib -> libclntsh.dylib.19.1)
+  - Verify architecture matches system (arm64 vs x86_64)
+  - Set permissions correctly
+  - Print success/failure message with clear feedback
+- [ ] Upload script to Cloudflare Workers R2 bucket
+- [ ] Create Cloudflare Workers endpoint at `https://adtools.lolik.workers.dev/install-oracle.sh`
+- [ ] Configure Workers to serve script with appropriate headers (Content-Type, Cache-Control)
+- [ ] Test installation: `curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash`
+- [ ] Test script with both architectures (Apple Silicon and Intel)
+
+**Task 1.5: Credential Management**
+
+- [ ] Create `src-tauri/src/credentials.rs` (if not exists)
+- [ ] Implement `CredentialManager` struct
+- [ ] Add methods:
+  - `set_oracle_credentials(name, username, password)` → Save to keychain
+  - `get_oracle_credentials(name)` → Retrieve from keychain
+  - `delete_oracle_credentials(name)` → Remove from keychain
+- [ ] Use keychain keys: `adtools.oracle.{name}.username` and `adtools.oracle.{name}.password`
+- [ ] Create Tauri commands for credential operations
+- [ ] Register CredentialManager in Tauri state
+
+#### 13.2.2 Frontend Tasks
+
+**Task 1.6: Tool Structure Setup**
+
+- [ ] Create `app/tools/compare-config/` directory
+- [ ] Create base files: `main.js`, `template.js`, `styles.css`, `service.js`
+- [ ] Create `CompareConfigTool` class extending `BaseTool`
+- [ ] Register tool in `app/tools/registry.js` (if applicable)
+- [ ] Add tool to navigation/sidebar
+
+**Task 1.7: Oracle Client Check UI**
+
+- [ ] Implement `checkOracleClient()` method
+  - Call `check_oracle_client_ready` on mount
+  - Update UI state based on result
+- [ ] Create installation guide template in `template.js`
+  - Display when client not found
+  - Include download links (ARM64 and x86_64)
+  - Include installation script command
+  - Add "Copy Command" button
+  - Add "Check Again" button
+  - Add "View Troubleshooting" button
+- [ ] Implement `showInstallationGuide()` method
+- [ ] Implement `hideInstallationGuide()` method
+- [ ] Implement `disableAllFeatures()` method
+- [ ] Implement `enableAllFeatures()` method
+
+**Task 1.8: Troubleshooting Modal**
+
+- [ ] Create troubleshooting content template
+- [ ] Add common issues and solutions:
+  - Architecture mismatch
+  - libclntsh.dylib not found
+  - Permission denied
+  - Feature still unavailable after install
+- [ ] Implement `showTroubleshootingModal()` using EventBus modal system
+
+#### 13.2.3 Testing
+
+**Test 1.1: Backend Oracle Client Detection**
+
+- [ ] Test with Oracle client NOT installed → returns `false`
+- [ ] Test with Oracle client installed → returns `true`
+- [ ] Test with invalid library path → returns `false`
+- [ ] Test `prime_client()` loads library successfully
+
+**Test 1.2: Installation Script**
+
+- [ ] Test script with valid ARM64 zip → installs correctly
+- [ ] Test script with valid x86_64 zip → installs correctly
+- [ ] Test script with wrong architecture → shows error
+- [ ] Test script with missing file → shows error
+- [ ] Test script with existing installation → handles gracefully
+
+**Test 1.3: Frontend Client Check**
+
+- [ ] Test tool opens when client NOT installed → shows installation guide
+- [ ] Test tool opens when client installed → shows main form
+- [ ] Test "Check Again" button → re-checks and updates UI
+- [ ] Test "Copy Command" button → copies installation command
+- [ ] Test troubleshooting modal → opens and displays correctly
+
+**Test 1.4: Credential Management**
+
+- [ ] Test storing credentials → saves to keychain
+- [ ] Test retrieving credentials → retrieves from keychain
+- [ ] Test deleting credentials → removes from keychain
+- [ ] Test with invalid connection name → handles error
+
+#### 13.2.4 Acceptance Criteria
+
+✅ Oracle client detection works correctly (installed vs not installed)
+✅ Installation guide displays with clear instructions when client missing
+✅ Installation script successfully installs Oracle client
+✅ Credentials can be stored and retrieved from macOS keychain
+✅ All features disabled when client not available
+✅ "Check Again" button re-enables features after installation
+
+---
+
+### 13.3 Phase 2: Connection Management (Settings Integration)
+
+**Duration:** 1 week
+**Goal:** Enable users to configure, test, and save Oracle database connections
+
+#### 13.3.1 Backend Tasks
+
+**Task 2.1: Connection Data Models (models.rs)**
+
+- [ ] Define `ConnectionConfig` struct:
+  - `name: String`
+  - `host: String`
+  - `port: u16`
+  - `service_name: String`
+- [ ] Define `Credentials` struct:
+  - `username: String`
+  - `password: String`
+- [ ] Add Serialize/Deserialize derives
+- [ ] Add validation methods
+
+**Task 2.2: Database Connection (connection.rs)**
+
+- [ ] Implement `DatabaseConnection` struct
+- [ ] Implement `new(config, credentials)` method:
+  - Build Oracle connection string: `host:port/service_name`
+  - Create Oracle connection using credentials
+  - Return `DatabaseConnection` or error
+- [ ] Implement `test_connection()` method:
+  - Execute simple query: `SELECT 1 FROM dual`
+  - Return success or error message
+- [ ] Add connection error handling
+
+**Task 2.3: Tauri Commands (commands.rs)**
+
+- [ ] Create `test_oracle_connection` command:
+  - Accept `ConnectionConfig`
+  - Retrieve credentials from CredentialManager
+  - Create connection
+  - Test connection
+  - Return success message or error
+
+#### 13.3.2 Frontend Tasks
+
+**Task 2.4: Settings Configuration**
+
+- [ ] Add Oracle connection section to `app/pages/settings/config.json`:
+  - Section ID: `oracle`
+  - Label: "Oracle Database Connections"
+  - Type: `kvlist` (key-value list)
+  - Storage key: `config.oracle.connections`
+- [ ] Create connection form UI in Settings page:
+  - Input: Connection Name
+  - Input: Host
+  - Input: Port (default 1521)
+  - Input: Service Name
+  - Input: Username (stored in keychain)
+  - Input: Password (stored in keychain)
+  - Buttons: Test, Save, Delete
+  - Status indicator
+- [ ] Implement connection validation
+
+**Task 2.5: Connection Management UI**
+
+- [ ] Implement "Add New Connection" functionality
+- [ ] Implement "Test Connection" functionality:
+  - Call `test_oracle_connection` command
+  - Display success/error message
+  - Update connection status
+- [ ] Implement "Save Connection" functionality:
+  - Save connection details to localStorage
+  - Save credentials to keychain via Tauri
+  - Update saved connections list
+- [ ] Implement "Delete Connection" functionality:
+  - Remove from localStorage
+  - Remove credentials from keychain
+  - Update UI
+- [ ] Display list of saved connections with status indicators
+
+**Task 2.6: Compare Config Tool Integration**
+
+- [ ] Implement `loadSavedConnections()` method:
+  - Load from localStorage
+  - Populate environment dropdowns (Env1 and Env2)
+- [ ] Create environment selection dropdowns:
+  - Env1 (Reference Environment)
+  - Env2 (Comparison Environment)
+- [ ] Implement `onConnectionSelected(envKey, connectionName)`:
+  - Load connection config
+  - Store in state
+  - Enable next steps
+
+#### 13.3.3 Testing
+
+**Test 2.1: Backend Connection Testing**
+
+- [ ] Test with valid credentials → connection succeeds
+- [ ] Test with invalid credentials → connection fails with error
+- [ ] Test with invalid host/port → connection fails with error
+- [ ] Test with valid connection → `SELECT 1 FROM dual` returns successfully
+
+**Test 2.2: Settings UI**
+
+- [ ] Test adding new connection → saves to localStorage and keychain
+- [ ] Test connection with valid credentials → shows success message
+- [ ] Test connection with invalid credentials → shows error message
+- [ ] Test editing connection → updates localStorage and keychain
+- [ ] Test deleting connection → removes from localStorage and keychain
+- [ ] Test connection list display → shows all saved connections
+
+**Test 2.3: Compare Config Integration**
+
+- [ ] Test loading saved connections → populates dropdowns
+- [ ] Test selecting Env1 → stores config in state
+- [ ] Test selecting Env2 → stores config in state
+- [ ] Test with no saved connections → shows helpful message
+
+#### 13.3.4 Acceptance Criteria
+
+✅ Users can add Oracle connections in Settings
+✅ Credentials are securely stored in macOS keychain
+✅ Connection testing works correctly (success/failure)
+✅ Saved connections appear in Compare Config tool dropdowns
+✅ Connections can be edited and deleted
+✅ Connection status indicators work correctly
+
+---
+
+### 13.4 Phase 3: Schema & Table Discovery (Metadata Operations)
+
+**Duration:** 1 week
+**Goal:** Enable users to browse schemas and tables in connected databases
+
+#### 13.4.1 Backend Tasks
+
+**Task 3.1: Schema Discovery (connection.rs)**
+
+- [ ] Implement `fetch_schemas()` method:
+  - Query `ALL_TABLES` system view
+  - Filter out system schemas (SYS, SYSTEM, etc.)
+  - Return sorted list of schema names
+  - Handle errors (permission denied, etc.)
+
+**Task 3.2: Table Discovery (connection.rs)**
+
+- [ ] Implement `fetch_tables(owner)` method:
+  - Query `ALL_TABLES` filtered by OWNER
+  - Return sorted list of table names
+  - Handle errors
+
+**Task 3.3: Table Metadata (connection.rs)**
+
+- [ ] Implement `fetch_table_metadata(owner, table_name)` method:
+  - Query column information from `ALL_TAB_COLUMNS`
+  - Query primary key from `ALL_CONSTRAINTS` and `ALL_CONS_COLUMNS`
+  - Build `TableMetadata` struct with:
+    - Column names, data types, nullable status
+    - Primary key columns
+  - Return metadata or error
+
+**Task 3.4: Data Models (models.rs)**
+
+- [ ] Define `TableMetadata` struct:
+  - `owner: String`
+  - `table_name: String`
+  - `columns: Vec<ColumnInfo>`
+  - `primary_key: Vec<String>`
+- [ ] Define `ColumnInfo` struct:
+  - `name: String`
+  - `data_type: String`
+  - `nullable: bool`
+  - `is_pk: bool`
+
+**Task 3.5: Tauri Commands (commands.rs)**
+
+- [ ] Create `fetch_schemas` command
+- [ ] Create `fetch_tables` command
+- [ ] Create `fetch_table_metadata` command
+- [ ] Register commands in invoke_handler
+
+#### 13.4.2 Frontend Tasks
+
+**Task 3.6: Schema Selection UI**
+
+- [ ] Create schema dropdown in template
+- [ ] Implement `fetchSchemas()` method:
+  - Call `fetch_schemas` command for Env1
+  - Populate dropdown
+  - Show loading state
+- [ ] Implement `renderSchemaDropdown(schemas)` method
+- [ ] Implement `onSchemaSelected(schema)` method:
+  - Store schema in state
+  - Enable table dropdown
+  - Fetch tables for selected schema
+- [ ] Add event listener for schema selection
+
+**Task 3.7: Table Selection UI**
+
+- [ ] Create table dropdown in template
+- [ ] Implement `fetchTables(schema)` method:
+  - Call `fetch_tables` command
+  - Populate dropdown
+  - Show loading state
+- [ ] Implement `renderTableDropdown(tables)` method
+- [ ] Implement `onTableSelected(tableName)` method:
+  - Store table name in state
+  - Fetch table metadata
+  - Enable field selection
+- [ ] Add event listener for table selection
+
+**Task 3.8: Table Metadata Display**
+
+- [ ] Implement `fetchTableMetadata(schema, tableName)` method:
+  - Call `fetch_table_metadata` command
+  - Store metadata in state
+  - Render field selection UI
+- [ ] Display column information:
+  - Column names
+  - Data types
+  - Primary key indicators
+- [ ] Show metadata loading state
+
+**Task 3.9: Progressive Disclosure**
+
+- [ ] Schema dropdown initially disabled until connections selected
+- [ ] Table dropdown initially disabled until schema selected
+- [ ] Field selection initially hidden until table selected
+- [ ] Clear downstream selections when upstream changes
+
+#### 13.4.3 Testing
+
+**Test 3.1: Backend Schema Fetching**
+
+- [ ] Test with valid connection → returns list of schemas
+- [ ] Test filters out system schemas correctly
+- [ ] Test with insufficient permissions → returns error
+- [ ] Test with invalid connection → returns error
+
+**Test 3.2: Backend Table Fetching**
+
+- [ ] Test with valid schema → returns list of tables
+- [ ] Test with empty schema → returns empty list
+- [ ] Test with invalid schema → returns error
+
+**Test 3.3: Backend Metadata Fetching**
+
+- [ ] Test with valid table → returns complete metadata
+- [ ] Test primary key detection → correctly identifies PK columns
+- [ ] Test with table without PK → returns error or empty PK list
+- [ ] Test column data types → correctly maps Oracle types
+
+**Test 3.4: Frontend Schema/Table UI**
+
+- [ ] Test schema dropdown populates after connection
+- [ ] Test table dropdown populates after schema selection
+- [ ] Test metadata displays after table selection
+- [ ] Test progressive enabling of dropdowns
+- [ ] Test loading states display correctly
+- [ ] Test error messages display when fetches fail
+
+#### 13.4.4 Acceptance Criteria
+
+✅ Users can browse schemas in connected database
+✅ System schemas are filtered out
+✅ Users can browse tables in selected schema
+✅ Table metadata (columns, PK) displays correctly
+✅ Dropdowns enable progressively as selections made
+✅ Loading states provide feedback during fetches
+✅ Errors are handled gracefully with clear messages
+
+---
+
+### 13.5 Phase 4: Data Fetching & Comparison Engine (Core Feature)
+
+**Duration:** 1.5 weeks
+**Goal:** Implement the comparison algorithm and data processing
+
+#### 13.4.1 Backend Tasks
+
+**Task 4.1: Record Fetching (connection.rs)**
+
+- [ ] Implement `fetch_records(owner, table_name, where_clause, fields)` method:
+  - Build dynamic SQL query
+  - Support optional WHERE clause
+  - Support field selection (or all fields with `*`)
+  - Execute query
+  - Convert rows to JSON using `row_to_json()`
+  - Return `Vec<serde_json::Value>` or error
+
+**Task 4.2: Data Sanitization (connection.rs)**
+
+- [ ] Implement `row_to_json(row)` helper:
+  - Iterate through columns
+  - Get column name and type
+  - Call `sanitize_oracle_value()` for each column
+  - Build JSON object
+- [ ] Implement `sanitize_oracle_value(row, idx)` helper:
+  - Handle NULL values
+  - Handle VARCHAR2, CHAR, NVARCHAR2, NCHAR:
+    - Remove control characters (except \n and \t)
+    - Truncate at 10MB
+  - Handle NUMBER, FLOAT, BINARY_FLOAT, BINARY_DOUBLE:
+    - Convert to string to preserve precision
+  - Handle DATE, TIMESTAMP types:
+    - Convert to ISO string
+  - Handle CLOB:
+    - Remove control characters
+    - Truncate at 1MB
+  - Handle BLOB, RAW:
+    - Return `[BINARY DATA]` marker
+  - Return `serde_json::Value`
+
+**Task 4.3: Comparison Data Models (models.rs)**
+
+- [ ] Define `ComparisonRequest` struct:
+  - `env1_name, env1_connection, env1_schema`
+  - `env2_name, env2_connection, env2_schema`
+  - `table_name, where_clause, fields`
+- [ ] Define `ComparisonResult` struct:
+  - `env1_name, env2_name, timestamp`
+  - `summary: ComparisonSummary`
+  - `comparisons: Vec<ConfigComparison>`
+- [ ] Define `ComparisonSummary` struct:
+  - `total_records, matching, differing, only_in_env1, only_in_env2`
+- [ ] Define `ConfigComparison` struct:
+  - `primary_key, status, env1_data, env2_data, differences`
+- [ ] Define `ComparisonStatus` enum:
+  - `Match, Differ, OnlyInEnv1, OnlyInEnv2`
+- [ ] Define `FieldDifference` struct:
+  - `field_name, env1_value, env2_value`
+  - `env1_diff_chunks, env2_diff_chunks` (for highlighting)
+- [ ] Define `DiffChunk` struct:
+  - `text: String`
+  - `chunk_type: DiffChunkType` (Same, Added, Removed, Modified)
+
+**Task 4.4: Comparison Engine (comparison.rs)**
+
+- [ ] Create `ComparisonEngine` struct
+- [ ] Implement `compare()` method:
+  - Accept env names, records, PK fields, compare fields
+  - Build hash maps keyed by primary key
+  - Iterate through all unique keys
+  - Determine status for each record
+  - Call `find_differences()` for differing records
+  - Build summary statistics
+  - Sort results (differences first)
+  - Return `ComparisonResult`
+- [ ] Implement `build_record_map()` helper:
+  - Extract PK values from records
+  - Build composite key (join with `::`)
+  - Return `HashMap<String, serde_json::Value>`
+- [ ] Implement `find_differences()` helper:
+  - Compare specified fields (or all fields)
+  - Identify differing fields
+  - Generate diff chunks for each difference
+  - Return `Vec<FieldDifference>`
+
+**Task 4.5: Diff Algorithm (comparison.rs)**
+
+- [ ] Implement `compute_diff_chunks(s1, s2)` method:
+  - Split strings into word tokens
+  - Compute LCS (Longest Common Subsequence)
+  - Build diff chunks for both strings:
+    - Removed words (only in s1)
+    - Added words (only in s2)
+    - Same words (in both)
+  - Return `(Vec<DiffChunk>, Vec<DiffChunk>)`
+- [ ] Implement `compute_lcs(words1, words2)` helper:
+  - Use dynamic programming (DP table)
+  - Backtrack to find LCS positions
+  - Return `Vec<(usize, usize)>`
+
+**Task 4.6: Tauri Commands (commands.rs)**
+
+- [ ] Create `compare_configurations` command:
+  - Accept `ComparisonRequest`
+  - Get credentials for both environments
+  - Create connections to both databases
+  - Fetch metadata to determine PK
+  - Validate table has PK
+  - Fetch records from both environments
+  - Call `ComparisonEngine::compare()`
+  - Return `ComparisonResult` or error
+
+#### 13.4.2 Frontend Tasks
+
+**Task 4.7: Field Selection UI**
+
+- [ ] Implement `renderFieldSelection(metadata)` method:
+  - Create checkbox for each column
+  - Disable PK columns (always included)
+  - Add "Select All" / "Deselect All" buttons
+  - Display field count preview
+- [ ] Implement `updateSelectedFields()` method:
+  - Collect checked fields
+  - Update state
+  - Update preview text
+- [ ] Implement `selectAllFields(select)` method:
+  - Check/uncheck all non-PK fields
+- [ ] Add event listeners for field selection
+
+**Task 4.8: WHERE Clause Input**
+
+- [ ] Create WHERE clause text input in template
+- [ ] Add placeholder examples
+- [ ] Add validation (optional)
+- [ ] Store in state
+
+**Task 4.9: Comparison Execution**
+
+- [ ] Implement `executeComparison()` method:
+  - Validate all required fields are selected
+  - Build `ComparisonRequest` object
+  - Show loading state
+  - Call `compare_configurations` command
+  - Store result in state
+  - Show results section
+  - Emit `comparison:complete` event
+- [ ] Implement `validateComparisonRequest()` method:
+  - Check env1, env2, schema, table, metadata
+  - Show validation errors
+  - Return boolean
+- [ ] Add loading indicator during comparison
+- [ ] Handle errors with clear messages
+
+#### 13.4.3 Testing
+
+**Test 4.1: Backend Record Fetching**
+
+- [ ] Test fetch all records → returns complete dataset
+- [ ] Test fetch with WHERE clause → returns filtered dataset
+- [ ] Test fetch specific fields → returns only selected fields
+- [ ] Test with invalid SQL → returns error
+
+**Test 4.2: Backend Data Sanitization**
+
+- [ ] Test VARCHAR2 with control characters → characters removed
+- [ ] Test VARCHAR2 exceeding 10MB → truncated
+- [ ] Test NUMBER with high precision → preserved as string
+- [ ] Test NULL values → converted to JSON null
+- [ ] Test CLOB exceeding 1MB → truncated
+- [ ] Test BLOB → returns `[BINARY DATA]` marker
+
+**Test 4.3: Backend Comparison Engine**
+
+- [ ] Test with matching records → status = Match
+- [ ] Test with differing records → status = Differ, differences populated
+- [ ] Test with record only in env1 → status = OnlyInEnv1
+- [ ] Test with record only in env2 → status = OnlyInEnv2
+- [ ] Test summary statistics → counts are accurate
+- [ ] Test sorting → differences appear first
+
+**Test 4.4: Backend Diff Algorithm**
+
+- [ ] Test identical strings → all chunks = Same
+- [ ] Test added words → chunks marked as Added
+- [ ] Test removed words → chunks marked as Removed
+- [ ] Test complex changes → correct mix of Same/Added/Removed
+- [ ] Test empty strings → handles gracefully
+- [ ] Test LCS algorithm → produces correct subsequence
+
+**Test 4.5: Frontend Comparison UI**
+
+- [ ] Test field selection → updates state correctly
+- [ ] Test "Select All" → checks all fields
+- [ ] Test "Deselect All" → unchecks non-PK fields
+- [ ] Test WHERE clause input → stores in state
+- [ ] Test validation → prevents invalid comparisons
+- [ ] Test comparison execution → calls backend and displays results
+- [ ] Test loading state → shows spinner during comparison
+- [ ] Test error handling → displays error messages
+
+#### 13.4.4 Acceptance Criteria
+
+✅ Users can select fields to compare
+✅ Users can enter WHERE clause for filtering
+✅ Comparison executes correctly and returns results
+✅ Data is sanitized and safe for frontend display
+✅ Diff chunks are computed correctly for text highlighting
+✅ Summary statistics are accurate
+✅ Results are sorted with differences first
+✅ Errors are handled gracefully
+
+---
+
+### 13.6 Phase 5: Results Display & Export (UI & Output)
+
+**Duration:** 1 week
+**Goal:** Display comparison results with multiple views and export functionality
+
+#### 13.5.1 Frontend Tasks
+
+**Task 5.1: Results Summary Display**
+
+- [ ] Implement `renderSummary(summary)` method:
+  - Display total records
+  - Display matching count (green)
+  - Display differing count (yellow/red)
+  - Display only in Env1 count (blue)
+  - Display only in Env2 count (blue)
+  - Calculate sync percentage
+  - Display sync status badge
+- [ ] Style summary cards with appropriate colors
+- [ ] Make summary visually prominent
+
+**Task 5.2: Expandable Row View (views/ExpandableRowView.js)**
+
+- [ ] Create `ExpandableRowView` class
+- [ ] Implement `render(comparisons, env1Name, env2Name)` method:
+  - Display table with primary key and status
+  - Add expand/collapse icon for each row
+  - Show color-coded status badges
+  - On expand: show detailed field comparisons
+  - Render diff chunks with highlighting
+- [ ] Implement diff chunk rendering:
+  - `Same` chunks: no highlighting
+  - `Added` chunks: green background
+  - `Removed` chunks: red background with strikethrough
+  - `Modified` chunks: yellow background
+- [ ] Add row filtering by status
+- [ ] Add search functionality
+
+**Task 5.3: View Selector**
+
+- [ ] Create view selector dropdown in template
+- [ ] Options: Expandable Rows, Vertical Cards, Master-Detail
+- [ ] Implement `onViewChange(viewType)` method:
+  - Update state
+  - Re-render results with selected view
+- [ ] Add event listener
+
+**Task 5.4: Alternative Views (Optional for Phase 5)**
+
+- [ ] Create `VerticalCardView` class (basic implementation)
+- [ ] Create `MasterDetailView` class (basic implementation)
+- [ ] Note: These can be enhanced in future iterations
+
+**Task 5.5: Export Functionality (Backend)**
+
+- [ ] Implement `export_comparison_result` command (commands.rs):
+  - Accept `ComparisonResult` and format (json/csv)
+  - Create export directory: `~/Documents/adtools_library/comparisons/`
+  - Generate timestamped filename
+  - For JSON: serialize result to pretty JSON
+  - For CSV: call `export_to_csv()` helper
+  - Write file
+  - Return filepath
+- [ ] Implement `export_to_csv(result)` helper:
+  - Generate CSV header
+  - Iterate through comparisons
+  - Format each row
+  - Return CSV string
+
+**Task 5.6: Export Functionality (Frontend)**
+
+- [ ] Add export buttons in results section:
+  - Export as JSON
+  - Export as CSV
+- [ ] Implement `exportResults(format)` method:
+  - Call `export_comparison_result` command
+  - Show success message with filepath
+  - Emit `comparison:exported` event
+  - Handle errors
+- [ ] Add event listeners for export buttons
+
+**Task 5.7: Results Navigation**
+
+- [ ] Add "New Comparison" button to return to setup form
+- [ ] Clear results and reset state
+- [ ] Add "Compare Again" button with same settings
+- [ ] Preserve selections for quick re-comparison
+
+#### 13.5.2 Testing
+
+**Test 5.1: Summary Display**
+
+- [ ] Test with various result sets → summary is accurate
+- [ ] Test sync percentage calculation → correct percentage
+- [ ] Test color coding → appropriate colors for each status
+
+**Test 5.2: Expandable Row View**
+
+- [ ] Test row expansion → shows detailed comparisons
+- [ ] Test row collapse → hides details
+- [ ] Test diff highlighting → colors are correct
+  - Same text: no highlight
+  - Added text: green
+  - Removed text: red with strikethrough
+  - Modified text: yellow
+- [ ] Test row filtering → filters by status correctly
+- [ ] Test search → finds matching records
+
+**Test 5.3: Export Functionality**
+
+- [ ] Test JSON export → creates valid JSON file
+- [ ] Test CSV export → creates valid CSV file
+- [ ] Test export directory creation → directory created if missing
+- [ ] Test timestamped filename → unique filenames generated
+- [ ] Test export with large dataset → completes successfully
+- [ ] Test file content → data is correct and complete
+
+**Test 5.4: Results Navigation**
+
+- [ ] Test "New Comparison" → returns to setup form
+- [ ] Test "Compare Again" → preserves selections and re-runs
+- [ ] Test state reset → clears results correctly
+
+#### 13.5.3 Acceptance Criteria
+
+✅ Results summary displays accurate statistics
+✅ Expandable row view shows comparisons clearly
+✅ Diff highlighting works correctly (color-coded)
+✅ Export to JSON produces valid file
+✅ Export to CSV produces valid file
+✅ Users can navigate back to setup form
+✅ Users can quickly re-run comparisons
+✅ All features work with large datasets (100+ records)
+
+---
+
+### 13.7 Integration & Testing (Final Phase)
+
+**Duration:** 3-5 days
+**Goal:** End-to-end testing and integration with AD Tools
+
+#### 13.7.1 Integration Tasks
+
+**Task I.1: Tool Registration**
+
+- [ ] Register Compare Config tool in tool registry
+- [ ] Add tool to navigation sidebar with icon
+- [ ] Ensure tool category is set correctly
+- [ ] Test tool loading and unmounting
+
+**Task I.2: Settings Integration**
+
+- [ ] Verify Oracle connections section appears in Settings
+- [ ] Test settings persistence across app restarts
+- [ ] Ensure credentials sync correctly with keychain
+- [ ] Test settings validation
+
+**Task I.3: EventBus Integration**
+
+- [ ] Emit appropriate events:
+  - `comparison:complete` when comparison finishes
+  - `comparison:exported` when export completes
+- [ ] Listen for global events if needed
+- [ ] Test event propagation
+
+**Task I.4: Error Handling Consistency**
+
+- [ ] Use consistent error message format
+- [ ] Integrate with global error notification system
+- [ ] Test all error paths display correctly
+
+#### 13.7.2 End-to-End Testing
+
+**Test E2E.1: Complete User Journey (Oracle Client Installed)**
+
+- [ ] Open AD Tools → Oracle client detected
+- [ ] Navigate to Settings → Add Oracle connection
+- [ ] Enter connection details → Test connection succeeds
+- [ ] Save connection → Appears in saved list
+- [ ] Navigate to Compare Config tool → Tool loads
+- [ ] Select Env1 connection → Connection loaded
+- [ ] Select Env2 connection → Connection loaded
+- [ ] Schema dropdown populates → Select schema
+- [ ] Table dropdown populates → Select table
+- [ ] Table metadata loads → Field selection appears
+- [ ] Select fields to compare → Fields stored
+- [ ] Enter WHERE clause → Clause stored
+- [ ] Click "Compare Configurations" → Comparison executes
+- [ ] Results display → Summary and comparisons shown
+- [ ] Expand row → Diff highlighting visible
+- [ ] Export as JSON → File created successfully
+- [ ] Export as CSV → File created successfully
+- [ ] Navigate back → Return to setup form
+
+**Test E2E.2: Complete User Journey (Oracle Client NOT Installed)**
+
+- [ ] Open AD Tools → Oracle client NOT detected
+- [ ] Navigate to Compare Config tool → Installation guide shown
+- [ ] Click download link → Oracle website opens
+- [ ] Copy installation command → Command copied
+- [ ] (Simulate) Install Oracle client → Installation succeeds
+- [ ] Click "Check Again" → Client detected
+- [ ] Tool enables → Can proceed with normal flow
+
+**Test E2E.3: Error Handling**
+
+- [ ] Test with invalid credentials → Clear error message
+- [ ] Test with unreachable host → Clear error message
+- [ ] Test with table without PK → Clear error message
+- [ ] Test with invalid WHERE clause → Clear error message
+- [ ] Test with network timeout → Clear error message
+
+**Test E2E.4: Performance Testing**
+
+- [ ] Test comparison with 100 records → Completes in < 5 seconds
+- [ ] Test comparison with 500 records → Completes in < 15 seconds
+- [ ] Test comparison with 1000 records → Completes in < 30 seconds
+- [ ] Test export of 1000 records → Completes in < 5 seconds
+
+**Test E2E.5: Cross-Platform Testing**
+
+- [ ] Test on macOS ARM64 (Apple Silicon) → Works correctly
+- [ ] Test on macOS x86_64 (Intel) → Works correctly
+
+#### 13.7.3 Documentation
+
+**Task D.1: User Documentation**
+
+- [ ] Create user guide: `docs/user-guide/compare-config.md`
+  - Feature overview
+  - Oracle client installation steps
+  - Adding database connections
+  - Running comparisons
+  - Interpreting results
+  - Exporting data
+- [ ] Create troubleshooting guide: `docs/user-guide/oracle-client-troubleshooting.md`
+  - Common installation issues
+  - Connection problems
+  - Permission errors
+  - Architecture mismatch
+
+**Task D.2: Developer Documentation**
+
+- [ ] Create developer guide: `docs/developer/oracle-integration.md`
+  - Architecture overview
+  - Oracle client integration
+  - Comparison algorithm
+  - Adding new data types
+  - Extending comparison views
+- [ ] Update README.md with Oracle feature information
+- [ ] Add API documentation for Tauri commands
+
+**Task D.3: Code Documentation**
+
+- [ ] Add Rustdoc comments to all public functions
+- [ ] Add JSDoc comments to all public methods
+- [ ] Document complex algorithms (LCS, diff chunks)
+- [ ] Add inline comments for tricky logic
+
+#### 13.7.4 Final Acceptance Criteria
+
+✅ Complete user journey works end-to-end
+✅ All error cases handled gracefully
+✅ Performance meets requirements (< 30s for 1000 records)
+✅ Works on both ARM64 and x86_64 macOS
+✅ User documentation is complete and clear
+✅ Developer documentation explains architecture
+✅ Code is well-documented with comments
+✅ All tests pass
+✅ Feature is ready for production use
+
+---
+
+### 13.8 Implementation Checklist
+
+Use this checklist to track overall progress:
+
+#### Phase 1: Oracle Client Integration & Foundation
+
+- [ ] Oracle client detection implemented
+- [ ] Installation script created
+- [ ] Credential management working
+- [ ] Installation guide UI complete
+- [ ] Phase 1 tests passing
+
+#### Phase 2: Connection Management
+
+- [ ] Settings integration complete
+- [ ] Connection testing working
+- [ ] Saved connections in localStorage
+- [ ] Credentials in keychain
+- [ ] Dropdowns populated in Compare Config tool
+- [ ] Phase 2 tests passing
+
+#### Phase 3: Schema & Table Discovery
+
+- [ ] Schema fetching implemented
+- [ ] Table fetching implemented
+- [ ] Table metadata fetching implemented
+- [ ] Progressive disclosure working
+- [ ] Phase 3 tests passing
+
+#### Phase 4: Data Fetching & Comparison Engine
+
+- [ ] Record fetching implemented
+- [ ] Data sanitization working
+- [ ] Comparison engine complete
+- [ ] Diff algorithm implemented
+- [ ] Field selection UI complete
+- [ ] Comparison execution working
+- [ ] Phase 4 tests passing
+
+#### Phase 5: Results Display & Export
+
+- [ ] Results summary displaying
+- [ ] Expandable row view complete
+- [ ] Diff highlighting working
+- [ ] Export to JSON working
+- [ ] Export to CSV working
+- [ ] Phase 5 tests passing
+
+#### Integration & Testing
+
+- [ ] Tool registered in AD Tools
+- [ ] End-to-end testing complete
+- [ ] Performance testing complete
+- [ ] Documentation complete
+- [ ] All acceptance criteria met
+- [ ] Feature ready for release
+
+---
+
+### 13.9 Implementation Notes
+
+**Development Environment:**
+
+- Use Rust nightly or stable (latest)
+- Node.js 18+ for frontend development
+- Tauri CLI installed
+- Oracle Instant Client for testing
+
+**Git Workflow:**
+
+- Create feature branch: `feature/compare-config`
+- Commit after each task with clear message format:
+  - `[Phase 1.1] Implement Oracle client detection`
+  - `[Phase 2.3] Add test_oracle_connection command`
+- Create pull request after each phase
+- Merge only after tests pass
+
+**Code Review:**
+
+- Review Rust code for safety and correctness
+- Review JavaScript code for consistency with existing patterns
+- Check error handling is comprehensive
+- Verify tests cover edge cases
+- Ensure documentation is clear
+
+**Performance Considerations:**
+
+- Use connection pooling if needed (future enhancement)
+- Implement pagination for large result sets (future enhancement)
+- Profile comparison algorithm if performance issues arise
+- Consider caching metadata to reduce queries
+
+**Security Considerations:**
+
+- Never log credentials
+- Validate all user inputs (SQL injection prevention)
+- Sanitize all data from Oracle before displaying
+- Use parameterized queries where possible
+- Test with malicious inputs (XSS, SQL injection)
+
+---
+
 ## Appendix A: Sample Data
 
 ### A.1 Example Comparison Result
@@ -3793,9 +5269,11 @@ pub fn run() {
 
 **Document Control**
 
-| Version | Date       | Author | Changes                                            |
-| ------- | ---------- | ------ | -------------------------------------------------- |
-| 2.0     | 2025-11-06 | System | Integrated specification with current architecture |
+| Version | Date       | Author | Changes                                                             |
+| ------- | ---------- | ------ | ------------------------------------------------------------------- |
+| 1.0     | 2025-11-05 | System | Initial specification                                               |
+| 2.0     | 2025-11-06 | System | Integrated specification with current architecture                  |
+| 3.0     | 2025-11-07 | System | Added comprehensive 5-phase implementation plan with detailed tasks |
 
 ---
 
