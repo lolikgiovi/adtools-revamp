@@ -74,6 +74,16 @@
       "order": 55
     },
     {
+      "id": "compare-config",
+      "name": "Compare Config",
+      "category": "config",
+      "icon": "database",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 56
+    },
+    {
       "id": "html-template",
       "name": "HTML Template",
       "category": "config",

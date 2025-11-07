@@ -13,7 +13,21 @@ pub fn run() {
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
       open_url,
-      get_arch
+      get_arch,
+      // Oracle commands
+      oracle::commands::check_oracle_client_ready,
+      oracle::commands::prime_oracle_client,
+      oracle::commands::test_oracle_connection,
+      oracle::commands::fetch_schemas,
+      oracle::commands::fetch_tables,
+      oracle::commands::fetch_table_metadata,
+      oracle::commands::compare_configurations,
+      oracle::commands::export_comparison_result,
+      // Credential management commands
+      credentials::set_oracle_credentials,
+      credentials::get_oracle_credentials,
+      credentials::delete_oracle_credentials,
+      credentials::has_oracle_credentials
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -29,6 +43,8 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 pub mod jenkins;
+pub mod oracle;
+pub mod credentials;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;

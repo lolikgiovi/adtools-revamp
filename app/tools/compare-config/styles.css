@@ -1,0 +1,442 @@
+/**
+ * Compare Config Tool Styles
+ */
+
+.compare-config-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: var(--bg-primary, #1e1e1e);
+  color: var(--text-primary, #d4d4d4);
+}
+
+/* Installation Guide Styles */
+.installation-guide {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: 20px;
+}
+
+.installation-card {
+  background-color: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 8px;
+  padding: 30px;
+  max-width: 800px;
+  width: 100%;
+}
+
+.installation-header h2 {
+  margin: 0 0 10px 0;
+  color: var(--text-primary, #d4d4d4);
+}
+
+.installation-header p {
+  margin: 0 0 20px 0;
+  color: var(--text-secondary, #adadad);
+}
+
+.installation-steps {
+  margin: 20px 0;
+}
+
+.installation-steps h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+}
+
+.installation-method {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: var(--bg-tertiary, #1e1e1e);
+  border-radius: 6px;
+}
+
+.installation-method h4 {
+  margin: 0 0 10px 0;
+  color: var(--accent-color, #4ec9b0);
+}
+
+.installation-method p {
+  margin: 5px 0;
+}
+
+.installation-method ol, .installation-method ul {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+
+.installation-method li {
+  margin: 5px 0;
+}
+
+.installation-method a {
+  color: var(--link-color, #3794ff);
+  text-decoration: none;
+}
+
+.installation-method a:hover {
+  text-decoration: underline;
+}
+
+.command-box {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-code, #2d2d30);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  gap: 10px;
+}
+
+.command-box code {
+  flex: 1;
+  color: var(--text-code, #ce9178);
+  font-size: 13px;
+  overflow-x: auto;
+}
+
+.btn-copy-command {
+  padding: 5px 12px;
+  background-color: var(--btn-secondary-bg, #3e3e42);
+  color: var(--btn-secondary-text, #d4d4d4);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn-copy-command:hover {
+  background-color: var(--btn-secondary-hover, #505053);
+}
+
+.installation-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 30px;
+  justify-content: center;
+}
+
+/* Main Interface Styles */
+.main-interface {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.config-header h2 {
+  margin: 0 0 5px 0;
+  color: var(--text-primary, #d4d4d4);
+}
+
+.config-header p {
+  margin: 0;
+  color: var(--text-secondary, #adadad);
+  font-size: 14px;
+}
+
+/* Environment Selection */
+.environment-selection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.env-card {
+  background-color: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.env-card h3 {
+  margin: 0 0 15px 0;
+  color: var(--accent-color, #4ec9b0);
+  font-size: 16px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--text-secondary, #adadad);
+}
+
+.form-select, .form-input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--bg-input, #3c3c3c);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 4px;
+  color: var(--text-primary, #d4d4d4);
+  font-size: 14px;
+}
+
+.form-select:disabled, .form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-select:focus, .form-input:focus {
+  outline: none;
+  border-color: var(--focus-border, #007acc);
+}
+
+/* Field Selection */
+.field-selection {
+  background-color: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.field-selection h3 {
+  margin: 0 0 5px 0;
+  color: var(--text-primary, #d4d4d4);
+}
+
+.field-help {
+  margin: 0 0 15px 0;
+  color: var(--text-secondary, #adadad);
+  font-size: 13px;
+}
+
+.field-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.field-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px;
+  background-color: var(--bg-tertiary, #1e1e1e);
+  border-radius: 4px;
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.field-checkbox label {
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+.field-checkbox.pk-field label {
+  color: var(--accent-color, #4ec9b0);
+  font-weight: 500;
+}
+
+.where-clause-section {
+  margin-top: 20px;
+}
+
+.where-clause-section label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--text-secondary, #adadad);
+}
+
+.help-text {
+  margin: 5px 0 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #adadad);
+  font-style: italic;
+}
+
+.comparison-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 20px;
+}
+
+.spinner {
+  border: 4px solid var(--border-color, #3e3e42);
+  border-top: 4px solid var(--accent-color, #4ec9b0);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Results Section */
+.results-section {
+  background-color: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-color, #3e3e42);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.results-header h3 {
+  margin: 0;
+  color: var(--text-primary, #d4d4d4);
+}
+
+.results-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.results-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: var(--bg-tertiary, #1e1e1e);
+  border-radius: 4px;
+}
+
+.summary-stat {
+  text-align: center;
+  padding: 10px;
+}
+
+.summary-stat .stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.summary-stat .stat-label {
+  font-size: 12px;
+  color: var(--text-secondary, #adadad);
+}
+
+.summary-stat.matching .stat-value {
+  color: var(--success-color, #73c991);
+}
+
+.summary-stat.differing .stat-value {
+  color: var(--warning-color, #dcdcaa);
+}
+
+.summary-stat.only-env1 .stat-value,
+.summary-stat.only-env2 .stat-value {
+  color: var(--info-color, #4fc1ff);
+}
+
+.view-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.view-selector label {
+  font-size: 13px;
+  color: var(--text-secondary, #adadad);
+}
+
+.view-selector .form-select {
+  width: auto;
+  min-width: 200px;
+}
+
+.results-content {
+  margin-top: 15px;
+}
+
+/* Buttons */
+.btn-primary {
+  padding: 10px 20px;
+  background-color: var(--btn-primary-bg, #0e639c);
+  color: var(--btn-primary-text, #ffffff);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--btn-primary-hover, #1177bb);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background-color: var(--btn-secondary-bg, #3e3e42);
+  color: var(--btn-secondary-text, #d4d4d4);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: var(--btn-secondary-hover, #505053);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .environment-selection {
+    grid-template-columns: 1fr;
+  }
+
+  .field-list {
+    grid-template-columns: 1fr;
+  }
+
+  .results-actions {
+    flex-direction: column;
+  }
+}
