@@ -51,12 +51,12 @@ class CompareConfigTool extends BaseTool {
     // Check if Oracle client is installed
     await this.checkOracleClient();
 
+    // Always bind UI events so the installation guide actions work
+    this.bindEvents();
+
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
       this.loadSavedConnections();
-
-      // Bind events
-      this.bindEvents();
     }
   }
 
@@ -191,7 +191,23 @@ class CompareConfigTool extends BaseTool {
     const troubleshootingBtn = document.getElementById("btn-troubleshooting");
 
     if (checkAgainBtn) {
-      checkAgainBtn.addEventListener("click", () => this.checkOracleClient());
+      checkAgainBtn.addEventListener("click", async () => {
+        // Provide immediate feedback while checking
+        const originalHtml = checkAgainBtn.innerHTML;
+        checkAgainBtn.disabled = true;
+        checkAgainBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+            <circle cx="12" cy="12" r="10" opacity="0.3"/>
+            <path d="M12 2 a10 10 0 0 1 0 20"/>
+          </svg>
+          Checking...`;
+        try {
+          await this.checkOracleClient();
+        } finally {
+          checkAgainBtn.disabled = false;
+          checkAgainBtn.innerHTML = originalHtml;
+        }
+      });
     }
 
     if (copyCommandBtn) {
@@ -286,22 +302,12 @@ class CompareConfigTool extends BaseTool {
    */
   async copyInstallCommand() {
     const command = document.getElementById("install-command");
+    const btn = document.querySelector(".btn-copy-command");
+
     if (!command) return;
 
-    try {
-      await navigator.clipboard.writeText(command.textContent);
-
-      const btn = document.querySelector(".btn-copy-command");
-      if (btn) {
-        const originalText = btn.textContent;
-        btn.textContent = "Copied!";
-        setTimeout(() => {
-          btn.textContent = originalText;
-        }, 2000);
-      }
-    } catch (error) {
-      console.error("Failed to copy command:", error);
-    }
+    // Use BaseTool's copyToClipboard method
+    await this.copyToClipboard(command.textContent, btn);
   }
 
   /**

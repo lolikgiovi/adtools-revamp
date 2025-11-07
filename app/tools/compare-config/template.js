@@ -9,7 +9,7 @@ export const CompareConfigTemplate = /* html */ `
     <div id="installation-guide" class="installation-guide" style="display: none;">
         <div class="installation-card">
             <div class="installation-header">
-                <h2>🔧 Oracle Instant Client Required</h2>
+                <h2>Oracle Instant Client Required</h2>
                 <p>The Compare Config feature requires Oracle Instant Client to be installed.</p>
             </div>
 
@@ -41,8 +41,21 @@ export const CompareConfigTemplate = /* html */ `
             </div>
 
             <div class="installation-actions">
-                <button class="btn-primary" id="btn-check-again">✓ Check Again</button>
-                <button class="btn-secondary" id="btn-troubleshooting">❓ Troubleshooting</button>
+                <button class="btn-primary" id="btn-check-again">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    Check Again
+                </button>
+                <button class="btn-secondary" id="btn-troubleshooting">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Troubleshooting
+                </button>
             </div>
         </div>
     </div>
@@ -50,8 +63,7 @@ export const CompareConfigTemplate = /* html */ `
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
         <div class="config-header">
-            <h2>Oracle Configuration Comparison</h2>
-            <p>Compare configuration data between two Oracle database environments</p>
+            <h2>Compare Config between Environments</h2>
         </div>
 
         <!-- Environment Selection -->
