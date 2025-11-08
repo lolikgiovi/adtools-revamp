@@ -149,6 +149,9 @@ pub struct ComparisonRequest {
     /// Optional WHERE clause
     pub where_clause: Option<String>,
 
+    /// Custom primary key fields for comparison (empty = use table's actual PK)
+    pub custom_primary_key: Vec<String>,
+
     /// Fields to compare (empty = all fields)
     pub fields: Vec<String>,
 }

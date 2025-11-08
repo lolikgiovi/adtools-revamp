@@ -114,8 +114,20 @@ export const CompareConfigTemplate = /* html */ `
 
         <!-- Field Selection (shown after table is selected) -->
         <div id="field-selection" class="field-selection" style="display: none;">
-            <h3>Field Selection</h3>
-            <p class="field-help">Select fields to compare (primary key fields are always included)</p>
+            <h3>Primary Key Selection</h3>
+            <p class="field-help">Select fields to use as primary key for comparison (leave empty to use table's default primary key)</p>
+
+            <div class="field-actions">
+                <button class="btn-secondary" id="btn-select-all-pk">Select All</button>
+                <button class="btn-secondary" id="btn-deselect-all-pk">Deselect All</button>
+            </div>
+
+            <div id="pk-field-list" class="field-list">
+                <!-- PK fields will be populated here -->
+            </div>
+
+            <h3 style="margin-top: 24px;">Field Selection</h3>
+            <p class="field-help">Select fields to display and compare</p>
 
             <div class="field-actions">
                 <button class="btn-secondary" id="btn-select-all">Select All</button>

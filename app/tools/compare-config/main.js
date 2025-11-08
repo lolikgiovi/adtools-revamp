@@ -33,6 +33,7 @@ class CompareConfigTool extends BaseTool {
     this.metadata = null;
     this.env2SchemaExists = false;
     this.env2TableExists = false;
+    this.customPrimaryKey = []; // Custom PK fields for comparison
     this.selectedFields = [];
     this.whereClause = "";
     this.comparisonResult = null;
@@ -237,6 +238,18 @@ class CompareConfigTool extends BaseTool {
 
     if (tableSelect) {
       tableSelect.addEventListener("change", (e) => this.onTableSelected(e.target.value));
+    }
+
+    // Primary key selection events
+    const selectAllPkBtn = document.getElementById("btn-select-all-pk");
+    const deselectAllPkBtn = document.getElementById("btn-deselect-all-pk");
+
+    if (selectAllPkBtn) {
+      selectAllPkBtn.addEventListener("click", () => this.selectAllPkFields(true));
+    }
+
+    if (deselectAllPkBtn) {
+      deselectAllPkBtn.addEventListener("click", () => this.selectAllPkFields(false));
     }
 
     // Field selection events
@@ -582,10 +595,8 @@ class CompareConfigTool extends BaseTool {
       const fieldSelection = document.getElementById("field-selection");
       if (fieldSelection) fieldSelection.style.display = "none";
 
-      this.showValidationMessage(
-        `success`,
-        `Schema "${this.schema}" exists in both environments.`
-      );
+      // Clear validation message when deselecting table
+      this.hideValidationMessage();
 
       return;
     }
@@ -622,17 +633,15 @@ class CompareConfigTool extends BaseTool {
       if (!this.env2TableExists) {
         this.showValidationMessage(
           `error`,
-          `Table "${this.schema}.${tableName}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different table.`
+          `⚠️ Table "${this.schema}.${tableName}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different table.`
         );
 
         // Hide field selection
         const fieldSelection = document.getElementById("field-selection");
         if (fieldSelection) fieldSelection.style.display = "none";
       } else {
-        this.showValidationMessage(
-          `success`,
-          `Table "${this.schema}.${tableName}" exists in both environments.`
-        );
+        // Table exists in both environments - hide validation message
+        this.hideValidationMessage();
       }
     } catch (error) {
       console.error("Failed to validate table in Env 2:", error);
@@ -701,58 +710,93 @@ class CompareConfigTool extends BaseTool {
    */
   showFieldSelection() {
     const fieldSelection = document.getElementById("field-selection");
+    const pkFieldList = document.getElementById("pk-field-list");
     const fieldList = document.getElementById("field-list");
 
-    if (!fieldSelection || !fieldList || !this.metadata) return;
+    if (!fieldSelection || !pkFieldList || !fieldList || !this.metadata) return;
 
     // Clear existing fields
+    pkFieldList.innerHTML = "";
     fieldList.innerHTML = "";
+
+    // Render PK field checkboxes
+    this.metadata.columns.forEach((column) => {
+      const fieldDiv = document.createElement("div");
+      fieldDiv.className = "field-checkbox";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = `pk-${column.name}`;
+      checkbox.value = column.name;
+      checkbox.checked = column.is_pk; // Pre-check default PK fields
+
+      checkbox.addEventListener("change", () => this.updateCustomPrimaryKey());
+
+      const label = document.createElement("label");
+      label.htmlFor = `pk-${column.name}`;
+      label.textContent = column.name;
+      if (column.is_pk) {
+        label.textContent += " (Default PK)";
+      }
+
+      fieldDiv.appendChild(checkbox);
+      fieldDiv.appendChild(label);
+      pkFieldList.appendChild(fieldDiv);
+    });
+
+    // Initialize custom PK with default PK fields
+    this.customPrimaryKey = this.metadata.primary_key.slice();
 
     // Render field checkboxes
     this.metadata.columns.forEach((column) => {
       const fieldDiv = document.createElement("div");
-      fieldDiv.className = column.is_pk ? "field-checkbox pk-field" : "field-checkbox";
+      fieldDiv.className = "field-checkbox";
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.id = `field-${column.name}`;
       checkbox.value = column.name;
-      checkbox.disabled = column.is_pk; // PK fields always included
-      checkbox.checked = column.is_pk; // Pre-check PK fields
+      checkbox.checked = true; // Pre-check all fields
 
-      if (!column.is_pk) {
-        checkbox.addEventListener("change", () => this.updateSelectedFields());
-      }
+      checkbox.addEventListener("change", () => this.updateSelectedFields());
 
       const label = document.createElement("label");
       label.htmlFor = `field-${column.name}`;
       label.textContent = column.name;
-      if (column.is_pk) {
-        label.textContent += " (PK)";
-      }
 
       fieldDiv.appendChild(checkbox);
       fieldDiv.appendChild(label);
       fieldList.appendChild(fieldDiv);
     });
 
-    // Initialize selected fields with PK fields
-    this.selectedFields = this.env1.metadata.primary_key.slice();
+    // Initialize selected fields with all fields
+    this.selectedFields = this.metadata.columns.map(c => c.name);
 
     // Show field selection section
     fieldSelection.style.display = "block";
   }
 
   /**
+   * Updates custom primary key selection
+   */
+  updateCustomPrimaryKey() {
+    const checkboxes = document.querySelectorAll('#pk-field-list input[type="checkbox"]');
+    this.customPrimaryKey = [];
+
+    checkboxes.forEach((checkbox) => {
+      if (checkbox.checked) {
+        this.customPrimaryKey.push(checkbox.value);
+      }
+    });
+  }
+
+  /**
    * Updates selected fields list
    */
   updateSelectedFields() {
-    const checkboxes = document.querySelectorAll('.field-checkbox input[type="checkbox"]:not(:disabled)');
+    const checkboxes = document.querySelectorAll('#field-list input[type="checkbox"]');
+    this.selectedFields = [];
 
-    // Start with PK fields
-    this.selectedFields = this.env1.metadata.primary_key.slice();
-
-    // Add checked non-PK fields
     checkboxes.forEach((checkbox) => {
       if (checkbox.checked) {
         this.selectedFields.push(checkbox.value);
@@ -761,10 +805,23 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Selects/deselects all PK fields
+   */
+  selectAllPkFields(select) {
+    const checkboxes = document.querySelectorAll('#pk-field-list input[type="checkbox"]');
+
+    checkboxes.forEach((checkbox) => {
+      checkbox.checked = select;
+    });
+
+    this.updateCustomPrimaryKey();
+  }
+
+  /**
    * Selects/deselects all fields
    */
   selectAllFields(select) {
-    const checkboxes = document.querySelectorAll('.field-checkbox input[type="checkbox"]:not(:disabled)');
+    const checkboxes = document.querySelectorAll('#field-list input[type="checkbox"]');
 
     checkboxes.forEach((checkbox) => {
       checkbox.checked = select;
@@ -796,6 +853,7 @@ class CompareConfigTool extends BaseTool {
         env2_schema: this.schema,
         table_name: this.table,
         where_clause: this.whereClause || null,
+        custom_primary_key: this.customPrimaryKey,
         fields: this.selectedFields,
       };
 

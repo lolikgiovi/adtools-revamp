@@ -319,15 +319,177 @@ impl DatabaseConnection {
 
     /// Fetches records from a table
     ///
-    /// NOTE: Placeholder for Phase 4
+    /// Supports optional WHERE clause filtering and field selection.
+    /// Returns records as JSON values with proper Oracle type handling.
     pub fn fetch_records(
         &self,
-        _owner: &str,
-        _table_name: &str,
-        _where_clause: Option<&str>,
-        _fields: &[String],
+        owner: &str,
+        table_name: &str,
+        where_clause: Option<&str>,
+        fields: &[String],
     ) -> Result<Vec<serde_json::Value>, String> {
-        Err("Not implemented yet - Phase 4".to_string())
+        log::info!("Fetching records from {}.{}", owner, table_name);
+
+        // Build field list
+        let field_list = if fields.is_empty() {
+            "*".to_string()
+        } else {
+            fields.join(", ")
+        };
+
+        // Build SQL query
+        let mut sql = format!(
+            "SELECT {} FROM {}.{}",
+            field_list, owner, table_name
+        );
+
+        if let Some(where_sql) = where_clause {
+            sql.push_str(" WHERE ");
+            sql.push_str(where_sql);
+        }
+
+        log::debug!("Executing query: {}", sql);
+
+        // Execute query
+        let rows = self
+            .conn
+            .query(&sql, &[])
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        // Convert rows to JSON
+        let mut records = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let record = row_to_json(&row)?;
+            records.push(record);
+        }
+
+        log::info!("Fetched {} records", records.len());
+        Ok(records)
+    }
+}
+
+/// Converts an Oracle row to JSON with proper sanitization
+fn row_to_json(row: &oracle::Row) -> Result<serde_json::Value, String> {
+    let mut map = serde_json::Map::new();
+    let col_info_list = row.column_info();
+
+    for (i, col_info) in col_info_list.iter().enumerate() {
+        let col_name = col_info.name().to_string();
+
+        // Sanitize and convert value based on Oracle type
+        let value = sanitize_oracle_value(row, i, col_info)?;
+        map.insert(col_name, value);
+    }
+
+    Ok(serde_json::Value::Object(map))
+}
+
+/// Sanitizes Oracle value with proper type handling and security
+fn sanitize_oracle_value(
+    row: &oracle::Row,
+    idx: usize,
+    col_info: &oracle::ColumnInfo,
+) -> Result<serde_json::Value, String> {
+    use oracle::sql_type::OracleType;
+
+    let oracle_type = col_info.oracle_type();
+
+    // Handle NULL values first - check using a safe approach
+    let is_null = match row.get::<usize, Option<String>>(idx) {
+        Ok(opt) => opt.is_none(),
+        Err(_) => {
+            // If we can't get as String, try as number to check nullability
+            match row.get::<usize, Option<i64>>(idx) {
+                Ok(opt) => opt.is_none(),
+                Err(_) => false, // If both fail, assume not null and let type handler deal with it
+            }
+        }
+    };
+
+    if is_null {
+        return Ok(serde_json::Value::Null);
+    }
+
+    match oracle_type {
+        // String types: VARCHAR2, CHAR, NVARCHAR2, NCHAR
+        OracleType::Varchar2(_) | OracleType::Char(_) | OracleType::NVarchar2(_) | OracleType::NChar(_) => {
+            match row.get::<usize, String>(idx) {
+                Ok(mut s) => {
+                    // Sanitize: remove control characters except newline/tab
+                    s = s
+                        .chars()
+                        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+                        .collect();
+
+                    // Truncate if too long (safety limit: 10MB)
+                    const MAX_STRING_LEN: usize = 10_000_000;
+                    if s.len() > MAX_STRING_LEN {
+                        s.truncate(MAX_STRING_LEN);
+                        s.push_str("... [TRUNCATED]");
+                    }
+
+                    Ok(serde_json::Value::String(s))
+                }
+                Err(_) => Ok(serde_json::Value::Null),
+            }
+        }
+
+        // Number types: NUMBER, FLOAT, BINARY_FLOAT, BINARY_DOUBLE
+        OracleType::Number(_, _) | OracleType::Float(_) | OracleType::BinaryFloat | OracleType::BinaryDouble => {
+            // Convert to string to preserve precision (Oracle NUMBER can be very large)
+            match row.get::<usize, String>(idx) {
+                Ok(s) => Ok(serde_json::Value::String(s)),
+                Err(_) => Ok(serde_json::Value::Null),
+            }
+        }
+
+        // Date/Timestamp types
+        OracleType::Date | OracleType::Timestamp(_) | OracleType::TimestampTZ(_) | OracleType::TimestampLTZ(_) => {
+            match row.get::<usize, String>(idx) {
+                Ok(s) => Ok(serde_json::Value::String(s)),
+                Err(_) => Ok(serde_json::Value::Null),
+            }
+        }
+
+        // CLOB: Character Large Object
+        OracleType::CLOB => {
+            match row.get::<usize, String>(idx) {
+                Ok(mut s) => {
+                    // Remove control characters
+                    s = s
+                        .chars()
+                        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+                        .collect();
+
+                    // Truncate large CLOBs (limit: 1MB for UI performance)
+                    const MAX_CLOB_LEN: usize = 1_000_000;
+                    if s.len() > MAX_CLOB_LEN {
+                        s.truncate(MAX_CLOB_LEN);
+                        s.push_str("\n... [CLOB TRUNCATED - too large for comparison]");
+                    }
+
+                    Ok(serde_json::Value::String(s))
+                }
+                Err(_) => Ok(serde_json::Value::Null),
+            }
+        }
+
+        // BLOB: Binary Large Object (not suitable for text comparison)
+        OracleType::BLOB => Ok(serde_json::Value::String(
+            "[BLOB - binary data not displayed]".to_string(),
+        )),
+
+        // RAW, LONG RAW: Binary data
+        OracleType::Raw(_) | OracleType::LongRaw => {
+            Ok(serde_json::Value::String("[BINARY DATA]".to_string()))
+        }
+
+        // Other types: fallback to string conversion
+        _ => match row.get::<usize, String>(idx) {
+            Ok(s) => Ok(serde_json::Value::String(s)),
+            Err(_) => Ok(serde_json::Value::Null),
+        },
     }
 }
 

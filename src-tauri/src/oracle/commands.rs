@@ -165,12 +165,109 @@ pub fn fetch_table_metadata(
 
 /// Compares configurations between two environments
 ///
-/// NOTE: Placeholder for Phase 4
+/// This command:
+/// 1. Retrieves credentials for both environments from keychain
+/// 2. Connects to both Oracle databases
+/// 3. Fetches table metadata to get primary key
+/// 4. Fetches records from both environments
+/// 5. Runs comparison engine
+/// 6. Returns structured comparison results
 #[tauri::command]
 pub fn compare_configurations(
-    _request: super::models::ComparisonRequest,
+    request: super::models::ComparisonRequest,
 ) -> Result<super::models::ComparisonResult, String> {
-    Err("Not implemented yet - Phase 4".to_string())
+    log::info!(
+        "Starting comparison: {}.{} vs {}.{} (table: {})",
+        request.env1_name,
+        request.env1_schema,
+        request.env2_name,
+        request.env2_schema,
+        request.table_name
+    );
+
+    // Get credentials for both environments
+    let (username1, password1) = CredentialManager::get_oracle_credentials(&request.env1_name)?;
+    let credentials1 = Credentials::new(username1, password1);
+
+    let (username2, password2) = CredentialManager::get_oracle_credentials(&request.env2_name)?;
+    let credentials2 = Credentials::new(username2, password2);
+
+    // Connect to both environments
+    let conn1 = DatabaseConnection::new(request.env1_connection.clone(), credentials1)?;
+    let conn2 = DatabaseConnection::new(request.env2_connection.clone(), credentials2)?;
+
+    // Fetch metadata to determine primary key
+    let metadata = conn1.fetch_table_metadata(&request.env1_schema, &request.table_name)?;
+
+    // Determine which primary key to use: custom or table's actual PK
+    let primary_key = if !request.custom_primary_key.is_empty() {
+        log::info!(
+            "Using custom primary key: {:?} (overriding table PK: {:?})",
+            request.custom_primary_key,
+            metadata.primary_key
+        );
+        request.custom_primary_key.clone()
+    } else {
+        if metadata.primary_key.is_empty() {
+            return Err(format!(
+                "Table {}.{} has no primary key defined. Please select custom primary key fields.",
+                request.env1_schema, request.table_name
+            ));
+        }
+        log::info!(
+            "Using table's primary key: {:?} for comparison",
+            metadata.primary_key
+        );
+        metadata.primary_key.clone()
+    };
+
+    // Determine which fields to fetch and compare
+    let fields_to_fetch = if request.fields.is_empty() {
+        // If no fields specified, fetch all columns
+        metadata
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect::<Vec<_>>()
+    } else {
+        request.fields.clone()
+    };
+
+    // Fetch records from both environments
+    log::info!("Fetching records from environment 1...");
+    let env1_records = conn1.fetch_records(
+        &request.env1_schema,
+        &request.table_name,
+        request.where_clause.as_deref(),
+        &fields_to_fetch,
+    )?;
+
+    log::info!("Fetching records from environment 2...");
+    let env2_records = conn2.fetch_records(
+        &request.env2_schema,
+        &request.table_name,
+        request.where_clause.as_deref(),
+        &fields_to_fetch,
+    )?;
+
+    log::info!(
+        "Fetched {} records from env1, {} records from env2",
+        env1_records.len(),
+        env2_records.len()
+    );
+
+    // Perform comparison
+    let result = super::comparison::ComparisonEngine::compare(
+        request.env1_name,
+        request.env2_name,
+        env1_records,
+        env2_records,
+        &primary_key,
+        &fields_to_fetch,
+    )?;
+
+    log::info!("Comparison complete");
+    Ok(result)
 }
 
 /// Exports comparison results to a file
