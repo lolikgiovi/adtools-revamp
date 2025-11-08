@@ -167,27 +167,154 @@ impl DatabaseConnection {
 
     /// Fetches all schemas from the database
     ///
-    /// NOTE: Placeholder for Phase 3
+    /// Returns a list of schema names (owners) that the user has access to,
+    /// with system schemas filtered out.
+    ///
+    /// # Returns
+    /// A vector of schema names or an error message
     pub fn fetch_schemas(&self) -> Result<Vec<String>, String> {
-        Err("Not implemented yet - Phase 3".to_string())
+        log::info!("Fetching schemas from database");
+
+        let sql = r#"
+            SELECT DISTINCT OWNER
+            FROM   ALL_TABLES
+            WHERE  OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS',
+                                 'WMSYS', 'EXFSYS', 'CTXSYS', 'XDB', 'ANONYMOUS',
+                                 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS', 'DVSYS',
+                                 'DVF', 'AUDSYS', 'OJVMSYS', 'GSMADMIN_INTERNAL')
+            ORDER BY OWNER
+        "#;
+
+        let rows = self.conn
+            .query(sql, &[])
+            .map_err(|e| format!("Failed to fetch schemas: {}", e))?;
+
+        let mut schemas = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let schema: String = row.get(0).map_err(|e| format!("Schema error: {}", e))?;
+            schemas.push(schema);
+        }
+
+        log::info!("Found {} schemas", schemas.len());
+        Ok(schemas)
     }
 
     /// Fetches all tables for a given schema/owner
     ///
-    /// NOTE: Placeholder for Phase 3
-    pub fn fetch_tables(&self, _owner: &str) -> Result<Vec<String>, String> {
-        Err("Not implemented yet - Phase 3".to_string())
+    /// # Arguments
+    /// * `owner` - Schema/owner name
+    ///
+    /// # Returns
+    /// A vector of table names or an error message
+    pub fn fetch_tables(&self, owner: &str) -> Result<Vec<String>, String> {
+        log::info!("Fetching tables for schema: {}", owner);
+
+        let sql = r#"
+            SELECT TABLE_NAME
+            FROM   ALL_TABLES
+            WHERE  OWNER = :owner
+            ORDER BY TABLE_NAME
+        "#;
+
+        let rows = self.conn
+            .query(sql, &[&owner])
+            .map_err(|e| format!("Failed to fetch tables: {}", e))?;
+
+        let mut tables = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let table: String = row.get(0).map_err(|e| format!("Table error: {}", e))?;
+            tables.push(table);
+        }
+
+        log::info!("Found {} tables in schema {}", tables.len(), owner);
+        Ok(tables)
     }
 
     /// Fetches metadata for a specific table
     ///
-    /// NOTE: Placeholder for Phase 3
+    /// Retrieves column information and primary key details from Oracle system views.
+    ///
+    /// # Arguments
+    /// * `owner` - Schema/owner name
+    /// * `table_name` - Table name
+    ///
+    /// # Returns
+    /// TableMetadata structure or an error message
     pub fn fetch_table_metadata(
         &self,
-        _owner: &str,
-        _table_name: &str,
+        owner: &str,
+        table_name: &str,
     ) -> Result<super::models::TableMetadata, String> {
-        Err("Not implemented yet - Phase 3".to_string())
+        log::info!("Fetching metadata for table: {}.{}", owner, table_name);
+
+        // Query columns
+        let sql_columns = r#"
+            SELECT c.COLUMN_NAME,
+                   c.DATA_TYPE,
+                   c.NULLABLE
+            FROM   ALL_TAB_COLUMNS c
+            WHERE  c.OWNER = :owner
+            AND    c.TABLE_NAME = :table_name
+            ORDER BY c.COLUMN_ID
+        "#;
+
+        let rows = self.conn
+            .query(sql_columns, &[&owner, &table_name])
+            .map_err(|e| format!("Failed to fetch columns: {}", e))?;
+
+        let mut columns = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            columns.push(super::models::ColumnInfo {
+                name: row.get(0).map_err(|e| format!("Column name error: {}", e))?,
+                data_type: row.get(1).map_err(|e| format!("Data type error: {}", e))?,
+                nullable: row.get::<usize, String>(2)
+                    .map_err(|e| format!("Nullable error: {}", e))? == "Y",
+                is_pk: false,  // Will be updated below
+            });
+        }
+
+        log::info!("Found {} columns", columns.len());
+
+        // Query primary key
+        let sql_pk = r#"
+            SELECT cc.COLUMN_NAME
+            FROM   ALL_CONSTRAINTS cons
+            JOIN   ALL_CONS_COLUMNS cc
+              ON   cons.OWNER = cc.OWNER
+             AND   cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+            WHERE  cons.OWNER = :owner
+            AND    cons.TABLE_NAME = :table_name
+            AND    cons.CONSTRAINT_TYPE = 'P'
+            ORDER BY cc.POSITION
+        "#;
+
+        let pk_rows = self.conn
+            .query(sql_pk, &[&owner, &table_name])
+            .map_err(|e| format!("Failed to fetch primary key: {}", e))?;
+
+        let mut primary_key = Vec::new();
+        for row_result in pk_rows {
+            let row = row_result.map_err(|e| format!("PK row error: {}", e))?;
+            let pk_col: String = row.get(0).map_err(|e| format!("PK column error: {}", e))?;
+            primary_key.push(pk_col.clone());
+
+            // Mark column as PK
+            if let Some(col) = columns.iter_mut().find(|c| c.name == pk_col) {
+                col.is_pk = true;
+            }
+        }
+
+        log::info!("Primary key columns: {:?}", primary_key);
+
+        Ok(super::models::TableMetadata {
+            owner: owner.to_string(),
+            table_name: table_name.to_string(),
+            columns,
+            primary_key,
+        })
     }
 
     /// Fetches records from a table

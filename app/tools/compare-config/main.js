@@ -410,11 +410,11 @@ class CompareConfigTool extends BaseTool {
       schemaSelect.disabled = true;
       schemaSelect.innerHTML = '<option value="">Loading schemas...</option>';
 
-      // Get credentials
-      const [username, password] = await CompareConfigService.getOracleCredentials(this[envKey].connection.name);
-
-      // Fetch schemas
-      const schemas = await CompareConfigService.fetchSchemas(this[envKey].connection, username, password);
+      // Fetch schemas (credentials retrieved from keychain in backend)
+      const schemas = await CompareConfigService.fetchSchemas(
+        this[envKey].connection.name,
+        this[envKey].connection
+      );
 
       // Populate dropdown
       schemaSelect.innerHTML = '<option value="">Select schema...</option>';
@@ -474,11 +474,12 @@ class CompareConfigTool extends BaseTool {
       tableSelect.disabled = true;
       tableSelect.innerHTML = '<option value="">Loading tables...</option>';
 
-      // Get credentials
-      const [username, password] = await CompareConfigService.getOracleCredentials(this[envKey].connection.name);
-
-      // Fetch tables
-      const tables = await CompareConfigService.fetchTables(this[envKey].connection, username, password, this[envKey].schema);
+      // Fetch tables (credentials retrieved from keychain in backend)
+      const tables = await CompareConfigService.fetchTables(
+        this[envKey].connection.name,
+        this[envKey].connection,
+        this[envKey].schema
+      );
 
       // Populate dropdown
       tableSelect.innerHTML = '<option value="">Select table...</option>';
@@ -548,14 +549,10 @@ class CompareConfigTool extends BaseTool {
       // Show loading
       this.showLoading("Fetching table metadata...");
 
-      // Get credentials
-      const [username, password] = await CompareConfigService.getOracleCredentials(this[envKey].connection.name);
-
-      // Fetch metadata
+      // Fetch metadata (credentials retrieved from keychain in backend)
       const metadata = await CompareConfigService.fetchTableMetadata(
+        this[envKey].connection.name,
         this[envKey].connection,
-        username,
-        password,
         this[envKey].schema,
         this[envKey].table
       );

@@ -87,41 +87,80 @@ pub fn test_oracle_connection_saved(
 
 /// Fetches available schemas from a database
 ///
-/// NOTE: Placeholder for Phase 3
+/// # Arguments
+/// * `connection_name` - Name of the saved connection (to retrieve credentials)
+/// * `config` - Connection configuration
+///
+/// # Returns
+/// List of schema names or an error message
 #[tauri::command]
 pub fn fetch_schemas(
-    _config: ConnectionConfig,
-    _username: String,
-    _password: String,
+    connection_name: String,
+    config: ConnectionConfig,
 ) -> Result<Vec<String>, String> {
-    Err("Not implemented yet - Phase 3".to_string())
+    log::info!("Fetching schemas for connection: {}", connection_name);
+
+    // Retrieve credentials from keychain
+    let (username, password) = CredentialManager::get_oracle_credentials(&connection_name)?;
+    let credentials = Credentials::new(username, password);
+
+    // Create connection and fetch schemas
+    let conn = DatabaseConnection::new(config, credentials)?;
+    conn.fetch_schemas()
 }
 
 /// Fetches tables for a specific schema
 ///
-/// NOTE: Placeholder for Phase 3
+/// # Arguments
+/// * `connection_name` - Name of the saved connection (to retrieve credentials)
+/// * `config` - Connection configuration
+/// * `owner` - Schema/owner name
+///
+/// # Returns
+/// List of table names or an error message
 #[tauri::command]
 pub fn fetch_tables(
-    _config: ConnectionConfig,
-    _username: String,
-    _password: String,
-    _owner: String,
+    connection_name: String,
+    config: ConnectionConfig,
+    owner: String,
 ) -> Result<Vec<String>, String> {
-    Err("Not implemented yet - Phase 3".to_string())
+    log::info!("Fetching tables for schema: {} (connection: {})", owner, connection_name);
+
+    // Retrieve credentials from keychain
+    let (username, password) = CredentialManager::get_oracle_credentials(&connection_name)?;
+    let credentials = Credentials::new(username, password);
+
+    // Create connection and fetch tables
+    let conn = DatabaseConnection::new(config, credentials)?;
+    conn.fetch_tables(&owner)
 }
 
 /// Fetches metadata for a specific table
 ///
-/// NOTE: Placeholder for Phase 3
+/// # Arguments
+/// * `connection_name` - Name of the saved connection (to retrieve credentials)
+/// * `config` - Connection configuration
+/// * `owner` - Schema/owner name
+/// * `table_name` - Table name
+///
+/// # Returns
+/// TableMetadata structure or an error message
 #[tauri::command]
 pub fn fetch_table_metadata(
-    _config: ConnectionConfig,
-    _username: String,
-    _password: String,
-    _owner: String,
-    _table_name: String,
+    connection_name: String,
+    config: ConnectionConfig,
+    owner: String,
+    table_name: String,
 ) -> Result<super::models::TableMetadata, String> {
-    Err("Not implemented yet - Phase 3".to_string())
+    log::info!("Fetching metadata for table: {}.{} (connection: {})", owner, table_name, connection_name);
+
+    // Retrieve credentials from keychain
+    let (username, password) = CredentialManager::get_oracle_credentials(&connection_name)?;
+    let credentials = Credentials::new(username, password);
+
+    // Create connection and fetch metadata
+    let conn = DatabaseConnection::new(config, credentials)?;
+    conn.fetch_table_metadata(&owner, &table_name)
 }
 
 /// Compares configurations between two environments

@@ -49,50 +49,44 @@ export class CompareConfigService {
 
   /**
    * Fetches available schemas from the database
+   * @param {string} connectionName - Connection name (for credential lookup)
    * @param {Object} config - Connection configuration
-   * @param {string} username - Database username
-   * @param {string} password - Database password
    * @returns {Promise<string[]>} List of schema names
    */
-  static async fetchSchemas(config, username, password) {
+  static async fetchSchemas(connectionName, config) {
     return await invoke("fetch_schemas", {
+      connectionName,
       config,
-      username,
-      password,
     });
   }
 
   /**
    * Fetches tables for a specific schema
+   * @param {string} connectionName - Connection name (for credential lookup)
    * @param {Object} config - Connection configuration
-   * @param {string} username - Database username
-   * @param {string} password - Database password
    * @param {string} owner - Schema/owner name
    * @returns {Promise<string[]>} List of table names
    */
-  static async fetchTables(config, username, password, owner) {
+  static async fetchTables(connectionName, config, owner) {
     return await invoke("fetch_tables", {
+      connectionName,
       config,
-      username,
-      password,
       owner,
     });
   }
 
   /**
    * Fetches metadata for a specific table
+   * @param {string} connectionName - Connection name (for credential lookup)
    * @param {Object} config - Connection configuration
-   * @param {string} username - Database username
-   * @param {string} password - Database password
    * @param {string} owner - Schema/owner name
    * @param {string} tableName - Table name
    * @returns {Promise<Object>} Table metadata
    */
-  static async fetchTableMetadata(config, username, password, owner, tableName) {
+  static async fetchTableMetadata(connectionName, config, owner, tableName) {
     return await invoke("fetch_table_metadata", {
+      connectionName,
       config,
-      username,
-      password,
       owner,
       tableName,
     });
