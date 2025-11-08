@@ -272,11 +272,107 @@ pub fn compare_configurations(
 
 /// Exports comparison results to a file
 ///
-/// NOTE: Placeholder for Phase 5
+/// Supports JSON and CSV formats
 #[tauri::command]
 pub fn export_comparison_result(
-    _result: super::models::ComparisonResult,
-    _format: String,
+    result: super::models::ComparisonResult,
+    format: String,
 ) -> Result<String, String> {
-    Err("Not implemented yet - Phase 5".to_string())
+    use std::fs;
+
+    log::info!("Exporting comparison result as {}", format);
+
+    // Create export directory
+    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
+    let export_dir = home_dir.join("Documents").join("adtools_library").join("comparisons");
+
+    if !export_dir.exists() {
+        fs::create_dir_all(&export_dir)
+            .map_err(|e| format!("Failed to create export directory: {}", e))?;
+    }
+
+    // Generate timestamped filename
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let extension = match format.as_str() {
+        "json" => "json",
+        "csv" => "csv",
+        _ => return Err(format!("Unsupported format: {}", format)),
+    };
+
+    let filename = format!(
+        "comparison_{}_{}.{}",
+        result.env1_name.replace(" ", "_"),
+        timestamp,
+        extension
+    );
+    let filepath = export_dir.join(&filename);
+
+    // Generate content
+    let content = match format.as_str() {
+        "json" => {
+            serde_json::to_string_pretty(&result)
+                .map_err(|e| format!("Failed to serialize to JSON: {}", e))?
+        }
+        "csv" => export_to_csv(&result)?,
+        _ => unreachable!(),
+    };
+
+    // Write file
+    fs::write(&filepath, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let filepath_str = filepath.to_string_lossy().to_string();
+    log::info!("Exported comparison to: {}", filepath_str);
+
+    Ok(filepath_str)
+}
+
+/// Converts comparison result to CSV format
+fn export_to_csv(result: &super::models::ComparisonResult) -> Result<String, String> {
+    let mut csv = String::new();
+
+    // Header
+    csv.push_str("Primary Key,Status,Env1 Name,Env2 Name,Field,Env1 Value,Env2 Value\n");
+
+    // Rows
+    for comparison in &result.comparisons {
+        let pk = &comparison.primary_key;
+        let status = format!("{:?}", comparison.status);
+
+        if comparison.differences.is_empty() {
+            // No differences - just show status
+            csv.push_str(&format!(
+                "\"{}\",\"{}\",\"{}\",\"{}\",,,\n",
+                escape_csv(pk),
+                escape_csv(&status),
+                escape_csv(&result.env1_name),
+                escape_csv(&result.env2_name)
+            ));
+        } else {
+            // Show each field difference
+            for diff in &comparison.differences {
+                let empty = String::new();
+                let env1_value = diff.env1_value.as_ref().unwrap_or(&empty);
+                let env2_value = diff.env2_value.as_ref().unwrap_or(&empty);
+
+                csv.push_str(&format!(
+                    "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                    escape_csv(pk),
+                    escape_csv(&status),
+                    escape_csv(&result.env1_name),
+                    escape_csv(&result.env2_name),
+                    escape_csv(&diff.field_name),
+                    escape_csv(env1_value),
+                    escape_csv(env2_value)
+                ));
+            }
+        }
+    }
+
+    Ok(csv)
+}
+
+/// Escapes CSV values
+fn escape_csv(value: &str) -> String {
+    value.replace("\"", "\"\"")
 }

@@ -204,73 +204,49 @@ impl ComparisonEngine {
 
     /// Computes diff chunks for text highlighting
     ///
-    /// Uses word-based LCS algorithm for performance
+    /// Uses word-based comparison to highlight differences in Env2 compared to Env1.
+    /// Env1 is shown as plain text (all Same chunks).
+    /// Env2 highlights differing words with Added type (rendered as soft red background).
     pub fn compute_diff_chunks(s1: &str, s2: &str) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
         // Split by whitespace to get word tokens
         let words1: Vec<&str> = s1.split_whitespace().collect();
         let words2: Vec<&str> = s2.split_whitespace().collect();
 
-        // Simple LCS-based diff (Longest Common Subsequence)
+        // Env1 chunks: all words are "Same" (no highlighting)
+        let chunks1: Vec<DiffChunk> = words1
+            .iter()
+            .map(|word| DiffChunk {
+                text: format!("{} ", word),
+                chunk_type: DiffChunkType::Same,
+            })
+            .collect();
+
+        // Env2 chunks: highlight words that differ from Env1
+        // Use LCS to find matching words
         let lcs = Self::compute_lcs(&words1, &words2);
 
-        let mut chunks1 = Vec::new();
-        let mut chunks2 = Vec::new();
-        let mut i = 0;
-        let mut j = 0;
-        let mut lcs_idx = 0;
-
-        while i < words1.len() || j < words2.len() {
-            if lcs_idx < lcs.len() {
-                let (lcs_i, lcs_j) = lcs[lcs_idx];
-
-                // Add removed words (only in s1)
-                while i < lcs_i {
-                    chunks1.push(DiffChunk {
-                        text: format!("{} ", words1[i]),
-                        chunk_type: DiffChunkType::Removed,
-                    });
-                    i += 1;
-                }
-
-                // Add added words (only in s2)
-                while j < lcs_j {
-                    chunks2.push(DiffChunk {
-                        text: format!("{} ", words2[j]),
-                        chunk_type: DiffChunkType::Added,
-                    });
-                    j += 1;
-                }
-
-                // Add common word
-                chunks1.push(DiffChunk {
-                    text: format!("{} ", words1[i]),
-                    chunk_type: DiffChunkType::Same,
-                });
-                chunks2.push(DiffChunk {
-                    text: format!("{} ", words2[j]),
-                    chunk_type: DiffChunkType::Same,
-                });
-                i += 1;
-                j += 1;
-                lcs_idx += 1;
-            } else {
-                // Remaining words after LCS
-                while i < words1.len() {
-                    chunks1.push(DiffChunk {
-                        text: format!("{} ", words1[i]),
-                        chunk_type: DiffChunkType::Removed,
-                    });
-                    i += 1;
-                }
-                while j < words2.len() {
-                    chunks2.push(DiffChunk {
-                        text: format!("{} ", words2[j]),
-                        chunk_type: DiffChunkType::Added,
-                    });
-                    j += 1;
-                }
-            }
+        // Build a set of matching positions in words2
+        let mut matching_positions = std::collections::HashSet::new();
+        for (_, j) in &lcs {
+            matching_positions.insert(*j);
         }
+
+        // Create chunks for Env2: Same for matching words, Added for different words
+        let chunks2: Vec<DiffChunk> = words2
+            .iter()
+            .enumerate()
+            .map(|(idx, word)| {
+                let chunk_type = if matching_positions.contains(&idx) {
+                    DiffChunkType::Same
+                } else {
+                    DiffChunkType::Added // Will be rendered with soft red background
+                };
+                DiffChunk {
+                    text: format!("{} ", word),
+                    chunk_type,
+                }
+            })
+            .collect();
 
         (chunks1, chunks2)
     }

@@ -7,6 +7,8 @@ import { CompareConfigService } from "./service.js";
 import { CompareConfigTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
+import { VerticalCardView } from "./views/VerticalCardView.js";
+import { MasterDetailView } from "./views/MasterDetailView.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -37,6 +39,11 @@ class CompareConfigTool extends BaseTool {
     this.selectedFields = [];
     this.whereClause = "";
     this.comparisonResult = null;
+    this.currentView = "expandable"; // Default view
+
+    // View instances
+    this.verticalCardView = new VerticalCardView();
+    this.masterDetailView = new MasterDetailView();
   }
 
   getIconSvg() {
@@ -407,10 +414,7 @@ class CompareConfigTool extends BaseTool {
       schemaSelect.innerHTML = '<option value="">Loading schemas from Env 1...</option>';
 
       // Fetch schemas from Env 1
-      const schemas = await CompareConfigService.fetchSchemas(
-        this.env1.connection.name,
-        this.env1.connection
-      );
+      const schemas = await CompareConfigService.fetchSchemas(this.env1.connection.name, this.env1.connection);
 
       // Populate dropdown
       schemaSelect.innerHTML = '<option value="">Select schema...</option>';
@@ -510,10 +514,7 @@ class CompareConfigTool extends BaseTool {
    */
   async validateSchemaInEnv2(schema) {
     try {
-      const schemas = await CompareConfigService.fetchSchemas(
-        this.env2.connection.name,
-        this.env2.connection
-      );
+      const schemas = await CompareConfigService.fetchSchemas(this.env2.connection.name, this.env2.connection);
 
       this.env2SchemaExists = schemas.includes(schema);
 
@@ -529,18 +530,10 @@ class CompareConfigTool extends BaseTool {
           tableSelect.disabled = true;
           tableSelect.innerHTML = '<option value="">Schema not available in Env 2</option>';
         }
-      } else {
-        this.showValidationMessage(
-          `success`,
-          `Schema "${schema}" exists in both environments.`
-        );
       }
     } catch (error) {
       console.error("Failed to validate schema in Env 2:", error);
-      this.showValidationMessage(
-        `error`,
-        `Failed to validate schema in Env 2: ${error.message || error}`
-      );
+      this.showValidationMessage(`error`, `Failed to validate schema in Env 2: ${error.message || error}`);
     }
   }
 
@@ -557,11 +550,7 @@ class CompareConfigTool extends BaseTool {
       tableSelect.innerHTML = '<option value="">Loading tables from Env 1...</option>';
 
       // Fetch tables from Env 1
-      const tables = await CompareConfigService.fetchTables(
-        this.env1.connection.name,
-        this.env1.connection,
-        this.schema
-      );
+      const tables = await CompareConfigService.fetchTables(this.env1.connection.name, this.env1.connection, this.schema);
 
       // Populate dropdown
       tableSelect.innerHTML = '<option value="">Select table...</option>';
@@ -622,11 +611,7 @@ class CompareConfigTool extends BaseTool {
    */
   async validateTableInEnv2(tableName) {
     try {
-      const tables = await CompareConfigService.fetchTables(
-        this.env2.connection.name,
-        this.env2.connection,
-        this.schema
-      );
+      const tables = await CompareConfigService.fetchTables(this.env2.connection.name, this.env2.connection, this.schema);
 
       this.env2TableExists = tables.includes(tableName);
 
@@ -645,10 +630,7 @@ class CompareConfigTool extends BaseTool {
       }
     } catch (error) {
       console.error("Failed to validate table in Env 2:", error);
-      this.showValidationMessage(
-        `error`,
-        `Failed to validate table in Env 2: ${error.message || error}`
-      );
+      this.showValidationMessage(`error`, `Failed to validate table in Env 2: ${error.message || error}`);
     }
   }
 
@@ -770,7 +752,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Initialize selected fields with all fields
-    this.selectedFields = this.metadata.columns.map(c => c.name);
+    this.selectedFields = this.metadata.columns.map((c) => c.name);
 
     // Show field selection section
     fieldSelection.style.display = "block";
@@ -973,14 +955,47 @@ class CompareConfigTool extends BaseTool {
     // Render summary
     this.renderSummary();
 
-    // Render results content (default to expandable view)
-    this.renderExpandableView();
+    // Render results content based on current view
+    this.renderResults();
 
     // Show results section
     resultsSection.style.display = "block";
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
+  }
+
+  /**
+   * Renders results based on current view type
+   */
+  renderResults() {
+    const resultsContent = document.getElementById("results-content");
+    if (!resultsContent || !this.comparisonResult) return;
+
+    const { comparisons, env1_name, env2_name } = this.comparisonResult;
+
+    let html = "";
+    switch (this.currentView) {
+      case "expandable":
+        // Use inline expandable view rendering
+        this.renderExpandableView();
+        return; // Exit early since renderExpandableView handles everything
+
+      case "vertical":
+        html = this.verticalCardView.render(comparisons, env1_name, env2_name);
+        resultsContent.innerHTML = html;
+        break;
+
+      case "master-detail":
+        html = this.masterDetailView.render(comparisons, env1_name, env2_name);
+        resultsContent.innerHTML = html;
+        // Attach event listeners for master-detail view
+        this.masterDetailView.attachEventListeners(resultsContent);
+        break;
+
+      default:
+        this.renderExpandableView();
+    }
   }
 
   /**
@@ -1023,22 +1038,262 @@ class CompareConfigTool extends BaseTool {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.comparisonResult) return;
 
-    // Phase 5 TODO: Implement full expandable view with diff highlighting
+    const { comparisons, env1_name, env2_name } = this.comparisonResult;
+
+    if (comparisons.length === 0) {
+      resultsContent.innerHTML = `
+        <div class="placeholder-message">
+          <p>No records found matching the criteria.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Build expandable rows
+    const rowsHtml = comparisons.map((comp, index) => this.renderComparisonRow(comp, index, env1_name, env2_name)).join("");
+
     resultsContent.innerHTML = `
-      <div class="placeholder-message">
-        <p>Comparison complete!</p>
-        <p>Detailed results view will be implemented in Phase 5.</p>
-        <p>Summary: ${this.comparisonResult.comparisons.length} records compared.</p>
+      <div class="expandable-results">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th width="40"></th>
+              <th>Primary Key</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
       </div>
     `;
+
+    // Add event listeners for expand/collapse
+    const expandButtons = resultsContent.querySelectorAll(".btn-expand");
+    expandButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const rowId = e.target.closest(".btn-expand").dataset.rowId;
+        this.toggleRowExpansion(rowId);
+      });
+    });
+  }
+
+  /**
+   * Renders a single comparison row
+   */
+  renderComparisonRow(comparison, index, env1Name, env2Name) {
+    const statusClass = comparison.status.toLowerCase().replace("_", "-");
+    const statusLabel = this.getStatusLabel(comparison.status);
+    const statusBadge = `<span class="status-badge status-${statusClass}">${statusLabel}</span>`;
+
+    return `
+      <tr class="comparison-row" data-row-id="${index}">
+        <td>
+          <button class="btn-expand" data-row-id="${index}" title="Expand/Collapse">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </td>
+        <td class="pk-cell">${this.escapeHtml(comparison.primary_key)}</td>
+        <td>${statusBadge}</td>
+        <td>
+          <button class="btn-icon" onclick="navigator.clipboard.writeText('${this.escapeHtml(comparison.primary_key)}')" title="Copy PK">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </td>
+      </tr>
+      <tr class="comparison-detail" data-row-id="${index}" style="display: none;">
+        <td colspan="4">
+          ${this.renderComparisonDetail(comparison, env1Name, env2Name)}
+        </td>
+      </tr>
+    `;
+  }
+
+  /**
+   * Renders the detailed comparison for an expanded row
+   */
+  renderComparisonDetail(comparison, env1Name, env2Name) {
+    if (comparison.status === "only_in_env1") {
+      return `
+        <div class="comparison-detail-content">
+          <p class="detail-message">This record only exists in <strong>${env1Name}</strong></p>
+          ${this.renderDataObject(comparison.env1_data, "Env 1 Data")}
+        </div>
+      `;
+    }
+
+    if (comparison.status === "only_in_env2") {
+      return `
+        <div class="comparison-detail-content">
+          <p class="detail-message">This record only exists in <strong>${env2Name}</strong></p>
+          ${this.renderDataObject(comparison.env2_data, "Env 2 Data")}
+        </div>
+      `;
+    }
+
+    if (comparison.status === "match") {
+      return `
+        <div class="comparison-detail-content">
+          <p class="detail-message">✓ Records match perfectly</p>
+          ${this.renderDataObject(comparison.env1_data, "Data")}
+        </div>
+      `;
+    }
+
+    // Status is 'differ' - show field-by-field comparison
+    return `
+      <div class="comparison-detail-content">
+        <table class="field-comparison-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>${this.escapeHtml(env1Name)}</th>
+              <th>${this.escapeHtml(env2Name)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${comparison.differences.map((diff) => this.renderFieldDifference(diff)).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
+   * Renders a single field difference with diff highlighting
+   */
+  renderFieldDifference(diff) {
+    const env1ValueHtml = this.renderDiffChunks(diff.env1_diff_chunks);
+    const env2ValueHtml = this.renderDiffChunks(diff.env2_diff_chunks);
+
+    return `
+      <tr class="field-diff-row">
+        <td class="field-name">${this.escapeHtml(diff.field_name)}</td>
+        <td class="field-value">${env1ValueHtml}</td>
+        <td class="field-value">${env2ValueHtml}</td>
+      </tr>
+    `;
+  }
+
+  /**
+   * Renders diff chunks with color highlighting
+   */
+  renderDiffChunks(chunks) {
+    if (!chunks || chunks.length === 0) {
+      return '<span class="empty-value">(empty)</span>';
+    }
+
+    return chunks
+      .map((chunk) => {
+        const escapedText = this.escapeHtml(chunk.text);
+        switch (chunk.chunk_type) {
+          case "same":
+            return `<span class="diff-same">${escapedText}</span>`;
+          case "added":
+            return `<span class="diff-added">${escapedText}</span>`;
+          case "removed":
+            return `<span class="diff-removed">${escapedText}</span>`;
+          case "modified":
+            return `<span class="diff-modified">${escapedText}</span>`;
+          default:
+            return `<span>${escapedText}</span>`;
+        }
+      })
+      .join("");
+  }
+
+  /**
+   * Renders a data object as a table
+   */
+  renderDataObject(data, title) {
+    if (!data) return "";
+
+    const entries = Object.entries(data);
+    return `
+      <div class="data-object">
+        <h4>${title}</h4>
+        <table class="data-table">
+          <tbody>
+            ${entries
+              .map(
+                ([key, value]) => `
+              <tr>
+                <td class="data-key">${this.escapeHtml(key)}</td>
+                <td class="data-value">${this.escapeHtml(JSON.stringify(value))}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
+   * Toggles row expansion
+   */
+  toggleRowExpansion(rowId) {
+    const row = document.querySelector(`tr.comparison-row[data-row-id="${rowId}"]`);
+    const detail = document.querySelector(`tr.comparison-detail[data-row-id="${rowId}"]`);
+    const button = document.querySelector(`.btn-expand[data-row-id="${rowId}"]`);
+
+    if (!row || !detail || !button) return;
+
+    const isExpanded = detail.style.display !== "none";
+
+    if (isExpanded) {
+      detail.style.display = "none";
+      row.classList.remove("expanded");
+      button.classList.remove("expanded");
+    } else {
+      detail.style.display = "table-row";
+      row.classList.add("expanded");
+      button.classList.add("expanded");
+    }
+  }
+
+  /**
+   * Gets a human-readable status label
+   */
+  getStatusLabel(status) {
+    switch (status) {
+      case "match":
+        return "Match";
+      case "differ":
+        return "Differ";
+      case "only_in_env1":
+        return "Only in Env 1";
+      case "only_in_env2":
+        return "Only in Env 2";
+      default:
+        return status;
+    }
+  }
+
+  /**
+   * Escapes HTML to prevent XSS
+   */
+  escapeHtml(text) {
+    if (text === null || text === undefined) return "";
+    const div = document.createElement("div");
+    div.textContent = String(text);
+    return div.innerHTML;
   }
 
   /**
    * Changes the results view type
    */
   changeView(viewType) {
-    // Phase 5 TODO: Implement view switching
-    console.log("Change view to:", viewType);
+    this.currentView = viewType;
+    this.renderResults();
   }
 
   /**
