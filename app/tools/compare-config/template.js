@@ -62,54 +62,53 @@ export const CompareConfigTemplate = /* html */ `
 
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
-        <div class="config-header">
-            <h2>Compare Config between Environments</h2>
-        </div>
-
         <!-- Environment Selection -->
         <div class="environment-selection">
-            <div class="env-card">
-                <h3>Environment 1 (Reference)</h3>
-                <div class="form-group">
-                    <label for="env1-connection">Connection:</label>
-                    <select id="env1-connection" class="form-select">
-                        <option value="">Select connection...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="env1-schema">Schema:</label>
-                    <select id="env1-schema" class="form-select" disabled>
-                        <option value="">Select connection first...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="env1-table">Table:</label>
-                    <select id="env1-table" class="form-select" disabled>
-                        <option value="">Select schema first...</option>
-                    </select>
-                </div>
-            </div>
+            <div class="selection-card">
+                <div class="selection-grid">
+                    <!-- Connections Row -->
+                    <div class="grid-row">
+                        <div class="form-group">
+                            <label for="env1-connection">
+                                <span class="label-icon">🔵</span>
+                                Env 1 (Reference)
+                            </label>
+                            <select id="env1-connection" class="form-select">
+                                <option value="">Select connection...</option>
+                            </select>
+                        </div>
 
-            <div class="env-card">
-                <h3>Environment 2 (Comparison)</h3>
-                <div class="form-group">
-                    <label for="env2-connection">Connection:</label>
-                    <select id="env2-connection" class="form-select">
-                        <option value="">Select connection...</option>
-                    </select>
+                        <div class="form-group">
+                            <label for="env2-connection">
+                                <span class="label-icon">🟢</span>
+                                Env 2 (Comparison)
+                            </label>
+                            <select id="env2-connection" class="form-select">
+                                <option value="">Select connection...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Schema & Table Row -->
+                    <div class="grid-row">
+                        <div class="form-group">
+                            <label for="schema-select">Schema</label>
+                            <select id="schema-select" class="form-select" disabled>
+                                <option value="">Select connections first...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="table-select">Table</label>
+                            <select id="table-select" class="form-select" disabled>
+                                <option value="">Select schema first...</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="env2-schema">Schema:</label>
-                    <select id="env2-schema" class="form-select" disabled>
-                        <option value="">Select connection first...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="env2-table">Table:</label>
-                    <select id="env2-table" class="form-select" disabled>
-                        <option value="">Select schema first...</option>
-                    </select>
-                </div>
+
+                <!-- Validation Message -->
+                <div id="validation-message" class="validation-message" style="display: none;"></div>
             </div>
         </div>
 

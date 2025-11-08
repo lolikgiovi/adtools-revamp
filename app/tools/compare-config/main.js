@@ -24,16 +24,15 @@ class CompareConfigTool extends BaseTool {
     this.savedConnections = [];
     this.env1 = {
       connection: null,
-      schema: null,
-      table: null,
-      metadata: null,
     };
     this.env2 = {
       connection: null,
-      schema: null,
-      table: null,
-      metadata: null,
     };
+    this.schema = null;
+    this.table = null;
+    this.metadata = null;
+    this.env2SchemaExists = false;
+    this.env2TableExists = false;
     this.selectedFields = [];
     this.whereClause = "";
     this.comparisonResult = null;
@@ -221,10 +220,8 @@ class CompareConfigTool extends BaseTool {
     // Environment selection events
     const env1Connection = document.getElementById("env1-connection");
     const env2Connection = document.getElementById("env2-connection");
-    const env1Schema = document.getElementById("env1-schema");
-    const env2Schema = document.getElementById("env2-schema");
-    const env1Table = document.getElementById("env1-table");
-    const env2Table = document.getElementById("env2-table");
+    const schemaSelect = document.getElementById("schema-select");
+    const tableSelect = document.getElementById("table-select");
 
     if (env1Connection) {
       env1Connection.addEventListener("change", (e) => this.onConnectionSelected("env1", e.target.value));
@@ -234,20 +231,12 @@ class CompareConfigTool extends BaseTool {
       env2Connection.addEventListener("change", (e) => this.onConnectionSelected("env2", e.target.value));
     }
 
-    if (env1Schema) {
-      env1Schema.addEventListener("change", (e) => this.onSchemaSelected("env1", e.target.value));
+    if (schemaSelect) {
+      schemaSelect.addEventListener("change", (e) => this.onSchemaSelected(e.target.value));
     }
 
-    if (env2Schema) {
-      env2Schema.addEventListener("change", (e) => this.onSchemaSelected("env2", e.target.value));
-    }
-
-    if (env1Table) {
-      env1Table.addEventListener("change", (e) => this.onTableSelected("env1", e.target.value));
-    }
-
-    if (env2Table) {
-      env2Table.addEventListener("change", (e) => this.onTableSelected("env2", e.target.value));
+    if (tableSelect) {
+      tableSelect.addEventListener("change", (e) => this.onTableSelected(e.target.value));
     }
 
     // Field selection events
@@ -363,23 +352,15 @@ class CompareConfigTool extends BaseTool {
    */
   async onConnectionSelected(envKey, connectionName) {
     if (!connectionName) {
-      // Reset downstream selections
+      // Reset connection
       this[envKey].connection = null;
-      this[envKey].schema = null;
-      this[envKey].table = null;
-      this[envKey].metadata = null;
 
-      const schemaSelect = document.getElementById(`${envKey}-schema`);
-      const tableSelect = document.getElementById(`${envKey}-table`);
-
-      if (schemaSelect) {
-        schemaSelect.disabled = true;
-        schemaSelect.innerHTML = '<option value="">Select connection first...</option>';
-      }
-
-      if (tableSelect) {
-        tableSelect.disabled = true;
-        tableSelect.innerHTML = '<option value="">Select schema first...</option>';
+      // Reset schema/table if both connections are cleared
+      if (!this.env1.connection && !this.env2.connection) {
+        this.resetSchemaTableSelection();
+      } else if (this.env1.connection && this.env2.connection) {
+        // One connection changed, validate again
+        await this.onBothConnectionsSelected();
       }
 
       return;
@@ -394,26 +375,28 @@ class CompareConfigTool extends BaseTool {
 
     this[envKey].connection = connection;
 
-    // Fetch schemas
-    await this.fetchSchemas(envKey);
+    // If both connections are now selected, fetch schemas from env1
+    if (this.env1.connection && this.env2.connection) {
+      await this.onBothConnectionsSelected();
+    }
   }
 
   /**
-   * Fetches schemas for an environment
+   * Called when both connections are selected
    */
-  async fetchSchemas(envKey) {
-    const schemaSelect = document.getElementById(`${envKey}-schema`);
+  async onBothConnectionsSelected() {
+    const schemaSelect = document.getElementById("schema-select");
     if (!schemaSelect) return;
 
     try {
       // Show loading state
       schemaSelect.disabled = true;
-      schemaSelect.innerHTML = '<option value="">Loading schemas...</option>';
+      schemaSelect.innerHTML = '<option value="">Loading schemas from Env 1...</option>';
 
-      // Fetch schemas (credentials retrieved from keychain in backend)
+      // Fetch schemas from Env 1
       const schemas = await CompareConfigService.fetchSchemas(
-        this[envKey].connection.name,
-        this[envKey].connection
+        this.env1.connection.name,
+        this.env1.connection
       );
 
       // Populate dropdown
@@ -432,53 +415,139 @@ class CompareConfigTool extends BaseTool {
 
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: `Failed to fetch schemas: ${error.message || error}`,
+        message: `Failed to fetch schemas from Env 1: ${error.message || error}`,
       });
+    }
+  }
+
+  /**
+   * Resets schema and table selection
+   */
+  resetSchemaTableSelection() {
+    this.schema = null;
+    this.table = null;
+    this.metadata = null;
+    this.env2SchemaExists = false;
+    this.env2TableExists = false;
+
+    const schemaSelect = document.getElementById("schema-select");
+    const tableSelect = document.getElementById("table-select");
+    const validationMessage = document.getElementById("validation-message");
+    const fieldSelection = document.getElementById("field-selection");
+
+    if (schemaSelect) {
+      schemaSelect.disabled = true;
+      schemaSelect.innerHTML = '<option value="">Select connections first...</option>';
+    }
+
+    if (tableSelect) {
+      tableSelect.disabled = true;
+      tableSelect.innerHTML = '<option value="">Select schema first...</option>';
+    }
+
+    if (validationMessage) {
+      validationMessage.style.display = "none";
+    }
+
+    if (fieldSelection) {
+      fieldSelection.style.display = "none";
     }
   }
 
   /**
    * Handler for schema selection
    */
-  async onSchemaSelected(envKey, schema) {
+  async onSchemaSelected(schema) {
     if (!schema) {
-      // Reset downstream selections
-      this[envKey].schema = null;
-      this[envKey].table = null;
-      this[envKey].metadata = null;
+      this.schema = null;
+      this.table = null;
+      this.metadata = null;
 
-      const tableSelect = document.getElementById(`${envKey}-table`);
+      const tableSelect = document.getElementById("table-select");
+      const fieldSelection = document.getElementById("field-selection");
+
       if (tableSelect) {
         tableSelect.disabled = true;
         tableSelect.innerHTML = '<option value="">Select schema first...</option>';
       }
 
+      if (fieldSelection) {
+        fieldSelection.style.display = "none";
+      }
+
+      this.hideValidationMessage();
       return;
     }
 
-    this[envKey].schema = schema;
+    this.schema = schema;
 
-    // Fetch tables
-    await this.fetchTables(envKey);
+    // Check if schema exists in Env 2
+    await this.validateSchemaInEnv2(schema);
+
+    if (!this.env2SchemaExists) {
+      return; // Validation message already shown
+    }
+
+    // Fetch tables from Env 1
+    await this.fetchTables();
   }
 
   /**
-   * Fetches tables for a schema
+   * Validates that schema exists in Env 2
    */
-  async fetchTables(envKey) {
-    const tableSelect = document.getElementById(`${envKey}-table`);
+  async validateSchemaInEnv2(schema) {
+    try {
+      const schemas = await CompareConfigService.fetchSchemas(
+        this.env2.connection.name,
+        this.env2.connection
+      );
+
+      this.env2SchemaExists = schemas.includes(schema);
+
+      if (!this.env2SchemaExists) {
+        this.showValidationMessage(
+          `error`,
+          `Schema "${schema}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different schema.`
+        );
+
+        // Disable table selection
+        const tableSelect = document.getElementById("table-select");
+        if (tableSelect) {
+          tableSelect.disabled = true;
+          tableSelect.innerHTML = '<option value="">Schema not available in Env 2</option>';
+        }
+      } else {
+        this.showValidationMessage(
+          `success`,
+          `Schema "${schema}" exists in both environments.`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to validate schema in Env 2:", error);
+      this.showValidationMessage(
+        `error`,
+        `Failed to validate schema in Env 2: ${error.message || error}`
+      );
+    }
+  }
+
+  /**
+   * Fetches tables from Env 1
+   */
+  async fetchTables() {
+    const tableSelect = document.getElementById("table-select");
     if (!tableSelect) return;
 
     try {
       // Show loading state
       tableSelect.disabled = true;
-      tableSelect.innerHTML = '<option value="">Loading tables...</option>';
+      tableSelect.innerHTML = '<option value="">Loading tables from Env 1...</option>';
 
-      // Fetch tables (credentials retrieved from keychain in backend)
+      // Fetch tables from Env 1
       const tables = await CompareConfigService.fetchTables(
-        this[envKey].connection.name,
-        this[envKey].connection,
-        this[envKey].schema
+        this.env1.connection.name,
+        this.env1.connection,
+        this.schema
       );
 
       // Populate dropdown
@@ -497,7 +566,7 @@ class CompareConfigTool extends BaseTool {
 
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: `Failed to fetch tables: ${error.message || error}`,
+        message: `Failed to fetch tables from Env 1: ${error.message || error}`,
       });
     }
   }
@@ -505,61 +574,93 @@ class CompareConfigTool extends BaseTool {
   /**
    * Handler for table selection
    */
-  async onTableSelected(envKey, tableName) {
+  async onTableSelected(tableName) {
     if (!tableName) {
-      this[envKey].table = null;
-      this[envKey].metadata = null;
+      this.table = null;
+      this.metadata = null;
 
-      // Hide field selection if both tables are unselected
-      if (!this.env1.table && !this.env2.table) {
-        const fieldSelection = document.getElementById("field-selection");
-        if (fieldSelection) fieldSelection.style.display = "none";
-      }
+      const fieldSelection = document.getElementById("field-selection");
+      if (fieldSelection) fieldSelection.style.display = "none";
+
+      this.showValidationMessage(
+        `success`,
+        `Schema "${this.schema}" exists in both environments.`
+      );
 
       return;
     }
 
-    this[envKey].table = tableName;
+    this.table = tableName;
 
-    // Fetch table metadata (only need to do this once since both envs use same table)
-    if (!this.env1.metadata && !this.env2.metadata) {
-      await this.fetchTableMetadata(envKey);
+    // Check if table exists in Env 2
+    await this.validateTableInEnv2(tableName);
+
+    if (!this.env2TableExists) {
+      return; // Validation message already shown
     }
 
-    // Check if both environments have tables selected
-    if (this.env1.table && this.env2.table) {
-      // Verify they selected the same table
-      if (this.env1.table !== this.env2.table) {
-        this.eventBus.emit("notification:show", {
-          type: "warning",
-          message: "You selected different tables for each environment. Comparison requires the same table.",
-        });
+    // Fetch table metadata from Env 1
+    await this.fetchTableMetadata();
+
+    // Show field selection
+    this.showFieldSelection();
+  }
+
+  /**
+   * Validates that table exists in Env 2
+   */
+  async validateTableInEnv2(tableName) {
+    try {
+      const tables = await CompareConfigService.fetchTables(
+        this.env2.connection.name,
+        this.env2.connection,
+        this.schema
+      );
+
+      this.env2TableExists = tables.includes(tableName);
+
+      if (!this.env2TableExists) {
+        this.showValidationMessage(
+          `error`,
+          `Table "${this.schema}.${tableName}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different table.`
+        );
+
+        // Hide field selection
+        const fieldSelection = document.getElementById("field-selection");
+        if (fieldSelection) fieldSelection.style.display = "none";
       } else {
-        // Show field selection
-        this.showFieldSelection();
+        this.showValidationMessage(
+          `success`,
+          `Table "${this.schema}.${tableName}" exists in both environments.`
+        );
       }
+    } catch (error) {
+      console.error("Failed to validate table in Env 2:", error);
+      this.showValidationMessage(
+        `error`,
+        `Failed to validate table in Env 2: ${error.message || error}`
+      );
     }
   }
 
   /**
    * Fetches table metadata
    */
-  async fetchTableMetadata(envKey) {
+  async fetchTableMetadata() {
     try {
       // Show loading
       this.showLoading("Fetching table metadata...");
 
-      // Fetch metadata (credentials retrieved from keychain in backend)
+      // Fetch metadata from Env 1 (credentials retrieved from keychain in backend)
       const metadata = await CompareConfigService.fetchTableMetadata(
-        this[envKey].connection.name,
-        this[envKey].connection,
-        this[envKey].schema,
-        this[envKey].table
+        this.env1.connection.name,
+        this.env1.connection,
+        this.schema,
+        this.table
       );
 
-      // Store metadata (same for both envs)
-      this.env1.metadata = metadata;
-      this.env2.metadata = metadata;
+      // Store metadata
+      this.metadata = metadata;
 
       this.hideLoading();
     } catch (error) {
@@ -574,19 +675,41 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Shows validation message
+   */
+  showValidationMessage(type, message) {
+    const validationMessage = document.getElementById("validation-message");
+    if (!validationMessage) return;
+
+    validationMessage.className = `validation-message ${type}`;
+    validationMessage.textContent = message;
+    validationMessage.style.display = "block";
+  }
+
+  /**
+   * Hides validation message
+   */
+  hideValidationMessage() {
+    const validationMessage = document.getElementById("validation-message");
+    if (validationMessage) {
+      validationMessage.style.display = "none";
+    }
+  }
+
+  /**
    * Shows field selection UI
    */
   showFieldSelection() {
     const fieldSelection = document.getElementById("field-selection");
     const fieldList = document.getElementById("field-list");
 
-    if (!fieldSelection || !fieldList || !this.env1.metadata) return;
+    if (!fieldSelection || !fieldList || !this.metadata) return;
 
     // Clear existing fields
     fieldList.innerHTML = "";
 
     // Render field checkboxes
-    this.env1.metadata.columns.forEach((column) => {
+    this.metadata.columns.forEach((column) => {
       const fieldDiv = document.createElement("div");
       fieldDiv.className = column.is_pk ? "field-checkbox pk-field" : "field-checkbox";
 
@@ -663,19 +786,15 @@ class CompareConfigTool extends BaseTool {
       // Show loading
       this.showLoading("Comparing configurations...");
 
-      // Get credentials for both environments
-      const [env1Username, env1Password] = await CompareConfigService.getOracleCredentials(this.env1.connection.name);
-      const [env2Username, env2Password] = await CompareConfigService.getOracleCredentials(this.env2.connection.name);
-
       // Build comparison request
       const request = {
         env1_name: this.env1.connection.name,
         env1_connection: this.env1.connection,
-        env1_schema: this.env1.schema,
+        env1_schema: this.schema,
         env2_name: this.env2.connection.name,
         env2_connection: this.env2.connection,
-        env2_schema: this.env2.schema,
-        table_name: this.env1.table,
+        env2_schema: this.schema,
+        table_name: this.table,
         where_clause: this.whereClause || null,
         fields: this.selectedFields,
       };
@@ -716,31 +835,39 @@ class CompareConfigTool extends BaseTool {
       return false;
     }
 
-    if (!this.env1.schema || !this.env2.schema) {
+    if (!this.schema) {
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: "Please select schemas for both environments",
+        message: "Please select a schema",
       });
       return false;
     }
 
-    if (!this.env1.table || !this.env2.table) {
+    if (!this.table) {
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: "Please select tables for both environments",
+        message: "Please select a table",
       });
       return false;
     }
 
-    if (this.env1.table !== this.env2.table) {
+    if (!this.env2SchemaExists) {
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: "Both environments must use the same table",
+        message: `Schema "${this.schema}" does not exist in Env 2`,
       });
       return false;
     }
 
-    if (!this.env1.metadata) {
+    if (!this.env2TableExists) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Table "${this.schema}.${this.table}" does not exist in Env 2`,
+      });
+      return false;
+    }
+
+    if (!this.metadata) {
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Table metadata not loaded",
