@@ -19,6 +19,10 @@ pub struct ConnectionConfig {
 
     /// Oracle service name
     pub service_name: String,
+
+    /// Whether credentials exist for this connection (frontend-only field)
+    #[serde(default)]
+    pub has_credentials: bool,
 }
 
 impl ConnectionConfig {
@@ -29,6 +33,7 @@ impl ConnectionConfig {
             host,
             port,
             service_name,
+            has_credentials: false,
         }
     }
 
@@ -123,8 +128,8 @@ pub struct ComparisonRequest {
     /// Environment 1 (reference) name
     pub env1_name: String,
 
-    /// Environment 1 connection name
-    pub env1_connection: String,
+    /// Environment 1 connection config
+    pub env1_connection: ConnectionConfig,
 
     /// Environment 1 schema
     pub env1_schema: String,
@@ -132,8 +137,8 @@ pub struct ComparisonRequest {
     /// Environment 2 (comparison) name
     pub env2_name: String,
 
-    /// Environment 2 connection name
-    pub env2_connection: String,
+    /// Environment 2 connection config
+    pub env2_connection: ConnectionConfig,
 
     /// Environment 2 schema
     pub env2_schema: String,
