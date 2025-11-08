@@ -316,7 +316,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
@@ -563,10 +562,8 @@
 .results-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 15px;
+  gap: 16px;
   margin-bottom: 20px;
-  padding: 15px;
-  background-color: var(--bg-tertiary, #1e1e1e);
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
@@ -577,7 +574,24 @@
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0px 5px rgba(0, 0, 0, 0.25);
+}
+
+.element::-webkit-scrollbar {
+  display: none; /* Hides the scrollbar */
+}
+
+.summary-stat.matching {
+  border-left: 4px solid var(--success-color);
+}
+
+.summary-stat.differing {
+  border-left: 4px solid var(--warning-color);
+}
+
+.summary-stat.only-env1,
+.summary-stat.only-env2 {
+  border-left: 4px solid var(--info-color);
 }
 
 .summary-stat .stat-value {
@@ -798,34 +812,6 @@
   gap: 12px;
 }
 
-.results-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.summary-stat {
-  padding: 16px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  text-align: center;
-}
-
-.summary-stat.matching {
-  border-left: 4px solid var(--success-color);
-}
-
-.summary-stat.differing {
-  border-left: 4px solid var(--warning-color);
-}
-
-.summary-stat.only-env1,
-.summary-stat.only-env2 {
-  border-left: 4px solid var(--info-color);
-}
-
 .stat-value {
   font-size: 32px;
   font-weight: 700;
@@ -998,7 +984,7 @@
 }
 
 .field-value {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
@@ -1021,7 +1007,6 @@
   /* Words in Env2 that differ from Env1 - soft red background */
   background-color: #ffe6e6;
   color: #000;
-  padding: 2px 4px;
   border-radius: 3px;
   font-weight: 500;
 }
@@ -1080,7 +1065,7 @@
 }
 
 .data-value {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   color: var(--text-primary);
 }
 
@@ -1108,7 +1093,7 @@
 }
 
 .pk-cell {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 13px;
 }
 
@@ -1195,7 +1180,7 @@
 }
 
 .card-pk {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1255,7 +1240,7 @@
 }
 
 .card-field-value {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 13px;
   color: var(--text-primary);
   word-break: break-word;
@@ -1285,7 +1270,7 @@
 }
 
 .card-data-value {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   color: var(--text-primary);
   word-break: break-word;
 }
@@ -1379,7 +1364,7 @@
 }
 
 .master-item-pk {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 13px;
   font-weight: 500;
   flex: 1;
