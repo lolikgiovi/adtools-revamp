@@ -43,6 +43,7 @@ export class OracleConnectionsUI {
         <div class="oracle-connection-form" style="display: none;">
           ${this.renderConnectionForm()}
         </div>
+        ${this.renderConfirmModal()}
       </div>
     `;
 
@@ -150,13 +151,33 @@ export class OracleConnectionsUI {
     `;
   }
 
+  renderConfirmModal() {
+    return `
+      <div class="confirm-modal" id="delete-confirm-modal" style="display: none;">
+        <div class="confirm-modal-overlay" data-action="confirm-cancel"></div>
+        <div class="confirm-modal-content">
+          <h3 class="confirm-modal-title">Delete Connection</h3>
+          <p class="confirm-modal-message"></p>
+          <div class="confirm-modal-actions">
+          <button type="button" class="btn btn-secondary" data-action="confirm-delete">Delete</button>
+            <button type="button" class="btn btn" data-action="confirm-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   attachEventListeners(container) {
     // Store the handler so we can remove it later
     this.clickHandler = async (e) => {
-      const action = e.target.getAttribute("data-action");
+      // Find the nearest element with data-action (handles clicks on button text/children)
+      const actionElement = e.target.closest("[data-action]");
+      if (!actionElement) return;
+
+      const action = actionElement.getAttribute("data-action");
       if (!action) return;
 
-      const index = parseInt(e.target.getAttribute("data-index"), 10);
+      const index = parseInt(actionElement.getAttribute("data-index"), 10);
 
       switch (action) {
         case "add-connection":
@@ -166,7 +187,13 @@ export class OracleConnectionsUI {
           this.showConnectionForm(container, this.connections[index]);
           break;
         case "delete-connection":
-          await this.deleteConnection(container, index);
+          this.showDeleteConfirm(container, index);
+          break;
+        case "confirm-delete":
+          await this.confirmDeleteConnection(container);
+          break;
+        case "confirm-cancel":
+          this.hideDeleteConfirm(container);
           break;
         case "test-connection":
           await this.testConnection(container, index);
@@ -275,11 +302,36 @@ export class OracleConnectionsUI {
     }
   }
 
-  async deleteConnection(container, index) {
+  showDeleteConfirm(container, index) {
     const connection = this.connections[index];
-    if (!connection) return;
+    if (!connection) {
+      console.error("No connection found at index:", index);
+      return;
+    }
 
-    if (!confirm(`Are you sure you want to delete the connection "${connection.name}"?`)) {
+    // Store the index for later use
+    this.deleteIndex = index;
+
+    const modal = container.querySelector("#delete-confirm-modal");
+    const message = modal.querySelector(".confirm-modal-message");
+    message.textContent = `Are you sure you want to delete the connection "${connection.name}"?`;
+    modal.style.display = "flex";
+  }
+
+  hideDeleteConfirm(container) {
+    const modal = container.querySelector("#delete-confirm-modal");
+    modal.style.display = "none";
+    this.deleteIndex = null;
+  }
+
+  async confirmDeleteConnection(container) {
+    if (this.deleteIndex === null || this.deleteIndex === undefined) {
+      return;
+    }
+
+    const connection = this.connections[this.deleteIndex];
+    if (!connection) {
+      this.hideDeleteConfirm(container);
       return;
     }
 
@@ -288,16 +340,20 @@ export class OracleConnectionsUI {
       await invoke("delete_oracle_credentials", { name: connection.name });
 
       // Remove from list
-      this.connections.splice(index, 1);
+      this.connections.splice(this.deleteIndex, 1);
 
       // Persist to localStorage
       localStorage.setItem("config.oracle.connections", JSON.stringify(this.connections));
+
+      // Hide modal
+      this.hideDeleteConfirm(container);
 
       // Re-render
       this.render(container, this.connections);
 
       this.eventBus?.emit?.("notification:success", { message: `Connection "${connection.name}" deleted` });
     } catch (error) {
+      this.hideDeleteConfirm(container);
       this.eventBus?.emit?.("notification:error", { message: `Failed to delete connection: ${error}` });
     }
   }
