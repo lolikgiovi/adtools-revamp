@@ -15,7 +15,7 @@ class CompareConfigTool extends BaseTool {
     super({
       id: "compare-config",
       name: "Compare Config",
-      description: "Compare Oracle database configurations between environments",
+      description: "Compare Oracle database configs between environments",
       icon: "database-compare",
       category: "database",
       eventBus: eventBus,
@@ -24,6 +24,9 @@ class CompareConfigTool extends BaseTool {
     // State
     this.oracleClientReady = false;
     this.savedConnections = [];
+    this.queryMode = "schema-table"; // "schema-table" or "raw-sql"
+
+    // Schema/Table mode state
     this.env1 = {
       connection: null,
     };
@@ -38,6 +41,20 @@ class CompareConfigTool extends BaseTool {
     this.customPrimaryKey = []; // Custom PK fields for comparison
     this.selectedFields = [];
     this.whereClause = "";
+    this.maxRows = 100; // Max rows to fetch (default: 100)
+
+    // Raw SQL mode state
+    this.rawenv1 = {
+      connection: null,
+    };
+    this.rawenv2 = {
+      connection: null,
+    };
+    this.rawSql = ""; // Single SQL query for both environments
+    this.rawPrimaryKey = ""; // Optional primary key field(s) for raw SQL mode
+    this.rawMaxRows = 100; // Max rows for raw SQL mode (default: 100)
+
+    // Common state
     this.comparisonResult = null;
     this.currentView = "expandable"; // Default view
     this.statusFilter = null; // null = show all, or "match", "differ", "only_in_env1", "only_in_env2"
@@ -135,25 +152,44 @@ class CompareConfigTool extends BaseTool {
   populateConnectionDropdowns() {
     const env1Select = document.getElementById("env1-connection");
     const env2Select = document.getElementById("env2-connection");
+    const rawEnv1Select = document.getElementById("raw-env1-connection");
+    const rawEnv2Select = document.getElementById("raw-env2-connection");
 
-    if (!env1Select || !env2Select) return;
+    // Schema/Table mode dropdowns
+    if (env1Select && env2Select) {
+      env1Select.innerHTML = '<option value="">Select connection...</option>';
+      env2Select.innerHTML = '<option value="">Select connection...</option>';
 
-    // Clear existing options (except placeholder)
-    env1Select.innerHTML = '<option value="">Select connection...</option>';
-    env2Select.innerHTML = '<option value="">Select connection...</option>';
+      this.savedConnections.forEach((conn) => {
+        const option1 = document.createElement("option");
+        option1.value = conn.name;
+        option1.textContent = conn.name;
+        env1Select.appendChild(option1);
 
-    // Add connections
-    this.savedConnections.forEach((conn) => {
-      const option1 = document.createElement("option");
-      option1.value = conn.name;
-      option1.textContent = conn.name;
-      env1Select.appendChild(option1);
+        const option2 = document.createElement("option");
+        option2.value = conn.name;
+        option2.textContent = conn.name;
+        env2Select.appendChild(option2);
+      });
+    }
 
-      const option2 = document.createElement("option");
-      option2.value = conn.name;
-      option2.textContent = conn.name;
-      env2Select.appendChild(option2);
-    });
+    // Raw SQL mode dropdowns
+    if (rawEnv1Select && rawEnv2Select) {
+      rawEnv1Select.innerHTML = '<option value="">Select connection...</option>';
+      rawEnv2Select.innerHTML = '<option value="">Select connection...</option>';
+
+      this.savedConnections.forEach((conn) => {
+        const option1 = document.createElement("option");
+        option1.value = conn.name;
+        option1.textContent = conn.name;
+        rawEnv1Select.appendChild(option1);
+
+        const option2 = document.createElement("option");
+        option2.value = conn.name;
+        option2.textContent = conn.name;
+        rawEnv2Select.appendChild(option2);
+      });
+    }
   }
 
   /**
@@ -193,6 +229,15 @@ class CompareConfigTool extends BaseTool {
    * Binds event listeners
    */
   bindEvents() {
+    // Tab switching events
+    const tabButtons = document.querySelectorAll(".compare-tab-button");
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+        this.switchTab(tab);
+      });
+    });
+
     // Installation guide events
     const checkAgainBtn = document.getElementById("btn-check-again");
     const copyCommandBtn = document.querySelector(".btn-copy-command");
@@ -284,6 +329,53 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
+    const maxRowsInput = document.getElementById("max-rows");
+    if (maxRowsInput) {
+      maxRowsInput.addEventListener("input", (e) => {
+        const value = parseInt(e.target.value, 10);
+        this.maxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+      });
+    }
+
+    // Raw SQL mode events
+    const compareRawSqlBtn = document.getElementById("btn-compare-raw-sql");
+    const rawSqlInput = document.getElementById("raw-sql");
+    const rawPrimaryKeyInput = document.getElementById("raw-primary-key");
+    const rawEnv1Connection = document.getElementById("raw-env1-connection");
+    const rawEnv2Connection = document.getElementById("raw-env2-connection");
+    const rawMaxRowsInput = document.getElementById("raw-max-rows");
+
+    if (compareRawSqlBtn) {
+      compareRawSqlBtn.addEventListener("click", () => this.executeRawSqlComparison());
+    }
+
+    if (rawSqlInput) {
+      rawSqlInput.addEventListener("input", (e) => {
+        this.rawSql = e.target.value.trim();
+      });
+    }
+
+    if (rawPrimaryKeyInput) {
+      rawPrimaryKeyInput.addEventListener("input", (e) => {
+        this.rawPrimaryKey = e.target.value.trim();
+      });
+    }
+
+    if (rawMaxRowsInput) {
+      rawMaxRowsInput.addEventListener("input", (e) => {
+        const value = parseInt(e.target.value, 10);
+        this.rawMaxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+      });
+    }
+
+    if (rawEnv1Connection) {
+      rawEnv1Connection.addEventListener("change", (e) => this.onRawConnectionSelected("env1", e.target.value));
+    }
+
+    if (rawEnv2Connection) {
+      rawEnv2Connection.addEventListener("change", (e) => this.onRawConnectionSelected("env2", e.target.value));
+    }
+
     // Results events
     const exportJsonBtn = document.getElementById("btn-export-json");
     const exportCsvBtn = document.getElementById("btn-export-csv");
@@ -305,6 +397,56 @@ class CompareConfigTool extends BaseTool {
     if (viewTypeSelect) {
       viewTypeSelect.addEventListener("change", (e) => this.changeView(e.target.value));
     }
+  }
+
+  /**
+   * Switches between tabs (schema-table vs raw-sql)
+   */
+  switchTab(tab) {
+    this.queryMode = tab;
+
+    // Update tab button states
+    const tabButtons = document.querySelectorAll(".compare-tab-button");
+    tabButtons.forEach((btn) => {
+      if (btn.dataset.tab === tab) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+
+    // Show/hide appropriate UI sections
+    const envSelection = document.querySelector(".environment-selection");
+    const fieldSelection = document.getElementById("field-selection");
+    const rawSqlMode = document.getElementById("raw-sql-mode");
+
+    if (tab === "schema-table") {
+      if (envSelection) envSelection.style.display = "block";
+      if (fieldSelection) fieldSelection.style.display = this.metadata ? "block" : "none";
+      if (rawSqlMode) rawSqlMode.style.display = "none";
+    } else {
+      if (envSelection) envSelection.style.display = "none";
+      if (fieldSelection) fieldSelection.style.display = "none";
+      if (rawSqlMode) rawSqlMode.style.display = "block";
+    }
+  }
+
+  /**
+   * Handler for raw SQL connection selection
+   */
+  onRawConnectionSelected(envKey, connectionName) {
+    if (!connectionName) {
+      this[`raw${envKey}`] = { connection: null };
+      return;
+    }
+
+    const connection = this.savedConnections.find((c) => c.name === connectionName);
+    if (!connection) {
+      console.error("Connection not found:", connectionName);
+      return;
+    }
+
+    this[`raw${envKey}`] = { connection };
   }
 
   /**
@@ -838,6 +980,7 @@ class CompareConfigTool extends BaseTool {
         where_clause: this.whereClause || null,
         custom_primary_key: this.customPrimaryKey,
         fields: this.selectedFields,
+        max_rows: this.maxRows,
       };
 
       // Execute comparison
@@ -862,6 +1005,98 @@ class CompareConfigTool extends BaseTool {
         message: `Comparison failed: ${error.message || error}`,
       });
     }
+  }
+
+  /**
+   * Executes comparison using raw SQL queries
+   */
+  async executeRawSqlComparison() {
+    // Validate
+    if (!this.validateRawSqlRequest()) {
+      return;
+    }
+
+    try {
+      // Show loading
+      this.showLoading("Executing SQL query and comparing...");
+
+      // Strip trailing semicolon (Oracle OCI doesn't support it)
+      const cleanSql = this.rawSql.trim().replace(/;+$/, '');
+
+      // Parse primary key field(s) if provided (comma-separated for composite keys)
+      const primaryKeyFields = this.rawPrimaryKey
+        ? this.rawPrimaryKey.split(',').map(f => f.trim()).filter(f => f.length > 0)
+        : [];
+
+      // Build comparison request
+      // Primary key will be auto-detected as the first column from SQL results if not provided
+      const request = {
+        env1_name: this.rawenv1.connection.name,
+        env1_connection: this.rawenv1.connection,
+        env1_sql: cleanSql,
+        env2_name: this.rawenv2.connection.name,
+        env2_connection: this.rawenv2.connection,
+        env2_sql: cleanSql,
+        primary_key: primaryKeyFields,
+        max_rows: this.rawMaxRows,
+      };
+
+      // Execute comparison
+      const result = await CompareConfigService.compareRawSql(request);
+
+      this.comparisonResult = result;
+
+      // Hide loading
+      this.hideLoading();
+
+      // Show results
+      this.showResults();
+
+      // Emit event
+      this.eventBus.emit("comparison:complete", result);
+    } catch (error) {
+      console.error("Raw SQL comparison failed:", error);
+      this.hideLoading();
+
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Comparison failed: ${error.message || error}`,
+      });
+    }
+  }
+
+  /**
+   * Validates raw SQL comparison request
+   */
+  validateRawSqlRequest() {
+    if (!this.rawenv1.connection || !this.rawenv2.connection) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: "Please select connections for both environments",
+      });
+      return false;
+    }
+
+    if (!this.rawSql) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: "Please enter a SQL query",
+      });
+      return false;
+    }
+
+    // Basic SQL validation - must start with SELECT
+    const sqlLower = this.rawSql.trim().toLowerCase();
+
+    if (!sqlLower.startsWith("select")) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: "SQL query must start with SELECT",
+      });
+      return false;
+    }
+
+    return true;
   }
 
   /**

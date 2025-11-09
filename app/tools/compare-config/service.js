@@ -104,6 +104,17 @@ export class CompareConfigService {
   }
 
   /**
+   * Compares data using raw SQL queries
+   * @param {Object} request - Raw SQL comparison request
+   * @returns {Promise<Object>} Comparison result
+   */
+  static async compareRawSql(request) {
+    return await invoke("compare_raw_sql", {
+      request,
+    });
+  }
+
+  /**
    * Exports comparison results to a file
    * @param {Object} result - Comparison result
    * @param {string} format - Export format (json or csv)

@@ -327,8 +327,9 @@ impl DatabaseConnection {
         table_name: &str,
         where_clause: Option<&str>,
         fields: &[String],
+        max_rows: usize,
     ) -> Result<Vec<serde_json::Value>, String> {
-        log::info!("Fetching records from {}.{}", owner, table_name);
+        log::info!("Fetching records from {}.{} (max_rows: {})", owner, table_name, max_rows);
 
         // Build field list
         let field_list = if fields.is_empty() {
@@ -348,6 +349,9 @@ impl DatabaseConnection {
             sql.push_str(where_sql);
         }
 
+        // Add ROWNUM limit for Oracle
+        sql = format!("SELECT * FROM ({}) WHERE ROWNUM <= {}", sql, max_rows);
+
         log::debug!("Executing query: {}", sql);
 
         // Execute query
@@ -365,6 +369,55 @@ impl DatabaseConnection {
         }
 
         log::info!("Fetched {} records", records.len());
+        Ok(records)
+    }
+
+    /// Executes a raw SQL SELECT query and returns results as JSON
+    ///
+    /// # Arguments
+    /// * `sql` - The SQL SELECT statement to execute
+    /// * `max_rows` - Maximum number of rows to return
+    ///
+    /// # Returns
+    /// * `Ok(Vec<serde_json::Value>)` - Array of records as JSON objects
+    /// * `Err(String)` - Error message if query fails
+    pub fn execute_raw_sql(&self, sql: &str, max_rows: usize) -> Result<Vec<serde_json::Value>, String> {
+        log::info!("Executing raw SQL query (max_rows: {})", max_rows);
+
+        // Basic validation - must be SELECT
+        let sql_lower = sql.trim().to_lowercase();
+        if !sql_lower.starts_with("select") {
+            return Err("Only SELECT statements are allowed".to_string());
+        }
+
+        // Prevent dangerous SQL patterns
+        let dangerous_patterns = ["drop", "delete", "truncate", "insert", "update", "alter", "create"];
+        for pattern in &dangerous_patterns {
+            if sql_lower.contains(pattern) {
+                return Err(format!("SQL statement contains forbidden keyword: {}", pattern));
+            }
+        }
+
+        // Wrap query with ROWNUM limit for Oracle
+        let limited_sql = format!("SELECT * FROM ({}) WHERE ROWNUM <= {}", sql, max_rows);
+
+        log::debug!("Executing limited query: {}", limited_sql);
+
+        // Execute query
+        let rows = self
+            .conn
+            .query(&limited_sql, &[])
+            .map_err(|e| format!("SQL execution error: {}", e))?;
+
+        // Convert rows to JSON
+        let mut records = Vec::new();
+        for row_result in rows {
+            let row = row_result.map_err(|e| format!("Row error: {}", e))?;
+            let record = row_to_json(&row)?;
+            records.push(record);
+        }
+
+        log::info!("Raw SQL returned {} records", records.len());
         Ok(records)
     }
 }

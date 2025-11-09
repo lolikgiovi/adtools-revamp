@@ -154,6 +154,44 @@ pub struct ComparisonRequest {
 
     /// Fields to compare (empty = all fields)
     pub fields: Vec<String>,
+
+    /// Maximum number of rows to fetch (default: 100, max: 10000)
+    #[serde(default = "default_max_rows")]
+    pub max_rows: usize,
+}
+
+fn default_max_rows() -> usize {
+    100
+}
+
+/// Raw SQL comparison request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawSqlComparisonRequest {
+    /// Environment 1 name
+    pub env1_name: String,
+
+    /// Environment 1 connection config
+    pub env1_connection: ConnectionConfig,
+
+    /// Raw SQL query for environment 1
+    pub env1_sql: String,
+
+    /// Environment 2 name
+    pub env2_name: String,
+
+    /// Environment 2 connection config
+    pub env2_connection: ConnectionConfig,
+
+    /// Raw SQL query for environment 2
+    pub env2_sql: String,
+
+    /// Optional primary key fields for comparison (empty = auto-detect from first column)
+    #[serde(default)]
+    pub primary_key: Vec<String>,
+
+    /// Maximum number of rows to fetch (default: 100, max: 10000)
+    #[serde(default = "default_max_rows")]
+    pub max_rows: usize,
 }
 
 /// Summary statistics for a comparison

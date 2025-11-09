@@ -241,6 +241,9 @@ pub fn compare_configurations(
         request.fields.clone()
     };
 
+    // Clamp max_rows to valid range (1-10000)
+    let max_rows = request.max_rows.clamp(1, 10000);
+
     // Fetch records from both environments
     log::info!("Fetching records from environment 1...");
     let env1_records = conn1.fetch_records(
@@ -248,6 +251,7 @@ pub fn compare_configurations(
         &request.table_name,
         request.where_clause.as_deref(),
         &fields_to_fetch,
+        max_rows,
     )?;
 
     log::info!("Fetching records from environment 2...");
@@ -256,6 +260,7 @@ pub fn compare_configurations(
         &request.table_name,
         request.where_clause.as_deref(),
         &fields_to_fetch,
+        max_rows,
     )?;
 
     log::info!(
@@ -275,6 +280,124 @@ pub fn compare_configurations(
     )?;
 
     log::info!("Comparison complete");
+    Ok(result)
+}
+
+/// Compares data using raw SQL queries
+///
+/// Primary key is automatically detected as the first column from the SQL results
+#[tauri::command]
+pub fn compare_raw_sql(
+    request: super::models::RawSqlComparisonRequest,
+) -> Result<super::models::ComparisonResult, String> {
+    log::info!(
+        "Starting raw SQL comparison: {} vs {}",
+        request.env1_name,
+        request.env2_name
+    );
+
+    // Get credentials for both environments
+    let (username1, password1) = CredentialManager::get_oracle_credentials(&request.env1_name)?;
+    let credentials1 = Credentials::new(username1, password1);
+
+    let (username2, password2) = CredentialManager::get_oracle_credentials(&request.env2_name)?;
+    let credentials2 = Credentials::new(username2, password2);
+
+    // Create connection to env1
+    log::info!("Creating connection to env1");
+    let env1_conn = super::connection::DatabaseConnection::new(
+        request.env1_connection.clone(),
+        credentials1,
+    )?;
+
+    // Create connection to env2
+    log::info!("Creating connection to env2");
+    let env2_conn = super::connection::DatabaseConnection::new(
+        request.env2_connection.clone(),
+        credentials2,
+    )?;
+
+    // Clamp max_rows to valid range (1-10000)
+    let max_rows = request.max_rows.clamp(1, 10000);
+
+    // Execute SQL on env1
+    log::info!("Executing SQL on env1");
+    let env1_records = env1_conn.execute_raw_sql(&request.env1_sql, max_rows)?;
+
+    // Execute SQL on env2
+    log::info!("Executing SQL on env2");
+    let env2_records = env2_conn.execute_raw_sql(&request.env2_sql, max_rows)?;
+
+    log::info!(
+        "Fetched {} records from env1, {} records from env2",
+        env1_records.len(),
+        env2_records.len()
+    );
+
+    // Use provided primary key or auto-detect from first column
+    let primary_key = if !request.primary_key.is_empty() {
+        log::info!("Using user-provided primary key: {:?}", request.primary_key);
+
+        // Validate that the primary key fields exist in the SQL results
+        if !env1_records.is_empty() {
+            if let Some(obj) = env1_records[0].as_object() {
+                for pk_field in &request.primary_key {
+                    if !obj.contains_key(pk_field) {
+                        let available_fields: Vec<String> = obj.keys().map(|k| k.clone()).collect();
+                        return Err(format!(
+                            "Primary key field '{}' not found in SQL result. Available fields: {}",
+                            pk_field,
+                            available_fields.join(", ")
+                        ));
+                    }
+                }
+            }
+        }
+
+        request.primary_key.clone()
+    } else {
+        // Auto-detect primary key from first column
+        let primary_key_field = if !env1_records.is_empty() {
+            // Get first column name from the first record
+            if let Some(obj) = env1_records[0].as_object() {
+                if let Some(first_key) = obj.keys().next() {
+                    first_key.clone()
+                } else {
+                    return Err("No columns found in SQL result".to_string());
+                }
+            } else {
+                return Err("Invalid SQL result format".to_string());
+            }
+        } else if !env2_records.is_empty() {
+            // Fallback to env2 if env1 is empty
+            if let Some(obj) = env2_records[0].as_object() {
+                if let Some(first_key) = obj.keys().next() {
+                    first_key.clone()
+                } else {
+                    return Err("No columns found in SQL result".to_string());
+                }
+            } else {
+                return Err("Invalid SQL result format".to_string());
+            }
+        } else {
+            return Err("Both environments returned empty results".to_string());
+        };
+
+        log::info!("Auto-detected primary key field: {}", primary_key_field);
+        vec![primary_key_field]
+    };
+
+    // Perform comparison using all fields (empty = all fields)
+    let result = super::comparison::ComparisonEngine::compare(
+        request.env1_name,
+        request.env2_name,
+        env1_records,
+        env2_records,
+        &primary_key,
+        &vec![], // Empty = compare all fields
+    )?;
+
+    log::info!("Raw SQL comparison complete");
     Ok(result)
 }
 

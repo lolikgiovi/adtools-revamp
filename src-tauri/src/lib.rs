@@ -23,6 +23,7 @@ pub fn run() {
       oracle::commands::fetch_tables,
       oracle::commands::fetch_table_metadata,
       oracle::commands::compare_configurations,
+      oracle::commands::compare_raw_sql,
       oracle::commands::export_comparison_result,
       // Credential management commands
       credentials::set_oracle_credentials,

@@ -62,6 +62,12 @@ export const CompareConfigTemplate = /* html */ `
 
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
+        <!-- Query Mode Tabs -->
+        <div class="compare-tabs">
+            <button class="compare-tab-button active" data-tab="schema-table">Schema/Table</button>
+            <button class="compare-tab-button" data-tab="raw-sql">Raw SQL</button>
+        </div>
+
         <!-- Environment Selection -->
         <div class="environment-selection">
             <div class="selection-card">
@@ -106,6 +112,57 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
 
+        <!-- Raw SQL Mode (shown when Raw SQL tab is active) -->
+        <div id="raw-sql-mode" class="raw-sql-mode" style="display: none;">
+            <div class="raw-sql-connections">
+                <div class="connection-row">
+                    <div class="form-group">
+                        <label for="raw-env1-connection">Env 1 Connection</label>
+                        <select id="raw-env1-connection" class="form-select">
+                            <option value="">Select connection...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="raw-env2-connection">Env 2 Connection</label>
+                        <select id="raw-env2-connection" class="form-select">
+                            <option value="">Select connection...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="raw-sql-editor">
+                <div class="editor-header">
+                    <h3>SQL Query</h3>
+                </div>
+                <textarea id="raw-sql" class="raw-sql-input" placeholder="Full SQL Query, for example:\nSELECT field_name_1, field_name_2, field_name_3 FROM schema_name.table_name\nWHERE field_key_1 IN ('a', 'b', 'c') AND field_key_2 = 0;"></textarea>
+            </div>
+
+            <div class="raw-sql-options">
+                <div class="form-group">
+                    <label for="raw-primary-key">Primary Key to Compare (Optional)</label>
+                    <input type="text" id="raw-primary-key" class="form-input" placeholder="e.g., c.parameter_key or id">
+                    <p class="help-text">Specify the field(s) to use as primary key. Use aliases if defined in the query (e.g., c.parameter_key). Leave empty to auto-detect from first column. For composite keys, separate with commas.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="raw-max-rows">Max Rows to Fetch</label>
+                    <input type="number" id="raw-max-rows" class="form-input" value="100" min="1" max="10000" placeholder="100">
+                    <p class="help-text">Maximum number of rows to fetch from each environment (default: 100)</p>
+                </div>
+            </div>
+
+            <div class="raw-sql-actions">
+                <button class="btn-primary" id="btn-compare-raw-sql">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Compare Query Result from Both Environments
+                </button>
+            </div>
+        </div>
+
         <!-- Field Selection (shown after table is selected) -->
         <div id="field-selection" class="field-selection" style="display: none;">
             <h3>Primary Key Selection</h3>
@@ -138,8 +195,14 @@ export const CompareConfigTemplate = /* html */ `
                 <p class="help-text">Enter a WHERE clause to filter records (do not include 'WHERE' keyword)</p>
             </div>
 
+            <div class="max-rows-section">
+                <label for="max-rows">Max Rows to Fetch:</label>
+                <input type="number" id="max-rows" class="form-input" value="100" min="1" max="10000" placeholder="100">
+                <p class="help-text">Maximum number of rows to fetch from each environment (default: 100)</p>
+            </div>
+
             <div class="comparison-actions">
-                <button class="btn-primary" id="btn-compare">Compare Configurations</button>
+                <button class="btn-primary" id="btn-compare">Compare Configs</button>
             </div>
         </div>
 

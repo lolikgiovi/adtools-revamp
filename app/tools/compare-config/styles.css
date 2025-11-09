@@ -29,6 +29,124 @@
   color: var(--text-primary);
 }
 
+.compare-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: hsl(var(--card));
+  margin-bottom: 0;
+}
+
+.compare-tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius, 8px) var(--radius, 8px) 0 0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.compare-tab-button:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.compare-tab-button.active {
+  color: hsl(var(--primary));
+  background: hsl(var(--background));
+  /* border-bottom: 2px solid hsl(var(--primary));  */ /* got itch when the border got into rounded rect*/
+  background: linear-gradient(to right, black 100%, transparent 0) bottom center / 90% 1.5px no-repeat;
+}
+
+.tab-content {
+  padding: 24px;
+}
+
+/* Raw SQL Mode Styles */
+.raw-sql-mode {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  padding: 24px;
+}
+
+.raw-sql-connections {
+  margin-bottom: 24px;
+}
+
+.connection-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.raw-sql-editor {
+  margin-bottom: 24px;
+}
+
+.editor-header {
+  background: hsl(var(--muted));
+  padding: 0.5rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+
+.editor-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.editor-header .help-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.raw-sql-input {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0 0 6px 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.raw-sql-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsla(var(--ring), 0.1);
+}
+
+.raw-sql-options {
+  margin-bottom: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.raw-sql-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+}
+
 /* Installation Guide Styles */
 .installation-guide {
   display: flex;
@@ -286,19 +404,19 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  padding: 24px;
 }
 
 /* Selection Grid */
 .selection-grid {
-  padding: 24px;
 }
 
 .grid-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* grid-template-columns: 1fr 1fr; */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
   margin-bottom: 20px;
 }
@@ -491,6 +609,21 @@
   color: var(--text-secondary, #adadad);
 }
 
+.max-rows-section {
+  margin-top: 20px;
+}
+
+.max-rows-section label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--text-secondary, #adadad);
+}
+
+.max-rows-section .form-input {
+  max-width: 200px;
+}
+
 .help-text {
   margin: 5px 0 0 0;
   font-size: 12px;
@@ -592,7 +725,7 @@
 }
 
 .summary-stat.selected::after {
-  content: '✓';
+  content: "✓";
   position: absolute;
   top: 6px;
   right: 8px;
@@ -1039,12 +1172,10 @@
 
 .diff-removed {
   /* Characters/words in Env1 that don't exist in Env2 - light gray background */
-  background-color: #f0f0f0;
+  background-color: #ffe6e6;
   color: #666;
   border-radius: 3px;
   padding: 0 2px;
-  text-decoration: line-through;
-  text-decoration-color: #999;
 }
 
 .diff-modified {
