@@ -69,20 +69,14 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Connections Row -->
                     <div class="grid-row">
                         <div class="form-group">
-                            <label for="env1-connection">
-                                <span class="label-icon">🔵</span>
-                                Env 1 (Reference)
-                            </label>
+                            <label for="env1-connection">Env 1 (Reference)</label>
                             <select id="env1-connection" class="form-select">
                                 <option value="">Select connection...</option>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <label for="env2-connection">
-                                <span class="label-icon">🟢</span>
-                                Env 2 (Comparison)
-                            </label>
+                            <label for="env2-connection">Env 2 (Comparison)</label>
                             <select id="env2-connection" class="form-select">
                                 <option value="">Select connection...</option>
                             </select>

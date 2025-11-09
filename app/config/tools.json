@@ -71,7 +71,7 @@
       "showOnHome": true,
       "enabled": true,
       "requiresTauri": true,
-      "order": 55
+      "order": 60
     },
     {
       "id": "compare-config",
@@ -80,8 +80,9 @@
       "icon": "database",
       "showInSidebar": true,
       "showOnHome": true,
+      "requiresTauri": true,
       "enabled": true,
-      "order": 56
+      "order": 70
     },
     {
       "id": "html-template",
@@ -91,7 +92,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
-      "order": 60
+      "order": 80
     },
     {
       "id": "splunk-template",
@@ -101,7 +102,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
-      "order": 70
+      "order": 90
     },
     {
       "id": "sql-in-clause",
@@ -111,7 +112,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
-      "order": 80
+      "order": 100
     },
     {
       "id": "check-image",
@@ -121,7 +122,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
-      "order": 90
+      "order": 110
     }
   ]
 }

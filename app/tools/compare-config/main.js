@@ -40,6 +40,7 @@ class CompareConfigTool extends BaseTool {
     this.whereClause = "";
     this.comparisonResult = null;
     this.currentView = "expandable"; // Default view
+    this.statusFilter = null; // null = show all, or "match", "differ", "only_in_env1", "only_in_env2"
 
     // View instances
     this.verticalCardView = new VerticalCardView();
@@ -972,7 +973,8 @@ class CompareConfigTool extends BaseTool {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.comparisonResult) return;
 
-    const { comparisons, env1_name, env2_name } = this.comparisonResult;
+    const { env1_name, env2_name } = this.comparisonResult;
+    const comparisons = this.getFilteredComparisons();
 
     let html = "";
     switch (this.currentView) {
@@ -1007,28 +1009,67 @@ class CompareConfigTool extends BaseTool {
 
     const { summary } = this.comparisonResult;
 
+    // Render summary cards as clickable filter buttons
     summaryContainer.innerHTML = `
-      <div class="summary-stat">
+      <button class="summary-stat ${this.statusFilter === null ? "selected" : ""}" data-filter="all">
         <div class="stat-value">${summary.total_records}</div>
         <div class="stat-label">Total Records</div>
-      </div>
-      <div class="summary-stat matching">
+      </button>
+      <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match">
         <div class="stat-value">${summary.matching}</div>
         <div class="stat-label">Matching</div>
-      </div>
-      <div class="summary-stat differing">
+      </button>
+      <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ">
         <div class="stat-value">${summary.differing}</div>
         <div class="stat-label">Differing</div>
-      </div>
-      <div class="summary-stat only-env1">
+      </button>
+      <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
         <div class="stat-value">${summary.only_in_env1}</div>
         <div class="stat-label">Only in ${this.comparisonResult.env1_name}</div>
-      </div>
-      <div class="summary-stat only-env2">
+      </button>
+      <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
         <div class="stat-value">${summary.only_in_env2}</div>
         <div class="stat-label">Only in ${this.comparisonResult.env2_name}</div>
-      </div>
+      </button>
     `;
+
+    // Add click event listeners to filter buttons
+    const filterButtons = summaryContainer.querySelectorAll(".summary-stat");
+    filterButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const filter = btn.dataset.filter;
+        this.applyStatusFilter(filter);
+      });
+    });
+  }
+
+  /**
+   * Applies status filter to comparison results
+   */
+  applyStatusFilter(filter) {
+    // Set filter (null means show all)
+    this.statusFilter = filter === "all" ? null : filter;
+
+    // Re-render the view with filtered results
+    this.renderSummary(); // Update selected state
+    this.renderResults(); // Re-render results with filter
+  }
+
+  /**
+   * Gets filtered comparisons based on current status filter
+   */
+  getFilteredComparisons() {
+    if (!this.comparisonResult) return [];
+
+    const { comparisons } = this.comparisonResult;
+
+    // If no filter, return all comparisons
+    if (!this.statusFilter) {
+      return comparisons;
+    }
+
+    // Filter by status
+    return comparisons.filter((comp) => comp.status === this.statusFilter);
   }
 
   /**
@@ -1038,7 +1079,8 @@ class CompareConfigTool extends BaseTool {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.comparisonResult) return;
 
-    const { comparisons, env1_name, env2_name } = this.comparisonResult;
+    const { env1_name, env2_name } = this.comparisonResult;
+    const comparisons = this.getFilteredComparisons();
 
     if (comparisons.length === 0) {
       resultsContent.innerHTML = `

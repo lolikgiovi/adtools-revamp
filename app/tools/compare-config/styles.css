@@ -575,6 +575,30 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 0px 5px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.summary-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.summary-stat.selected {
+  border: 2px solid var(--accent-color);
+  box-shadow: 0 4px 12px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
+}
+
+.summary-stat.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 14px;
+  color: var(--accent-color);
+  font-weight: bold;
 }
 
 .element::-webkit-scrollbar {
@@ -992,32 +1016,39 @@
 
 /* Diff Highlighting Styles
  *
- * Design Philosophy (per spec section 6.7):
- * - Env1: Plain text (no highlighting) - reference environment
- * - Env2: Soft red background (#ffe6e6) for differing words - comparison environment
- * - NOT a Git-style diff (no strikethrough/green additions)
- * - Simple side-by-side comparison showing "how Env2 differs from Env1"
+ * Design Philosophy:
+ * - Uses Myers diff algorithm for clean, intuitive diffs
+ * - Env1: Shows removed characters with light gray background and strikethrough
+ * - Env2: Shows added characters with soft red background
+ * - Example: "ABC|DEF|" vs "ABC|" correctly highlights "DEF|" as removed
+ * - Very different strings (<30% similarity): Highlights entire text for better readability
  */
 .diff-same {
-  /* Words that match between environments - no highlighting */
+  /* Characters/words that match between environments - no highlighting */
   color: var(--text-primary);
 }
 
 .diff-added {
-  /* Words in Env2 that differ from Env1 - soft red background */
+  /* Characters/words in Env2 that don't exist in Env1 - soft red background */
   background-color: #ffe6e6;
   color: #000;
   border-radius: 3px;
+  padding: 0 2px;
   font-weight: 500;
 }
 
 .diff-removed {
-  /* Not used in this comparison style - kept for backwards compatibility */
-  color: var(--text-primary);
+  /* Characters/words in Env1 that don't exist in Env2 - light gray background */
+  background-color: #f0f0f0;
+  color: #666;
+  border-radius: 3px;
+  padding: 0 2px;
+  text-decoration: line-through;
+  text-decoration-color: #999;
 }
 
 .diff-modified {
-  /* Not used in this comparison style - kept for backwards compatibility */
+  /* Not currently used - kept for future use */
   color: var(--text-primary);
 }
 

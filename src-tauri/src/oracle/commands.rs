@@ -199,7 +199,7 @@ pub fn compare_configurations(
     // Fetch metadata to determine primary key
     let metadata = conn1.fetch_table_metadata(&request.env1_schema, &request.table_name)?;
 
-    // Determine which primary key to use: custom or table's actual PK
+    // Determine which primary key to use: custom > table PK > first field fallback
     let primary_key = if !request.custom_primary_key.is_empty() {
         log::info!(
             "Using custom primary key: {:?} (overriding table PK: {:?})",
@@ -207,18 +207,26 @@ pub fn compare_configurations(
             metadata.primary_key
         );
         request.custom_primary_key.clone()
-    } else {
-        if metadata.primary_key.is_empty() {
-            return Err(format!(
-                "Table {}.{} has no primary key defined. Please select custom primary key fields.",
-                request.env1_schema, request.table_name
-            ));
-        }
+    } else if !metadata.primary_key.is_empty() {
         log::info!(
             "Using table's primary key: {:?} for comparison",
             metadata.primary_key
         );
         metadata.primary_key.clone()
+    } else {
+        // Fallback: use the first field as primary key
+        if metadata.columns.is_empty() {
+            return Err(format!(
+                "Table {}.{} has no columns. Cannot perform comparison.",
+                request.env1_schema, request.table_name
+            ));
+        }
+        let first_field = metadata.columns[0].name.clone();
+        log::warn!(
+            "Table {}.{} has no primary key defined. Using first field '{}' as fallback primary key.",
+            request.env1_schema, request.table_name, first_field
+        );
+        vec![first_field]
     };
 
     // Determine which fields to fetch and compare

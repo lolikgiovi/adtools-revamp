@@ -204,47 +204,444 @@ impl ComparisonEngine {
 
     /// Computes diff chunks for text highlighting
     ///
-    /// Uses word-based comparison to highlight differences in Env2 compared to Env1.
-    /// Env1 is shown as plain text (all Same chunks).
-    /// Env2 highlights differing words with Added type (rendered as soft red background).
+    /// Uses smart adaptive approach:
+    /// - For completely different strings: highlight entire text
+    /// - For similar strings: use Myers diff algorithm for clean, intuitive diffs
+    /// - Falls back to highlighting all if Myers takes too long
     pub fn compute_diff_chunks(s1: &str, s2: &str) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
-        // Split by whitespace to get word tokens
+        // Phase 1: Quick check for completely different strings
+        let similarity = Self::calculate_similarity(s1, s2);
+
+        if similarity < 0.3 {
+            // Completely different - just highlight everything
+            return (
+                vec![DiffChunk {
+                    text: s1.to_string(),
+                    chunk_type: DiffChunkType::Removed,
+                }],
+                vec![DiffChunk {
+                    text: s2.to_string(),
+                    chunk_type: DiffChunkType::Added,
+                }],
+            );
+        }
+
+        // Phase 2: Use Myers diff algorithm for clean results
+        Self::compute_myers_diff_chunks(s1, s2)
+    }
+
+    /// Calculates similarity ratio between two strings using LCS
+    fn calculate_similarity(s1: &str, s2: &str) -> f64 {
+        if s1.is_empty() && s2.is_empty() {
+            return 1.0;
+        }
+        if s1.is_empty() || s2.is_empty() {
+            return 0.0;
+        }
+
+        let chars1: Vec<char> = s1.chars().collect();
+        let chars2: Vec<char> = s2.chars().collect();
+        let lcs_length = Self::compute_char_lcs_length(&chars1, &chars2);
+
+        let max_len = s1.len().max(s2.len());
+        lcs_length as f64 / max_len as f64
+    }
+
+    /// Computes LCS length for characters (for similarity calculation)
+    fn compute_char_lcs_length(chars1: &[char], chars2: &[char]) -> usize {
+        let m = chars1.len();
+        let n = chars2.len();
+        let mut dp = vec![vec![0; n + 1]; m + 1];
+
+        for i in 1..=m {
+            for j in 1..=n {
+                if chars1[i - 1] == chars2[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
+                }
+            }
+        }
+
+        dp[m][n]
+    }
+
+    /// Computes diff chunks using Myers diff algorithm
+    ///
+    /// Myers algorithm produces cleaner, more intuitive diffs than LCS.
+    /// For example: "ABC|DEF|" vs "ABC|" will correctly show "DEF|" as removed,
+    /// rather than splitting it into confusing character fragments.
+    fn compute_myers_diff_chunks(s1: &str, s2: &str) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
+        let chars1: Vec<char> = s1.chars().collect();
+        let chars2: Vec<char> = s2.chars().collect();
+
+        // Compute Myers diff
+        let edits = Self::myers_diff(&chars1, &chars2);
+
+        // Build chunks from edit script
+        let (chunks1, chunks2) = Self::build_chunks_from_myers(&chars1, &chars2, &edits);
+
+        (chunks1, chunks2)
+    }
+
+    /// Myers diff algorithm implementation
+    ///
+    /// Returns a vector of edit operations: (type, position_in_s1, position_in_s2)
+    /// where type is: 0 = match, 1 = insert (add to s2), -1 = delete (remove from s1)
+    fn myers_diff(s1: &[char], s2: &[char]) -> Vec<(i32, usize, usize)> {
+        let n = s1.len();
+        let m = s2.len();
+        let max = n + m;
+
+        // V array for Myers algorithm
+        let mut v: Vec<isize> = vec![0; 2 * max + 1];
+        let offset = max;
+
+        // Trace for backtracking
+        let mut trace: Vec<Vec<isize>> = Vec::new();
+
+        // Find shortest edit script
+        for d in 0..=max {
+            trace.push(v.clone());
+
+            for k in (-(d as isize)..=(d as isize)).step_by(2) {
+                let k_idx = (k + offset as isize) as usize;
+
+                let mut x = if k == -(d as isize) || (k != d as isize && v[k_idx - 1] < v[k_idx + 1]) {
+                    v[k_idx + 1]
+                } else {
+                    v[k_idx - 1] + 1
+                };
+
+                let mut y = x - k;
+
+                // Extend diagonal
+                while (x as usize) < n && (y as usize) < m && s1[x as usize] == s2[y as usize] {
+                    x += 1;
+                    y += 1;
+                }
+
+                v[k_idx] = x;
+
+                if (x as usize) >= n && (y as usize) >= m {
+                    // Found the shortest path
+                    return Self::backtrack_myers(&trace, s1, s2, d, k, offset);
+                }
+            }
+        }
+
+        // Fallback: no common subsequence
+        vec![]
+    }
+
+    /// Backtrack through Myers trace to build edit script
+    fn backtrack_myers(
+        trace: &[Vec<isize>],
+        s1: &[char],
+        s2: &[char],
+        d: usize,
+        mut k: isize,
+        offset: usize,
+    ) -> Vec<(i32, usize, usize)> {
+        let mut edits = Vec::new();
+        let mut x = s1.len() as isize;
+        let mut y = s2.len() as isize;
+
+        for d in (0..=d).rev() {
+            let k_idx = (k + offset as isize) as usize;
+            let v = &trace[d];
+
+            let prev_k = if k == -(d as isize) || (k != d as isize && v[k_idx - 1] < v[k_idx + 1]) {
+                k + 1
+            } else {
+                k - 1
+            };
+
+            let prev_k_idx = (prev_k + offset as isize) as usize;
+            let prev_x = if d > 0 { v[prev_k_idx] } else { 0 };
+            let prev_y = prev_x - prev_k;
+
+            // Extend diagonal matches backwards
+            while x > prev_x && y > prev_y {
+                x -= 1;
+                y -= 1;
+                edits.push((0, x as usize, y as usize)); // Match
+            }
+
+            if d > 0 {
+                if x == prev_x {
+                    // Insert
+                    y -= 1;
+                    edits.push((1, x as usize, y as usize));
+                } else {
+                    // Delete
+                    x -= 1;
+                    edits.push((-1, x as usize, y as usize));
+                }
+            }
+
+            k = prev_k;
+        }
+
+        edits.reverse();
+        edits
+    }
+
+    /// Builds chunks from Myers edit script
+    fn build_chunks_from_myers(
+        s1: &[char],
+        s2: &[char],
+        edits: &[(i32, usize, usize)],
+    ) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
+        let mut chunks1 = Vec::new();
+        let mut chunks2 = Vec::new();
+
+        let mut current1 = String::new();
+        let mut current2 = String::new();
+        let mut type1 = DiffChunkType::Same;
+        let mut type2 = DiffChunkType::Same;
+
+        for (op, i, j) in edits {
+            match op {
+                0 => {
+                    // Match
+                    let ch = s1[*i];
+
+                    // Flush previous chunks if type changes
+                    if type1 != DiffChunkType::Same && !current1.is_empty() {
+                        chunks1.push(DiffChunk {
+                            text: current1.clone(),
+                            chunk_type: type1.clone(),
+                        });
+                        current1.clear();
+                    }
+                    if type2 != DiffChunkType::Same && !current2.is_empty() {
+                        chunks2.push(DiffChunk {
+                            text: current2.clone(),
+                            chunk_type: type2.clone(),
+                        });
+                        current2.clear();
+                    }
+
+                    current1.push(ch);
+                    current2.push(ch);
+                    type1 = DiffChunkType::Same;
+                    type2 = DiffChunkType::Same;
+                }
+                -1 => {
+                    // Delete from s1
+                    let ch = s1[*i];
+
+                    if type1 != DiffChunkType::Removed && !current1.is_empty() {
+                        chunks1.push(DiffChunk {
+                            text: current1.clone(),
+                            chunk_type: type1.clone(),
+                        });
+                        current1.clear();
+                    }
+
+                    current1.push(ch);
+                    type1 = DiffChunkType::Removed;
+                }
+                1 => {
+                    // Insert into s2
+                    let ch = s2[*j];
+
+                    if type2 != DiffChunkType::Added && !current2.is_empty() {
+                        chunks2.push(DiffChunk {
+                            text: current2.clone(),
+                            chunk_type: type2.clone(),
+                        });
+                        current2.clear();
+                    }
+
+                    current2.push(ch);
+                    type2 = DiffChunkType::Added;
+                }
+                _ => {}
+            }
+        }
+
+        // Flush remaining
+        if !current1.is_empty() {
+            chunks1.push(DiffChunk {
+                text: current1,
+                chunk_type: type1,
+            });
+        }
+        if !current2.is_empty() {
+            chunks2.push(DiffChunk {
+                text: current2,
+                chunk_type: type2,
+            });
+        }
+
+        (chunks1, chunks2)
+    }
+
+    /// Computes character-level diff chunks for similar strings (OLD - kept for reference)
+    #[allow(dead_code)]
+    fn compute_char_diff_chunks_old(s1: &str, s2: &str) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
+        let chars1: Vec<char> = s1.chars().collect();
+        let chars2: Vec<char> = s2.chars().collect();
+
+        let lcs = Self::compute_char_lcs(&chars1, &chars2);
+
+        // Build matching position sets
+        let mut matching_pos1 = std::collections::HashSet::new();
+        let mut matching_pos2 = std::collections::HashSet::new();
+        for (i, j) in &lcs {
+            matching_pos1.insert(*i);
+            matching_pos2.insert(*j);
+        }
+
+        // Build chunks for Env1 (show removed characters)
+        let chunks1 = Self::build_char_chunks(&chars1, &matching_pos1, DiffChunkType::Removed);
+
+        // Build chunks for Env2 (show added characters)
+        let chunks2 = Self::build_char_chunks(&chars2, &matching_pos2, DiffChunkType::Added);
+
+        (chunks1, chunks2)
+    }
+
+    /// Builds chunks from character array with matching positions
+    fn build_char_chunks(
+        chars: &[char],
+        matching_positions: &std::collections::HashSet<usize>,
+        diff_type: DiffChunkType,
+    ) -> Vec<DiffChunk> {
+        let mut chunks = Vec::new();
+        let mut current_chunk = String::new();
+        let mut current_type = DiffChunkType::Same;
+
+        for (idx, ch) in chars.iter().enumerate() {
+            let chunk_type = if matching_positions.contains(&idx) {
+                DiffChunkType::Same
+            } else {
+                diff_type.clone()
+            };
+
+            if chunk_type != current_type && !current_chunk.is_empty() {
+                chunks.push(DiffChunk {
+                    text: current_chunk.clone(),
+                    chunk_type: current_type,
+                });
+                current_chunk.clear();
+            }
+
+            current_chunk.push(*ch);
+            current_type = chunk_type;
+        }
+
+        if !current_chunk.is_empty() {
+            chunks.push(DiffChunk {
+                text: current_chunk,
+                chunk_type: current_type,
+            });
+        }
+
+        chunks
+    }
+
+    /// Computes LCS positions for characters
+    fn compute_char_lcs(chars1: &[char], chars2: &[char]) -> Vec<(usize, usize)> {
+        let m = chars1.len();
+        let n = chars2.len();
+        let mut dp = vec![vec![0; n + 1]; m + 1];
+
+        // Fill DP table
+        for i in 1..=m {
+            for j in 1..=n {
+                if chars1[i - 1] == chars2[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
+                }
+            }
+        }
+
+        // Backtrack to find LCS positions
+        let mut lcs = Vec::new();
+        let mut i = m;
+        let mut j = n;
+
+        while i > 0 && j > 0 {
+            if chars1[i - 1] == chars2[j - 1] {
+                lcs.push((i - 1, j - 1));
+                i -= 1;
+                j -= 1;
+            } else if dp[i - 1][j] > dp[i][j - 1] {
+                i -= 1;
+            } else {
+                j -= 1;
+            }
+        }
+
+        lcs.reverse();
+        lcs
+    }
+
+    /// Computes word-level diff chunks for very different strings
+    fn compute_word_diff_chunks(s1: &str, s2: &str) -> (Vec<DiffChunk>, Vec<DiffChunk>) {
         let words1: Vec<&str> = s1.split_whitespace().collect();
         let words2: Vec<&str> = s2.split_whitespace().collect();
 
-        // Env1 chunks: all words are "Same" (no highlighting)
+        if words1.is_empty() || words2.is_empty() {
+            return (
+                vec![DiffChunk {
+                    text: s1.to_string(),
+                    chunk_type: if s1 == s2 {
+                        DiffChunkType::Same
+                    } else {
+                        DiffChunkType::Removed
+                    },
+                }],
+                vec![DiffChunk {
+                    text: s2.to_string(),
+                    chunk_type: if s1 == s2 {
+                        DiffChunkType::Same
+                    } else {
+                        DiffChunkType::Added
+                    },
+                }],
+            );
+        }
+
+        let lcs = Self::compute_lcs(&words1, &words2);
+
+        // Build matching position sets
+        let mut matching_pos1 = std::collections::HashSet::new();
+        let mut matching_pos2 = std::collections::HashSet::new();
+        for (i, j) in &lcs {
+            matching_pos1.insert(*i);
+            matching_pos2.insert(*j);
+        }
+
+        // Create chunks for Env1
         let chunks1: Vec<DiffChunk> = words1
             .iter()
-            .map(|word| DiffChunk {
+            .enumerate()
+            .map(|(idx, word)| DiffChunk {
                 text: format!("{} ", word),
-                chunk_type: DiffChunkType::Same,
+                chunk_type: if matching_pos1.contains(&idx) {
+                    DiffChunkType::Same
+                } else {
+                    DiffChunkType::Removed
+                },
             })
             .collect();
 
-        // Env2 chunks: highlight words that differ from Env1
-        // Use LCS to find matching words
-        let lcs = Self::compute_lcs(&words1, &words2);
-
-        // Build a set of matching positions in words2
-        let mut matching_positions = std::collections::HashSet::new();
-        for (_, j) in &lcs {
-            matching_positions.insert(*j);
-        }
-
-        // Create chunks for Env2: Same for matching words, Added for different words
+        // Create chunks for Env2
         let chunks2: Vec<DiffChunk> = words2
             .iter()
             .enumerate()
-            .map(|(idx, word)| {
-                let chunk_type = if matching_positions.contains(&idx) {
+            .map(|(idx, word)| DiffChunk {
+                text: format!("{} ", word),
+                chunk_type: if matching_pos2.contains(&idx) {
                     DiffChunkType::Same
                 } else {
-                    DiffChunkType::Added // Will be rendered with soft red background
-                };
-                DiffChunk {
-                    text: format!("{} ", word),
-                    chunk_type,
-                }
+                    DiffChunkType::Added
+                },
             })
             .collect();
 
@@ -391,5 +788,68 @@ mod tests {
         assert_eq!(result.summary.total_records, 1);
         assert_eq!(result.summary.matching, 0);
         assert_eq!(result.summary.differing, 1);
+    }
+
+    #[test]
+    fn test_myers_diff_simple() {
+        // Test case: "ABC" vs "ABCD" using Myers diff
+        let (chunks1, chunks2) = ComparisonEngine::compute_diff_chunks("ABC", "ABCD");
+
+        // Env1 should show "ABC" as all same (no D to remove)
+        assert_eq!(chunks1.len(), 1);
+        assert_eq!(chunks1[0].text, "ABC");
+        assert_eq!(chunks1[0].chunk_type, DiffChunkType::Same);
+
+        // Env2 should show "ABC" as same and "D" as added
+        assert_eq!(chunks2.len(), 2);
+        assert_eq!(chunks2[0].text, "ABC");
+        assert_eq!(chunks2[0].chunk_type, DiffChunkType::Same);
+        assert_eq!(chunks2[1].text, "D");
+        assert_eq!(chunks2[1].chunk_type, DiffChunkType::Added);
+    }
+
+    #[test]
+    fn test_myers_diff_pipe_separated() {
+        // Test case from user's example: pipe-separated values
+        let env1 = "ATMPRI|GOVATN|GOVMS1|KDMPRI|KDTANI|MAKMR2|MAKMUR|KPRI01|PRIOP1|";
+        let env2 = "ATMPRI|GOVATN|GOVMS1|KDMPRI|KDTANI|MAKMR2|MAKMUR|";
+
+        let (chunks1, chunks2) = ComparisonEngine::compute_diff_chunks(env1, env2);
+
+        // Env1 should show common part + removed part
+        // Find the chunk with removed content
+        let removed_chunk = chunks1.iter().find(|c| c.chunk_type == DiffChunkType::Removed);
+        assert!(removed_chunk.is_some(), "Should have removed chunk");
+        assert_eq!(removed_chunk.unwrap().text, "KPRI01|PRIOP1|");
+
+        // Env2 should show only the common part as "same"
+        assert_eq!(chunks2.len(), 1);
+        assert_eq!(chunks2[0].text, "ATMPRI|GOVATN|GOVMS1|KDMPRI|KDTANI|MAKMR2|MAKMUR|");
+        assert_eq!(chunks2[0].chunk_type, DiffChunkType::Same);
+    }
+
+    #[test]
+    fn test_similarity_calculation() {
+        // Test high similarity
+        let similarity = ComparisonEngine::calculate_similarity("ABC", "ABCD");
+        assert!(similarity > 0.6, "ABC vs ABCD should have >60% similarity");
+
+        // Test low similarity
+        let similarity = ComparisonEngine::calculate_similarity("hello world", "goodbye universe");
+        assert!(similarity < 0.6, "Very different strings should have <60% similarity");
+
+        // Test identical strings
+        let similarity = ComparisonEngine::calculate_similarity("test", "test");
+        assert_eq!(similarity, 1.0, "Identical strings should have 100% similarity");
+    }
+
+    #[test]
+    fn test_word_diff_for_different_strings() {
+        // Test case: very different strings should use word-level diff
+        let (chunks1, chunks2) = ComparisonEngine::compute_diff_chunks("hello world", "goodbye universe");
+
+        // Should use word-level diff (multiple chunks)
+        assert!(chunks1.len() > 0);
+        assert!(chunks2.len() > 0);
     }
 }
