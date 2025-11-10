@@ -77,7 +77,7 @@
       "id": "compare-config",
       "name": "Compare Config",
       "category": "config",
-      "icon": "database",
+      "icon": "database-compare",
       "showInSidebar": true,
       "showOnHome": true,
       "requiresTauri": true,
