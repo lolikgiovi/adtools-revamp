@@ -4,7 +4,7 @@
  */
 
 export const CompareConfigTemplate = /* html */ `
-<div class="compare-config-container">
+<div class="compare-config-container tool-container">
     <!-- Oracle Client Installation Guide (shown when client not installed) -->
     <div id="installation-guide" class="installation-guide" style="display: none;">
         <div class="installation-card">
@@ -47,14 +47,6 @@ export const CompareConfigTemplate = /* html */ `
                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
                     </svg>
                     Check Again
-                </button>
-                <button class="btn-secondary" id="btn-troubleshooting">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    Troubleshooting
                 </button>
             </div>
         </div>

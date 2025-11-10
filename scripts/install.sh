@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Color codes for styled output (similar to install-oracle.sh)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,15 +11,12 @@ log() { printf "%b\n" "${GREEN}[adtools] $1${NC}"; }
 warn() { printf "%b\n" "${YELLOW}[warning] $1${NC}"; }
 err() { printf "%b\n" "${RED}[error] $1${NC}" >&2; }
 
-# Banner
 printf "%b\n" "${GREEN}==============================================${NC}"
 printf "%b\n" "${GREEN}[ Installing AD Tools for Desktop ]${NC}"
 printf "%b\n" "${GREEN}==============================================${NC}"
 echo ""
 
 BASE_URL="https://adtools.lolik.workers.dev"
-
-# No extra curl security flags; rely on https URLs and system defaults
 CURL_SECURITY_ARGS=""
 
 retry_curl() {

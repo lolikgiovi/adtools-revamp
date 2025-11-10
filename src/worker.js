@@ -30,6 +30,12 @@ export default {
       return handleInstallScript(request, env);
     }
 
+    // Oracle Instant Client installer script endpoint
+    if (url.pathname === "/install-oracle.sh") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleInstallOracleScript(request, env);
+    }
+
     // Latest release resolver (redirects to DMG based on arch, stable-only)
     if (url.pathname === "/releases/latest") {
       if (method !== "GET" && method !== "HEAD") return methodNotAllowed();
@@ -160,6 +166,35 @@ async function handleInstallScript(request, env) {
       "Cache-Control": "no-store",
       ...corsHeaders(),
     },
+  });
+}
+
+async function handleInstallOracleScript(request, env) {
+  // Validate Origin; allow absent Origin for CLI usage
+  if (!isOriginAllowed(request, env)) {
+    return new Response("Forbidden", { status: 403, headers: { "Content-Type": "text/plain", ...corsHeaders() } });
+  }
+
+  // Serve the script stored in R2 at install-oracle.sh
+  try {
+    const obj = await env.UPDATES?.get("install-oracle.sh");
+    if (obj && obj.body) {
+      return new Response(obj.body, {
+        headers: {
+          "Content-Type": "text/x-sh; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "no-store",
+          ...corsHeaders(),
+        },
+      });
+    }
+  } catch (_) {
+    // Fall through to 404 if object cannot be read
+  }
+
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "Content-Type": "text/plain", ...corsHeaders() },
   });
 }
 
