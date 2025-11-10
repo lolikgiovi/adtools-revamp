@@ -53,6 +53,7 @@ impl ComparisonEngine {
         };
 
         // Compare each record
+        let mut row_num = 0;
         for key in all_keys {
             let env1_record = env1_map.get(&key);
             let env2_record = env2_map.get(&key);
@@ -79,8 +80,17 @@ impl ComparisonEngine {
                 (None, None) => unreachable!(), // Can't happen since key came from union
             };
 
+            row_num += 1;
+
+            // Format the display key: if it's very long (composite key), use row number
+            let display_key = if key.len() > 100 {
+                format!("Row #{}", row_num)
+            } else {
+                key.clone()
+            };
+
             comparisons.push(ConfigComparison {
-                primary_key: key,
+                primary_key: display_key,
                 status,
                 env1_data: env1_record.cloned(),
                 env2_data: env2_record.cloned(),

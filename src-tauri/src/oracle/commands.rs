@@ -334,48 +334,74 @@ pub fn compare_raw_sql(
         env2_records.len()
     );
 
-    // Use provided primary key or auto-detect from first column
+    // Use provided primary key or auto-detect using all columns
     let primary_key = if !request.primary_key.is_empty() {
         log::info!("Using user-provided primary key: {:?}", request.primary_key);
+
+        // Normalize primary key fields by stripping table aliases (e.g., "e.EVENT_CODE" -> "EVENT_CODE")
+        let mut normalized_pk: Vec<String> = request.primary_key
+            .iter()
+            .map(|field| {
+                // Split by '.' and take the last part (column name without alias)
+                field.split('.').last().unwrap_or(field).to_uppercase()
+            })
+            .collect();
 
         // Validate that the primary key fields exist in the SQL results
         if !env1_records.is_empty() {
             if let Some(obj) = env1_records[0].as_object() {
-                for pk_field in &request.primary_key {
-                    if !obj.contains_key(pk_field) {
-                        let available_fields: Vec<String> = obj.keys().map(|k| k.clone()).collect();
+                // Get available fields (Oracle returns them in uppercase)
+                let available_fields: Vec<String> = obj.keys().map(|k| k.clone()).collect();
+
+                // Validate and match fields
+                for pk_field in &normalized_pk {
+                    // Try exact match first, then case-insensitive
+                    let field_exists = obj.contains_key(pk_field) ||
+                        available_fields.iter().any(|f| f.eq_ignore_ascii_case(pk_field));
+
+                    if !field_exists {
                         return Err(format!(
-                            "Primary key field '{}' not found in SQL result. Available fields: {}",
+                            "Primary key field '{}' not found in SQL result. Available fields: {}\nTip: Use column names without table aliases (e.g., 'EVENT_CODE' instead of 'e.EVENT_CODE')",
                             pk_field,
                             available_fields.join(", ")
                         ));
                     }
                 }
+
+                // Replace normalized fields with exact matches from available fields
+                normalized_pk = normalized_pk
+                    .into_iter()
+                    .map(|pk_field| {
+                        // Find the exact field name from the result (case-sensitive match)
+                        available_fields
+                            .iter()
+                            .find(|f| f.eq_ignore_ascii_case(&pk_field))
+                            .cloned()
+                            .unwrap_or(pk_field)
+                    })
+                    .collect();
             }
         }
 
-        request.primary_key.clone()
+        log::info!("Normalized primary key: {:?}", normalized_pk);
+        normalized_pk
     } else {
-        // Auto-detect primary key from first column
-        let primary_key_field = if !env1_records.is_empty() {
-            // Get first column name from the first record
+        // Auto-detect: use all columns as composite primary key
+        // This ensures each unique row gets its own identity
+        let all_columns = if !env1_records.is_empty() {
             if let Some(obj) = env1_records[0].as_object() {
-                if let Some(first_key) = obj.keys().next() {
-                    first_key.clone()
-                } else {
-                    return Err("No columns found in SQL result".to_string());
-                }
+                // Collect all column names and sort them for consistency
+                let mut cols: Vec<String> = obj.keys().cloned().collect();
+                cols.sort();
+                cols
             } else {
                 return Err("Invalid SQL result format".to_string());
             }
         } else if !env2_records.is_empty() {
-            // Fallback to env2 if env1 is empty
             if let Some(obj) = env2_records[0].as_object() {
-                if let Some(first_key) = obj.keys().next() {
-                    first_key.clone()
-                } else {
-                    return Err("No columns found in SQL result".to_string());
-                }
+                let mut cols: Vec<String> = obj.keys().cloned().collect();
+                cols.sort();
+                cols
             } else {
                 return Err("Invalid SQL result format".to_string());
             }
@@ -383,8 +409,8 @@ pub fn compare_raw_sql(
             return Err("Both environments returned empty results".to_string());
         };
 
-        log::info!("Auto-detected primary key field: {}", primary_key_field);
-        vec![primary_key_field]
+        log::info!("No primary key specified - using all columns as composite key: {:?}", all_columns);
+        all_columns
     };
 
     // Perform comparison using all fields (empty = all fields)

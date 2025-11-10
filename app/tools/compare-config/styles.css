@@ -1055,6 +1055,14 @@
   color: var(--text-primary);
 }
 
+/* Center align Status and Action columns */
+.results-table th:nth-child(3),
+.results-table td:nth-child(3),
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) {
+  text-align: center;
+}
+
 .comparison-row {
   cursor: pointer;
   transition: background-color 0.15s ease;

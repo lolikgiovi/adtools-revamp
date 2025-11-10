@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-log() { printf "[adtools] %s\n" "$1"; }
-warn() { printf "[warning] %s\n" "$1"; }
-err() { printf "[error] %s\n" "$1" >&2; }
+# Color codes for styled output (similar to install-oracle.sh)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Styled logging helpers
+log() { printf "%b\n" "${GREEN}[adtools] $1${NC}"; }
+warn() { printf "%b\n" "${YELLOW}[warning] $1${NC}"; }
+err() { printf "%b\n" "${RED}[error] $1${NC}" >&2; }
+
+# Banner
+printf "%b\n" "${GREEN}==============================================${NC}"
+printf "%b\n" "${GREEN}[ Installing AD Tools for Desktop ]${NC}"
+printf "%b\n" "${GREEN}==============================================${NC}"
+echo ""
 
 BASE_URL="https://adtools.lolik.workers.dev"
 
@@ -49,6 +62,8 @@ case "$ARCH_NATIVE" in
   x86_64) ARCH_KEY="darwin-x86_64";;
   *) err "Unsupported architecture: $ARCH_NATIVE"; exit 1;;
 esac
+
+log "Architecture detected: $ARCH_NATIVE"
 
 CHANNEL="stable"
 LATEST_URL="${BASE_URL}/releases/latest?arch=${ARCH_KEY}&channel=${CHANNEL}"
