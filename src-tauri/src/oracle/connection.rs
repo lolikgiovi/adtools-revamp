@@ -307,13 +307,60 @@ impl DatabaseConnection {
             }
         }
 
-        log::info!("Primary key columns: {:?}", primary_key);
+        log::info!("Primary key columns from database: {:?}", primary_key);
+
+        // Smart config table detection: suggest PARAMETER_KEY as default PK for config tables
+        let table_name_lower = table_name.to_lowercase();
+        let is_config_table = table_name_lower == "config"
+            || table_name_lower.ends_with("_config")
+            || table_name_lower == "app_config";
+
+        let suggested_primary_key = if is_config_table {
+            // Look for PARAMETER_KEY column (first pass - just check if it exists)
+            let param_key_exists = columns.iter().any(|c| c.name.eq_ignore_ascii_case("PARAMETER_KEY"));
+
+            if param_key_exists {
+                // Get the exact column name
+                let param_key_name = columns
+                    .iter()
+                    .find(|c| c.name.eq_ignore_ascii_case("PARAMETER_KEY"))
+                    .map(|c| c.name.clone())
+                    .unwrap();
+
+                // Second pass - update the is_pk flags
+                for col in columns.iter_mut() {
+                    if col.name.eq_ignore_ascii_case("PARAMETER_KEY") {
+                        // Mark PARAMETER_KEY as PK (this makes it selected by default in UI)
+                        col.is_pk = true;
+                    } else if primary_key.contains(&col.name) {
+                        // Unmark the database PK columns (if different from PARAMETER_KEY)
+                        col.is_pk = false;
+                    }
+                }
+
+                log::info!(
+                    "Config table detected. Suggesting 'PARAMETER_KEY' as default primary key (overriding database PK: {:?})",
+                    primary_key
+                );
+                vec![param_key_name]
+            } else {
+                // Config table without PARAMETER_KEY: keep database PK
+                log::info!(
+                    "Config table detected but 'PARAMETER_KEY' column not found. Using database PK: {:?}",
+                    primary_key
+                );
+                primary_key
+            }
+        } else {
+            // Non-config table: use database PK as-is
+            primary_key
+        };
 
         Ok(super::models::TableMetadata {
             owner: owner.to_string(),
             table_name: table_name.to_string(),
             columns,
-            primary_key,
+            primary_key: suggested_primary_key,
         })
     }
 
@@ -390,11 +437,23 @@ impl DatabaseConnection {
             return Err("Only SELECT statements are allowed".to_string());
         }
 
-        // Prevent dangerous SQL patterns
+        // Prevent dangerous SQL patterns (check as whole words, not substrings in field names)
+        // This prevents blocking queries like: SELECT deleted_at, updated_by FROM ...
         let dangerous_patterns = ["drop", "delete", "truncate", "insert", "update", "alter", "create"];
+
+        // Use word boundary detection: split by common SQL delimiters
+        let sql_words: Vec<&str> = sql_lower
+            .split(|c: char| c.is_whitespace() || "(),;".contains(c))
+            .filter(|w| !w.is_empty())
+            .collect();
+
         for pattern in &dangerous_patterns {
-            if sql_lower.contains(pattern) {
-                return Err(format!("SQL statement contains forbidden keyword: {}", pattern));
+            // Only match if the dangerous keyword appears as a standalone word
+            if sql_words.contains(pattern) {
+                return Err(format!(
+                    "SQL statement contains forbidden keyword: '{}'. Only SELECT queries are allowed.",
+                    pattern
+                ));
             }
         }
 

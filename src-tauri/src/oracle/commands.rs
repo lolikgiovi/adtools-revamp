@@ -199,17 +199,18 @@ pub fn compare_configurations(
     // Fetch metadata to determine primary key
     let metadata = conn1.fetch_table_metadata(&request.env1_schema, &request.table_name)?;
 
-    // Determine which primary key to use: custom > table PK > first field fallback
+    // Determine which primary key to use: custom > metadata PK > first field fallback
+    // Note: metadata.primary_key already contains smart suggestions for config tables
     let primary_key = if !request.custom_primary_key.is_empty() {
         log::info!(
-            "Using custom primary key: {:?} (overriding table PK: {:?})",
+            "Using custom primary key: {:?} (overriding suggested PK: {:?})",
             request.custom_primary_key,
             metadata.primary_key
         );
         request.custom_primary_key.clone()
     } else if !metadata.primary_key.is_empty() {
         log::info!(
-            "Using table's primary key: {:?} for comparison",
+            "Using suggested primary key from metadata: {:?}",
             metadata.primary_key
         );
         metadata.primary_key.clone()
@@ -230,7 +231,7 @@ pub fn compare_configurations(
     };
 
     // Determine which fields to fetch and compare
-    let fields_to_fetch = if request.fields.is_empty() {
+    let mut fields_to_fetch = if request.fields.is_empty() {
         // If no fields specified, fetch all columns
         metadata
             .columns
@@ -241,15 +242,28 @@ pub fn compare_configurations(
         request.fields.clone()
     };
 
+    // Always ensure primary key fields are included in the field list
+    for pk_field in &primary_key {
+        if !fields_to_fetch.contains(pk_field) {
+            fields_to_fetch.insert(0, pk_field.clone());
+            log::info!("Added primary key field '{}' to field list", pk_field);
+        }
+    }
+
     // Clamp max_rows to valid range (1-10000)
     let max_rows = request.max_rows.clamp(1, 10000);
+
+    // Clean up WHERE clause if provided
+    let cleaned_where_clause = request.where_clause.as_ref().map(|clause| {
+        sanitize_where_clause(clause)
+    });
 
     // Fetch records from both environments
     log::info!("Fetching records from environment 1...");
     let env1_records = conn1.fetch_records(
         &request.env1_schema,
         &request.table_name,
-        request.where_clause.as_deref(),
+        cleaned_where_clause.as_deref(),
         &fields_to_fetch,
         max_rows,
     )?;
@@ -258,7 +272,7 @@ pub fn compare_configurations(
     let env2_records = conn2.fetch_records(
         &request.env2_schema,
         &request.table_name,
-        request.where_clause.as_deref(),
+        cleaned_where_clause.as_deref(),
         &fields_to_fetch,
         max_rows,
     )?;
@@ -532,4 +546,39 @@ fn export_to_csv(result: &super::models::ComparisonResult) -> Result<String, Str
 /// Escapes CSV values
 fn escape_csv(value: &str) -> String {
     value.replace("\"", "\"\"")
+}
+
+/// Sanitizes WHERE clause input by stripping common prefixes
+///
+/// Handles cases where users input:
+/// - "WHERE status = 'active'" → "status = 'active'"
+/// - "SELECT * FROM table WHERE id = 1" → "id = 1"
+/// - "status = 'active'" → "status = 'active'" (unchanged)
+fn sanitize_where_clause(clause: &str) -> String {
+    let trimmed = clause.trim();
+
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    // Convert to lowercase for pattern matching (but preserve original case in result)
+    let lower = trimmed.to_lowercase();
+
+    // Pattern 1: "SELECT ... FROM ... WHERE condition" → extract "condition"
+    if let Some(where_pos) = lower.rfind("where") {
+        // Find the last occurrence of WHERE and take everything after it
+        let after_where = &trimmed[where_pos + 5..].trim();
+        log::info!("Stripped SELECT/FROM/WHERE from clause, extracted: {}", after_where);
+        return after_where.to_string();
+    }
+
+    // Pattern 2: Just "WHERE condition" → extract "condition"
+    if lower.starts_with("where") {
+        let after_where = trimmed[5..].trim();
+        log::info!("Stripped WHERE keyword from clause, extracted: {}", after_where);
+        return after_where.to_string();
+    }
+
+    // Pattern 3: Plain condition (no WHERE keyword) → return as-is
+    trimmed.to_string()
 }
