@@ -1611,14 +1611,32 @@ class CompareConfigTool extends BaseTool {
     }
 
     try {
-      const filepath = await CompareConfigService.exportComparisonResult(this.comparisonResult, format);
+      // Get export data from backend
+      const exportData = await CompareConfigService.exportComparisonResult(this.comparisonResult, format);
+
+      // Create a blob and trigger browser download
+      const blob = new Blob([exportData.content], {
+        type: format === 'json' ? 'application/json' : 'text/csv'
+      });
+      const url = URL.createObjectURL(blob);
+
+      // Create temporary download link and click it
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = exportData.filename;
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
       this.eventBus.emit("notification:show", {
         type: "success",
-        message: `Results exported to: ${filepath}`,
+        message: `Results exported as ${exportData.filename}`,
       });
 
-      this.eventBus.emit("comparison:exported", { filepath, format });
+      this.eventBus.emit("comparison:exported", { filename: exportData.filename, format });
     } catch (error) {
       console.error("Export failed:", error);
 

@@ -444,39 +444,29 @@ pub fn compare_raw_sql(
 /// Exports comparison results to a file
 ///
 /// Supports JSON and CSV formats
+/// Returns the file content to be saved via frontend dialog
 #[tauri::command]
 pub fn export_comparison_result(
     result: super::models::ComparisonResult,
     format: String,
-) -> Result<String, String> {
-    use std::fs;
+) -> Result<ExportData, String> {
+    log::info!("Preparing export data as {}", format);
 
-    log::info!("Exporting comparison result as {}", format);
-
-    // Create export directory
-    let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
-    let export_dir = home_dir.join("Documents").join("adtools_library").join("comparisons");
-
-    if !export_dir.exists() {
-        fs::create_dir_all(&export_dir)
-            .map_err(|e| format!("Failed to create export directory: {}", e))?;
-    }
-
-    // Generate timestamped filename
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    // Validate format
     let extension = match format.as_str() {
         "json" => "json",
         "csv" => "csv",
         _ => return Err(format!("Unsupported format: {}", format)),
     };
 
+    // Generate default filename
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     let filename = format!(
         "comparison_{}_{}.{}",
         result.env1_name.replace(" ", "_"),
         timestamp,
         extension
     );
-    let filepath = export_dir.join(&filename);
 
     // Generate content
     let content = match format.as_str() {
@@ -488,14 +478,21 @@ pub fn export_comparison_result(
         _ => unreachable!(),
     };
 
-    // Write file
-    fs::write(&filepath, content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    log::info!("Export data prepared: {} bytes", content.len());
 
-    let filepath_str = filepath.to_string_lossy().to_string();
-    log::info!("Exported comparison to: {}", filepath_str);
+    Ok(ExportData {
+        filename,
+        content,
+        format: extension.to_string(),
+    })
+}
 
-    Ok(filepath_str)
+/// Export data structure returned to frontend
+#[derive(serde::Serialize)]
+pub struct ExportData {
+    pub filename: String,
+    pub content: String,
+    pub format: String,
 }
 
 /// Converts comparison result to CSV format

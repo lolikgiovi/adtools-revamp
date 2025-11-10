@@ -118,7 +118,7 @@ export class CompareConfigService {
    * Exports comparison results to a file
    * @param {Object} result - Comparison result
    * @param {string} format - Export format (json or csv)
-   * @returns {Promise<string>} File path
+   * @returns {Promise<{filename: string, content: string, format: string}>} Export data
    */
   static async exportComparisonResult(result, format) {
     return await invoke("export_comparison_result", {
