@@ -2,7 +2,7 @@
 ///
 /// This module exposes Oracle functionality to the frontend via Tauri commands.
 
-use super::client::{check_client_ready, prime_client};
+use super::client::{check_client_ready, prime_client, resolve_client_path, is_client_primed};
 use super::models::{ConnectionConfig, Credentials};
 use super::connection::DatabaseConnection;
 use crate::credentials::CredentialManager;
@@ -46,21 +46,157 @@ pub fn test_oracle_connection(
     password: String,
 ) -> Result<String, String> {
     log::info!("Testing Oracle connection for: {}", config.name);
+    log::debug!("Connection details - Host: {}, Port: {}, Service: {}",
+                config.host, config.port, config.service_name);
 
     // Validate inputs
-    config.validate()?;
+    if let Err(e) = config.validate() {
+        log::error!("Configuration validation failed: {}", e);
+        return Err(format!("Configuration error: {}", e));
+    }
 
     let credentials = Credentials::new(username, password);
-    credentials.validate()?;
+    if let Err(e) = credentials.validate() {
+        log::error!("Credentials validation failed: {}", e);
+        return Err(format!("Credentials error: {}", e));
+    }
+
+    // Check if Oracle client is ready before attempting connection
+    if !check_client_ready(None) {
+        let client_path = resolve_client_path(None);
+        log::error!("Oracle client not ready at: {:?}", client_path);
+        return Err(format!(
+            "Oracle Instant Client not found at: {}\n\n\
+            Please install Oracle Instant Client:\n\
+            1. Run the installation script from the Compare Config page\n\
+            2. Or visit: https://www.oracle.com/database/technologies/instant-client/downloads.html",
+            client_path.display()
+        ));
+    }
+
+    // Check if client is primed (loaded)
+    if !is_client_primed() {
+        log::warn!("Oracle client found but not primed, attempting to prime...");
+
+        // Before priming, verify the file and symlink details
+        let client_path = resolve_client_path(None);
+        let lib_path = client_path.join("libclntsh.dylib");
+
+        if lib_path.is_symlink() {
+            match std::fs::read_link(&lib_path) {
+                Ok(target) => {
+                    let full_target = if target.is_absolute() {
+                        target.clone()
+                    } else {
+                        client_path.join(&target)
+                    };
+                    log::info!("Symlink details: {:?} -> {:?} (exists: {})",
+                              lib_path, full_target, full_target.exists());
+
+                    if !full_target.exists() {
+                        return Err(format!(
+                            "Oracle Instant Client installation is broken.\n\n\
+                            The symlink exists but points to a missing file:\n\
+                            - Symlink: {}\n\
+                            - Target: {} (NOT FOUND)\n\n\
+                            Solution: Reinstall Oracle Instant Client by running:\n\
+                            curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash",
+                            lib_path.display(),
+                            full_target.display()
+                        ));
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to read symlink: {}", e);
+                }
+            }
+        }
+
+        if let Err(e) = prime_client(None) {
+            log::error!("Failed to prime Oracle client: {}", e);
+
+            // Provide detailed diagnostics
+            let mut diagnostic_info = format!(
+                "Failed to load Oracle Instant Client: {}\n\n\
+                Library Path: {}\n\
+                Symlink: {}\n\n",
+                e,
+                client_path.display(),
+                if lib_path.is_symlink() { "Yes" } else { "No" }
+            );
+
+            // Check if it's an architecture issue
+            if e.contains("wrong architecture") || e.contains("mach-o") {
+                diagnostic_info.push_str(
+                    "⚠️  ARCHITECTURE MISMATCH DETECTED\n\n\
+                    The installed Oracle library doesn't match your system architecture.\n\n\
+                    Your System: "
+                );
+                diagnostic_info.push_str(if cfg!(target_arch = "aarch64") { "ARM64 (Apple Silicon)\n" } else { "x86_64 (Intel)\n" });
+                diagnostic_info.push_str(
+                    "\nSolution:\n\
+                    1. Remove the current installation\n\
+                    2. Reinstall with the correct architecture:\n\
+                    curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash"
+                );
+            } else {
+                diagnostic_info.push_str(
+                    "Possible causes:\n\
+                    - Missing library dependencies\n\
+                    - Corrupted installation\n\
+                    - Broken symlinks\n\n\
+                    Solution: Reinstall Oracle Instant Client:\n\
+                    curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash"
+                );
+            }
+
+            return Err(diagnostic_info);
+        }
+        log::info!("Successfully primed Oracle client");
+    }
 
     // Create and test connection
-    let conn = DatabaseConnection::new(config.clone(), credentials)?;
-    conn.test_connection()?;
+    let conn = match DatabaseConnection::new(config.clone(), credentials) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Failed to create database connection: {}", e);
 
-    Ok(format!(
-        "Connection to {} successful",
-        config.connection_string()
-    ))
+            // Add diagnostic information
+            let client_path = resolve_client_path(None);
+            let diagnostic_info = format!(
+                "\n\nDiagnostic Information:\n\
+                - Oracle Client Path: {}\n\
+                - Connection String: {}\n\
+                - Host: {}:{}\n\
+                - Service Name: {}",
+                client_path.display(),
+                config.connection_string(),
+                config.host,
+                config.port,
+                config.service_name
+            );
+
+            return Err(format!("{}{}", e, diagnostic_info));
+        }
+    };
+
+    if let Err(e) = conn.test_connection() {
+        log::error!("Connection test query failed: {}", e);
+        return Err(format!("Connection established but test query failed: {}", e));
+    }
+
+    let success_msg = format!(
+        "✓ Successfully connected to {}\n\
+        Host: {}:{}\n\
+        Service: {}",
+        config.name,
+        config.host,
+        config.port,
+        config.service_name
+    );
+
+    log::info!("Connection test successful: {}", config.name);
+    Ok(success_msg)
 }
 
 /// Tests an Oracle database connection using saved credentials

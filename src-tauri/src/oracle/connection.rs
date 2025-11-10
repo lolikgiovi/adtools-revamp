@@ -8,6 +8,45 @@ use super::client::{resolve_client_path, is_client_primed};
 use oracle::Connection;
 use std::sync::{Mutex, OnceLock};
 
+/// Extracts Oracle error code from error message
+///
+/// Looks for patterns like "ORA-12345" or "DPI-1234" in the error string
+fn extract_oracle_error_code(error_str: &str) -> Option<String> {
+    // Look for ORA-XXXXX pattern
+    if let Some(pos) = error_str.find("ORA-") {
+        if let Some(end_pos) = error_str[pos..].find(|c: char| !c.is_ascii_digit() && c != '-') {
+            let code = &error_str[pos..pos + end_pos];
+            if code.len() >= 9 {  // "ORA-" + 5 digits
+                return Some(code.to_string());
+            }
+        } else {
+            // Error code is at the end of the string
+            let code = &error_str[pos..];
+            if code.len() >= 9 {
+                return Some(code.to_string());
+            }
+        }
+    }
+
+    // Look for DPI-XXXX pattern
+    if let Some(pos) = error_str.find("DPI-") {
+        if let Some(end_pos) = error_str[pos..].find(|c: char| !c.is_ascii_digit() && c != '-') {
+            let code = &error_str[pos..pos + end_pos];
+            if code.len() >= 8 {  // "DPI-" + 4 digits
+                return Some(code.to_string());
+            }
+        } else {
+            // Error code is at the end of the string
+            let code = &error_str[pos..];
+            if code.len() >= 8 {
+                return Some(code.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 /// Static to store the result of Oracle environment setup
 static ORACLE_ENV_SETUP: OnceLock<Mutex<Result<(), String>>> = OnceLock::new();
 
@@ -106,29 +145,168 @@ impl DatabaseConnection {
         )
         .map_err(|e| {
             let error_str = e.to_string();
+            let error_code = extract_oracle_error_code(&error_str);
 
-            // Check if this is an Oracle client library not found error
-            if error_str.contains("DPI-1047") || error_str.contains("Cannot locate") {
-                return "Oracle Instant Client library could not be loaded. Please ensure Oracle Instant Client is installed correctly. Visit the Compare Config page for installation instructions.".to_string();
+            log::error!("Oracle connection error: {} (Code: {:?})", error_str, error_code);
+
+            // Detailed error categorization
+            match error_code.as_deref() {
+                // Library/Client errors
+                Some("DPI-1047") | Some("DPI-1000") => {
+                    let client_path = resolve_client_path(None);
+                    format!(
+                        "Oracle Instant Client library could not be loaded.\n\n\
+                        Library path: {}\n\n\
+                        Possible causes:\n\
+                        - Oracle Instant Client not installed\n\
+                        - Missing library dependencies\n\
+                        - Architecture mismatch (ARM64 vs x86_64)\n\n\
+                        Solution: Run the installation script from the Compare Config page.",
+                        client_path.display()
+                    )
+                }
+
+                // Network/TNS errors
+                Some("ORA-12170") | Some("ORA-12541") | Some("ORA-12543") | Some("ORA-12545") => {
+                    format!(
+                        "Network error: Cannot reach database server.\n\n\
+                        Host: {}:{}\n\
+                        Service: {}\n\n\
+                        Possible causes:\n\
+                        - Database server is not running\n\
+                        - Firewall blocking connection\n\
+                        - Incorrect host or port\n\
+                        - Network connectivity issues\n\n\
+                        Please verify:\n\
+                        1. Database server is accessible\n\
+                        2. Host and port are correct\n\
+                        3. Firewall allows connections on port {}",
+                        config.host, config.port, config.service_name, config.port
+                    )
+                }
+
+                // TNS listener errors
+                Some("ORA-12514") => {
+                    format!(
+                        "Service name not found: '{}'\n\n\
+                        The TNS listener is running but doesn't recognize this service name.\n\n\
+                        Possible causes:\n\
+                        - Service name is misspelled\n\
+                        - Database instance not registered with listener\n\
+                        - Case sensitivity issue (try uppercase)\n\n\
+                        Please verify:\n\
+                        1. Service name spelling\n\
+                        2. Database instance is running\n\
+                        3. Run 'lsnrctl status' on database server",
+                        config.service_name
+                    )
+                }
+
+                Some("ORA-12505") => {
+                    format!(
+                        "SID not found: '{}'\n\n\
+                        If you're using a service name, ensure you specified it correctly.\n\
+                        If you're using a SID, the database instance may not be running.",
+                        config.service_name
+                    )
+                }
+
+                // Authentication errors
+                Some("ORA-01017") => {
+                    format!(
+                        "Authentication failed for user: {}\n\n\
+                        Possible causes:\n\
+                        - Incorrect username or password\n\
+                        - Account is locked\n\
+                        - Password has expired\n\
+                        - Case sensitivity (Oracle usernames are usually uppercase)\n\n\
+                        Please verify your credentials.",
+                        credentials.username
+                    )
+                }
+
+                Some("ORA-28000") => {
+                    format!(
+                        "Account locked: {}\n\n\
+                        The database account has been locked, usually due to too many failed login attempts.\n\n\
+                        Contact your DBA to unlock the account using:\n\
+                        ALTER USER {} ACCOUNT UNLOCK;",
+                        credentials.username, credentials.username
+                    )
+                }
+
+                // Connection timeout
+                Some("ORA-12609") | Some("ORA-12535") => {
+                    format!(
+                        "Connection timeout.\n\n\
+                        Host: {}:{}\n\n\
+                        The database server is not responding within the timeout period.\n\n\
+                        Possible causes:\n\
+                        - Network latency issues\n\
+                        - Database server is overloaded\n\
+                        - Firewall is dropping packets",
+                        config.host, config.port
+                    )
+                }
+
+                // TNS protocol errors
+                Some("ORA-12518") => {
+                    "Database server is too busy.\n\n\
+                    The TNS listener could not hand off the client connection.\n\
+                    Wait a moment and try again, or contact your DBA.".to_string()
+                }
+
+                Some("ORA-12520") => {
+                    "No available dedicated server processes.\n\n\
+                    The database has reached its process limit.\n\
+                    Contact your DBA to increase PROCESSES parameter.".to_string()
+                }
+
+                // Generic network error with no specific code
+                _ if error_str.to_lowercase().contains("timeout") => {
+                    format!(
+                        "Connection timeout to {}:{}\n\n\
+                        The server is not responding. Please check:\n\
+                        1. Network connectivity\n\
+                        2. Firewall settings\n\
+                        3. Database server status",
+                        config.host, config.port
+                    )
+                }
+
+                _ if error_str.to_lowercase().contains("refused") => {
+                    format!(
+                        "Connection refused by {}:{}\n\n\
+                        Possible causes:\n\
+                        - TNS listener is not running\n\
+                        - Wrong port number\n\
+                        - Firewall blocking connection\n\n\
+                        Verify the listener is running: lsnrctl status",
+                        config.host, config.port
+                    )
+                }
+
+                // Fallback for unrecognized errors
+                _ => {
+                    format!(
+                        "Connection failed: {}\n\n\
+                        Connection Details:\n\
+                        - Host: {}:{}\n\
+                        - Service: {}\n\
+                        - Connection String: {}\n\n\
+                        If this error persists, please check:\n\
+                        1. Oracle database is running and accessible\n\
+                        2. Network connectivity to the database server\n\
+                        3. Credentials are correct\n\
+                        4. Service name is correct",
+                        error_str,
+                        config.host,
+                        config.port,
+                        config.service_name,
+                        connect_string
+                    )
+                }
             }
-
-            // Check if this is a network/connection error
-            if error_str.contains("ORA-12170") || error_str.contains("ORA-12541") || error_str.contains("timeout") {
-                return format!("Could not connect to database at {}: Network error or database not reachable", connect_string);
-            }
-
-            // Check if this is an authentication error
-            if error_str.contains("ORA-01017") {
-                return format!("Authentication failed for {}: Invalid username or password", connect_string);
-            }
-
-            // Check if this is a service name error
-            if error_str.contains("ORA-12514") {
-                return format!("Service name '{}' not found on the database server", config.service_name);
-            }
-
-            // For other errors, provide a more concise message
-            format!("Failed to connect to {}: {}", connect_string, error_str)
         })?;
 
         log::info!("Successfully connected to {}", connect_string);

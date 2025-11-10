@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-# Oracle Instant Client Installation Script for AD Tools
-# This script downloads and installs Oracle Instant Client for macOS
-# Supports both Apple Silicon (ARM64) and Intel (x86_64) architectures
-
-# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -13,9 +8,6 @@ NC='\033[0m' # No Color
 
 # Installation directory
 INSTALL_DIR="$HOME/Documents/adtools_library/oracle_instantclient"
-
-# Oracle download URLs (update these with actual Oracle download links)
-# Note: Oracle requires acceptance of license terms
 ARM64_URL="https://download.oracle.com/otn_software/mac/instantclient/233023/instantclient-basic-macos.arm64-23.3.0.23.09-2.dmg"
 X86_64_URL="https://download.oracle.com/otn_software/mac/instantclient/198000/instantclient-basiclite-macos.x64-19.8.0.0.0dbru.dmg"
 

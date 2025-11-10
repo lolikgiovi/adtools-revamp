@@ -37,35 +37,77 @@ pub fn resolve_client_path(custom_path: Option<&str>) -> PathBuf {
 
 /// Checks if Oracle Instant Client is ready to use
 ///
-/// Verifies that the Oracle client library exists at the expected location
-/// and is a valid loadable library.
+/// Verifies that the Oracle client library exists at the expected location.
+/// Note: This function does NOT attempt to load the library because macOS SIP
+/// prevents DYLD_LIBRARY_PATH from working at this stage. The actual loading
+/// happens in prime_client() with RTLD_GLOBAL flag.
 ///
 /// # Arguments
 /// * `custom_path` - Optional custom directory path
 ///
 /// # Returns
-/// `true` if the client library is available and valid, `false` otherwise
+/// `true` if the client library file exists, `false` otherwise
 pub fn check_client_ready(custom_path: Option<&str>) -> bool {
     let client_dir = resolve_client_path(custom_path);
     let lib_path = client_dir.join(ORACLE_LIB_NAME);
 
-    // Check if file exists
+    // Check if file exists (could be a symlink, that's fine)
     if !lib_path.exists() {
         log::debug!("Oracle client library not found at: {:?}", lib_path);
         return false;
     }
 
-    // Try to load the library to verify it's valid
-    match unsafe { libloading::Library::new(&lib_path) } {
-        Ok(_) => {
-            log::info!("Oracle client library found and valid at: {:?}", lib_path);
-            true
+    // Verify it's a file (not a directory)
+    if !lib_path.is_file() {
+        log::warn!("Oracle client library path exists but is not a file: {:?}", lib_path);
+        return false;
+    }
+
+    // Check if it's a symlink and if so, verify the target exists
+    if lib_path.is_symlink() {
+        match std::fs::read_link(&lib_path) {
+            Ok(target) => {
+                let full_target = if target.is_absolute() {
+                    target.clone()
+                } else {
+                    client_dir.join(&target)
+                };
+
+                if !full_target.exists() {
+                    log::warn!("Oracle client library symlink target does not exist: {:?} -> {:?}",
+                              lib_path, full_target);
+                    return false;
+                }
+                log::info!("Oracle client library found (symlink): {:?} -> {:?}", lib_path, target);
+            }
+            Err(e) => {
+                log::warn!("Failed to read symlink target: {:?} - {}", lib_path, e);
+                return false;
+            }
+        }
+    } else {
+        log::info!("Oracle client library found: {:?}", lib_path);
+    }
+
+    // Additional check: verify the file has reasonable size (> 1MB)
+    // Oracle Instant Client library should be at least a few MB
+    match std::fs::metadata(&lib_path) {
+        Ok(metadata) => {
+            let size = metadata.len();
+            if size < 1_048_576 {  // 1MB
+                log::warn!("Oracle client library file is suspiciously small ({} bytes): {:?}",
+                          size, lib_path);
+                return false;
+            }
+            log::debug!("Oracle client library size: {} bytes", size);
         }
         Err(e) => {
-            log::warn!("Oracle client library found but invalid: {}", e);
-            false
+            log::warn!("Failed to get file metadata: {:?} - {}", lib_path, e);
+            return false;
         }
     }
+
+    true
 }
 
 /// Primes (loads) the Oracle client library into memory

@@ -4,7 +4,7 @@
  */
 
 export const CompareConfigTemplate = /* html */ `
-<div class="compare-config-container tool-container">
+<div class="compare-config-container">
     <!-- Oracle Client Installation Guide (shown when client not installed) -->
     <div id="installation-guide" class="installation-guide" style="display: none;">
         <div class="installation-card">
