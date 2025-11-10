@@ -864,6 +864,14 @@ class CompareConfigTool extends BaseTool {
         label.textContent += " (Default PK)";
       }
 
+      // Make the whole container clickable (excluding direct clicks on input/label)
+      fieldDiv.addEventListener("click", (e) => {
+        const targetTag = e.target.tagName;
+        if (targetTag === "INPUT" || targetTag === "LABEL") return;
+        checkbox.checked = !checkbox.checked;
+        this.updateCustomPrimaryKey();
+      });
+
       fieldDiv.appendChild(checkbox);
       fieldDiv.appendChild(label);
       pkFieldList.appendChild(fieldDiv);
@@ -888,6 +896,14 @@ class CompareConfigTool extends BaseTool {
       const label = document.createElement("label");
       label.htmlFor = `field-${column.name}`;
       label.textContent = column.name;
+
+      // Make the whole container clickable (excluding direct clicks on input/label)
+      fieldDiv.addEventListener("click", (e) => {
+        const targetTag = e.target.tagName;
+        if (targetTag === "INPUT" || targetTag === "LABEL") return;
+        checkbox.checked = !checkbox.checked;
+        this.updateSelectedFields();
+      });
 
       fieldDiv.appendChild(checkbox);
       fieldDiv.appendChild(label);
@@ -1021,11 +1037,14 @@ class CompareConfigTool extends BaseTool {
       this.showLoading("Executing SQL query and comparing...");
 
       // Strip trailing semicolon (Oracle OCI doesn't support it)
-      const cleanSql = this.rawSql.trim().replace(/;+$/, '');
+      const cleanSql = this.rawSql.trim().replace(/;+$/, "");
 
       // Parse primary key field(s) if provided (comma-separated for composite keys)
       const primaryKeyFields = this.rawPrimaryKey
-        ? this.rawPrimaryKey.split(',').map(f => f.trim()).filter(f => f.length > 0)
+        ? this.rawPrimaryKey
+            .split(",")
+            .map((f) => f.trim())
+            .filter((f) => f.length > 0)
         : [];
 
       // Build comparison request
@@ -1337,7 +1356,7 @@ class CompareConfigTool extends BaseTool {
               <th width="40"></th>
               <th>Primary Key</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -1355,6 +1374,15 @@ class CompareConfigTool extends BaseTool {
         this.toggleRowExpansion(rowId);
       });
     });
+
+    // Add event listeners for copy primary key using BaseTool helper
+    const copyPkButtons = resultsContent.querySelectorAll(".btn-copy-pk");
+    copyPkButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pk = btn.dataset.pk || "";
+        this.copyToClipboard(pk, btn);
+      });
+    });
   }
 
   /**
@@ -1365,7 +1393,7 @@ class CompareConfigTool extends BaseTool {
     const statusLabel = this.getStatusLabel(comparison.status);
     const statusBadge = `<span class="status-badge status-${statusClass}">${statusLabel}</span>`;
 
-    return `
+    return /*html*/ `
       <tr class="comparison-row" data-row-id="${index}">
         <td>
           <button class="btn-expand" data-row-id="${index}" title="Expand/Collapse">
@@ -1377,12 +1405,9 @@ class CompareConfigTool extends BaseTool {
         <td class="pk-cell">${this.escapeHtml(comparison.primary_key)}</td>
         <td>${statusBadge}</td>
         <td>
-          <button class="btn-icon" onclick="navigator.clipboard.writeText('${this.escapeHtml(comparison.primary_key)}')" title="Copy PK">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-          </button>
+          <button class="btn btn-sm btn-sm-xs btn-copy-pk" data-pk="${this.escapeHtml(
+            comparison.primary_key
+          )}" title="Copy Primary Key">Copy PK</button>
         </td>
       </tr>
       <tr class="comparison-detail" data-row-id="${index}" style="display: none;">

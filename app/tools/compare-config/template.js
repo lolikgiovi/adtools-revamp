@@ -115,16 +115,16 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Raw SQL Mode (shown when Raw SQL tab is active) -->
         <div id="raw-sql-mode" class="raw-sql-mode" style="display: none;">
             <div class="raw-sql-connections">
-                <div class="connection-row">
+                <div class="grid-row">
                     <div class="form-group">
-                        <label for="raw-env1-connection">Env 1 Connection</label>
+                        <label for="raw-env1-connection">Env 1 (Reference)</label>
                         <select id="raw-env1-connection" class="form-select">
                             <option value="">Select connection...</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="raw-env2-connection">Env 2 Connection</label>
+                        <label for="raw-env2-connection">Env 2 (Comparison)</label>
                         <select id="raw-env2-connection" class="form-select">
                             <option value="">Select connection...</option>
                         </select>
@@ -139,17 +139,17 @@ export const CompareConfigTemplate = /* html */ `
                 <textarea id="raw-sql" class="raw-sql-input" placeholder="Full SQL Query, for example:\nSELECT field_name_1, field_name_2, field_name_3 FROM schema_name.table_name\nWHERE field_key_1 IN ('a', 'b', 'c') AND field_key_2 = 0;"></textarea>
             </div>
 
-            <div class="raw-sql-options">
-                <div class="form-group">
+            <div class="filter-row">
+                <div class="where-clause-section">
                     <label for="raw-primary-key">Primary Key to Compare (Optional)</label>
                     <input type="text" id="raw-primary-key" class="form-input" placeholder="e.g., c.parameter_key or id">
                     <p class="help-text">Specify the field(s) to use as primary key. Use aliases if defined in the query (e.g., c.parameter_key). Leave empty to auto-detect from first column. For composite keys, separate with commas.</p>
                 </div>
 
-                <div class="form-group">
+                <div class="max-rows-section">
                     <label for="raw-max-rows">Max Rows to Fetch</label>
                     <input type="number" id="raw-max-rows" class="form-input" value="100" min="1" max="10000" placeholder="100">
-                    <p class="help-text">Maximum number of rows to fetch from each environment (default: 100)</p>
+                    <p class="help-text">Maximum rows to fetch from each environment</p>
                 </div>
             </div>
 
@@ -165,40 +165,44 @@ export const CompareConfigTemplate = /* html */ `
 
         <!-- Field Selection (shown after table is selected) -->
         <div id="field-selection" class="field-selection" style="display: none;">
-            <h3>Primary Key Selection</h3>
-            <p class="field-help">Select fields to use as primary key for comparison (leave empty to use table's default primary key)</p>
-
-            <div class="field-actions">
-                <button class="btn-secondary" id="btn-select-all-pk">Select All</button>
-                <button class="btn-secondary" id="btn-deselect-all-pk">Deselect All</button>
+            <div class="field-header">
+                <h4 class="field-title">Primary Key Selection</h4>
+                <div class="field-actions">
+                    <button class="btn-secondary" id="btn-select-all-pk">Select All</button>
+                    <button class="btn-secondary" id="btn-deselect-all-pk">Clear</button>
+                </div>
             </div>
+            <p class="field-help">Select fields to use as primary key for comparison</p>
 
             <div id="pk-field-list" class="field-list">
                 <!-- PK fields will be populated here -->
             </div>
 
-            <h3 style="margin-top: 24px;">Field Selection</h3>
-            <p class="field-help">Select fields to display and compare</p>
-
-            <div class="field-actions">
-                <button class="btn-secondary" id="btn-select-all">Select All</button>
-                <button class="btn-secondary" id="btn-deselect-all">Deselect All</button>
+            <div class="field-header" style="margin-top: 24px;">
+                <h4 class="field-title">Field Selection</h4>
+                <div class="field-actions">
+                    <button class="btn-secondary" id="btn-select-all">Select All</button>
+                    <button class="btn-secondary" id="btn-deselect-all">Clear</button>
+                </div>
             </div>
+            <p class="field-help">Select fields to display and compare</p>
 
             <div id="field-list" class="field-list">
                 <!-- Fields will be populated here -->
             </div>
 
-            <div class="where-clause-section">
-                <label for="where-clause">WHERE Clause (optional):</label>
-                <input type="text" id="where-clause" class="form-input" placeholder="e.g., status = 'active'">
-                <p class="help-text">Enter a WHERE clause to filter records (do not include 'WHERE' keyword)</p>
-            </div>
+            <div class="filter-row">
+                <div class="where-clause-section">
+                    <label for="where-clause">WHERE Clause (optional):</label>
+                    <input type="text" id="where-clause" class="form-input" placeholder="e.g., status = 'active'">
+                    <p class="help-text">Enter a WHERE clause to filter records (do not include 'WHERE' keyword)</p>
+                </div>
 
-            <div class="max-rows-section">
-                <label for="max-rows">Max Rows to Fetch:</label>
-                <input type="number" id="max-rows" class="form-input" value="100" min="1" max="10000" placeholder="100">
-                <p class="help-text">Maximum number of rows to fetch from each environment (default: 100)</p>
+                <div class="max-rows-section">
+                    <label for="max-rows">Max Rows to Fetch:</label>
+                    <input type="number" id="max-rows" class="form-input" value="100" min="1" max="10000" placeholder="100">
+                    <p class="help-text">Maximum rows to fetch from each environment</p>
+                </div>
             </div>
 
             <div class="comparison-actions">
@@ -233,7 +237,7 @@ export const CompareConfigTemplate = /* html */ `
                 <label>View:</label>
                 <select id="view-type" class="form-select">
                     <option value="expandable">Expandable Rows</option>
-                    <option value="vertical">Vertical Cards</option>
+                    <option value="vertical">Cards</option>
                     <option value="master-detail">Master-Detail</option>
                 </select>
             </div>
