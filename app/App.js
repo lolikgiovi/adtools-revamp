@@ -6,6 +6,12 @@ import { UUIDGenerator } from "./tools/uuid-generator/main.js";
 import { JSONTools } from "./tools/json-tools/main.js";
 import { QRTools } from "./tools/qr-tools/main.js";
 import { Base64Tools } from "./tools/base64-tools/main.js";
+import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
+import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
+import { CheckImageTool } from "./tools/image-checker/main.js";
+import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { CompareConfigTool } from "./tools/compare-config/main.js";
+
 import { EventBus } from "./core/EventBus.js";
 import { Router } from "./core/Router.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -22,10 +28,7 @@ import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from "./core/UsageTracker.js";
 import { AnalyticsSender } from "./core/AnalyticsSender.js";
-import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
-import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
-import { CheckImageTool } from "./tools/image-checker/main.js";
-import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
@@ -139,7 +142,8 @@ class App {
     this.categoriesConfigMap.clear();
     if (cats.length > 0) {
       cats.forEach((c) => {
-        if (c && c.id) this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
+        if (c && c.id)
+          this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
       });
     } else {
       // Fallback defaults
@@ -256,6 +260,9 @@ class App {
     // Register Jenkins Runner
     const jenkinsRunner = new JenkinsRunner(this.eventBus);
     this.registerTool(jenkinsRunner);
+
+    const compareConfig = new CompareConfigTool(this.eventBus);
+    this.registerTool(compareConfig);
 
     // Add more tools here as they are implemented
   }

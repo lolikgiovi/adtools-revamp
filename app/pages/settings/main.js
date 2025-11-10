@@ -1,8 +1,10 @@
 import { SettingsTemplate } from "./template.js";
 import "./styles.css";
+import "./oracle-connections.css";
 import { SettingsService } from "./service.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
+import { OracleConnectionsUI } from "./OracleConnectionsUI.js";
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -409,6 +411,16 @@ class SettingsPage {
         }
       });
       wrapper.appendChild(row);
+      return wrapper;
+    }
+
+    // Oracle connections custom UI
+    if (item.type === "oracle-connections") {
+      const oracleUI = new OracleConnectionsUI({ eventBus: this.eventBus });
+      const container = document.createElement("div");
+      container.className = "oracle-connections-container";
+      oracleUI.render(container, current);
+      wrapper.appendChild(container);
       return wrapper;
     }
 

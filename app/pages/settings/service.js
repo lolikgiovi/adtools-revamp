@@ -79,6 +79,14 @@ class SettingsService {
             return [];
           }
         }
+        case "oracle-connections": {
+          try {
+            const val = JSON.parse(raw);
+            return Array.isArray(val) ? val : [];
+          } catch (_) {
+            return [];
+          }
+        }
         case "date":
         case "time":
         case "datetime":

@@ -13,7 +13,23 @@ pub fn run() {
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
       open_url,
-      get_arch
+      get_arch,
+      // Oracle commands
+      oracle::commands::check_oracle_client_ready,
+      oracle::commands::prime_oracle_client,
+      oracle::commands::test_oracle_connection,
+      oracle::commands::test_oracle_connection_saved,
+      oracle::commands::fetch_schemas,
+      oracle::commands::fetch_tables,
+      oracle::commands::fetch_table_metadata,
+      oracle::commands::compare_configurations,
+      oracle::commands::compare_raw_sql,
+      oracle::commands::export_comparison_result,
+      // Credential management commands
+      credentials::set_oracle_credentials,
+      credentials::get_oracle_credentials,
+      credentials::delete_oracle_credentials,
+      credentials::has_oracle_credentials
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -23,12 +39,41 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      // Set up Oracle client library path BEFORE any Oracle operations
+      // This must be done at app startup, not at connection time,
+      // because macOS SIP prevents runtime DYLD_LIBRARY_PATH changes
+      let client_path = oracle::client::resolve_client_path(None);
+      if client_path.exists() {
+        #[cfg(target_os = "macos")]
+        {
+          std::env::set_var("DYLD_LIBRARY_PATH", client_path.to_string_lossy().to_string());
+          log::info!("Set DYLD_LIBRARY_PATH at startup to: {:?}", client_path);
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+          std::env::set_var("LD_LIBRARY_PATH", client_path.to_string_lossy().to_string());
+          log::info!("Set LD_LIBRARY_PATH at startup to: {:?}", client_path);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+          std::env::set_var("PATH", client_path.to_string_lossy().to_string());
+          log::info!("Set PATH at startup to: {:?}", client_path);
+        }
+      } else {
+        log::warn!("Oracle Instant Client path does not exist at startup: {:?}", client_path);
+      }
+
       Ok(())
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
 pub mod jenkins;
+pub mod oracle;
+pub mod credentials;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
