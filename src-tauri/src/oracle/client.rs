@@ -8,8 +8,12 @@ use std::sync::{Mutex, OnceLock};
 /// Static reference to the Oracle client library (loaded via libloading)
 static ORACLE_CLIENT: OnceLock<Mutex<Option<libloading::Library>>> = OnceLock::new();
 
-/// Default Oracle Instant Client installation path
-const DEFAULT_ORACLE_PATH: &str = "~/Documents/adtools_library/oracle_instantclient";
+/// Default Oracle Instant Client installation path (user-space, no sudo)
+/// New default: ~/Library/Application Support/AD Tools/instantclient
+const DEFAULT_ORACLE_PATH: &str = "~/Library/Application Support/AD Tools/instantclient";
+
+/// Legacy Oracle Instant Client installation path (kept for backward compatibility)
+const LEGACY_ORACLE_PATH: &str = "~/Documents/adtools_library/oracle_instantclient";
 
 /// Oracle client library filename for macOS
 #[cfg(target_os = "macos")]
@@ -23,16 +27,65 @@ const ORACLE_LIB_NAME: &str = "libclntsh.dylib";
 /// # Returns
 /// Resolved PathBuf with tilde expansion applied
 pub fn resolve_client_path(custom_path: Option<&str>) -> PathBuf {
-    let path_str = custom_path.unwrap_or(DEFAULT_ORACLE_PATH);
+    // If a custom path is provided, expand and return it directly
+    if let Some(path_str) = custom_path {
+        if path_str.starts_with("~/") {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(&path_str[2..]);
+            }
+        }
+        return PathBuf::from(path_str);
+    }
 
-    // Expand tilde to home directory
-    if path_str.starts_with("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(&path_str[2..]);
+    // 1) Prefer app bundle Resources when running a packaged app
+    //    AD Tools.app/Contents/Resources/instantclient
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(mac_os_dir) = exe_path.parent() { // .../Contents/MacOS
+                if let Some(contents_dir) = mac_os_dir.parent() { // .../Contents
+                    let resources_dir = contents_dir.join("Resources").join("instantclient");
+                    let lib_path = resources_dir.join(ORACLE_LIB_NAME);
+                    if lib_path.exists() {
+                        return resources_dir;
+                    }
+                }
+            }
         }
     }
 
-    PathBuf::from(path_str)
+    // Helper to expand "~/..." safely
+    let expand_home = |p: &str| -> PathBuf {
+        if p.starts_with("~/") {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(&p[2..]);
+            }
+        }
+        PathBuf::from(p)
+    };
+
+    // 2) New default under Application Support (no sudo, user-specific)
+    let app_support_dir = expand_home(DEFAULT_ORACLE_PATH);
+    if app_support_dir.join(ORACLE_LIB_NAME).exists() {
+        return app_support_dir;
+    }
+
+    // 3) Legacy location under Documents (kept for users who previously installed)
+    let legacy_dir = expand_home(LEGACY_ORACLE_PATH);
+    if legacy_dir.join(ORACLE_LIB_NAME).exists() {
+        return legacy_dir;
+    }
+
+    // 4) Fallback: ~/lib (used by older installs that symlinked libraries)
+    if let Some(home) = dirs::home_dir() {
+        let lib_dir = home.join("lib");
+        if lib_dir.join(ORACLE_LIB_NAME).exists() {
+            return lib_dir;
+        }
+    }
+
+    // If nothing is found, return the new default (so diagnostics show the expected location)
+    app_support_dir
 }
 
 /// Checks if Oracle Instant Client is ready to use
@@ -198,7 +251,7 @@ mod tests {
     #[test]
     fn test_resolve_client_path_default() {
         let path = resolve_client_path(None);
-        assert!(path.to_string_lossy().contains("Documents/adtools_library/oracle_instantclient"));
+        assert!(path.to_string_lossy().contains("Library/Application Support/AD Tools/instantclient"));
     }
 
     #[test]

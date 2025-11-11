@@ -12,8 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Installation directory
-INSTALL_DIR="$HOME/Documents/adtools_library/oracle_instantclient"
+# Installation directory (user-space, no sudo)
+# New default: ~/Library/Application Support/AD Tools/instantclient
+INSTALL_DIR="$HOME/Library/Application Support/AD Tools/instantclient"
 
 # Oracle download URLs
 # Note: Oracle requires acceptance of license terms
@@ -290,8 +291,8 @@ if [ "$VERIFICATION_PASSED" = true ]; then
     echo -e "${GREEN}║          ✓ Installation Successful!                    ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${GREEN}Oracle Instant Client installed at:${NC}"
-    echo -e "${YELLOW}  $INSTALL_DIR${NC}"
+echo -e "${GREEN}Oracle Instant Client installed at:${NC}"
+echo -e "${YELLOW}  $INSTALL_DIR${NC}"
     echo ""
     echo -e "${GREEN}Next steps:${NC}"
     echo -e "${BLUE}  1. Restart AD Tools if it's currently running${NC}"

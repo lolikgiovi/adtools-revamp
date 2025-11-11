@@ -6,8 +6,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Installation directory
-INSTALL_DIR="$HOME/Documents/adtools_library/oracle_instantclient"
+# Installation directory (user-space, no sudo)
+# New default: ~/Library/Application Support/AD Tools/instantclient
+INSTALL_DIR="$HOME/Library/Application Support/AD Tools/instantclient"
 ARM64_URL="https://download.oracle.com/otn_software/mac/instantclient/233023/instantclient-basic-macos.arm64-23.3.0.23.09-2.dmg"
 X86_64_URL="https://download.oracle.com/otn_software/mac/instantclient/198000/instantclient-basiclite-macos.x64-19.8.0.0.0dbru.dmg"
 
@@ -108,11 +109,11 @@ fi
 # Create ~/lib directory and symlink Oracle libraries there
 # This allows the Tauri app to find Oracle libraries via rpath without sudo
 echo ""
-echo -e "${GREEN}Setting up ~/lib for Oracle libraries...${NC}"
+echo -e "${GREEN}Optional: Setting up ~/lib symlinks for legacy builds...${NC}"
 LIB_DIR="$HOME/lib"
 mkdir -p "$LIB_DIR"
 
-# Symlink key Oracle libraries to ~/lib
+# Symlink key Oracle libraries to ~/lib (harmless if unused; aids older builds)
 echo -e "${GREEN}Creating symlinks in ~/lib...${NC}"
 ln -sf "$INSTALL_DIR/libclntsh.dylib" "$LIB_DIR/"
 ln -sf "$INSTALL_DIR/libclntsh.dylib.23.1" "$LIB_DIR/" 2>/dev/null || true
@@ -129,7 +130,7 @@ for dylib in "$INSTALL_DIR"/*.dylib*; do
     fi
 done
 
-echo -e "${GREEN}✓ Symlinks created in ~/lib${NC}"
+echo -e "${GREEN}✓ Symlinks created in ~/lib (optional)${NC}"
 
 # Verify installation
 echo ""
@@ -179,16 +180,16 @@ echo -e "${GREEN}=== Installation Complete! ===${NC}"
 echo -e "${GREEN}Oracle Instant Client installed at:${NC}"
 echo -e "${YELLOW}$INSTALL_DIR${NC}"
 echo ""
-echo -e "${GREEN}Libraries also symlinked to:${NC}"
+echo -e "${GREEN}Libraries also symlinked (optional) to:${NC}"
 echo -e "${YELLOW}$LIB_DIR${NC}"
-echo -e "${GREEN}This allows AD Tools to find Oracle libraries without sudo.${NC}"
+echo -e "${GREEN}These symlinks support legacy builds; new builds preload from Application Support.${NC}"
 echo ""
 echo -e "${GREEN}You can now use the Compare Config feature in AD Tools.${NC}"
 echo -e "${GREEN}Please restart AD Tools if it's currently running.${NC}"
 echo ""
 echo -e "${YELLOW}Note: If you encounter library loading issues, ensure:${NC}"
-echo -e "${YELLOW}  1. AD Tools was rebuilt after running this script${NC}"
-echo -e "${YELLOW}  2. The ~/lib directory exists and contains Oracle library symlinks${NC}"
-echo -e "${YELLOW}  3. You've restarted AD Tools to pick up the new libraries${NC}"
+echo -e "${YELLOW}  1. AD Tools was restarted after running this script${NC}"
+echo -e "${YELLOW}  2. The install directory contains libclntsh.dylib and versioned targets${NC}"
+echo -e "${YELLOW}  3. For older builds, ensure ~/lib symlinks exist (optional)${NC}"
 
 exit 0

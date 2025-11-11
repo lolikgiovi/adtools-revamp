@@ -34,9 +34,10 @@ fn test_oracle_connection_with_real_database() {
     // If not, skip the test gracefully
     let client_path = dirs::home_dir()
         .map(|h| {
-            h.join("Documents")
-                .join("adtools_library")
-                .join("oracle_instantclient")
+            h.join("Library")
+                .join("Application Support")
+                .join("AD Tools")
+                .join("instantclient")
                 .join("libclntsh.dylib")
         });
 

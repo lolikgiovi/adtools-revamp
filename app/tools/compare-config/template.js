@@ -34,7 +34,7 @@ export const CompareConfigTemplate = /* html */ `
                             <li><a href="https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html" target="_blank">x86_64 (Intel)</a></li>
                         </ul>
                         <li>Extract the downloaded DMG file</li>
-                        <li>Copy contents to: <code>~/Documents/adtools_library/oracle_instantclient/</code></li>
+                        <li>Copy contents to: <code>~/Library/Application Support/AD Tools/instantclient/</code></li>
                         <li>Create symlink: <code>ln -s libclntsh.dylib.* libclntsh.dylib</code></li>
                     </ol>
                 </div>

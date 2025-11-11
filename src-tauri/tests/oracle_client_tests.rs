@@ -16,7 +16,7 @@ fn test_1_1_client_not_installed() {
 #[test]
 fn test_1_1_resolve_default_path() {
     let path = resolve_client_path(None);
-    assert!(path.to_string_lossy().contains("Documents/adtools_library/oracle_instantclient"));
+    assert!(path.to_string_lossy().contains("Library/Application Support/AD Tools/instantclient"));
     println!("✓ Path resolution works: {:?}", path);
 }
 

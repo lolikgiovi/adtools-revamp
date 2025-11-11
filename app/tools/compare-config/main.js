@@ -483,12 +483,12 @@ class CompareConfigTool extends BaseTool {
       <h4>2. Library Not Found</h4>
       <p><strong>Error:</strong> "libclntsh.dylib not found"</p>
       <p><strong>Solution:</strong> Verify the library is in the correct location:</p>
-      <code>ls -la ~/Documents/adtools_library/oracle_instantclient/libclntsh.dylib</code>
+      <code>ls -la ~/Library/Application\ Support/AD\ Tools/instantclient/libclntsh.dylib</code>
 
       <h4>3. Permission Denied</h4>
       <p><strong>Error:</strong> "Permission denied"</p>
       <p><strong>Solution:</strong> Set correct permissions:</p>
-      <code>chmod -R 755 ~/Documents/adtools_library/oracle_instantclient/</code>
+      <code>chmod -R 755 ~/Library/Application\ Support/AD\ Tools/instantclient/</code>
 
       <h4>4. Feature Still Unavailable After Installation</h4>
       <p><strong>Solution:</strong> Try these steps:</p>
