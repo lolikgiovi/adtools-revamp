@@ -72,8 +72,6 @@ class Breadcrumb {
       this.currentPageElement.textContent = toolName;
     } else if (page === "settings") {
       this.currentPageElement.textContent = "Settings";
-    } else if (page === "about") {
-      this.currentPageElement.textContent = "About";
     } else {
       this.currentPageElement.textContent = "Page";
     }

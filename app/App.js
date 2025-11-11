@@ -20,10 +20,8 @@ import { ThemeManager } from "./core/ThemeManager.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
 import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
-import { AboutPage } from "./pages/about/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
 import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
-import { getIconSvg as getAboutIconSvg } from "./pages/about/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import toolsConfig from "./config/tools.json";
 import { UsageTracker } from "./core/UsageTracker.js";
@@ -199,7 +197,6 @@ class App {
     });
     // Page and action icons
     this.iconRegistry.set("settings", () => getSettingsIconSvg());
-    this.iconRegistry.set("about", () => getAboutIconSvg());
     this.iconRegistry.set("signout", () => getSignoutIconSvg());
   }
 
@@ -311,11 +308,6 @@ class App {
     // Settings route
     this.router.register("settings", () => {
       this.showSettings();
-    });
-
-    // About route
-    this.router.register("about", () => {
-      this.showAbout();
     });
 
     // Feedback route removed
@@ -473,25 +465,6 @@ class App {
 
     // Emit page change
     this.eventBus.emit("page:changed", { page: "settings" });
-  }
-
-  showAbout() {
-    // Update breadcrumb for about
-    this.updateBreadcrumb("About");
-
-    // Ensure no tool is active
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
-
-    if (this.mainContent) {
-      const aboutPage = new AboutPage({ eventBus: this.eventBus });
-      aboutPage.mount(this.mainContent);
-    }
-
-    // Emit page change
-    this.eventBus.emit("page:changed", { page: "about" });
   }
 
   // Feedback page removed
@@ -966,14 +939,6 @@ class App {
       icon: null,
     });
     items.push({
-      id: "about",
-      name: "About",
-      description: "Learn about AD Tools and how to use it",
-      route: "about",
-      type: "page",
-      icon: "about",
-    });
-    items.push({
       id: "settings",
       name: "Settings",
       description: "Adjust application settings",
@@ -1003,10 +968,7 @@ class App {
     return {
       config: [],
       // App group removed
-      footer: [
-        { id: "about", name: "About", icon: "about", type: "page" },
-        { id: "settings", name: "Settings", icon: "settings", type: "page" },
-      ],
+      footer: [{ id: "settings", name: "Settings", icon: "settings", type: "page" }],
     };
   }
   renderUsagePanel() {
