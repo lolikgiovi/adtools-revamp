@@ -291,11 +291,12 @@
 #errorMessages {
   color: hsl(var(--destructive));
   margin-bottom: 10px;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 #warningMessages {
   margin-bottom: 10px;
+  font-size: 12px;
 }
 
 /* Schema Management */
