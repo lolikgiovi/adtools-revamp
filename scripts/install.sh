@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+<<<<<<< HEAD
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -15,6 +16,11 @@ printf "%b\n" "${GREEN}==============================================${NC}"
 printf "%b\n" "${GREEN}[ Installing AD Tools for Desktop ]${NC}"
 printf "%b\n" "${GREEN}==============================================${NC}"
 echo ""
+=======
+log() { printf "[adtools] %s\n" "$1"; }
+warn() { printf "[warning] %s\n" "$1"; }
+err() { printf "[error] %s\n" "$1" >&2; }
+>>>>>>> parent of 891249a (Merge branch 'claude-develop-compare-config' into 'main')
 
 BASE_URL="https://adtools.lolik.workers.dev"
 CURL_SECURITY_ARGS=""
@@ -58,8 +64,6 @@ case "$ARCH_NATIVE" in
   x86_64) ARCH_KEY="darwin-x86_64";;
   *) err "Unsupported architecture: $ARCH_NATIVE"; exit 1;;
 esac
-
-log "Architecture detected: $ARCH_NATIVE"
 
 CHANNEL="stable"
 LATEST_URL="${BASE_URL}/releases/latest?arch=${ARCH_KEY}&channel=${CHANNEL}"

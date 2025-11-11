@@ -89,23 +89,6 @@
           }
         }
       ]
-    },
-    {
-      "id": "oracle",
-      "label": "Oracle Database Connections",
-      "requiresTauri": true,
-      "initiallyExpanded": false,
-      "description": "Manage Oracle database connections for the Compare Config tool. Requires Oracle Instant Client. Schema and table selection happens in the Compare Config tool.",
-      "items": [
-        {
-          "key": "oracle.connections",
-          "storageKey": "config.oracle.connections",
-          "label": "Database Connections",
-          "type": "oracle-connections",
-          "default": [],
-          "description": "Configure Oracle database connections. Credentials are stored securely in macOS Keychain."
-        }
-      ]
     }
   ]
 }
