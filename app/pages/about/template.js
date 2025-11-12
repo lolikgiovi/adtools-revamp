@@ -27,8 +27,8 @@ export const AboutTemplate = /*html*/ `
           <li>Register yourself using Work e-mail address, the app will send you OTP via that e-mail.</li>
           <li>The verification is needed to fetch some configs I've prepared on cloud.</li>
           <li>Open <em>Settings</em> from the sidebar footer to Load Default Settings, and configure tokens.</li>
+          <li>To get <em>Jenkins Token</em>, navigate to Jenkins profile -> Security -> API Token -> Add new token.</li>
           <li>Open <em>Quick Query</em> then <em>Schemas</em> then <em>Import default Schemas</em> to load default schemas from remote.</li>
-          <li>Return to <em>Home</em> anytime to see featured tools and usage overview.</li>
         </ol>
       </section>
 
