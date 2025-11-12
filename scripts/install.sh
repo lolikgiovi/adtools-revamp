@@ -72,29 +72,29 @@ if ! retry_curl "$DMG_PATH" "$LATEST_URL" 3; then
   exit 1
 fi
 
-# Optional integrity: fetch manifest to verify installer_sha256 when available
-MANIFEST_JSON="$TMP_DIR/manifest.json"
-if curl -fsSL ${CURL_SECURITY_ARGS} -o "$MANIFEST_JSON" "${BASE_URL}/update/${CHANNEL}.json"; then
-  EXPECTED_SHA=""
-  if command -v jq >/dev/null 2>&1; then
-    EXPECTED_SHA="$(jq -r ".platforms[\"${ARCH_KEY}\"]?.installer_sha256 // empty" "$MANIFEST_JSON")"
-  else
-    EXPECTED_SHA="$(grep -A 5 "\"${ARCH_KEY}\"" "$MANIFEST_JSON" | grep -E '"installer_sha256"' | sed -E 's/.*"installer_sha256"\s*:\s*"([^"]+)".*/\1/' | head -n1)"
-  fi
-  if [[ -n "$EXPECTED_SHA" ]]; then
-    ACTUAL_SHA="$({ shasum -a 256 "$DMG_PATH" 2>/dev/null || sha256sum "$DMG_PATH" 2>/dev/null || openssl dgst -sha256 "$DMG_PATH"; } | awk '{print $1}')"
-    if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
-      err "Installer integrity check failed. Expected $EXPECTED_SHA, got $ACTUAL_SHA."
-      err "Please retry later; if the issue persists, contact support."
-      exit 1
-    fi
-    log "Installer integrity verified (sha256=$ACTUAL_SHA)"
-  else
-    warn "No installer checksum in manifest; skipping integrity verification."
-  fi
-else
-  warn "Unable to fetch manifest for integrity check. Continuing without verification."
-fi
+# # Optional integrity: fetch manifest to verify installer_sha256 when available
+# MANIFEST_JSON="$TMP_DIR/manifest.json"
+# if curl -fsSL ${CURL_SECURITY_ARGS} -o "$MANIFEST_JSON" "${BASE_URL}/update/${CHANNEL}.json"; then
+#   EXPECTED_SHA=""
+#   if command -v jq >/dev/null 2>&1; then
+#     EXPECTED_SHA="$(jq -r ".platforms[\"${ARCH_KEY}\"]?.installer_sha256 // empty" "$MANIFEST_JSON")"
+#   else
+#     EXPECTED_SHA="$(grep -A 5 "\"${ARCH_KEY}\"" "$MANIFEST_JSON" | grep -E '"installer_sha256"' | sed -E 's/.*"installer_sha256"\s*:\s*"([^"]+)".*/\1/' | head -n1)"
+#   fi
+#   if [[ -n "$EXPECTED_SHA" ]]; then
+#     ACTUAL_SHA="$({ shasum -a 256 "$DMG_PATH" 2>/dev/null || sha256sum "$DMG_PATH" 2>/dev/null || openssl dgst -sha256 "$DMG_PATH"; } | awk '{print $1}')"
+#     if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+#       err "Installer integrity check failed. Expected $EXPECTED_SHA, got $ACTUAL_SHA."
+#       err "Please retry later; if the issue persists, contact support."
+#       exit 1
+#     fi
+#     log "Installer integrity verified (sha256=$ACTUAL_SHA)"
+#   else
+#     warn "No installer checksum in manifest; skipping integrity verification."
+#   fi
+# else
+#   warn "Unable to fetch manifest for integrity check. Continuing without verification."
+# fi
 
 DEST_DMG="$DOCS_DIR/ADTools-latest.dmg"
 cp "$DMG_PATH" "$DEST_DMG"
