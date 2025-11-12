@@ -331,10 +331,9 @@ else
   warn "xattr not available; skipping quarantine removal"
 fi
 
-# Launch the app
-APP_NAME="$(basename "$APP_DEST" .app)"
-log "Launching $APP_NAME"
-open -a "$APP_NAME" || warn "Unable to launch automatically; open '$APP_DEST' manually"
+# Launch the app by absolute path to avoid opening an older copy
+log "Launching $(basename \"$APP_DEST\")"
+open "$APP_DEST" || warn "Unable to launch automatically; open '$APP_DEST' manually"
 
 log "Installation complete"
 `;
