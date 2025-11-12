@@ -216,7 +216,8 @@ export class QueryGenerationService {
 
     // Format UPDATE SET clause (excluding PKs and creation fields)
     const updateFields = processedFields
-      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(f.fieldName))
+      // lowercase comparison is mandatory, we want to exclude created field ignoring case
+      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(String(f.fieldName).toLowerCase()))
       .map((f) => `  tgt.${this.formatFieldName(f.fieldName)} = src.${this.formatFieldName(f.fieldName)}`)
       .join(",\n");
 
@@ -250,11 +251,11 @@ export class QueryGenerationService {
         // Collect non-primary key fields that are being updated (excluding audit fields)
         else if (
           !primaryKeys.includes(field.fieldName) &&
-          !["created_time", "created_by", "updated_time", "updated_by"].includes(field.fieldName) &&
+          !["created_time", "created_by", "updated_time", "updated_by"].includes(String(field.fieldName).toLowerCase()) &&
           field.formattedValue !== null &&
           field.formattedValue !== undefined
         ) {
-          allUpdatedFields.add(field.fieldName);
+          allUpdatedFields.add(String(field.fieldName).toLowerCase());
         }
       });
     });
@@ -282,7 +283,7 @@ export class QueryGenerationService {
       const updateFields = row
         .filter((f) => {
           if (primaryKeys.includes(f.fieldName)) return false;
-          if (["created_time", "created_by"].includes(f.fieldName)) return false;
+          if (["created_time", "created_by"].includes(String(f.fieldName).toLowerCase())) return false;
           if (f.formattedValue === null) return false;
           return f.formattedValue !== undefined;
         })
