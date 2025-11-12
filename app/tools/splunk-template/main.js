@@ -118,7 +118,7 @@ class SplunkVTLEditor extends BaseTool {
   async initializeMonacoEditor() {
     const container = document.getElementById("vtlEditor");
     const initial =
-      "eventType=EV_CPTS_TRANSACTION|channelCode=EVE|channelName=EVE|cifNo=$!{context.fromCif}|creditAccAlias=$!{context.merchantName}|creditAccName=$!{context.merchantName}|creditAccNo=$!{context.creditAccNo}|";
+      "[$context.event.toUpperCase()] logdate=$!context.captureDate - IPAddress=$!context.clientIp|channelCode=$!context.channelId|channelName=$!context.channelId|cifNo=$!context.cif|deviceId=$!context.deviceId|emailAddress=$!context.email|eventType=$!context.event.toUpperCase()|isSuccess=false|mobilePhone=$!context.mobileNumber|statusCode=$!context.statusCode|statusName=$!context.status|transactionDate=$!context.captureDate|userActivationDate=$!context.registeredDate|userAgent=$!context.osVersion|userID=$!context.userId|sessionId=$!context.authorization|appsVersion=$!context.clientVersion";
     let value = initial;
     try {
       const saved = localStorage.getItem(this._storageKey);
