@@ -17,9 +17,13 @@ BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
 # Trim trailing slash to avoid double slashes in URLs
 BASE_URL="${BASE_URL%/}"
 
-# Resolve version: CLI arg $1 overrides tauri.conf.json version
-VERSION_ARG="${1:-}"
 TAURI_CONF="$SRC_TAURI_DIR/tauri.conf.json"
+
+# Globals for auto-revert handling
+FILES_MODIFIED=0
+BUILD_OK=0
+TAURI_CONF_BACKUP=""
+PACKAGE_JSON_BACKUP=""
 
 timestamp() {
   date +"%Y-%m-%d_%H-%M"
@@ -27,29 +31,87 @@ timestamp() {
 
 read_version_from_conf() {
   local conf="$1"
-  # Prefer jq for robust JSON parsing; fallback to grep/sed when jq is unavailable
-  if command -v jq >/dev/null 2>&1; then
-    jq -r '.version // empty' "$conf"
-  else
-    grep -E '"version"[[:space:]]*:[[:space:]]*"' "$conf" \
-      | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
-      | head -n1
-  fi
+  jq -r '.version // empty' "$conf"
 }
 
 # Sanitize arbitrary version strings that may accidentally include JSON fragments
 sanitize_version() {
   local v="$1"
-  # If it looks like a JSON line, extract the quoted value; otherwise pass through
-  echo "$v" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
+  echo "$v"
+}
+
+# -------- Interactive prompt helpers --------
+prompt_version() {
+  local current="$1" input
+  while true; do
+    read -r -p "Version [${current}]: " input || true
+    input="${input:-$current}"
+    if [[ "$input" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "$input"
+      return 0
+    fi
+    echo "Invalid version format. Use X.Y.Z (e.g., 1.2.3)."
+  done
+}
+
+prompt_force_update() {
+  local ans
+  read -r -p "Force update? (y/N) [N]: " ans || true
+  ans="${ans:-N}"
+  if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+    echo "y"
+  else
+    echo "n"
+  fi
+}
+
+prompt_channel() {
+  local ch
+  while true; do
+    read -r -p "Channel (stable/beta/both) [stable]: " ch || true
+    ch="${ch:-stable}"
+    case "$ch" in
+      stable|beta|both)
+        echo "$ch"
+        return 0
+        ;;
+      *)
+        echo "Invalid channel. Choose stable, beta, or both."
+        ;;
+    esac
+  done
+}
+
+prompt_release_message() {
+  local default_msg="$1" msg
+  read -r -p "Release message [${default_msg}]: " msg || true
+  echo "${msg:-$default_msg}"
+}
+
+# Removed: JSON is constructed via jq directly in write_manifest
+
+# Revert version changes using backups when a failure occurs
+revert_versions() {
+  if [[ "$FILES_MODIFIED" -eq 1 ]]; then
+    [[ -n "$TAURI_CONF_BACKUP" && -f "$TAURI_CONF_BACKUP" ]] && cp "$TAURI_CONF_BACKUP" "$TAURI_CONF" || true
+    [[ -n "$PACKAGE_JSON_BACKUP" && -f "$PACKAGE_JSON_BACKUP" ]] && cp "$PACKAGE_JSON_BACKUP" "$ROOT_DIR/package.json" || true
+    echo "Version files reverted due to error."
+  fi
+}
+
+# Update the top-level "version" field in a JSON file using jq
+update_json_version() {
+  local file="$1" new_version="$2" tmp
+  tmp="$(mktemp)"
+  jq --arg v "$new_version" '.version = $v' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
 ensure_prereqs() {
   if [[ ! -f "$KEY_FILE" ]]; then
     echo "ERROR: Missing updater key at $KEY_FILE" >&2
-    echo "       Expected: repo-root/keys/updater.key (Ed25519 private key)" >&2
-    echo "       Also required: repo-root/keys/passphrase.key (matching passphrase)" >&2
-    echo "       See docs/update.md → Quick Start — Release Scripts for setup." >&2
+    echo "       Expected: repo-root/keys/updater.key - Ed25519 private key" >&2
+    echo "       Also required: repo-root/keys/passphrase.key - matching passphrase" >&2
+    echo "       See docs/update.md -> Quick Start — Release Scripts for setup." >&2
     exit 1
   fi
   if [[ ! -f "$PASSPHRASE_FILE" ]]; then
@@ -66,7 +128,8 @@ ensure_prereqs() {
     exit 1
   fi
   if ! command -v jq >/dev/null 2>&1; then
-    echo "INFO: jq not found; falling back to grep/sed for version parsing and skipping JSON validation." >&2
+    echo "ERROR: jq is required. Please install jq (e.g., brew install jq)." >&2
+    exit 1
   fi
 }
 
@@ -127,47 +190,55 @@ sign_file() {
   # Some versions print human-friendly text; we need just the base64 token.
   local out sig
   out="$(npx tauri signer sign -f "$key" -p "$passphrase" "$file")"
-  if echo "$out" | grep -q "Public signature:"; then
-    # Read from the "Public signature:" section and stop before the trailing note.
-    # Select the first pure base64 line to avoid concatenating any human text.
-    sig="$(printf "%s" "$out" \
-      | sed -n '/Public signature:/,$p' \
-      | sed '/Make sure/q' \
-      | grep -E '^[A-Za-z0-9+/=]+$' \
-      | head -n 1)"
-  else
-    # Fallback: find the first pure base64-looking line anywhere in the output.
-    sig="$(printf "%s" "$out" | grep -E '^[A-Za-z0-9+/=]+$' | head -n 1)"
-  fi
-  printf "%s" "$sig"
-}
+    if echo "$out" | grep -q "Public signature:"; then
+      # Extract the base64 signature line after the marker without using sed
+      sig="$(printf "%s" "$out" | awk 'BEGIN{found=0} /Public signature:/ {found=1; next} found && /^[A-Za-z0-9+\/=]+$/ {print; exit}')"
+    else
+      # Fallback: find the first pure base64-looking line anywhere in the output.
+      sig="$(printf "%s" "$out" | grep -E '^[A-Za-z0-9+/=]+$' | head -n 1)"
+    fi
+    printf "%s" "$sig"
+  }
 
 write_manifest() {
-  local out_json="$1" version="$2" channel="$3" sig_arm64="$4" sig_x64="$5" sha_arm64="$6" sha_x64="$7"
+  local out_json="$1" version="$2" min_version="$3" channel="$4" notes="$5" sig_arm64="$6" sig_x64="$7" sha_arm64="$8" sha_x64="$9"
   local pubdate
   pubdate="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  cat > "$out_json" <<JSON
-{
-  "version": "$version",
-  "minVersion": "0.0.0",
-  "notes": "$channel release $version",
-  "pub_date": "$pubdate",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "$sig_arm64",
-      "url": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz",
-      "installer": "$BASE_URL/releases/$version/$channel/darwin-aarch64/ADTools-$version-mac-arm64.dmg",
-      "installer_sha256": "${sha_arm64}"
-    },
-    "darwin-x86_64": {
-      "signature": "$sig_x64",
-      "url": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz",
-      "installer": "$BASE_URL/releases/$version/$channel/darwin-x86_64/ADTools-$version-mac-intel.dmg",
-      "installer_sha256": "${sha_x64}"
-    }
-  }
-}
-JSON
+  jq -n \
+    --arg base_url "$BASE_URL" \
+    --arg version "$version" \
+    --arg min_version "$min_version" \
+    --arg notes "$notes" \
+    --arg pubdate "$pubdate" \
+    --arg channel "$channel" \
+    --arg sig_arm64 "$sig_arm64" \
+    --arg sig_x64 "$sig_x64" \
+    --arg sha_arm64 "$sha_arm64" \
+    --arg sha_x64 "$sha_x64" \
+    '{
+      version: $version,
+      minVersion: $min_version,
+      notes: $notes,
+      pub_date: $pubdate,
+      platforms: {
+        "darwin-aarch64": (
+          {
+            signature: $sig_arm64,
+            url: ($base_url+"/releases/"+$version+"/"+$channel+"/darwin-aarch64/ADTools-"+$version+"-mac-arm64.app.tar.gz"),
+            installer: ($base_url+"/releases/"+$version+"/"+$channel+"/darwin-aarch64/ADTools-"+$version+"-mac-arm64.dmg")
+          }
+          + ( if $sha_arm64 != "" then { installer_sha256: $sha_arm64 } else {} end )
+        ),
+        "darwin-x86_64": (
+          {
+            signature: $sig_x64,
+            url: ($base_url+"/releases/"+$version+"/"+$channel+"/darwin-x86_64/ADTools-"+$version+"-mac-intel.app.tar.gz"),
+            installer: ($base_url+"/releases/"+$version+"/"+$channel+"/darwin-x86_64/ADTools-"+$version+"-mac-intel.dmg")
+          }
+          + ( if $sha_x64 != "" then { installer_sha256: $sha_x64 } else {} end )
+        )
+      }
+    }' > "$out_json"
 }
 
 main() {
@@ -175,23 +246,47 @@ main() {
 
   validate_json "$TAURI_CONF"
 
-  local version timestamp_dir release_dir passphrase
+  local version current_version selected_version timestamp_dir release_dir passphrase channel force min_version notes
   # Read passphrase as raw text, preserve spaces, strip trailing newlines/CR
   passphrase="$(tr -d '\r\n' < "$PASSPHRASE_FILE")"
-  version="$VERSION_ARG"
-  if [[ -z "$version" ]]; then
-    version="$(read_version_from_conf "$TAURI_CONF")"
-  fi
-  # Final guard to strip any accidental JSON fragments
-  version="$(sanitize_version "$version")"
-  # Basic validation to catch obvious parsing failures
-  if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,2}([-a-zA-Z0-9\.]+)?$ ]]; then
-    echo "ERROR: Parsed version '$version' is invalid. Check tauri.conf.json or pass a version argument." >&2
+  current_version="$(read_version_from_conf "$TAURI_CONF")"
+  current_version="$(sanitize_version "$current_version")"
+  if [[ -z "$current_version" ]]; then
+    echo "ERROR: Unable to determine current version from $TAURI_CONF" >&2
     exit 1
   fi
-  if [[ -z "$version" ]]; then
-    echo "ERROR: Unable to determine version; pass it as first argument" >&2
-    exit 1
+
+  # Strictly interactive prompts
+  selected_version="$(prompt_version "$current_version")"
+  force="$(prompt_force_update)"  # y or n
+  channel="$(prompt_channel)"     # stable | beta | both
+  # Default notes depend on channel selection
+  if [[ "$channel" == "both" ]]; then
+    notes="Release $selected_version"
+  else
+    notes="$channel release $selected_version"
+  fi
+  notes="$(prompt_release_message "$notes")"
+  # Compute minVersion
+  if [[ "$force" == "y" ]]; then
+    min_version="$selected_version"
+  else
+    min_version="0.0.0"
+  fi
+
+  # Prepare auto-revert backups only if we will change versions
+  trap 'revert_versions' ERR
+  trap '[[ "$BUILD_OK" -eq 1 ]] || revert_versions' EXIT
+
+  # Update versions only when changed
+  if [[ "$selected_version" != "$current_version" ]]; then
+    FILES_MODIFIED=1
+    TAURI_CONF_BACKUP="$(mktemp)"; cp "$TAURI_CONF" "$TAURI_CONF_BACKUP"
+    PACKAGE_JSON_BACKUP="$(mktemp)"; cp "$ROOT_DIR/package.json" "$PACKAGE_JSON_BACKUP"
+    update_json_version "$TAURI_CONF" "$selected_version"
+    update_json_version "$ROOT_DIR/package.json" "$selected_version"
+    validate_json "$TAURI_CONF"
+    validate_json "$ROOT_DIR/package.json"
   fi
 
   timestamp_dir="$(timestamp)"
@@ -206,22 +301,22 @@ main() {
 
   # Copy DMGs with naming convention
   if [[ -n "$DMG_ARM64" && -f "$DMG_ARM64" ]]; then
-    cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.dmg"
+    cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
   fi
   if [[ -n "$DMG_X64" && -f "$DMG_X64" ]]; then
-    cp "$DMG_X64" "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.dmg"
+    cp "$DMG_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg"
   fi
 
   # Create .app.tar.gz for each arch
-  compress_app "$APP_ARM64" "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz"
-  compress_app "$APP_X64" "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz"
+  compress_app "$APP_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.app.tar.gz"
+  compress_app "$APP_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.app.tar.gz"
 
   # Sign tarballs and save .sig files
   local SIG_ARM64 SIG_X64
-  SIG_ARM64="$(sign_file "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz" "$KEY_FILE" "$passphrase")"
-  SIG_X64="$(sign_file "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz" "$KEY_FILE" "$passphrase")"
-  echo "$SIG_ARM64" > "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.app.tar.gz.sig"
-  echo "$SIG_X64" > "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.app.tar.gz.sig"
+  SIG_ARM64="$(sign_file "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.app.tar.gz" "$KEY_FILE" "$passphrase")"
+  SIG_X64="$(sign_file "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.app.tar.gz" "$KEY_FILE" "$passphrase")"
+  echo "$SIG_ARM64" > "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.app.tar.gz.sig"
+  echo "$SIG_X64" > "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.app.tar.gz.sig"
 
   # Compute installer DMG checksums (optional if DMG exists)
   sha256_file() {
@@ -237,22 +332,31 @@ main() {
   local SHA_ARM64 SHA_X64
   SHA_ARM64=""
   SHA_X64=""
-  if [[ -f "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.dmg" ]]; then
-    SHA_ARM64="$(sha256_file "$release_dir/darwin-aarch64/ADTools-$version-mac-arm64.dmg")"
+  if [[ -f "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg" ]]; then
+    SHA_ARM64="$(sha256_file "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg")"
   fi
-  if [[ -f "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.dmg" ]]; then
-    SHA_X64="$(sha256_file "$release_dir/darwin-x86_64/ADTools-$version-mac-intel.dmg")"
+  if [[ -f "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg" ]]; then
+    SHA_X64="$(sha256_file "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg")"
   fi
 
-  # Write manifests for both channels
-  write_manifest "$release_dir/stable.json" "$version" "stable" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
-  write_manifest "$release_dir/beta.json" "$version" "beta" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+  # Write manifests according to selection
+  if [[ "$channel" == "stable" || "$channel" == "both" ]]; then
+    write_manifest "$release_dir/stable.json" "$selected_version" "$min_version" "stable" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+  fi
+  if [[ "$channel" == "beta" || "$channel" == "both" ]]; then
+    write_manifest "$release_dir/beta.json" "$selected_version" "$min_version" "beta" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+  fi
 
   echo "Release built: $release_dir"
   echo "Artifacts:"
   ls -la "$release_dir/darwin-aarch64" "$release_dir/darwin-x86_64"
   echo "Manifests:"
   ls -la "$release_dir" | grep -E 'beta.json|stable.json' || true
+
+  # Mark success and cleanup backups if any
+  BUILD_OK=1
+  [[ -n "${TAURI_CONF_BACKUP:-}" && -f "${TAURI_CONF_BACKUP:-}" ]] && rm -f "$TAURI_CONF_BACKUP" || true
+  [[ -n "${PACKAGE_JSON_BACKUP:-}" && -f "${PACKAGE_JSON_BACKUP:-}" ]] && rm -f "$PACKAGE_JSON_BACKUP" || true
 }
 
 main "$@"
