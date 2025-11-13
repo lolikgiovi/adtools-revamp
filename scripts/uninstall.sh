@@ -65,6 +65,15 @@ DATA_ITEMS=(
 )
 for d in "${DATA_ITEMS[@]}"; do remove_path "$d"; done
 
+# WKWebView website data (localStorage/IndexedDB) used by Tauri
+WEBKIT_ITEMS=(
+  "$HOME/Library/WebKit/com.adtools.desktop"
+  "$HOME/Library/Containers/com.adtools.desktop/Data/Library/WebKit"
+  "$HOME/Library/Containers/com.adtools.desktop/Data/Library/Caches/com.apple.WebKit.Networking"
+  "$HOME/Library/Containers/com.adtools.desktop/Data/Library/Caches/com.apple.WebKit.WebContent"
+)
+for d in "${WEBKIT_ITEMS[@]}"; do remove_path "$d"; done
+
 if [[ "$PURGE" -eq 1 ]]; then
   # Refresh LaunchServices registration so the system forgets removed app paths
   log "Purging LaunchServices registration"

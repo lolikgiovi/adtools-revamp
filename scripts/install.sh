@@ -12,7 +12,7 @@ warn() { printf "%b\n" "${YELLOW}[warning] $1${NC}"; }
 err() { printf "%b\n" "${RED}[error] $1${NC}" >&2; }
 
 printf "%b\n" "${GREEN}==============================================${NC}"
-printf "%b\n" "${GREEN}[ Installing AD Tools for Desktop ]${NC}"
+printf "%b\n" "${GREEN}[       Installing AD Tools for Desktop      ]${NC}"
 printf "%b\n" "${GREEN}==============================================${NC}"
 echo ""
 
