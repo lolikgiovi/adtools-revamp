@@ -36,6 +36,12 @@ export default {
       return handleInstallOracleScript(request, env);
     }
 
+    // Uninstaller script endpoint
+    if (url.pathname === "/uninstall.sh") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleUninstallScript(request, env);
+    }
+
     // Latest release resolver (redirects to DMG based on arch, stable-only)
     if (url.pathname === "/releases/latest") {
       if (method !== "GET" && method !== "HEAD") return methodNotAllowed();
@@ -178,6 +184,35 @@ async function handleInstallOracleScript(request, env) {
   // Serve the script stored in R2 at install-oracle.sh
   try {
     const obj = await env.UPDATES?.get("install-oracle.sh");
+    if (obj && obj.body) {
+      return new Response(obj.body, {
+        headers: {
+          "Content-Type": "text/x-sh; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "no-store",
+          ...corsHeaders(),
+        },
+      });
+    }
+  } catch (_) {
+    // Fall through to 404 if object cannot be read
+  }
+
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "Content-Type": "text/plain", ...corsHeaders() },
+  });
+}
+
+async function handleUninstallScript(request, env) {
+  // Validate Origin; allow absent Origin for CLI usage
+  if (!isOriginAllowed(request, env)) {
+    return new Response("Forbidden", { status: 403, headers: { "Content-Type": "text/plain", ...corsHeaders() } });
+  }
+
+  // Serve the script stored in R2 at uninstall.sh
+  try {
+    const obj = await env.UPDATES?.get("uninstall.sh");
     if (obj && obj.body) {
       return new Response(obj.body, {
         headers: {
