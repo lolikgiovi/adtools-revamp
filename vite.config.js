@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   server: {
-    open: true,
+    open: false,
     proxy: {
       "/register": "http://localhost:8787",
       "/analytics": "http://localhost:8787",

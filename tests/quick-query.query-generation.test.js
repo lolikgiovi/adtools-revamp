@@ -140,3 +140,33 @@ describe('QueryGenerationService - UPDATE generation', () => {
     expect(() => svc.generateQuery('my_table', 'update', schema, inputNoFields, [])).toThrow('No fields to update')
   })
 })
+
+describe('QueryGenerationService - NULL and whitespace handling', () => {
+  const svc = new QueryGenerationService()
+  const schema = buildLowercaseSchema()
+  const headers = ['id','type','sequence','created_time','created_by','updated_time','updated_by']
+
+  it('MERGE: empty nullable cell becomes NULL', () => {
+    const row = ['1','menu','', '', '', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'merge', schema, [headers, row], [])
+    expect(sql).toContain("NULL AS \"sequence\"")
+  })
+
+  it('INSERT: empty nullable cell becomes NULL', () => {
+    const row = ['1','', '10', '', '', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'insert', schema, [headers, row], [])
+    expect(sql).toContain("VALUES (1, NULL, 10, SYSDATE, 'SYSTEM', SYSDATE, 'USER1')")
+  })
+
+  it('MERGE: whitespace-only input is treated as literal string', () => {
+    const row = ['1',' ', '10', '', '', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'merge', schema, [headers, row], [])
+    expect(sql).toContain("' ' AS \"type\"")
+  })
+
+  it('INSERT: whitespace-only input is treated as literal string', () => {
+    const row = ['1',' ', '10', '', '', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'insert', schema, [headers, row], [])
+    expect(sql).toContain("VALUES (1, ' ', 10, SYSDATE, 'SYSTEM', SYSDATE, 'USER1')")
+  })
+})

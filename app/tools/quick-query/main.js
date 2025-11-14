@@ -38,14 +38,15 @@ export class QuickQuery extends BaseTool {
   }
 
   onMount() {
-    this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this));
+    this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this), this.eventBus);
   }
 }
 
 export class QuickQueryUI {
-  constructor(container, updateHeaderTitle, copyToClipboard) {
+  constructor(container, updateHeaderTitle, copyToClipboard, eventBus) {
     this.container = container;
     this.copyToClipboard = copyToClipboard;
+    this.eventBus = eventBus;
     this.updateHeaderTitle = updateHeaderTitle;
     this.editor = null;
     this.schemaTable = null;
@@ -490,9 +491,9 @@ export class QuickQueryUI {
 
   showSuccess(message) {
     if (this.elements.warningMessages) {
-      this.elements.errorMessages.innerHTML = message;
-      this.elements.errorMessages.style.display = "block";
-      this.elements.errorMessages.style.color = "green";
+      this.elements.warningMessages.innerHTML = message;
+      this.elements.warningMessages.style.display = "block";
+      this.elements.warningMessages.style.color = "green";
     }
   }
 
@@ -613,6 +614,14 @@ export class QuickQueryUI {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    const displayName = tableName || sanitizedTableName;
+    if (this.eventBus) {
+      this.eventBus.emit("notification:success", {
+        message: `Query ${displayName} downloaded to Download Directory`,
+        duration: 2500,
+      });
+    }
   }
 
   handleExecuteInJenkinsRunner() {
