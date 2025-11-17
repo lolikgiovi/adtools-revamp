@@ -60,6 +60,9 @@ export class QuickQueryUI {
     this.isAttachmentActive = false;
     this.processedFiles = [];
 
+    this._layoutState = { height: "auto", fixedRowsTop: 0 };
+    this._layoutScheduled = false;
+
     // Initialize search state
     this.searchState = {
       selectedIndex: -1,
@@ -67,42 +70,6 @@ export class QuickQueryUI {
     };
 
     this.init();
-  }
-
-  // Compute available height for the data spreadsheet viewport
-  computeDataTableHeight() {
-    const headerEl = document.querySelector(".main-header");
-    const headerHeight = headerEl?.offsetHeight || 57; // default header height fallback
-    // Reserve a small buffer for paddings/margins within the Quick Query layout
-    const buffer = 16;
-    const viewport = window.innerHeight || 800;
-    const height = Math.max(240, viewport - headerHeight - buffer);
-    return height;
-  }
-
-  // Determine if the table has more than a threshold of data rows (exclude header row)
-  hasEnoughRows(minRows = 20) {
-    try {
-      if (!this.dataTable) return false;
-      const count =
-        typeof this.dataTable.countRows === "function"
-          ? this.dataTable.countRows()
-          : Array.isArray(this.dataTable.getData())
-          ? this.dataTable.getData().length
-          : 0;
-      const dataRows = Math.max(0, count - 1); // exclude fixed header row
-      return dataRows > minRows;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // Apply height dynamically: 'auto' until >threshold rows, static height otherwise
-  applyDataTableHeight() {
-    if (!this.dataTable) return;
-    const useStatic = this.hasEnoughRows(20);
-    const targetHeight = useStatic ? this.computeDataTableHeight() : "auto";
-    this.dataTable.updateSettings({ height: targetHeight });
   }
 
   async init() {
@@ -165,16 +132,6 @@ export class QuickQueryUI {
 
       this.initializeSpreadsheets();
       this.initializeEditor();
-
-      // Update the data table height responsively
-      const resizeHandler = () => {
-        if (this.dataTable) {
-          this.applyDataTableHeight();
-        }
-      };
-      window.addEventListener("resize", resizeHandler);
-      // Initial height update after mount
-      resizeHandler();
 
       // Make sure files container is visible initially
       if (this.elements.filesContainer) {
@@ -429,9 +386,6 @@ export class QuickQueryUI {
       // Constrain the internal viewport height to keep headers visible while scrolling
       height: "auto",
       afterChange: (changes, source) => {
-        // Always re-evaluate height after any change, including loadData
-        this.applyDataTableHeight();
-
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
 
@@ -443,13 +397,10 @@ export class QuickQueryUI {
           this.localStorageService.updateTableData(tableName, currentData);
         }
       },
-      afterCreateRow: () => this.applyDataTableHeight(),
-      afterRemoveRow: () => this.applyDataTableHeight(),
+      // No height recalculation hooks
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
-    // Apply initial height based on current content
-    this.applyDataTableHeight();
   }
 
   updateDataSpreadsheet() {
@@ -476,8 +427,6 @@ export class QuickQueryUI {
       });
       this.dataTable.loadData(newData);
     }
-    // Re-apply height after reloading data
-    this.applyDataTableHeight();
   }
 
   // Error handling methods
@@ -583,7 +532,6 @@ export class QuickQueryUI {
         colHeaders: true,
         minCols: 1,
       });
-      this.applyDataTableHeight();
     }
 
     if (this.editor) {
@@ -676,7 +624,6 @@ export class QuickQueryUI {
     }
 
     this.dataTable.loadData(currentData);
-    this.applyDataTableHeight();
   }
 
   handleAddDataRow() {
@@ -686,14 +633,12 @@ export class QuickQueryUI {
     const newRow = Array(columnCount).fill(null);
     const newData = [...currentData, newRow];
     this.dataTable.loadData(newData);
-    this.applyDataTableHeight();
   }
 
   handleRemoveDataRow() {
     const currentData = this.dataTable.getData();
     const newData = currentData.slice(0, -1);
     this.dataTable.loadData(newData);
-    this.applyDataTableHeight();
   }
 
   handleClearData() {
@@ -702,7 +647,6 @@ export class QuickQueryUI {
     const newData = [fieldNames, Array(fieldNames.length).fill(null)];
 
     this.dataTable.loadData(newData);
-    this.applyDataTableHeight();
   }
 
   handleAddNewSchemaRow() {
@@ -869,11 +813,9 @@ export class QuickQueryUI {
       // Load cached data if available
       if (result.data) {
         this.dataTable.loadData(result.data);
-        this.applyDataTableHeight();
       } else {
         this.handleAddFieldNames();
         this.handleClearData();
-        this.applyDataTableHeight();
       }
 
       this.elements.schemaOverlay.classList.add("hidden");

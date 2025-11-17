@@ -75,9 +75,9 @@
 /* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
   /* Keep the table within the visible viewport minus app header */
-  max-height: calc(100vh - 57px);
-  overflow: auto; /* enable vertical and horizontal scroll inside container */
-  overscroll-behavior: contain; /* prevent scroll chaining to the page */
+  /* max-height: calc(100vh - 57px); */
+  overflow-x: auto; /* enable vertical and horizontal scroll inside container */
+  /* overscroll-behavior: contain; */
 }
 
 /* Hide scrollbar in spreadsheet-data */
@@ -250,8 +250,8 @@
 #spreadsheet-data .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
-  white-space: normal !important;
-  text-overflow: ellipsis;
+  white-space: pre-wrap !important;
+  /* text-overflow: ellipsis; */
 }
 
 /* Ensure theme class selector also picks up compact vars */
