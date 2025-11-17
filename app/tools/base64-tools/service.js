@@ -32,7 +32,7 @@ function normalizeDataUri(input) {
   if (trimmed.startsWith("data:")) {
     const dataUriMatch = trimmed.match(/^data:([^;]*);base64,(.+)$/);
     if (!dataUriMatch) throw new Error("Invalid data URI format");
-    return { mimeType: dataUriMatch[1], base64: dataUriMatch[2] };
+    return { mimeType: dataUriMatch[1], base64: dataUriMatch[2].replace(/\s+/g, "") };
   }
   return { mimeType: null, base64: trimmed.replace(/\s+/g, "") };
 }

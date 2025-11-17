@@ -440,6 +440,7 @@ class Base64Tools extends BaseTool {
     if (selectedFilesForMode.length > 0) {
       await this.processMultipleFiles("decode");
     } else {
+      this.clearOutputFiles("decode");
       const inputArea = container.querySelector("#decode-input");
       const outputArea = container.querySelector("#decode-output");
       const base64Text = inputArea.value.trim();
@@ -460,18 +461,63 @@ class Base64Tools extends BaseTool {
 
         if (isTextContent) {
           outputArea.value = decoded;
+          outputArea.style.display = "block";
+          this.decodedBlob = null;
+          this.decodedFilename = null;
         } else {
           outputArea.value = "";
           outputArea.style.display = "none";
-          const uint8Array = new Uint8Array(decoded.length);
+          const bytes = new Uint8Array(decoded.length);
           for (let i = 0; i < decoded.length; i++) {
-            uint8Array[i] = decoded.charCodeAt(i);
+            bytes[i] = decoded.charCodeAt(i);
           }
-          const contentType = Base64ToolsService.detectContentType(uint8Array);
-          this.decodedBlob = new Blob([uint8Array], { type: contentType });
-          this.decodedFilename = `decoded_base64-${Date.now()}`;
+          const contentType = Base64ToolsService.detectContentType(bytes);
 
-          this.showFileInfo({ name: this.decodedFilename, size: this.decodedBlob.size, type: contentType }, "decode");
+          const processedFiles = [];
+          if (contentType.startsWith("image/")) {
+            const blob = new Blob([bytes], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const { width, height } = await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.onload = () =>
+                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+              img.onerror = (e) => reject(e);
+              img.src = url;
+            });
+            processedFiles.push({
+              originalName: "decoded_base64",
+              processedName: `decoded_base64.${contentType.split("/")[1]}`,
+              content: {
+                url,
+                name: `decoded_base64.${contentType.split("/")[1]}`,
+                size: blob.size,
+                width,
+                height,
+                type: contentType,
+                content: bytes,
+              },
+              size: blob.size,
+              isImage: true,
+            });
+          } else {
+            const blob = new Blob([bytes], { type: contentType });
+            const extension = contentType.split("/")[1] || "bin";
+            const processedName = `decoded_base64.${extension}`;
+            processedFiles.push({
+              originalName: "decoded_base64",
+              processedName,
+              content: {
+                name: processedName,
+                size: blob.size,
+                type: contentType,
+                content: bytes,
+              },
+              size: blob.size,
+              isFile: true,
+            });
+          }
+
+          this.displayProcessedFiles(processedFiles, "decode");
         }
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
