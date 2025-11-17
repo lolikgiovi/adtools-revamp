@@ -91,7 +91,7 @@
 }
 
 #spreadsheet-data .handsontable .wtHolder {
-  max-height: calc(100vh - 70px);
+  /* max-height: calc(100vh - 70px); */
   overflow-y: auto;
 }
 
