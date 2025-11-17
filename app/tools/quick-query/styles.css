@@ -90,6 +90,11 @@
   -ms-overflow-style: none;
 }
 
+#spreadsheet-data .handsontable .wtHolder {
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
+}
+
 #queryEditor {
   /* height: 500px;  */
   flex: 1;
