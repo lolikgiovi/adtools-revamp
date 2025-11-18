@@ -55,7 +55,7 @@ export class ValueProcessorService {
     // Increment value (max + 1)
     if (
       (fieldName === "config_id" && upperDataType === "NUMBER") || // specific for config_id
-      (upperDataType.startsWith("NUMBER") && value.toLowerCase() === "max") // any number fields with exactly max value
+      (upperDataType.startsWith("NUMBER") && value.toLowerCase().includes("max")) // any number fields containing "max" phrase
     ) {
       return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
     }
@@ -244,34 +244,109 @@ export class ValueProcessorService {
         }
       }
 
-      // 2. Handle common explicit formats without timezone
-      for (const fmt of commonDateFormats) {
-        const parsed = moment(value, fmt, true);
+      // 2. Handle timestamps with fractional seconds
+      if (value.includes(",")) {
+        // First replace dots in time with colons, but keep the date dots
+        const normalizedValue = value.replace(/(\d{2})\.(\d{2})\.(\d{2}),/, "$1:$2:$3,");
+        const [datePart, fractionalPart] = normalizedValue.split(",");
+        const precision = Math.min(fractionalPart?.length || 0, 9);
+
+        const parsed = moment(datePart, "DD-MM-YYYY HH:mm:ss", true);
         if (parsed.isValid()) {
-          return `TO_DATE('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
+          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
+            0,
+            precision
+          )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
         }
       }
 
-      // 3. Fallback to parsing with timezone if provided (like +07:00)
-      const tzMatch = value.match(/([+-]\d{2}:?\d{2})$/);
-      if (tzMatch) {
-        const parsed = moment(value);
+      // 3. Handle common formats with strict parsing
+      const commonFormats = [
+        "YYYY-MM-DD HH:mm:ss",
+        "DD-MM-YYYY HH:mm:ss",
+        "MM/DD/YYYY HH:mm:ss",
+        "DD/MM/YYYY HH:mm:ss",
+        "YYYY-MM-DD",
+        "DD-MM-YYYY",
+        "MM/DD/YYYY",
+        "DD/MM/YYYY",
+        "DD-MMM-YYYY",
+        "DD-MMM-YY",
+        "DD.MM.YYYY HH:mm:ss",
+        "DD.MM.YYYY",
+        "YYYY/MM/DD HH:mm:ss",
+        "YYYY/MM/DD",
+      ];
+
+      for (const format of commonFormats) {
+        const parsed = moment(value, format, true);
         if (parsed.isValid()) {
-          return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ssZ")}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
+          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
         }
       }
 
-      // 4. If none matched, return literal string
-      return `'${value.replace(/'/g, "''")}'`;
+      // 4. Handle AM/PM format
+      if (/[AaPpMm]/.test(value)) {
+        const amPmFormats = [
+          "MM/DD/YYYY hh:mm:ss A",
+          "DD-MM-YYYY hh:mm:ss A",
+          "YYYY-MM-DD hh:mm:ss A",
+          "DD/MM/YYYY hh:mm:ss A",
+          "MM-DD-YYYY hh:mm:ss A",
+        ];
+
+        for (const format of amPmFormats) {
+          const parsed = moment(value, format, true);
+          if (parsed.isValid()) {
+            return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
+          }
+        }
+      }
+
+      // 5. Last resort: try flexible parsing
+      const parsed = moment(value);
+      if (parsed.isValid()) {
+        console.warn(`Using flexible date parsing for format: ${value}`);
+        return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
+      }
+
+      throw new Error(`Unable to parse date format: ${value}`);
     } catch (error) {
-      UsageTracker.trackEvent("quick-query", "value_error", { type: "timestamp_parse_failed", message: error.message, value });
-      return `'${value.replace(/'/g, "''")}'`;
+      console.error(`Error parsing timestamp: ${value}`, error);
+      throw new Error(`Invalid timestamp format: ${value}. Please use a valid date/time format.`);
     }
   }
 
   formatCLOB(value) {
-    // Escape single quotes and wrap in TO_CLOB()
-    return `TO_CLOB('${value.replace(/'/g, "''")}')`;
+    const chunkSize = 1000;
+    let result = "";
+    let currentChunkSize = 0;
+    let isFirstChunk = true;
+
+    for (let i = 0; i < value.length; i++) {
+      let char = value[i];
+
+      if (char === "'" || char === "\u2018" || char === "\u2019") {
+        char = "''";
+      } else if (char === "\u201C" || char === "\u201D") {
+        char = '"';
+      }
+
+      if (currentChunkSize + char.length > chunkSize || isFirstChunk) {
+        if (!isFirstChunk) {
+          result += "') || \n";
+        }
+        result += "to_clob('";
+        currentChunkSize = 0;
+        isFirstChunk = false;
+      }
+
+      result += char;
+      currentChunkSize += char.length;
+    }
+
+    result += "')";
+    return result;
   }
 
   formatBLOB(value) {
@@ -281,7 +356,24 @@ export class ValueProcessorService {
   }
 
   isValidDate(value) {
+    // Handle special cases
+    if (!value) return false;
+    if (value.toUpperCase() === "SYSDATE" || value.toUpperCase() === "CURRENT_TIMESTAMP") {
+      return true;
+    }
+
+    // Try strict parsing with common formats
+    if (commonDateFormats.some((format) => moment(value, format, true).isValid())) {
+      return true;
+    }
+
+    // If strict parsing fails, try flexible parsing as last resort
     const parsed = moment(value);
-    return parsed.isValid();
+    if (parsed.isValid()) {
+      console.warn(`Date validated using flexible parsing: ${value}`);
+      return true;
+    }
+
+    return false;
   }
 }
