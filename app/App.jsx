@@ -15,9 +15,9 @@ import JSONTools from "./tools/json-tools/JSONTools.jsx";
 import HTMLEditor from "./tools/html-editor/HTMLEditor.jsx";
 import SplunkTemplate from "./tools/splunk-template/SplunkTemplate.jsx";
 import Base64Tools from "./tools/base64-tools/Base64Tools.jsx";
+import QRTools from "./tools/qr-tools/QRTools.jsx";
 
 // Legacy Tool imports (to be migrated)
-import { QRTools } from "./tools/qr-tools/main.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
 import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
@@ -67,7 +67,7 @@ function AppContent() {
                 <Route path="/uuid-generator" element={<UUIDGenerator />} />
                 <Route path="/json-tools" element={<JSONTools />} />
                 <Route path="/base64-tools" element={<Base64Tools />} />
-                <Route path="/qr-tools" element={<ToolPageWrapper toolId="qr-tools" />} />
+                <Route path="/qr-tools" element={<QRTools />} />
                 <Route path="/quick-query" element={<ToolPageWrapper toolId="quick-query" />} />
                 <Route path="/html-editor" element={<HTMLEditor />} />
                 <Route path="/html-template" element={<HTMLEditor />} />
