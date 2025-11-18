@@ -16,13 +16,13 @@ import HTMLEditor from "./tools/html-editor/HTMLEditor.jsx";
 import SplunkTemplate from "./tools/splunk-template/SplunkTemplate.jsx";
 import Base64Tools from "./tools/base64-tools/Base64Tools.jsx";
 import QRTools from "./tools/qr-tools/QRTools.jsx";
+import ImageChecker from "./tools/image-checker/ImageChecker.jsx";
 
 // Legacy Tool imports (to be migrated)
 import { QuickQuery } from "./tools/quick-query/main.js";
 import { HTMLTemplateTool } from "./tools/html-editor/main.js";
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
-import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 
 // Import core modules
@@ -73,7 +73,7 @@ function AppContent() {
                 <Route path="/html-template" element={<HTMLEditor />} />
                 <Route path="/splunk-template" element={<SplunkTemplate />} />
                 <Route path="/sql-in-clause" element={<SQLInClause />} />
-                <Route path="/check-image" element={<ToolPageWrapper toolId="check-image" />} />
+                <Route path="/check-image" element={<ImageChecker />} />
                 <Route path="/jenkins-runner" element={<ToolPageWrapper toolId="jenkins-runner" />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
