@@ -4,7 +4,8 @@ import { EventBusProvider } from "./contexts/EventBusContext.jsx";
 import { AppProvider } from "./contexts/AppContext.jsx";
 import Layout from "./components/Layout.jsx";
 import HomePage from "./pages/HomePage.jsx";
-import { RegisterPage } from "./pages/register/main.js";
+import RegisterPage from "./pages/register/RegisterPage.jsx";
+import AboutPage from "./pages/about/AboutPage.jsx";
 
 // React Tool imports
 import UUIDGenerator from "./tools/uuid-generator/UUIDGenerator.jsx";
@@ -23,7 +24,6 @@ import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { SettingsPage } from "./pages/settings/main.js";
-import { AboutPage } from "./pages/about/main.js";
 
 // Import core modules
 import { UsageTracker } from "./core/UsageTracker.js";
@@ -55,7 +55,7 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route path="/register" element={<RegisterPageWrapper />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         path="/*"
         element={
@@ -76,7 +76,7 @@ function AppContent() {
                 <Route path="/check-image" element={<ToolPageWrapper toolId="check-image" />} />
                 <Route path="/jenkins-runner" element={<ToolPageWrapper toolId="jenkins-runner" />} />
                 <Route path="/settings" element={<SettingsPageWrapper />} />
-                <Route path="/about" element={<AboutPageWrapper />} />
+                <Route path="/about" element={<AboutPage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>
@@ -91,16 +91,8 @@ function ToolPageWrapper({ toolId }) {
   return <div className="tool-page" data-tool-id={toolId}>Tool: {toolId}</div>;
 }
 
-function RegisterPageWrapper() {
-  return <div className="register-page">Register Page Placeholder</div>;
-}
-
 function SettingsPageWrapper() {
   return <div className="settings-page">Settings Page Placeholder</div>;
-}
-
-function AboutPageWrapper() {
-  return <div className="about-page">About Page Placeholder</div>;
 }
 
 function App() {

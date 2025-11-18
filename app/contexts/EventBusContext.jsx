@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef } from "react";
 import { EventBus } from "../core/EventBus.js";
 
-const EventBusContext = createContext(null);
+export const EventBusContext = createContext(null);
 
 export const EventBusProvider = ({ children }) => {
   const eventBusRef = useRef(new EventBus());
