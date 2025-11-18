@@ -6,8 +6,10 @@ import Layout from "./components/Layout.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import { RegisterPage } from "./pages/register/main.js";
 
-// Tool imports
-import { UUIDGenerator } from "./tools/uuid-generator/main.js";
+// React Tool imports
+import UUIDGenerator from "./tools/uuid-generator/UUIDGenerator.jsx";
+
+// Legacy Tool imports (to be migrated)
 import { JSONTools } from "./tools/json-tools/main.js";
 import { QRTools } from "./tools/qr-tools/main.js";
 import { Base64Tools } from "./tools/base64-tools/main.js";
@@ -59,15 +61,16 @@ function AppContent() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/home" element={<HomePage />} />
-                <Route path="/uuid-generator" element={<ToolPageWrapper toolId="uuid-generator" />} />
+                <Route path="/uuid-generator" element={<UUIDGenerator />} />
                 <Route path="/json-tools" element={<ToolPageWrapper toolId="json-tools" />} />
                 <Route path="/base64-tools" element={<ToolPageWrapper toolId="base64-tools" />} />
                 <Route path="/qr-tools" element={<ToolPageWrapper toolId="qr-tools" />} />
                 <Route path="/quick-query" element={<ToolPageWrapper toolId="quick-query" />} />
                 <Route path="/html-editor" element={<ToolPageWrapper toolId="html-editor" />} />
+                <Route path="/html-template" element={<ToolPageWrapper toolId="html-template" />} />
                 <Route path="/splunk-template" element={<ToolPageWrapper toolId="splunk-template" />} />
                 <Route path="/sql-in-clause" element={<ToolPageWrapper toolId="sql-in-clause" />} />
-                <Route path="/image-checker" element={<ToolPageWrapper toolId="image-checker" />} />
+                <Route path="/check-image" element={<ToolPageWrapper toolId="check-image" />} />
                 <Route path="/jenkins-runner" element={<ToolPageWrapper toolId="jenkins-runner" />} />
                 <Route path="/settings" element={<SettingsPageWrapper />} />
                 <Route path="/about" element={<AboutPageWrapper />} />

@@ -3,13 +3,31 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEventBus } from "../contexts/EventBusContext.jsx";
 import { isTauri } from "../core/Runtime.js";
 import { cn } from "@/lib/utils";
+import Sidebar from "./Sidebar.jsx";
+import NotificationContainer from "./Notification.jsx";
 
 export default function Layout({ children }) {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [currentPage, setCurrentPage] = useState("Home");
   const eventBus = useEventBus();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Handle responsive behavior
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarExpanded(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     // Update current page based on location
@@ -29,6 +47,10 @@ export default function Layout({ children }) {
 
   const toggleSidebar = () => {
     setSidebarExpanded(!sidebarExpanded);
+  };
+
+  const closeSidebar = () => {
+    setSidebarExpanded(false);
   };
 
   const handleReload = () => {
@@ -56,47 +78,13 @@ export default function Layout({ children }) {
         role="navigation"
         aria-label="Main navigation"
         data-state={sidebarExpanded ? "expanded" : "collapsed"}
+        data-mobile={isMobile}
       >
-        <div className="sidebar-header">
-          <div className="sidebar-header-content">
-            <h2 className="sidebar-title">AD Tools</h2>
-          </div>
-        </div>
-
-        <div className="sidebar-content">
-          {/* Sidebar content will be rendered here */}
-          <div className="sidebar-menu">
-            <button onClick={() => navigate("/home")} className="sidebar-menu-item">
-              Home
-            </button>
-            <button onClick={() => navigate("/uuid-generator")} className="sidebar-menu-item">
-              UUID Generator
-            </button>
-            <button onClick={() => navigate("/json-tools")} className="sidebar-menu-item">
-              JSON Tools
-            </button>
-            <button onClick={() => navigate("/base64-tools")} className="sidebar-menu-item">
-              Base64 Tools
-            </button>
-            <button onClick={() => navigate("/qr-tools")} className="sidebar-menu-item">
-              QR Tools
-            </button>
-            <button onClick={() => navigate("/quick-query")} className="sidebar-menu-item">
-              Quick Query
-            </button>
-          </div>
-        </div>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-menu" data-group="footer">
-            <button onClick={() => navigate("/about")} className="sidebar-menu-item">
-              About
-            </button>
-            <button onClick={() => navigate("/settings")} className="sidebar-menu-item">
-              Settings
-            </button>
-          </div>
-        </div>
+        <Sidebar
+          isExpanded={sidebarExpanded}
+          isMobile={isMobile}
+          onClose={closeSidebar}
+        />
       </aside>
 
       {/* Main content */}
@@ -170,7 +158,14 @@ export default function Layout({ children }) {
       </main>
 
       {/* Sidebar overlay for mobile */}
-      <div className="sidebar-overlay" data-state={sidebarExpanded ? "open" : "closed"} onClick={toggleSidebar}></div>
+      <div
+        className="sidebar-overlay"
+        data-state={isMobile && sidebarExpanded ? "open" : "closed"}
+        onClick={closeSidebar}
+      ></div>
+
+      {/* Notification System */}
+      <NotificationContainer />
     </div>
   );
 }
