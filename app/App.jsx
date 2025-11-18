@@ -8,9 +8,10 @@ import { RegisterPage } from "./pages/register/main.js";
 
 // React Tool imports
 import UUIDGenerator from "./tools/uuid-generator/UUIDGenerator.jsx";
+import SQLInClause from "./tools/sql-in-clause/SQLInClause.jsx";
+import JSONTools from "./tools/json-tools/JSONTools.jsx";
 
 // Legacy Tool imports (to be migrated)
-import { JSONTools } from "./tools/json-tools/main.js";
 import { QRTools } from "./tools/qr-tools/main.js";
 import { Base64Tools } from "./tools/base64-tools/main.js";
 import { QuickQuery } from "./tools/quick-query/main.js";
@@ -62,14 +63,14 @@ function AppContent() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/home" element={<HomePage />} />
                 <Route path="/uuid-generator" element={<UUIDGenerator />} />
-                <Route path="/json-tools" element={<ToolPageWrapper toolId="json-tools" />} />
+                <Route path="/json-tools" element={<JSONTools />} />
                 <Route path="/base64-tools" element={<ToolPageWrapper toolId="base64-tools" />} />
                 <Route path="/qr-tools" element={<ToolPageWrapper toolId="qr-tools" />} />
                 <Route path="/quick-query" element={<ToolPageWrapper toolId="quick-query" />} />
                 <Route path="/html-editor" element={<ToolPageWrapper toolId="html-editor" />} />
                 <Route path="/html-template" element={<ToolPageWrapper toolId="html-template" />} />
                 <Route path="/splunk-template" element={<ToolPageWrapper toolId="splunk-template" />} />
-                <Route path="/sql-in-clause" element={<ToolPageWrapper toolId="sql-in-clause" />} />
+                <Route path="/sql-in-clause" element={<SQLInClause />} />
                 <Route path="/check-image" element={<ToolPageWrapper toolId="check-image" />} />
                 <Route path="/jenkins-runner" element={<ToolPageWrapper toolId="jenkins-runner" />} />
                 <Route path="/settings" element={<SettingsPageWrapper />} />
