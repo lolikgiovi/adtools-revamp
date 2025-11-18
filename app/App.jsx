@@ -6,6 +6,7 @@ import Layout from "./components/Layout.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import RegisterPage from "./pages/register/RegisterPage.jsx";
 import AboutPage from "./pages/about/AboutPage.jsx";
+import SettingsPage from "./pages/settings/SettingsPage.jsx";
 
 // React Tool imports
 import UUIDGenerator from "./tools/uuid-generator/UUIDGenerator.jsx";
@@ -23,7 +24,6 @@ import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
-import { SettingsPage } from "./pages/settings/main.js";
 
 // Import core modules
 import { UsageTracker } from "./core/UsageTracker.js";
@@ -75,7 +75,7 @@ function AppContent() {
                 <Route path="/sql-in-clause" element={<SQLInClause />} />
                 <Route path="/check-image" element={<ToolPageWrapper toolId="check-image" />} />
                 <Route path="/jenkins-runner" element={<ToolPageWrapper toolId="jenkins-runner" />} />
-                <Route path="/settings" element={<SettingsPageWrapper />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/about" element={<AboutPage />} />
               </Routes>
             </Layout>
@@ -89,10 +89,6 @@ function AppContent() {
 // Wrapper components for legacy tools (will be migrated later)
 function ToolPageWrapper({ toolId }) {
   return <div className="tool-page" data-tool-id={toolId}>Tool: {toolId}</div>;
-}
-
-function SettingsPageWrapper() {
-  return <div className="settings-page">Settings Page Placeholder</div>;
 }
 
 function App() {
