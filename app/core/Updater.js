@@ -268,34 +268,33 @@ export function setupAutoUpdate(options = {}) {
     if (policy.autoCheck) await runOptionalCheck();
   })();
 
-  // Schedule checks at 9:00, 12:00, 15:00 local time
   const timers = [];
-  const HOURS = [9, 12, 15];
-  const scheduleForHour = (hour) => {
-    const now = new Date();
-    const next = new Date(now);
-    next.setHours(hour, 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    const delay = next.getTime() - now.getTime();
-    const id = setTimeout(async function tick() {
+  const getIntervalMinutes = () => {
+    try {
+      const raw = localStorage.getItem("update.intervalMinutes");
+      const n = parseInt(raw, 10);
+      if (Number.isFinite(n) && n > 0) return n;
+    } catch (_) {}
+    return 30;
+  };
+  const startInterval = () => {
+    const ms = getIntervalMinutes() * 60 * 1000;
+    const id = setInterval(async () => {
       try {
         const policy = await evaluatePolicy();
         if (policy.mustForce) await runForcedIfNeeded();
         else if (policy.autoCheck) await runOptionalCheck();
-      } finally {
-        const daily = setTimeout(tick, 24 * 60 * 60 * 1000);
-        timers.push(daily);
-      }
-    }, delay);
+      } catch (_) {}
+    }, ms);
     timers.push(id);
   };
-  HOURS.forEach(scheduleForHour);
+  startInterval();
 
   return {
     cancel() {
       timers.splice(0).forEach((t) => {
         try {
-          clearTimeout(t);
+          clearInterval(t);
         } catch (_) {}
       });
     },
