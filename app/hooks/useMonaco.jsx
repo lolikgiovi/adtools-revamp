@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 
 /**
  * Custom hook for Monaco Editor integration
@@ -20,10 +23,24 @@ export function useMonaco({
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Setup Monaco environment
+    // Setup Monaco environment with all workers
     self.MonacoEnvironment = {
-      getWorker() {
-        return new editorWorker();
+      getWorker(_, label) {
+        switch (label) {
+          case "css":
+          case "scss":
+          case "less":
+            return new cssWorker();
+          case "html":
+          case "handlebars":
+          case "razor":
+            return new htmlWorker();
+          case "typescript":
+          case "javascript":
+            return new tsWorker();
+          default:
+            return new editorWorker();
+        }
       },
     };
 
