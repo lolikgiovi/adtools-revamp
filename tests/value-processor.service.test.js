@@ -97,15 +97,37 @@ describe('ValueProcessorService', () => {
       expect(result).toContain("TO_TIMESTAMP('2023-10-27 10:00:00.123', 'YYYY-MM-DD HH24:MI:SS.FF3')");
     });
 
-    it('should format common date formats', () => {
-      expect(service.formatTimestamp('2023-10-27 10:00:00')).toContain("TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')");
-      expect(service.formatTimestamp('27-10-2023 10:00:00')).toContain("TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')");
-      expect(service.formatTimestamp('10/27/2023 10:00:00')).toContain("TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')");
-      expect(service.formatTimestamp('2023-10-27')).toContain("TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')");
-    });
+    // 3. Common Formats & Tool Exports
+    describe('Common Tool Export Formats', () => {
+      const testCases = [
+        // Excel formats
+        { input: '10/27/2023 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '27/10/2023 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '2023/10/27 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '10-27-2023 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        
+        // SQLDeveloper / Toad / DBeaver formats
+        { input: '27-OCT-23', expected: "TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '27-OCT-2023', expected: "TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '27.10.2023 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '27.10.2023', expected: "TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '2023-10-27 10:00:00.0', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" }, // DBeaver sometimes adds .0
+        { input: '27-Oct-2023 10:00:00', expected: "TO_TIMESTAMP('2023-10-27 10:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        
+        // AM/PM formats
+        { input: '10/27/2023 10:00:00 PM', expected: "TO_TIMESTAMP('2023-10-27 22:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '27-10-2023 10:00:00 PM', expected: "TO_TIMESTAMP('2023-10-27 22:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        { input: '2023-10-27 10:00:00 PM', expected: "TO_TIMESTAMP('2023-10-27 22:00:00', 'YYYY-MM-DD HH24:MI:SS')" },
+        
+        // Specific Toad Export case: 1/30/1993 12:00:00.000000 AM
+        { input: '1/30/1993 12:00:00.000000 AM', expected: "TO_TIMESTAMP('1993-01-30 00:00:00.000000', 'YYYY-MM-DD HH24:MI:SS.FF6')" },
+      ];
 
-    it('should format AM/PM dates', () => {
-      expect(service.formatTimestamp('10/27/2023 10:00:00 PM')).toContain("TO_TIMESTAMP('2023-10-27 22:00:00', 'YYYY-MM-DD HH24:MI:SS')");
+      testCases.forEach(({ input, expected }) => {
+        it(`should format ${input} correctly`, () => {
+          expect(service.formatTimestamp(input)).toContain(expected);
+        });
+      });
     });
 
     it('should format AM/PM dates with fractional seconds', () => {
@@ -113,8 +135,15 @@ describe('ValueProcessorService', () => {
       expect(result).toContain("TO_TIMESTAMP('2026-10-15 00:00:00.000000', 'YYYY-MM-DD HH24:MI:SS.FF6')");
     });
 
-    it('should throw error for invalid dates', () => {
-      expect(() => service.formatTimestamp('invalid-date')).toThrow(/Invalid timestamp format/);
+    it('should handle flexible parsing for unknown but valid formats', () => {
+      // Moment is quite flexible, let's try something that isn't in the strict list but moment might handle
+      // e.g. "2023 Oct 27"
+      const result = service.formatTimestamp('2023 Oct 27');
+      expect(result).toContain("TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')");
+    });
+
+    it('should throw error for truly invalid dates', () => {
+      expect(() => service.formatTimestamp('not-a-date')).toThrow(/Invalid timestamp format/);
     });
   });
 });

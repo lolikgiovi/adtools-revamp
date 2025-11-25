@@ -1,4 +1,5 @@
 import { commonDateFormats } from "../constants.js";
+import moment from "moment";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 
 export class ValueProcessorService {
@@ -257,200 +258,117 @@ export class ValueProcessorService {
 
     try {
       // 1. Handle ISO 8601 format with timezone
-      const iso8601Regex = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/;
-      const iso8601Match = value.match(iso8601Regex);
-      
-      if (iso8601Match) {
-        const [, year, month, day, hour, minute, second, fractional, timezone] = iso8601Match;
-        
-        // Parse the date to validate it
-        const date = new Date(value);
-        if (isNaN(date.getTime())) {
-          throw new Error(`Invalid date: ${value}`);
-        }
-        
-        // Format timezone
-        let tzOffset = "+00:00";
-        if (timezone && timezone !== "Z") {
-          tzOffset = timezone.includes(":") ? timezone : timezone.slice(0, 3) + ":" + timezone.slice(3);
-        } else if (!timezone || timezone === "Z") {
-          // Convert to local timezone
-          const offset = -date.getTimezoneOffset();
-          const sign = offset >= 0 ? "+" : "-";
-          const absOffset = Math.abs(offset);
-          const hours = String(Math.floor(absOffset / 60)).padStart(2, "0");
-          const minutes = String(absOffset % 60).padStart(2, "0");
-          tzOffset = `${sign}${hours}:${minutes}`;
-          
-          // Adjust the time to local
-          const localDate = new Date(date.getTime());
-          const formattedDate = `${year}-${month}-${day} ${String(localDate.getHours()).padStart(2, "0")}:${minute}:${second}`;
-          
-          if (fractional) {
-            const precision = Math.min(fractional.length, 9);
-            return `TO_TIMESTAMP_TZ('${formattedDate}.${fractional.substring(0, precision)}${tzOffset}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
+      // Regex to check if it looks like ISO 8601
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(value)) {
+        const parsed = moment(value);
+        if (parsed.isValid()) {
+          const fractionalMatch = value.match(/\.(\d+)/);
+          const precision = fractionalMatch ? Math.min(fractionalMatch[1].length, 9) : 0;
+
+          if (precision > 0) {
+            // Reconstruct the timestamp with timezone
+            return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalMatch[1].substring(0, precision)}${parsed.format("Z")}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
           }
-          return `TO_TIMESTAMP_TZ('${formattedDate}${tzOffset}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
+          return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ssZ")}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
         }
-        
-        const formattedDate = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
-        
-        if (fractional) {
-          const precision = Math.min(fractional.length, 9);
-          return `TO_TIMESTAMP_TZ('${formattedDate}.${fractional.substring(0, precision)}${tzOffset}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
-        }
-        return `TO_TIMESTAMP_TZ('${formattedDate}${tzOffset}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
       }
 
       // 2. Handle timestamps with fractional seconds (comma separator)
       if (value.includes(",")) {
-        // First replace dots in time with colons, but keep the date dots/dashes
+        // First replace dots in time with colons, but keep the date dots
+        // This regex targets the time part specifically if it uses dots
         const normalizedValue = value.replace(/(\d{2})\.(\d{2})\.(\d{2}),/, "$1:$2:$3,");
         const [datePart, fractionalPart] = normalizedValue.split(",");
         const precision = Math.min(fractionalPart?.length || 0, 9);
 
-        // Try DD-MM-YYYY HH:mm:ss format
-        const ddmmyyyyRegex = /^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/;
-        const match = datePart.match(ddmmyyyyRegex);
-        
-        if (match) {
-          const [, day, month, year, hour, minute, second] = match;
-          const date = new Date(year, month - 1, day, hour, minute, second);
-          
-          if (isNaN(date.getTime())) {
-            throw new Error(`Invalid date: ${value}`);
-          }
-          
-          return `TO_TIMESTAMP('${year}-${month}-${day} ${hour}:${minute}:${second}.${fractionalPart.substring(0, precision)}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
+        // Try parsing the date part strictly first
+        const parsed = moment(datePart, ["DD-MM-YYYY HH:mm:ss", "YYYY-MM-DD HH:mm:ss", "DD.MM.YYYY HH:mm:ss"], true);
+        if (parsed.isValid()) {
+           return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
+            0,
+            precision
+          )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
         }
       }
 
-      // 3. Handle common formats with regex
-      const formats = [
-        // YYYY-MM-DD HH:mm:ss
-        { regex: /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [0, 1, 2, 3, 4, 5] },
-        // DD-MM-YYYY HH:mm:ss
-        { regex: /^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [2, 1, 0, 3, 4, 5] },
-        // MM/DD/YYYY HH:mm:ss
-        { regex: /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [2, 0, 1, 3, 4, 5] },
-        // DD/MM/YYYY HH:mm:ss
-        { regex: /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [2, 1, 0, 3, 4, 5] },
-        // DD.MM.YYYY HH:mm:ss
-        { regex: /^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [2, 1, 0, 3, 4, 5] },
-        // YYYY/MM/DD HH:mm:ss
-        { regex: /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/, order: [0, 1, 2, 3, 4, 5] },
-        // Date only formats
-        // YYYY-MM-DD
-        { regex: /^(\d{4})-(\d{2})-(\d{2})$/, order: [0, 1, 2], dateOnly: true },
-        // DD-MM-YYYY
-        { regex: /^(\d{2})-(\d{2})-(\d{4})$/, order: [2, 1, 0], dateOnly: true },
-        // MM/DD/YYYY
-        { regex: /^(\d{2})\/(\d{2})\/(\d{4})$/, order: [2, 0, 1], dateOnly: true },
-        // DD/MM/YYYY
-        { regex: /^(\d{2})\/(\d{2})\/(\d{4})$/, order: [2, 1, 0], dateOnly: true },
-        // DD.MM.YYYY
-        { regex: /^(\d{2})\.(\d{2})\.(\d{4})$/, order: [2, 1, 0], dateOnly: true },
-        // YYYY/MM/DD
-        { regex: /^(\d{4})\/(\d{2})\/(\d{2})$/, order: [0, 1, 2], dateOnly: true },
-        // DD-MMM-YYYY (e.g., 27-Oct-2023)
-        { regex: /^(\d{2})-([A-Za-z]{3})-(\d{4})$/, order: [2, 1, 0], dateOnly: true, monthName: true },
-        // DD-MMM-YY (e.g., 27-Oct-23)
-        { regex: /^(\d{2})-([A-Za-z]{3})-(\d{2})$/, order: [2, 1, 0], dateOnly: true, monthName: true, shortYear: true },
+      // 3. Handle common formats with strict parsing
+      // These cover Excel, SQLDeveloper, DBeaver, Toad exports
+      const commonFormats = [
+        "YYYY-MM-DD HH:mm:ss",
+        "DD-MM-YYYY HH:mm:ss",
+        "MM/DD/YYYY HH:mm:ss",
+        "DD/MM/YYYY HH:mm:ss",
+        "YYYY/MM/DD HH:mm:ss",
+        "DD.MM.YYYY HH:mm:ss",
+        // Date only
+        "YYYY-MM-DD",
+        "DD-MM-YYYY",
+        "MM/DD/YYYY",
+        "DD/MM/YYYY",
+        "YYYY/MM/DD",
+        "DD.MM.YYYY",
+        // Textual months
+        "DD-MMM-YYYY",
+        "DD-MMM-YY",
+        "DD-MMM-RR",
       ];
 
-      for (const format of formats) {
-        const match = value.match(format.regex);
-        if (match) {
-          let year, month, day, hour = "00", minute = "00", second = "00";
-          
-          if (format.monthName) {
-            const monthNames = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
-            day = match[format.order[0] + 1];
-            month = monthNames[match[format.order[1] + 1].toLowerCase()];
-            year = match[format.order[2] + 1];
-            
-            if (format.shortYear) {
-              year = parseInt(year) < 50 ? `20${year}` : `19${year}`;
-            }
-          } else {
-            const parts = [match[1], match[2], match[3]];
-            year = parts[format.order[0]];
-            month = parts[format.order[1]];
-            day = parts[format.order[2]];
-            
-            if (!format.dateOnly) {
-              hour = match[4];
-              minute = match[5];
-              second = match[6];
-            }
-          }
-          
-          // Validate the date
-          const date = new Date(year, month - 1, day, hour, minute, second);
-          if (isNaN(date.getTime()) || date.getFullYear() != year || date.getMonth() != month - 1 || date.getDate() != day) {
-            continue; // Try next format
-          }
-          
-          return `TO_TIMESTAMP('${year}-${month}-${day} ${hour}:${minute}:${second}', 'YYYY-MM-DD HH24:MI:SS')`;
+      for (const format of commonFormats) {
+        const parsed = moment(value, format, true);
+        if (parsed.isValid()) {
+          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
         }
       }
 
       // 4. Handle AM/PM format
       if (/[AaPpMm]/.test(value)) {
-        // Support both with and without fractional seconds
-        const amPmRegex = /^(\d{2})[-\/](\d{2})[-\/](\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?\s*([AaPp][Mm])$/;
-        const match = value.match(amPmRegex);
-        
-        if (match) {
-          const [, p1, p2, year, hour12, minute, second, fractional, ampm] = match;
-          
-          // Determine if it's MM/DD or DD/MM based on which makes more sense
-          let month, day;
-          if (parseInt(p1) > 12) {
-            // Must be DD/MM
-            day = p1;
-            month = p2;
-          } else if (parseInt(p2) > 12) {
-            // Must be MM/DD
-            month = p1;
-            day = p2;
-          } else {
-            // Ambiguous, assume MM/DD (US format)
-            month = p1;
-            day = p2;
+        const amPmFormats = [
+          "MM/DD/YYYY hh:mm:ss A",
+          "DD-MM-YYYY hh:mm:ss A",
+          "YYYY-MM-DD hh:mm:ss A",
+          "DD/MM/YYYY hh:mm:ss A",
+          "MM-DD-YYYY hh:mm:ss A",
+          "MM/DD/YYYY h:mm:ss A", // Single digit hour
+        ];
+
+        for (const format of amPmFormats) {
+          const parsed = moment(value, format, true);
+          if (parsed.isValid()) {
+            return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
           }
-          
-          // Convert to 24-hour format
-          let hour24 = parseInt(hour12);
-          if (ampm.toUpperCase() === "PM" && hour24 !== 12) {
-            hour24 += 12;
-          } else if (ampm.toUpperCase() === "AM" && hour24 === 12) {
-            hour24 = 0;
-          }
-          
-          const date = new Date(year, month - 1, day, hour24, minute, second);
-          if (isNaN(date.getTime())) {
-            throw new Error(`Invalid date: ${value}`);
-          }
-          
-          const hour24Str = String(hour24).padStart(2, "0");
-          const monthStr = month.padStart(2, "0");
-          const dayStr = day.padStart(2, "0");
-          
-          // Handle fractional seconds if present
-          if (fractional) {
-            const precision = Math.min(fractional.length, 9);
-            return `TO_TIMESTAMP('${year}-${monthStr}-${dayStr} ${hour24Str}:${minute}:${second}.${fractional.substring(0, precision)}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
-          }
-          
-          return `TO_TIMESTAMP('${year}-${monthStr}-${dayStr} ${hour24Str}:${minute}:${second}', 'YYYY-MM-DD HH24:MI:SS')`;
         }
+        
+        // Handle AM/PM with fractional seconds
+        // e.g. 10/15/2026 12:00:00.000000 AM
+        const fractionalAmPmMatch = value.match(/^(.+?)\.(\d+)\s+([AP]M)$/i);
+        if (fractionalAmPmMatch) {
+             const [_, datePart, fractional, ampm] = fractionalAmPmMatch;
+             const formats = [
+               "MM/DD/YYYY hh:mm:ss A", 
+               "M/DD/YYYY hh:mm:ss A", 
+               "M/D/YYYY hh:mm:ss A", 
+               "MM/D/YYYY hh:mm:ss A", 
+               "YYYY-MM-DD hh:mm:ss A"
+             ];
+             const parsed = moment(`${datePart} ${ampm}`, formats, true);
+             if (parsed.isValid()) {
+                 const precision = Math.min(fractional.length, 9);
+                 return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractional.substring(0, precision)}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
+             }
+        }
+      }
+
+      // 5. Last resort: try flexible parsing
+      const parsed = moment(value);
+      if (parsed.isValid()) {
+        console.warn(`Using flexible date parsing for format: ${value}`);
+        return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
       }
 
       throw new Error(`Unable to parse date format: ${value}`);
     } catch (error) {
       console.error(`Error parsing timestamp: ${value}`, error);
-      throw new Error(`Invalid timestamp format: "${value}". Please use a valid date/time format (e.g., YYYY-MM-DD HH:mm:ss or MM/DD/YYYY HH:mm:ss AM/PM or ISO 8601).`);
+      throw new Error(`Invalid timestamp format: "${value}". Please use a valid date/time format.`);
     }
   }
 
