@@ -136,8 +136,6 @@ describe('ValueProcessorService', () => {
     });
 
     it('should handle flexible parsing for unknown but valid formats', () => {
-      // Moment is quite flexible, let's try something that isn't in the strict list but moment might handle
-      // e.g. "2023 Oct 27"
       const result = service.formatTimestamp('2023 Oct 27');
       expect(result).toContain("TO_TIMESTAMP('2023-10-27 00:00:00', 'YYYY-MM-DD HH24:MI:SS')");
     });

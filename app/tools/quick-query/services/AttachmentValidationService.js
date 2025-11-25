@@ -7,7 +7,6 @@ export class AttachmentValidationService {
     // Find matching file (case-insensitive)
     const matchingFile = attachments.find((file) => file.name.toLowerCase() === value.toLowerCase());
     if (!matchingFile) {
-      UsageTracker.trackEvent("quick-query", "attachment_error", { type: "file_not_found", value });
       return null;
     }
 

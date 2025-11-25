@@ -6,7 +6,6 @@ export class SchemaValidationService {
     console.log(schemaData.length);
     // Check for empty schema
     if (schemaData.length === 0) {
-      UsageTracker.trackEvent("quick-query", "validation_error", { type: "empty_schema" });
       throw new Error("Schema Validation Error:<br>Please fill in the schema (see the left panel).");
     }
 
@@ -21,10 +20,6 @@ export class SchemaValidationService {
 
       // Check if any required field is empty
       if (!fieldName || !dataType || !nullable) {
-        UsageTracker.trackEvent("quick-query", "validation_error", {
-          type: "row_missing_required",
-          row: index + 1,
-        });
         throw new Error(
           `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`
         );
@@ -96,7 +91,6 @@ export class SchemaValidationService {
     const hasFirstDataRow = inputData[1]?.some((cell) => cell !== null && cell !== "");
 
     if (!hasSchemaData || !hasFieldNames || !hasFirstDataRow) {
-      UsageTracker.trackEvent("quick-query", "validation_error", { type: "incomplete_data" });
       throw new Error("Incomplete data. Please fill in both schema and data sheets.");
     }
 
@@ -106,12 +100,10 @@ export class SchemaValidationService {
     // Check for empty field names in data input
     const emptyColumnIndex = inputFieldNames.findIndex((field) => !field);
     if (emptyColumnIndex !== -1) {
-      UsageTracker.trackEvent("quick-query", "validation_error", {
-        type: "empty_field_name",
-        column: emptyColumnIndex + 1,
-      });
-      throw new Error(`Field Name Error:<br>Empty field name found in data input at column ${emptyColumnIndex + 1}`);
+      const columnLetter = this.columnIndexToLetter(emptyColumnIndex);
+      throw new Error(`Field Name Error:<br>Empty field name found in data input at column ${columnLetter}`);
     }
+
 
     // Find mismatches in both directions
     const missingInSchema = inputFieldNames.filter((field) => !schemaFieldNames.includes(field));
@@ -125,15 +117,19 @@ export class SchemaValidationService {
       if (missingInData.length > 0) {
         errors.push(`Fields in schema but not in data: ${missingInData.join(", ")}`);
       }
-      UsageTracker.trackEvent("quick-query", "validation_error", {
-        type: "field_mismatch",
-        missingInSchemaCount: missingInSchema.length,
-        missingInDataCount: missingInData.length,
-      });
       throw new Error(`Field Mismatch Error:<br>${errors.join("<br>")}<br>Note: Oracle treat reserved keywords as case sensitive`);
     }
 
     return true;
+  }
+
+  columnIndexToLetter(index) {
+    let letter = "";
+    while (index >= 0) {
+      letter = String.fromCharCode(65 + (index % 26)) + letter;
+      index = Math.floor(index / 26) - 1;
+    }
+    return letter;
   }
 }
 

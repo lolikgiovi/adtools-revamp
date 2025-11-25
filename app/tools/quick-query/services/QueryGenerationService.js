@@ -182,7 +182,7 @@ export class QueryGenerationService {
               fieldName, 
               message: fieldError.message 
             });
-            throw new Error(`Error in Row ${rowIndex + 2}, Column ${columnLetter}, Field "${fieldName}": ${fieldError.message}`);
+            throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${fieldName}":<br>${fieldError.message}`);
           }
         });
       } catch (error) {
@@ -191,7 +191,7 @@ export class QueryGenerationService {
           throw error;
         }
         UsageTracker.trackEvent("quick-query", "generation_error", { row: rowIndex + 2, message: error.message });
-        throw new Error(`Row ${rowIndex + 2}: ${error.message}`);
+        throw new Error(`${error.message}`);
       }
     });
 
@@ -334,7 +334,7 @@ export class QueryGenerationService {
                 column: columnLetter,
                 pk,
               });
-              throw new Error(`Error in Row ${rowIndex + 2}, Column ${columnLetter}, Field "${pk}": Primary key must have a value for UPDATE operation.`);
+              throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`);
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;
           })
