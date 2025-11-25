@@ -408,7 +408,7 @@ export class QuickQueryUI {
     const columnCount = schemaData.length;
     const currentData = this.dataTable.getData();
 
-    const columnHeaders = Array.from({ length: columnCount }, (_, i) => String.fromCharCode(65 + i));
+    const columnHeaders = Array.from({ length: columnCount }, (_, i) => this.queryGenerationService.columnIndexToLetter(i));
 
     console.log("Column headers:", columnHeaders);
 

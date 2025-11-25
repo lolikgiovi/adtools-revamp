@@ -9,6 +9,20 @@ export class QueryGenerationService {
     this.attachmentValidationService = new AttachmentValidationService();
   }
 
+  /**
+   * Convert column index to Excel-style column letter (A, B, ..., Z, AA, AB, ...)
+   * @param {number} index - Zero-based column index
+   * @returns {string} Excel-style column letter
+   */
+  columnIndexToLetter(index) {
+    let letter = '';
+    while (index >= 0) {
+      letter = String.fromCharCode(65 + (index % 26)) + letter;
+      index = Math.floor(index / 26) - 1;
+    }
+    return letter;
+  }
+
   detectDuplicatePrimaryKeys(schemaData, inputData, tableName) {
     // 1. Get primary keys
     const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
@@ -134,32 +148,48 @@ export class QueryGenerationService {
       try {
         // For each field in the row
         return fieldNames.map((fieldName, colIndex) => {
-          // Get the schema definition for this field
-          const schemaRow = schemaMap.get(fieldName);
+          try {
+            // Get the schema definition for this field
+            const schemaRow = schemaMap.get(fieldName);
 
-          // Extract dataType and nullable from schema
-          const [, dataType, nullable] = schemaRow;
-          // Get the actual value from the data
-          let value = rowData[colIndex];
+            // Extract dataType and nullable from schema
+            const [, dataType, nullable] = schemaRow;
+            // Get the actual value from the data
+            let value = rowData[colIndex];
 
-          // Check if value matches any attachment
-          const attachmentValue = this.attachmentValidationService.validateAttachment(
-            value,
-            dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
-            this.getMaxLength(dataType),
-            attachments
-          );
+            // Check if value matches any attachment
+            const attachmentValue = this.attachmentValidationService.validateAttachment(
+              value,
+              dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
+              this.getMaxLength(dataType),
+              attachments
+            );
 
-          // Use attachment value if found, otherwise use original value
-          value = attachmentValue !== null ? attachmentValue : value;
+            // Use attachment value if found, otherwise use original value
+            value = attachmentValue !== null ? attachmentValue : value;
 
-          // Return formatted object
-          return {
-            fieldName,
-            formattedValue: this.ValueProcessorService.processValue(value, dataType, nullable, fieldName, tableName, queryType),
-          };
+            // Return formatted object
+            return {
+              fieldName,
+              formattedValue: this.ValueProcessorService.processValue(value, dataType, nullable, fieldName, tableName, queryType),
+            };
+          } catch (fieldError) {
+            // Convert column index to Excel-style letter (A, B, ..., Z, AA, AB, ...)
+            const columnLetter = this.columnIndexToLetter(colIndex);
+            UsageTracker.trackEvent("quick-query", "generation_error", { 
+              row: rowIndex + 2, 
+              column: columnLetter, 
+              fieldName, 
+              message: fieldError.message 
+            });
+            throw new Error(`Error in Row ${rowIndex + 2}, Column ${columnLetter}, Field "${fieldName}": ${fieldError.message}`);
+          }
         });
       } catch (error) {
+        // If the error already has our format, just re-throw it
+        if (error.message.includes("Error in Row")) {
+          throw error;
+        }
         UsageTracker.trackEvent("quick-query", "generation_error", { row: rowIndex + 2, message: error.message });
         throw new Error(`Row ${rowIndex + 2}: ${error.message}`);
       }
@@ -180,7 +210,7 @@ export class QueryGenerationService {
         query += "\n\n";
       });
     } else if (queryType === "update") {
-      query += this.generateUpdateStatement(tableName, processedRows, primaryKeys);
+      query += this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames);
       query += "\n\n";
     } else {
       processedRows.forEach((processedFields) => {
@@ -234,7 +264,7 @@ export class QueryGenerationService {
     return mergeStatement;
   }
 
-  generateUpdateStatement(tableName, processedRows, primaryKeys) {
+  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = []) {
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
     const pkValueMap = new Map(primaryKeys.map((pk) => [pk, new Set()]));
@@ -279,7 +309,7 @@ export class QueryGenerationService {
 
     // Build UPDATE SET clause for each row
     const updateStatements = [];
-    processedRows.forEach((row) => {
+    processedRows.forEach((row, rowIndex) => {
       const updateFields = row
         .filter((f) => {
           if (primaryKeys.includes(f.fieldName)) return false;
@@ -294,12 +324,17 @@ export class QueryGenerationService {
           .map((pk) => {
             const pkField = row.find((f) => f.fieldName === pk);
             if (!pkField || pkField.formattedValue === null || pkField.formattedValue === "NULL" || !pkField.formattedValue) {
+              // Find column index for this primary key field
+              const colIndex = fieldNames.indexOf(pk);
+              const columnLetter = colIndex >= 0 ? this.columnIndexToLetter(colIndex) : "?";
+              
               UsageTracker.trackEvent("quick-query", "generation_error", {
                 type: "pk_missing_in_row",
-                row: processedRows.indexOf(row) + 2,
+                row: rowIndex + 2,
+                column: columnLetter,
                 pk,
               });
-              throw new Error(`Primary key '${pk}' in row ${processedRows.indexOf(row) + 2} must have a value for UPDATE operation.`);
+              throw new Error(`Error in Row ${rowIndex + 2}, Column ${columnLetter}, Field "${pk}": Primary key must have a value for UPDATE operation.`);
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;
           })
