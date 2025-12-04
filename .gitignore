@@ -60,3 +60,6 @@ src-tauri/releases/
 
 # rust analyzer
 target/
+
+#macOS
+.DS_Store
