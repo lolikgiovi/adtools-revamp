@@ -96,7 +96,8 @@ export function groupBySize(statements, maxBytes, header) {
   let cur = "";
 
   for (const st of statements) {
-    const combined = cur ? cur + "\n" + st : st;
+    // Add blank line after each statement for readability
+    const combined = cur ? cur + "\n\n" + st : st;
     const candidateWithHeader = header + combined;
 
     if (calcUtf8Bytes(candidateWithHeader) <= maxBytes) {
@@ -131,13 +132,15 @@ export function groupByQueryCount(statements, count, header) {
     if (isMutating) queryCount++;
 
     if (queryCount >= count) {
-      chunks.push(header + current.join("\n"));
+      // Add blank line after each statement for readability
+      chunks.push(header + current.join("\n\n"));
       current = [];
       queryCount = 0;
     }
   }
   if (current.length > 0) {
-    chunks.push(header + current.join("\n"));
+    // Add blank line after each statement for readability
+    chunks.push(header + current.join("\n\n"));
   }
   return chunks;
 }
