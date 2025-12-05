@@ -14,6 +14,8 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { importSchemasPayload } from "./services/SchemaImportService.js";
+import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
+import JSZip from "jszip";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -228,6 +230,9 @@ export class QuickQueryUI {
       },
       toggleWordWrapButton: {
         click: () => this.handleToggleWordWrap(),
+      },
+      splitQuery: {
+        click: () => this.handleOpenSplitOptions(),
       },
 
       // Attachments related (button only; no drag-and-drop)
@@ -605,6 +610,283 @@ export class QuickQueryUI {
     this.editor.updateOptions({ wordWrap: next });
     if (wordWrapButton) {
       wordWrapButton.textContent = `Word Wrap: ${next === "on" ? "On" : "Off"}`;
+    }
+  }
+
+  // ===== Split Query Feature =====
+  handleOpenSplitOptions() {
+    const sql = (this.editor?.getValue() || "").trim();
+    if (!sql) {
+      this.showError("No SQL to split. Please generate a query first.");
+      return;
+    }
+
+    // Reset and show options modal
+    const overlay = document.getElementById("splitOptionsOverlay");
+    const modal = document.getElementById("splitOptionsModal");
+    const sizeRadio = document.querySelector('input[name="splitMode"][value="size"]');
+    const valueInput = document.getElementById("splitValue");
+    const valueLabel = document.getElementById("splitValueLabel");
+    const hint = document.getElementById("splitHint");
+
+    if (sizeRadio) sizeRadio.checked = true;
+    if (valueInput) valueInput.value = "90";
+    if (valueLabel) valueLabel.textContent = "Max size per chunk (KB):";
+    if (hint) hint.textContent = "Each chunk will be max 90 KB. SET DEFINE OFF will be added to each chunk.";
+
+    if (overlay) overlay.classList.remove("hidden");
+    if (modal) modal.classList.remove("hidden");
+
+    // Setup event listeners for this modal session
+    this._setupSplitOptionsListeners();
+  }
+
+  _setupSplitOptionsListeners() {
+    const overlay = document.getElementById("splitOptionsOverlay");
+    const modal = document.getElementById("splitOptionsModal");
+    const closeBtn = document.getElementById("closeSplitOptions");
+    const cancelBtn = document.getElementById("cancelSplitOptions");
+    const confirmBtn = document.getElementById("confirmSplit");
+    const modeRadios = document.querySelectorAll('input[name="splitMode"]');
+    const valueInput = document.getElementById("splitValue");
+    const valueLabel = document.getElementById("splitValueLabel");
+    const hint = document.getElementById("splitHint");
+
+    const closeModal = () => {
+      if (overlay) overlay.classList.add("hidden");
+      if (modal) modal.classList.add("hidden");
+    };
+
+    // Remove previous listeners by cloning
+    if (closeBtn) {
+      const newClose = closeBtn.cloneNode(true);
+      closeBtn.parentNode.replaceChild(newClose, closeBtn);
+      newClose.addEventListener("click", closeModal);
+    }
+    if (cancelBtn) {
+      const newCancel = cancelBtn.cloneNode(true);
+      cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+      newCancel.addEventListener("click", closeModal);
+    }
+    if (overlay) {
+      overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+    }
+
+    // Mode change handler
+    modeRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const mode = document.querySelector('input[name="splitMode"]:checked')?.value;
+        if (mode === "size") {
+          if (valueLabel) valueLabel.textContent = "Max size per chunk (KB):";
+          if (valueInput) valueInput.value = "90";
+          if (hint) hint.textContent = "Each chunk will be max 90 KB. SET DEFINE OFF will be added to each chunk.";
+        } else {
+          if (valueLabel) valueLabel.textContent = "Number of queries per chunk:";
+          if (valueInput) valueInput.value = "200";
+          if (hint) hint.textContent = "MERGE/INSERT/UPDATE count per chunk. SET DEFINE OFF and SELECT are excluded from count.";
+        }
+      });
+    });
+
+    // Confirm split
+    if (confirmBtn) {
+      const newConfirm = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+      newConfirm.addEventListener("click", () => {
+        const mode = document.querySelector('input[name="splitMode"]:checked')?.value || "size";
+        const value = parseInt(document.getElementById("splitValue")?.value || "90", 10);
+        closeModal();
+        this._performSplit(mode, value);
+      });
+    }
+  }
+
+  _performSplit(mode, value) {
+    const sql = (this.editor?.getValue() || "").trim();
+    const statements = splitSqlStatementsSafely(sql);
+
+    // Filter out SET DEFINE OFF statements for processing
+    const filtered = statements.filter((s) => !/^SET\s+DEFINE\s+OFF\s*;?$/i.test(s.trim()));
+
+    let chunks = [];
+    const HEADER = "SET DEFINE OFF;\n";
+
+    if (mode === "size") {
+      const maxBytes = value * 1024;
+      chunks = groupBySize(filtered, maxBytes, HEADER);
+    } else {
+      chunks = groupByQueryCount(filtered, value, HEADER);
+    }
+
+    if (chunks.length === 0) {
+      this.showError("No valid queries to split.");
+      return;
+    }
+
+    // Store split state
+    this._splitState = {
+      chunks,
+      mode,
+      value,
+      currentIndex: 0,
+      tableName: this.elements.tableNameInput?.value?.trim() || "QUERY",
+    };
+
+    this._openSplitResultsModal();
+  }
+
+  _openSplitResultsModal() {
+    const overlay = document.getElementById("splitResultsOverlay");
+    const modal = document.getElementById("splitResultsModal");
+
+    if (overlay) overlay.classList.remove("hidden");
+    if (modal) modal.classList.remove("hidden");
+
+    // Initialize Monaco editor for preview if not already
+    if (!this._splitEditor) {
+      const container = document.getElementById("qq-split-editor");
+      if (container) {
+        this._splitEditor = createOracleEditor(container, {
+          value: "",
+          automaticLayout: true,
+          readOnly: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          fontSize: 11,
+        });
+      }
+    }
+
+    this._renderSplitResults();
+    this._setupSplitResultsListeners();
+  }
+
+  _renderSplitResults() {
+    const { chunks, currentIndex, mode, value } = this._splitState;
+    const chunksList = document.getElementById("qq-split-chunks-list");
+    const chunkLabel = document.getElementById("qq-split-chunk-label");
+    const infoEl = document.getElementById("qq-split-info");
+
+    // Update label
+    if (chunkLabel) {
+      chunkLabel.textContent = `Chunk ${currentIndex + 1} of ${chunks.length}`;
+    }
+
+    // Update info
+    if (infoEl) {
+      const suffix = mode === "size" ? `${value}kb` : `${value}`;
+      infoEl.textContent = `Split by ${mode === "size" ? "size" : "query count"}: ${suffix}`;
+    }
+
+    // Render chunks list
+    if (chunksList) {
+      chunksList.innerHTML = "";
+      chunks.forEach((chunk, i) => {
+        const li = document.createElement("li");
+        li.className = i === currentIndex ? "active" : "";
+        li.innerHTML = `
+          <span>Chunk ${i + 1}</span>
+          <span class="qq-chunk-size">${(calcUtf8Bytes(chunk) / 1024).toFixed(1)} KB</span>
+        `;
+        li.addEventListener("click", () => {
+          this._splitState.currentIndex = i;
+          this._renderSplitResults();
+        });
+        chunksList.appendChild(li);
+      });
+    }
+
+    // Update editor
+    if (this._splitEditor && chunks[currentIndex]) {
+      this._splitEditor.setValue(chunks[currentIndex]);
+    }
+  }
+
+  _setupSplitResultsListeners() {
+    const overlay = document.getElementById("splitResultsOverlay");
+    const modal = document.getElementById("splitResultsModal");
+    const closeBtn = document.getElementById("closeSplitResults");
+    const cancelBtn = document.getElementById("cancelSplitResults");
+    const downloadBtn = document.getElementById("downloadAllChunks");
+    const prevBtn = document.getElementById("qq-split-prev");
+    const nextBtn = document.getElementById("qq-split-next");
+
+    const closeModal = () => {
+      if (overlay) overlay.classList.add("hidden");
+      if (modal) modal.classList.add("hidden");
+    };
+
+    // Clone to remove previous listeners
+    [closeBtn, cancelBtn, downloadBtn, prevBtn, nextBtn].forEach((btn) => {
+      if (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+      }
+    });
+
+    // Re-query cloned buttons
+    document.getElementById("closeSplitResults")?.addEventListener("click", closeModal);
+    document.getElementById("cancelSplitResults")?.addEventListener("click", closeModal);
+
+    document.getElementById("qq-split-prev")?.addEventListener("click", () => {
+      if (this._splitState.currentIndex > 0) {
+        this._splitState.currentIndex--;
+        this._renderSplitResults();
+      }
+    });
+
+    document.getElementById("qq-split-next")?.addEventListener("click", () => {
+      if (this._splitState.currentIndex < this._splitState.chunks.length - 1) {
+        this._splitState.currentIndex++;
+        this._renderSplitResults();
+      }
+    });
+
+    document.getElementById("downloadAllChunks")?.addEventListener("click", () => {
+      this._downloadChunksAsZip();
+    });
+
+    if (overlay) {
+      overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+    }
+  }
+
+  async _downloadChunksAsZip() {
+    const { chunks, mode, value, tableName } = this._splitState;
+    const zip = new JSZip();
+
+    // Derive base name from first chunk or table name
+    const baseName = deriveBaseName(chunks[0], 0, tableName).replace(/\./g, "_");
+    const suffix = mode === "size" ? `${value}kb` : `${value}`;
+
+    chunks.forEach((chunk, i) => {
+      const fileName = `${baseName} - ${i + 1} - split_${suffix}.sql`;
+      zip.file(fileName, chunk);
+    });
+
+    const zipName = `${baseName} - split_${suffix}.zip`;
+
+    try {
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = zipName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      if (this.eventBus) {
+        this.eventBus.emit("notification:success", {
+          message: `Downloaded ${chunks.length} chunks as ${zipName}`,
+          duration: 2500,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to create ZIP:", err);
+      this.showError("Failed to create ZIP file");
     }
   }
 

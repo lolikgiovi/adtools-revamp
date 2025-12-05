@@ -42,6 +42,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <button id="toggleWordWrap" class="btn btn-primary">Word Wrap: Off</button>
                     <button id="copySQL" class="btn btn-primary">Copy SQL</button>
                     <button id="downloadSQL" class="btn btn-primary">Download SQL</button>
+                <button id="splitQuery" class="btn btn-primary">Split</button>
                     <button id="executeInJenkinsRunner" class="btn btn-primary">Execute in Jenkins Runner</button>
                 </div>
                 <div id="warningMessages"></div>
@@ -116,6 +117,74 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <div id="charCount" class="hidden">Characters: -</div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Split Options Modal -->
+<div id="splitOptionsOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="splitOptionsModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="splitOptionsTitle">
+    <div class="qq-modal-content qq-split-options-content">
+        <div class="qq-modal-header">
+            <h3 id="splitOptionsTitle">Split Query Options</h3>
+            <button id="closeSplitOptions" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <div class="qq-split-mode-group">
+                <label class="qq-radio-label">
+                    <input type="radio" name="splitMode" value="size" checked>
+                    <span>By Size (KB)</span>
+                </label>
+                <label class="qq-radio-label">
+                    <input type="radio" name="splitMode" value="count">
+                    <span>By Query Count</span>
+                </label>
+            </div>
+            <div class="qq-split-value-group">
+                <label id="splitValueLabel" for="splitValue">Max size per chunk (KB):</label>
+                <input type="number" id="splitValue" class="qq-input" value="90" min="1">
+            </div>
+            <p class="qq-hint" id="splitHint">Each chunk will be max 90 KB. SET DEFINE OFF and SELECT statements are excluded from count.</p>
+        </div>
+        <div class="qq-modal-footer">
+            <button id="confirmSplit" class="btn btn-primary">Split Query</button>
+            <button id="cancelSplitOptions" class="btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Split Results Modal -->
+<div id="splitResultsOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="splitResultsModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="splitResultsTitle">
+    <div class="qq-modal-content qq-split-results-content">
+        <div class="qq-modal-header">
+            <h3 id="splitResultsTitle">Split Results</h3>
+            <button id="closeSplitResults" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body qq-split-body">
+            <aside class="qq-split-sidebar" aria-label="Chunk navigation">
+                <div class="qq-split-summary">
+                    <div id="qq-split-chunk-label" class="qq-split-chunk-label">Chunk 1 of 1</div>
+                    <div id="qq-split-info" class="qq-split-info"></div>
+                </div>
+                <nav class="qq-split-nav" aria-label="Chunks list">
+                    <ul id="qq-split-chunks-list" class="qq-split-chunks-list"></ul>
+                </nav>
+                <div class="qq-split-controls">
+                    <button id="qq-split-prev" class="btn btn-sm-xs" aria-label="Previous chunk">Prev</button>
+                    <button id="qq-split-next" class="btn btn-sm-xs" aria-label="Next chunk">Next</button>
+                </div>
+            </aside>
+            <section class="qq-split-editor-panel" aria-label="Chunk content">
+                <div class="qq-sql-header">
+                    <label for="qq-split-editor"><span>SQL Chunk Preview</span></label>
+                </div>
+                <div id="qq-split-editor" class="qq-monaco-editor" aria-readonly="true"></div>
+            </section>
+        </div>
+        <div class="qq-modal-footer">
+            <button id="downloadAllChunks" class="btn btn-primary">Download All (ZIP)</button>
+            <button id="cancelSplitResults" class="btn">Close</button>
         </div>
     </div>
 </div>`;
