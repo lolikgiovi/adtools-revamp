@@ -203,9 +203,22 @@ class UsageTracker {
       this._eventBus?.emit?.("usage:updated", ev);
     } catch (_) {}
 
+    // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
     try {
-      const deviceId = this.getDeviceId();
-      // No immediate network send; rely on hourly batch flush
+      let userEmail = null;
+      try {
+        const email = localStorage.getItem('user.email');
+        userEmail = email ? String(email).trim().toLowerCase() : null;
+      } catch (_) {}
+
+      if (userEmail) {
+        AnalyticsSender.sendLog({
+          user_email: userEmail,
+          tool_id: featureKey,
+          action: actionKey,
+          created_time: this._isoToGmt7Plain(ev.ts),
+        }).catch(() => {}); // Fire and forget
+      }
     } catch (_) {}
   }
 
@@ -361,7 +374,6 @@ class UsageTracker {
       counts: {},
       events: [],
       daily: {},
-      dailySent: {},
       integrity: null,
     };
   }
@@ -395,10 +407,17 @@ class UsageTracker {
     return this._isoToGmt7Plain(new Date().toISOString());
   }
 
-  // Build batch payload with event records and daily_usage deltas
+  // Build batch payload with absolute counts from state.counts (idempotent)
   static _toBatchPayload() {
     const s = this._state || this._createEmptyState();
     const deviceId = s.deviceId || this.getDeviceId();
+
+    // Get user email from localStorage
+    let userEmail = null;
+    try {
+      const email = localStorage.getItem('user.email');
+      userEmail = email ? String(email).trim().toLowerCase() : null;
+    } catch (_) {}
 
     const events = (Array.isArray(s.events) ? s.events : []).map(ev => ({
       type: ev.featureId,
@@ -409,66 +428,40 @@ class UsageTracker {
       created_time: this._isoToGmt7Plain(ev.ts || new Date().toISOString()),
     }));
 
-    const today = new Date().toISOString().slice(0, 10);
-    const alreadySent = (s.dailySent && s.dailySent[today]) ? s.dailySent[today] : {};
-    const current = (s.daily && s.daily[today]) ? s.daily[today] : {};
-    const daily_usage = [];
-    const userTotals = new Map();
-    // Build per-row entries matching worker/schema: tool_id + action + count
-    for (const [k, v] of Object.entries(current)) {
-      const prev = Number(alreadySent[k] || 0);
-      const now = Number(v || 0);
-      if (now > prev) {
-        const count = now - prev;
-        const [tool_id, action] = String(k).split('.')
-          .map(x => x || 'unknown');
-        let user_id = null;
-        try {
-          const uid = localStorage.getItem('user.id');
-          user_id = uid ? String(uid) : null;
-        } catch (_) {}
-        daily_usage.push({
-          day: today,
-          device_id: deviceId,
-          user_id,
-          tool_id,
-          action,
-          count,
-          updated_time: this._nowGmt7Plain(),
-        });
-
-        // Aggregate per-tool user totals for user_usage upsert
-        if (user_id) {
-          const key = `${user_id}::${tool_id}`;
-          const prevTotal = userTotals.get(key) || 0;
-          userTotals.set(key, prevTotal + count);
+    // Build device_usage from absolute counts in state.counts
+    const device_usage = [];
+    const nowPlain = this._nowGmt7Plain();
+    const counts = s.counts || {};
+    
+    for (const [tool_id, actions] of Object.entries(counts)) {
+      if (!actions || typeof actions !== 'object') continue;
+      for (const [action, count] of Object.entries(actions)) {
+        const c = Number(count || 0);
+        if (c > 0) {
+          device_usage.push({
+            device_id: deviceId,
+            user_email: userEmail,
+            tool_id: String(tool_id),
+            action: String(action),
+            count: c,
+            updated_time: nowPlain,
+          });
         }
       }
     }
 
-    // Convert aggregated map into user_usage array for server upsert
-    const user_usage = [];
-    const nowPlain = this._nowGmt7Plain();
-    for (const [key, cnt] of userTotals.entries()) {
-      const [user_id, tool_id] = key.split('::');
-      user_usage.push({ user_id, tool_id, count: cnt, updated_time: nowPlain });
-    }
-
-    return { events, daily_usage, user_usage };
+    return { device_id: deviceId, user_email: userEmail, events, device_usage };
   }
 
-  // Send batch to backend and update local snapshots
+  // Send batch to backend (idempotent - sends absolute counts)
   static async _flushBatch() {
     if (!this._enabled) return;
     try {
       const payload = this._toBatchPayload();
-      if ((payload.events && payload.events.length) || (payload.daily_usage && payload.daily_usage.length) || (payload.user_usage && payload.user_usage.length)) {
+      if ((payload.events && payload.events.length) || (payload.device_usage && payload.device_usage.length)) {
         await AnalyticsSender.sendBatch(payload);
-        // After successful send, clear events and update dailySent snapshot for today
-        const today = new Date().toISOString().slice(0, 10);
+        // After successful send, clear events (counts remain for next sync)
         this._state.events = [];
-        this._state.dailySent = this._state.dailySent || {};
-        this._state.dailySent[today] = (this._state.daily && this._state.daily[today]) ? { ...this._state.daily[today] } : {};
         // Persist local storage changes immediately
         this.flushSync();
       }

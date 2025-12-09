@@ -57,6 +57,25 @@ class AnalyticsSender {
     }
     return false;
   }
+
+  // Live usage log sender (fire-and-forget)
+  static async sendLog(log = {}) {
+    const urls = this._resolveUrls('/analytics/log');
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(log),
+          credentials: 'omit',
+        });
+        if (res.ok) return true;
+      } catch (_) {
+        // try next candidate
+      }
+    }
+    return false;
+  }
 }
 
 export { AnalyticsSender };
