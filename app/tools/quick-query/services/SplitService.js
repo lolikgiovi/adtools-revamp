@@ -85,6 +85,43 @@ export function calcUtf8Bytes(s) {
 }
 
 /**
+ * Extract table name from SQL chunk and add verification SELECT COUNT
+ * @param {string} chunk - SQL chunk
+ * @returns {string} Chunk with verification query appended
+ */
+function addVerificationSelect(chunk) {
+  try {
+    let tableName = null;
+    
+    // Try to extract table name from different statement types:
+    // 1. MERGE INTO table_name
+    // 2. INSERT INTO table_name
+    // 3. UPDATE table_name SET
+    const mergeMatch = String(chunk || "").match(/\bMERGE\s+INTO\s+([a-z0-9_]+\.[a-z0-9_]+)/i);
+    const insertMatch = String(chunk || "").match(/\bINSERT\s+INTO\s+([a-z0-9_]+\.[a-z0-9_]+)/i);
+    const updateMatch = String(chunk || "").match(/\bUPDATE\s+([a-z0-9_]+\.[a-z0-9_]+)\s+SET/i);
+    
+    if (mergeMatch) {
+      tableName = mergeMatch[1];
+    } else if (insertMatch) {
+      tableName = insertMatch[1];
+    } else if (updateMatch) {
+      tableName = updateMatch[1];
+    }
+    
+    if (!tableName) return chunk; // No table found, return as-is
+    
+    // Add verification query matching QueryGenerationService pattern
+    // Uses INTERVAL '5' MINUTE syntax (Oracle SQL standard)
+    const verificationQuery = `\n\nSELECT COUNT(*) FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+    
+    return chunk + verificationQuery;
+  } catch (_) {
+    return chunk; // On any error, return chunk unchanged
+  }
+}
+
+/**
  * Group statements by size (bytes)
  * @param {string[]} statements - Array of SQL statements
  * @param {number} maxBytes - Max bytes per chunk
@@ -103,11 +140,17 @@ export function groupBySize(statements, maxBytes, header) {
     if (calcUtf8Bytes(candidateWithHeader) <= maxBytes) {
       cur = combined;
     } else {
-      if (cur) chunks.push(header + cur);
+      if (cur) {
+        const chunkWithSelect = addVerificationSelect(header + cur);
+        chunks.push(chunkWithSelect);
+      }
       cur = st;
     }
   }
-  if (cur) chunks.push(header + cur);
+  if (cur) {
+    const chunkWithSelect = addVerificationSelect(header + cur);
+    chunks.push(chunkWithSelect);
+  }
   return chunks;
 }
 
@@ -133,14 +176,18 @@ export function groupByQueryCount(statements, count, header) {
 
     if (queryCount >= count) {
       // Add blank line after each statement for readability
-      chunks.push(header + current.join("\n\n"));
+      const chunk = header + current.join("\n\n");
+      const chunkWithSelect = addVerificationSelect(chunk);
+      chunks.push(chunkWithSelect);
       current = [];
       queryCount = 0;
     }
   }
   if (current.length > 0) {
     // Add blank line after each statement for readability
-    chunks.push(header + current.join("\n\n"));
+    const chunk = header + current.join("\n\n");
+    const chunkWithSelect = addVerificationSelect(chunk);
+    chunks.push(chunkWithSelect);
   }
   return chunks;
 }
