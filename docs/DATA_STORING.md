@@ -73,6 +73,54 @@ ON CONFLICT(day, tool_id, action) DO UPDATE SET
   updated_time = excluded.updated_time;
 ```
 
+### device_usage
+- Purpose: per-device usage tracking with absolute counts (idempotent syncing).
+- `device_id` TEXT NOT NULL
+- `user_email` TEXT (denormalized for fast queries)
+- `tool_id` TEXT NOT NULL
+- `action` TEXT NOT NULL
+- `count` INTEGER NOT NULL DEFAULT 0 (absolute count, not incremental)
+- `updated_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
+
+Primary key and indexes:
+- `PRIMARY KEY(device_id, tool_id, action)`
+- `CREATE INDEX idx_device_usage_tool ON device_usage(tool_id);`
+- `CREATE INDEX idx_device_usage_device_time ON device_usage(device_id, updated_time DESC);`
+- `CREATE INDEX idx_device_usage_user_email ON device_usage(user_email);`
+
+Upsert (replaces count, not increments):
+```
+INSERT INTO device_usage(device_id, user_email, tool_id, action, count, updated_time)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(device_id, tool_id, action) DO UPDATE SET
+  user_email = excluded.user_email,
+  count = excluded.count,
+  updated_time = excluded.updated_time;
+```
+
+### usage_log
+- Purpose: real-time activity logging for live monitoring (enabled via `SEND_LIVE_USER_LOG` env var).
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `user_email` TEXT NOT NULL
+- `tool_id` TEXT NOT NULL
+- `action` TEXT NOT NULL
+- `created_time` TEXT NOT NULL (`YYYY-MM-DD HH:MM:SS+07:00`)
+
+Indexes:
+- `CREATE INDEX idx_usage_log_email ON usage_log(user_email);`
+- `CREATE INDEX idx_usage_log_tool ON usage_log(tool_id);`
+- `CREATE INDEX idx_usage_log_time ON usage_log(created_time DESC);`
+- `CREATE INDEX idx_usage_log_email_time ON usage_log(user_email, created_time DESC);`
+
+Insert (no upsert, always append):
+```
+INSERT INTO usage_log (user_email, tool_id, action, created_time)
+VALUES (?, ?, ?, ?);
+```
+
+> [!NOTE]
+> Live logging is **disabled by default**. Set Cloudflare worker environment variable `SEND_LIVE_USER_LOG=true` to enable.
+
 ### user_usage
 - Purpose: cumulative usage totals per user and feature across devices.
 - `user_id` TEXT NOT NULL REFERENCES users(id)
@@ -109,11 +157,16 @@ Notes:
 - Avoid "check then insert" patterns; rely on upsert semantics as shown.
 
 ## Client Storage and Flush Policy
-- Local queues in `localStorage`:
+- Primary storage: `usage.analytics.v1` in `localStorage` with structure:
+  - `counts`: nested object `{ [tool_id]: { [action]: count } }` tracking absolute usage counts
+  - `events`: array of detailed event objects for server logging
+  - `daily`: per-day aggregates (maintained for backward compatibility)
+  - `deviceId`: client-generated UUID
+- Legacy queues (deprecated in favor of `device_usage`):
   - `ad.events.queue`: array of event objects `{ device_id, feature_id, action, properties, created_time }`.
   - `ad.daily_usage.queue`: array of usage objects `{ day, tool_id, action, count, updated_time }`.
   - `ad.user_usage.queue`: array of usage objects `{ user_id, tool_id, count, updated_time }`.
-  - Quick Query storage (schema/data separated):
+- Quick Query storage (schema/data separated):
     - `tool:quick-query:schema`: JSON object using the new schema model (see `app/tools/quick-query/new_data_model_schema.json`). Example:
 ```
 {
@@ -172,8 +225,8 @@ Notes:
 - Request body:
 ```
 {
-  "batch_id": "uuid-...",
   "device_id": "uuid-...",
+  "user_email": "user@example.com",
   "events": [
     {
       "event_id": "uuid-...",
@@ -181,6 +234,16 @@ Notes:
       "action": "run",
       "properties": {"success": true},
       "created_time": "2025-11-03 10:30:12+07:00"
+    }
+  ],
+  "device_usage": [
+    {
+      "device_id": "uuid-...",
+      "user_email": "user@example.com",
+      "tool_id": "quick-query",
+      "action": "run",
+      "count": 47,
+      "updated_time": "2025-11-03 11:00:00+07:00"
     }
   ],
   "daily_usage": [
@@ -199,6 +262,7 @@ Notes:
       "count": 120,
       "updated_time": "2025-11-03 11:00:00+07:00"
     }
+    }
   ]
 }
 ```
@@ -206,16 +270,16 @@ Notes:
 ```
 {
   "ok": true,
-  "inserted": {"events": 10, "daily_usage": 3, "user_usage": 2},
-  "deduplicated": {"events": 2}
+  "inserted": {"events": 10, "device_usage": 5, "daily_usage": 3, "user_usage": 2}
 }
 ```
 - Server behavior:
   - Validate payload sizes and sanitize `properties`.
   - Wrap inserts in a transaction.
   - `events`: simple inserts using `created_time`.
-  - `daily_usage`: upsert increment using `(day, tool_id, action)`.
-  - `user_usage`: upsert increment using `(user_id, tool_id)`.
+  - `device_usage`: upsert **replacing** counts (idempotent) using `(device_id, tool_id, action)`.
+  - `daily_usage`: upsert **incrementing** counts using `(day, tool_id, action)` (legacy).
+  - `user_usage`: upsert **incrementing** counts using `(user_id, tool_id)` (legacy).
 
 ## Indexing Guidance
 - `daily_usage(day, tool_id, action)` composite primary key for fast upserts.

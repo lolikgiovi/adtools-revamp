@@ -88,6 +88,10 @@ export default {
       if (method !== "POST") return methodNotAllowed();
       return handleAnalyticsBatchPost(request, env);
     }
+    if (url.pathname === "/analytics/log") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleAnalyticsLogPost(request, env);
+    }
 
     // Static assets via Wrangler assets binding with SPA fallback
     try {
@@ -973,16 +977,19 @@ async function sendOtpEmail(env, to, code) {
   }
 }
 
-// Batch analytics: insert events and upsert daily_usage
+// Batch analytics: insert events and upsert device_usage
 async function handleAnalyticsBatchPost(request, env) {
   try {
     const data = await request.json();
     const deviceId = String(data.device_id || data.deviceId || "");
+    const userEmail = String(data.user_email || "").trim().toLowerCase() || null;
     const events = Array.isArray(data.events) ? data.events : [];
+    const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
     const daily = Array.isArray(data.daily_usage) ? data.daily_usage : [];
     const userTotals = Array.isArray(data.user_usage) ? data.user_usage : [];
 
     let insertedEvents = 0;
+    let upsertsDevice = 0;
     let upsertsDaily = 0;
     let upsertsUserTotals = 0;
     if (env.DB) {
@@ -999,6 +1006,26 @@ async function handleAnalyticsBatchPost(request, env) {
           insertedEvents++;
         } catch (_) {}
       }
+
+      // New: device_usage upserts (idempotent - replaces counts, not increments)
+      for (const du of deviceUsage) {
+        try {
+          const devId = String(du.device_id || deviceId || "");
+          const email = String(du.user_email || userEmail || "").trim().toLowerCase() || null;
+          const toolId = String(du.tool_id || "unknown");
+          const action = String(du.action || "unknown");
+          const count = Number(du.count || 0) || 0;
+          const updatedTime = String(du.updated_time || tsGmt7Plain());
+          await env.DB.prepare(
+            "INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(device_id, tool_id, action) DO UPDATE SET user_email = excluded.user_email, count = excluded.count, updated_time = excluded.updated_time"
+          )
+            .bind(devId, email, toolId, action, count, updatedTime)
+            .run();
+          upsertsDevice++;
+        } catch (_) {}
+      }
+
+      // Keep legacy daily_usage for backward compatibility
       for (const du of daily) {
         try {
           const day = String(du.day || dayGmt7());
@@ -1015,6 +1042,7 @@ async function handleAnalyticsBatchPost(request, env) {
         } catch (_) {}
       }
 
+      // Keep legacy user_usage for backward compatibility
       for (const uu of userTotals) {
         try {
           const userId = String(uu.user_id || "");
@@ -1032,7 +1060,7 @@ async function handleAnalyticsBatchPost(request, env) {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inserted: { events: insertedEvents, daily_usage: upsertsDaily, user_usage: upsertsUserTotals } }),
+      JSON.stringify({ ok: true, inserted: { events: insertedEvents, device_usage: upsertsDevice, daily_usage: upsertsDaily, user_usage: upsertsUserTotals } }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       }
@@ -1044,6 +1072,59 @@ async function handleAnalyticsBatchPost(request, env) {
     });
   }
 }
+
+// Live usage log: insert to usage_log if SEND_LIVE_USER_LOG is enabled
+async function handleAnalyticsLogPost(request, env) {
+  try {
+    // Check if live logging is enabled
+    const enabled = String(env.SEND_LIVE_USER_LOG || "").toLowerCase() === "true";
+    if (!enabled) {
+      return new Response(
+        JSON.stringify({ ok: false, message: "Live logging disabled" }),
+        {
+          status: 200, // Return 200 to avoid client errors
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
+
+    const data = await request.json();
+    const userEmail = String(data.user_email || "").trim().toLowerCase();
+    const toolId = String(data.tool_id || "unknown");
+    const action = String(data.action || "unknown");
+    const createdTime = String(data.created_time || tsGmt7Plain());
+
+    if (!userEmail) {
+      return new Response(JSON.stringify({ ok: false, error: "user_email required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    let inserted = 0;
+    if (env.DB) {
+      try {
+        await env.DB.prepare("INSERT INTO usage_log (user_email, tool_id, action, created_time) VALUES (?, ?, ?, ?)")
+          .bind(userEmail, toolId, action, createdTime)
+          .run();
+        inserted = 1;
+      } catch (_) {}
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true, inserted }),
+      {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
 
 function tsToGmt7Plain(s) {
   try {

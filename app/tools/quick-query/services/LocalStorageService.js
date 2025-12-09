@@ -4,7 +4,7 @@ const DATA_STORAGE_KEY = "tool:quick-query:data";
 const ORACLE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_$#]*$/;
 const MAX_SCHEMA_LENGTH = 30;
 const MAX_TABLE_LENGTH = 128;
-const MAX_CACHED_ROWS = 100;
+const MAX_CACHED_ROWS = 300;
 
 export class LocalStorageService {
   constructor() {
