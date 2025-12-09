@@ -15,6 +15,7 @@ MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_ORIGINS = "http://localhost:5173,tauri://localhost"
 ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
+SEND_LIVE_USER_LOG = "true"
 
 # R2 bucket for updater manifests and artifacts
 [[r2_buckets]]
