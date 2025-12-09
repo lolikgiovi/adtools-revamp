@@ -138,6 +138,25 @@ class UsageTracker {
       return;
     }
     this.track(featureId, action, meta);
+
+    // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
+    try {
+      let userEmail = null;
+      try {
+        const email = localStorage.getItem('user.email');
+        userEmail = email ? String(email).trim().toLowerCase() : null;
+      } catch (_) {}
+
+      if (userEmail) {
+        const now = new Date();
+        AnalyticsSender.sendLog({
+          user_email: userEmail,
+          tool_id: String(featureId),
+          action: String(action),
+          created_time: this._isoToGmt7Plain(now.toISOString()),
+        }).catch(() => {}); // Fire and forget
+      }
+    } catch (_) {}
   }
 
   // Add explicit event-level tracking with event detail persistence
@@ -201,24 +220,6 @@ class UsageTracker {
 
     try {
       this._eventBus?.emit?.("usage:updated", ev);
-    } catch (_) {}
-
-    // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
-    try {
-      let userEmail = null;
-      try {
-        const email = localStorage.getItem('user.email');
-        userEmail = email ? String(email).trim().toLowerCase() : null;
-      } catch (_) {}
-
-      if (userEmail) {
-        AnalyticsSender.sendLog({
-          user_email: userEmail,
-          tool_id: featureKey,
-          action: actionKey,
-          created_time: this._isoToGmt7Plain(ev.ts),
-        }).catch(() => {}); // Fire and forget
-      }
     } catch (_) {}
   }
 
