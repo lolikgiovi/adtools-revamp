@@ -142,18 +142,19 @@ class UsageTracker {
     // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
     try {
       let userEmail = null;
+      let deviceId = null;
       try {
         const email = localStorage.getItem('user.email');
-        const deviceId = localStorage.getItem('adtools.deviceId');
-        const safeDeviceId = deviceId ? String(deviceId).trim() : null;
+        const device = localStorage.getItem('adtools.deviceId');
+        deviceId = device ? String(device).trim() : null;
         userEmail = email ? String(email).trim().toLowerCase() : null;
       } catch (_) {}
 
-      if (userEmail) {
+      if (userEmail && deviceId) {
         const now = new Date();
         AnalyticsSender.sendLog({
           user_email: userEmail,
-          device_id: safeDeviceId,
+          device_id: deviceId,
           tool_id: String(featureId),
           action: String(action),
           created_time: this._isoToGmt7Plain(now.toISOString()),
