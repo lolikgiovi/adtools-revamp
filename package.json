@@ -7,7 +7,7 @@
     "dev": "vite --port 5173",
     "build": "vite build",
     "build:tauri": "vite build --mode tauri",
-    "prebuild": "npm run test:ci",
+    "prebuild": "npm run test:ci && node scripts/update-build-version.js",
     "prebuild:tauri": "npm run test:ci",
     "postbuild": "cp -R app dist/app",
     "preview": "vite preview",

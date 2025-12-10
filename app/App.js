@@ -29,6 +29,7 @@ import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
+import WebUpdateChecker from "./core/WebUpdateChecker.js";
 
 class App {
   constructor() {
@@ -112,6 +113,15 @@ class App {
         // Silently ignore if module fails to load
       }
     })();
+
+    // Setup web-only update checker (hourly build checks)
+    if (!isTauri()) {
+      try {
+        WebUpdateChecker.init();
+      } catch (err) {
+        console.warn("WebUpdateChecker initialization failed:", err);
+      }
+    }
 
     console.log("AD Tools app initialized successfully");
   }
@@ -935,6 +945,11 @@ class App {
     // Cancel any scheduled updater timers
     try {
       this._updaterHandle && typeof this._updaterHandle.cancel === "function" && this._updaterHandle.cancel();
+    } catch (_) {}
+
+    // Cancel web update checker
+    try {
+      WebUpdateChecker.cancel();
     } catch (_) {}
 
     // Deactivate current tool
