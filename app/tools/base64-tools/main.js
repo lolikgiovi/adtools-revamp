@@ -4,6 +4,7 @@ import { Base64ToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import JSZip from "jszip";
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {
@@ -264,7 +265,7 @@ class Base64Tools extends BaseTool {
 
   buildFileCard(data, actions = {}) {
     const { variant, name, size, type, previewUrl, dimensions } = data;
-    const { remove, download } = actions;
+    const { remove, download, copy } = actions;
 
     const card = document.createElement("div");
     card.className = "file-card";
@@ -322,6 +323,17 @@ class Base64Tools extends BaseTool {
         </button>`
       : "";
 
+    const copyBtn = copy
+      ? /*html*/ `
+        <button class="btn btn-sm copy-btn" type="button" title="Copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy
+        </button>`
+      : "";
+
     const downloadBtn = download
       ? /*html*/ `
         <button class="btn btn-sm download-btn" type="button" title="Download">
@@ -334,11 +346,16 @@ class Base64Tools extends BaseTool {
         </button>`
       : "";
 
-    card.innerHTML = infoInner + removeBtn + downloadBtn;
+    card.innerHTML = infoInner + removeBtn + copyBtn + downloadBtn;
 
     if (remove) {
       const btn = card.querySelector(".file-card-remove");
       btn?.addEventListener("click", remove);
+    }
+    if (copy) {
+      const btn = card.querySelector(".copy-btn");
+      btn?.addEventListener("click", copy);
+      card.classList.add("processed-file-card");
     }
     if (download) {
       const btn = card.querySelector(".download-btn");
@@ -412,9 +429,38 @@ class Base64Tools extends BaseTool {
     // Check if we have selected files to process
     const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "encode");
 
-    if (selectedFilesForMode.length > 0) {
+    if (selectedFilesForMode.length === 1) {
+      // Single file: output to textarea
+      const [fileId, { file }] = selectedFilesForMode[0];
+      const outputArea = container.querySelector("#encode-output");
+      
+      try {
+        const arrayBuffer = await this.readFileAsArrayBuffer(file);
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const base64Result = Base64ToolsService.toBase64FromBytes(uint8Array);
+        const mimeType = Base64ToolsService.getMimeTypeFromBase64(file, uint8Array);
+        const dataUri = `data:${mimeType};base64,${base64Result}`;
+        
+        outputArea.value = dataUri;
+        outputArea.style.display = "block";
+        
+        // Hide processed files display if it was shown
+        const processedDisplay = container.querySelector("#encode-processed-files");
+        if (processedDisplay) {
+          processedDisplay.style.display = "none";
+        }
+        
+        this.updateOutputHeaderButtons("encode", false); // false = not multi-file
+        this.showSuccess("Encoded to Base64!");
+      } catch (error) {
+        this.showError("Failed to encode file to Base64");
+        outputArea.value = "";
+      }
+    } else if (selectedFilesForMode.length > 1) {
+      // Multiple files: use card display
       await this.processMultipleFiles("encode");
     } else {
+      // No files, encode text input
       const inputArea = container.querySelector("#encode-input");
       const outputArea = container.querySelector("#encode-output");
       const text = inputArea.value;
@@ -423,6 +469,15 @@ class Base64Tools extends BaseTool {
         const encoded = Base64ToolsService.encodeText(text);
         this.showSuccess("Encoded to Base64!");
         outputArea.value = encoded;
+        outputArea.style.display = "block";
+        
+        // Hide processed files display if it was shown
+        const processedDisplay = container.querySelector("#encode-processed-files");
+        if (processedDisplay) {
+          processedDisplay.style.display = "none";
+        }
+        
+        this.updateOutputHeaderButtons("encode", false); // false = not multi-file
       } catch (error) {
         this.showError("Failed to encode text to Base64");
         outputArea.value = "";
@@ -464,6 +519,9 @@ class Base64Tools extends BaseTool {
           outputArea.style.display = "block";
           this.decodedBlob = null;
           this.decodedFilename = null;
+          
+          // Enable copy button for text output
+          this.updateOutputHeaderButtons("decode", false); // false = single file, text output
         } else {
           outputArea.value = "";
           outputArea.style.display = "none";
@@ -518,6 +576,14 @@ class Base64Tools extends BaseTool {
           }
 
           this.displayProcessedFiles(processedFiles, "decode");
+          
+          // Disable copy button for binary output (single file showing as card)
+          const copyBtn = container.querySelector("#decode-copy-btn");
+          if (copyBtn) {
+            copyBtn.disabled = true;
+            copyBtn.style.opacity = "0.5";
+            copyBtn.style.cursor = "not-allowed";
+          }
         }
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
@@ -673,6 +739,18 @@ class Base64Tools extends BaseTool {
       let card;
       if (fileData.isImage) {
         const imageData = fileData.content;
+        const actions = {
+          download: () => {
+            const blob = new Blob([imageData.content], { type: imageData.type });
+            this.downloadBlob(blob, imageData.name);
+          },
+        };
+        
+        // Add copy button for encode mode
+        if (mode === "encode") {
+          actions.copy = () => this.copyFileContent(fileData.content, index);
+        }
+        
         card = this.buildFileCard(
           {
             variant: "image",
@@ -682,15 +760,22 @@ class Base64Tools extends BaseTool {
             previewUrl: imageData.url,
             dimensions: { width: imageData.width, height: imageData.height },
           },
-          {
-            download: () => {
-              const blob = new Blob([imageData.content], { type: imageData.type });
-              this.downloadBlob(blob, imageData.name);
-            },
-          }
+          actions
         );
       } else if (fileData.isFile) {
         const fileInfo = fileData.content;
+        const actions = {
+          download: () => {
+            const blob = new Blob([fileInfo.content], { type: fileInfo.type });
+            this.downloadBlob(blob, fileInfo.name);
+          },
+        };
+        
+        // Add copy button for encode mode
+        if (mode === "encode") {
+          actions.copy = () => this.copyFileContent(fileData.content, index);
+        }
+        
         card = this.buildFileCard(
           {
             variant: "binary",
@@ -698,14 +783,19 @@ class Base64Tools extends BaseTool {
             size: fileInfo.size,
             type: fileInfo.type,
           },
-          {
-            download: () => {
-              const blob = new Blob([fileInfo.content], { type: fileInfo.type });
-              this.downloadBlob(blob, fileInfo.name);
-            },
-          }
+          actions
         );
       } else {
+        // Text file (encoded result)
+        const actions = {
+          download: () => this.downloadProcessedFile(fileData),
+        };
+        
+        // Add copy button for encode mode
+        if (mode === "encode") {
+          actions.copy = () => this.copyFileContent(fileData.content, index);
+        }
+        
         card = this.buildFileCard(
           {
             variant: "text",
@@ -713,9 +803,7 @@ class Base64Tools extends BaseTool {
             size: fileData.size,
             type: "text/plain",
           },
-          {
-            download: () => this.downloadProcessedFile(fileData),
-          }
+          actions
         );
       }
       card.dataset.fileIndex = index;
@@ -724,11 +812,83 @@ class Base64Tools extends BaseTool {
 
     processedDisplay.style.display = "block";
     outputTextarea.style.display = "none";
+    
+    // Update header buttons for multi-file mode
+    if (mode === "encode" || mode === "decode") {
+      this.updateOutputHeaderButtons(mode, true); // true = multi-file
+    }
   }
 
   downloadProcessedFile(fileData) {
     const blob = new Blob([fileData.content], { type: "text/plain" });
     this.downloadBlob(blob, fileData.processedName);
+  }
+
+  async copyFileContent(content, index) {
+    try {
+      // Handle different content types
+      let textToCopy = "";
+      
+      if (typeof content === "string") {
+        textToCopy = content;
+      } else if (content && typeof content === "object") {
+        // For binary/image content, we can't really copy binary data
+        // So we'll show an appropriate message
+        this.showError("Cannot copy binary content to clipboard");
+        return;
+      }
+      
+      await navigator.clipboard.writeText(textToCopy);
+      this.showSuccess("Copied to clipboard!");
+    } catch (error) {
+      this.showError("Failed to copy to clipboard");
+    }
+  }
+
+  updateOutputHeaderButtons(mode, isMultiFile) {
+    const container = this.validateContainer();
+    const copyBtn = container.querySelector(`#${mode}-copy-btn`);
+    const downloadBtn = container.querySelector(`#${mode}-download-btn`);
+    
+    if (isMultiFile) {
+      // Disable copy button for multi-file output
+      if (copyBtn) {
+        copyBtn.disabled = true;
+        copyBtn.style.opacity = "0.5";
+        copyBtn.style.cursor = "not-allowed";
+      }
+      
+      // Update download button text to "Download All"
+      if (downloadBtn) {
+        const textNode = downloadBtn.childNodes[downloadBtn.childNodes.length - 1];
+        if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+          textNode.textContent = "Download All";
+        }
+      }
+    } else {
+      // Enable copy button for single file/text output
+      if (copyBtn) {
+        copyBtn.disabled = false;
+        copyBtn.style.opacity = "1";
+        copyBtn.style.cursor = "pointer";
+      }
+      
+      // Reset download button text to "Download"
+      if (downloadBtn) {
+        const textNode = downloadBtn.childNodes[downloadBtn.childNodes.length - 1];
+        if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+          textNode.textContent = "Download";
+        }
+      }
+    }
+  }
+
+  getFormattedDate() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   async copyToClipboard(targetId) {
@@ -837,16 +997,109 @@ class Base64Tools extends BaseTool {
     }
   }
 
-  downloadResult(mode) {
+  async downloadResult(mode) {
     const container = this.validateContainer();
 
-    // If processed cards are visible, prefer per-card "Download" actions
+    // Check if processed cards are visible for encode mode
     const processedDisplay = container.querySelector(`#${mode}-processed-files`);
-    if (processedDisplay && processedDisplay.style.display === "block") {
-      this.showError("Use per-file Download buttons for processed items");
+    const processedContainer = container.querySelector(`#${mode}-processed-container`);
+    
+    if (mode === "encode" && processedDisplay && processedDisplay.style.display === "block") {
+      // Multi-file encode: Create ZIP with all encoded files
+      const fileCards = processedContainer.querySelectorAll(".file-card");
+      if (fileCards.length === 0) {
+        this.showError("No files to download");
+        return;
+      }
+      
+      try {
+        const zip = new JSZip();
+        const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "encode");
+        
+        // Process each file and add to ZIP
+        for (const [fileId, { file }] of selectedFilesForMode) {
+          const arrayBuffer = await this.readFileAsArrayBuffer(file);
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const base64Result = Base64ToolsService.toBase64FromBytes(uint8Array);
+          const mimeType = Base64ToolsService.getMimeTypeFromBase64(file, uint8Array);
+          const dataUri = `data:${mimeType};base64,${base64Result}`;
+          
+          // Add to ZIP with .txt extension
+          const fileName = `${file.name.split(".")[0]}.txt`;
+          zip.file(fileName, dataUri);
+        }
+        
+        // Generate and download ZIP with date format
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const dateStr = this.getFormattedDate();
+        this.downloadBlob(zipBlob, `encoded_b64_${dateStr}.zip`);
+        this.showSuccess("Downloaded all files as ZIP");
+      } catch (error) {
+        console.error("Failed to create ZIP:", error);
+        this.showError("Failed to create ZIP file");
+      }
+      return;
+    }
+    
+    // For decode mode with processed cards - create ZIP
+    if (mode === "decode" && processedDisplay && processedDisplay.style.display === "block") {
+      const fileCards = processedContainer.querySelectorAll(".file-card");
+      if (fileCards.length === 0) {
+        this.showError("No files to download");
+        return;
+      }
+      
+      try {
+        const zip = new JSZip();
+        const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "decode");
+        
+        // Process each file and add to ZIP
+        for (const [fileId, { file }] of selectedFilesForMode) {
+          const text = await this.readFileAsText(file);
+          const base64Content = text.trim();
+          
+          if (!Base64ToolsService.isValidBase64(base64Content)) {
+            continue; // Skip invalid files
+          }
+          
+          const { base64: actualBase64 } = Base64ToolsService.normalizeDataUri(base64Content);
+          const binaryString = Base64ToolsService.decodeToBinaryString(actualBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          const contentType = Base64ToolsService.detectContentType(bytes);
+          
+          // Determine file extension and content
+          let fileName;
+          let content;
+          
+          if (Base64ToolsService.isTextContent(binaryString)) {
+            fileName = `${file.name.split(".")[0]}.txt`;
+            content = binaryString;
+          } else {
+            const extension = contentType.split("/")[1] || "bin";
+            fileName = `${file.name.split(".")[0]}.${extension}`;
+            content = bytes;
+          }
+          
+          zip.file(fileName, content);
+        }
+        
+        // Generate and download ZIP with date format
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const dateStr = this.getFormattedDate();
+        this.downloadBlob(zipBlob, `decoded_b64_${dateStr}.zip`);
+        this.showSuccess("Downloaded all files as ZIP");
+      } catch (error) {
+        console.error("Failed to create ZIP:", error);
+        this.showError("Failed to create ZIP file");
+      }
       return;
     }
 
+    // Single file or text output
     if (mode === "encode") {
       const outputArea = container.querySelector("#encode-output");
       if (!outputArea || !outputArea.value.trim()) {
