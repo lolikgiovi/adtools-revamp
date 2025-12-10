@@ -1113,6 +1113,14 @@
   color: hsl(var(--muted-foreground));
 }
 
+.qq-chunk-warning {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 14px;
+  color: #f59e0b;
+  cursor: help;
+}
+
 .qq-split-controls {
   display: flex;
   gap: 8px;

@@ -126,10 +126,11 @@ function addVerificationSelect(chunk) {
  * @param {string[]} statements - Array of SQL statements
  * @param {number} maxBytes - Max bytes per chunk
  * @param {string} header - Header to prepend to each chunk
- * @returns {string[]} Array of chunks
+ * @returns {{ chunks: string[], metadata: Array<{size: number, isOversized: boolean}> }} Chunks with metadata
  */
 export function groupBySize(statements, maxBytes, header) {
   const chunks = [];
+  const metadata = [];
   let cur = "";
 
   for (const st of statements) {
@@ -142,16 +143,20 @@ export function groupBySize(statements, maxBytes, header) {
     } else {
       if (cur) {
         const chunkWithSelect = addVerificationSelect(header + cur);
+        const chunkSize = calcUtf8Bytes(chunkWithSelect);
         chunks.push(chunkWithSelect);
+        metadata.push({ size: chunkSize, isOversized: chunkSize > maxBytes });
       }
       cur = st;
     }
   }
   if (cur) {
     const chunkWithSelect = addVerificationSelect(header + cur);
+    const chunkSize = calcUtf8Bytes(chunkWithSelect);
     chunks.push(chunkWithSelect);
+    metadata.push({ size: chunkSize, isOversized: chunkSize > maxBytes });
   }
-  return chunks;
+  return { chunks, metadata };
 }
 
 /**
@@ -159,10 +164,12 @@ export function groupBySize(statements, maxBytes, header) {
  * @param {string[]} statements - Array of SQL statements
  * @param {number} count - Number of queries per chunk
  * @param {string} header - Header to prepend to each chunk
- * @returns {string[]} Array of chunks
+ * @param {number} [maxBytes] - Optional max bytes for oversized detection
+ * @returns {{ chunks: string[], metadata: Array<{size: number, isOversized: boolean}> }} Chunks with metadata
  */
-export function groupByQueryCount(statements, count, header) {
+export function groupByQueryCount(statements, count, header, maxBytes = Infinity) {
   const chunks = [];
+  const metadata = [];
   let current = [];
   let queryCount = 0;
 
@@ -178,7 +185,9 @@ export function groupByQueryCount(statements, count, header) {
       // Add blank line after each statement for readability
       const chunk = header + current.join("\n\n");
       const chunkWithSelect = addVerificationSelect(chunk);
+      const chunkSize = calcUtf8Bytes(chunkWithSelect);
       chunks.push(chunkWithSelect);
+      metadata.push({ size: chunkSize, isOversized: chunkSize > maxBytes });
       current = [];
       queryCount = 0;
     }
@@ -187,9 +196,11 @@ export function groupByQueryCount(statements, count, header) {
     // Add blank line after each statement for readability
     const chunk = header + current.join("\n\n");
     const chunkWithSelect = addVerificationSelect(chunk);
+    const chunkSize = calcUtf8Bytes(chunkWithSelect);
     chunks.push(chunkWithSelect);
+    metadata.push({ size: chunkSize, isOversized: chunkSize > maxBytes });
   }
-  return chunks;
+  return { chunks, metadata };
 }
 
 /**

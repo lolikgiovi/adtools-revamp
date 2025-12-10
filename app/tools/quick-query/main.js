@@ -709,13 +709,20 @@ export class QuickQueryUI {
     const filtered = statements.filter((s) => !/^SET\s+DEFINE\s+OFF\s*;?$/i.test(s.trim()));
 
     let chunks = [];
+    let metadata = [];
     const HEADER = "SET DEFINE OFF;\n";
 
     if (mode === "size") {
       const maxBytes = value * 1024;
-      chunks = groupBySize(filtered, maxBytes, HEADER);
+      const result = groupBySize(filtered, maxBytes, HEADER);
+      chunks = result.chunks;
+      metadata = result.metadata;
     } else {
-      chunks = groupByQueryCount(filtered, value, HEADER);
+      // For query count mode, pass maxBytes to detect oversized chunks
+      const maxBytes = 90 * 1024; // Use 90KB as default limit for oversized detection
+      const result = groupByQueryCount(filtered, value, HEADER, maxBytes);
+      chunks = result.chunks;
+      metadata = result.metadata;
     }
 
     if (chunks.length === 0) {
@@ -723,9 +730,10 @@ export class QuickQueryUI {
       return;
     }
 
-    // Store split state
+    // Store split state with metadata
     this._splitState = {
       chunks,
+      metadata,
       mode,
       value,
       currentIndex: 0,
@@ -763,7 +771,7 @@ export class QuickQueryUI {
   }
 
   _renderSplitResults() {
-    const { chunks, currentIndex, mode, value } = this._splitState;
+    const { chunks, metadata, currentIndex, mode, value } = this._splitState;
     const chunksList = document.getElementById("qq-split-chunks-list");
     const chunkLabel = document.getElementById("qq-split-chunk-label");
     const infoEl = document.getElementById("qq-split-info");
@@ -785,9 +793,19 @@ export class QuickQueryUI {
       chunks.forEach((chunk, i) => {
         const li = document.createElement("li");
         li.className = i === currentIndex ? "active" : "";
+        
+        const chunkMeta = metadata[i];
+        const chunkSizeKB = (chunkMeta.size / 1024).toFixed(1);
+        const isOversized = chunkMeta.isOversized;
+        
+        // Build warning badge HTML if chunk is oversized
+        const warningBadge = isOversized 
+          ? `<span class="qq-chunk-warning" title="Chunk exceeds ${mode === "size" ? value : 90} KB limit">⚠️</span>` 
+          : "";
+        
         li.innerHTML = `
-          <span>Chunk ${i + 1}</span>
-          <span class="qq-chunk-size">${(calcUtf8Bytes(chunk) / 1024).toFixed(1)} KB</span>
+          <span>Chunk ${i + 1} ${warningBadge}</span>
+          <span class="qq-chunk-size">${chunkSizeKB} KB</span>
         `;
         li.addEventListener("click", () => {
           this._splitState.currentIndex = i;

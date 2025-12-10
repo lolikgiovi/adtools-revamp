@@ -223,14 +223,14 @@ describe('groupBySize - INSERT statements', () => {
       'INSERT INTO t VALUES (2);',
       'INSERT INTO t VALUES (3);',
     ]
-    const chunks = groupBySize(statements, 60, HEADER)
-    expect(chunks.length).toBeGreaterThan(1)
+    const result = groupBySize(statements, 60, HEADER)
+    expect(result.chunks.length).toBeGreaterThan(1)
   })
 
   it('each chunk starts with header', () => {
     const statements = ['INSERT INTO t VALUES (1);']
-    const chunks = groupBySize(statements, 1000, HEADER)
-    expect(chunks[0].startsWith('SET DEFINE OFF;')).toBe(true)
+    const result = groupBySize(statements, 1000, HEADER)
+    expect(result.chunks[0].startsWith('SET DEFINE OFF;')).toBe(true)
   })
 
   it('fits all statements in one chunk when size allows', () => {
@@ -238,10 +238,10 @@ describe('groupBySize - INSERT statements', () => {
       'INSERT INTO t VALUES (1);',
       'INSERT INTO t VALUES (2);',
     ]
-    const chunks = groupBySize(statements, 10000, HEADER)
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]).toContain('VALUES (1)')
-    expect(chunks[0]).toContain('VALUES (2)')
+    const result = groupBySize(statements, 10000, HEADER)
+    expect(result.chunks).toHaveLength(1)
+    expect(result.chunks[0]).toContain('VALUES (1)')
+    expect(result.chunks[0]).toContain('VALUES (2)')
   })
 
   it('handles large multi-row INSERT statements', () => {
@@ -249,9 +249,9 @@ describe('groupBySize - INSERT statements', () => {
       `INSERT INTO users VALUES (1, 'Alice', 'alice@example.com'), (2, 'Bob', 'bob@example.com');`,
       `INSERT INTO products VALUES (1, 'Laptop', 999.99);`
     ]
-    const chunks = groupBySize(statements, 200, HEADER)
-    expect(chunks.length).toBeGreaterThan(0)
-    chunks.forEach(chunk => {
+    const result = groupBySize(statements, 200, HEADER)
+    expect(result.chunks.length).toBeGreaterThan(0)
+    result.chunks.forEach(chunk => {
       expect(chunk.startsWith('SET DEFINE OFF;')).toBe(true)
     })
   })
@@ -265,30 +265,30 @@ describe('groupBySize - MERGE statements', () => {
       `MERGE INTO t1 USING s1 ON (t1.id = s1.id) WHEN MATCHED THEN UPDATE SET t1.val = s1.val WHEN NOT MATCHED THEN INSERT VALUES (s1.id, s1.val);`,
       `MERGE INTO t2 USING s2 ON (t2.id = s2.id) WHEN MATCHED THEN UPDATE SET t2.val = s2.val;`,
     ]
-    const chunks = groupBySize(statements, 150, HEADER)
-    expect(chunks.length).toBeGreaterThan(1)
+    const result = groupBySize(statements, 150, HEADER)
+    expect(result.chunks.length).toBeGreaterThan(1)
   })
 
   it('keeps complex MERGE in single chunk if size allows', () => {
     const statements = [
       `MERGE INTO inventory i USING shipments s ON (i.product_id = s.product_id) WHEN MATCHED THEN UPDATE SET i.quantity = i.quantity + s.quantity WHEN NOT MATCHED THEN INSERT (product_id, quantity) VALUES (s.product_id, s.quantity);`
     ]
-    const chunks = groupBySize(statements, 5000, HEADER)
-    expect(chunks).toHaveLength(1)
+    const result = groupBySize(statements, 5000, HEADER)
+    expect(result.chunks).toHaveLength(1)
   })
 })
 
 describe('groupByQueryCount - INSERT statements', () => {
   const HEADER = 'SET DEFINE OFF;\n'
 
-  it('splits by INSERT count', () => {
+  it('splits by MERGE/INSERT/UPDATE count', () => {
     const statements = [
       'INSERT INTO t VALUES (1);',
       'INSERT INTO t VALUES (2);',
       'INSERT INTO t VALUES (3);',
       'INSERT INTO t VALUES (4);',
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
+    const { chunks } = groupByQueryCount(statements, 2, HEADER)
     expect(chunks).toHaveLength(2)
   })
 
@@ -299,15 +299,15 @@ describe('groupByQueryCount - INSERT statements', () => {
       'SELECT * FROM t2;',
       'INSERT INTO t VALUES (2);',
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]).toContain('SELECT * FROM t;')
+    const result = groupByQueryCount(statements, 2, HEADER)
+    expect(result.chunks).toHaveLength(1)
+    expect(result.chunks[0]).toContain('SELECT * FROM t;')
   })
 
   it('each chunk starts with header', () => {
     const statements = ['INSERT INTO t VALUES (1);']
-    const chunks = groupByQueryCount(statements, 100, HEADER)
-    expect(chunks[0].startsWith('SET DEFINE OFF;')).toBe(true)
+    const result = groupByQueryCount(statements, 100, HEADER)
+    expect(result.chunks[0].startsWith('SET DEFINE OFF;')).toBe(true)
   })
 
   it('handles multi-row INSERT as single statement', () => {
@@ -316,8 +316,8 @@ describe('groupByQueryCount - INSERT statements', () => {
       "INSERT INTO products VALUES (1, 'Laptop');",
       "INSERT INTO orders VALUES (1, 100);"
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
-    expect(chunks).toHaveLength(2)
+    const result = groupByQueryCount(statements, 2, HEADER)
+    expect(result.chunks).toHaveLength(2)
   })
 })
 
@@ -330,8 +330,8 @@ describe('groupByQueryCount - MERGE statements', () => {
       'MERGE INTO t2 USING s2 ON (t2.id = s2.id) WHEN MATCHED THEN UPDATE SET t2.x = s2.x;',
       'MERGE INTO t3 USING s3 ON (t3.id = s3.id) WHEN MATCHED THEN UPDATE SET t3.x = s3.x;',
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
-    expect(chunks).toHaveLength(2)
+    const result = groupByQueryCount(statements, 2, HEADER)
+    expect(result.chunks).toHaveLength(2)
   })
 
   it('counts complex MERGE with INSERT and DELETE', () => {
@@ -343,8 +343,8 @@ describe('groupByQueryCount - MERGE statements', () => {
       `MERGE INTO products USING updates ON (products.id = updates.id)
        WHEN MATCHED THEN UPDATE SET products.price = updates.price;`,
     ]
-    const chunks = groupByQueryCount(statements, 1, HEADER)
-    expect(chunks).toHaveLength(2)
+    const result = groupByQueryCount(statements, 1, HEADER)
+    expect(result.chunks).toHaveLength(2)
   })
 
   it('mixes INSERT, MERGE, and UPDATE in count', () => {
@@ -354,8 +354,8 @@ describe('groupByQueryCount - MERGE statements', () => {
       'UPDATE config SET value = 1 WHERE key = \'test\';',
       'INSERT INTO log VALUES (2);',
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
-    expect(chunks).toHaveLength(2)
+    const result = groupByQueryCount(statements, 2, HEADER)
+    expect(result.chunks).toHaveLength(2)
   })
 
   it('counts UPDATE statements', () => {
@@ -364,8 +364,8 @@ describe('groupByQueryCount - MERGE statements', () => {
       'UPDATE t SET x = 2;',
       'UPDATE t SET x = 3;',
     ]
-    const chunks = groupByQueryCount(statements, 2, HEADER)
-    expect(chunks).toHaveLength(2)
+    const result = groupByQueryCount(statements, 2, HEADER)
+    expect(result.chunks).toHaveLength(2)
   })
 })
 
