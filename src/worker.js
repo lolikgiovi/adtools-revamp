@@ -1090,6 +1090,7 @@ async function handleAnalyticsLogPost(request, env) {
 
     const data = await request.json();
     const userEmail = String(data.user_email || "").trim().toLowerCase();
+    const deviceId = String(data.device_id || "unknown");
     const toolId = String(data.tool_id || "unknown");
     const action = String(data.action || "unknown");
     const createdTime = String(data.created_time || tsGmt7Plain());
@@ -1104,8 +1105,8 @@ async function handleAnalyticsLogPost(request, env) {
     let inserted = 0;
     if (env.DB) {
       try {
-        await env.DB.prepare("INSERT INTO usage_log (user_email, tool_id, action, created_time) VALUES (?, ?, ?, ?)")
-          .bind(userEmail, toolId, action, createdTime)
+        await env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
+          .bind(userEmail, deviceId, toolId, action, createdTime)
           .run();
         inserted = 1;
       } catch (_) {}
