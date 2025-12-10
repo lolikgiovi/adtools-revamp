@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS usage_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_email TEXT NOT NULL,
-  device_id TEXT NULL,
+  device_id TEXT NOT NULL,
   tool_id TEXT NOT NULL,
   action TEXT NOT NULL,
   created_time TEXT NOT NULL

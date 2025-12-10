@@ -145,6 +145,7 @@ class UsageTracker {
       try {
         const email = localStorage.getItem('user.email');
         const deviceId = localStorage.getItem('adtools.deviceId');
+        const safeDeviceId = deviceId ? String(deviceId).trim() : null;
         userEmail = email ? String(email).trim().toLowerCase() : null;
       } catch (_) {}
 
@@ -152,7 +153,7 @@ class UsageTracker {
         const now = new Date();
         AnalyticsSender.sendLog({
           user_email: userEmail,
-          device_id: deviceId,
+          device_id: safeDeviceId,
           tool_id: String(featureId),
           action: String(action),
           created_time: this._isoToGmt7Plain(now.toISOString()),
