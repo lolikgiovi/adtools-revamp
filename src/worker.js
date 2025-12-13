@@ -85,12 +85,14 @@ export default {
       if (method === "GET") return handleAnalyticsGet(request, env);
     }
     if (url.pathname === "/analytics/batch") {
-      if (method !== "POST") return methodNotAllowed();
-      return handleAnalyticsBatchPost(request, env);
+      if (method === "POST") return handleAnalyticsBatchPost(request, env);
+      if (method === "GET") return handleAnalyticsBatchGet(request, env);
+      return methodNotAllowed();
     }
     if (url.pathname === "/analytics/log") {
-      if (method !== "POST") return methodNotAllowed();
-      return handleAnalyticsLogPost(request, env);
+      if (method === "POST") return handleAnalyticsLogPost(request, env);
+      if (method === "GET") return handleAnalyticsLogGet(request, env);
+      return methodNotAllowed();
     }
 
     // Static assets via Wrangler assets binding with SPA fallback
@@ -1073,6 +1075,40 @@ async function handleAnalyticsBatchPost(request, env) {
   }
 }
 
+async function handleAnalyticsBatchGet(request, env) {
+  try {
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("device_id") || "unknown";
+    const userEmail = (url.searchParams.get("user_email") || "").trim().toLowerCase() || null;
+    const toolId = url.searchParams.get("tool_id") || "unknown";
+    const action = url.searchParams.get("action") || "unknown";
+    const count = Number(url.searchParams.get("count") || 0) || 0;
+    const updatedTime = url.searchParams.get("updated_time") || tsGmt7Plain();
+
+    let inserted = 0;
+    if (env.DB && count > 0) {
+      try {
+        await env.DB.prepare("INSERT INTO get_device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(deviceId, userEmail, toolId, action, count, updatedTime)
+          .run();
+        inserted = 1;
+      } catch (_) {}
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true, inserted, method: "GET" }),
+      {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
 // Live usage log: insert to usage_log if SEND_LIVE_USER_LOG is enabled
 async function handleAnalyticsLogPost(request, env) {
   try {
@@ -1114,6 +1150,58 @@ async function handleAnalyticsLogPost(request, env) {
 
     return new Response(
       JSON.stringify({ ok: true, inserted }),
+      {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+async function handleAnalyticsLogGet(request, env) {
+  try {
+    // Check if live logging is enabled
+    const enabled = String(env.SEND_LIVE_USER_LOG || "").toLowerCase() === "true";
+    if (!enabled) {
+      return new Response(
+        JSON.stringify({ ok: false, message: "Live logging disabled" }),
+        {
+          status: 200, // Return 200 to avoid client errors
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
+
+    const url = new URL(request.url);
+    const userEmail = (url.searchParams.get("user_email") || "").trim().toLowerCase();
+    const deviceId = url.searchParams.get("device_id") || "unknown";
+    const toolId = url.searchParams.get("tool_id") || "unknown";
+    const action = url.searchParams.get("action") || "unknown";
+    const createdTime = url.searchParams.get("created_time") || tsGmt7Plain();
+
+    if (!userEmail) {
+      return new Response(JSON.stringify({ ok: false, error: "user_email required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    let inserted = 0;
+    if (env.DB) {
+      try {
+        await env.DB.prepare("INSERT INTO get_usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
+          .bind(userEmail, deviceId, toolId, action, createdTime)
+          .run();
+        inserted = 1;
+      } catch (_) {}
+    }
+
+    return new Response(
+      JSON.stringify({ ok: true, inserted, method: "GET" }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       }
