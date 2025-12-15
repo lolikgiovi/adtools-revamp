@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS get_device_usage (
   tool_id TEXT NOT NULL,
   action TEXT NOT NULL,
   count INTEGER NOT NULL DEFAULT 0,
-  updated_time TEXT NOT NULL
+  updated_time TEXT NOT NULL,
+  UNIQUE(device_id, tool_id, action)
 );
 
 -- Index for querying device usage by device

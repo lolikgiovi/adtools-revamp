@@ -1086,21 +1086,46 @@ async function handleAnalyticsBatchGet(request, env) {
     const updatedTime = url.searchParams.get("updated_time") || tsGmt7Plain();
 
     let inserted = 0;
+    let dbError = null;
     if (env.DB && count > 0) {
       try {
-        await env.DB.prepare("INSERT INTO get_device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)")
+        await env.DB.prepare(
+          "INSERT INTO get_device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(device_id, tool_id, action) DO UPDATE SET user_email = excluded.user_email, count = excluded.count, updated_time = excluded.updated_time"
+        )
           .bind(deviceId, userEmail, toolId, action, count, updatedTime)
           .run();
         inserted = 1;
-      } catch (_) {}
+      } catch (err) {
+        dbError = String(err);
+      }
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, inserted, method: "GET" }),
-      {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      }
-    );
+    if (count === 0) {
+      return new Response(
+        JSON.stringify({ ok: false, inserted: 0, method: "GET", error: "count must be greater than 0", message: "Invalid count value" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
+
+    if (inserted === 1) {
+      return new Response(
+        JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Device usage recorded successfully" }),
+        {
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({ ok: false, inserted: 0, method: "GET", error: dbError || "Database unavailable", message: "Failed to record device usage" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 400,
@@ -1139,21 +1164,34 @@ async function handleAnalyticsLogPost(request, env) {
     }
 
     let inserted = 0;
+    let dbError = null;
     if (env.DB) {
       try {
         await env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
           .bind(userEmail, deviceId, toolId, action, createdTime)
           .run();
         inserted = 1;
-      } catch (_) {}
+      } catch (err) {
+        dbError = String(err);
+      }
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, inserted }),
-      {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      }
-    );
+    if (inserted === 1) {
+      return new Response(
+        JSON.stringify({ ok: true, inserted: 1, message: "Usage log recorded successfully" }),
+        {
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({ ok: false, inserted: 0, error: dbError || "Database unavailable", message: "Failed to record usage log" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 400,
@@ -1191,21 +1229,34 @@ async function handleAnalyticsLogGet(request, env) {
     }
 
     let inserted = 0;
+    let dbError = null;
     if (env.DB) {
       try {
         await env.DB.prepare("INSERT INTO get_usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
           .bind(userEmail, deviceId, toolId, action, createdTime)
           .run();
         inserted = 1;
-      } catch (_) {}
+      } catch (err) {
+        dbError = String(err);
+      }
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, inserted, method: "GET" }),
-      {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      }
-    );
+    if (inserted === 1) {
+      return new Response(
+        JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Usage log recorded successfully" }),
+        {
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({ ok: false, inserted: 0, method: "GET", error: dbError || "Database unavailable", message: "Failed to record usage log" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        }
+      );
+    }
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 400,
