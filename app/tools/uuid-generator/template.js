@@ -30,7 +30,7 @@ export const UUIDGeneratorTemplate = /* html */ `
                         type="number" 
                         id="uuidQuantity" 
                         class="quantity-input" 
-                        placeholder="How many?" 
+                        placeholder="How many? Max 10.000" 
                         min="1" 
                         max="10000"
                     />
