@@ -91,7 +91,7 @@ class UUIDGenerator extends BaseTool {
     const quantity = parseInt(quantityInput.value) || 1;
     const uuids = [];
 
-    for (let i = 0; i < Math.min(quantity, 100); i++) {
+    for (let i = 0; i < Math.min(quantity, 1000); i++) {
       uuids.push(crypto.randomUUID());
     }
 
