@@ -192,7 +192,7 @@ class MasterLockeyService {
     if (mode === "key") {
       return this.filterByKeys(rows, query);
     } else if (mode === "content") {
-      return this.filterByContent(rows, query, languages);
+      return this.filterByContent(rows, languages, query);
     }
 
     return rows;
