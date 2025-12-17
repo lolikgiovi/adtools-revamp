@@ -9,7 +9,7 @@ export const MasterLockeyTemplate = /* html */ `
         <div class="master-lockey-controls">
             <div class="control-group">
                 <select id="domain-selector" class="domain-selector">
-                    <option value="">Env</option>
+                    <option value="">Pick Domain</option>
                 </select>
             </div>
             <button class="btn-fetch" id="btn-fetch-data" disabled>
@@ -20,17 +20,13 @@ export const MasterLockeyTemplate = /* html */ `
                 <span class="cache-badge">Cached</span>
                 <span class="cache-timestamp" id="cache-timestamp"></span>
             </div>
+            <div id="lockey-info" class="master-lockey-info" style="display: none;">
+                <span id="info-domain-name" class="domain-name"></span>
+                <span class="separator">-</span>
+                <span class="version-info">Language Pack Version: <span id="info-version"></span></span>
+            </div>
         </div>
     </div>
-
-    <!-- Info: Domain and Version -->
-  <div id="lockey-info" class="master-lockey-info" style="display: none;">
-    <div class="info-content">
-      <span id="info-domain-name" class="domain-name"></span>
-      <span class="separator">-</span>
-      <span class="version-info">Language Pack Version: <span id="info-version"></span></span>
-    </div>
-  </div>
 
     <!-- Search -->
   <div id="search-section" class="master-lockey-search" style="display: none;">
@@ -44,10 +40,13 @@ export const MasterLockeyTemplate = /* html */ `
       </div>
       <input type="text" id="search-input" class="search-input" placeholder="Enter search term...">
       <button id="btn-clear-search" class="btn-clear-search" title="Clear search">×</button>
+      <button id="btn-whole-word" class="btn-whole-word" title="Match whole word only">
+        Match Word
+      </button>
     </div>
-    <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
-    <div id="results-count" class="search-results-count" style="display: none;">
-      <span id="results-text"></span>
+    <div class="search-meta">
+      <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
+      <div id="results-count" class="search-results-count" style="display: none;"><span id="results-text"></span></div>
     </div>
   </div>
 

@@ -12,17 +12,17 @@ class MasterLockeyService {
   async fetchLockeyData(url) {
     try {
       // Use Tauri's invoke to fetch via Rust backend (no CORS restrictions)
-      const { invoke } = await import('@tauri-apps/api/core');
-      const data = await invoke('fetch_lockey_json', { url });
+      const { invoke } = await import("@tauri-apps/api/core");
+      const data = await invoke("fetch_lockey_json", { url });
       return data;
     } catch (error) {
       // Handle Tauri invoke errors
-      if (typeof error === 'string') {
+      if (typeof error === "string") {
         throw new Error(error);
       } else if (error.message) {
         throw new Error(error.message);
       }
-      throw new Error('Failed to fetch lockey data');
+      throw new Error("Failed to fetch lockey data");
     }
   }
 
@@ -32,23 +32,21 @@ class MasterLockeyService {
    * @returns {Object} Parsed data { languagePackId, languages, rows }
    */
   parseLockeyData(json) {
-    if (!json || typeof json !== 'object') {
-      throw new Error('Invalid JSON structure: Expected an object');
+    if (!json || typeof json !== "object") {
+      throw new Error("Invalid JSON structure: Expected an object");
     }
 
-    if (!json.content || typeof json.content !== 'object') {
+    if (!json.content || typeof json.content !== "object") {
       throw new Error('Invalid JSON structure: Missing "content" property');
     }
 
     const { content, languagePackId } = json;
 
     // Extract language codes (all keys except non-language properties)
-    const languages = Object.keys(content).filter(key => 
-      typeof content[key] === 'object' && content[key] !== null
-    );
+    const languages = Object.keys(content).filter((key) => typeof content[key] === "object" && content[key] !== null);
 
     if (languages.length === 0) {
-      throw new Error('Invalid JSON structure: No language data found in content');
+      throw new Error("Invalid JSON structure: No language data found in content");
     }
 
     // Get all unique localization keys from the first language
@@ -56,13 +54,13 @@ class MasterLockeyService {
     const lockeyKeys = Object.keys(content[firstLang] || {});
 
     // Build rows: { key, [lang1]: "...", [lang2]: "...", ... }
-    const rows = lockeyKeys.map(key => {
+    const rows = lockeyKeys.map((key) => {
       const row = { key };
-      
-      languages.forEach(lang => {
-        row[lang] = content[lang][key] || '';
+
+      languages.forEach((lang) => {
+        row[lang] = content[lang][key] || "";
       });
-      
+
       return row;
     });
 
@@ -70,62 +68,82 @@ class MasterLockeyService {
     rows.sort((a, b) => a.key.localeCompare(b.key));
 
     return {
-      languagePackId: languagePackId || 'N/A',
+      languagePackId: languagePackId || "N/A",
       languages,
       rows,
     };
   }
 
   /**
-   * Filter data by comma-separated key names
+   * Filter data by key search (comma-separated keys)
    * @param {Array} rows - Array of row objects
-   * @param {string} keysString - Comma-separated key names
+   * @param {string} keysString - Comma-separated keys to search for
+   * @param {boolean} wholeWord - Match whole words only
    * @returns {Array} Filtered rows
    */
-  filterByKeys(rows, keysString) {
-    if (!keysString || keysString.trim() === '') {
+  filterByKeys(rows, keysString, wholeWord = false) {
+    if (!keysString || keysString.trim() === "") {
       return rows;
     }
 
     // Split by comma, trim whitespace, and filter out empty strings
     const searchKeys = keysString
-      .split(',')
-      .map(k => k.trim().toLowerCase())
-      .filter(k => k.length > 0);
+      .split(",")
+      .map((k) => k.trim().toLowerCase())
+      .filter((k) => k.length > 0);
 
     if (searchKeys.length === 0) {
       return rows;
     }
 
-    return rows.filter(row => {
-      const rowKey = (row.key || '').toLowerCase();
-      
-      // Match if any search key is found in the row key (partial match)
-      return searchKeys.some(searchKey => rowKey.includes(searchKey));
+    return rows.filter((row) => {
+      const rowKey = (row.key || "").toLowerCase();
+
+      // Match if any search key is found in the row key
+      return searchKeys.some((searchKey) => {
+        if (wholeWord) {
+          // Match whole word only using word boundaries
+          const regex = new RegExp(`\\b${searchKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          return regex.test(rowKey);
+        } else {
+          // Partial match
+          return rowKey.includes(searchKey);
+        }
+      });
     });
   }
 
   /**
    * Filter data by content search across all or specific language
    * @param {Array} rows - Array of row objects
-   * @param {string} query - Search query
    * @param {Array} languages - Array of language codes to search in
+   * @param {string} query - Search query
+   * @param {boolean} wholeWord - Match whole words only
    * @param {string} [specificLang] - Optional specific language to search in
    * @returns {Array} Filtered rows
    */
-  filterByContent(rows, query, languages, specificLang = null) {
-    if (!query || query.trim() === '') {
+  filterByContent(rows, languages, query, wholeWord = false, specificLang = null) {
+    if (!query || query.trim() === "") {
       return rows;
     }
 
-    const searchQuery = query.toLowerCase();
+    const searchQuery = query.trim();
     const langsToSearch = specificLang ? [specificLang] : languages;
 
-    return rows.filter(row => {
+    return rows.filter((row) => {
       // Search across specified languages
-      return langsToSearch.some(lang => {
-        const content = (row[lang] || '').toLowerCase();
-        return content.includes(searchQuery);
+      return langsToSearch.some((lang) => {
+        const content = row[lang] || "";
+
+        if (wholeWord) {
+          // Match whole word only using word boundaries
+          const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(`\\b${escapedQuery}\\b`, "i");
+          return regex.test(content);
+        } else {
+          // Partial match (case-insensitive)
+          return content.toLowerCase().includes(searchQuery.toLowerCase());
+        }
       });
     });
   }
@@ -139,9 +157,9 @@ class MasterLockeyService {
   filterData(rows, searchConfig) {
     const { mode, query, languages } = searchConfig;
 
-    if (mode === 'key') {
+    if (mode === "key") {
       return this.filterByKeys(rows, query);
-    } else if (mode === 'content') {
+    } else if (mode === "content") {
       return this.filterByContent(rows, query, languages);
     }
 
@@ -161,12 +179,12 @@ class MasterLockeyService {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+
+    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 }
 
