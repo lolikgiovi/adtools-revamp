@@ -6,7 +6,6 @@
 import { BaseTool } from '../../core/BaseTool.js';
 import { MasterLockeyTemplate } from './template.js';
 import { MasterLockeyService } from './service.js';
-import { IndexedDBService } from './indexeddb-service.js';
 import { getIconSvg } from './icon.js';
 import { UsageTracker } from '../../core/UsageTracker.js';
 import './styles.css';
@@ -23,7 +22,6 @@ class MasterLockey extends BaseTool {
     });
 
     this.service = new MasterLockeyService();
-    this.dbService = new IndexedDBService();
     this.currentDomain = null;
     this.currentDomainUrl = null;
     this.parsedData = null; // { languagePackId, languages, rows }
@@ -32,19 +30,17 @@ class MasterLockey extends BaseTool {
     // Virtual scrolling state for performance with large datasets
     this.virtualScroll = {
       rowHeight: 42, // Estimated row height in pixels
-      visibleRows: 50, // Number of rows to render at once
-      scrollTop: 0,
+      coreRows: 100, // Core visible rows
+      overscan: 30, // Buffer rows on each side (top and bottom)
       startIndex: 0,
-      endIndex: 50,
+      endIndex: 160, // coreRows + (2 * overscan)
     };
     
     // Debounce timer for search
     this.searchDebounceTimer = null;
     
-    // Initialize IndexedDB
-    this.dbService.init().catch(err => {
-      console.error('Failed to initialize IndexedDB:', err);
-    });
+    // Throttle for scroll events
+    this.scrollUpdateQueued = false;
   }
 
   getIconSvg() {
@@ -188,22 +184,43 @@ class MasterLockey extends BaseTool {
   handleTableScroll() {
     if (!this.filteredRows || this.filteredRows.length === 0) return;
     
-    const scrollTop = this.els.tableContainer.scrollTop;
-    const startIndex = Math.floor(scrollTop / this.virtualScroll.rowHeight);
-    const endIndex = Math.min(
-      startIndex + this.virtualScroll.visibleRows,
-      this.filteredRows.length
-    );
+    // Throttle scroll updates - only one update per frame
+    if (this.scrollUpdateQueued) return;
     
-    // Only re-render if the visible range changed significantly
-    if (
-      Math.abs(startIndex - this.virtualScroll.startIndex) > 10 ||
-      Math.abs(endIndex - this.virtualScroll.endIndex) > 10
-    ) {
-      this.virtualScroll.startIndex = startIndex;
-      this.virtualScroll.endIndex = endIndex;
-      this.renderTableBody(this.filteredRows, this.parsedData.languages);
-    }
+    this.scrollUpdateQueued = true;
+    requestAnimationFrame(() => {
+      const scrollTop = this.els.tableContainer.scrollTop;
+      const containerHeight = this.els.tableContainer.clientHeight;
+      
+      // Calculate which row is at the top of viewport
+      const topRowIndex = Math.floor(scrollTop / this.virtualScroll.rowHeight);
+      
+      // Calculate ideal range with overscan buffer
+      const idealStart = Math.max(0, topRowIndex - this.virtualScroll.overscan);
+      const idealEnd = Math.min(
+        this.filteredRows.length,
+        topRowIndex + Math.ceil(containerHeight / this.virtualScroll.rowHeight) + this.virtualScroll.overscan
+      );
+      
+      // Only re-render if we've scrolled outside the overscan buffer
+      const needsUpdate = 
+        idealStart < this.virtualScroll.startIndex ||
+        idealEnd > this.virtualScroll.endIndex ||
+        idealStart > this.virtualScroll.startIndex + this.virtualScroll.overscan ||
+        idealEnd < this.virtualScroll.endIndex - this.virtualScroll.overscan;
+      
+      if (needsUpdate) {
+        // Render with overscan buffer
+        this.virtualScroll.startIndex = idealStart;
+        this.virtualScroll.endIndex = Math.min(
+          idealStart + this.virtualScroll.coreRows + (2 * this.virtualScroll.overscan),
+          this.filteredRows.length
+        );
+        this.renderTableBody(this.filteredRows, this.parsedData.languages);
+      }
+      
+      this.scrollUpdateQueued = false;
+    });
   }
 
   updateSearchHint() {
@@ -219,7 +236,9 @@ class MasterLockey extends BaseTool {
     if (!this.currentDomain) return;
     
     try {
-      const cached = await this.dbService.getLockeyData(this.currentDomain);
+      const { invoke } = await import('@tauri-apps/api/core');
+      const cached = await invoke('load_lockey_cache', { domain: this.currentDomain });
+      
       if (cached && cached.data) {
         this.parsedData = cached.data;
         this.displayData();
@@ -248,8 +267,12 @@ class MasterLockey extends BaseTool {
       const rawData = await this.service.fetchLockeyData(this.currentDomainUrl);
       this.parsedData = this.service.parseLockeyData(rawData);
       
-      // Cache the parsed data
-      await this.dbService.saveLockeyData(this.currentDomain, this.parsedData);
+      // Cache the parsed data using Tauri backend
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('save_lockey_cache', { 
+        domain: this.currentDomain, 
+        data: this.parsedData 
+      });
       
       this.displayData();
       this.showCache(Date.now());
@@ -355,12 +378,11 @@ class MasterLockey extends BaseTool {
       return;
     }
     
-    // Virtual scrolling: only render visible rows + some padding
     const startIndex = this.virtualScroll.startIndex;
     const endIndex = this.virtualScroll.endIndex;
     const visibleRows = rows.slice(startIndex, endIndex);
     
-    // Add spacer row before visible rows to maintain scroll position
+    // Add top spacer to maintain scroll position
     if (startIndex > 0) {
       const spacerBefore = document.createElement('tr');
       spacerBefore.style.height = `${startIndex * this.virtualScroll.rowHeight}px`;
@@ -368,28 +390,28 @@ class MasterLockey extends BaseTool {
       this.els.tableBody.appendChild(spacerBefore);
     }
     
-    // Render visible rows
+    // Render visible rows with overscan buffer
     visibleRows.forEach(row => {
       const tr = document.createElement('tr');
       
       // Key cell
       const keyCell = document.createElement('td');
       keyCell.textContent = row.key;
-      keyCell.title = row.key; // Tooltip for long keys
+      keyCell.title = row.key;
       tr.appendChild(keyCell);
       
       // Language cells
       languages.forEach(lang => {
         const cell = document.createElement('td');
         cell.textContent = row[lang] || '';
-        cell.title = row[lang] || ''; // Tooltip for long text
+        cell.title = row[lang] || '';
         tr.appendChild(cell);
       });
       
       this.els.tableBody.appendChild(tr);
     });
     
-    // Add spacer row after visible rows
+    // Add bottom spacer
     const remainingRows = rows.length - endIndex;
     if (remainingRows > 0) {
       const spacerAfter = document.createElement('tr');

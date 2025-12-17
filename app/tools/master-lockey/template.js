@@ -8,13 +8,12 @@ export const MasterLockeyTemplate = /* html */ `
     <div class="master-lockey-header">
         <div class="master-lockey-controls">
             <div class="control-group">
-                <label for="domain-selector">Domain:</label>
                 <select id="domain-selector" class="domain-selector">
-                    <option value="">Select a domain...</option>
+                    <option value="">Env</option>
                 </select>
             </div>
             <button class="btn-fetch" id="btn-fetch-data" disabled>
-                <span class="btn-text">Fetch Latest Data</span>
+                <span class="btn-text">Get Latest Data</span>
                 <span class="btn-spinner" style="display: none;">⟳</span>
             </button>
             <div class="cache-info" id="cache-info" style="display: none;">
@@ -24,35 +23,33 @@ export const MasterLockeyTemplate = /* html */ `
         </div>
     </div>
 
-    <div class="master-lockey-info" id="lockey-info" style="display: none;">
-        <div class="info-content">
-            <span class="domain-name" id="info-domain-name"></span>
-            <span class="separator">-</span>
-            <span class="version-info">Language Pack Version: <strong id="info-version"></strong></span>
-        </div>
+    <!-- Info: Domain and Version -->
+  <div id="lockey-info" class="master-lockey-info" style="display: none;">
+    <div class="info-content">
+      <span id="info-domain-name" class="domain-name"></span>
+      <span class="separator">-</span>
+      <span class="version-info">Language Pack Version: <span id="info-version"></span></span>
     </div>
+  </div>
 
-    <div class="master-lockey-search" id="search-section" style="display: none;">
-        <div class="search-container">
-            <select id="search-mode" class="search-mode-selector">
-                <option value="key">Search by Key</option>
-                <option value="content">Search by Content</option>
-            </select>
-            <input 
-                type="text" 
-                id="search-input" 
-                class="search-input" 
-                placeholder="Enter search term..."
-            />
-            <button class="btn-clear-search" id="btn-clear-search" title="Clear search">×</button>
-        </div>
-        <div class="search-hint" id="search-hint">
-            Tip: For key search, use comma-separated values (e.g., key1, key2)
-        </div>
-        <div class="search-results-count" id="results-count" style="display: none;">
-            <span id="results-text"></span>
-        </div>
+    <!-- Search -->
+  <div id="search-section" class="master-lockey-search" style="display: none;">
+    <div class="search-container">
+      <div class="search-mode-wrapper">
+        <span class="dropdown-icon">▼</span>
+        <select id="search-mode" class="search-mode-selector">
+          <option value="key">Search by Key</option>
+          <option value="content">Search by Content</option>
+        </select>
+      </div>
+      <input type="text" id="search-input" class="search-input" placeholder="Enter search term...">
+      <button id="btn-clear-search" class="btn-clear-search" title="Clear search">×</button>
     </div>
+    <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
+    <div id="results-count" class="search-results-count" style="display: none;">
+      <span id="results-text"></span>
+    </div>
+  </div>
 
     <div class="master-lockey-content" id="lockey-content">
         <div class="empty-state" id="empty-state">

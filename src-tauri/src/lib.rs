@@ -14,7 +14,10 @@ pub fn run() {
       jenkins_stream_logs,
       open_url,
       get_arch,
-      fetch_lockey_json
+      fetch_lockey_json,
+      save_lockey_cache,
+      load_lockey_cache,
+      clear_lockey_cache
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -33,7 +36,7 @@ pub mod jenkins;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use jenkins::Credentials;
 
 const KEYCHAIN_SERVICE: &str = "ad-tools:jenkins";
@@ -183,4 +186,101 @@ async fn fetch_lockey_json(url: String) -> Result<serde_json::Value, String> {
     .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
   
   Ok(json)
+}
+
+// Cache management for Master Lockey
+// Stores cache files in app data directory
+
+fn get_cache_dir(app: AppHandle) -> Result<std::path::PathBuf, String> {
+  let app_data = app.path().app_data_dir()
+    .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+  let cache_dir = app_data.join("lockey_cache");
+  
+  // Create cache directory if it doesn't exist
+  std::fs::create_dir_all(&cache_dir)
+    .map_err(|e| format!("Failed to create cache directory: {}", e))?;
+  
+  Ok(cache_dir)
+}
+
+fn sanitize_domain_name(domain: &str) -> String {
+  domain.chars()
+    .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+    .collect()
+}
+
+#[tauri::command]
+async fn save_lockey_cache(
+  app: AppHandle,
+  domain: String,
+  data: serde_json::Value
+) -> Result<(), String> {
+  let cache_dir = get_cache_dir(app)?;
+  let safe_domain = sanitize_domain_name(&domain);
+  let cache_file = cache_dir.join(format!("{}.json", safe_domain));
+  
+  let cache_data = serde_json::json!({
+    "domain": domain,
+    "data": data,
+    "timestamp": chrono::Utc::now().timestamp_millis()
+  });
+  
+  let json_string = serde_json::to_string_pretty(&cache_data)
+    .map_err(|e| format!("Failed to serialize cache: {}", e))?;
+  
+  std::fs::write(&cache_file, json_string)
+    .map_err(|e| format!("Failed to write cache file: {}", e))?;
+  
+  Ok(())
+}
+
+#[tauri::command]
+async fn load_lockey_cache(
+  app: AppHandle,
+  domain: String
+) -> Result<Option<serde_json::Value>, String> {
+  let cache_dir = get_cache_dir(app)?;
+  let safe_domain = sanitize_domain_name(&domain);
+  let cache_file = cache_dir.join(format!("{}.json", safe_domain));
+  
+  if !cache_file.exists() {
+    return Ok(None);
+  }
+  
+  let content = std::fs::read_to_string(&cache_file)
+    .map_err(|e| format!("Failed to read cache file: {}", e))?;
+  
+  let cache_data: serde_json::Value = serde_json::from_str(&content)
+    .map_err(|e| format!("Failed to parse cache file: {}", e))?;
+  
+  Ok(Some(cache_data))
+}
+
+#[tauri::command]
+async fn clear_lockey_cache(
+  app: AppHandle,
+  domain: Option<String>
+) -> Result<(), String> {
+  let cache_dir = get_cache_dir(app)?;
+  
+  if let Some(domain_name) = domain {
+    // Clear specific domain cache
+    let safe_domain = sanitize_domain_name(&domain_name);
+    let cache_file = cache_dir.join(format!("{}.json", safe_domain));
+    
+    if cache_file.exists() {
+      std::fs::remove_file(&cache_file)
+        .map_err(|e| format!("Failed to remove cache file: {}", e))?;
+    }
+  } else {
+    // Clear all caches
+    if cache_dir.exists() {
+      std::fs::remove_dir_all(&cache_dir)
+        .map_err(|e| format!("Failed to remove cache directory: {}", e))?;
+      std::fs::create_dir_all(&cache_dir)
+        .map_err(|e| format!("Failed to recreate cache directory: {}", e))?;
+    }
+  }
+  
+  Ok(())
 }
