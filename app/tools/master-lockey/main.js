@@ -29,6 +29,18 @@ class MasterLockey extends BaseTool {
     this.parsedData = null; // { languagePackId, languages, rows }
     this.filteredRows = null;
     
+    // Virtual scrolling state for performance with large datasets
+    this.virtualScroll = {
+      rowHeight: 42, // Estimated row height in pixels
+      visibleRows: 50, // Number of rows to render at once
+      scrollTop: 0,
+      startIndex: 0,
+      endIndex: 50,
+    };
+    
+    // Debounce timer for search
+    this.searchDebounceTimer = null;
+    
     // Initialize IndexedDB
     this.dbService.init().catch(err => {
       console.error('Failed to initialize IndexedDB:', err);
@@ -136,12 +148,12 @@ class MasterLockey extends BaseTool {
     // Search mode change
     this.els.searchMode.addEventListener('change', () => {
       this.updateSearchHint();
-      this.applyFilter();
+      this.applyFilterDebounced();
     });
 
-    // Search input
+    // Search input with debouncing (300ms delay)
     this.els.searchInput.addEventListener('input', () => {
-      this.applyFilter();
+      this.applyFilterDebounced();
     });
 
     // Clear search
@@ -154,6 +166,44 @@ class MasterLockey extends BaseTool {
     this.els.btnRetry.addEventListener('click', () => {
       this.fetchData();
     });
+    
+    // Virtual scroll handler
+    this.els.tableContainer.addEventListener('scroll', () => {
+      this.handleTableScroll();
+    });
+  }
+
+  applyFilterDebounced() {
+    // Clear existing timer
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer);
+    }
+    
+    // Set new timer (300ms delay)
+    this.searchDebounceTimer = setTimeout(() => {
+      this.applyFilter();
+    }, 300);
+  }
+
+  handleTableScroll() {
+    if (!this.filteredRows || this.filteredRows.length === 0) return;
+    
+    const scrollTop = this.els.tableContainer.scrollTop;
+    const startIndex = Math.floor(scrollTop / this.virtualScroll.rowHeight);
+    const endIndex = Math.min(
+      startIndex + this.virtualScroll.visibleRows,
+      this.filteredRows.length
+    );
+    
+    // Only re-render if the visible range changed significantly
+    if (
+      Math.abs(startIndex - this.virtualScroll.startIndex) > 10 ||
+      Math.abs(endIndex - this.virtualScroll.endIndex) > 10
+    ) {
+      this.virtualScroll.startIndex = startIndex;
+      this.virtualScroll.endIndex = endIndex;
+      this.renderTableBody(this.filteredRows, this.parsedData.languages);
+    }
   }
 
   updateSearchHint() {
@@ -305,7 +355,21 @@ class MasterLockey extends BaseTool {
       return;
     }
     
-    rows.forEach(row => {
+    // Virtual scrolling: only render visible rows + some padding
+    const startIndex = this.virtualScroll.startIndex;
+    const endIndex = this.virtualScroll.endIndex;
+    const visibleRows = rows.slice(startIndex, endIndex);
+    
+    // Add spacer row before visible rows to maintain scroll position
+    if (startIndex > 0) {
+      const spacerBefore = document.createElement('tr');
+      spacerBefore.style.height = `${startIndex * this.virtualScroll.rowHeight}px`;
+      spacerBefore.innerHTML = `<td colspan="${languages.length + 1}"></td>`;
+      this.els.tableBody.appendChild(spacerBefore);
+    }
+    
+    // Render visible rows
+    visibleRows.forEach(row => {
       const tr = document.createElement('tr');
       
       // Key cell
@@ -324,6 +388,15 @@ class MasterLockey extends BaseTool {
       
       this.els.tableBody.appendChild(tr);
     });
+    
+    // Add spacer row after visible rows
+    const remainingRows = rows.length - endIndex;
+    if (remainingRows > 0) {
+      const spacerAfter = document.createElement('tr');
+      spacerAfter.style.height = `${remainingRows * this.virtualScroll.rowHeight}px`;
+      spacerAfter.innerHTML = `<td colspan="${languages.length + 1}"></td>`;
+      this.els.tableBody.appendChild(spacerAfter);
+    }
   }
 
   showLoading() {

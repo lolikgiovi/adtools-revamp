@@ -5,25 +5,24 @@
 
 class MasterLockeyService {
   /**
-   * Fetch lockey data from a URL
+   * Fetch lockey data from a URL using Tauri backend (bypasses CORS)
    * @param {string} url - URL to fetch from
    * @returns {Promise<Object>} Fetched JSON data
    */
   async fetchLockeyData(url) {
     try {
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
+      // Use Tauri's invoke to fetch via Rust backend (no CORS restrictions)
+      const { invoke } = await import('@tauri-apps/api/core');
+      const data = await invoke('fetch_lockey_json', { url });
       return data;
     } catch (error) {
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to the server. Check your internet connection.');
+      // Handle Tauri invoke errors
+      if (typeof error === 'string') {
+        throw new Error(error);
+      } else if (error.message) {
+        throw new Error(error.message);
       }
-      throw error;
+      throw new Error('Failed to fetch lockey data');
     }
   }
 
@@ -66,6 +65,9 @@ class MasterLockeyService {
       
       return row;
     });
+
+    // Sort rows alphabetically by key (ascending)
+    rows.sort((a, b) => a.key.localeCompare(b.key));
 
     return {
       languagePackId: languagePackId || 'N/A',

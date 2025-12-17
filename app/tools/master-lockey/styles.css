@@ -337,8 +337,7 @@
   padding: 10px 12px;
   color: var(--color-text-primary, #333);
   max-width: 400px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word; /* Allow long text to wrap */
 }
 
 .lockey-table td:first-child {
@@ -349,6 +348,10 @@
   color: var(--color-primary, #007bff);
   font-family: 'Courier New', monospace;
   z-index: 5;
+  min-width: 200px;
+  max-width: 300px;
+  white-space: normal; /* Allow wrapping */
+  word-break: break-word; /* Break long words if needed */
 }
 
 .lockey-table tbody tr:hover td:first-child {

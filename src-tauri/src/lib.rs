@@ -13,7 +13,8 @@ pub fn run() {
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
       open_url,
-      get_arch
+      get_arch,
+      fetch_lockey_json
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -134,4 +135,52 @@ fn open_url(url: String) -> Result<(), String> {
 #[tauri::command]
 fn get_arch() -> String {
   std::env::consts::ARCH.to_string()
+}
+
+// Fetch JSON data from a URL (bypasses browser CORS restrictions)
+// Used by Master Lockey tool to fetch localization data
+#[tauri::command]
+async fn fetch_lockey_json(url: String) -> Result<serde_json::Value, String> {
+  // Build a more permissive client for development (accepts invalid SSL certs)
+  let client = Client::builder()
+    .timeout(Duration::from_secs(30))
+    .danger_accept_invalid_certs(true) // Allow self-signed/invalid SSL certs
+    .build()
+    .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+  
+  // Validate URL format
+  if !url.starts_with("http://") && !url.starts_with("https://") {
+    return Err(format!("Invalid URL format: must start with http:// or https://"));
+  }
+  
+  let response = client
+    .get(&url)
+    .send()
+    .await
+    .map_err(|e| {
+      // Provide more specific error messages based on error type
+      if e.is_timeout() {
+        format!("Request timed out after 30 seconds")
+      } else if e.is_connect() {
+        format!("Connection error: Unable to connect to server. Check the URL and network connection.")
+      } else if e.is_request() {
+        format!("Request error: {}", e)
+      } else {
+        format!("Network error: {}", e)
+      }
+    })?;
+  
+  let status = response.status();
+  if !status.is_success() {
+    let status_code = status.as_u16();
+    let reason = status.canonical_reason().unwrap_or("Unknown");
+    return Err(format!("HTTP {}: {} - Server returned an error", status_code, reason));
+  }
+  
+  let json = response
+    .json::<serde_json::Value>()
+    .await
+    .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
+  
+  Ok(json)
 }

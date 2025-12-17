@@ -121,6 +121,7 @@
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,
+      "requiresTauri": true,
       "order": 100
     }
   ]
