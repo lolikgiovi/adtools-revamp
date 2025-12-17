@@ -195,15 +195,8 @@ class UsageTracker {
     const featureKey = String(featureId);
     const actionKey = String(event);
 
-    const counts = this._state.counts;
-    counts[featureKey] = counts[featureKey] || {};
-    counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
-
-    const day = now.toISOString().slice(0, 10);
-    const k = `${featureKey}.${actionKey}`;
-    this._state.daily = this._state.daily || {};
-    this._state.daily[day] = this._state.daily[day] || {};
-    this._state.daily[day][k] = (this._state.daily[day][k] || 0) + 1;
+    // trackEvent only logs events, does NOT increment counts
+    // Only trackFeature should increment usage counts
 
     const ev = {
       featureId: featureKey,
