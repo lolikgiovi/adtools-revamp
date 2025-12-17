@@ -434,16 +434,19 @@ class MasterLockey extends BaseTool {
 
         if (isPlaceholder) {
           // Render placeholder with special styling
-          cell.innerHTML = `<span class="empty-value">${cellText}</span>`;
-          cell.title = cellText;
+          const span = document.createElement("span");
+          span.className = "empty-value";
+          span.textContent = this.escapeSpecialChars(cellText);
+          cell.appendChild(span);
+          cell.title = this.escapeSpecialChars(cellText);
         } else {
           // Normal value - apply highlighting if searching by content
           if (shouldHighlight) {
             cell.innerHTML = this.highlightText(cellText, searchQuery);
           } else {
-            cell.textContent = cellText;
+            cell.textContent = this.escapeSpecialChars(cellText);
           }
-          cell.title = cellText;
+          cell.title = this.escapeSpecialChars(cellText);
         }
 
         tr.appendChild(cell);
@@ -462,8 +465,32 @@ class MasterLockey extends BaseTool {
     }
   }
 
+  escapeSpecialChars(text) {
+    if (!text) return text;
+
+    return text
+      .replace(/\\/g, "\\\\") // Backslash first (to avoid double-escaping)
+      .replace(/\n/g, "\\n") // Newline
+      .replace(/\r/g, "\\r") // Carriage return
+      .replace(/\t/g, "\\t") // Tab
+      .replace(/\f/g, "\\f") // Form feed
+      .replace(/\v/g, "\\v"); // Vertical tab
+  }
+
   highlightText(text, query) {
     if (!query || !text) return text;
+
+    // First, escape special characters (newlines, tabs, etc.)
+    const escapedSpecialChars = this.escapeSpecialChars(text);
+
+    // Then, escape HTML entities to prevent HTML injection
+    const escapeHtml = (str) => {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
+    const escapedText = escapeHtml(escapedSpecialChars);
 
     // Escape special regex characters in query
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -473,7 +500,7 @@ class MasterLockey extends BaseTool {
     const regex = new RegExp(pattern, "gi");
 
     // Replace matches with highlighted version
-    return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    return escapedText.replace(regex, '<mark class="search-highlight">$1</mark>');
   }
 
   showLoading() {
