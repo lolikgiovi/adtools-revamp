@@ -59,6 +59,9 @@ class MasterLockey extends BaseTool {
     this.loadDomainConfig();
     this.setupEventListeners();
 
+    // Track feature usage
+    UsageTracker.trackFeature("master_lockey");
+
     // Try to load cached data for the first selected domain
     this.tryLoadCache();
   }
@@ -166,6 +169,11 @@ class MasterLockey extends BaseTool {
     this.els.btnWholeWord.addEventListener("click", () => {
       this.wholeWord = !this.wholeWord;
       this.els.btnWholeWord.classList.toggle("active", this.wholeWord);
+
+      UsageTracker.trackEvent("master_lockey", "toggle_whole_word", {
+        enabled: this.wholeWord,
+      });
+
       this.applyFilter();
     });
 
@@ -273,7 +281,7 @@ class MasterLockey extends BaseTool {
     this.hideCache();
 
     try {
-      UsageTracker.trackEvent("master_lockey", "fetch_data", { domain: this.currentDomain });
+      UsageTracker.trackEvent("master_lockey", "fetch_latest_data", { domain: this.currentDomain });
 
       const rawData = await this.service.fetchLockeyData(this.currentDomainUrl);
       this.parsedData = this.service.parseLockeyData(rawData);
@@ -374,10 +382,12 @@ class MasterLockey extends BaseTool {
     this.els.resultsCount.style.display = "block";
     this.els.resultsText.textContent = `${this.filteredRows.length} of ${this.parsedData.rows.length} results`;
 
-    UsageTracker.trackEvent("master_lockey", "search", {
-      mode: searchMode,
+    // Track search with specific action based on mode
+    const searchAction = searchMode === "key" ? "search_by_key" : "search_by_content";
+    UsageTracker.trackEvent("master_lockey", searchAction, {
       whole_word: this.wholeWord,
       results: filtered.length,
+      total_rows: this.parsedData.rows.length,
     });
   }
 
