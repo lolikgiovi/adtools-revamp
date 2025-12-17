@@ -47,6 +47,9 @@
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .domain-selector:hover {
@@ -71,6 +74,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  height: 32px;
 }
 
 .btn-fetch:hover:not(:disabled) {
@@ -103,11 +107,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0.25rem 0.5rem;
+  padding: 0.375rem 0.75rem;
   background: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   font-size: 0.7rem;
+  height: 32px;
 }
 
 .cache-badge {
