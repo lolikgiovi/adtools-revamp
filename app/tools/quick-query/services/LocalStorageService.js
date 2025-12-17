@@ -787,7 +787,6 @@ export class LocalStorageService {
       });
       return rows;
     } catch (e) {
-      UsageTracker.trackEvent("quick-query", "storage_error", { type: "convert_data_failed", message: e.message });
       return [];
     }
   }

@@ -176,22 +176,12 @@ export class QueryGenerationService {
           } catch (fieldError) {
             // Convert column index to Excel-style letter (A, B, ..., Z, AA, AB, ...)
             const columnLetter = this.columnIndexToLetter(colIndex);
-            UsageTracker.trackEvent("quick-query", "generation_error", { 
-              row: rowIndex + 2, 
-              column: columnLetter, 
-              fieldName, 
-              message: fieldError.message 
-            });
             throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${fieldName}":<br>${fieldError.message}`);
           }
         });
       } catch (error) {
         // If the error already has our format, just re-throw it
-        if (error.message.includes("Error in Row")) {
-          throw error;
-        }
-        UsageTracker.trackEvent("quick-query", "generation_error", { row: rowIndex + 2, message: error.message });
-        throw new Error(`${error.message}`);
+        throw error;
       }
     });
 
