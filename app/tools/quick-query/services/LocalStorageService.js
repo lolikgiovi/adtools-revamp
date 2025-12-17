@@ -345,17 +345,6 @@ export class LocalStorageService {
     return true;
   }
 
-  sqlLikeToRegex(pattern) {
-    // If no SQL wildcards provided, default to prefix matching (starts-with)
-    const hasWildcards = /[%_]/.test(pattern);
-    if (hasWildcards) {
-      return new RegExp("^" + pattern.replace(/%/g, ".*").replace(/_/g, ".").replace(/\[/g, "\\[").replace(/\]/g, "\\]") + "$", "i");
-    }
-    // Escape regex meta for safety, then perform prefix match
-    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp("^" + escaped + ".*$", "i");
-  }
-
   // Collapse helper: remove underscores and lowercase for plain-text matching
   collapseName(str) {
     return (str || "").toLowerCase().replace(/_/g, "");
@@ -611,86 +600,54 @@ export class LocalStorageService {
       const [schemaTermRaw = "", tableTermRaw = ""] = searchTerm.split(".");
       const schemaTerm = (schemaTermRaw || "").trim();
       const tableTerm = (tableTermRaw || "").trim();
-      const schemaPlain = !/%|_/.test(schemaTerm);
-      const tablePlain = !/%|_/.test(tableTerm);
       const tableWildcard = tableTerm === "";
-      const schemaRegex = schemaPlain ? null : this.sqlLikeToRegex(schemaTerm);
-      const tableRegex = tableWildcard ? null : tablePlain ? null : this.sqlLikeToRegex(tableTerm);
 
       this._index.schemas.forEach((schemaInfo, schemaName) => {
         if (!this.validateOracleName(schemaName, "schema")) return;
-        let schemaScore = 0;
-        if (schemaPlain) {
-          schemaScore = this.scorePlainTerm(schemaTerm, {
-            name: schemaName,
-            abbrs: schemaInfo.abbrs,
-            collapsed: schemaInfo.collapsed,
-          });
-          if (schemaScore === 0) return;
-        } else {
-          const match = schemaRegex.test(schemaName) || schemaInfo.abbrs.some((abbr) => schemaRegex.test(abbr));
-          if (!match) return;
-          schemaScore = 50;
-        }
+        
+        const schemaScore = this.scorePlainTerm(schemaTerm, {
+          name: schemaName,
+          abbrs: schemaInfo.abbrs,
+          collapsed: schemaInfo.collapsed,
+        });
+        if (schemaScore === 0) return;
 
         schemaInfo.tables.forEach((tableName) => {
           if (!this.validateOracleName(tableName, "table")) return;
           const fullName = `${schemaName}.${tableName}`;
+          
           if (tableWildcard) {
             results.push({ fullName, schemaName, tableName, _score: schemaScore });
             return;
           }
+          
           const tInfo = this._index.tables.get(fullName);
           if (!tInfo) return;
-          let tableScore = 0;
-          if (tablePlain) {
-            tableScore = this.scorePlainTerm(tableTerm, {
-              name: tableName,
-              abbrs: tInfo.abbrs,
-              collapsed: tInfo.collapsed,
-            });
-            if (tableScore === 0) return;
-          } else {
-            const tMatch = tableRegex.test(tableName) || (tInfo?.abbrs || []).some((abbr) => tableRegex.test(abbr));
-            if (!tMatch) return;
-            tableScore = 50;
-          }
+          
+          const tableScore = this.scorePlainTerm(tableTerm, {
+            name: tableName,
+            abbrs: tInfo.abbrs,
+            collapsed: tInfo.collapsed,
+          });
+          if (tableScore === 0) return;
+          
           results.push({ fullName, schemaName, tableName, _score: schemaScore + tableScore });
         });
       });
     } else {
-      const plain = !/%|_/.test(searchTerm);
-      if (plain) {
-        const q = searchTerm.trim();
-        this._index.tables.forEach((tInfo, fullName) => {
-          const { schemaName, tableName, abbrs, collapsed } = tInfo;
-          const sInfo = this._index.schemas.get(schemaName);
-          const schemaScore = this.scorePlainTerm(q, {
-            name: schemaName,
-            abbrs: sInfo?.abbrs || [],
-            collapsed: sInfo?.collapsed,
-          });
-          const tableScore = this.scorePlainTerm(q, { name: tableName, abbrs, collapsed });
-          const best = Math.max(schemaScore, tableScore);
-          if (best > 0) results.push({ fullName, schemaName, tableName, _score: best });
+      const q = searchTerm.trim();
+      this._index.tables.forEach((tInfo, fullName) => {
+        const { schemaName, tableName, abbrs, collapsed } = tInfo;
+        const sInfo = this._index.schemas.get(schemaName);
+        const schemaScore = this.scorePlainTerm(q, {
+          name: schemaName,
+          abbrs: sInfo?.abbrs || [],
+          collapsed: sInfo?.collapsed,
         });
-      } else {
-        const regex = this.sqlLikeToRegex(searchTerm);
-        this._index.tables.forEach((tInfo, fullName) => {
-          const { schemaName, tableName, abbrs } = tInfo;
-          const sInfo = this._index.schemas.get(schemaName);
-          const sAbbrs = sInfo?.abbrs || [];
-          if (
-            regex.test(schemaName) ||
-            regex.test(tableName) ||
-            regex.test(fullName) ||
-            sAbbrs.some((abbr) => regex.test(abbr)) ||
-            abbrs.some((abbr) => regex.test(abbr))
-          ) {
-            results.push({ fullName, schemaName, tableName, _score: 50 });
-          }
-        });
-      }
+        const tableScore = this.scorePlainTerm(q, { name: tableName, abbrs, collapsed });
+        const best = Math.max(schemaScore, tableScore);
+        if (best > 0) results.push({ fullName, schemaName, tableName, _score: best });
+      });
     }
 
     // Sort by score desc, then alphabetical for stability
