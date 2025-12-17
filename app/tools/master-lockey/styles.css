@@ -417,12 +417,12 @@
   left: 0;
   background: hsl(var(--background));
   font-weight: 500;
-  font-size: 13px;
+  font-size: 11px;
   color: hsl(var(--primary));
-  font-family: "Courier New", monospace;
+  font-family: monospace;
   z-index: 5;
-  min-width: 280px;
-  max-width: 400px;
+  min-width: 290px;
+  max-width: 410px;
   white-space: normal;
   word-break: break-word;
 }
