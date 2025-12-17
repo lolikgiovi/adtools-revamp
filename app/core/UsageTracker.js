@@ -42,6 +42,9 @@ class UsageTracker {
     // Load after flags applied so fallback behaves correctly
     this._state = this._loadFromStorage();
 
+    // Sanitize counts to remove event tracking from legacy data
+    this.sanitizeCounts();
+
     // Start periodic batch flush for remote analytics
     try {
       if (this._batchTimer) clearInterval(this._batchTimer);
@@ -83,6 +86,66 @@ class UsageTracker {
       if (Number.isFinite(ls) && ls > 0) return ls;
     } catch (_) {}
     return this.BATCH_FLUSH_INTERVAL_MS;
+  }
+
+  /**
+   * Sanitize counts to remove event tracking, keeping only feature usage
+   * This removes error/event tracking from counts that should only track features
+   */
+  static sanitizeCounts() {
+    if (!this._state || !this._state.counts) return;
+
+    const counts = this._state.counts;
+
+    // Quick Query: keep only actual query types (merge, insert, update)
+    if (counts['quick-query']) {
+      const allowed = ['merge', 'insert', 'update'];
+      const quickQuery = counts['quick-query'];
+      Object.keys(quickQuery).forEach(action => {
+        if (!allowed.includes(action)) {
+          delete quickQuery[action];
+        }
+      });
+    }
+
+    // Jenkins Runner: keep only run_click (feature usage), remove run_success (event)
+    if (counts['jenkins-runner']) {
+      const allowed = ['run_click'];
+      const jenkinsRunner = counts['jenkins-runner'];
+      Object.keys(jenkinsRunner).forEach(action => {
+        if (!allowed.includes(action)) {
+          delete jenkinsRunner[action];
+        }
+      });
+    }
+
+    // Clean up daily tracking for removed actions
+    if (this._state.daily && typeof this._state.daily === 'object') {
+      Object.keys(this._state.daily).forEach(day => {
+        const dayData = this._state.daily[day];
+        if (dayData && typeof dayData === 'object') {
+          Object.keys(dayData).forEach(key => {
+            // Format: "featureId.action"
+            if (key.startsWith('quick-query.')) {
+              const action = key.split('.')[1];
+              if (!['merge', 'insert', 'update'].includes(action)) {
+                delete dayData[key];
+              }
+            }
+            if (key.startsWith('jenkins-runner.')) {
+              const action = key.split('.')[1];
+              if (action !== 'run_click') {
+                delete dayData[key];
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Persist cleaned data
+    this.flushSync();
+    console.log('Usage counts sanitized - removed event tracking from counts');
   }
 
   /** Track a usage event (simple: increment counts and daily, flush immediately) */
@@ -195,15 +258,8 @@ class UsageTracker {
     const featureKey = String(featureId);
     const actionKey = String(event);
 
-    const counts = this._state.counts;
-    counts[featureKey] = counts[featureKey] || {};
-    counts[featureKey][actionKey] = (counts[featureKey][actionKey] || 0) + 1;
-
-    const day = now.toISOString().slice(0, 10);
-    const k = `${featureKey}.${actionKey}`;
-    this._state.daily = this._state.daily || {};
-    this._state.daily[day] = this._state.daily[day] || {};
-    this._state.daily[day][k] = (this._state.daily[day][k] || 0) + 1;
+    // trackEvent only logs events, does NOT increment counts
+    // Only trackFeature should increment usage counts
 
     const ev = {
       featureId: featureKey,
