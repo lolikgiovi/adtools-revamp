@@ -429,14 +429,23 @@ class MasterLockey extends BaseTool {
         const cell = document.createElement("td");
         const cellText = row[lang] || "";
 
-        // Apply highlighting if searching by content
-        if (shouldHighlight && cellText) {
-          cell.innerHTML = this.highlightText(cellText, searchQuery);
+        // Check if this is a placeholder value (already transformed in service)
+        const isPlaceholder = cellText.startsWith("json raw value is");
+
+        if (isPlaceholder) {
+          // Render placeholder with special styling
+          cell.innerHTML = `<span class="empty-value">${cellText}</span>`;
+          cell.title = cellText;
         } else {
-          cell.textContent = cellText;
+          // Normal value - apply highlighting if searching by content
+          if (shouldHighlight) {
+            cell.innerHTML = this.highlightText(cellText, searchQuery);
+          } else {
+            cell.textContent = cellText;
+          }
+          cell.title = cellText;
         }
 
-        cell.title = cellText;
         tr.appendChild(cell);
       });
 

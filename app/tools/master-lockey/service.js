@@ -53,12 +53,44 @@ class MasterLockeyService {
     const firstLang = languages[0];
     const lockeyKeys = Object.keys(content[firstLang] || {});
 
-    // Build rows: { key, [lang1]: "...", [lang2]: "...", ... }
-    const rows = lockeyKeys.map((key) => {
+    // Reformat content to be key-centric for easier processing
+    const keyCentricData = {};
+    lockeyKeys.forEach((key) => {
+      keyCentricData[key] = {};
+      languages.forEach((lang) => {
+        keyCentricData[key][lang] = content[lang][key];
+      });
+    });
+
+    // Transform data into rows with key + language values
+    const rows = Object.entries(keyCentricData).map(([key, translations]) => {
       const row = { key };
 
       languages.forEach((lang) => {
-        row[lang] = content[lang][key] || "";
+        const value = translations[lang];
+
+        // Debug logging for first few rows
+        if (Object.keys(keyCentricData).indexOf(key) < 3) {
+          console.log(`Key: ${key}, Lang: ${lang}, Value:`, value, `Type: ${typeof value}, Length: ${value?.length}`);
+        }
+
+        // Transform null/undefined/empty values to searchable placeholders
+        if (value === null || value === undefined) {
+          row[lang] = "json raw value is null";
+        } else if (typeof value === "string") {
+          if (value === "") {
+            // Empty string
+            row[lang] = 'json raw value is ""';
+          } else if (value.trim() === "") {
+            // Whitespace only (spaces, tabs, etc.) - has length but trims to empty
+            row[lang] = `json raw value is "${value}"`;
+          } else {
+            // Normal string value
+            row[lang] = value;
+          }
+        } else {
+          row[lang] = value;
+        }
       });
 
       return row;
