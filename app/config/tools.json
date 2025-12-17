@@ -112,6 +112,16 @@
       "showOnHome": true,
       "enabled": true,
       "order": 90
+    },
+    {
+      "id": "master-lockey",
+      "name": "Master Lockey",
+      "category": "config",
+      "icon": "language",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 100
     }
   ]
 }

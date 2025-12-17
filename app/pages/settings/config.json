@@ -17,6 +17,16 @@
           "description": "Add environment ➝ base URL pairs."
         },
         {
+          "key": "config.lockeyDomains",
+          "storageKey": "config.lockeyDomains",
+          "label": "Lockey Domain URLs",
+          "type": "kvlist",
+          "default": [],
+          "keyPlaceholder": "Environment",
+          "valuePlaceholder": "Lockey JSON URL",
+          "description": "Add environment ➝ lockey domain URL pairs for Master Lockey tool."
+        },
+        {
           "key": "config.jenkins.url",
           "storageKey": "config.jenkins.url",
           "label": "Jenkins URL",
