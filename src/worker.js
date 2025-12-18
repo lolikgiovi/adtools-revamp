@@ -95,6 +95,30 @@ export default {
       return methodNotAllowed();
     }
 
+    // Check if current user is admin (for dashboard access)
+    if (url.pathname === "/api/is-admin") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleIsAdmin(request, env);
+    }
+
+    // Dashboard API endpoints (require authentication)
+    if (url.pathname === "/api/dashboard/tools-usage") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleDashboardToolsUsage(request, env);
+    }
+    if (url.pathname === "/api/dashboard/daily-logs") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleDashboardDailyLogs(request, env);
+    }
+    if (url.pathname === "/api/dashboard/device-list") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleDashboardDeviceList(request, env);
+    }
+    if (url.pathname === "/api/dashboard/events") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleDashboardEvents(request, env);
+    }
+
     // Static assets via Wrangler assets binding with SPA fallback
     try {
       const res = await env.ASSETS.fetch(request);
@@ -984,7 +1008,10 @@ async function handleAnalyticsBatchPost(request, env) {
   try {
     const data = await request.json();
     const deviceId = String(data.device_id || data.deviceId || "");
-    const userEmail = String(data.user_email || "").trim().toLowerCase() || null;
+    const userEmail =
+      String(data.user_email || "")
+        .trim()
+        .toLowerCase() || null;
     const events = Array.isArray(data.events) ? data.events : [];
     const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
     const daily = Array.isArray(data.daily_usage) ? data.daily_usage : [];
@@ -1013,7 +1040,10 @@ async function handleAnalyticsBatchPost(request, env) {
       for (const du of deviceUsage) {
         try {
           const devId = String(du.device_id || deviceId || "");
-          const email = String(du.user_email || userEmail || "").trim().toLowerCase() || null;
+          const email =
+            String(du.user_email || userEmail || "")
+              .trim()
+              .toLowerCase() || null;
           const toolId = String(du.tool_id || "unknown");
           const action = String(du.action || "unknown");
           const count = Number(du.count || 0) || 0;
@@ -1062,7 +1092,10 @@ async function handleAnalyticsBatchPost(request, env) {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inserted: { events: insertedEvents, device_usage: upsertsDevice, daily_usage: upsertsDaily, user_usage: upsertsUserTotals } }),
+      JSON.stringify({
+        ok: true,
+        inserted: { events: insertedEvents, device_usage: upsertsDevice, daily_usage: upsertsDaily, user_usage: upsertsUserTotals },
+      }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       }
@@ -1111,15 +1144,18 @@ async function handleAnalyticsBatchGet(request, env) {
     }
 
     if (inserted === 1) {
-      return new Response(
-        JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Device usage recorded successfully" }),
-        {
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Device usage recorded successfully" }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     } else {
       return new Response(
-        JSON.stringify({ ok: false, inserted: 0, method: "GET", error: dbError || "Database unavailable", message: "Failed to record device usage" }),
+        JSON.stringify({
+          ok: false,
+          inserted: 0,
+          method: "GET",
+          error: dbError || "Database unavailable",
+          message: "Failed to record device usage",
+        }),
         {
           status: 500,
           headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -1140,17 +1176,16 @@ async function handleAnalyticsLogPost(request, env) {
     // Check if live logging is enabled
     const enabled = String(env.SEND_LIVE_USER_LOG || "").toLowerCase() === "true";
     if (!enabled) {
-      return new Response(
-        JSON.stringify({ ok: false, message: "Live logging disabled" }),
-        {
-          status: 200, // Return 200 to avoid client errors
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: false, message: "Live logging disabled" }), {
+        status: 200, // Return 200 to avoid client errors
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     }
 
     const data = await request.json();
-    const userEmail = String(data.user_email || "").trim().toLowerCase();
+    const userEmail = String(data.user_email || "")
+      .trim()
+      .toLowerCase();
     const deviceId = String(data.device_id || "unknown");
     const toolId = String(data.tool_id || "unknown");
     const action = String(data.action || "unknown");
@@ -1177,12 +1212,9 @@ async function handleAnalyticsLogPost(request, env) {
     }
 
     if (inserted === 1) {
-      return new Response(
-        JSON.stringify({ ok: true, inserted: 1, message: "Usage log recorded successfully" }),
-        {
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: true, inserted: 1, message: "Usage log recorded successfully" }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     } else {
       return new Response(
         JSON.stringify({ ok: false, inserted: 0, error: dbError || "Database unavailable", message: "Failed to record usage log" }),
@@ -1205,13 +1237,10 @@ async function handleAnalyticsLogGet(request, env) {
     // Check if live logging is enabled
     const enabled = String(env.SEND_LIVE_USER_LOG || "").toLowerCase() === "true";
     if (!enabled) {
-      return new Response(
-        JSON.stringify({ ok: false, message: "Live logging disabled" }),
-        {
-          status: 200, // Return 200 to avoid client errors
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: false, message: "Live logging disabled" }), {
+        status: 200, // Return 200 to avoid client errors
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     }
 
     const url = new URL(request.url);
@@ -1242,15 +1271,18 @@ async function handleAnalyticsLogGet(request, env) {
     }
 
     if (inserted === 1) {
-      return new Response(
-        JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Usage log recorded successfully" }),
-        {
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: true, inserted: 1, method: "GET", message: "Usage log recorded successfully" }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     } else {
       return new Response(
-        JSON.stringify({ ok: false, inserted: 0, method: "GET", error: dbError || "Database unavailable", message: "Failed to record usage log" }),
+        JSON.stringify({
+          ok: false,
+          inserted: 0,
+          method: "GET",
+          error: dbError || "Database unavailable",
+          message: "Failed to record usage log",
+        }),
         {
           status: 500,
           headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -1264,7 +1296,6 @@ async function handleAnalyticsLogGet(request, env) {
     });
   }
 }
-
 
 function tsToGmt7Plain(s) {
   try {
@@ -1482,6 +1513,268 @@ async function handleDevSeedUpdate(request, env) {
       httpMetadata: { contentType: "application/json" },
     });
     return new Response(JSON.stringify({ ok: true, manifestKey, artifactKey }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// Dashboard authentication helper
+async function verifyDashboardAuth(request, env) {
+  try {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return { authorized: false, error: "Missing or invalid authorization header" };
+    }
+
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    if (!token) {
+      return { authorized: false, error: "No token provided" };
+    }
+
+    // Check if session exists in KV
+    if (!env.adtools) {
+      return { authorized: false, error: "Session store unavailable" };
+    }
+
+    const sessionData = await env.adtools.get(`session:${token}`);
+    if (!sessionData) {
+      return { authorized: false, error: "Invalid or expired session" };
+    }
+
+    const session = JSON.parse(sessionData);
+    const userEmail = String(session.email || "")
+      .trim()
+      .toLowerCase();
+
+    // Fetch admin emails from KV
+    let adminEmails = [];
+    try {
+      const adminEmailsData = await env.adtools.get("admin-emails");
+      if (adminEmailsData) {
+        const parsed = JSON.parse(adminEmailsData);
+        if (Array.isArray(parsed)) {
+          adminEmails = parsed.map((e) =>
+            String(e || "")
+              .trim()
+              .toLowerCase()
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching admin emails:", err);
+    }
+
+    // Check if user is admin
+    if (!adminEmails.includes(userEmail)) {
+      return { authorized: false, error: "Unauthorized: Admin access required" };
+    }
+
+    return { authorized: true, email: userEmail };
+  } catch (err) {
+    return { authorized: false, error: String(err) };
+  }
+}
+
+// GET /api/is-admin - Check if current user's email is in admin list
+async function handleIsAdmin(request, env) {
+  try {
+    // Get user email from query parameter
+    const url = new URL(request.url);
+    const email = url.searchParams.get("email");
+
+    if (!email) {
+      return new Response(JSON.stringify({ ok: false, isAdmin: false, error: "Email parameter required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const userEmail = String(email).trim().toLowerCase();
+
+    // Fetch admin emails from KV
+    let adminEmails = [];
+    try {
+      if (env.adtools) {
+        const adminEmailsData = await env.adtools.get("admin-emails");
+        if (adminEmailsData) {
+          const parsed = JSON.parse(adminEmailsData);
+          if (Array.isArray(parsed)) {
+            adminEmails = parsed.map((e) =>
+              String(e || "")
+                .trim()
+                .toLowerCase()
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching admin emails:", err);
+    }
+
+    const isAdmin = adminEmails.includes(userEmail);
+
+    return new Response(JSON.stringify({ ok: true, isAdmin }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, isAdmin: false, error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// GET /api/dashboard/tools-usage
+async function handleDashboardToolsUsage(request, env) {
+  const auth = await verifyDashboardAuth(request, env);
+  if (!auth.authorized) {
+    return new Response(JSON.stringify({ ok: false, error: auth.error }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  try {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `
+      SELECT tool_id, action, SUM(count) AS total_count
+      FROM device_usage
+      WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+      GROUP BY tool_id, action
+      ORDER BY total_count DESC
+    `
+    ).all();
+
+    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// GET /api/dashboard/daily-logs
+async function handleDashboardDailyLogs(request, env) {
+  const auth = await verifyDashboardAuth(request, env);
+  if (!auth.authorized) {
+    return new Response(JSON.stringify({ ok: false, error: auth.error }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  try {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `
+      SELECT u.user_email, d.platform, u.tool_id, u.action, u.created_time
+      FROM usage_log u
+      JOIN device d ON u.device_id = d.device_id
+      WHERE DATE(u.created_time) = DATE('now')
+      ORDER BY u.created_time DESC
+    `
+    ).all();
+
+    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// GET /api/dashboard/device-list
+async function handleDashboardDeviceList(request, env) {
+  const auth = await verifyDashboardAuth(request, env);
+  if (!auth.authorized) {
+    return new Response(JSON.stringify({ ok: false, error: auth.error }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  try {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `
+      SELECT u.email, d.platform
+      FROM device d
+      JOIN users u ON u.id = d.user_id
+      ORDER BY u.email, d.platform
+    `
+    ).all();
+
+    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+}
+
+// GET /api/dashboard/events
+async function handleDashboardEvents(request, env) {
+  const auth = await verifyDashboardAuth(request, env);
+  if (!auth.authorized) {
+    return new Response(JSON.stringify({ ok: false, error: auth.error }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+
+  try {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `
+      SELECT u.email, e.device_id, d.platform, e.feature_id, e.action, e.properties, e.created_time
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      ORDER BY e.created_time DESC
+      LIMIT 100
+    `
+    ).all();
+
+    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {

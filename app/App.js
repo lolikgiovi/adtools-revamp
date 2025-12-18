@@ -27,6 +27,7 @@ import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
+import { MonitoringDashboard } from "./tools/monitoring-dashboard/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
@@ -150,7 +151,8 @@ class App {
     this.categoriesConfigMap.clear();
     if (cats.length > 0) {
       cats.forEach((c) => {
-        if (c && c.id) this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
+        if (c && c.id)
+          this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
       });
     } else {
       // Fallback defaults
@@ -271,6 +273,32 @@ class App {
     // Register Master Lockey
     const masterLockey = new MasterLockey(this.eventBus);
     this.registerTool(masterLockey);
+
+    // Register Monitoring Dashboard (admin only - Easter egg)
+    // Check if user is admin via API
+    (async () => {
+      try {
+        const userEmail = localStorage.getItem("user.email");
+        if (!userEmail) return;
+
+        const response = await fetch(`/api/is-admin?email=${encodeURIComponent(userEmail)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.isAdmin) {
+            const monitoringDashboard = new MonitoringDashboard(this.eventBus);
+            this.registerTool(monitoringDashboard);
+            console.log("🔐 Monitoring Dashboard unlocked for admin");
+
+            // Rebuild sidebar to show the new tool
+            if (this.sidebar) {
+              this.sidebar.renderTools(this.tools);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error checking admin status:", err);
+      }
+    })();
 
     // Add more tools here as they are implemented
   }

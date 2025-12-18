@@ -34,11 +34,12 @@
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-process": "^2.3.0",
     "@tauri-apps/plugin-updater": "^2.9.0",
+    "chart.js": "^4.5.1",
     "handsontable": "^16.0.0",
     "html-minifier": "^4.0.0",
+    "jszip": "^3.10.1",
     "moment": "^2.30.1",
     "monaco-editor": "^0.54.0",
-    "jszip": "^3.10.1",
     "qrcode": "^1.5.4",
     "velocityjs": "^2.1.5"
   }
