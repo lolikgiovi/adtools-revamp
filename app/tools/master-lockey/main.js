@@ -362,7 +362,9 @@ class MasterLockey extends BaseTool {
     if (!searchQuery) {
       this.filteredRows = this.parsedData.rows;
       this.renderTableBody(this.filteredRows, this.parsedData.languages);
-      this.els.resultsCount.style.display = "none";
+      // Show total entry count when no search is active
+      this.els.resultsCount.style.display = "block";
+      this.els.resultsText.textContent = `Showing ${this.formatNumber(this.parsedData.rows.length)} entries`;
       return;
     }
 
@@ -380,7 +382,9 @@ class MasterLockey extends BaseTool {
 
     // Update results count
     this.els.resultsCount.style.display = "block";
-    this.els.resultsText.textContent = `${this.filteredRows.length} of ${this.parsedData.rows.length} results`;
+    this.els.resultsText.textContent = `${this.formatNumber(this.filteredRows.length)} of ${this.formatNumber(
+      this.parsedData.rows.length
+    )} results`;
 
     // Track search with specific action based on mode
     const searchAction = searchMode === "key" ? "search_by_key" : "search_by_content";
@@ -473,6 +477,15 @@ class MasterLockey extends BaseTool {
       spacerAfter.innerHTML = `<td colspan="${languages.length + 1}"></td>`;
       this.els.tableBody.appendChild(spacerAfter);
     }
+  }
+
+  /**
+   * Format number with dot as thousand separator (e.g., 14443 -> 14.443)
+   * @param {number} num - Number to format
+   * @returns {string} Formatted number string
+   */
+  formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   }
 
   escapeSpecialChars(text) {

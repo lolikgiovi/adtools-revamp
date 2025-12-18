@@ -173,5 +173,97 @@ describe("MasterLockey - escapeSpecialChars", () => {
 
       expect(result).toBe("**Bold**\\n*Italic*\\n- List item");
     });
+
+    describe("real-world localization content from sample.json", () => {
+      it("should handle Indonesian text with newlines and special formatting", () => {
+        const input =
+          "Proses akan berlangsung hingga __matchStp__ WIB. Kami akan mengirimkan hasil verifikasi Anda melalui Inbox di Pusat Pesan, ya.";
+        const result = tool.escapeSpecialChars(input);
+
+        // Should preserve underscores and special characters
+        expect(result).toContain("__matchStp__");
+        expect(result).toContain("Pusat Pesan");
+      });
+
+      it("should handle content with HTML-like tags in localization", () => {
+        const input = "Pastikan untuk <b>menyimpan</b> file dengan aman.\nJangan bagikan <i>password</i> Anda.";
+        const result = tool.escapeSpecialChars(input);
+
+        // Should escape newlines but preserve HTML tags
+        expect(result).toContain("\\n");
+        expect(result).toContain("<b>menyimpan</b>");
+        expect(result).toContain("<i>password</i>");
+      });
+
+      it("should escape content with multiple consecutive newlines", () => {
+        const input = "Line 1\n\nLine 2\n\n\nLine 3";
+        const result = tool.escapeSpecialChars(input);
+
+        expect(result).toBe("Line 1\\n\\nLine 2\\n\\n\\nLine 3");
+      });
+
+      it("should handle mixed Indonesian and English content with special chars", () => {
+        const input = "Transfer ke __accountNumber__\nMaksimal Rp __maxAmount__";
+        const result = tool.escapeSpecialChars(input);
+
+        expect(result).toContain("__accountNumber__");
+        expect(result).toContain("__maxAmount__");
+        expect(result).toContain("\\n");
+      });
+
+      it("should preserve apostrophes and quotes in localization strings", () => {
+        const input = "At the user's account, you'll see \"Balance\" information.";
+        const result = tool.escapeSpecialChars(input);
+
+        expect(result).toContain("user's");
+        expect(result).toContain("you'll");
+        expect(result).toContain('"Balance"');
+      });
+
+      it("should handle complex notification templates", () => {
+        const input = "Transaksi Anda:\n- Jumlah: __amount__\n- Waktu: __timestamp__\n- Status: __status__";
+        const result = tool.escapeSpecialChars(input);
+
+        const newlineCount = (result.match(/\\n/g) || []).length;
+        expect(newlineCount).toBe(3);
+        expect(result).toContain("__amount__");
+        expect(result).toContain("__timestamp__");
+        expect(result).toContain("__status__");
+      });
+    });
+
+    describe("highlighting with real-world content", () => {
+      it("should highlight search terms in Indonesian text with HTML", () => {
+        const input = "Kartu <b>Kredit</b> Anda akan diproses";
+        const query = "Kredit";
+        const result = tool.highlightText(input, query);
+
+        // Should escape HTML and highlight the search term
+        expect(result).toContain("&lt;b&gt;");
+        expect(result).toContain("&lt;/b&gt;");
+        expect(result).toContain('<mark class="search-highlight">Kredit</mark>');
+      });
+
+      it("should handle highlighting with newlines and variable placeholders", () => {
+        const input = "Saldo Anda:\n__balance__";
+        const query = "Saldo";
+        const result = tool.highlightText(input, query);
+
+        expect(result).toContain('<mark class="search-highlight">Saldo</mark>');
+        expect(result).toContain("\\n");
+        expect(result).toContain("__balance__");
+      });
+
+      it("should respect whole word when searching Indonesian words", () => {
+        tool.wholeWord = true;
+        const input = "Kartu kredit, kartu debit, dan kartu lainnya";
+        const query = "kartu";
+        const result = tool.highlightText(input, query);
+
+        // Should match all three instances of standalone "kartu"
+        const matches = result.match(/<mark class="search-highlight">kartu<\/mark>/gi);
+        expect(matches).toHaveLength(3);
+      });
+    });
   });
 });

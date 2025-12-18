@@ -109,6 +109,82 @@ describe("MasterLockeyService", () => {
       const result = service.filterByContent(rows, languages, "");
       expect(result).toHaveLength(3);
     });
+
+    describe("whole word search", () => {
+      const testRows = [
+        { key: "btn1", id: "Kartu Kredit", en: "Credit Card" },
+        { key: "btn2", id: "Kartu Kredit Utama", en: "Primary Credit Card" },
+        { key: "btn3", id: "Aktivasi Kartu", en: "Card Activation" },
+        { key: "btn4", id: "testing test tested", en: "test testing" },
+      ];
+
+      it("should match whole word only when enabled", () => {
+        const result = service.filterByContent(testRows, languages, "Kartu", true);
+        // Should match all rows containing "Kartu" as a whole word
+        expect(result).toHaveLength(3);
+        expect(result.map((r) => r.key)).toEqual(["btn1", "btn2", "btn3"]);
+      });
+
+      it("should match partial words when whole word is disabled", () => {
+        const result = service.filterByContent(testRows, languages, "test", false);
+        // Should match "testing", "test", and "tested"
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("btn4");
+      });
+
+      it("should only match exact word when whole word is enabled", () => {
+        const result = service.filterByContent(testRows, languages, "test", true);
+        // Should only match standalone "test", not "testing" or "tested"
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("btn4");
+      });
+
+      it("should handle multi-word queries with whole word search", () => {
+        const result = service.filterByContent(testRows, languages, "Credit Card", true);
+        // Should match both rows containing "Credit Card"
+        expect(result).toHaveLength(2);
+        expect(result.map((r) => r.key)).toEqual(["btn1", "btn2"]);
+      });
+    });
+
+    describe("real-world sample data tests", () => {
+      // Simulate data from sample.json
+      const sampleRows = [
+        {
+          key: "vobddrybt.dd.BxbkLddtCotplytyTdtlyLxbyl",
+          dd: "Bxbk Lxdbbyx",
+          en: "Other Banks",
+        },
+        {
+          key: "vobddrybt.dd.BxbkLddtPopulxkTdtlyLxbyl",
+          dd: "Pxldbg Sykdbg Ddtuju",
+          en: "Popular Destinations",
+        },
+        {
+          key: "vudxAvvvoubtSyttdbgAvtdvxtdobFkyyAvtdvxtdobButtob",
+          dd: "Oky",
+          en: "Okay",
+        },
+      ];
+
+      it("should filter Indonesian text with special characters", () => {
+        const result = service.filterByContent(sampleRows, ["dd", "en"], "Bxbk");
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("vobddrybt.dd.BxbkLddtCotplytyTdtlyLxbyl");
+      });
+
+      it("should handle whole word search with special characters", () => {
+        const result = service.filterByContent(sampleRows, ["dd", "en"], "Pxldbg", true);
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("vobddrybt.dd.BxbkLddtPopulxkTdtlyLxbyl");
+      });
+
+      it("should filter by short abbreviations", () => {
+        const result = service.filterByContent(sampleRows, ["dd", "en"], "Oky", true);
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("vudxAvvvoubtSyttdbgAvtdvxtdobFkyyAvtdvxtdobButtob");
+      });
+    });
   });
 
   describe("filterData", () => {
