@@ -26,6 +26,7 @@ import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { MasterLockey } from "./tools/master-lockey/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
@@ -266,6 +267,10 @@ class App {
     // Register Jenkins Runner
     const jenkinsRunner = new JenkinsRunner(this.eventBus);
     this.registerTool(jenkinsRunner);
+
+    // Register Master Lockey
+    const masterLockey = new MasterLockey(this.eventBus);
+    this.registerTool(masterLockey);
 
     // Add more tools here as they are implemented
   }
