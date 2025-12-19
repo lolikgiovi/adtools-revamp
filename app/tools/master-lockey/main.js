@@ -44,6 +44,9 @@ class MasterLockey extends BaseTool {
 
     // Whole word match setting
     this.wholeWord = false;
+
+    // Confluence integration state
+    this.confluenceResults = null; // Array of { key, status, inRemote }
   }
 
   getIconSvg() {
@@ -92,6 +95,16 @@ class MasterLockey extends BaseTool {
       tableContainer: this.container.querySelector("#table-container"),
       tableHead: this.container.querySelector("#table-head"),
       tableBody: this.container.querySelector("#table-body"),
+      // Confluence elements
+      confluenceSection: this.container.querySelector("#confluence-section"),
+      confluencePageInput: this.container.querySelector("#confluence-page-input"),
+      btnFetchConfluence: this.container.querySelector("#btn-fetch-confluence"),
+      confluenceError: this.container.querySelector("#confluence-error"),
+      confluenceResults: this.container.querySelector("#confluence-results"),
+      confluenceResultsCount: this.container.querySelector("#confluence-results-count"),
+      confluenceTableBody: this.container.querySelector("#confluence-table-body"),
+      btnExportTsv: this.container.querySelector("#btn-export-tsv"),
+      btnExportCsv: this.container.querySelector("#btn-export-csv"),
     };
   }
 
@@ -186,6 +199,33 @@ class MasterLockey extends BaseTool {
     this.els.tableContainer.addEventListener("scroll", () => {
       this.handleTableScroll();
     });
+
+    // Confluence event listeners
+    this.setupConfluenceListeners();
+  }
+
+  setupConfluenceListeners() {
+    // Enable/disable fetch button based on input
+    this.els.confluencePageInput.addEventListener("input", () => {
+      const value = this.els.confluencePageInput.value.trim();
+      this.els.btnFetchConfluence.disabled = !value;
+    });
+
+    // Fetch button click
+    this.els.btnFetchConfluence.addEventListener("click", () => {
+      this.fetchFromConfluence();
+    });
+
+    // Enter key in input
+    this.els.confluencePageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !this.els.btnFetchConfluence.disabled) {
+        this.fetchFromConfluence();
+      }
+    });
+
+    // Export buttons
+    this.els.btnExportTsv.addEventListener("click", () => this.exportResults("tsv"));
+    this.els.btnExportCsv.addEventListener("click", () => this.exportResults("csv"));
   }
 
   applyFilterDebounced() {
@@ -332,6 +372,9 @@ class MasterLockey extends BaseTool {
     // Hide empty state, show table
     this.hideEmpty();
     this.els.tableContainer.style.display = "block";
+
+    // Show Confluence section (Tauri only)
+    this.showConfluenceSection();
   }
 
   buildTableHeaders(languages) {
@@ -576,6 +619,156 @@ class MasterLockey extends BaseTool {
 
   onUnmount() {
     // Cleanup if needed
+  }
+
+  // =====================
+  // Confluence Integration
+  // =====================
+
+  async showConfluenceSection() {
+    try {
+      const hasPat = await this.service.hasConfluencePat();
+      const domain = localStorage.getItem("config.confluence.domain");
+      const username = localStorage.getItem("config.confluence.username");
+
+      if (hasPat && domain && username) {
+        this.els.confluenceSection.style.display = "block";
+      } else {
+        this.els.confluenceSection.style.display = "none";
+      }
+    } catch (_) {
+      // Not available (web mode)
+      this.els.confluenceSection.style.display = "none";
+    }
+  }
+
+  async fetchFromConfluence() {
+    const pageIdOrUrl = this.els.confluencePageInput.value.trim();
+    if (!pageIdOrUrl) return;
+
+    // Show loading
+    this.els.btnFetchConfluence.classList.add("loading");
+    this.els.btnFetchConfluence.querySelector(".btn-spinner").style.display = "inline";
+    this.els.btnFetchConfluence.disabled = true;
+    this.hideConfluenceError();
+    this.els.confluenceResults.style.display = "none";
+
+    try {
+      UsageTracker.trackEvent("master_lockey", "confluence_fetch", { pageIdOrUrl });
+
+      // Fetch page content
+      const htmlContent = await this.service.fetchConfluencePage(pageIdOrUrl);
+
+      // Parse table for lockeys
+      const lockeys = this.service.parseConfluenceTableForLockeys(htmlContent);
+
+      if (lockeys.length === 0) {
+        this.showConfluenceError(
+          "No lockey table found on this page. Make sure the table has a column named 'Localization Key', 'Lockey', or 'Loc Key'."
+        );
+        return;
+      }
+
+      // Compare with remote data
+      this.confluenceResults = this.service.compareLockeyWithRemote(lockeys, this.parsedData);
+
+      // Display results
+      this.displayConfluenceResults();
+
+      UsageTracker.trackEvent("master_lockey", "confluence_fetch_success", {
+        lockeysFound: lockeys.length,
+      });
+    } catch (error) {
+      console.error("Confluence fetch error:", error);
+      this.showConfluenceError(error.message);
+
+      UsageTracker.trackEvent("master_lockey", "confluence_fetch_error", {
+        error: error.message,
+      });
+    } finally {
+      // Hide loading
+      this.els.btnFetchConfluence.classList.remove("loading");
+      this.els.btnFetchConfluence.querySelector(".btn-spinner").style.display = "none";
+      this.els.btnFetchConfluence.disabled = false;
+    }
+  }
+
+  displayConfluenceResults() {
+    if (!this.confluenceResults) return;
+
+    // Update count
+    this.els.confluenceResultsCount.textContent = `Found ${this.confluenceResults.length} lockeys`;
+
+    // Clear and populate table
+    this.els.confluenceTableBody.innerHTML = "";
+
+    this.confluenceResults.forEach((item) => {
+      const tr = document.createElement("tr");
+
+      // Lockey cell
+      const keyCell = document.createElement("td");
+      keyCell.textContent = item.key;
+      keyCell.className = `status-${item.status}`;
+      tr.appendChild(keyCell);
+
+      // Status cell
+      const statusCell = document.createElement("td");
+      const statusLabels = {
+        plain: "Released",
+        new: "New (In Dev)",
+        removed: "Removed (Previous)",
+        "removed-new": "Removed (Current)",
+      };
+      statusCell.textContent = statusLabels[item.status] || item.status;
+      statusCell.className = `status-${item.status}`;
+      tr.appendChild(statusCell);
+
+      // In Remote cell
+      const inRemoteCell = document.createElement("td");
+      inRemoteCell.textContent = item.inRemote ? "✓" : "✗";
+      inRemoteCell.className = item.inRemote ? "in-remote-yes" : "in-remote-no";
+      tr.appendChild(inRemoteCell);
+
+      this.els.confluenceTableBody.appendChild(tr);
+    });
+
+    // Show results
+    this.els.confluenceResults.style.display = "block";
+  }
+
+  showConfluenceError(message) {
+    this.els.confluenceError.textContent = message;
+    this.els.confluenceError.style.display = "block";
+  }
+
+  hideConfluenceError() {
+    this.els.confluenceError.style.display = "none";
+  }
+
+  exportResults(format) {
+    if (!this.confluenceResults || this.confluenceResults.length === 0) return;
+
+    let content;
+    if (format === "tsv") {
+      content = this.service.exportAsTsv(this.confluenceResults);
+    } else {
+      content = this.service.exportAsCsv(this.confluenceResults);
+    }
+
+    // Copy to clipboard
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        this.showSuccess(`Copied ${this.confluenceResults.length} rows as ${format.toUpperCase()}`);
+
+        UsageTracker.trackEvent("master_lockey", `confluence_export_${format}`, {
+          rowCount: this.confluenceResults.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
   }
 }
 

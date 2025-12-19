@@ -224,4 +224,235 @@ describe("MasterLockeyService", () => {
       expect(service.formatTimestamp(now - 172800000)).toContain("day"); // 2 days ago
     });
   });
+
+  // =====================
+  // Confluence Integration Tests
+  // =====================
+
+  describe("parseConfluenceTableForLockeys", () => {
+    it("should parse table with 'Localization Key' header", () => {
+      const html = `
+        <table>
+          <tr><th>Localization Key</th><th>Description</th></tr>
+          <tr><td>homeScreenTitle</td><td>Home Title</td></tr>
+          <tr><td>homeScreenSubtitle</td><td>Home Subtitle</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(2);
+      expect(result[0].key).toBe("homeScreenTitle");
+      expect(result[0].status).toBe("plain");
+    });
+
+    it("should parse table with 'Lockey' header (case-insensitive)", () => {
+      const html = `
+        <table>
+          <tr><th>LOCKEY</th></tr>
+          <tr><td>myKey</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("myKey");
+    });
+
+    it("should detect colored text as 'new' status", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td><span style="color: blue;">newFeatureKey</span></td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("new");
+    });
+
+    it("should detect strikethrough as 'removed' status", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td><del>oldKeyRemoved</del></td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("removed");
+    });
+
+    it("should detect color + strikethrough as 'removed-new' status", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td><del><span style="color: red;">recentlyRemovedKey</span></del></td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe("removed-new");
+    });
+
+    it("should return empty array for empty content", () => {
+      expect(service.parseConfluenceTableForLockeys("")).toEqual([]);
+      expect(service.parseConfluenceTableForLockeys(null)).toEqual([]);
+    });
+
+    it("should return empty array if no lockey column found", () => {
+      const html = `
+        <table>
+          <tr><th>Name</th><th>Value</th></tr>
+          <tr><td>foo</td><td>bar</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(0);
+    });
+
+    it("should reject dotted values like 'context.key' in main column", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>context.someKey</td></tr>
+          <tr><td>prefix.anotherKey</td></tr>
+          <tr><td>validCamelCase</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("validCamelCase");
+    });
+
+    it("should extract camelCase value from nested table with 'value' column", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>
+            <table>
+              <tr><th>Context</th><th>Value</th></tr>
+              <tr><td>context.x.something</td><td>myLockeyKey</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("myLockeyKey");
+    });
+
+    it("should extract from nested table with 'lockey' column", () => {
+      const html = `
+        <table>
+          <tr><th>Localization Key</th></tr>
+          <tr><td>
+            <table>
+              <tr><th>Lockey</th><th>Other</th></tr>
+              <tr><td>camelCaseValue</td><td>ignored</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("camelCaseValue");
+    });
+
+    it("should reject dotted values like 'context.x.key' from nested tables", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>
+            <table>
+              <tr><th>Value</th></tr>
+              <tr><td>context.x.someKey</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("isStandaloneCamelCase", () => {
+    it("should accept valid camelCase identifiers", () => {
+      expect(service.isStandaloneCamelCase("myKey")).toBe(true);
+      expect(service.isStandaloneCamelCase("anotherLockeyName")).toBe(true);
+      expect(service.isStandaloneCamelCase("simpleValue")).toBe(true);
+      expect(service.isStandaloneCamelCase("key123")).toBe(true);
+    });
+
+    it("should reject dotted values", () => {
+      expect(service.isStandaloneCamelCase("context.x.key")).toBe(false);
+      expect(service.isStandaloneCamelCase("prefix.value")).toBe(false);
+      expect(service.isStandaloneCamelCase("x.camelCase")).toBe(false);
+    });
+
+    it("should reject invalid formats", () => {
+      expect(service.isStandaloneCamelCase("")).toBe(false);
+      expect(service.isStandaloneCamelCase(null)).toBe(false);
+      expect(service.isStandaloneCamelCase("123key")).toBe(false);
+      expect(service.isStandaloneCamelCase("Key")).toBe(false); // Starts with uppercase
+    });
+  });
+
+  describe("compareLockeyWithRemote", () => {
+    const remoteData = {
+      rows: [{ key: "existing.key1" }, { key: "existing.key2" }],
+    };
+
+    it("should mark existing keys as inRemote: true", () => {
+      const lockeys = [{ key: "existing.key1", status: "plain" }];
+      const result = service.compareLockeyWithRemote(lockeys, remoteData);
+      expect(result[0].inRemote).toBe(true);
+    });
+
+    it("should mark missing keys as inRemote: false", () => {
+      const lockeys = [{ key: "missing.key", status: "plain" }];
+      const result = service.compareLockeyWithRemote(lockeys, remoteData);
+      expect(result[0].inRemote).toBe(false);
+    });
+
+    it("should handle empty remoteData", () => {
+      const lockeys = [{ key: "test.key", status: "plain" }];
+      const result = service.compareLockeyWithRemote(lockeys, null);
+      expect(result[0].inRemote).toBe(false);
+    });
+
+    it("should preserve status from input", () => {
+      const lockeys = [{ key: "existing.key1", status: "new" }];
+      const result = service.compareLockeyWithRemote(lockeys, remoteData);
+      expect(result[0].status).toBe("new");
+      expect(result[0].inRemote).toBe(true);
+    });
+  });
+
+  describe("exportAsTsv", () => {
+    it("should format data as TSV with header", () => {
+      const data = [
+        { key: "key1", status: "plain", inRemote: true },
+        { key: "key2", status: "new", inRemote: false },
+      ];
+      const result = service.exportAsTsv(data);
+      const lines = result.split("\n");
+      expect(lines[0]).toBe("Lockey\tStatus\tIn Remote");
+      expect(lines[1]).toBe("key1\tplain\tYes");
+      expect(lines[2]).toBe("key2\tnew\tNo");
+    });
+  });
+
+  describe("exportAsCsv", () => {
+    it("should format data as CSV with header", () => {
+      const data = [{ key: "key1", status: "plain", inRemote: true }];
+      const result = service.exportAsCsv(data);
+      const lines = result.split("\n");
+      expect(lines[0]).toBe("Lockey,Status,In Remote");
+      expect(lines[1]).toBe("key1,plain,Yes");
+    });
+
+    it("should escape commas in values", () => {
+      const data = [{ key: "key,with,commas", status: "plain", inRemote: true }];
+      const result = service.exportAsCsv(data);
+      expect(result).toContain('"key,with,commas"');
+    });
+  });
 });

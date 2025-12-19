@@ -79,6 +79,44 @@ export const MasterLockeyTemplate = /* html */ `
                 </tbody>
             </table>
         </div>
+
+        <!-- Confluence Integration Section -->
+        <div id="confluence-section" class="confluence-section" style="display: none;">
+            <div class="confluence-header">
+                <h4>📄 Fetch from Confluence</h4>
+            </div>
+            <div class="confluence-controls">
+                <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Enter page URL or ID">
+                <button id="btn-fetch-confluence" class="btn-confluence" disabled>
+                    <span class="btn-text">Fetch Lockeys</span>
+                    <span class="btn-spinner" style="display: none;">⟳</span>
+                </button>
+            </div>
+            <div id="confluence-error" class="confluence-error" style="display: none;"></div>
+            <div id="confluence-results" class="confluence-results" style="display: none;">
+                <div class="results-header">
+                    <span id="confluence-results-count"></span>
+                    <div class="export-buttons">
+                        <button id="btn-export-tsv" class="btn-export" title="Copy as Tab-Separated Values">📋 TSV</button>
+                        <button id="btn-export-csv" class="btn-export" title="Copy as Comma-Separated Values">📋 CSV</button>
+                    </div>
+                </div>
+                <div class="confluence-table-container">
+                    <table class="confluence-table" id="confluence-table">
+                        <thead>
+                            <tr>
+                                <th>Lockey</th>
+                                <th>Status</th>
+                                <th>In Remote</th>
+                            </tr>
+                        </thead>
+                        <tbody id="confluence-table-body">
+                            <!-- Confluence lockey rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 `;
