@@ -322,7 +322,7 @@ async fn confluence_fetch_page(
   domain: String,
   page_id: String,
   username: String
-) -> Result<String, String> {
+) -> Result<confluence::PageContent, String> {
   let pat = load_confluence_pat().await?;
   let client = http_client();
   confluence::fetch_page_content(&client, &domain, &page_id, &username, &pat).await

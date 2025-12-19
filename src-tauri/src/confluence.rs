@@ -12,6 +12,14 @@ pub struct PageInfo {
     pub space_key: Option<String>,
 }
 
+/// Page content returned from fetch
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PageContent {
+    pub id: String,
+    pub title: String,
+    pub html: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct ContentResponse {
@@ -55,14 +63,14 @@ struct Expandable {
 }
 
 /// Fetch page content from Confluence
-/// Returns the HTML body storage content
+/// Returns the page ID, title, and HTML body storage content
 pub async fn fetch_page_content(
     client: &Client,
     domain: &str,
     page_id: &str,
     _username: &str,
     pat: &str,
-) -> Result<String, String> {
+) -> Result<PageContent, String> {
     let url = format!(
         "{}/rest/api/content/{}?expand=body.storage",
         domain.trim_end_matches('/'),
@@ -111,7 +119,11 @@ pub async fn fetch_page_content(
         .map(|s| s.value)
         .unwrap_or_default();
 
-    Ok(body_html)
+    Ok(PageContent {
+        id: content.id,
+        title: content.title,
+        html: body_html,
+    })
 }
 
 /// Search for pages in Confluence
@@ -215,7 +227,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(result.contains("<table>"));
+        assert_eq!(result.id, "12345");
+        assert_eq!(result.title, "Test Page");
+        assert!(result.html.contains("<table>"));
     }
 
     #[tokio::test]

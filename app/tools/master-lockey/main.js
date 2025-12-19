@@ -47,6 +47,9 @@ class MasterLockey extends BaseTool {
 
     // Confluence integration state
     this.confluenceResults = null; // Array of { key, status, inRemote }
+    this.currentConfluencePageId = null;
+    this.currentConfluenceTitle = null;
+    this.hiddenKeys = [];
   }
 
   getIconSvg() {
@@ -97,14 +100,23 @@ class MasterLockey extends BaseTool {
       tableBody: this.container.querySelector("#table-body"),
       // Confluence elements
       confluenceSection: this.container.querySelector("#confluence-section"),
+      cachedPagesSelector: this.container.querySelector("#cached-pages-selector"),
+      btnRefreshPage: this.container.querySelector("#btn-refresh-page"),
+      btnDeleteCache: this.container.querySelector("#btn-delete-cache"),
       confluencePageInput: this.container.querySelector("#confluence-page-input"),
       btnFetchConfluence: this.container.querySelector("#btn-fetch-confluence"),
       confluenceError: this.container.querySelector("#confluence-error"),
       confluenceResults: this.container.querySelector("#confluence-results"),
+      confluencePageTitle: this.container.querySelector("#confluence-page-title"),
       confluenceResultsCount: this.container.querySelector("#confluence-results-count"),
       confluenceTableBody: this.container.querySelector("#confluence-table-body"),
       btnExportTsv: this.container.querySelector("#btn-export-tsv"),
       btnExportCsv: this.container.querySelector("#btn-export-csv"),
+      hiddenKeysSection: this.container.querySelector("#hidden-keys-section"),
+      hiddenKeysToggle: this.container.querySelector("#hidden-keys-toggle"),
+      hiddenKeysCount: this.container.querySelector("#hidden-keys-count"),
+      hiddenKeysContent: this.container.querySelector("#hidden-keys-content"),
+      hiddenKeysBody: this.container.querySelector("#hidden-keys-body"),
     };
   }
 
@@ -226,6 +238,40 @@ class MasterLockey extends BaseTool {
     // Export buttons
     this.els.btnExportTsv.addEventListener("click", () => this.exportResults("tsv"));
     this.els.btnExportCsv.addEventListener("click", () => this.exportResults("csv"));
+
+    // Cached pages selector change
+    this.els.cachedPagesSelector.addEventListener("change", () => {
+      const pageId = this.els.cachedPagesSelector.value;
+      if (pageId) {
+        this.loadCachedPage(pageId);
+        this.els.btnRefreshPage.disabled = false;
+        this.els.btnDeleteCache.disabled = false;
+      } else {
+        this.els.btnRefreshPage.disabled = true;
+        this.els.btnDeleteCache.disabled = true;
+        this.els.confluenceResults.style.display = "none";
+      }
+    });
+
+    // Refresh button
+    this.els.btnRefreshPage.addEventListener("click", () => {
+      if (this.currentConfluencePageId) {
+        this.fetchFromConfluence(this.currentConfluencePageId, true);
+      }
+    });
+
+    // Delete cache button
+    this.els.btnDeleteCache.addEventListener("click", () => {
+      if (this.currentConfluencePageId) {
+        this.deleteCurrentCache();
+      }
+    });
+
+    // Hidden keys toggle
+    this.els.hiddenKeysToggle.addEventListener("click", () => {
+      const isExpanded = this.els.hiddenKeysToggle.classList.toggle("expanded");
+      this.els.hiddenKeysContent.style.display = isExpanded ? "block" : "none";
+    });
   }
 
   applyFilterDebounced() {
@@ -633,6 +679,8 @@ class MasterLockey extends BaseTool {
 
       if (hasPat && domain && username) {
         this.els.confluenceSection.style.display = "block";
+        // Load cached pages dropdown
+        await this.loadCachedPagesDropdown();
       } else {
         this.els.confluenceSection.style.display = "none";
       }
@@ -642,8 +690,46 @@ class MasterLockey extends BaseTool {
     }
   }
 
-  async fetchFromConfluence() {
-    const pageIdOrUrl = this.els.confluencePageInput.value.trim();
+  async loadCachedPagesDropdown() {
+    try {
+      const pages = await this.service.loadAllCachedPages();
+
+      // Clear and rebuild dropdown
+      this.els.cachedPagesSelector.innerHTML = '<option value="">-- Select cached page or enter new --</option>';
+
+      pages.forEach((page) => {
+        const option = document.createElement("option");
+        option.value = page.pageId;
+        option.textContent = page.title || `Page ${page.pageId}`;
+        this.els.cachedPagesSelector.appendChild(option);
+      });
+    } catch (error) {
+      console.error("Failed to load cached pages:", error);
+    }
+  }
+
+  async loadCachedPage(pageId) {
+    try {
+      const cached = await this.service.loadConfluenceCache(pageId);
+      if (!cached) {
+        this.showConfluenceError("Cached page not found");
+        return;
+      }
+
+      this.currentConfluencePageId = pageId;
+      this.currentConfluenceTitle = cached.title;
+      this.confluenceResults = cached.lockeys;
+      this.hiddenKeys = cached.hiddenKeys || [];
+
+      this.displayConfluenceResults();
+    } catch (error) {
+      console.error("Failed to load cached page:", error);
+      this.showConfluenceError(error.message);
+    }
+  }
+
+  async fetchFromConfluence(pageIdOverride = null, isRefresh = false) {
+    const pageIdOrUrl = pageIdOverride || this.els.confluencePageInput.value.trim();
     if (!pageIdOrUrl) return;
 
     // Show loading
@@ -654,13 +740,13 @@ class MasterLockey extends BaseTool {
     this.els.confluenceResults.style.display = "none";
 
     try {
-      UsageTracker.trackEvent("master_lockey", "confluence_fetch", { pageIdOrUrl });
+      UsageTracker.trackEvent("master_lockey", "confluence_fetch", { pageIdOrUrl, isRefresh });
 
-      // Fetch page content
-      const htmlContent = await this.service.fetchConfluencePage(pageIdOrUrl);
+      // Fetch page content (returns { id, title, html })
+      const pageData = await this.service.fetchConfluencePage(pageIdOrUrl);
 
       // Parse table for lockeys
-      const lockeys = this.service.parseConfluenceTableForLockeys(htmlContent);
+      const lockeys = this.service.parseConfluenceTableForLockeys(pageData.html);
 
       if (lockeys.length === 0) {
         this.showConfluenceError(
@@ -670,13 +756,39 @@ class MasterLockey extends BaseTool {
       }
 
       // Compare with remote data
-      this.confluenceResults = this.service.compareLockeyWithRemote(lockeys, this.parsedData);
+      const comparedLockeys = this.service.compareLockeyWithRemote(lockeys, this.parsedData);
+
+      // Format title
+      const formattedTitle = this.service.formatPageTitle(pageData.title);
+
+      // Save to cache (preserves hidden keys on refresh)
+      await this.service.saveConfluenceCache(pageData.id, formattedTitle, comparedLockeys);
+
+      // Update state
+      this.currentConfluencePageId = pageData.id;
+      this.currentConfluenceTitle = formattedTitle;
+      this.confluenceResults = comparedLockeys;
+
+      // Load hidden keys from cache
+      const cached = await this.service.loadConfluenceCache(pageData.id);
+      this.hiddenKeys = cached?.hiddenKeys || [];
 
       // Display results
       this.displayConfluenceResults();
 
+      // Refresh dropdown and select current page
+      await this.loadCachedPagesDropdown();
+      this.els.cachedPagesSelector.value = pageData.id;
+      this.els.btnRefreshPage.disabled = false;
+      this.els.btnDeleteCache.disabled = false;
+
+      // Clear input
+      this.els.confluencePageInput.value = "";
+      this.els.btnFetchConfluence.disabled = true;
+
       UsageTracker.trackEvent("master_lockey", "confluence_fetch_success", {
         lockeysFound: lockeys.length,
+        pageId: pageData.id,
       });
     } catch (error) {
       console.error("Confluence fetch error:", error);
@@ -689,20 +801,29 @@ class MasterLockey extends BaseTool {
       // Hide loading
       this.els.btnFetchConfluence.classList.remove("loading");
       this.els.btnFetchConfluence.querySelector(".btn-spinner").style.display = "none";
-      this.els.btnFetchConfluence.disabled = false;
+      this.els.btnFetchConfluence.disabled = !this.els.confluencePageInput.value.trim();
     }
   }
 
   displayConfluenceResults() {
     if (!this.confluenceResults) return;
 
+    const hiddenKeys = this.hiddenKeys || [];
+    const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
+    const hiddenResults = this.confluenceResults.filter((r) => hiddenKeys.includes(r.key));
+
+    // Update page title
+    this.els.confluencePageTitle.textContent = this.currentConfluenceTitle || "";
+
     // Update count
-    this.els.confluenceResultsCount.textContent = `Found ${this.confluenceResults.length} lockeys`;
+    this.els.confluenceResultsCount.textContent = `${visibleResults.length} lockeys${
+      hiddenResults.length > 0 ? ` (${hiddenResults.length} hidden)` : ""
+    }`;
 
     // Clear and populate table
     this.els.confluenceTableBody.innerHTML = "";
 
-    this.confluenceResults.forEach((item) => {
+    visibleResults.forEach((item) => {
       const tr = document.createElement("tr");
 
       // Lockey cell
@@ -729,11 +850,111 @@ class MasterLockey extends BaseTool {
       inRemoteCell.className = item.inRemote ? "in-remote-yes" : "in-remote-no";
       tr.appendChild(inRemoteCell);
 
+      // Action cell
+      const actionCell = document.createElement("td");
+      const hideBtn = document.createElement("button");
+      hideBtn.className = "btn-hide";
+      hideBtn.textContent = "Hide";
+      hideBtn.addEventListener("click", () => this.hideKey(item.key));
+      actionCell.appendChild(hideBtn);
+      tr.appendChild(actionCell);
+
       this.els.confluenceTableBody.appendChild(tr);
     });
 
+    // Update hidden keys section
+    this.displayHiddenKeys(hiddenResults);
+
     // Show results
     this.els.confluenceResults.style.display = "block";
+  }
+
+  displayHiddenKeys(hiddenResults) {
+    if (hiddenResults.length === 0) {
+      this.els.hiddenKeysSection.style.display = "none";
+      return;
+    }
+
+    this.els.hiddenKeysSection.style.display = "block";
+    this.els.hiddenKeysCount.textContent = hiddenResults.length;
+    this.els.hiddenKeysBody.innerHTML = "";
+
+    hiddenResults.forEach((item) => {
+      const tr = document.createElement("tr");
+
+      // Lockey cell
+      const keyCell = document.createElement("td");
+      keyCell.textContent = item.key;
+      tr.appendChild(keyCell);
+
+      // Action cell
+      const actionCell = document.createElement("td");
+      const unhideBtn = document.createElement("button");
+      unhideBtn.className = "btn-unhide";
+      unhideBtn.textContent = "Unhide";
+      unhideBtn.addEventListener("click", () => this.unhideKey(item.key));
+      actionCell.appendChild(unhideBtn);
+      tr.appendChild(actionCell);
+
+      this.els.hiddenKeysBody.appendChild(tr);
+    });
+  }
+
+  async hideKey(key) {
+    if (!this.currentConfluencePageId) return;
+
+    try {
+      await this.service.hideKey(this.currentConfluencePageId, key);
+      this.hiddenKeys.push(key);
+      this.displayConfluenceResults();
+
+      UsageTracker.trackEvent("master_lockey", "confluence_hide_key", { key });
+    } catch (error) {
+      console.error("Failed to hide key:", error);
+    }
+  }
+
+  async unhideKey(key) {
+    if (!this.currentConfluencePageId) return;
+
+    try {
+      await this.service.unhideKey(this.currentConfluencePageId, key);
+      this.hiddenKeys = this.hiddenKeys.filter((k) => k !== key);
+      this.displayConfluenceResults();
+
+      UsageTracker.trackEvent("master_lockey", "confluence_unhide_key", { key });
+    } catch (error) {
+      console.error("Failed to unhide key:", error);
+    }
+  }
+
+  async deleteCurrentCache() {
+    if (!this.currentConfluencePageId) return;
+
+    try {
+      await this.service.deleteConfluenceCache(this.currentConfluencePageId);
+
+      // Reset state
+      this.currentConfluencePageId = null;
+      this.currentConfluenceTitle = null;
+      this.confluenceResults = null;
+      this.hiddenKeys = [];
+
+      // Clear UI
+      this.els.confluenceResults.style.display = "none";
+      this.els.cachedPagesSelector.value = "";
+      this.els.btnRefreshPage.disabled = true;
+      this.els.btnDeleteCache.disabled = true;
+
+      // Refresh dropdown
+      await this.loadCachedPagesDropdown();
+
+      this.showSuccess("Cache deleted");
+      UsageTracker.trackEvent("master_lockey", "confluence_delete_cache");
+    } catch (error) {
+      console.error("Failed to delete cache:", error);
+      this.showError("Delete Failed", error.message);
+    }
   }
 
   showConfluenceError(message) {
@@ -748,21 +969,25 @@ class MasterLockey extends BaseTool {
   exportResults(format) {
     if (!this.confluenceResults || this.confluenceResults.length === 0) return;
 
+    // Export only visible (non-hidden) results
+    const hiddenKeys = this.hiddenKeys || [];
+    const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
+
     let content;
     if (format === "tsv") {
-      content = this.service.exportAsTsv(this.confluenceResults);
+      content = this.service.exportAsTsv(visibleResults);
     } else {
-      content = this.service.exportAsCsv(this.confluenceResults);
+      content = this.service.exportAsCsv(visibleResults);
     }
 
     // Copy to clipboard
     navigator.clipboard
       .writeText(content)
       .then(() => {
-        this.showSuccess(`Copied ${this.confluenceResults.length} rows as ${format.toUpperCase()}`);
+        this.showSuccess(`Copied ${visibleResults.length} rows as ${format.toUpperCase()}`);
 
         UsageTracker.trackEvent("master_lockey", `confluence_export_${format}`, {
-          rowCount: this.confluenceResults.length,
+          rowCount: visibleResults.length,
         });
       })
       .catch((err) => {

@@ -239,7 +239,7 @@ class MasterLockeyService {
   /**
    * Fetch Confluence page content
    * @param {string} pageIdOrUrl - Page ID or full Confluence URL
-   * @returns {Promise<string>} HTML content
+   * @returns {Promise<{id: string, title: string, html: string}>} Page content with id, title, and html
    */
   async fetchConfluencePage(pageIdOrUrl) {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -262,6 +262,7 @@ class MasterLockeyService {
     }
 
     try {
+      // Returns { id, title, html }
       return await invoke("confluence_fetch_page", { domain, pageId, username });
     } catch (error) {
       if (typeof error === "string") throw new Error(error);
@@ -535,6 +536,191 @@ class MasterLockeyService {
     const header = "Lockey,Status,In Remote";
     const rows = data.map((row) => `${escapeCSV(row.key)},${escapeCSV(row.status)},${row.inRemote ? "Yes" : "No"}`);
     return [header, ...rows].join("\n");
+  }
+
+  // =====================
+  // IndexedDB Cache for Confluence Pages
+  // =====================
+
+  /**
+   * Initialize IndexedDB for Confluence page cache
+   * @returns {Promise<IDBDatabase>}
+   */
+  async initConfluenceDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("MasterLockeyConfluence", 1);
+
+      request.onerror = () => reject(new Error("Failed to open IndexedDB"));
+
+      request.onsuccess = () => resolve(request.result);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains("confluencePages")) {
+          const store = db.createObjectStore("confluencePages", { keyPath: "pageId" });
+          store.createIndex("timestamp", "timestamp", { unique: false });
+        }
+      };
+    });
+  }
+
+  /**
+   * Save parsed Confluence page to cache
+   * @param {string} pageId - Confluence page ID
+   * @param {string} title - Page title (formatted)
+   * @param {Array} lockeys - Parsed lockeys with status and inRemote
+   * @param {string[]} hiddenKeys - Keys hidden by user (optional, preserves existing if not provided)
+   * @returns {Promise<void>}
+   */
+  async saveConfluenceCache(pageId, title, lockeys, hiddenKeys = null) {
+    const db = await this.initConfluenceDB();
+
+    // If hiddenKeys not provided, try to preserve existing ones
+    let existingHiddenKeys = [];
+    if (hiddenKeys === null) {
+      try {
+        const existing = await this.loadConfluenceCache(pageId);
+        if (existing && existing.hiddenKeys) {
+          existingHiddenKeys = existing.hiddenKeys;
+        }
+      } catch (_) {
+        // No existing cache, use empty array
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("confluencePages", "readwrite");
+      const store = tx.objectStore("confluencePages");
+
+      const data = {
+        pageId,
+        title,
+        lockeys,
+        hiddenKeys: hiddenKeys !== null ? hiddenKeys : existingHiddenKeys,
+        timestamp: Date.now(),
+      };
+
+      const request = store.put(data);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(new Error("Failed to save cache"));
+
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  /**
+   * Load cached Confluence page by ID
+   * @param {string} pageId - Confluence page ID
+   * @returns {Promise<Object|null>} Cached data or null
+   */
+  async loadConfluenceCache(pageId) {
+    const db = await this.initConfluenceDB();
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("confluencePages", "readonly");
+      const store = tx.objectStore("confluencePages");
+      const request = store.get(pageId);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(new Error("Failed to load cache"));
+
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  /**
+   * Load all cached Confluence pages (for dropdown)
+   * @returns {Promise<Array<{pageId, title, timestamp}>>}
+   */
+  async loadAllCachedPages() {
+    const db = await this.initConfluenceDB();
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("confluencePages", "readonly");
+      const store = tx.objectStore("confluencePages");
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const pages = (request.result || []).map(({ pageId, title, timestamp }) => ({
+          pageId,
+          title,
+          timestamp,
+        }));
+        // Sort by timestamp descending (most recent first)
+        pages.sort((a, b) => b.timestamp - a.timestamp);
+        resolve(pages);
+      };
+      request.onerror = () => reject(new Error("Failed to load cached pages"));
+
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  /**
+   * Delete cached Confluence page
+   * @param {string} pageId - Confluence page ID
+   * @returns {Promise<void>}
+   */
+  async deleteConfluenceCache(pageId) {
+    const db = await this.initConfluenceDB();
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("confluencePages", "readwrite");
+      const store = tx.objectStore("confluencePages");
+      const request = store.delete(pageId);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(new Error("Failed to delete cache"));
+
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  /**
+   * Hide a key for a specific page
+   * @param {string} pageId - Confluence page ID
+   * @param {string} key - Lockey key to hide
+   * @returns {Promise<void>}
+   */
+  async hideKey(pageId, key) {
+    const cached = await this.loadConfluenceCache(pageId);
+    if (!cached) throw new Error("Page not found in cache");
+
+    const hiddenKeys = cached.hiddenKeys || [];
+    if (!hiddenKeys.includes(key)) {
+      hiddenKeys.push(key);
+    }
+
+    await this.saveConfluenceCache(pageId, cached.title, cached.lockeys, hiddenKeys);
+  }
+
+  /**
+   * Unhide a key for a specific page
+   * @param {string} pageId - Confluence page ID
+   * @param {string} key - Lockey key to unhide
+   * @returns {Promise<void>}
+   */
+  async unhideKey(pageId, key) {
+    const cached = await this.loadConfluenceCache(pageId);
+    if (!cached) throw new Error("Page not found in cache");
+
+    const hiddenKeys = (cached.hiddenKeys || []).filter((k) => k !== key);
+    await this.saveConfluenceCache(pageId, cached.title, cached.lockeys, hiddenKeys);
+  }
+
+  /**
+   * Format Confluence page title
+   * Transforms "Rxx - Mobile Screen - User Settings Screen" → "Rxx - User Settings Screen"
+   * @param {string} title - Original page title
+   * @returns {string} Formatted title
+   */
+  formatPageTitle(title) {
+    if (!title) return title;
+    // Remove " - Mobile Screen" segment (case-insensitive)
+    return title
+      .replace(/ - Mobile Screen -/i, " -")
+      .replace(/ - Mobile Screen$/i, "")
+      .trim();
   }
 }
 

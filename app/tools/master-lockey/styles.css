@@ -650,3 +650,138 @@
   color: hsl(var(--destructive));
   font-weight: 600;
 }
+
+/* Cached Pages Row */
+.cached-pages-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cached-pages-selector {
+  flex: 1;
+  max-width: 400px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.btn-icon {
+  padding: 6px 10px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: hsl(var(--accent));
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon.btn-danger:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.1);
+  border-color: hsl(var(--destructive));
+}
+
+/* Page Title in Results */
+.results-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.page-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: hsl(var(--foreground));
+}
+
+.results-count {
+  font-size: 0.7rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Hide/Unhide Buttons */
+.btn-hide {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.65rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-hide:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.btn-unhide {
+  padding: 2px 8px;
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.65rem;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-unhide:hover {
+  background: hsl(var(--primary) / 0.2);
+}
+
+/* Hidden Keys Section */
+.hidden-keys-section {
+  margin-top: 16px;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 12px;
+}
+
+.hidden-keys-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  padding: 4px 0;
+  user-select: none;
+}
+
+.hidden-keys-header:hover {
+  color: hsl(var(--foreground));
+}
+
+.hidden-keys-header .toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.hidden-keys-header.expanded .toggle-icon {
+  transform: rotate(90deg);
+}
+
+.hidden-keys-content {
+  margin-top: 8px;
+}
+
+.hidden-keys-table {
+  opacity: 0.7;
+}
+
+.hidden-keys-table tbody tr {
+  background: hsl(var(--muted) / 0.5);
+}
