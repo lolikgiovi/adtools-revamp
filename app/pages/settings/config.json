@@ -2,6 +2,40 @@
   "version": 2,
   "categories": [
     {
+      "id": "appearance",
+      "label": "Appearance",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "theme",
+          "storageKey": "theme",
+          "label": "Theme",
+          "type": "enum",
+          "default": "system",
+          "options": [
+            {
+              "value": "light",
+              "label": "Light"
+            },
+            {
+              "value": "grey-muted",
+              "label": "Grey (Cool)"
+            },
+            {
+              "value": "grey-paper",
+              "label": "Grey (Warm)"
+            },
+            {
+              "value": "dark",
+              "label": "Dark"
+            }
+          ],
+          "apply": "theme",
+          "description": "Choose the color theme for the app."
+        }
+      ]
+    },
+    {
       "id": "config",
       "label": "Configuration Settings",
       "initiallyExpanded": true,

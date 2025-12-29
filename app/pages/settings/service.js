@@ -213,6 +213,17 @@ class SettingsService {
           <input type="password" class="setting-input" placeholder="Enter new token" aria-label="${item.label}">
         `;
       }
+      case 'enum': {
+        const options = item.options || [];
+        const optionsHtml = options.map(opt => 
+          `<option value="${opt.value}">${opt.label}</option>`
+        ).join('');
+        return `
+          <select class="setting-input setting-select" aria-label="${item.label}">
+            ${optionsHtml}
+          </select>
+        `;
+      }
       default: {
         return `<input type="text" class="setting-input" aria-label="${item.label}">`;
       }

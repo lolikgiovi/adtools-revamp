@@ -41,6 +41,14 @@
     --text-primary: 240 10% 3.9%;
     --text-secondary: 240 3.8% 46.1%;
     --shadow: 240 3.8% 46.1% / 0.1;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -80,6 +88,112 @@
     --text-primary: 0 0% 98%;
     --text-secondary: 240 5% 64.9%;
     --shadow: 0 0% 0% / 0.3;
+
+    /* Status colors for dark mode */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+  }
+
+  /* Grey Muted Theme - Professional/Cool grey */
+  .grey-muted {
+    --sidebar: 220 13% 91%;
+    --sidebar-foreground: 220 13% 18%;
+    --sidebar-primary: 220 13% 26%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 220 13% 87%;
+    --sidebar-accent-foreground: 220 13% 18%;
+    --sidebar-border: 220 13% 85%;
+    --sidebar-ring: 220 9% 46%;
+    --sidebar-input: 220 13% 87%;
+
+    --background: 220 14% 96%;
+    --foreground: 220 13% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 18%;
+    --primary: 220 13% 26%;
+    --primary-foreground: 0 0% 98%;
+    --primary-hover: 220 13% 36%;
+    --secondary: 220 13% 91%;
+    --secondary-foreground: 220 13% 18%;
+    --muted: 220 13% 91%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 13% 91%;
+    --accent-foreground: 220 13% 18%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 220 9% 46%;
+
+    /* Background variations */
+    --bg-secondary: 220 13% 93%;
+    --bg-tertiary: 220 13% 91%;
+    --text-primary: 220 13% 18%;
+    --text-secondary: 220 9% 46%;
+    --shadow: 220 13% 18% / 0.08;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+  }
+
+  /* Grey Paper Theme - Warm off-white/paper */
+  .grey-paper {
+    --sidebar: 40 23% 94%;
+    --sidebar-foreground: 24 10% 20%;
+    --sidebar-primary: 24 10% 25%;
+    --sidebar-primary-foreground: 40 23% 97%;
+    --sidebar-accent: 40 18% 90%;
+    --sidebar-accent-foreground: 24 10% 20%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 24 6% 50%;
+    --sidebar-input: 40 18% 90%;
+
+    --background: 40 23% 97%;
+    --foreground: 24 10% 20%;
+    --card: 40 33% 99%;
+    --card-foreground: 24 10% 20%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 24 10% 20%;
+    --primary: 24 10% 25%;
+    --primary-foreground: 40 23% 97%;
+    --primary-hover: 24 10% 35%;
+    --secondary: 40 18% 93%;
+    --secondary-foreground: 24 10% 20%;
+    --muted: 40 18% 93%;
+    --muted-foreground: 24 6% 50%;
+    --accent: 40 18% 93%;
+    --accent-foreground: 24 10% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 24 6% 50%;
+
+    /* Background variations */
+    --bg-secondary: 40 20% 95%;
+    --bg-tertiary: 40 18% 93%;
+    --text-primary: 24 10% 20%;
+    --text-secondary: 24 6% 50%;
+    --shadow: 24 10% 20% / 0.06;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
   }
 }
 
@@ -127,7 +241,8 @@ select {
   background-color: hsl(var(--card));
   color: hsl(var(--card-foreground));
   line-height: 1.2;
-  padding: 0.375rem 1.5rem 0.375rem 0.5rem; /* room for arrow */
+  padding: 0.375rem 1.5rem 0.375rem 0.5rem;
+  /* room for arrow */
   background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 12px;
@@ -208,7 +323,8 @@ textarea:-webkit-autofill:focus {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 200; /* raised above Handsontable header clones */
+  z-index: 200;
+  /* raised above Handsontable header clones */
 }
 
 .sidebar[data-state="collapsed"] {
@@ -439,7 +555,8 @@ textarea:-webkit-autofill:focus {
 }
 
 .header-reload {
-  display: none; /* Tauri-only: hidden by default */
+  display: none;
+  /* Tauri-only: hidden by default */
   width: 2rem;
   height: 2rem;
   padding: 0;
@@ -451,22 +568,27 @@ textarea:-webkit-autofill:focus {
   transition: all 0.15s ease;
   margin: 1rem;
 }
+
 .main-header[data-runtime="tauri"] .header-reload {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
+
 .main-header .header-reload {
   margin: 0;
 }
+
 .header-reload:hover {
   background-color: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
 }
+
 .header-reload:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
+
 .header-reload svg {
   display: block;
   overflow: visible;
@@ -553,7 +675,8 @@ textarea:-webkit-autofill:focus {
 /* Desktop: Main content adjusts for sidebar */
 @media (min-width: 769px) {
   .main {
-    margin-left: var(--sidebar-width); /* Default expanded sidebar width */
+    margin-left: var(--sidebar-width);
+    /* Default expanded sidebar width */
   }
 }
 
@@ -885,6 +1008,7 @@ textarea:-webkit-autofill:focus {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
 }
+
 .btn-sm-xs svg {
   width: 0.8rem;
   height: 0.8rem;
@@ -903,7 +1027,8 @@ textarea:-webkit-autofill:focus {
     top: 0;
     left: 0;
     height: 100vh;
-    z-index: 200; /* keep above in mobile too */
+    z-index: 200;
+    /* keep above in mobile too */
     transition: transform 0.2s ease;
   }
 
@@ -1075,10 +1200,12 @@ body.global-search-open {
     top: 8vh;
     width: 96vw;
   }
+
   .global-search-results {
     max-height: 50vh;
   }
 }
+
 .global-search-results {
   max-height: 50vh;
 }
@@ -1276,7 +1403,8 @@ body.global-search-open {
     top: 0;
     left: 0;
     height: 100vh;
-    z-index: 200; /* keep above in mobile too */
+    z-index: 200;
+    /* keep above in mobile too */
     transition: transform 0.2s ease;
   }
 
@@ -1313,7 +1441,8 @@ body.global-search-open {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    z-index: 180; /* Above Handsontable clones, below sidebar (200) */
+    z-index: 180;
+    /* Above Handsontable clones, below sidebar (200) */
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -1372,6 +1501,7 @@ body.global-search-open {
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -1425,6 +1555,7 @@ body.global-search-open {
   from {
     transform: translateX(0);
   }
+
   to {
     transform: translateX(-100%);
   }
@@ -1440,29 +1571,35 @@ body.global-search-open {
   border-radius: 999px;
   padding: 0.25rem 0.5rem;
 }
+
 .update-banner-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
+
 .update-banner-label {
   color: hsl(var(--text-secondary));
   font-size: 0.8rem;
 }
+
 .update-banner-actions {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
+
 .update-banner-progress {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-left: 0.5rem;
 }
+
 .update-banner-progress[aria-hidden="true"] {
   display: none;
 }
+
 .update-banner-progressbox {
   width: 120px;
   height: 4px;
@@ -1470,11 +1607,13 @@ body.global-search-open {
   background: hsl(var(--muted));
   overflow: hidden;
 }
+
 .update-banner-progressbar {
   height: 100%;
   width: 0%;
   background: hsl(var(--primary));
 }
+
 .update-banner-stage {
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
@@ -1490,13 +1629,16 @@ body.global-search-open {
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
+
 .update-overlay.open {
   opacity: 1;
   pointer-events: auto;
 }
+
 .update-modal-open {
   overflow: hidden;
 }
+
 .update-modal {
   position: fixed;
   top: 18vh;
@@ -1513,25 +1655,30 @@ body.global-search-open {
   transition: opacity 0.18s ease, transform 0.18s ease;
   padding: 1rem;
 }
+
 .update-overlay.open .update-modal {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
 .update-modal-header h3 {
   font-size: 1.25rem;
   font-weight: 600;
   color: hsl(var(--text-primary));
 }
+
 .update-modal-desc {
   color: hsl(var(--text-secondary));
   margin-top: 0.5rem;
   margin-bottom: 0.75rem;
 }
+
 .update-modal-progress {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
+
 .update-modal-progressbox {
   width: 100%;
   max-width: 420px;
@@ -1540,15 +1687,18 @@ body.global-search-open {
   background: hsl(var(--muted));
   overflow: hidden;
 }
+
 .update-modal-progressbar {
   height: 100%;
   width: 0%;
   background: hsl(var(--primary));
 }
+
 .update-modal-stage {
   color: hsl(var(--muted-foreground));
   font-size: 0.85rem;
 }
+
 .update-modal-footer {
   margin-top: 0.75rem;
   display: flex;
@@ -1701,6 +1851,7 @@ body.global-search-open {
   .usage-grid {
     grid-template-columns: 1fr;
   }
+
   .usage-trend {
     height: 90px;
   }

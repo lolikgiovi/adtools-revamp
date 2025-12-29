@@ -14,9 +14,11 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
-  overflow: visible; /* avoid horizontal scroll, let items wrap */
+  overflow: visible;
+  /* avoid horizontal scroll, let items wrap */
   white-space: normal;
 }
+
 .quick-query-right-panel .button-group,
 .quick-query-left-controls.button-group {
   flex-wrap: wrap;
@@ -28,14 +30,18 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0; /* Allow content to grow */
-  overflow: visible; /* Allow content to expand */
+  min-height: 0;
+  /* Allow content to grow */
+  overflow: visible;
+  /* Allow content to expand */
 }
 
 .content-a {
   display: flex;
-  flex: 1 0 auto; /* Allow it to grow but not shrink */
-  min-height: calc(80vh - 80px); /* 80% of container's height (100vh - 100px) */
+  flex: 1 0 auto;
+  /* Allow it to grow but not shrink */
+  min-height: calc(80vh - 80px);
+  /* 80% of container's height (100vh - 100px) */
   position: relative;
 }
 
@@ -62,7 +68,8 @@
 }
 
 .content-b {
-  flex: 0 0 auto; /* Allow it to grow but not shrink */
+  flex: 0 0 auto;
+  /* Allow it to grow but not shrink */
   padding: 8px 0 8px 0;
   border-top: 1px solid hsl(var(--border));
 }
@@ -76,7 +83,8 @@
 #spreadsheet-data {
   /* Keep the table within the visible viewport minus app header */
   /* max-height: calc(100vh - 57px); */
-  overflow-x: auto; /* enable vertical and horizontal scroll inside container */
+  overflow-x: auto;
+  /* enable vertical and horizontal scroll inside container */
   /* overscroll-behavior: contain; */
 }
 
@@ -101,7 +109,8 @@
   min-height: 400px;
   display: flex;
   flex-direction: column;
-  overflow: visible; /* allow Monaco widgets to overflow */
+  overflow: visible;
+  /* allow Monaco widgets to overflow */
   /* Contain overscroll so wheel events don't bubble naturally */
   overscroll-behavior: contain;
   border-radius: 6px;
@@ -113,8 +122,10 @@
 #queryEditor .monaco-editor .overflow-guard {
   border-radius: 6px;
 }
+
 #queryEditor .monaco-editor .overflow-guard {
-  overflow: hidden; /* ensures inner canvas respects the radius */
+  overflow: hidden;
+  /* ensures inner canvas respects the radius */
 }
 
 /* Ensure the internal scroll container also contains overscroll */
@@ -128,19 +139,24 @@
   background: #252526 !important;
   border: 1px solid #3c3c3c !important;
 }
+
 .monaco-editor .suggest-widget .monaco-list-row {
-  color: #d4d4d4 !important; /* readable on dark theme */
+  color: #d4d4d4 !important;
+  /* readable on dark theme */
   background: #252526 !important;
 }
+
 .monaco-editor .suggest-widget .monaco-list {
   background: #252526 !important;
 }
+
 .monaco-editor .suggest-widget .monaco-list-row.focused,
 .monaco-editor .suggest-widget .monaco-list-row.selected {
   background: #094771 !important;
 }
+
 .monaco-editor .suggest-widget .monaco-icon-label .label-name,
-.monaco-editor .suggest-widget .monaco-icon-label .label-name > span {
+.monaco-editor .suggest-widget .monaco-icon-label .label-name>span {
   color: #d4d4d4 !important;
   opacity: 1 !important;
 }
@@ -162,6 +178,7 @@
   color: hsl(var(--foreground));
   border: 1px solid hsl(var(--border));
 }
+
 .quick-query-tool-container .btn-outline:hover {
   background-color: hsl(var(--muted));
 }
@@ -169,15 +186,18 @@
 /* Allow the first left-panel control group to wrap its input on narrow widths */
 .quick-query-left-panel .button-group:first-of-type {
   flex-wrap: wrap;
-  white-space: normal; /* enable wrapping */
-  overflow: visible; /* allow items to break to next line */
+  white-space: normal;
+  /* enable wrapping */
+  overflow: visible;
+  /* allow items to break to next line */
 }
 
 .quick-query-left-panel .button-group:first-of-type #queryTypeSelect {
   height: 28px;
   font-size: 12px;
   width: 120px;
-  flex: 0 0 120px; /* fixed width as defined */
+  flex: 0 0 120px;
+  /* fixed width as defined */
   border-radius: calc(var(--radius) - 2px);
 }
 
@@ -185,6 +205,7 @@
 .content-b .button-group {
   min-width: 0;
 }
+
 .content-b .button-group .tip-text {
   margin-top: 6px;
   /* default: allow wrap in generic bottom toolbar */
@@ -222,24 +243,48 @@
   --ht-cell-horizontal-padding: 6px;
 }
 
+/* Theme-aware Handsontable root backgrounds */
+.quick-query-tool-container .handsontable,
+.quick-query-tool-container .handsontable .wtHolder,
+.quick-query-tool-container .handsontable .wtHider,
+.quick-query-tool-container .handsontable .wtSpreader {
+  background-color: hsl(var(--card)) !important;
+}
+
+/* Table cells - background and text */
 .quick-query-tool-container .handsontable .htCore td {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
   border-color: hsl(var(--border));
   padding: 1px 6px;
   font-size: 11px !important;
 }
 
+/* Table headers */
 .quick-query-tool-container .handsontable .htCore th {
-  background-color: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
   font-size: 11px;
   font-weight: 600;
-  padding: 1px 6px; /* match td height */
+  padding: 1px 6px;
+  /* match td height */
   line-height: 1.2;
+}
+
+/* Row/column header backgrounds (row numbers, column letters) */
+.quick-query-tool-container .handsontable .ht_clone_left th,
+.quick-query-tool-container .handsontable .ht_clone_top th,
+.quick-query-tool-container .handsontable .ht_clone_top_left_corner th {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
 }
 
 /* Ensure the colHeader span matches compact header font size */
 .quick-query-tool-container .handsontable .htCore th .colHeader {
   font-size: 11px !important;
+  color: hsl(var(--foreground)) !important;
 }
 
 /* Ensure header (th) and data cells (td) have identical compact height */
@@ -286,6 +331,20 @@
   font-size: 11px !important;
   line-height: 16px !important;
   padding: 2px 6px !important;
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border-color: hsl(var(--ring)) !important;
+}
+
+/* Selection highlight */
+.quick-query-tool-container .handsontable td.current,
+.quick-query-tool-container .handsontable td.area {
+  background-color: hsl(var(--accent)) !important;
+}
+
+/* Hover highlight */
+.quick-query-tool-container .handsontable tbody tr:hover td {
+  background-color: hsl(var(--muted)) !important;
 }
 
 .handsontable .wtBorder,
@@ -374,7 +433,8 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
-  padding-right: 36px; /* keep space for absolute close button */
+  padding-right: 36px;
+  /* keep space for absolute close button */
 }
 
 .schema-modal-actions {
@@ -530,6 +590,7 @@
   -webkit-box-shadow: 0 0 0px 1000px white inset !important;
   -webkit-text-fill-color: hsl(var(--foreground)) !important;
 }
+
 .table-search-container {
   position: relative;
   width: 488px;
@@ -860,7 +921,8 @@
   background-color: hsl(var(--bg-tertiary));
   border-radius: 4px;
   border-left: 3px solid hsl(var(--ring));
-  white-space: nowrap; /* keep in one line */
+  white-space: nowrap;
+  /* keep in one line */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -870,6 +932,7 @@
   margin-right: 8px;
   font-size: 1.1em;
 }
+
 /* Attachments controls: compact slim buttons */
 .quick-query-attachments-controls.button-group {
   gap: 4px;
@@ -944,6 +1007,7 @@
   background: rgba(0, 0, 0, 0.35);
   z-index: 1000;
 }
+
 .qq-modal-overlay.hidden {
   display: none;
 }
@@ -956,6 +1020,7 @@
   justify-content: center;
   z-index: 1001;
 }
+
 .qq-modal.hidden {
   display: none;
 }
@@ -987,6 +1052,7 @@
   padding: 16px;
   border-bottom: 1px solid hsl(var(--border));
 }
+
 .qq-modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
@@ -1013,6 +1079,7 @@
   display: flex;
   gap: 20px;
 }
+
 .qq-radio-label {
   display: flex;
   align-items: center;
@@ -1020,6 +1087,7 @@
   cursor: pointer;
   font-size: 0.9rem;
 }
+
 .qq-radio-label input[type="radio"] {
   accent-color: hsl(var(--primary));
 }
@@ -1029,10 +1097,12 @@
   flex-direction: column;
   gap: 6px;
 }
+
 .qq-split-value-group label {
   font-size: 0.85rem;
   color: hsl(var(--muted-foreground));
 }
+
 .qq-input {
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
@@ -1041,6 +1111,7 @@
   font-size: 0.9rem;
   color: hsl(var(--foreground));
 }
+
 .qq-input:focus {
   outline: none;
   border-color: hsl(var(--ring));
@@ -1073,6 +1144,7 @@
 .qq-split-chunk-label {
   font-weight: 600;
 }
+
 .qq-split-info {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
@@ -1093,6 +1165,7 @@
   flex-direction: column;
   gap: 6px;
 }
+
 .qq-split-chunks-list li {
   display: flex;
   align-items: center;
@@ -1104,10 +1177,12 @@
   cursor: pointer;
   font-size: 0.85rem;
 }
+
 .qq-split-chunks-list li.active {
   border-color: hsl(var(--ring));
   box-shadow: 0 0 0 2px color-mix(in oklab, hsl(var(--ring)) 35%, transparent);
 }
+
 .qq-split-chunks-list .qq-chunk-size {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
@@ -1151,6 +1226,7 @@
   .qq-split-body {
     grid-template-columns: 1fr;
   }
+
   .qq-split-sidebar {
     border-right: 0;
     border-bottom: 1px solid hsl(var(--border));

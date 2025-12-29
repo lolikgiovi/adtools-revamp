@@ -381,6 +381,22 @@ class SettingsPage {
       return wrapper;
     }
 
+    // Inline enum dropdown - immediate save on change
+    if (item.type === "enum") {
+      row.innerHTML = `
+        <div class="setting-name">${item.label}</div>
+        <div class="setting-control">${this.service.inputForType("enum", item)}</div>
+      `;
+      const select = row.querySelector(".setting-input");
+      // Set initial value
+      select.value = current || item.default || "";
+      select.addEventListener("change", () => {
+        this.service.setValue(storageKey, "enum", select.value, item.apply);
+      });
+      wrapper.appendChild(row);
+      return wrapper;
+    }
+
     // Action-type items render as a button that performs the action
     if (item.type === "action") {
       row.innerHTML = `

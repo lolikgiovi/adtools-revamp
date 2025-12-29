@@ -1,12 +1,35 @@
 /**
  * ThemeManager - Theme management system
- * Handles dark/light mode switching and persistence
+ * Handles multi-theme switching (light, grey-muted, grey-paper, dark) and persistence
  */
 class ThemeManager {
+    static THEMES = ["light", "grey-muted", "grey-paper", "dark"];
+    static THEME_LABELS = {
+        "light": "Light",
+        "grey-muted": "Grey (Cool)",
+        "grey-paper": "Grey (Warm)",
+        "dark": "Dark"
+    };
+
     constructor(eventBus) {
         this.eventBus = eventBus;
-        this.theme = localStorage.getItem("theme") || "light";
+        this.theme = this.getInitialTheme();
         this.init();
+    }
+
+    /**
+     * Determine initial theme from localStorage or system preference
+     */
+    getInitialTheme() {
+        const stored = localStorage.getItem("theme");
+        if (stored && ThemeManager.THEMES.includes(stored)) {
+            return stored;
+        }
+        // Detect system preference
+        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            return "dark";
+        }
+        return "light";
     }
 
     /**
@@ -14,29 +37,37 @@ class ThemeManager {
      */
     init() {
         this.applyTheme();
-        this.setupThemeToggle();
+        this.setupSystemPreferenceListener();
         this.bindEvents();
+    }
+
+    /**
+     * Listen for system preference changes
+     */
+    setupSystemPreferenceListener() {
+        if (window.matchMedia) {
+            window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+                // Only auto-switch if user hasn't explicitly set a preference
+                if (!localStorage.getItem("theme")) {
+                    this.setTheme(e.matches ? "dark" : "light", false);
+                }
+            });
+        }
     }
 
     /**
      * Apply current theme to document
      */
     applyTheme() {
-        document.documentElement.classList.toggle("dark", this.theme === "dark");
-        document.documentElement.setAttribute('data-theme', this.theme);
-    }
-
-    /**
-     * Setup theme toggle functionality
-     */
-    setupThemeToggle() {
-        // Add theme toggle button if needed
-        const themeToggle = document.querySelector("[data-theme-toggle]");
-        if (themeToggle) {
-            themeToggle.addEventListener("click", () => {
-                this.toggleTheme();
-            });
+        // Remove all theme classes
+        ThemeManager.THEMES.forEach(t => {
+            document.documentElement.classList.remove(t);
+        });
+        // Add current theme class (light has no class, just :root defaults)
+        if (this.theme !== "light") {
+            document.documentElement.classList.add(this.theme);
         }
+        document.documentElement.setAttribute("data-theme", this.theme);
     }
 
     /**
@@ -44,51 +75,56 @@ class ThemeManager {
      */
     bindEvents() {
         if (this.eventBus) {
-            this.eventBus.on('theme:toggle', () => {
-                this.toggleTheme();
+            this.eventBus.on("theme:toggle", () => {
+                this.cycleTheme();
+            });
+            this.eventBus.on("theme:set", (data) => {
+                if (data && data.theme) {
+                    this.setTheme(data.theme);
+                }
             });
         }
     }
 
     /**
-     * Toggle between light and dark themes
+     * Cycle through themes (for legacy toggle button)
      */
-    toggleTheme() {
-        this.theme = this.theme === "light" ? "dark" : "light";
-        localStorage.setItem("theme", this.theme);
-        this.applyTheme();
-
-        // Emit theme change event
-        if (this.eventBus) {
-            this.eventBus.emit("theme:change", {
-                theme: this.theme
-            });
-        }
-
-        // Also emit custom DOM event for compatibility
-        document.dispatchEvent(
-            new CustomEvent("themeChange", {
-                detail: { theme: this.theme },
-            })
-        );
+    cycleTheme() {
+        const currentIndex = ThemeManager.THEMES.indexOf(this.theme);
+        const nextIndex = (currentIndex + 1) % ThemeManager.THEMES.length;
+        this.setTheme(ThemeManager.THEMES[nextIndex]);
     }
 
     /**
      * Get current theme
-     * @returns {string} Current theme ('light' or 'dark')
+     * @returns {string} Current theme
      */
     getTheme() {
         return this.theme;
     }
 
     /**
-     * Set theme programmatically
-     * @param {string} theme - Theme to set ('light' or 'dark')
+     * Get all available themes with labels
+     * @returns {Array} Array of {value, label} objects
      */
-    setTheme(theme) {
-        if (["light", "dark"].includes(theme)) {
+    getThemeOptions() {
+        return ThemeManager.THEMES.map(t => ({
+            value: t,
+            label: ThemeManager.THEME_LABELS[t]
+        }));
+    }
+
+    /**
+     * Set theme programmatically
+     * @param {string} theme - Theme to set
+     * @param {boolean} persist - Whether to save to localStorage (default: true)
+     */
+    setTheme(theme, persist = true) {
+        if (ThemeManager.THEMES.includes(theme)) {
             this.theme = theme;
-            localStorage.setItem("theme", this.theme);
+            if (persist) {
+                localStorage.setItem("theme", this.theme);
+            }
             this.applyTheme();
 
             if (this.eventBus) {
@@ -96,6 +132,12 @@ class ThemeManager {
                     theme: this.theme
                 });
             }
+
+            document.dispatchEvent(
+                new CustomEvent("themeChange", {
+                    detail: { theme: this.theme },
+                })
+            );
         }
     }
 
@@ -113,6 +155,14 @@ class ThemeManager {
      */
     isLight() {
         return this.theme === "light";
+    }
+
+    /**
+     * Check if current theme is a grey variant
+     * @returns {boolean} True if grey theme is active
+     */
+    isGrey() {
+        return this.theme.startsWith("grey-");
     }
 }
 
