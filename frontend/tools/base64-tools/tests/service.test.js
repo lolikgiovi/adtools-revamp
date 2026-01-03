@@ -1,4 +1,4 @@
-import { Base64ToolsService } from './service.js';
+import { Base64ToolsService } from '../service.js';
 
 describe('Base64ToolsService', () => {
   it('encodes and decodes text', () => {

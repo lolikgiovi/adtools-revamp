@@ -1,5 +1,5 @@
 // Basic tests for JSONToolsService; if still using globals, import the file
-import { JSONToolsService } from './service.js';
+import { JSONToolsService } from '../service.js';
 
 describe('JSONToolsService', () => {
   it('validates correct JSON', () => {

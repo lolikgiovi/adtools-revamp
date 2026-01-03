@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { QueryGenerationService } from './services/QueryGenerationService.js'
+import { QueryGenerationService } from '../services/QueryGenerationService.js'
 
-vi.mock('../../core/UsageTracker.js', () => ({
+vi.mock('../../../core/UsageTracker.js', () => ({
   UsageTracker: {
     track: () => {},
     trackEvent: () => {},

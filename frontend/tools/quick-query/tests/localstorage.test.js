@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, beforeEach, expect, vi } from 'vitest';
-import { LocalStorageService } from './services/LocalStorageService.js';
+import { LocalStorageService } from '../services/LocalStorageService.js';
 
 const SCHEMA_KEY = 'tool:quick-query:schema';
 const DATA_KEY = 'tool:quick-query:data';

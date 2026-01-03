@@ -14,7 +14,7 @@ ad-tools-revamp/
 │   ├── core/                 # Router, EventBus, ThemeManager, etc.
 │   ├── pages/                # Page components (about, settings, etc.)
 │   ├── tools/                # Individual tools (each with its own folder)
-│   │   └── **/*.test.js      # Colocated tests
+│   │   └── */tests/          # Tests in tests/ subdirectory
 │   └── public/               # Static assets
 │
 ├── backend-workers/          # Cloudflare Worker API

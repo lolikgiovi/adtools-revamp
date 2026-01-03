@@ -5,7 +5,7 @@ vi.mock('qrcode', () => ({
     toString: vi.fn(async () => '<svg></svg>'),
   },
 }));
-import { QRToolsService } from './service.js';
+import { QRToolsService } from '../service.js';
 
 describe('QRToolsService', () => {
   it('validates URLs robustly', () => {

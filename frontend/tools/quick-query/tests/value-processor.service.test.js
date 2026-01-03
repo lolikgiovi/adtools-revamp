@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ValueProcessorService } from './services/ValueProcessorService.js';
-import { UsageTracker } from '../../core/UsageTracker.js';
+import { ValueProcessorService } from '../services/ValueProcessorService.js';
+import { UsageTracker } from '../../../core/UsageTracker.js';
 
 // Mock UsageTracker
-vi.mock('../../core/UsageTracker.js', () => ({
+vi.mock('../../../core/UsageTracker.js', () => ({
   UsageTracker: {
     trackEvent: vi.fn(),
   },

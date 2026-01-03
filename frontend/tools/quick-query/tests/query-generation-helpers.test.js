@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { QueryGenerationService } from './services/QueryGenerationService.js';
+import { QueryGenerationService } from '../services/QueryGenerationService.js';
 
 describe('QueryGenerationService - Helper Methods', () => {
   let service;

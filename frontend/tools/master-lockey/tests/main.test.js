@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MasterLockey } from "./main.js";
+import { MasterLockey } from "../main.js";
 
 describe("MasterLockey - escapeSpecialChars", () => {
   let tool;

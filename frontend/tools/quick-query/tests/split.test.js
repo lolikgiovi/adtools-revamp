@@ -5,7 +5,7 @@ import {
   groupBySize,
   groupByQueryCount,
   deriveBaseName,
-} from './services/SplitService.js'
+} from '../services/SplitService.js'
 
 describe('splitSqlStatementsSafely - INSERT statements', () => {
   it('splits basic INSERT statements', () => {
