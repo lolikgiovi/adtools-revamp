@@ -1,0 +1,35 @@
+{
+  "inhouse_forex": {
+    "tables": {
+      "rate_tiering": {
+        "columns": {
+          "RATE_TIERING_ID": { "type": "VARCHAR2(36)" },
+          "CURRENCY_ISO_CODE": { "type": "VARCHAR2(10)" },
+          "MIN_AMOUNT": { "type": "NUMBER(20,2)" },
+          "MAX_AMOUNT": { "type": "NUMBER(20,2)" },
+          "TIERING_GROUP": { "type": "VARCHAR2(36)" },
+          "IS_DELETED": { "type": "NUMBER(1,0)", "default": "0" },
+          "CREATED_BY": { "type": "VARCHAR2(36)", "default": "'SYSTEM'" },
+          "CREATED_TIME": { "type": "TIMESTAMP(6)", "default": "SYSTIMESTAMP" },
+          "UPDATED_BY": { "type": "VARCHAR2(36)", "default": "'SYSTEM'" },
+          "UPDATED_TIME": { "type": "TIMESTAMP(6)", "default": "SYSTIMESTAMP" }
+        },
+        "pk": ["CURRENCY_ISO_CODE", "TIERING_GROUP"],
+        "unique": [["RATE_TIERING_ID"]]
+      },
+      "other_table": {
+        "columns": {
+          "OTHER_TABLE_ID": { "type": "VARCHAR2(36)" },
+          "CURRENCY_ISO_CODE": { "type": "VARCHAR2(10)" },
+          "IS_DELETED": { "type": "NUMBER(1,0)", "default": "0" },
+          "CREATED_BY": { "type": "VARCHAR2(36)", "default": "'SYSTEM'" },
+          "CREATED_TIME": { "type": "TIMESTAMP(6)", "default": "SYSTIMESTAMP" },
+          "UPDATED_BY": { "type": "VARCHAR2(36)", "default": "'SYSTEM'" },
+          "UPDATED_TIME": { "type": "TIMESTAMP(6)", "default": "SYSTIMESTAMP" }
+        },
+        "pk": ["OTHER_TABLE_ID"],
+        "unique": []
+      }
+    }
+  }
+}

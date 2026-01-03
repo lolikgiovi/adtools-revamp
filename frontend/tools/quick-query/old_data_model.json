@@ -1,0 +1,39 @@
+{
+  "schemas": {
+    "inhouse_forex": {
+      "tables": {
+        "rate_tiering": {
+          "schema": [
+            ["RATE_TIERING_ID", "VARCHAR2(36 BYTE)", "No", "", 1, ""],
+            ["CURRENCY_ISO_CODE", "VARCHAR2(10 BYTE)", "PK", "", 2, ""],
+            ["MIN_AMOUNT", "NUMBER(20,2)", "No", "", 3, ""],
+            ["MAX_AMOUNT", "NUMBER(20,2)", "No", "", 4, ""],
+            ["TIERING_GROUP", "VARCHAR2(36 BYTE)", "PK", "", 5, ""],
+            ["IS_DELETED", "NUMBER(1,0)", "No", "0 ", 6, ""],
+            ["CREATED_BY", "VARCHAR2(36 BYTE)", "No", "'SYSTEM' ", 7, ""],
+            ["CREATED_TIME", "TIMESTAMP(6)", "No", "SYSDATE ", 8, ""],
+            ["UPDATED_BY", "VARCHAR2(36 BYTE)", "No", "'SYSTEM' ", 9, ""],
+            ["UPDATED_TIME", "TIMESTAMP(6)", "No", "SYSDATE ", 10, ""]
+          ],
+          "data": [
+            [
+              "RATE_TIERING_ID",
+              "CURRENCY_ISO_CODE",
+              "MIN_AMOUNT",
+              "MAX_AMOUNT",
+              "TIERING_GROUP",
+              "IS_DELETED",
+              "CREATED_BY",
+              "CREATED_TIME",
+              "UPDATED_BY",
+              "UPDATED_TIME"
+            ],
+            ["1", "1", "1", "1", "1", "1", null, null, null, null]
+          ],
+          "timestamp": "2025-10-03T04:17:21.546Z"
+        }
+      }
+    }
+  },
+  "lastUpdated": "2025-11-01T12:24:07.676Z"
+}

@@ -1,0 +1,138 @@
+{
+  "version": 2,
+  "categories": [
+    {
+      "id": "appearance",
+      "label": "Appearance",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "theme",
+          "storageKey": "theme",
+          "label": "Theme",
+          "type": "enum",
+          "default": "system",
+          "options": [
+            {
+              "value": "light",
+              "label": "Light"
+            },
+            {
+              "value": "grey-muted",
+              "label": "Grey (Cool)"
+            },
+            {
+              "value": "grey-paper",
+              "label": "Grey (Warm)"
+            },
+            {
+              "value": "dark",
+              "label": "Dark"
+            }
+          ],
+          "apply": "theme",
+          "description": "Choose the color theme for the app."
+        }
+      ]
+    },
+    {
+      "id": "config",
+      "label": "Configuration Settings",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.baseUrls",
+          "storageKey": "config.baseUrls",
+          "label": "CDN Base URLs",
+          "type": "kvlist",
+          "default": [],
+          "keyPlaceholder": "Environment",
+          "valuePlaceholder": "Base URL",
+          "description": "Add environment ➝ base URL pairs."
+        },
+        {
+          "key": "config.lockeyDomains",
+          "storageKey": "config.lockeyDomains",
+          "label": "Lockey Domain URLs",
+          "type": "kvlist",
+          "default": [],
+          "keyPlaceholder": "Environment",
+          "valuePlaceholder": "Lockey JSON URL",
+          "description": "Add environment ➝ lockey domain URL pairs for Master Lockey tool."
+        },
+        {
+          "key": "config.jenkins.url",
+          "storageKey": "config.jenkins.url",
+          "label": "Jenkins URL",
+          "type": "string",
+          "default": "",
+          "description": "Dedicated Jenkins URL used by the Jenkins Query Runner.",
+          "validation": {
+            "required": true,
+            "pattern": "^https?://"
+          }
+        }
+      ]
+    },
+    {
+      "id": "updates",
+      "label": "Check for Update",
+      "requiresTauri": true,
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "update.autoCheck",
+          "storageKey": "update.autoCheck",
+          "label": "Check for Auto Update",
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, the app checks at startup and scheduled times."
+        },
+        {
+          "key": "update.allowBeta",
+          "storageKey": "update.allowBeta",
+          "label": "Allow Beta Update",
+          "type": "boolean",
+          "default": false,
+          "description": "Opt into beta channel updates (uses manifest/beta.json)."
+        },
+        {
+          "key": "update.check",
+          "storageKey": "update.check",
+          "label": "Check for Update",
+          "type": "action",
+          "buttonLabel": "Check Now",
+          "description": "Manually check for updates and show banner if available."
+        }
+      ]
+    },
+    {
+      "id": "credentials",
+      "requiresTauri": true,
+      "label": "Credential Management",
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "secure.jenkins.username",
+          "storageKey": "secure.jenkins.username",
+          "label": "Jenkins Username",
+          "type": "string",
+          "default": "",
+          "description": "Username paired with Jenkins API token."
+        },
+        {
+          "key": "secure.jenkins.token",
+          "storageKey": "secure.jenkins.token",
+          "label": "Jenkins Token",
+          "type": "secret",
+          "default": "",
+          "description": "Generate an API token from Jenkins (User ➝ Configure ➝ API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          }
+        }
+      ]
+    }
+  ]
+}
