@@ -182,8 +182,8 @@
     const hasObjects = dataArray.some(item => typeof item === "object" && item !== null && !Array.isArray(item));
     
     if (!hasObjects) {
-      // Array of primitives - simple list
-      let html = `<table class="json-table nested-table depth-${depth}"><tbody>`;
+      // Array of primitives - simple list (transposed: key column + value columns)
+      let html = `<table class="json-table nested-table depth-${depth} transposed"><tbody>`;
       dataArray.forEach((item, index) => {
         html += `<tr><td class="row-index">${index}</td><td>${formatCellValue(item, depth)}</td></tr>`;
       });
@@ -201,23 +201,22 @@
 
     const headers = Array.from(allKeys);
 
-    // Build nested table HTML
-    let html = `<table class="json-table nested-table depth-${depth}">`;
+    // Build nested table HTML in TRANSPOSED format (keys as rows)
+    let html = `<table class="json-table nested-table depth-${depth} transposed">`;
     html += '<thead><tr>';
+    html += '<th class="row-index-header">Key</th>';
     if (!isSingleObject) {
-      html += '<th class="row-index-header">#</th>';
+      dataArray.forEach((_, index) => {
+        html += `<th>${index}</th>`;
+      });
+    } else {
+      html += '<th>Value</th>';
     }
-    headers.forEach(header => {
-      html += `<th>${escapeHtml(header)}</th>`;
-    });
     html += '</tr></thead><tbody>';
 
-    dataArray.forEach((item, index) => {
-      html += '<tr>';
-      if (!isSingleObject) {
-        html += `<td class="row-index">${index}</td>`;
-      }
-      headers.forEach(header => {
+    headers.forEach(header => {
+      html += `<tr><td class="row-index">${escapeHtml(header)}</td>`;
+      dataArray.forEach(item => {
         const value = typeof item === "object" && item !== null ? item[header] : undefined;
         html += `<td>${formatCellValue(value, depth)}</td>`;
       });

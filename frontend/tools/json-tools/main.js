@@ -428,7 +428,7 @@ class JSONTools extends BaseTool {
     // Validate JSON first
     try {
       this.validatedJson = JSON.parse(content);
-      this.isTransposed = false; // Reset transpose state on new conversion
+      this.isTransposed = true; // Default to transposed view
       this.keySortOrder = "natural"; // Reset sort order on new conversion
     } catch (error) {
       this.validatedJson = null;
