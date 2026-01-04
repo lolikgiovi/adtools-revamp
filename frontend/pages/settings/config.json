@@ -34,8 +34,12 @@
               "label": "Ocean Blue"
             },
             {
+              "value": "dark-grey",
+              "label": "Dark Grey"
+            },
+            {
               "value": "dark",
-              "label": "Dark"
+              "label": "Dark (Midnight)"
             }
           ],
           "apply": "theme",

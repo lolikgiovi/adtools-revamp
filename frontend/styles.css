@@ -293,6 +293,55 @@
     --info: 200 70% 55%;
     --info-foreground: 0 0% 100%;
   }
+
+  /* Dark Grey Theme - Softer dark mode, charcoal tones */
+  .dark-grey {
+    --sidebar: 220 10% 18%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 220 15% 45%;
+    --sidebar-primary-foreground: 220 10% 95%;
+    --sidebar-accent: 220 10% 22%;
+    --sidebar-accent-foreground: 220 10% 85%;
+    --sidebar-border: 220 10% 25%;
+    --sidebar-ring: 220 15% 50%;
+    --sidebar-input: 220 10% 22%;
+
+    --background: 220 10% 15%;
+    --foreground: 220 10% 90%;
+    --card: 220 10% 18%;
+    --card-foreground: 220 10% 90%;
+    --popover: 220 10% 18%;
+    --popover-foreground: 220 10% 90%;
+    --primary: 220 15% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 220 15% 55%;
+    --secondary: 220 10% 25%;
+    --secondary-foreground: 220 10% 90%;
+    --muted: 220 10% 22%;
+    --muted-foreground: 220 8% 55%;
+    --accent: 220 10% 25%;
+    --accent-foreground: 220 10% 90%;
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 10% 25%;
+    --input: 220 10% 22%;
+    --ring: 220 15% 50%;
+
+    /* Background variations */
+    --bg-secondary: 220 10% 18%;
+    --bg-tertiary: 220 10% 22%;
+    --text-primary: 220 10% 90%;
+    --text-secondary: 220 8% 55%;
+    --shadow: 0 0% 0% / 0.3;
+
+    /* Status colors */
+    --success: 150 50% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 70% 50%;
+    --warning-foreground: 0 0% 0%;
+    --info: 210 60% 55%;
+    --info-foreground: 0 0% 100%;
+  }
 }
 
 /* Reset and base styles */
