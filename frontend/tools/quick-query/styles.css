@@ -229,7 +229,7 @@
 .quick-query-tool-container .handsontable .wtHolder,
 .quick-query-tool-container .handsontable .wtHider,
 .quick-query-tool-container .handsontable .wtSpreader {
-  background-color: hsl(var(--card)) !important;
+  background-color: hsl(var(--background)) !important;
 }
 
 /* Table cells - background and text */
