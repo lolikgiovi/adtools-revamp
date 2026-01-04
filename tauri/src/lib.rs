@@ -17,7 +17,12 @@ pub fn run() {
       fetch_lockey_json,
       save_lockey_cache,
       load_lockey_cache,
-      clear_lockey_cache
+      clear_lockey_cache,
+      // Confluence commands
+      set_confluence_pat,
+      has_confluence_pat,
+      confluence_fetch_page,
+      confluence_search_pages
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -33,6 +38,7 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 pub mod jenkins;
+pub mod confluence;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
@@ -40,6 +46,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use jenkins::Credentials;
 
 const KEYCHAIN_SERVICE: &str = "ad-tools:jenkins";
+const CONFLUENCE_KEYCHAIN_SERVICE: &str = "ad-tools:confluence";
 
 fn http_client() -> Client {
   Client::builder()
@@ -283,4 +290,51 @@ async fn clear_lockey_cache(
   }
   
   Ok(())
+}
+
+// Confluence integration commands
+
+#[tauri::command]
+fn set_confluence_pat(pat: String) -> Result<(), String> {
+  let entry = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat").map_err(|e| e.to_string())?;
+  entry.set_password(&pat).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn has_confluence_pat() -> Result<bool, String> {
+  let entry = match Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
+    Ok(e) => e,
+    Err(_) => return Ok(false),
+  };
+  match entry.get_password() {
+    Ok(_) => Ok(true),
+    Err(_) => Ok(false),
+  }
+}
+
+async fn load_confluence_pat() -> Result<String, String> {
+  let entry = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat").map_err(|e| e.to_string())?;
+  entry.get_password().map_err(|e| format!("PAT not found in keychain: {}", e))
+}
+
+#[tauri::command]
+async fn confluence_fetch_page(
+  domain: String,
+  page_id: String,
+  username: String
+) -> Result<confluence::PageContent, String> {
+  let pat = load_confluence_pat().await?;
+  let client = http_client();
+  confluence::fetch_page_content(&client, &domain, &page_id, &username, &pat).await
+}
+
+#[tauri::command]
+async fn confluence_search_pages(
+  domain: String,
+  query: String,
+  username: String
+) -> Result<Vec<confluence::PageInfo>, String> {
+  let pat = load_confluence_pat().await?;
+  let client = http_client();
+  confluence::search_pages(&client, &domain, &query, &username, &pat).await
 }

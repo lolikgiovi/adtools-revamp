@@ -131,6 +131,17 @@
             "required": true,
             "pattern": "^https?://"
           }
+        },
+        {
+          "key": "config.confluence.domain",
+          "storageKey": "config.confluence.domain",
+          "label": "Confluence Domain",
+          "type": "string",
+          "default": "",
+          "description": "Base URL (e.g., https://confluence.example.com)",
+          "validation": {
+            "pattern": "^https?://"
+          }
         }
       ]
     },
@@ -187,6 +198,26 @@
           "type": "secret",
           "default": "",
           "description": "Generate an API token from Jenkins (User ➝ Configure ➝ API Token). Token is stored securely in macOS Keychain, shown masked, and can only be replaced.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          }
+        },
+        {
+          "key": "config.confluence.username",
+          "storageKey": "config.confluence.username",
+          "label": "Confluence Username",
+          "type": "string",
+          "default": "",
+          "description": "Username for Confluence authentication"
+        },
+        {
+          "key": "secure.confluence.pat",
+          "storageKey": "secure.confluence.pat",
+          "label": "Confluence PAT",
+          "type": "secret",
+          "default": "",
+          "description": "Personal Access Token. Generate in Confluence: Profile → Personal Access Tokens → Create token. Stored in macOS Keychain.",
           "validation": {
             "required": true,
             "minLength": 8

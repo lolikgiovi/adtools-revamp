@@ -79,6 +79,81 @@ export const MasterLockeyTemplate = /* html */ `
                 </tbody>
             </table>
         </div>
+
+        <!-- Confluence Integration Section -->
+        <div id="confluence-section" class="confluence-section" style="display: none;">
+            <div class="confluence-header">
+                <h4>📄 Confluence Lockeys</h4>
+            </div>
+            
+            <!-- Cached Pages Selector -->
+            <div class="cached-pages-row">
+                <select id="cached-pages-selector" class="cached-pages-selector">
+                    <option value="">-- Select cached page or enter new --</option>
+                </select>
+                <button id="btn-refresh-page" class="btn-icon" title="Refresh from Confluence" disabled>🔄</button>
+                <button id="btn-delete-cache" class="btn-icon btn-danger" title="Delete from cache" disabled>🗑️</button>
+            </div>
+            
+            <!-- New Page Input -->
+            <div class="confluence-controls">
+                <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Enter page URL or ID">
+                <button id="btn-fetch-confluence" class="btn-confluence" disabled>
+                    <span class="btn-text">Fetch Lockeys</span>
+                    <span class="btn-spinner" style="display: none;">⟳</span>
+                </button>
+            </div>
+            
+            <div id="confluence-error" class="confluence-error" style="display: none;"></div>
+            <div id="confluence-results" class="confluence-results" style="display: none;">
+                <div class="results-header">
+                    <div class="results-info">
+                        <span id="confluence-page-title" class="page-title"></span>
+                        <span id="confluence-results-count" class="results-count"></span>
+                    </div>
+                    <div class="export-buttons">
+                        <button id="btn-export-tsv" class="btn-export" title="Copy as Tab-Separated Values">📋 TSV</button>
+                        <button id="btn-export-csv" class="btn-export" title="Copy as Comma-Separated Values">📋 CSV</button>
+                    </div>
+                </div>
+                <div class="confluence-table-container">
+                    <table class="confluence-table" id="confluence-table">
+                        <thead>
+                            <tr>
+                                <th>Lockey</th>
+                                <th>Status</th>
+                                <th>In Remote</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="confluence-table-body">
+                            <!-- Confluence lockey rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Hidden Keys Section -->
+                <div id="hidden-keys-section" class="hidden-keys-section" style="display: none;">
+                    <div class="hidden-keys-header" id="hidden-keys-toggle">
+                        <span class="toggle-icon">▶</span>
+                        <span>Hidden Keys (<span id="hidden-keys-count">0</span>)</span>
+                    </div>
+                    <div id="hidden-keys-content" class="hidden-keys-content" style="display: none;">
+                        <table class="confluence-table hidden-keys-table">
+                            <thead>
+                                <tr>
+                                    <th>Lockey</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hidden-keys-body">
+                                <!-- Hidden keys will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 `;
