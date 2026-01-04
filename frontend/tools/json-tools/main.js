@@ -24,6 +24,8 @@ class JSONTools extends BaseTool {
     this.outputEditor = null;
     this.currentTab = "validator";
     this.isErrorPanelCollapsed = false;
+    this.validatedJson = null; // Store validated JSON for table operations
+    this.isTransposed = false; // Track transpose state
   }
 
   getIconSvg() {
@@ -173,6 +175,22 @@ class JSONTools extends BaseTool {
         }
       });
     });
+
+    // Transpose table button
+    const transposeBtn = document.querySelector(".btn-transpose-table");
+    if (transposeBtn) {
+      transposeBtn.addEventListener("click", () => {
+        this.transposeTable();
+      });
+    }
+
+    // Expand table button
+    const expandBtn = document.querySelector(".btn-expand-table");
+    if (expandBtn) {
+      expandBtn.addEventListener("click", () => {
+        this.toggleExpandTable();
+      });
+    }
   }
 
   setupTabs() {
@@ -229,12 +247,18 @@ class JSONTools extends BaseTool {
     // Toggle between Monaco editor and table output
     const jsonOutput = document.getElementById("json-output");
     const tableOutput = document.getElementById("json-table-output");
+    const tableOptions = document.getElementById("table-options");
+    const transposeBtn = document.querySelector(".btn-transpose-table");
     if (tabName === "json-to-table") {
       jsonOutput.style.display = "none";
       tableOutput.style.display = "block";
+      tableOptions.style.display = "block";
+      if (transposeBtn) transposeBtn.style.display = "inline-flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
+      tableOptions.style.display = "none";
+      if (transposeBtn) transposeBtn.style.display = "none";
     }
 
     // Process current content
@@ -387,11 +411,94 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
     const tableOutput = document.getElementById("json-table-output");
 
-    const res = JSONToolsService.jsonToTable(content);
+    // Validate JSON first
+    try {
+      this.validatedJson = JSON.parse(content);
+      this.isTransposed = false; // Reset transpose state on new conversion
+    } catch (error) {
+      this.validatedJson = null;
+      tableOutput.innerHTML = `<div class="table-error">Invalid JSON: ${error.message}</div>`;
+      return;
+    }
+
+    // Render the table
+    this.renderTable();
+  }
+
+  renderTable() {
+    const tableOutput = document.getElementById("json-table-output");
+    if (!this.validatedJson) {
+      tableOutput.innerHTML = '<div class="table-error">No valid JSON to display</div>';
+      return;
+    }
+
+    const res = JSONToolsService.jsonToTable(JSON.stringify(this.validatedJson), this.isTransposed);
     if (res.error) {
       tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
     } else {
       tableOutput.innerHTML = res.result || "";
+    }
+  }
+
+  transposeTable() {
+    if (!this.validatedJson) {
+      return; // No data to transpose
+    }
+
+    // Toggle transpose state
+    this.isTransposed = !this.isTransposed;
+
+    // Re-render table with new transpose state
+    this.renderTable();
+  }
+
+  toggleExpandTable() {
+    const mainContent = document.querySelector(".main-content");
+    if (!mainContent) return;
+
+    let overlay = document.getElementById("table-expand-overlay");
+    const tableOutput = document.getElementById("json-table-output");
+    const expandBtn = document.querySelector(".btn-expand-table");
+
+    if (overlay) {
+      // Collapse - remove overlay
+      overlay.remove();
+      expandBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+        Expand
+      `;
+    } else {
+      // Expand - create overlay
+      overlay = document.createElement("div");
+      overlay.id = "table-expand-overlay";
+      overlay.className = "table-expand-overlay";
+      overlay.innerHTML = `
+        <div class="table-expand-header">
+          <h3>Table View (Expanded)</h3>
+          <button class="btn btn-primary btn-sm btn-close-expand" title="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+            Close
+          </button>
+        </div>
+        <div class="table-expand-content">${tableOutput.innerHTML}</div>
+      `;
+      mainContent.appendChild(overlay);
+
+      // Add close handler
+      overlay.querySelector(".btn-close-expand").addEventListener("click", () => {
+        this.toggleExpandTable();
+      });
+
+      expandBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 14h6m0 0v6m0-6L3 21M20 10h-6m0 0V4m0 6l7-7"/>
+        </svg>
+        Collapse
+      `;
     }
   }
 

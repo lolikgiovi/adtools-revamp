@@ -228,7 +228,7 @@
     return html;
   }
 
-  function jsonToTable(content) {
+  function jsonToTable(content, transpose = false) {
     try {
       const parsed = JSON.parse(content);
       
@@ -274,7 +274,34 @@
         return { result: html, error: null };
       }
 
-      // Build table HTML
+      // Build table HTML - check for transpose mode
+      if (transpose) {
+        // Transposed: keys are rows, indices are columns
+        let html = '<table class="json-table transposed"><thead><tr>';
+        html += '<th class="row-index-header">Key</th>';
+        if (!isSingleObject) {
+          dataArray.forEach((_, index) => {
+            html += `<th>${index}</th>`;
+          });
+        } else {
+          html += '<th>Value</th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        headers.forEach(header => {
+          html += `<tr><td class="row-index">${escapeHtml(header)}</td>`;
+          dataArray.forEach(item => {
+            const value = typeof item === "object" && item !== null ? item[header] : undefined;
+            html += `<td>${formatCellValue(value, 0)}</td>`;
+          });
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        return { result: html, error: null };
+      }
+
+      // Normal table: keys are columns, indices are rows
       let html = '<table class="json-table"><thead><tr>';
       if (!isSingleObject) {
         html += '<th class="row-index-header">#</th>';
