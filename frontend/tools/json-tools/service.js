@@ -228,7 +228,7 @@
     return html;
   }
 
-  function jsonToTable(content, transpose = false) {
+  function jsonToTable(content, transpose = false, keySortOrder = "natural") {
     try {
       const parsed = JSON.parse(content);
       
@@ -276,11 +276,23 @@
 
       // Build table HTML - check for transpose mode
       if (transpose) {
+        // Sort headers based on keySortOrder
+        let sortedHeaders = [...headers];
+        let sortIndicator = " ⇅"; // Default: double arrow to indicate sortable
+        if (keySortOrder === "asc") {
+          sortedHeaders.sort((a, b) => a.localeCompare(b));
+          sortIndicator = " ▲";
+        } else if (keySortOrder === "desc") {
+          sortedHeaders.sort((a, b) => b.localeCompare(a));
+          sortIndicator = " ▼";
+        }
+        // natural keeps original order, shows ⇅
+
         // Transposed: keys are rows, indices are columns
         // Add # column for key numbering
         let html = '<table class="json-table transposed"><thead><tr>';
         html += '<th class="row-index-header">#</th>';
-        html += '<th class="key-header">Key</th>';
+        html += `<th class="key-header key-header-sortable" title="Click to sort">Key${sortIndicator}</th>`;
         if (!isSingleObject) {
           dataArray.forEach((_, index) => {
             html += `<th>${index}</th>`;
@@ -290,7 +302,7 @@
         }
         html += '</tr></thead><tbody>';
 
-        headers.forEach((header, keyIndex) => {
+        sortedHeaders.forEach((header, keyIndex) => {
           html += `<tr><td class="key-index">${keyIndex + 1}</td><td class="row-index">${escapeHtml(header)}</td>`;
           dataArray.forEach(item => {
             const value = typeof item === "object" && item !== null ? item[header] : undefined;

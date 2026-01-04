@@ -37,6 +37,7 @@ export const JSONToolsTemplate = /* html */ `
             <div class="json-output-header">
                 <h3 id="output-title">Output</h3>
                 <div class="json-output-actions">
+                    <button class="btn btn-primary btn-sm btn-expand-table" title="Expand Table" style="display: none;">Expand</button>
                     <button class="btn btn-primary btn-sm btn-transpose-table" title="Transpose Table" style="display: none;">Transpose</button>
                     <button class="btn btn-primary btn-sm btn-copy-output" title="Copy Output">Copy</button>
                 </div>
@@ -46,18 +47,8 @@ export const JSONToolsTemplate = /* html */ `
         </div>
     </div>
     
-    <!-- Table Options Panel -->
-    <div class="table-options-panel" id="table-options" style="display: none;">
-        <div class="options-header">
-            <h4>Table Options</h4>
-            <button class="btn btn-primary btn-sm btn-expand-table" title="Expand Table">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-                </svg>
-                Expand
-            </button>
-        </div>
-    </div>
+    <!-- Table Options Panel (placeholder for future options) -->
+    <div class="table-options-panel" id="table-options" style="display: none;"></div>
     
     <!-- Extract Keys Options Panel -->
     <div class="extract-options-panel" id="extract-options" style="display: none;">

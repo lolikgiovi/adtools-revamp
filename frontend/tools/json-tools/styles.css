@@ -69,6 +69,12 @@
   border-right: 1px solid hsl(var(--border));
 }
 
+/* Expanded state for output section */
+.json-output-section.expanded {
+  flex: 1;
+  border-left: none;
+}
+
 .json-editor-header,
 .json-output-header {
   background: hsl(var(--muted));
@@ -632,4 +638,15 @@
 
 .json-table .key-header {
   background: hsl(var(--muted));
+}
+
+/* Sortable Key header in transposed view */
+.json-table .key-header-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.json-table .key-header-sortable:hover {
+  background: hsl(var(--accent));
 }

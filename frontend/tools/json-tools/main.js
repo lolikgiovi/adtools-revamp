@@ -26,6 +26,8 @@ class JSONTools extends BaseTool {
     this.isErrorPanelCollapsed = false;
     this.validatedJson = null; // Store validated JSON for table operations
     this.isTransposed = false; // Track transpose state
+    this.isExpanded = false; // Track expand state
+    this.keySortOrder = "natural"; // natural, asc, desc
   }
 
   getIconSvg() {
@@ -249,16 +251,28 @@ class JSONTools extends BaseTool {
     const tableOutput = document.getElementById("json-table-output");
     const tableOptions = document.getElementById("table-options");
     const transposeBtn = document.querySelector(".btn-transpose-table");
+    const expandBtn = document.querySelector(".btn-expand-table");
+    const inputSection = document.querySelector(".json-editor-section");
+    const outputSection = document.querySelector(".json-output-section");
+    
+    // Reset expand state when switching tabs
+    if (this.isExpanded) {
+      this.isExpanded = false;
+      if (inputSection) inputSection.style.display = "flex";
+      if (outputSection) outputSection.classList.remove("expanded");
+      if (expandBtn) expandBtn.textContent = "Expand";
+    }
+    
     if (tabName === "json-to-table") {
       jsonOutput.style.display = "none";
       tableOutput.style.display = "block";
-      tableOptions.style.display = "block";
       if (transposeBtn) transposeBtn.style.display = "inline-flex";
+      if (expandBtn) expandBtn.style.display = "inline-flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
-      tableOptions.style.display = "none";
       if (transposeBtn) transposeBtn.style.display = "none";
+      if (expandBtn) expandBtn.style.display = "none";
     }
 
     // Process current content
@@ -415,6 +429,7 @@ class JSONTools extends BaseTool {
     try {
       this.validatedJson = JSON.parse(content);
       this.isTransposed = false; // Reset transpose state on new conversion
+      this.keySortOrder = "natural"; // Reset sort order on new conversion
     } catch (error) {
       this.validatedJson = null;
       tableOutput.innerHTML = `<div class="table-error">Invalid JSON: ${error.message}</div>`;
@@ -432,12 +447,34 @@ class JSONTools extends BaseTool {
       return;
     }
 
-    const res = JSONToolsService.jsonToTable(JSON.stringify(this.validatedJson), this.isTransposed);
+    const res = JSONToolsService.jsonToTable(JSON.stringify(this.validatedJson), this.isTransposed, this.keySortOrder);
     if (res.error) {
       tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
     } else {
       tableOutput.innerHTML = res.result || "";
+      
+      // Add click handler for Key header sort toggle (only in transposed view)
+      if (this.isTransposed) {
+        const keyHeader = tableOutput.querySelector(".key-header-sortable");
+        if (keyHeader) {
+          keyHeader.addEventListener("click", () => {
+            this.cycleKeySortOrder();
+          });
+        }
+      }
     }
+  }
+
+  cycleKeySortOrder() {
+    // Cycle through: natural -> asc -> desc -> natural
+    if (this.keySortOrder === "natural") {
+      this.keySortOrder = "asc";
+    } else if (this.keySortOrder === "asc") {
+      this.keySortOrder = "desc";
+    } else {
+      this.keySortOrder = "natural";
+    }
+    this.renderTable();
   }
 
   transposeTable() {
@@ -453,52 +490,24 @@ class JSONTools extends BaseTool {
   }
 
   toggleExpandTable() {
-    const mainContent = document.querySelector(".main-content");
-    if (!mainContent) return;
-
-    let overlay = document.getElementById("table-expand-overlay");
-    const tableOutput = document.getElementById("json-table-output");
+    const inputSection = document.querySelector(".json-editor-section");
+    const outputSection = document.querySelector(".json-output-section");
     const expandBtn = document.querySelector(".btn-expand-table");
+    
+    if (!inputSection || !outputSection) return;
 
-    if (overlay) {
-      // Collapse - remove overlay
-      overlay.remove();
-      expandBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-        </svg>
-        Expand
-      `;
+    this.isExpanded = !this.isExpanded;
+
+    if (this.isExpanded) {
+      // Expand - hide input, expand output
+      inputSection.style.display = "none";
+      outputSection.classList.add("expanded");
+      expandBtn.textContent = "Shrink";
     } else {
-      // Expand - create overlay
-      overlay = document.createElement("div");
-      overlay.id = "table-expand-overlay";
-      overlay.className = "table-expand-overlay";
-      overlay.innerHTML = `
-        <div class="table-expand-header">
-          <h3>Table View (Expanded)</h3>
-          <button class="btn btn-primary btn-sm btn-close-expand" title="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-            Close
-          </button>
-        </div>
-        <div class="table-expand-content">${tableOutput.innerHTML}</div>
-      `;
-      mainContent.appendChild(overlay);
-
-      // Add close handler
-      overlay.querySelector(".btn-close-expand").addEventListener("click", () => {
-        this.toggleExpandTable();
-      });
-
-      expandBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 14h6m0 0v6m0-6L3 21M20 10h-6m0 0V4m0 6l7-7"/>
-        </svg>
-        Collapse
-      `;
+      // Shrink - show input, restore output
+      inputSection.style.display = "flex";
+      outputSection.classList.remove("expanded");
+      expandBtn.textContent = "Expand";
     }
   }
 
