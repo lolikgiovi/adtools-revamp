@@ -359,3 +359,168 @@
 .error-content::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* JSON Table Output */
+.json-table-output {
+  flex: 1;
+  overflow: auto;
+  background: hsl(var(--background));
+  padding: 1rem;
+}
+
+.json-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.8rem;
+}
+
+.json-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.json-table th {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 2px solid hsl(var(--border));
+  white-space: nowrap;
+}
+
+.json-table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-table tbody tr:hover {
+  background: hsl(var(--accent));
+}
+
+.json-table .row-index-header,
+.json-table .row-index {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  width: 50px;
+  text-align: center;
+  background: hsl(var(--muted) / 0.5);
+}
+
+/* Cell value type styling */
+.json-table .null-value {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.json-table .undefined-value {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.json-table .boolean-value {
+  color: hsl(280 80% 60%);
+  font-weight: 500;
+}
+
+.json-table .number-value {
+  color: hsl(210 80% 60%);
+}
+
+.json-table .object-value {
+  color: hsl(30 80% 55%);
+  font-size: 0.75rem;
+}
+
+.empty-table {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.table-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: hsl(var(--destructive));
+  font-weight: 500;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+
+  .json-table th,
+  .json-table td {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .json-table td {
+    max-width: 150px;
+  }
+}
+
+/* Nested tables */
+.json-table .nested-table {
+  margin: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.75rem;
+}
+
+.json-table .nested-table th,
+.json-table .nested-table td {
+  padding: 0.35rem 0.5rem;
+}
+
+.json-table .nested-table th {
+  background: hsl(var(--muted) / 0.7);
+  font-size: 0.7rem;
+}
+
+/* Depth-based styling for visual hierarchy */
+.json-table .nested-table.depth-1 {
+  background: hsl(var(--muted) / 0.15);
+}
+
+.json-table .nested-table.depth-2 {
+  background: hsl(var(--muted) / 0.25);
+}
+
+.json-table .nested-table.depth-3 {
+  background: hsl(var(--muted) / 0.35);
+}
+
+.json-table .nested-table.depth-4 {
+  background: hsl(var(--muted) / 0.45);
+}
+
+/* Allow nested table cells to expand */
+.json-table td:has(.nested-table) {
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  padding: 0.5rem;
+}
+
+/* Empty array/object styling */
+.json-table .empty-array,
+.json-table .empty-object {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+  font-size: 0.75rem;
+}

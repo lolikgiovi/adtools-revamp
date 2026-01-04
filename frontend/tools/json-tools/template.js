@@ -15,6 +15,7 @@ export const JSONToolsTemplate = /* html */ `
             <button class="json-tab-button" data-tab="escape">Escape</button>
             <button class="json-tab-button" data-tab="unescape">Unescape</button>
             <button class="json-tab-button" data-tab="extract-keys">Extract Keys</button>
+            <button class="json-tab-button" data-tab="json-to-table">To Table</button>
         </div>
     </div>
     
@@ -40,6 +41,7 @@ export const JSONToolsTemplate = /* html */ `
                 </div>
             </div>
             <div id="json-output" class="json-editor"></div>
+            <div id="json-table-output" class="json-table-output" style="display: none;"></div>
         </div>
     </div>
     

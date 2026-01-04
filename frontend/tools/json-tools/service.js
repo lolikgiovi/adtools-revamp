@@ -133,6 +133,176 @@
     }
   }
 
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function formatCellValue(value, depth = 0) {
+    if (value === null) return '<span class="null-value">null</span>';
+    if (value === undefined) return '<span class="undefined-value">—</span>';
+    if (typeof value === "boolean") return `<span class="boolean-value">${value}</span>`;
+    if (typeof value === "number") return `<span class="number-value">${value}</span>`;
+    
+    // Handle arrays - render as nested table
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return '<span class="empty-array">[ ]</span>';
+      }
+      // Limit nesting depth to prevent infinite recursion
+      if (depth > 3) {
+        return `<span class="object-value">${escapeHtml(JSON.stringify(value))}</span>`;
+      }
+      return buildNestedTable(value, depth + 1);
+    }
+    
+    // Handle objects - render as nested table
+    if (typeof value === "object" && value !== null) {
+      const keys = Object.keys(value);
+      if (keys.length === 0) {
+        return '<span class="empty-object">{ }</span>';
+      }
+      // Limit nesting depth
+      if (depth > 3) {
+        return `<span class="object-value">${escapeHtml(JSON.stringify(value))}</span>`;
+      }
+      return buildNestedTable([value], depth + 1, true);
+    }
+    
+    return escapeHtml(String(value));
+  }
+
+  function buildNestedTable(dataArray, depth = 0, isSingleObject = false) {
+    if (!Array.isArray(dataArray) || dataArray.length === 0) {
+      return '<span class="empty-array">[ ]</span>';
+    }
+
+    // Check if it's an array of primitives
+    const hasObjects = dataArray.some(item => typeof item === "object" && item !== null && !Array.isArray(item));
+    
+    if (!hasObjects) {
+      // Array of primitives - simple list
+      let html = `<table class="json-table nested-table depth-${depth}"><tbody>`;
+      dataArray.forEach((item, index) => {
+        html += `<tr><td class="row-index">${index}</td><td>${formatCellValue(item, depth)}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      return html;
+    }
+
+    // Get all unique keys from all objects
+    const allKeys = new Set();
+    dataArray.forEach(item => {
+      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+        Object.keys(item).forEach(key => allKeys.add(key));
+      }
+    });
+
+    const headers = Array.from(allKeys);
+
+    // Build nested table HTML
+    let html = `<table class="json-table nested-table depth-${depth}">`;
+    html += '<thead><tr>';
+    if (!isSingleObject) {
+      html += '<th class="row-index-header">#</th>';
+    }
+    headers.forEach(header => {
+      html += `<th>${escapeHtml(header)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    dataArray.forEach((item, index) => {
+      html += '<tr>';
+      if (!isSingleObject) {
+        html += `<td class="row-index">${index}</td>`;
+      }
+      headers.forEach(header => {
+        const value = typeof item === "object" && item !== null ? item[header] : undefined;
+        html += `<td>${formatCellValue(value, depth)}</td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function jsonToTable(content) {
+    try {
+      const parsed = JSON.parse(content);
+      
+      // Handle different JSON structures
+      let dataArray;
+      let isSingleObject = false;
+      
+      if (Array.isArray(parsed)) {
+        dataArray = parsed;
+      } else if (typeof parsed === "object" && parsed !== null) {
+        // Single object - wrap in array
+        dataArray = [parsed];
+        isSingleObject = true;
+      } else {
+        // Primitive value - create simple table
+        return {
+          result: `<table class="json-table"><tbody><tr><td>${formatCellValue(parsed, 0)}</td></tr></tbody></table>`,
+          error: null
+        };
+      }
+
+      if (dataArray.length === 0) {
+        return { result: '<div class="empty-table">Empty array - no data to display</div>', error: null };
+      }
+
+      // Get all unique keys from all objects
+      const allKeys = new Set();
+      dataArray.forEach(item => {
+        if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+          Object.keys(item).forEach(key => allKeys.add(key));
+        }
+      });
+
+      const headers = Array.from(allKeys);
+      
+      if (headers.length === 0) {
+        // Array of primitives
+        let html = '<table class="json-table"><thead><tr><th>#</th><th>Value</th></tr></thead><tbody>';
+        dataArray.forEach((item, index) => {
+          html += `<tr><td class="row-index">${index}</td><td>${formatCellValue(item, 0)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        return { result: html, error: null };
+      }
+
+      // Build table HTML
+      let html = '<table class="json-table"><thead><tr>';
+      if (!isSingleObject) {
+        html += '<th class="row-index-header">#</th>';
+      }
+      headers.forEach(header => {
+        html += `<th>${escapeHtml(header)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      dataArray.forEach((item, index) => {
+        html += '<tr>';
+        if (!isSingleObject) {
+          html += `<td class="row-index">${index}</td>`;
+        }
+        headers.forEach(header => {
+          const value = typeof item === "object" && item !== null ? item[header] : undefined;
+          html += `<td>${formatCellValue(value, 0)}</td>`;
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      return { result: html, error: null };
+    } catch (error) {
+      return { result: null, error: { message: error.message, position: getErrorPosition(error.message) } };
+    }
+  }
+
   export const JSONToolsService = {
     validate,
     prettify,
@@ -142,5 +312,6 @@
     escape,
     unescape,
     extractKeys,
+    jsonToTable,
     getErrorPosition,
   };

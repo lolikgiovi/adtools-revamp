@@ -199,6 +199,7 @@ class JSONTools extends BaseTool {
       escape: "Escape",
       unescape: "Unescape",
       "extract-keys": "Extract Keys",
+      "json-to-table": "Convert to Table",
     };
     actionButton.textContent = buttonTexts[tabName] || "Action";
 
@@ -221,8 +222,20 @@ class JSONTools extends BaseTool {
       escape: "Escaped JSON",
       unescape: "Unescaped JSON",
       "extract-keys": "Extracted Keys",
+      "json-to-table": "Table View",
     };
     outputTitle.textContent = titles[tabName] || "Output";
+
+    // Toggle between Monaco editor and table output
+    const jsonOutput = document.getElementById("json-output");
+    const tableOutput = document.getElementById("json-table-output");
+    if (tabName === "json-to-table") {
+      jsonOutput.style.display = "none";
+      tableOutput.style.display = "block";
+    } else {
+      jsonOutput.style.display = "block";
+      tableOutput.style.display = "none";
+    }
 
     // Process current content
     // this.processCurrentTab();
@@ -261,6 +274,9 @@ class JSONTools extends BaseTool {
         break;
       case "extract-keys":
         this.extractKeys();
+        break;
+      case "json-to-table":
+        this.jsonToTable();
         break;
     }
   }
@@ -363,6 +379,19 @@ class JSONTools extends BaseTool {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
+    }
+  }
+
+  jsonToTable() {
+    UsageTracker.trackFeature("json-tools", "json_to_table");
+    const content = this.editor.getValue().trim();
+    const tableOutput = document.getElementById("json-table-output");
+
+    const res = JSONToolsService.jsonToTable(content);
+    if (res.error) {
+      tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
+    } else {
+      tableOutput.innerHTML = res.result || "";
     }
   }
 
