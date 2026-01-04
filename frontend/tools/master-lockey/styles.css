@@ -8,7 +8,7 @@
   height: 100%;
   gap: 16px;
   /* padding: 20px; */
-  background: var(--color-bg-primary, #ffffff);
+  background: hsl(var(--background));
 }
 
 /* Header Controls */
@@ -33,7 +33,7 @@
 
 .control-group label {
   font-weight: 500;
-  color: var(--color-text-secondary, #666);
+  color: hsl(var(--muted-foreground));
   font-size: 14px;
 }
 
@@ -98,6 +98,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -130,8 +131,9 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--color-text-secondary, #666);
-  margin-left: auto; /* Push to right if space available */
+  color: hsl(var(--muted-foreground));
+  margin-left: auto;
+  /* Push to right if space available */
 }
 
 .info-content {
@@ -143,21 +145,21 @@
 
 .domain-name {
   font-weight: 600;
-  color: var(--color-primary, #007bff);
+  color: hsl(var(--primary));
 }
 
 .separator {
-  color: var(--color-text-tertiary, #999);
+  color: hsl(var(--muted-foreground));
 }
 
 .version-info {
-  color: var(--color-text-secondary, #666);
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
 .version-info span {
   font-family: "Courier New", monospace;
-  color: var(--color-text-secondary, #999);
+  color: hsl(var(--muted-foreground));
 }
 
 /* Search Section */
@@ -186,14 +188,14 @@
 
 .search-hint {
   font-size: 12px;
-  color: var(--color-text-tertiary, #999);
+  color: hsl(var(--muted-foreground));
   font-style: italic;
   margin: 0;
 }
 
 .search-results-count {
   font-size: 13px;
-  color: var(--color-text-secondary, #666);
+  color: hsl(var(--muted-foreground));
   font-weight: 500;
   margin-left: auto;
 }
@@ -306,7 +308,7 @@
   justify-content: center;
   padding: 60px 20px;
   text-align: center;
-  color: var(--color-text-secondary, #666);
+  color: hsl(var(--muted-foreground));
 }
 
 .empty-state-icon,
@@ -318,7 +320,7 @@
 .empty-state h3,
 .error-state h3 {
   margin: 0 0 8px 0;
-  color: var(--color-text-primary, #333);
+  color: hsl(var(--foreground));
   font-size: 20px;
 }
 
@@ -331,8 +333,8 @@
 .spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid var(--color-border, #ddd);
-  border-top-color: var(--color-primary, #007bff);
+  border: 4px solid hsl(var(--border));
+  border-top-color: hsl(var(--primary));
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -407,9 +409,10 @@
 
 .lockey-table td {
   padding: 10px 12px;
-  color: var(--color-text-primary, #333);
+  color: hsl(var(--foreground));
   max-width: 400px;
-  word-break: break-word; /* Allow long text to wrap */
+  word-break: break-word;
+  /* Allow long text to wrap */
 }
 
 .lockey-table td:first-child {
@@ -546,6 +549,27 @@
   font-size: 0.75rem;
   margin-bottom: 12px;
 }
+
+.confluence-warning {
+  padding: 12px;
+  background: hsl(45 93% 47% / 0.1);
+  border: 1px solid hsl(45 93% 47%);
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(45 93% 30%);
+  font-size: 0.75rem;
+  margin-bottom: 12px;
+}
+
+.confluence-warning a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.confluence-warning a:hover {
+  opacity: 0.8;
+}
+
 
 .confluence-results {
   margin-top: 12px;

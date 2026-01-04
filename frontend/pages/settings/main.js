@@ -580,6 +580,15 @@ class SettingsPage {
           }
           // Persist username for display
           stored = this.service.setValue(storageKey, "string", value, item.apply);
+        } else if (storageKey === "secure.confluence.pat") {
+          try {
+            await invoke("set_confluence_pat", { pat: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          // Store a marker only, not the PAT itself
+          stored = this.service.setValue(storageKey, "secret", "set", item.apply);
         } else if (storageKey === "config.jenkins.url") {
           // Strong URL validation via URL parser
           try {

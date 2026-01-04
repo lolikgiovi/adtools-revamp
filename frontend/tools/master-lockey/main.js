@@ -117,6 +117,8 @@ class MasterLockey extends BaseTool {
       hiddenKeysCount: this.container.querySelector("#hidden-keys-count"),
       hiddenKeysContent: this.container.querySelector("#hidden-keys-content"),
       hiddenKeysBody: this.container.querySelector("#hidden-keys-body"),
+      confluencePatWarning: this.container.querySelector("#confluence-pat-warning"),
+      confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
     };
   }
 
@@ -677,15 +679,32 @@ class MasterLockey extends BaseTool {
       const domain = localStorage.getItem("config.confluence.domain");
       const username = localStorage.getItem("config.confluence.username");
 
+      // Always show the section so user can see what's needed
+      this.els.confluenceSection.style.display = "block";
+
       if (hasPat && domain && username) {
-        this.els.confluenceSection.style.display = "block";
+        // Full credentials configured - hide warning, enable controls
+        this.els.confluencePatWarning.style.display = "none";
+        this.els.cachedPagesSelector.disabled = false;
+        this.els.confluencePageInput.disabled = false;
         // Load cached pages dropdown
         await this.loadCachedPagesDropdown();
       } else {
-        this.els.confluenceSection.style.display = "none";
+        // Missing credentials - show warning, disable controls
+        this.els.confluencePatWarning.style.display = "block";
+        this.els.cachedPagesSelector.disabled = true;
+        this.els.confluencePageInput.disabled = true;
+        this.els.btnFetchConfluence.disabled = true;
+
+        // Add click handler for settings link
+        this.els.confluenceSettingsLink?.addEventListener("click", (e) => {
+          e.preventDefault();
+          // Navigate to settings page
+          this.eventBus?.emit?.("navigate", { page: "settings" });
+        });
       }
     } catch (_) {
-      // Not available (web mode)
+      // Not available (web mode) - hide section entirely
       this.els.confluenceSection.style.display = "none";
     }
   }
@@ -720,6 +739,11 @@ class MasterLockey extends BaseTool {
       this.currentConfluenceTitle = cached.title;
       this.confluenceResults = cached.lockeys;
       this.hiddenKeys = cached.hiddenKeys || [];
+
+      UsageTracker.trackEvent("master_lockey", "confluence_load_cached", {
+        pageId,
+        lockeyCount: cached.lockeys?.length || 0,
+      });
 
       this.displayConfluenceResults();
     } catch (error) {

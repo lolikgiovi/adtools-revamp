@@ -86,6 +86,12 @@ export const MasterLockeyTemplate = /* html */ `
                 <h4>📄 Confluence Lockeys</h4>
             </div>
             
+            <!-- PAT Not Configured Warning -->
+            <div id="confluence-pat-warning" class="confluence-warning" style="display: none;">
+                ⚠️ Confluence credentials not configured. 
+                <a href="#" id="confluence-settings-link">Go to Settings</a> to add your domain, username, and PAT.
+            </div>
+            
             <!-- Cached Pages Selector -->
             <div class="cached-pages-row">
                 <select id="cached-pages-selector" class="cached-pages-selector">
