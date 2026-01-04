@@ -15,7 +15,7 @@
           "options": [
             {
               "value": "light",
-              "label": "Light"
+              "label": "Light (Default)"
             },
             {
               "value": "grey-muted",
@@ -28,6 +28,10 @@
             {
               "value": "soft-pink",
               "label": "Soft Pink"
+            },
+            {
+              "value": "ocean-blue",
+              "label": "Ocean Blue"
             },
             {
               "value": "dark",

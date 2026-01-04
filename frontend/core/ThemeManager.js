@@ -3,12 +3,13 @@
  * Handles multi-theme switching (light, grey-muted, grey-paper, dark) and persistence
  */
 class ThemeManager {
-    static THEMES = ["light", "grey-muted", "grey-paper", "soft-pink", "dark"];
+    static THEMES = ["light", "grey-muted", "grey-paper", "soft-pink", "ocean-blue", "dark"];
     static THEME_LABELS = {
         "light": "Light",
         "grey-muted": "Grey (Cool)",
         "grey-paper": "Grey (Warm)",
         "soft-pink": "Soft Pink",
+        "ocean-blue": "Ocean Blue",
         "dark": "Dark"
     };
 
