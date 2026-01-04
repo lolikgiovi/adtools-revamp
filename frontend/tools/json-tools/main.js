@@ -163,6 +163,16 @@ class JSONTools extends BaseTool {
         }
       });
     });
+
+    // Sort order options
+    document.querySelectorAll('input[name="sort-order"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if (this.currentTab === "extract-keys") {
+          this.clearErrors();
+          this.processCurrentTab();
+        }
+      });
+    });
   }
 
   setupTabs() {
@@ -346,8 +356,9 @@ class JSONTools extends BaseTool {
     UsageTracker.trackFeature("json-tools", "extract_keys");
     const content = this.editor.getValue().trim();
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;
+    const sortOrder = document.querySelector('input[name="sort-order"]:checked').value;
 
-    const res = JSONToolsService.extractKeys(content, extractType === "paths");
+    const res = JSONToolsService.extractKeys(content, extractType === "paths", sortOrder);
     if (res.error) {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {

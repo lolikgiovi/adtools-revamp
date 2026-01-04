@@ -112,11 +112,20 @@
     return keys;
   }
 
-  function extractKeys(content, includePaths) {
+  function extractKeys(content, includePaths, sortOrder = "natural") {
     try {
       const parsed = JSON.parse(content);
       const keys = getAllKeys(parsed, includePaths);
-      const uniqueKeys = [...new Set(keys)].sort();
+      let uniqueKeys = [...new Set(keys)];
+      
+      // Apply sorting based on sortOrder
+      if (sortOrder === "asc") {
+        uniqueKeys.sort((a, b) => a.localeCompare(b));
+      } else if (sortOrder === "desc") {
+        uniqueKeys.sort((a, b) => b.localeCompare(a));
+      }
+      // "natural" keeps the original order (no sorting)
+      
       const formatted = JSON.stringify(uniqueKeys, null, 2);
       return { result: formatted, error: null };
     } catch (error) {

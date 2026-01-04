@@ -49,14 +49,32 @@ export const JSONToolsTemplate = /* html */ `
             <h4>Extract Keys Options</h4>
         </div>
         <div class="options-content">
-            <label>
-                <input type="radio" name="extract-type" value="simple" checked>
-                Simple Keys (e.g., "name", "age", "address")
-            </label>
-            <label>
-                <input type="radio" name="extract-type" value="paths">
-                Key Paths (e.g., "user.name", "user.address.city")
-            </label>
+            <div class="options-group">
+                <span class="options-group-label">Key Type</span>
+                <label>
+                    <input type="radio" name="extract-type" value="simple" checked>
+                    Simple Keys (e.g., "name", "age", "address")
+                </label>
+                <label>
+                    <input type="radio" name="extract-type" value="paths">
+                    Key Paths (e.g., "user.name", "user.address.city")
+                </label>
+            </div>
+            <div class="options-group">
+                <span class="options-group-label">Sort Order</span>
+                <label>
+                    <input type="radio" name="sort-order" value="natural" checked>
+                    Natural (original order)
+                </label>
+                <label>
+                    <input type="radio" name="sort-order" value="asc">
+                    Sort A-Z
+                </label>
+                <label>
+                    <input type="radio" name="sort-order" value="desc">
+                    Sort Z-A
+                </label>
+            </div>
         </div>
     </div>
 </div>
