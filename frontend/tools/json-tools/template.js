@@ -23,10 +23,10 @@ export const JSONToolsTemplate = /* html */ `
             <div class="json-editor-header">
                 <h3>Input</h3>
                 <div class="json-editor-actions">
-                    <button class="btn-action-primary" title="Perform Action">Action</button>
-                    <button class="btn-clear" title="Clear Editor">Clear</button>
-                    <button class="btn-paste" title="Paste from Clipboard">Paste</button>
-                    <button class="btn-copy-input" title="Copy Input">Copy</button>
+                    <button class="btn btn-primary btn-sm btn-action-primary" title="Perform Action">Action</button>
+                    <button class="btn btn-primary btn-sm btn-clear" title="Clear Editor">Clear</button>
+                    <button class="btn btn-primary btn-sm btn-paste" title="Paste from Clipboard">Paste</button>
+                    <button class="btn btn-primary btn-sm btn-copy-input" title="Copy Input">Copy</button>
                 </div>
             </div>
             <div id="json-editor" class="json-editor"></div>
@@ -36,7 +36,7 @@ export const JSONToolsTemplate = /* html */ `
             <div class="json-output-header">
                 <h3 id="output-title">Output</h3>
                 <div class="json-output-actions">
-                    <button class="btn-copy-output" title="Copy Output">Copy</button>
+                    <button class="btn btn-primary btn-sm btn-copy-output" title="Copy Output">Copy</button>
                 </div>
             </div>
             <div id="json-output" class="json-editor"></div>

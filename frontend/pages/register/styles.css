@@ -12,7 +12,7 @@
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   padding: 20px 24px;
 }
 
@@ -51,18 +51,12 @@
   margin-top: 10px;
 }
 
-.btn.btn-primary {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border: none;
-  border-radius: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
+/* Uses global btn btn-primary classes */
 
 .register-error {
   margin-top: 10px;
-  color: #b91c1c; /* red-700 */
+  color: #b91c1c;
+  /* red-700 */
   min-height: 18px;
 }
 

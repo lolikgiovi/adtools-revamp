@@ -12,11 +12,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         value="schema_name.table_name">
                 </div>
                 <div class="button-group quick-query-left-controls">
-                    <button id="showSavedSchemas" class="btn btn-primary">Schemas</button>
-                    <button id="addNewSchemaRow" class="btn btn-primary">Add row</button>
-                    <button id="removeLastSchemaRow" class="btn btn-primary">Remove last row</button>
-                    <button id="clearAll" class="btn btn-primary">Clear All</button>
-                    <button id="generateQuery" class="btn btn-primary">Generate Query</button>
+                    <button id="showSavedSchemas" class="btn btn-primary btn-sm">Schemas</button>
+                    <button id="addNewSchemaRow" class="btn btn-primary btn-sm">Add row</button>
+                    <button id="removeLastSchemaRow" class="btn btn-primary btn-sm">Remove last row</button>
+                    <button id="clearAll" class="btn btn-primary btn-sm">Clear All</button>
+                    <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
                 </div>
 
                 <div id="spreadsheet-schema"></div>
@@ -39,11 +39,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
-                    <button id="toggleWordWrap" class="btn btn-primary">Word Wrap: Off</button>
-                    <button id="copySQL" class="btn btn-primary">Copy SQL</button>
-                    <button id="downloadSQL" class="btn btn-primary">Download SQL</button>
-                <button id="splitQuery" class="btn btn-primary">Split</button>
-                    <button id="executeInJenkinsRunner" class="btn btn-primary">Execute in Jenkins Runner</button>
+                    <button id="toggleWordWrap" class="btn btn-primary btn-sm">Word Wrap: Off</button>
+                    <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
+                    <button id="downloadSQL" class="btn btn-primary btn-sm">Download SQL</button>
+                    <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
+                    <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Execute in Jenkins Runner</button>
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>
@@ -52,10 +52,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
         <div class="content-b">
             <div class="button-group quick-query-data-controls">
-                <button id="addFieldNames" class="btn btn-primary">Add field names from schema</button>
-                <button id="addDataRow" class="btn btn-primary">Add Row</button>
-                <button id="removeDataRow" class="btn btn-primary">Remove Last Row</button>
-                <button id="clearData" class="btn btn-primary">Clear Data</button>
+                <button id="addFieldNames" class="btn btn-primary btn-sm">Add field names from schema</button>
+                <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
+                <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
+                <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
                 <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
             </div>
             <div id="spreadsheet-data"></div>
@@ -68,10 +68,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="schema-modal-header">
             <h3>Saved Schemas</h3>
             <div class="schema-modal-header-actions">
-                <button id="importDefaultSchema" class="btn btn-primary">Import Default Schema</button>
-                <button id="clearAllSchemas" class="btn btn-primary">Clear All</button>
-                <button id="exportSchemas" class="btn btn-primary">Export</button>
-                <button id="importSchemas" class="btn btn-primary">Import</button>
+                <button id="importDefaultSchema" class="btn btn-primary btn-sm">Import Default Schema</button>
+                <button id="clearAllSchemas" class="btn btn-primary btn-sm">Clear All</button>
+                <button id="exportSchemas" class="btn btn-primary btn-sm">Export</button>
+                <button id="importSchemas" class="btn btn-primary btn-sm">Import</button>
                 <input type="file" id="schemaFileInput" accept=".json" style="display: none;">
             </div>
             <button id="closeSchemaOverlay" class="overlay-close-button" aria-label="Close">&times;</button>

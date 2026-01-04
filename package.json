@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "vite --port 5173",
+    "dev": "vite --port 1234",
     "build": "vite build",
     "build:tauri": "vite build --mode tauri",
     "prebuild": "npm run test:ci && node backend-workers/scripts/update-build-version.js",

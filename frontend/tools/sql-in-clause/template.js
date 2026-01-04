@@ -6,8 +6,8 @@ export const SQLInClauseTemplate = /* html */ `
           <h3>Input</h3>
           <span class="hint">Enter items, one per line</span>
           <div class="editor-actions" style="display:flex;align-items:center;gap:.5rem;">
-            <button id="sqlInPasteBtn" class="btn btn-sm" title="Paste from clipboard">Paste</button>
-            <button id="sqlInClearBtn" class="btn btn-sm" title="Clear editor">Clear</button>
+            <button id="sqlInPasteBtn" class="btn btn-primary btn-sm" title="Paste from clipboard">Paste</button>
+            <button id="sqlInClearBtn" class="btn btn-primary btn-sm" title="Clear editor">Clear</button>
           </div>
         </div>
         <div id="sqlInEditor" class="monaco-editor-container"></div>
@@ -25,7 +25,7 @@ export const SQLInClauseTemplate = /* html */ `
                  <option value="select">SELECT query</option>
                </select>
              </div>
-             <button id="sqlInCopyBtn" class="btn btn-sm" title="Copy to clipboard">Copy</button>
+             <button id="sqlInCopyBtn" class="btn btn-primary btn-sm" title="Copy to clipboard">Copy</button>
            </div>
          </div>
          <div class="output-config">

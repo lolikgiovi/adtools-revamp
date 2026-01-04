@@ -78,45 +78,9 @@ label {
   margin-top: 0.25rem;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
+/* QR Tools uses btn-sm for compact buttons - inherits from global .btn */
+.qr-tools .btn {
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: calc(var(--radius) - 2px);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.btn-primary {
-  background: hsl(var(--primary));
-  border-color: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-}
-
-.btn-primary:hover {
-  background: hsl(var(--primary-hover));
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: hsl(var(--secondary));
-  border-color: hsl(var(--border));
-  color: hsl(var(--secondary-foreground));
-}
-
-.btn-secondary:hover {
-  background: hsl(var(--muted));
-}
-
-.btn[disabled],
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .preview-header {
@@ -150,27 +114,39 @@ label {
 
 #qrCanvas {
   width: 100%;
-  height: auto; /* computed from width to keep ratio */
-  aspect-ratio: 1 / 1; /* enforce square display */
-  image-rendering: pixelated; /* crisper scaling */
+  height: auto;
+  /* computed from width to keep ratio */
+  aspect-ratio: 1 / 1;
+  /* enforce square display */
+  image-rendering: pixelated;
+  /* crisper scaling */
   display: block;
 }
 
 /* Ensure native color inputs render their swatch visibly */
 input[type="color"].form-control {
-  padding: 0; /* avoid squeezing the swatch */
-  height: 2rem; /* explicit height for a clear preview */
-  background: transparent; /* let the swatch be visible */
+  padding: 0;
+  /* avoid squeezing the swatch */
+  height: 2rem;
+  /* explicit height for a clear preview */
+  background: transparent;
+  /* let the swatch be visible */
 }
+
 input[type="color"].form-control::-webkit-color-swatch-wrapper {
-  padding: 0; /* remove default inner padding */
+  padding: 0;
+  /* remove default inner padding */
 }
+
 input[type="color"].form-control::-webkit-color-swatch {
-  border: none; /* cleaner look */
+  border: none;
+  /* cleaner look */
   border-radius: calc(var(--radius) - 2px);
 }
+
 input[type="color"].form-control::-moz-color-swatch {
-  border: none; /* Firefox */
+  border: none;
+  /* Firefox */
   border-radius: calc(var(--radius) - 2px);
 }
 

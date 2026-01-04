@@ -6,11 +6,11 @@ export const SplunkVTLEditorTemplate = /* html */ `
         <div class="pane-header">
           <h3>Splunk Editor</h3>
           <div>
-            <button id="btnFormatVtl" class="btn btn-primary" title="Format template">Format</button>
-            <button id="btnMinifyVtl" class="btn btn-primary" title="Minify template">Minify</button>
-            <button id="btnCopyVtl" class="btn btn-sm" title="Copy">Copy</button>
-            <button id="btnPasteVtl" class="btn btn-sm" title="Paste">Paste</button>
-            <button id="btnClearVtl" class="btn btn-sm" title="Clear">Clear</button>
+            <button id="btnFormatVtl" class="btn btn-primary btn-sm" title="Format template">Format</button>
+            <button id="btnMinifyVtl" class="btn btn-primary btn-sm" title="Minify template">Minify</button>
+            <button id="btnCopyVtl" class="btn btn-secondary btn-sm" title="Copy">Copy</button>
+            <button id="btnPasteVtl" class="btn btn-secondary btn-sm" title="Paste">Paste</button>
+            <button id="btnClearVtl" class="btn btn-secondary btn-sm" title="Clear">Clear</button>
           </div>
         </div>
         <div id="vtlEditor" class="monaco-editor-container"></div>

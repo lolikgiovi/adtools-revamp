@@ -5,12 +5,12 @@ export const HTMLTemplateToolTemplate = /* html */ `
         <div class="pane-header">
           <h3>Editor</h3>
           <div class="toolbar-left">
-            <button id="btnFormatHtml" class="btn btn-primary" title="Format HTML">Format</button>
-            <button id="btnMinifyHtml" class="btn btn-primary" title="Minify HTML">Minify</button>
-            <button id="btnExtractVtl" class="btn btn-secondary" title="Extract VTL Fields">Extract VTL Fields</button>
-            <button id="btnCopyHtml" class="btn btn-sm" title="Copy HTML">Copy</button>
-            <button id="btnPasteHtml" class="btn btn-sm" title="Paste HTML">Paste</button>
-            <button id="btnClearHtml" class="btn btn-sm" title="Clear HTML">Clear</button>
+            <button id="btnFormatHtml" class="btn btn-primary btn-sm" title="Format HTML">Format</button>
+            <button id="btnMinifyHtml" class="btn btn-primary btn-sm" title="Minify HTML">Minify</button>
+            <button id="btnExtractVtl" class="btn btn-primary btn-sm" title="Extract VTL Fields">Extract VTL Fields</button>
+            <button id="btnCopyHtml" class="btn btn-secondary btn-sm" title="Copy HTML">Copy</button>
+            <button id="btnPasteHtml" class="btn btn-secondary btn-sm" title="Paste HTML">Paste</button>
+            <button id="btnClearHtml" class="btn btn-secondary btn-sm" title="Clear HTML">Clear</button>
           </div>
         </div>
         <div id="htmlEditor" class="monaco-editor-container"></div>
@@ -20,8 +20,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
           <div class="vtl-modal-header">
             <h4 class="vtl-modal-title">VTL Variables</h4>
             <div style="display:flex;gap:.5rem;align-items:center;">
-              <button id="btnResetVtl" class="btn btn-sm" title="Reset All">Reset</button>
-              <button id="btnCloseVtl" class="btn btn-sm" title="Close VTL">Close</button>
+              <button id="btnResetVtl" class="btn btn-secondary btn-sm" title="Reset All">Reset</button>
+              <button id="btnCloseVtl" class="btn btn-secondary btn-sm" title="Close VTL">Close</button>
             </div>
           </div>
           <div id="vtlModalBody" class="vtl-modal-body"></div>
@@ -39,7 +39,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <select id="envSelector" class="env-select" title="Select environment"></select>
             </div>
 
-            <button id="btnReloadPreview" class="btn btn-sm" title="Reload Preview">Reload</button>
+            <button id="btnReloadPreview" class="btn btn-secondary btn-sm" title="Reload Preview">Reload</button>
           </div>
         </div>
         <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
