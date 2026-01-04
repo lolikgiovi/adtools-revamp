@@ -342,6 +342,55 @@
     --info: 210 60% 55%;
     --info-foreground: 0 0% 100%;
   }
+
+  /* Forest Green Theme - Elegant emerald tones */
+  .luxury-green {
+    --sidebar: 150 25% 95%;
+    --sidebar-foreground: 150 15% 25%;
+    --sidebar-primary: 150 45% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 20% 90%;
+    --sidebar-accent-foreground: 150 15% 25%;
+    --sidebar-border: 150 18% 85%;
+    --sidebar-ring: 150 35% 45%;
+    --sidebar-input: 150 20% 90%;
+
+    --background: 150 20% 97%;
+    --foreground: 150 15% 18%;
+    --card: 150 30% 98%;
+    --card-foreground: 150 15% 18%;
+    --popover: 150 30% 98%;
+    --popover-foreground: 150 15% 18%;
+    --primary: 150 45% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 150 40% 32%;
+    --secondary: 150 20% 92%;
+    --secondary-foreground: 150 15% 18%;
+    --muted: 150 15% 93%;
+    --muted-foreground: 150 10% 45%;
+    --accent: 150 20% 92%;
+    --accent-foreground: 150 15% 18%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 18% 85%;
+    --input: 150 18% 90%;
+    --ring: 150 40% 42%;
+
+    /* Background variations */
+    --bg-secondary: 150 20% 95%;
+    --bg-tertiary: 150 18% 93%;
+    --text-primary: 150 15% 18%;
+    --text-secondary: 150 10% 45%;
+    --shadow: 150 25% 30% / 0.08;
+
+    /* Status colors */
+    --success: 150 55% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 75% 55%;
+    --warning-foreground: 40 50% 15%;
+    --info: 200 60% 55%;
+    --info-foreground: 0 0% 100%;
+  }
 }
 
 /* Reset and base styles */

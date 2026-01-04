@@ -19,11 +19,11 @@
             },
             {
               "value": "grey-muted",
-              "label": "Grey (Cool)"
+              "label": "Cool Tone"
             },
             {
               "value": "grey-paper",
-              "label": "Grey (Warm)"
+              "label": "Warm Tone"
             },
             {
               "value": "soft-pink",
@@ -32,6 +32,10 @@
             {
               "value": "ocean-blue",
               "label": "Ocean Blue"
+            },
+            {
+              "value": "luxury-green",
+              "label": "Forest Green"
             },
             {
               "value": "dark-grey",
