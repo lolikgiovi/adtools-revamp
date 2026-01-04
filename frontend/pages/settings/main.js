@@ -401,7 +401,7 @@ class SettingsPage {
     if (item.type === "action") {
       row.innerHTML = `
         <div class="setting-name">${item.label}</div>
-        <div class="setting-control"><button type="button" class="btn btn-primary setting-action-btn">${
+        <div class="setting-control"><button type="button" class="btn btn-primary btn-sm setting-action-btn">${
           item.buttonLabel || "Run"
         }</button></div>
       `;

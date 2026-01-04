@@ -3,7 +3,7 @@ export const SettingsTemplate = /*html*/ `
     <header class="settings-header">
       <h2>Settings</h2>
       <div class="settings-header-tools">
-      <button type="button" class="btn btn-secondary settings-load-defaults" aria-label="Load default settings">Load Default Settings</button>
+      <button type="button" class="btn btn-secondary btn-sm settings-load-defaults" aria-label="Load default settings">Load Default Settings</button>
       <div class="runtime-status" aria-live="polite">
         <span id="runtime-status" class="runtime-status-badge" data-state="detecting">Detecting…</span>
       </div>
