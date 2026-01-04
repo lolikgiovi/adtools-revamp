@@ -3,16 +3,36 @@
  * Handles multi-theme switching (light, grey-muted, grey-paper, dark) and persistence
  */
 class ThemeManager {
-    static THEMES = ["light", "grey-muted", "grey-paper", "soft-pink", "ocean-blue", "luxury-green", "dark-grey", "dark"];
+    static THEMES = [
+        // Light themes
+        "light", "grey-muted", "grey-paper", "soft-pink", "ocean-blue", "luxury-green",
+        "catppuccin-latte", "atom-one-light", "nord-light",
+        // Dark themes
+        "dark-grey", "dark", "dracula", "catppuccin-mocha", "nord", "gruvbox-dark",
+        "monokai-pro", "palenight", "github-dark-hc", "cobalt2"
+    ];
     static THEME_LABELS = {
-        "light": "Light",
-        "grey-muted": "Cool Tone",
-        "grey-paper": "Warm Tone",
-        "soft-pink": "Soft Pink",
-        "ocean-blue": "Ocean Blue",
-        "luxury-green": "Forest Green",
-        "dark-grey": "Dark Grey",
-        "dark": "Dark"
+        // Light themes
+        "light": "[Light] Quiet Light",
+        "grey-muted": "[Light] Solarized Light",
+        "grey-paper": "[Light] Sepia",
+        "soft-pink": "[Light] Light Pink",
+        "ocean-blue": "[Light] Winter is Coming",
+        "luxury-green": "[Light] Everforest",
+        "catppuccin-latte": "[Light] Catppuccin Latte",
+        "atom-one-light": "[Light] Atom One Light",
+        "nord-light": "[Light] Nord Light",
+        // Dark themes
+        "dark-grey": "[Dark] One Dark Pro",
+        "dark": "[Dark] Tokyo Night",
+        "dracula": "[Dark] Dracula",
+        "catppuccin-mocha": "[Dark] Catppuccin Mocha",
+        "nord": "[Dark] Nord",
+        "gruvbox-dark": "[Dark] Gruvbox Dark",
+        "monokai-pro": "[Dark] Monokai Pro",
+        "palenight": "[Dark] Palenight",
+        "github-dark-hc": "[Dark] GitHub Dark High Contrast",
+        "cobalt2": "[Dark] Cobalt2"
     };
 
     constructor(eventBus) {

@@ -15,35 +15,79 @@
           "options": [
             {
               "value": "light",
-              "label": "Light (Default)"
+              "label": "[Light] Quiet Light"
             },
             {
               "value": "grey-muted",
-              "label": "Cool Tone"
+              "label": "[Light] Solarized Light"
             },
             {
               "value": "grey-paper",
-              "label": "Warm Tone"
+              "label": "[Light] Sepia"
             },
             {
               "value": "soft-pink",
-              "label": "Soft Pink"
+              "label": "[Light] Light Pink"
             },
             {
               "value": "ocean-blue",
-              "label": "Ocean Blue"
+              "label": "[Light] Winter is Coming"
             },
             {
               "value": "luxury-green",
-              "label": "Forest Green"
+              "label": "[Light] Everforest"
+            },
+            {
+              "value": "catppuccin-latte",
+              "label": "[Light] Catppuccin Latte"
+            },
+            {
+              "value": "atom-one-light",
+              "label": "[Light] Atom One Light"
+            },
+            {
+              "value": "nord-light",
+              "label": "[Light] Nord Light"
             },
             {
               "value": "dark-grey",
-              "label": "Dark Grey"
+              "label": "[Dark] One Dark Pro"
             },
             {
               "value": "dark",
-              "label": "Dark (Midnight)"
+              "label": "[Dark] Tokyo Night"
+            },
+            {
+              "value": "dracula",
+              "label": "[Dark] Dracula"
+            },
+            {
+              "value": "catppuccin-mocha",
+              "label": "[Dark] Catppuccin Mocha"
+            },
+            {
+              "value": "nord",
+              "label": "[Dark] Nord"
+            },
+            {
+              "value": "gruvbox-dark",
+              "label": "[Dark] Gruvbox Dark"
+            },
+            {
+              "value": "monokai-pro",
+              "label": "[Dark] Monokai Pro"
+            },
+            {
+              "value": "palenight",
+              "label": "[Dark] Palenight"
+            },
+            {
+              "value": "github-dark-hc",
+              "label": "[Dark] GitHub Dark High Contrast"
+            },
+            {
+              "value": "cobalt2",
+              "label": "[Dark] Cobalt2"
             }
           ],
           "apply": "theme",
