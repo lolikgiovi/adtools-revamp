@@ -39,6 +39,11 @@ export const JSONToolsTemplate = /* html */ `
             <div class="json-output-header">
                 <h3 id="output-title">Output</h3>
                 <div class="json-output-actions">
+                    <button class="btn btn-sm btn-toggle-search" title="Search in table" style="display: none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                        </svg>
+                    </button>
                     <div class="table-search-group" style="display: none;">
                         <input type="text" class="table-search-input" placeholder="Search..." title="Search in table">
                         <span class="search-match-count"></span>

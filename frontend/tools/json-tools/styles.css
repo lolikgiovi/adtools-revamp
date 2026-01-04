@@ -66,6 +66,16 @@
 .json-output-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Search toggle button */
+.btn-toggle-search {
+  padding: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* JSON Tools buttons use btn btn-primary btn-sm from global system */

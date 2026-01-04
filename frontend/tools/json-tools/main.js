@@ -31,6 +31,7 @@ class JSONTools extends BaseTool {
     // Search state
     this.searchMatches = [];
     this.currentMatchIndex = -1;
+    this.isSearchOpen = false;
   }
 
   getIconSvg() {
@@ -224,6 +225,14 @@ class JSONTools extends BaseTool {
     const nextBtn = document.querySelector(".btn-search-next");
     if (prevBtn) prevBtn.addEventListener("click", () => this.navigateSearch(-1));
     if (nextBtn) nextBtn.addEventListener("click", () => this.navigateSearch(1));
+
+    // Toggle search button
+    const toggleSearchBtn = document.querySelector(".btn-toggle-search");
+    if (toggleSearchBtn) {
+      toggleSearchBtn.addEventListener("click", () => {
+        this.toggleSearch();
+      });
+    }
   }
 
   setupTabs() {
@@ -302,17 +311,20 @@ class JSONTools extends BaseTool {
       tableOutput.style.display = "block";
       if (transposeBtn) transposeBtn.style.display = "inline-flex";
       if (expandBtn) expandBtn.style.display = "inline-flex";
-      // Show search group
-      const searchGroup = document.querySelector(".table-search-group");
-      if (searchGroup) searchGroup.style.display = "flex";
+      // Show search toggle button
+      const searchToggleBtn = document.querySelector(".btn-toggle-search");
+      if (searchToggleBtn) searchToggleBtn.style.display = "inline-flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
       if (transposeBtn) transposeBtn.style.display = "none";
       if (expandBtn) expandBtn.style.display = "none";
-      // Hide search group
+      // Hide search toggle and group
+      const searchToggleBtn = document.querySelector(".btn-toggle-search");
       const searchGroup = document.querySelector(".table-search-group");
+      if (searchToggleBtn) searchToggleBtn.style.display = "none";
       if (searchGroup) searchGroup.style.display = "none";
+      this.isSearchOpen = false;
     }
 
     // Process current content
@@ -623,6 +635,23 @@ class JSONTools extends BaseTool {
     const matchCountEl = document.querySelector(".search-match-count");
     if (matchCountEl) {
       matchCountEl.textContent = `${this.currentMatchIndex + 1}/${this.searchMatches.length}`;
+    }
+  }
+
+  toggleSearch() {
+    const searchGroup = document.querySelector(".table-search-group");
+    const searchInput = document.querySelector(".table-search-input");
+    
+    this.isSearchOpen = !this.isSearchOpen;
+    
+    if (this.isSearchOpen) {
+      if (searchGroup) searchGroup.style.display = "flex";
+      if (searchInput) searchInput.focus();
+    } else {
+      if (searchGroup) searchGroup.style.display = "none";
+      // Clear search when closing
+      if (searchInput) searchInput.value = "";
+      this.searchTable("");
     }
   }
 
