@@ -1,0 +1,43 @@
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 200;
+    /* keep above in mobile too */
+    transition: transform 0.2s ease;
+  }
+
+  .sidebar[data-state="open"] {
+    transform: translateX(0);
+  }
+
+  .sidebar[data-state="collapsed"] {
+    transform: translateX(-100%);
+  }
+
+  .main {
+    margin-left: 0;
+    width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .content-wrapper h1 {
+    font-size: 2rem;
+  }
+
+  .tools-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .tool-card {
+    padding: 1rem;
+  }
+}
+
