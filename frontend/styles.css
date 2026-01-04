@@ -195,6 +195,55 @@
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
   }
+
+  /* Soft Pink Theme - Sanrio/Hello Kitty inspired pastels */
+  .soft-pink {
+    --sidebar: 350 50% 96%;
+    --sidebar-foreground: 340 10% 30%;
+    --sidebar-primary: 350 65% 70%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 350 40% 92%;
+    --sidebar-accent-foreground: 340 10% 30%;
+    --sidebar-border: 350 35% 88%;
+    --sidebar-ring: 350 50% 75%;
+    --sidebar-input: 350 40% 92%;
+
+    --background: 30 30% 98%;
+    --foreground: 340 10% 25%;
+    --card: 350 50% 98%;
+    --card-foreground: 340 10% 25%;
+    --popover: 350 50% 98%;
+    --popover-foreground: 340 10% 25%;
+    --primary: 350 60% 68%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 350 55% 60%;
+    --secondary: 350 40% 93%;
+    --secondary-foreground: 340 10% 25%;
+    --muted: 350 30% 94%;
+    --muted-foreground: 340 10% 45%;
+    --accent: 350 40% 93%;
+    --accent-foreground: 340 10% 25%;
+    --destructive: 0 65% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 350 35% 85%;
+    --input: 350 35% 90%;
+    --ring: 350 50% 70%;
+
+    /* Background variations */
+    --bg-secondary: 350 40% 96%;
+    --bg-tertiary: 350 35% 94%;
+    --text-primary: 340 10% 25%;
+    --text-secondary: 340 10% 45%;
+    --shadow: 350 30% 50% / 0.08;
+
+    /* Status colors - softer pastels */
+    --success: 150 45% 50%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 75% 60%;
+    --warning-foreground: 40 50% 20%;
+    --info: 200 60% 60%;
+    --info-foreground: 0 0% 100%;
+  }
 }
 
 /* Reset and base styles */

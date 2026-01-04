@@ -26,6 +26,10 @@
               "label": "Grey (Warm)"
             },
             {
+              "value": "soft-pink",
+              "label": "Soft Pink"
+            },
+            {
               "value": "dark",
               "label": "Dark"
             }
