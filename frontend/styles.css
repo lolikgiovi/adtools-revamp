@@ -2252,3 +2252,11 @@ body.global-search-open {
     height: 90px;
   }
 }
+
+/* Global Monaco Editor Container */
+.monaco-editor-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 8px 8px;
+}

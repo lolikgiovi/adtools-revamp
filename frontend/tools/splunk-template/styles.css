@@ -24,10 +24,12 @@
   border-radius: 4px;
   opacity: 0.7;
 }
+
 .vtl-resizer:hover {
   background: hsl(var(--muted));
   opacity: 1;
 }
+
 .vtl-resizer:active {
   background: hsl(var(--foreground));
   opacity: 1;
@@ -51,12 +53,6 @@
   color: hsl(var(--foreground));
 }
 
-.monaco-editor-container {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .handsontable-container {
   flex: 1;
   min-height: 0;
@@ -73,6 +69,7 @@
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
   }
+
   .vtl-resizer {
     display: none;
   }

@@ -258,14 +258,6 @@
   background: hsl(var(--destructive) / 0.05);
 }
 
-/* Monaco Editor container styling */
-.monaco-editor-container {
-  flex: 1;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  overflow: hidden;
-}
-
 /* Responsive design */
 @media (max-width: 768px) {
   .json-tools-main {

@@ -3,7 +3,8 @@
   /* Override global tool-container constraints for wide layout */
   max-width: none;
   margin: 0;
-  padding: 0; /* main-content already provides outer padding */
+  padding: 0;
+  /* main-content already provides outer padding */
 }
 
 .html-template {
@@ -77,19 +78,12 @@
   column-gap: 1rem;
 }
 
-.monaco-editor-container {
-  flex: 1;
-  min-height: 300px;
-  border: none;
-  background: hsl(var(--background));
-  overflow: hidden;
-}
-
 .renderer-iframe {
   flex: 1;
   border: none;
   width: 100%;
-  background: transparent; /* do not affect page rendering fidelity */
+  background: transparent;
+  /* do not affect page rendering fidelity */
 }
 
 .renderer-actions {
@@ -169,6 +163,7 @@
   .html-template-layout {
     flex-direction: column;
   }
+
   .editor-pane {
     border-right: none;
     border-bottom: 1px solid hsl(var(--border));

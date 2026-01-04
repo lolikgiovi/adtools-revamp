@@ -15,7 +15,8 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr); /* 50:50 split */
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr);
+  /* 50:50 split */
   gap: 0.75rem;
 }
 
@@ -60,28 +61,25 @@
 }
 
 .output-config {
-  display: none; /* toggled by JS when SELECT format */
+  display: none;
+  /* toggled by JS when SELECT format */
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
 }
 
-.select-details { display: inline-flex; gap: 0.5rem; align-items: center; }
+.select-details {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .select-details input {
   padding: 0.4rem 0.6rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-}
-
-/* Editor/Output containers */
-.monaco-editor-container {
-  flex: 1;
-  min-height: 0;
-  border: none;
-  background: hsl(var(--background));
-  overflow: hidden;
 }
 
 .output-text {
@@ -96,7 +94,10 @@
   resize: vertical;
 }
 
-.hint { color: hsl(var(--muted-foreground)); font-size: 0.8rem; }
+.hint {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
 
 /* Responsive */
 @media (max-width: 900px) {

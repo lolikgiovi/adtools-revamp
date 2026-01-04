@@ -117,6 +117,11 @@
   background: hsl(var(--background));
 }
 
+/* Override global monaco-editor-container to keep all corners rounded in Quick Query */
+#queryEditor .monaco-editor-container {
+  border-radius: 6px;
+}
+
 /* Clip editor canvas to rounded corners while keeping parent overflow visible */
 #queryEditor .monaco-editor,
 #queryEditor .monaco-editor .overflow-guard {
