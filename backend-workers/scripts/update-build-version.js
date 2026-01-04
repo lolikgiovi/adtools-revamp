@@ -18,8 +18,8 @@ const buildInfo = {
   timestamp
 };
 
-// Write to public/web-build.json
-const targetPath = path.join(__dirname, '..', 'public', 'web-build.json');
+// Write to frontend/public/web-build.json
+const targetPath = path.join(__dirname, '..', '..', 'frontend', 'public', 'web-build.json');
 
 try {
   fs.writeFileSync(
