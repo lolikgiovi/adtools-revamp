@@ -628,3 +628,49 @@
 .json-table .key-header-sortable:hover {
   background: hsl(var(--accent));
 }
+
+/* Table Search Styles */
+.table-search-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.table-search-input {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+  width: 140px;
+}
+
+.table-search-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+}
+
+.search-match-count {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  /* min-width: 50px; */
+}
+
+.btn-search-prev,
+.btn-search-next {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* Search match highlighting */
+.json-table td.search-match {
+  background: hsl(50 100% 50% / 0.3) !important;
+}
+
+.json-table td.search-current {
+  background: hsl(30 100% 50% / 0.5) !important;
+  outline: 2px solid hsl(30 100% 40%);
+  outline-offset: -2px;
+}

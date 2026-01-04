@@ -39,6 +39,12 @@ export const JSONToolsTemplate = /* html */ `
             <div class="json-output-header">
                 <h3 id="output-title">Output</h3>
                 <div class="json-output-actions">
+                    <div class="table-search-group" style="display: none;">
+                        <input type="text" class="table-search-input" placeholder="Search..." title="Search in table">
+                        <span class="search-match-count"></span>
+                        <button class="btn btn-sm btn-search-prev" title="Previous match">▲</button>
+                        <button class="btn btn-sm btn-search-next" title="Next match">▼</button>
+                    </div>
                     <button class="btn btn-primary btn-sm btn-expand-table" title="Expand Table" style="display: none;">Expand</button>
                     <button class="btn btn-primary btn-sm btn-transpose-table" title="Transpose Table" style="display: none;">Transpose</button>
                     <button class="btn btn-primary btn-sm btn-copy-output" title="Copy Output">Copy</button>

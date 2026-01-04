@@ -28,6 +28,9 @@ class JSONTools extends BaseTool {
     this.isTransposed = false; // Track transpose state
     this.isExpanded = false; // Track expand state
     this.keySortOrder = "natural"; // natural, asc, desc
+    // Search state
+    this.searchMatches = [];
+    this.currentMatchIndex = -1;
   }
 
   getIconSvg() {
@@ -193,6 +196,34 @@ class JSONTools extends BaseTool {
         this.toggleExpandTable();
       });
     }
+
+    // Search input
+    const searchInput = document.querySelector(".table-search-input");
+    if (searchInput) {
+      let debounceTimer;
+      searchInput.addEventListener("input", (e) => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          this.searchTable(e.target.value);
+        }, 150);
+      });
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.navigateSearch(-1);
+          } else {
+            this.navigateSearch(1);
+          }
+        }
+      });
+    }
+
+    // Search navigation buttons
+    const prevBtn = document.querySelector(".btn-search-prev");
+    const nextBtn = document.querySelector(".btn-search-next");
+    if (prevBtn) prevBtn.addEventListener("click", () => this.navigateSearch(-1));
+    if (nextBtn) nextBtn.addEventListener("click", () => this.navigateSearch(1));
   }
 
   setupTabs() {
@@ -271,11 +302,17 @@ class JSONTools extends BaseTool {
       tableOutput.style.display = "block";
       if (transposeBtn) transposeBtn.style.display = "inline-flex";
       if (expandBtn) expandBtn.style.display = "inline-flex";
+      // Show search group
+      const searchGroup = document.querySelector(".table-search-group");
+      if (searchGroup) searchGroup.style.display = "flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
       if (transposeBtn) transposeBtn.style.display = "none";
       if (expandBtn) expandBtn.style.display = "none";
+      // Hide search group
+      const searchGroup = document.querySelector(".table-search-group");
+      if (searchGroup) searchGroup.style.display = "none";
     }
 
     // Process current content
@@ -511,6 +548,81 @@ class JSONTools extends BaseTool {
       inputSection.style.display = "flex";
       outputSection.classList.remove("expanded");
       expandBtn.textContent = "Expand";
+    }
+  }
+
+  searchTable(query) {
+    const tableOutput = document.getElementById("json-table-output");
+    const matchCountEl = document.querySelector(".search-match-count");
+    
+    // Clear previous highlights
+    tableOutput.querySelectorAll(".search-match, .search-current").forEach(el => {
+      el.classList.remove("search-match", "search-current");
+    });
+    this.searchMatches = [];
+    this.currentMatchIndex = -1;
+    
+    if (!query || query.trim() === "") {
+      if (matchCountEl) matchCountEl.textContent = "";
+      return;
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    
+    // Find all leaf td cells (cells without nested tables inside)
+    const cells = tableOutput.querySelectorAll(".json-table td");
+    cells.forEach(cell => {
+      // Skip cells that contain nested tables - we'll search their children instead
+      if (cell.querySelector(".nested-table")) return;
+      
+      // Skip key-index cells (row numbers)
+      if (cell.classList.contains("key-index")) return;
+      
+      const text = cell.textContent.toLowerCase();
+      if (text.includes(lowerQuery)) {
+        cell.classList.add("search-match");
+        this.searchMatches.push(cell);
+      }
+    });
+    
+    // Update match count
+    if (matchCountEl) {
+      if (this.searchMatches.length > 0) {
+        this.currentMatchIndex = 0;
+        this.searchMatches[0].classList.add("search-current");
+        this.searchMatches[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        matchCountEl.textContent = `1/${this.searchMatches.length}`;
+      } else {
+        matchCountEl.textContent = "0 matches";
+      }
+    }
+  }
+
+  navigateSearch(direction) {
+    if (this.searchMatches.length === 0) return;
+    
+    // Remove current highlight
+    if (this.currentMatchIndex >= 0) {
+      this.searchMatches[this.currentMatchIndex].classList.remove("search-current");
+    }
+    
+    // Move to next/prev
+    this.currentMatchIndex += direction;
+    if (this.currentMatchIndex >= this.searchMatches.length) {
+      this.currentMatchIndex = 0;
+    } else if (this.currentMatchIndex < 0) {
+      this.currentMatchIndex = this.searchMatches.length - 1;
+    }
+    
+    // Highlight new current
+    const current = this.searchMatches[this.currentMatchIndex];
+    current.classList.add("search-current");
+    current.scrollIntoView({ behavior: "smooth", block: "center" });
+    
+    // Update counter
+    const matchCountEl = document.querySelector(".search-match-count");
+    if (matchCountEl) {
+      matchCountEl.textContent = `${this.currentMatchIndex + 1}/${this.searchMatches.length}`;
     }
   }
 
