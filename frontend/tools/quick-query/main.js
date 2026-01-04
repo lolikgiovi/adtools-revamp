@@ -1774,7 +1774,7 @@ export class QuickQueryUI {
     const originalContent = document.getElementById("originalContent");
     const processedContent = document.getElementById("processedContent");
     const metadata = document.getElementById("fileMetadata");
-    const processedTab = document.querySelector('.tab-button[data-tab="processed"]');
+    const processedTab = document.querySelector('.qq-tab-button[data-tab="processed"]');
 
     console.log("File viewer showing for file:", file);
     title.textContent = file.name;
@@ -1901,13 +1901,13 @@ export class QuickQueryUI {
 
     // Show overlay and set initial state
     overlay.classList.remove("hidden");
-    document.querySelector('.tab-button[data-tab="original"]').classList.add("active");
+    document.querySelector('.qq-tab-button[data-tab="original"]').classList.add("active");
     document.getElementById("originalContent").classList.add("active");
 
     // Add tab switching functionality
-    document.querySelectorAll(".tab-button").forEach((button) => {
+    document.querySelectorAll(".qq-tab-button").forEach((button) => {
       button.onclick = () => {
-        document.querySelectorAll(".tab-button").forEach((btn) => btn.classList.remove("active"));
+        document.querySelectorAll(".qq-tab-button").forEach((btn) => btn.classList.remove("active"));
         button.classList.add("active");
 
         document.querySelectorAll(".tab-content").forEach((content) => content.classList.remove("active"));

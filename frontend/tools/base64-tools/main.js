@@ -38,10 +38,10 @@ class Base64Tools extends BaseTool {
     const container = this.validateContainer();
 
     // Tab switching
-    const tabButtons = container.querySelectorAll(".base64-tab-button");
+    const tabButtons = container.querySelectorAll(".tab-navigation .tab-button");
     tabButtons.forEach((button) => {
       button.addEventListener("click", (e) => {
-        const mode = e.target.dataset.mode;
+        const mode = e.target.dataset.mode || e.target.closest(".tab-button")?.dataset.mode;
         if (mode) {
           this.switchMode(mode);
         }
@@ -185,7 +185,7 @@ class Base64Tools extends BaseTool {
     this.currentMode = mode;
 
     // Update tab buttons
-    const tabButtons = container.querySelectorAll(".base64-tab-button");
+    const tabButtons = container.querySelectorAll(".tab-navigation .tab-button");
     tabButtons.forEach((btn) => {
       btn.classList.remove("active");
       if (btn.dataset.mode === mode) {

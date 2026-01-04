@@ -1,10 +1,10 @@
 export const JenkinsRunnerTemplate = /*html*/ `
   <div class="jenkins-runner">
-    <div class="jr-tabs" aria-label="Jenkins Runner tabs">
-      <div class="jr-tabs-left" role="tablist">
-        <button class="jr-tab active" id="jr-tab-run-btn" role="tab" aria-selected="true" aria-controls="jr-tab-run">Run Query</button>
-        <button class="jr-tab" id="jr-tab-history-btn" role="tab" aria-selected="false" aria-controls="jr-tab-history">History</button>
-        <button class="jr-tab" id="jr-tab-templates-btn" role="tab" aria-selected="false" aria-controls="jr-tab-templates">Templates</button>
+    <div class="tabs-container jr-tabs" aria-label="Jenkins Runner tabs">
+      <div class="tabs-left" role="tablist">
+        <button class="tab-button active" id="jr-tab-run-btn" role="tab" aria-selected="true" aria-controls="jr-tab-run">Run Query</button>
+        <button class="tab-button" id="jr-tab-history-btn" role="tab" aria-selected="false" aria-controls="jr-tab-history">History</button>
+        <button class="tab-button" id="jr-tab-templates-btn" role="tab" aria-selected="false" aria-controls="jr-tab-templates">Templates</button>
       </div>
       <div class="jr-status" data-role="status">Ready</div>
     </div>

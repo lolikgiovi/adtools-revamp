@@ -93,8 +93,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
 
         <div class="file-viewer-tabs">
-            <button class="tab-button active" data-tab="original">Original</button>
-            <button class="tab-button" data-tab="processed">Processed</button>
+            <button class="qq-tab-button active" data-tab="original">Original</button>
+            <button class="qq-tab-button" data-tab="processed">Processed</button>
         </div>
 
         <div class="file-viewer-content">

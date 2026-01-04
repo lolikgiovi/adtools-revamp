@@ -1,51 +1,12 @@
 /* Base64 Tools Specific Styles */
 
-/* Tab Navigation */
+/* Tab container uses shared .tabs-container from components.css */
+/* Only override the margin-bottom for this tool's layout */
 .tab-navigation {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-  border-bottom: 1px solid hsl(var(--border));
+  margin-bottom: 1rem;
 }
 
-.base64-tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: var(--radius) var(--radius) 0 0;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.base64-tab-button:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--muted));
-}
-
-.base64-tab-button.active {
-  color: hsl(var(--primary));
-  background: hsl(var(--background));
-  border-bottom: 2px solid hsl(var(--primary));
-}
-
-.tab-icon {
-  width: 1rem;
-  height: 1rem;
-}
-
-/* Base64 tool-specific icon sizing by unique ids */
-#base64-tab-encode-icon,
-#base64-tab-decode-icon {
-  width: 0.85rem;
-  height: 0.85rem;
-}
+/* .tab-icon sizing is handled in the global components.css */
 
 #base64-upload-icon-encode,
 #base64-upload-icon-decode {
@@ -217,15 +178,18 @@
 .files-container {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem; /* tighter vertical spacing between cards */
+  gap: 0.5rem;
+  /* tighter vertical spacing between cards */
 }
 
 .file-card {
-  gap: 6px; /* reduce internal spacing between icon/details/actions */
+  gap: 6px;
+  /* reduce internal spacing between icon/details/actions */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem; /* compact card padding */
+  padding: 0.5rem 0.75rem;
+  /* compact card padding */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
@@ -240,7 +204,8 @@
 .file-card-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem; /* smaller gap inside info cluster */
+  gap: 0.5rem;
+  /* smaller gap inside info cluster */
   flex: 1;
   min-width: 0;
 }
@@ -251,7 +216,8 @@
   justify-content: center;
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
-  height: 100%; /* stretch to the height of the file-card-info row */
+  height: 100%;
+  /* stretch to the height of the file-card-info row */
 }
 
 .file-card-icon svg {
@@ -272,21 +238,25 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2; /* tighter line spacing */
+  line-height: 1.2;
+  /* tighter line spacing */
 }
 
 .file-card-size {
   font-size: 0.7rem;
   color: hsl(var(--muted-foreground));
-  margin: 0.2rem 0 0 0; /* slightly tighter */
-  line-height: 1.2; /* tighter line spacing */
+  margin: 0.2rem 0 0 0;
+  /* slightly tighter */
+  line-height: 1.2;
+  /* tighter line spacing */
 }
 
 .file-card-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem; /* slightly smaller action button footprint */
+  width: 1.75rem;
+  /* slightly smaller action button footprint */
   height: 1.75rem;
   border: none;
   border-radius: var(--radius);
@@ -303,7 +273,8 @@
 }
 
 .file-card-remove svg {
-  width: 0.9rem; /* consistent smaller svg */
+  width: 0.9rem;
+  /* consistent smaller svg */
   height: 0.9rem;
 }
 
@@ -349,7 +320,8 @@
 /* Smaller meta spans */
 .file-card-meta span {
   font-size: 0.7rem;
-  line-height: 1.2; /* tighter line spacing */
+  line-height: 1.2;
+  /* tighter line spacing */
 }
 
 /* Processed Files Display */
@@ -365,7 +337,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem; /* compact processed card padding */
+  padding: 0.5rem 0.75rem;
+  /* compact processed card padding */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--muted));
@@ -410,20 +383,20 @@
     gap: 0;
   }
 
-  .base64-tab-button {
+  .tab-navigation .tab-button {
     border-radius: 0;
     justify-content: center;
   }
 
-  .base64-tab-button.active {
+  .tab-navigation .tab-button.active {
     border-bottom: none;
     border-left: 3px solid hsl(var(--primary));
   }
 
-  .input-actions,
+  /* .input-actions,
   .output-actions {
     flex-wrap: wrap;
-  }
+  } */
 
   .file-drop-area {
     padding: 1.5rem 1rem;

@@ -121,7 +121,7 @@ class JSONTools extends BaseTool {
 
   bindToolEvents() {
     // Tab switching
-    document.querySelectorAll(".json-tab-button").forEach((button) => {
+    document.querySelectorAll(".json-tools-tabs .tab-button").forEach((button) => {
       button.addEventListener("click", (e) => {
         this.switchTab(e.target.dataset.tab);
       });
@@ -200,10 +200,10 @@ class JSONTools extends BaseTool {
   }
 
   switchTab(tabName) {
-    document.querySelectorAll(".json-tab-button").forEach((btn) => {
+    document.querySelectorAll(".json-tools-tabs .tab-button").forEach((btn) => {
       btn.classList.remove("active");
     });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add("active");
+    document.querySelector(`.json-tools-tabs [data-tab="${tabName}"]`).classList.add("active");
 
     // Update current tab
     this.currentTab = tabName;
