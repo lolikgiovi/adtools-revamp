@@ -314,18 +314,6 @@
   }
 }
 
-/* Monaco editor handles its own dark/light theme - no overrides needed */
-
-/* Focus states for accessibility
-.json-tab-button:focus-visible,
-.btn-clear:focus-visible,
-.btn-copy-input:focus-visible,
-.btn-copy-output:focus-visible,
-.btn-toggle-errors:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-} */
-
 /* Animation for smooth transitions */
 .error-content {
   transition: max-height 0.2s ease, padding 0.2s ease;
@@ -385,7 +373,7 @@
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
   font-weight: 600;
-  padding: 0.75rem 1rem;
+  padding: 0.125rem 1rem;
   text-align: left;
   border-bottom: 2px solid hsl(var(--border));
   white-space: nowrap;
@@ -617,5 +605,31 @@
 }
 
 .json-table.transposed th.row-index {
+  background: hsl(var(--muted));
+}
+
+/* Key numbering styling */
+.json-table .key-number-row th {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  padding: 0rem 1rem;
+  border-bottom: none;
+}
+
+.json-table .key-index {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  text-align: left;
+  width: 30px;
+  background: hsl(var(--muted));
+}
+
+.json-table.transposed .key-index {
+  text-align: center;
+}
+
+.json-table .key-header {
   background: hsl(var(--muted));
 }

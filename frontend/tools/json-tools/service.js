@@ -277,8 +277,10 @@
       // Build table HTML - check for transpose mode
       if (transpose) {
         // Transposed: keys are rows, indices are columns
+        // Add # column for key numbering
         let html = '<table class="json-table transposed"><thead><tr>';
-        html += '<th class="row-index-header">Key</th>';
+        html += '<th class="row-index-header">#</th>';
+        html += '<th class="key-header">Key</th>';
         if (!isSingleObject) {
           dataArray.forEach((_, index) => {
             html += `<th>${index}</th>`;
@@ -288,8 +290,8 @@
         }
         html += '</tr></thead><tbody>';
 
-        headers.forEach(header => {
-          html += `<tr><td class="row-index">${escapeHtml(header)}</td>`;
+        headers.forEach((header, keyIndex) => {
+          html += `<tr><td class="key-index">${keyIndex + 1}</td><td class="row-index">${escapeHtml(header)}</td>`;
           dataArray.forEach(item => {
             const value = typeof item === "object" && item !== null ? item[header] : undefined;
             html += `<td>${formatCellValue(value, 0)}</td>`;
@@ -302,7 +304,21 @@
       }
 
       // Normal table: keys are columns, indices are rows
-      let html = '<table class="json-table"><thead><tr>';
+      // Add a number row above the header row for key numbering
+      let html = '<table class="json-table"><thead>';
+      
+      // Key number row
+      html += '<tr class="key-number-row">';
+      if (!isSingleObject) {
+        html += '<th class="row-index-header"></th>';
+      }
+      headers.forEach((_, keyIndex) => {
+        html += `<th class="key-index">${keyIndex + 1}</th>`;
+      });
+      html += '</tr>';
+      
+      // Key name row
+      html += '<tr>';
       if (!isSingleObject) {
         html += '<th class="row-index-header">#</th>';
       }
