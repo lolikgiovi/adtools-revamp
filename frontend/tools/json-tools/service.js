@@ -178,51 +178,29 @@
       return '<span class="empty-array">[ ]</span>';
     }
 
-    // Check if it's an array of primitives
-    const hasObjects = dataArray.some(item => typeof item === "object" && item !== null && !Array.isArray(item));
-    
-    if (!hasObjects) {
-      // Array of primitives - simple list (transposed: key column + value columns)
-      let html = `<table class="json-table nested-table depth-${depth} transposed"><tbody>`;
-      dataArray.forEach((item, index) => {
-        html += `<tr><td class="row-index">${index}</td><td>${formatCellValue(item, depth)}</td></tr>`;
+    // For single object passed as array, render as key-value table
+    if (isSingleObject && dataArray.length === 1 && typeof dataArray[0] === "object" && dataArray[0] !== null && !Array.isArray(dataArray[0])) {
+      const obj = dataArray[0];
+      const keys = Object.keys(obj);
+      if (keys.length === 0) {
+        return '<span class="empty-object">{ }</span>';
+      }
+      
+      let html = `<table class="json-table nested-table depth-${depth} transposed">`;
+      html += '<thead><tr><th class="row-index-header">Key</th><th>Value</th></tr></thead><tbody>';
+      keys.forEach(key => {
+        html += `<tr><td class="row-index">${escapeHtml(key)}</td><td>${formatCellValue(obj[key], depth)}</td></tr>`;
       });
       html += '</tbody></table>';
       return html;
     }
 
-    // Get all unique keys from all objects
-    const allKeys = new Set();
-    dataArray.forEach(item => {
-      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
-        Object.keys(item).forEach(key => allKeys.add(key));
-      }
-    });
-
-    const headers = Array.from(allKeys);
-
-    // Build nested table HTML in TRANSPOSED format (keys as rows)
+    // For arrays (including mixed types), render as Index/Value table
     let html = `<table class="json-table nested-table depth-${depth} transposed">`;
-    html += '<thead><tr>';
-    html += '<th class="row-index-header">Key</th>';
-    if (!isSingleObject) {
-      dataArray.forEach((_, index) => {
-        html += `<th>${index}</th>`;
-      });
-    } else {
-      html += '<th>Value</th>';
-    }
-    html += '</tr></thead><tbody>';
-
-    headers.forEach(header => {
-      html += `<tr><td class="row-index">${escapeHtml(header)}</td>`;
-      dataArray.forEach(item => {
-        const value = typeof item === "object" && item !== null ? item[header] : undefined;
-        html += `<td>${formatCellValue(value, depth)}</td>`;
-      });
-      html += '</tr>';
+    html += '<thead><tr><th class="row-index-header">Index</th><th>Value</th></tr></thead><tbody>';
+    dataArray.forEach((item, index) => {
+      html += `<tr><td class="row-index">${index}</td><td>${formatCellValue(item, depth)}</td></tr>`;
     });
-
     html += '</tbody></table>';
     return html;
   }

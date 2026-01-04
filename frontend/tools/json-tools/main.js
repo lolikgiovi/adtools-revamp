@@ -196,7 +196,9 @@ class JSONTools extends BaseTool {
   }
 
   setupTabs() {
-    this.switchTab("validator");
+    // Restore last selected tab from localStorage
+    const savedTab = localStorage.getItem("json-tools-tab") || "validator";
+    this.switchTab(savedTab);
   }
 
   switchTab(tabName) {
@@ -205,8 +207,9 @@ class JSONTools extends BaseTool {
     });
     document.querySelector(`.json-tools-tabs [data-tab="${tabName}"]`).classList.add("active");
 
-    // Update current tab
+    // Update current tab and save to localStorage
     this.currentTab = tabName;
+    localStorage.setItem("json-tools-tab", tabName);
 
     // Update action button text
     const actionButton = document.querySelector(".btn-action-primary");
