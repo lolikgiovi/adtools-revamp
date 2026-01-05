@@ -9,7 +9,7 @@ import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 // Routes
 import { handleAnalyticsBatchPost, handleAnalyticsBatchGet, handleAnalyticsLogPost, handleAnalyticsLogGet } from './src/routes/analytics.js';
 import { handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
-import { handleDashboardVerify, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
+import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
 import { handleWhitelist } from './src/routes/whitelist.js';
@@ -111,6 +111,14 @@ export default {
     if (url.pathname === "/dashboard/verify") {
       if (method !== "POST") return methodNotAllowed();
       return handleDashboardVerify(request, env);
+    }
+    if (url.pathname === "/dashboard/tabs") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleDashboardTabs(request, env);
+    }
+    if (url.pathname === "/dashboard/query") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleDashboardQuery(request, env);
     }
     if (url.pathname === "/dashboard/stats/tools") {
       if (method !== "GET") return methodNotAllowed();

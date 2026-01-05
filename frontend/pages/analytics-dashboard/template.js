@@ -25,13 +25,8 @@ export const AnalyticsDashboardTemplate = /*html*/ `
     <div class="dashboard-content" id="dashboard-content" style="display: none;">
       <!-- Tabs -->
       <div class="tabs-container">
-        <div class="tabs-left">
-          <button type="button" class="tab-button active" data-tab="tools">Tool Usage</button>
-          <button type="button" class="tab-button" data-tab="daily">Daily Logs</button>
-          <button type="button" class="tab-button" data-tab="devices">Devices</button>
-          <button type="button" class="tab-button" data-tab="events">Events</button>
-          <button type="button" class="tab-button" data-tab="quick-query">Quick Query</button>
-          <button type="button" class="tab-button" data-tab="quick-query-errors">QQ Errors</button>
+        <div class="tabs-left" id="dynamic-tabs">
+          <!-- Tabs will be rendered dynamically -->
         </div>
         <div class="dashboard-actions">
           <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
@@ -45,29 +40,9 @@ export const AnalyticsDashboardTemplate = /*html*/ `
         </div>
       </div>
 
-      <!-- Tab Panels -->
+      <!-- Single Panel for dynamic content -->
       <div class="dashboard-panels">
-        <div class="dashboard-panel active" id="panel-tools">
-          <div class="panel-loading">Loading...</div>
-          <div class="panel-content"></div>
-        </div>
-        <div class="dashboard-panel" id="panel-daily">
-          <div class="panel-loading">Loading...</div>
-          <div class="panel-content"></div>
-        </div>
-        <div class="dashboard-panel" id="panel-devices">
-          <div class="panel-loading">Loading...</div>
-          <div class="panel-content"></div>
-        </div>
-        <div class="dashboard-panel" id="panel-events">
-          <div class="panel-loading">Loading...</div>
-          <div class="panel-content"></div>
-        </div>
-        <div class="dashboard-panel" id="panel-quick-query">
-          <div class="panel-loading">Loading...</div>
-          <div class="panel-content"></div>
-        </div>
-        <div class="dashboard-panel" id="panel-quick-query-errors">
+        <div class="dashboard-panel active" id="dashboard-panel">
           <div class="panel-loading">Loading...</div>
           <div class="panel-content"></div>
         </div>

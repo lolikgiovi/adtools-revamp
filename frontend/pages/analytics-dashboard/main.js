@@ -1,6 +1,7 @@
 /**
  * Analytics Dashboard Page
  * Password-protected internal analytics viewer
+ * Tabs are fetched dynamically from the API
  */
 import { AnalyticsDashboardTemplate } from './template.js';
 import './styles.css';
@@ -13,7 +14,8 @@ class AnalyticsDashboardPage {
     this.eventBus = eventBus;
     this.container = null;
     this.token = null;
-    this.currentTab = 'tools';
+    this.tabs = [];
+    this.currentTab = null;
     this.cache = {};
   }
 
@@ -30,7 +32,7 @@ class AnalyticsDashboardPage {
         if (payload.exp && payload.exp > Date.now()) {
           this.token = stored;
           this.showDashboard();
-          this.loadCurrentTab();
+          this.loadTabs();
         }
       }
     } catch (_) {}
@@ -43,15 +45,10 @@ class AnalyticsDashboardPage {
     const form = this.container.querySelector('#dashboard-auth-form');
     form?.addEventListener('submit', (e) => this.handleAuth(e));
 
-    // Tabs
-    this.container.querySelectorAll('.tab-button').forEach((tab) => {
-      tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
-    });
-
     // Refresh
     this.container.querySelector('#dashboard-refresh')?.addEventListener('click', () => {
       this.cache = {};
-      this.loadCurrentTab();
+      this.loadCurrentTabData();
     });
 
     // Logout
@@ -95,7 +92,7 @@ class AnalyticsDashboardPage {
           sessionStorage.setItem(TOKEN_KEY, data.token);
         } catch (_) {}
         this.showDashboard();
-        this.loadCurrentTab();
+        this.loadTabs();
       } else {
         errorEl.textContent = data.error || 'Invalid password';
         passwordInput.focus();
@@ -112,6 +109,8 @@ class AnalyticsDashboardPage {
 
   logout() {
     this.token = null;
+    this.tabs = [];
+    this.currentTab = null;
     this.cache = {};
     try {
       sessionStorage.removeItem(TOKEN_KEY);
@@ -121,36 +120,68 @@ class AnalyticsDashboardPage {
     this.container.querySelector('#dashboard-password').value = '';
   }
 
+  async loadTabs() {
+    const tabsContainer = this.container.querySelector('#dynamic-tabs');
+    if (!tabsContainer) return;
+
+    tabsContainer.innerHTML = '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Loading tabs...</span>';
+
+    try {
+      const res = await fetch(`${API_BASE}/dashboard/tabs`, {
+        headers: { 'Authorization': `Bearer ${this.token}` },
+      });
+
+      if (res.status === 401) {
+        this.logout();
+        return;
+      }
+
+      const data = await res.json();
+      
+      if (data.ok && Array.isArray(data.tabs)) {
+        this.tabs = data.tabs;
+        this.renderTabs();
+        // Auto-select first tab
+        if (this.tabs.length > 0) {
+          this.switchTab(this.tabs[0].id);
+        }
+      } else {
+        tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">${data.error || 'Failed to load tabs'}</span>`;
+      }
+    } catch (err) {
+      tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">Error: ${err.message}</span>`;
+    }
+  }
+
+  renderTabs() {
+    const tabsContainer = this.container.querySelector('#dynamic-tabs');
+    if (!tabsContainer) return;
+
+    tabsContainer.innerHTML = this.tabs.map((tab, idx) => 
+      `<button type="button" class="tab-button${idx === 0 ? ' active' : ''}" data-tab="${tab.id}">${this.escapeHtml(tab.name)}</button>`
+    ).join('');
+
+    // Bind click events
+    tabsContainer.querySelectorAll('.tab-button').forEach((btn) => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    });
+  }
+
   switchTab(tabId) {
     this.currentTab = tabId;
     
-    // Update active tab
-    this.container.querySelectorAll('.tab-button').forEach((tab) => {
+    // Update active tab button
+    this.container.querySelectorAll('#dynamic-tabs .tab-button').forEach((tab) => {
       tab.classList.toggle('active', tab.dataset.tab === tabId);
     });
     
-    // Update active panel
-    this.container.querySelectorAll('.dashboard-panel').forEach((panel) => {
-      panel.classList.toggle('active', panel.id === `panel-${tabId}`);
-    });
-    
-    this.loadCurrentTab();
+    this.loadCurrentTabData();
   }
 
-  async loadCurrentTab() {
-    const endpoints = {
-      'tools': '/dashboard/stats/tools',
-      'daily': '/dashboard/stats/daily',
-      'devices': '/dashboard/stats/devices',
-      'events': '/dashboard/stats/events',
-      'quick-query': '/dashboard/stats/quick-query',
-      'quick-query-errors': '/dashboard/stats/quick-query-errors',
-    };
+  async loadCurrentTabData() {
+    if (!this.currentTab) return;
 
-    const endpoint = endpoints[this.currentTab];
-    if (!endpoint) return;
-
-    const panel = this.container.querySelector(`#panel-${this.currentTab}`);
+    const panel = this.container.querySelector('#dashboard-panel');
     const loading = panel?.querySelector('.panel-loading');
     const content = panel?.querySelector('.panel-content');
     
@@ -158,7 +189,7 @@ class AnalyticsDashboardPage {
 
     // Check cache
     if (this.cache[this.currentTab]) {
-      this.renderTable(content, this.cache[this.currentTab], this.currentTab);
+      this.renderTable(content, this.cache[this.currentTab]);
       return;
     }
 
@@ -166,8 +197,13 @@ class AnalyticsDashboardPage {
     content.innerHTML = '';
 
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        headers: { 'Authorization': `Bearer ${this.token}` },
+      const res = await fetch(`${API_BASE}/dashboard/query`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}` 
+        },
+        body: JSON.stringify({ tabId: this.currentTab }),
       });
 
       if (res.status === 401) {
@@ -179,7 +215,7 @@ class AnalyticsDashboardPage {
       
       if (data.ok && Array.isArray(data.data)) {
         this.cache[this.currentTab] = data.data;
-        this.renderTable(content, data.data, this.currentTab);
+        this.renderTable(content, data.data);
       } else {
         content.innerHTML = `<div class="panel-error">${data.error || 'Failed to load data'}</div>`;
       }
@@ -190,23 +226,14 @@ class AnalyticsDashboardPage {
     }
   }
 
-  renderTable(container, data, tabId) {
+  renderTable(container, data) {
     if (!data.length) {
       container.innerHTML = '<div class="panel-empty">No data available</div>';
       return;
     }
 
-    // Define columns per tab
-    const columnConfig = {
-      'tools': ['tool_id', 'action', 'total_count'],
-      'daily': ['user_email', 'platform', 'tool_id', 'action'],
-      'devices': ['email', 'platform'],
-      'events': ['email', 'platform', 'feature_id', 'action', 'properties'],
-      'quick-query': ['time', 'user', 'platform', 'type', 'table_name', 'row_count', 'attachment'],
-      'quick-query-errors': ['time', 'user', 'platform', 'action', 'table_name', 'field', 'error'],
-    };
-
-    const columns = columnConfig[tabId] || Object.keys(data[0] || {});
+    // Infer columns from first row
+    const columns = Object.keys(data[0] || {});
     
     const headerCells = columns.map((col) => `<th>${this.formatHeader(col)}</th>`).join('');
     const rows = data.map((row) => {
