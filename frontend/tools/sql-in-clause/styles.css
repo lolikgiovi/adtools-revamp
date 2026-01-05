@@ -37,6 +37,8 @@
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid hsl(var(--border));
   color: hsl(var(--foreground));
+  min-height: 52px;
+  /* Standardized height to sync Input/Output headers */
 }
 
 /* Controls */
@@ -91,7 +93,8 @@
   color: hsl(var(--foreground));
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
   padding: 0.75rem;
-  resize: vertical;
+  resize: none;
+  /* Removed vertical resize to maintain pane height sync */
 }
 
 .hint {
@@ -103,6 +106,7 @@
 @media (max-width: 900px) {
   .sql-in-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr 1fr;
+    /* Set to equal heights for stacked layout */
   }
 }
