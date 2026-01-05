@@ -30,11 +30,24 @@ export class ImageCheckerService {
   normalizeInput(input) {
     input = input.trim();
 
+    // UUID regex pattern
+    const uuidPattern = /[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/i;
+
+    // If input is just a UUID (with or without .png), normalize it
+    if (/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}(\.png)?$/i.test(input)) {
+      const uuid = input.replace(/\.png$/i, "");
+      return `/content/v1/image/${uuid}.png`;
+    }
+
+    // Extract UUID from partial paths like:
+    // /content/v1/image/uuid.png, content/v1/image/uuid.png, /v1/image/uuid.png, etc.
+    const uuidMatch = input.match(uuidPattern);
+    if (uuidMatch) {
+      return `/content/v1/image/${uuidMatch[0]}.png`;
+    }
+
+    // If input starts with "/", use as-is
     if (input.startsWith("/")) return input;
-
-    if (/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\.png$/i.test(input)) return `/content/v1/image/${input}`;
-
-    if (/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(input)) return `/content/v1/image/${input}.png`;
 
     return input;
   }
