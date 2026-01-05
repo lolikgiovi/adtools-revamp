@@ -13,30 +13,7 @@ class AnalyticsSender {
     return urls.filter(Boolean);
   }
 
-  // Legacy single-event send (kept for compatibility; batch is preferred)
-  static async send(event = {}) {
-    const payload = {
-      ...event,
-      ts: event.ts || new Date().toISOString(),
-    };
-    const urls = this._resolveUrls('/analytics');
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          credentials: 'omit',
-        });
-        if (res.ok) return true; // stop after first success
-      } catch (_) {
-        // try next candidate
-      }
-    }
-    return false;
-  }
-
-  // Preferred batch sender for hourly flushes (sends both POST and GET simultaneously)
+  // Preferred batch sender for 3-hourly flushes (sends both POST and GET simultaneously)
   static async sendBatch(batch = {}) {
     const urls = this._resolveUrls('/analytics/batch');
     const deviceId = String(batch.device_id || batch.deviceId || '');

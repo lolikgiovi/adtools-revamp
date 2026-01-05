@@ -7,7 +7,7 @@
 import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 
 // Routes
-import { handleAnalyticsPost, handleAnalyticsGet, handleAnalyticsBatchPost, handleAnalyticsBatchGet, handleAnalyticsLogPost, handleAnalyticsLogGet } from './src/routes/analytics.js';
+import { handleAnalyticsBatchPost, handleAnalyticsBatchGet, handleAnalyticsLogPost, handleAnalyticsLogGet } from './src/routes/analytics.js';
 import { handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
@@ -94,11 +94,7 @@ export default {
       return handleRegister(request, env);
     }
 
-    // Analytics routes
-    if (url.pathname === "/analytics") {
-      if (method === "POST") return handleAnalyticsPost(request, env);
-      if (method === "GET") return handleAnalyticsGet(request, env);
-    }
+    // Analytics routes (batch and live log only)
     if (url.pathname === "/analytics/batch") {
       if (method === "POST") return handleAnalyticsBatchPost(request, env);
       if (method === "GET") return handleAnalyticsBatchGet(request, env);
