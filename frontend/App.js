@@ -28,6 +28,7 @@ import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
 import { RegisterPage } from "./pages/register/main.js";
+import { AnalyticsDashboardPage } from "./pages/analytics-dashboard/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
@@ -334,6 +335,11 @@ class App {
       registerPage.mount(this.mainContent);
     });
 
+    // Analytics dashboard (no sidebar entry, direct URL access only)
+    this.router.register("analytics-dashboard", () => {
+      this.showAnalyticsDashboard();
+    });
+
     // Set default route based on registration state
     const registered = localStorage.getItem("user.registered") === "true";
     this.router.setDefaultRoute(registered ? "home" : "register");
@@ -500,6 +506,25 @@ class App {
 
     // Emit page change
     this.eventBus.emit("page:changed", { page: "about" });
+  }
+
+  showAnalyticsDashboard() {
+    // Update breadcrumb for analytics dashboard
+    this.updateBreadcrumb("Analytics Dashboard");
+
+    // Ensure no tool is active
+    if (this.currentTool) {
+      this.currentTool.deactivate();
+      this.currentTool = null;
+    }
+
+    if (this.mainContent) {
+      const dashboardPage = new AnalyticsDashboardPage({ eventBus: this.eventBus });
+      dashboardPage.mount(this.mainContent);
+    }
+
+    // Emit page change
+    this.eventBus.emit("page:changed", { page: "analytics-dashboard" });
   }
 
   // Feedback page removed

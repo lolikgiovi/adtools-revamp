@@ -9,6 +9,7 @@ import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 // Routes
 import { handleAnalyticsBatchPost, handleAnalyticsBatchGet, handleAnalyticsLogPost, handleAnalyticsLogGet } from './src/routes/analytics.js';
 import { handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
+import { handleDashboardVerify, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
 import { handleWhitelist } from './src/routes/whitelist.js';
@@ -104,6 +105,36 @@ export default {
       if (method === "POST") return handleAnalyticsLogPost(request, env);
       if (method === "GET") return handleAnalyticsLogGet(request, env);
       return methodNotAllowed();
+    }
+
+    // Dashboard routes (password-protected analytics dashboard)
+    if (url.pathname === "/dashboard/verify") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleDashboardVerify(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/tools") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsTools(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/daily") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsDaily(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/devices") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsDevices(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/events") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsEvents(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/quick-query") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsQuickQuery(request, env);
+    }
+    if (url.pathname === "/dashboard/stats/quick-query-errors") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleStatsQuickQueryErrors(request, env);
     }
 
     // Static assets via Wrangler assets binding with SPA fallback

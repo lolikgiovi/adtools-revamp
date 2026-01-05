@@ -10,6 +10,9 @@ export default defineWorkersConfig({
           kvNamespaces: ['WHITELIST', 'adtools', 'ANALYTICS'],
           d1Databases: ['DB'],
           r2Buckets: ['UPDATES'],
+          bindings: {
+            ANALYTICS_DASHBOARD_PASSWORD: 'testpassword123',
+          },
         },
       },
     },
