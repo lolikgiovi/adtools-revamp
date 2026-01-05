@@ -291,39 +291,44 @@ The table view offers:
           content: `
 # Base64 Tools
 
-Encode and decode Base64 strings and images.
+Encode and decode Base64 strings and files.
 
 ## Tabs
 
-### Encode
-Convert plain text to Base64-encoded string.
+### Encode to Base64
+Convert plain text or files to Base64-encoded string:
+- Type or paste text in the input area
+- Or upload files using the **Upload File** button
+- Click **Encode to Base64** to convert
+- Copy the result from the output area
 
-### Decode
-Convert Base64-encoded string back to plain text.
+### Decode from Base64
+Convert Base64-encoded string back to plain text or files:
+- Paste Base64 content in the input area
+- Or upload .txt/.base64 files
+- Click **Decode from Base64** to convert
+- View or download the decoded result
 
-### Image Encode
-Convert images to Base64 data URLs:
-1. Drag & drop an image or click to select
-2. The Base64 data URL is generated automatically
-3. Copy to use in HTML/CSS
+## Features
 
-### Image Decode
-Convert Base64 data URLs back to viewable images:
-1. Paste a Base64 data URL
-2. Preview the decoded image
-3. Download if needed
+| Feature | Description |
+|---------|-------------|
+| File Upload | Encode multiple files at once |
+| Batch Processing | Process multiple files in one go |
+| Copy/Clear | Quick clipboard and clear actions |
+| Processed Files | View list of encoded/decoded files |
 
 ## Use Cases
 
-- Embedding images in HTML/CSS
-- Encoding API payloads
+- Encoding files for API payloads
 - Decoding Base64 responses
+- Converting images to data URLs
 - Quick data transformation
 
 ## Tips
 
-- 💡 Image encode preserves the original format (PNG, JPEG, etc.)
-- 💡 Maximum recommended image size: 5MB
+- 💡 Supports multiple file uploads at once
+- 💡 Processed files are listed separately for easy access
           `,
         },
         {
@@ -332,33 +337,39 @@ Convert Base64 data URLs back to viewable images:
           content: `
 # QR Tools
 
-Generate and read QR codes.
+Generate QR codes with custom colors.
 
-## Generate Tab
+## How to Use
 
-Create QR codes from text:
-1. Enter text or URL in the input field
-2. QR code generates automatically
-3. Download as PNG or copy to clipboard
+1. Select **Content Type** (Text or URL)
+2. Enter your content in the text area
+3. QR code generates automatically in the preview
+4. Customize colors (optional):
+   - **Foreground** — QR code color
+   - **Background** — Background color
+5. Download as **PNG** or **SVG**
 
-## Read Tab
+## Features
 
-Decode QR codes from images:
-1. Upload an image containing a QR code
-2. The decoded content appears below
-3. Copy the result
+| Feature | Description |
+|---------|-------------|
+| Live Preview | QR updates as you type |
+| Custom Colors | Pick foreground and background colors |
+| PNG Download | Download as raster image |
+| SVG Download | Download as vector image |
+| Contrast Warning | Alerts when colors have poor contrast |
 
 ## Use Cases
 
 - Generate QR codes for URLs
-- Create QR codes for WiFi credentials
-- Decode QR codes from screenshots
+- Create branded QR codes with custom colors
 - Quick information sharing
+- Marketing materials
 
 ## Tips
 
-- 💡 Works with most QR code types
-- 💡 Supports camera input on supported devices
+- 💡 Use high contrast colors for best scan reliability
+- 💡 SVG format is better for print/scaling
           `,
         },
         {
@@ -371,10 +382,25 @@ Generate SQL IN clauses from lists of values.
 
 ## How to Use
 
-1. Paste a list of values (one per line or comma-separated)
-2. Select the data type (String, Number, etc.)
-3. Click Generate
-4. Copy the formatted IN clause
+1. Enter items in the **Input** editor (one per line)
+2. Select the **Format** from the dropdown
+3. Output updates automatically
+4. Click **Copy** to copy the result
+
+## Format Options
+
+| Format | Description | Example |
+|--------|-------------|--------|
+| Single-line | Comma-separated in parentheses | \`('a', 'b', 'c')\` |
+| Multi-line | Each value on new line | One value per line |
+| SELECT query | Full SELECT statement | \`SELECT * FROM table WHERE col IN (...)\` |
+
+## SELECT Query Mode
+
+When using SELECT query format:
+- Enter **Table name** in the table input
+- Enter **Column name** in the column input
+- A complete SELECT query is generated
 
 ## Example
 
@@ -385,22 +411,16 @@ banana
 cherry
 \`\`\`
 
-**Output:**
+**Output (Single-line):**
 \`\`\`sql
 ('apple', 'banana', 'cherry')
 \`\`\`
 
-## Options
-
-- **Quote Type** — Single or double quotes for strings
-- **Data Type** — String (quoted) or Number (unquoted)
-- **Separator** — Comma, newline, or custom
-
 ## Tips
 
-- 💡 Handles duplicates automatically
-- 💡 Trims whitespace from values
-- 💡 Escapes special characters
+- 💡 Use **Paste** button for quick clipboard input
+- 💡 Uses Monaco Editor with line numbers
+- 💡 Values are automatically quoted as strings
           `,
         },
         {
@@ -409,33 +429,42 @@ cherry
           content: `
 # UUID Generator
 
-Generate multiple UUIDs in various formats.
+Generate single or multiple UUIDs quickly.
 
-## Options
+## Single UUID
 
-| Option | Description |
-|--------|-------------|
-| **Count** | Number of UUIDs to generate (1-1000) |
-| **Format** | Uppercase, lowercase, or with braces |
-| **Version** | UUID v4 (random) |
+Generate one UUID at a time:
+1. Click **Generate** to create a new UUID
+2. Click **Copy** to copy to clipboard
 
-## Formats
+## Multiple UUIDs
 
-- \`550e8400-e29b-41d4-a716-446655440000\` — Standard
-- \`550E8400-E29B-41D4-A716-446655440000\` — Uppercase
-- \`{550e8400-e29b-41d4-a716-446655440000}\` — With braces
+Generate up to 10,000 UUIDs at once:
+1. Enter the quantity (max 10,000)
+2. Click **Generate**
+3. UUIDs appear in the textarea
+4. Click **Copy** to copy all
+5. Click **Clear** to reset
 
-## How to Use
+## Format
 
-1. Set the number of UUIDs needed
-2. Choose format options
-3. Click Generate
-4. Copy all or individual UUIDs
+All UUIDs are generated in standard lowercase format:
+\`\`\`
+550e8400-e29b-41d4-a716-446655440000
+\`\`\`
+
+## Use Cases
+
+- Generate test data IDs
+- Create unique identifiers
+- Batch ID generation for imports
+- Database seeding
 
 ## Tips
 
-- 💡 Click individual UUIDs to copy them
-- 💡 No formatting characters (just raw UUIDs) for easy pasting
+- 💡 UUIDs are v4 (random)
+- 💡 Raw format without quotes for easy pasting
+- 💡 Each UUID is on its own line
           `,
         },
         {
@@ -444,30 +473,48 @@ Generate multiple UUIDs in various formats.
           content: `
 # Master Lockey
 
-Lock key and cache management utility.
+Localization key viewer and manager with Confluence integration.
 
 ## Overview
 
-Master Lockey helps manage distributed lock keys and cache entries across different environments.
-
-## Features
-
-- View active locks
-- Release stale locks
-- Manage cache entries
-- Environment-specific operations
+Master Lockey displays localization keys (lockey) from language packs in a searchable table format. It supports caching via IndexedDB for offline access.
 
 ## How to Use
 
-1. Select the target environment
-2. Enter the lock key pattern or cache key
-3. Choose the operation (View, Release, Clear)
-4. Execute and view results
+1. Select a **Domain** from the dropdown
+2. Click **Get Latest Data** to fetch language pack
+3. Data is cached automatically for future use
+4. Use search to find specific keys
+
+## Search Modes
+
+| Mode | Description |
+|------|-------------|
+| Search by Key | Find keys matching your search term |
+| Search by Content | Search within the localized content |
+
+## Features
+
+- **Domain selector** — Switch between different language domains
+- **Caching** — Data is cached with timestamp for offline use
+- **Match Word** — Toggle whole word matching
+- **Results count** — Shows number of matching keys
+- **Language Pack Version** — Displays current version info
+
+## Confluence Integration
+
+Compare lockeys against Confluence pages:
+1. Configure Confluence credentials in Settings
+2. Enter a Confluence page URL or ID
+3. Fetch lockeys from the page
+4. View status comparison (found/missing)
+5. Export as TSV or CSV
 
 ## Tips
 
-- 💡 Use wildcards for pattern matching
-- 💡 Be careful when releasing locks in production
+- 💡 Use comma-separated values for key search (e.g., \`key1, key2\`)
+- 💡 Cached data shows timestamp of last fetch
+- 💡 Click table headers to sort
           `,
         },
         {
@@ -476,31 +523,40 @@ Master Lockey helps manage distributed lock keys and cache entries across differ
           content: `
 # Splunk Template
 
-Generate Splunk search queries from templates.
+Splunk query editor with field extraction and formatting.
 
 ## Overview
 
-Create commonly-used Splunk search queries with variable substitution.
+A specialized editor for working with Splunk search queries. Includes tools for formatting, minifying, and managing extracted fields.
+
+## Editor Panel
+
+Write and edit Splunk queries with:
+- **Format** — Pretty-print the query
+- **Minify** — Compress to single line
+- **Copy** — Copy to clipboard
+- **Paste** — Paste from clipboard
+- **Clear** — Clear the editor
+
+## Fields Review Panel
+
+Manage extracted fields in a spreadsheet-like table:
+- **Add Field** — Add new field row
+- Edit field names and values inline
+- Resizable split between editor and table
 
 ## How to Use
 
-1. Select a template or create a new one
-2. Fill in the required variables
-3. Generate the final Splunk query
-4. Copy and paste into Splunk
-
-## Template Variables
-
-Templates support variables like:
-- \`{{startTime}}\` — Search start time
-- \`{{endTime}}\` — Search end time
-- \`{{index}}\` — Target index
-- \`{{searchTerm}}\` — Custom search terms
+1. Paste or write your Splunk query in the editor
+2. Use **Format** to improve readability
+3. Review and edit fields in the table
+4. Use **Copy** to copy the final query
 
 ## Tips
 
-- 💡 Save frequently used queries as templates
-- 💡 Templates persist across sessions
+- 💡 Uses Monaco Editor with syntax highlighting
+- 💡 Drag the resizer to adjust panel sizes
+- 💡 Fields table uses Handsontable for Excel-like editing
           `,
         },
         {
@@ -509,35 +565,40 @@ Templates support variables like:
           content: `
 # Image Checker
 
-Validate and analyze images.
+Validate images by UUID or content path.
 
-## Features
+## Overview
 
-- Check image dimensions
-- Verify file format
-- View metadata (EXIF data)
-- Validate for specific requirements
+Check if images exist and are accessible by providing their UUIDs or content API paths. Useful for validating ad creatives and content images.
 
 ## How to Use
 
-1. Drag & drop an image or click to upload
-2. View analysis results:
-   - Dimensions (width × height)
-   - File size
-   - Format (PNG, JPEG, etc.)
-   - Color profile
+1. Enter image identifiers in the textarea:
+   - Image UUIDs (e.g., \`550e8400-e29b-41d4-a716-446655440000\`)
+   - Content paths (e.g., \`/content/v1/image/...\`)
+2. One identifier per line
+3. Click **Check Images**
+4. View results showing image status
+
+## Input Formats
+
+| Format | Example |
+|--------|--------|
+| UUID | \`550e8400-e29b-41d4-a716-446655440000\` |
+| Content Path | \`/content/v1/image/abc123\` |
 
 ## Use Cases
 
-- Validate images before upload
-- Check ad creative dimensions
-- Extract image metadata
-- Quick image inspection
+- Validate image references in campaigns
+- Check if creative assets are accessible
+- Batch verify image availability
+- Debug missing image issues
 
 ## Tips
 
-- 💡 Supports common formats: PNG, JPEG, GIF, WebP
-- 💡 Shows exact pixel dimensions
+- 💡 Enter multiple IDs, one per line
+- 💡 Uses **Clear** to reset input and results
+- 💡 Results show status for each image
           `,
         },
         {
@@ -546,38 +607,47 @@ Validate and analyze images.
           content: `
 # HTML Editor
 
-Live HTML/CSS/JavaScript preview editor.
+HTML template editor with live preview and VTL support.
 
 ## Overview
 
-A simple code playground for HTML, CSS, and JavaScript with live preview.
+Edit HTML templates with real-time preview rendering. Includes support for VTL (Velocity Template Language) variable extraction and environment switching.
 
-## Panels
+## Editor Panel
 
-- **HTML** — Write your HTML markup
-- **CSS** — Add styles
-- **JavaScript** — Add interactivity
-- **Preview** — Live rendered output
+Write and edit HTML with:
+- **Format** — Pretty-print HTML
+- **Minify** — Compress HTML
+- **Extract VTL Fields** — Find VTL variables in template
+- **Copy/Paste/Clear** — Clipboard operations
 
-## Features
+## Preview Panel
 
-- Real-time preview updates
-- Syntax highlighting
-- Error display in console
-- Responsive preview
+- Live rendered HTML output
+- **ENV Selector** — Switch between environments
+- **Reload** — Refresh preview manually
+
+## VTL Variables
+
+Extract and manage Velocity Template variables:
+1. Click **Extract VTL Fields**
+2. A modal shows all found variables
+3. Edit variable values for preview
+4. Click **Reset** to clear values
 
 ## How to Use
 
-1. Write HTML in the HTML panel
-2. Add CSS for styling
-3. Add JavaScript for interactivity
-4. View live preview in the Preview panel
+1. Write or paste HTML in the editor
+2. Preview updates automatically in the iframe
+3. Use **Extract VTL Fields** to find variables
+4. Edit VTL values to test different data
+5. Switch ENV to test against different environments
 
 ## Tips
 
-- 💡 Changes are reflected immediately
-- 💡 Use for quick prototyping
-- 💡 Perfect for testing CSS snippets
+- 💡 Uses Monaco Editor with HTML syntax highlighting
+- 💡 Preview runs in a sandboxed iframe
+- 💡 VTL variables follow \`\$variable\` or \`\${variable}\` syntax
           `,
         },
       ],
@@ -738,7 +808,7 @@ Yes. On Desktop:
 - Restart the app
 
 ### Still need help?
-Use the Feedback option in the sidebar to report issues.
+Report the issue to me.
           `,
         },
       ],
