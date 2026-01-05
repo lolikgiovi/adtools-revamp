@@ -233,11 +233,25 @@ class JSONTools extends BaseTool {
         this.toggleSearch();
       });
     }
+
+    // Toggle extract options dropdown
+    const toggleExtractBtn = document.querySelector(".btn-toggle-extract-options");
+    if (toggleExtractBtn) {
+      toggleExtractBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.toggleExtractOptions();
+      });
+      // Close dropdown when clicking outside
+      document.addEventListener("click", () => {
+        const menu = document.querySelector(".extract-options-menu");
+        if (menu) menu.style.display = "none";
+      });
+    }
   }
 
   setupTabs() {
     // Restore last selected tab from localStorage
-    const savedTab = localStorage.getItem("json-tools-tab") || "validator";
+    const savedTab = localStorage.getItem("json-tools-tab") || "prettify";
     this.switchTab(savedTab);
   }
 
@@ -254,7 +268,6 @@ class JSONTools extends BaseTool {
     // Update action button text
     const actionButton = document.querySelector(".btn-action-primary");
     const buttonTexts = {
-      validator: "Validate",
       prettify: "Beautify",
       minify: "Minify",
       stringify: "Stringify",
@@ -269,15 +282,17 @@ class JSONTools extends BaseTool {
     // Show/hide extract options panel
     const extractOptions = document.getElementById("extract-options");
     if (tabName === "extract-keys") {
-      extractOptions.style.display = "block";
+      extractOptions.style.display = "inline-flex";
     } else {
       extractOptions.style.display = "none";
+      // Also hide the menu
+      const menu = document.querySelector(".extract-options-menu");
+      if (menu) menu.style.display = "none";
     }
 
     // Update output title
     const outputTitle = document.getElementById("output-title");
     const titles = {
-      validator: "Validation Result",
       prettify: "Formatted JSON",
       minify: "Minified JSON",
       stringify: "Stringified JSON",
@@ -341,9 +356,6 @@ class JSONTools extends BaseTool {
     }
 
     switch (this.currentTab) {
-      case "validator":
-        this.validateJSON();
-        break;
       case "prettify":
         this.prettifyJSON();
         break;
@@ -368,31 +380,6 @@ class JSONTools extends BaseTool {
       case "json-to-table":
         this.jsonToTable();
         break;
-    }
-  }
-
-  validateJSON() {
-    UsageTracker.trackFeature("json-tools", "validate");
-    const content = this.editor.getValue().trim();
-
-    const res = JSONToolsService.validate(content);
-    if (res.error) {
-      this.showError("JSON Syntax Error", res.error.message, res.error.position);
-    } else {
-      this.showSuccess("JSON is valid ✅");
-      this.outputEditor.setValue(res.result || "");
-    }
-  }
-
-  prettifyJSON() {
-    UsageTracker.trackFeature("json-tools", "prettify");
-    const content = this.editor.getValue().trim();
-
-    const res = JSONToolsService.prettify(content);
-    if (res.error) {
-      this.showError("JSON Syntax Error", res.error.message, res.error.position);
-    } else {
-      this.outputEditor.setValue(res.result || "");
     }
   }
 
@@ -652,6 +639,14 @@ class JSONTools extends BaseTool {
       // Clear search when closing
       if (searchInput) searchInput.value = "";
       this.searchTable("");
+    }
+  }
+
+  toggleExtractOptions() {
+    const menu = document.querySelector(".extract-options-menu");
+    if (menu) {
+      const isVisible = menu.style.display === "flex";
+      menu.style.display = isVisible ? "none" : "flex";
     }
   }
 

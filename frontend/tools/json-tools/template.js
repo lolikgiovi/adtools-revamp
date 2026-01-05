@@ -8,8 +8,7 @@ export const JSONToolsTemplate = /* html */ `
     <div class="json-tools-header">
         <div class="tabs-container json-tools-tabs">
             <div class="tabs-left">
-                <button class="tab-button active" data-tab="validator">Validator</button>
-                <button class="tab-button" data-tab="prettify">Beautify</button>
+                <button class="tab-button active" data-tab="prettify">Beautify</button>
                 <button class="tab-button" data-tab="minify">Minify</button>
                 <button class="tab-button" data-tab="stringify">Stringify</button>
                 <button class="tab-button" data-tab="unstringify">Unstringify</button>
@@ -52,6 +51,28 @@ export const JSONToolsTemplate = /* html */ `
                     </div>
                     <button class="btn btn-primary btn-sm btn-expand-table" title="Expand Table" style="display: none;">Expand</button>
                     <button class="btn btn-primary btn-sm btn-transpose-table" title="Transpose Table" style="display: none;">Transpose</button>
+                    <!-- Extract Keys Options Dropdown -->
+                    <div class="extract-options-dropdown" id="extract-options" style="display: none;">
+                        <button class="btn btn-sm btn-toggle-extract-options" title="Options">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/><path d="M12.22 2.02a10 10 0 0 1 7.7 7.7M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/>
+                            </svg>
+                            Options
+                        </button>
+                        <div class="extract-options-menu" style="display: none;">
+                            <div class="options-group">
+                                <span class="options-group-label">Key Type</span>
+                                <label><input type="radio" name="extract-type" value="simple" checked> Simple Keys</label>
+                                <label><input type="radio" name="extract-type" value="paths"> Key Paths</label>
+                            </div>
+                            <div class="options-group">
+                                <span class="options-group-label">Sort</span>
+                                <label><input type="radio" name="sort-order" value="natural" checked> Natural</label>
+                                <label><input type="radio" name="sort-order" value="asc"> A-Z</label>
+                                <label><input type="radio" name="sort-order" value="desc"> Z-A</label>
+                            </div>
+                        </div>
+                    </div>
                     <button class="btn btn-primary btn-sm btn-copy-output" title="Copy Output">Copy</button>
                 </div>
             </div>
@@ -62,40 +83,5 @@ export const JSONToolsTemplate = /* html */ `
     
     <!-- Table Options Panel (placeholder for future options) -->
     <div class="table-options-panel" id="table-options" style="display: none;"></div>
-    
-    <!-- Extract Keys Options Panel -->
-    <div class="extract-options-panel" id="extract-options" style="display: none;">
-        <div class="options-header">
-            <h4>Extract Keys Options</h4>
-        </div>
-        <div class="options-content">
-            <div class="options-group">
-                <span class="options-group-label">Key Type</span>
-                <label>
-                    <input type="radio" name="extract-type" value="simple" checked>
-                    Simple Keys (e.g., "name", "age", "address")
-                </label>
-                <label>
-                    <input type="radio" name="extract-type" value="paths">
-                    Key Paths (e.g., "user.name", "user.address.city")
-                </label>
-            </div>
-            <div class="options-group">
-                <span class="options-group-label">Sort Order</span>
-                <label>
-                    <input type="radio" name="sort-order" value="natural" checked>
-                    Natural (original order)
-                </label>
-                <label>
-                    <input type="radio" name="sort-order" value="asc">
-                    Sort A-Z
-                </label>
-                <label>
-                    <input type="radio" name="sort-order" value="desc">
-                    Sort Z-A
-                </label>
-            </div>
-        </div>
-    </div>
 </div>
 `;
