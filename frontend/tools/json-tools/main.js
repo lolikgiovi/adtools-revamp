@@ -471,6 +471,7 @@ class JSONTools extends BaseTool {
       this.keySortOrder = "natural"; // Reset sort order on new conversion
     } catch (error) {
       this.validatedJson = null;
+      UsageTracker.trackEvent("json-tools", "parse_error", UsageTracker.enrichErrorMeta(error, { action: "json_to_table" }));
       tableOutput.innerHTML = `<div class="table-error">Invalid JSON: ${error.message}</div>`;
       return;
     }

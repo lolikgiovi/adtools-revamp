@@ -235,6 +235,7 @@ class SplunkVTLEditor extends BaseTool {
     btnCopy?.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(this.editor.getValue());
+        UsageTracker.trackEvent("splunk-template", "copy_success");
       } catch (_) {}
     });
     btnPaste?.addEventListener("click", async () => {

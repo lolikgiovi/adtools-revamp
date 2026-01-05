@@ -45,6 +45,8 @@ export class JenkinsRunner extends BaseTool {
     try {
       const sql = (data && (data.sql || data.query)) || "";
       if (!sql) return;
+      // Mark source as quick-query when receiving SQL via route
+      this._querySource = "quick-query";
       // If editor is ready, set immediately; otherwise stash for onMount
       if (this.editor && typeof this.editor.setValue === "function") {
         this.editor.setValue(sql);
@@ -1320,6 +1322,8 @@ export class JenkinsRunner extends BaseTool {
               this.editor.focus();
             } catch (_) {}
           }
+          // Mark source as template for tracking
+          this._querySource = "template";
           switchToRun();
           // Ensure preview stays hidden; editing occurs in Monaco
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
@@ -1903,8 +1907,12 @@ export class JenkinsRunner extends BaseTool {
       const env = envSelect.value;
       const sql = this.editor ? this.editor.getValue().trim() : "";
       const totalBytes = calcUtf8Bytes(sql);
+      // Determine query source: quick-query, template, or manual
+      const source = this._querySource || "manual";
+      // Reset source after tracking (next run will be manual unless set again)
+      this._querySource = null;
       try {
-        UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length });
+        UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length, source });
       } catch (_) {}
 
       // Require statements to end with semicolon; show the line if missing
@@ -2158,7 +2166,7 @@ export class JenkinsRunner extends BaseTool {
             } catch (err) {
               statusEl.textContent = "Polling error";
               try {
-                UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(err || "") });
+                UsageTracker.trackEvent("jenkins-runner", "run_error", UsageTracker.enrichErrorMeta(err, { context: "polling" }));
               } catch (_) {}
               this.showError(String(err));
               runBtn.disabled = false;
@@ -2326,7 +2334,7 @@ export class JenkinsRunner extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Trigger failed";
         try {
-          UsageTracker.trackEvent("jenkins-runner", "run_error", { message: String(errorMapping(err) || ""), job, env });
+          UsageTracker.trackEvent("jenkins-runner", "run_error", UsageTracker.enrichErrorMeta(err, { job, env, context: "trigger" }));
         } catch (_) {}
         this.showError(errorMapping(err));
         runBtn.disabled = false;

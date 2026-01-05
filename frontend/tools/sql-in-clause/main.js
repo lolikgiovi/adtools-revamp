@@ -127,9 +127,6 @@ class SQLInClauseTool extends BaseTool {
             this.editor?.setValue(text);
             this.updateOutput();
             this.showSuccess("Pasted from clipboard");
-            try {
-              UsageTracker.trackFeature("sql-in-clause", "paste", { len: text.length }, 1000);
-            } catch (_) {}
           } else {
             this.showError("Clipboard is empty");
           }
@@ -147,9 +144,6 @@ class SQLInClauseTool extends BaseTool {
           this.editor?.setValue("");
           this.updateOutput();
           this.showSuccess("Cleared editor");
-          try {
-            UsageTracker.trackFeature("sql-in-clause", "clear", "", 1000);
-          } catch (_) {}
         } catch (err) {
           this.showError("Failed to clear editor");
           console.error("Clear error:", err);

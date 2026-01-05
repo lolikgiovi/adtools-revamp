@@ -453,6 +453,7 @@ class Base64Tools extends BaseTool {
         this.updateOutputHeaderButtons("encode", false); // false = not multi-file
         this.showSuccess("Encoded to Base64!");
       } catch (error) {
+        UsageTracker.trackEvent("base64-tools", "encode_error", UsageTracker.enrichErrorMeta(error, { type: "file" }));
         this.showError("Failed to encode file to Base64");
         outputArea.value = "";
       }
@@ -587,6 +588,7 @@ class Base64Tools extends BaseTool {
         }
       } catch (error) {
         console.error("❌ [DEBUG] Error decoding Base64:", error);
+        UsageTracker.trackEvent("base64-tools", "decode_error", UsageTracker.enrichErrorMeta(error, { type: "text" }));
         this.showError("Invalid Base64 input");
         outputArea.value = "";
       }
@@ -688,6 +690,8 @@ class Base64Tools extends BaseTool {
         }
       } catch (error) {
         console.error("❌ [DEBUG] Failed to process file:", file.name, error);
+        UsageTracker.trackEvent("base64-tools", mode === "encode" ? "encode_error" : "decode_error", 
+          UsageTracker.enrichErrorMeta(error, { type: "multi_file", file: file.name }));
         this.showError(`Failed to process ${file.name}: ${error.message}`);
       }
     }

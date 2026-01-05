@@ -315,6 +315,26 @@ class UsageTracker {
 
   // ---------------------- Internal helpers ----------------------
 
+  /**
+   * Enrich error metadata with technical details for debugging
+   * @param {Error|string} error - The error to enrich
+   * @param {Object} baseMeta - Base metadata to include
+   * @returns {Object} Enriched metadata with message, name, code, and stack
+   */
+  static enrichErrorMeta(error, baseMeta = {}) {
+    try {
+      return {
+        ...baseMeta,
+        message: String(error?.message || error || '').slice(0, 200),
+        name: error?.name || 'Error',
+        code: error?.code || null,
+        stack: error?.stack?.split('\n').slice(0, 5).join('\n').slice(0, 500) || null,
+      };
+    } catch (_) {
+      return { ...baseMeta, message: String(error || 'Unknown error').slice(0, 200) };
+    }
+  }
+
   static _sanitizeMeta(meta) {
     try {
       const sanitized = {};

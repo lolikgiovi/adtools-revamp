@@ -66,7 +66,7 @@ class MasterLockey extends BaseTool {
     this.setupEventListeners();
 
     // Track feature usage
-    UsageTracker.trackFeature("master_lockey");
+    UsageTracker.trackFeature("master_lockey", "mount");
 
     // Try to load cached data for the first selected domain
     this.tryLoadCache();
@@ -196,10 +196,6 @@ class MasterLockey extends BaseTool {
     this.els.btnWholeWord.addEventListener("click", () => {
       this.wholeWord = !this.wholeWord;
       this.els.btnWholeWord.classList.toggle("active", this.wholeWord);
-
-      UsageTracker.trackEvent("master_lockey", "toggle_whole_word", {
-        enabled: this.wholeWord,
-      });
 
       this.applyFilter();
     });
@@ -476,14 +472,6 @@ class MasterLockey extends BaseTool {
     this.els.resultsText.textContent = `${this.formatNumber(this.filteredRows.length)} of ${this.formatNumber(
       this.parsedData.rows.length
     )} results`;
-
-    // Track search with specific action based on mode
-    const searchAction = searchMode === "key" ? "search_by_key" : "search_by_content";
-    UsageTracker.trackEvent("master_lockey", searchAction, {
-      whole_word: this.wholeWord,
-      results: filtered.length,
-      total_rows: this.parsedData.rows.length,
-    });
   }
 
   renderTableBody(rows, languages) {
@@ -809,11 +797,6 @@ class MasterLockey extends BaseTool {
       // Clear input
       this.els.confluencePageInput.value = "";
       this.els.btnFetchConfluence.disabled = true;
-
-      UsageTracker.trackEvent("master_lockey", "confluence_fetch_success", {
-        lockeysFound: lockeys.length,
-        pageId: pageData.id,
-      });
     } catch (error) {
       console.error("Confluence fetch error:", error);
       this.showConfluenceError(error.message);
@@ -931,8 +914,6 @@ class MasterLockey extends BaseTool {
       await this.service.hideKey(this.currentConfluencePageId, key);
       this.hiddenKeys.push(key);
       this.displayConfluenceResults();
-
-      UsageTracker.trackEvent("master_lockey", "confluence_hide_key", { key });
     } catch (error) {
       console.error("Failed to hide key:", error);
     }
@@ -945,8 +926,6 @@ class MasterLockey extends BaseTool {
       await this.service.unhideKey(this.currentConfluencePageId, key);
       this.hiddenKeys = this.hiddenKeys.filter((k) => k !== key);
       this.displayConfluenceResults();
-
-      UsageTracker.trackEvent("master_lockey", "confluence_unhide_key", { key });
     } catch (error) {
       console.error("Failed to unhide key:", error);
     }
@@ -974,7 +953,6 @@ class MasterLockey extends BaseTool {
       await this.loadCachedPagesDropdown();
 
       this.showSuccess("Cache deleted");
-      UsageTracker.trackEvent("master_lockey", "confluence_delete_cache");
     } catch (error) {
       console.error("Failed to delete cache:", error);
       this.showError("Delete Failed", error.message);
