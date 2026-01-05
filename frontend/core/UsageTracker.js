@@ -12,7 +12,7 @@ class UsageTracker {
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static FLUSH_DELAY_MS = 300; // debounce writes
-  static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // hourly remote flush (default)
+  static BATCH_FLUSH_INTERVAL_MS = 180 * 60 * 1000; // 3 hours remote flush
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
@@ -406,6 +406,14 @@ class UsageTracker {
         } else {
           // Validate timestamps on existing events
           state.events = Array.isArray(state.events) ? state.events.filter((ev) => this._validateEvent(ev)) : [];
+          
+          // Time-based rotation: drop events older than 7 days
+          const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+          state.events = state.events.filter((ev) => {
+            const evTime = new Date(ev.ts).getTime();
+            return !Number.isNaN(evTime) && evTime > sevenDaysAgo;
+          });
+          
           if (state.events.length > this.MAX_EVENTS) {
             state.events = state.events.slice(state.events.length - this.MAX_EVENTS);
           }
