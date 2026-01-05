@@ -84,20 +84,6 @@
     overflow: hidden;
 }
 
-.dashboard-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-}
-
-.dashboard-header h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
-    color: hsl(var(--foreground));
-}
-
 .dashboard-actions {
     display: flex;
     gap: 0.5rem;

@@ -23,20 +23,6 @@ export const AnalyticsDashboardTemplate = /*html*/ `
 
     <!-- Dashboard Content (hidden until authenticated) -->
     <div class="dashboard-content" id="dashboard-content" style="display: none;">
-      <header class="dashboard-header">
-        <h2>Analytics Dashboard</h2>
-        <div class="dashboard-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6M1 20v-6h6"/>
-              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-            </svg>
-            Refresh
-          </button>
-          <button type="button" class="btn btn-outline btn-sm" id="dashboard-logout">Logout</button>
-        </div>
-      </header>
-
       <!-- Tabs -->
       <div class="tabs-container">
         <div class="tabs-left">
@@ -46,6 +32,16 @@ export const AnalyticsDashboardTemplate = /*html*/ `
           <button type="button" class="tab-button" data-tab="events">Events</button>
           <button type="button" class="tab-button" data-tab="quick-query">Quick Query</button>
           <button type="button" class="tab-button" data-tab="quick-query-errors">QQ Errors</button>
+        </div>
+        <div class="dashboard-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            Refresh
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="dashboard-logout">Logout</button>
         </div>
       </div>
 
