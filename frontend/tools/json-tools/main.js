@@ -383,6 +383,19 @@ class JSONTools extends BaseTool {
     }
   }
 
+  prettifyJSON() {
+    UsageTracker.trackFeature("json-tools", "prettify");
+    const content = this.editor.getValue().trim();
+
+    const res = JSONToolsService.prettify(content);
+    if (res.error) {
+      this.showError("JSON Syntax Error", res.error.message, res.error.position);
+    } else {
+      this.showSuccess("JSON is valid ✅");
+      this.outputEditor.setValue(res.result || "");
+    }
+  }
+
   minifyJSON() {
     UsageTracker.trackFeature("json-tools", "minify");
     const content = this.editor.getValue().trim();
