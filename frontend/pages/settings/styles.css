@@ -327,7 +327,7 @@
 }
 
 .setting-edit-row .setting-actions {
-  align-self: auto;
+  /* align-self: auto; */
   flex-shrink: 0;
 }
 
