@@ -84,19 +84,20 @@ const KV_KEY = 'analytics-dashboard-config';
 
 /**
  * Get tab configs from KV or fallback to defaults
+ * Returns { source: 'kv' | 'defaults', tabs: [] }
  */
 async function getTabConfigs(env) {
   try {
     if (env.adtools) {
       const stored = await env.adtools.get(KV_KEY, 'json');
       if (stored && Array.isArray(stored) && stored.length > 0) {
-        return stored;
+        return { source: 'kv', tabs: stored };
       }
     }
   } catch (err) {
     console.error('Error reading tab configs from KV:', err);
   }
-  return DEFAULT_TABS;
+  return { source: 'defaults', tabs: DEFAULT_TABS };
 }
 
 /**
@@ -180,12 +181,12 @@ export async function handleDashboardVerify(request, env) {
  */
 export const handleDashboardTabs = withAuth(async (request, env) => {
   try {
-    const tabs = await getTabConfigs(env);
-    // Return only id and name (not the query)
-    const tabList = tabs.map(({ id, name }) => ({ id, name }));
+    const config = await getTabConfigs(env);
+    // Return only id and name (not the query), plus the source
+    const tabList = config.tabs.map(({ id, name }) => ({ id, name }));
     
     return new Response(
-      JSON.stringify({ ok: true, tabs: tabList }),
+      JSON.stringify({ ok: true, tabs: tabList, source: config.source }),
       { headers: { 'Content-Type': 'application/json', ...corsHeaders() } }
     );
   } catch (err) {
@@ -218,8 +219,8 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       );
     }
 
-    const tabs = await getTabConfigs(env);
-    const tab = tabs.find(t => t.id === tabId);
+    const config = await getTabConfigs(env);
+    const tab = config.tabs.find(t => t.id === tabId);
     
     if (!tab) {
       return new Response(
@@ -244,38 +245,38 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 
 // Legacy endpoints for backwards compatibility
 export const handleStatsTools = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'tools') || DEFAULT_TABS[0];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'tools') || DEFAULT_TABS[0];
   return executeQuery(env, tab.query);
 });
 
 export const handleStatsDaily = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'daily') || DEFAULT_TABS[1];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'daily') || DEFAULT_TABS[1];
   return executeQuery(env, tab.query);
 });
 
 export const handleStatsDevices = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'devices') || DEFAULT_TABS[2];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'devices') || DEFAULT_TABS[2];
   return executeQuery(env, tab.query);
 });
 
 export const handleStatsEvents = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'events') || DEFAULT_TABS[3];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'events') || DEFAULT_TABS[3];
   return executeQuery(env, tab.query);
 });
 
 export const handleStatsQuickQuery = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'quick-query') || DEFAULT_TABS[4];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'quick-query') || DEFAULT_TABS[4];
   return executeQuery(env, tab.query);
 });
 
 export const handleStatsQuickQueryErrors = withAuth(async (request, env) => {
-  const tabs = await getTabConfigs(env);
-  const tab = tabs.find(t => t.id === 'quick-query-errors') || DEFAULT_TABS[5];
+  const config = await getTabConfigs(env);
+  const tab = config.tabs.find(t => t.id === 'quick-query-errors') || DEFAULT_TABS[5];
   return executeQuery(env, tab.query);
 });
 

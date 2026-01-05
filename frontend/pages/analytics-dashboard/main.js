@@ -122,6 +122,7 @@ class AnalyticsDashboardPage {
 
   async loadTabs() {
     const tabsContainer = this.container.querySelector('#dynamic-tabs');
+    const sourceIndicator = this.container.querySelector('#config-source');
     if (!tabsContainer) return;
 
     tabsContainer.innerHTML = '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Loading tabs...</span>';
@@ -140,7 +141,13 @@ class AnalyticsDashboardPage {
       
       if (data.ok && Array.isArray(data.tabs)) {
         this.tabs = data.tabs;
+        this.configSource = data.source || 'defaults';
         this.renderTabs();
+        // Show source indicator
+        if (sourceIndicator) {
+          const label = this.configSource === 'kv' ? 'KV Config' : 'Defaults';
+          sourceIndicator.innerHTML = `<span class="config-source-badge ${this.configSource}">${label}</span>`;
+        }
         // Auto-select first tab
         if (this.tabs.length > 0) {
           this.switchTab(this.tabs[0].id);

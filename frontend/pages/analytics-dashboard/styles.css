@@ -86,7 +86,28 @@
 
 .dashboard-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+}
+
+/* Config Source Badge */
+.config-source-badge {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.config-source-badge.defaults {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+}
+
+.config-source-badge.kv {
+    background: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
 }
 
 /* Panels */

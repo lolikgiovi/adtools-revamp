@@ -29,6 +29,7 @@ export const AnalyticsDashboardTemplate = /*html*/ `
           <!-- Tabs will be rendered dynamically -->
         </div>
         <div class="dashboard-actions">
+          <span id="config-source"></span>
           <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6M1 20v-6h6"/>
