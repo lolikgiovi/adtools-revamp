@@ -356,30 +356,32 @@
 
 /* Uses global btn btn-ghost btn-xs classes */
 
-/* kvlist preview (read-only) */
-.kvlist-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+/* kvlist table preview (read-only) */
+.kvlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
 }
 
-.kvlist-preview-row {
-  display: inline-flex;
-  gap: 0.5rem;
-  align-items: center;
+.kvlist-table tr:not(:last-child) {
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
 }
 
-.kvlist-env {
+.kvlist-key {
   font-weight: 600;
+  padding: 4px 12px 4px 0;
+  white-space: nowrap;
+  color: hsl(var(--foreground));
+  width: 1%;
+  /* Shrink to fit content */
+  vertical-align: top;
 }
 
-.kvlist-arrow {
-  color: var(--text-secondary);
-}
-
-.kvlist-url {
-  color: var(--text-secondary);
+.kvlist-value {
+  padding: 4px 0 4px 0;
   word-break: break-all;
+  color: hsl(var(--muted-foreground));
+  vertical-align: top;
 }
 
 /* Runtime status badge */

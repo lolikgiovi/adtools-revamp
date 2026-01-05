@@ -709,19 +709,20 @@ class SettingsPage {
     const esc = (s) =>
       String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     return `
-      <div class="kvlist-preview">
-        ${pairs
-          .map(
-            (p) => `
-          <div class="kvlist-preview-row">
-            <span class="kvlist-env">${esc(p.key)}</span>
-            <span class="kvlist-arrow">→</span>
-            <span class="kvlist-url">${esc(p.value)}</span>
-          </div>
-        `
-          )
-          .join("")}
-      </div>
+      <table class="kvlist-table">
+        <tbody>
+          ${pairs
+            .map(
+              (p) => `
+            <tr>
+              <td class="kvlist-key">${esc(p.key)}</td>
+              <td class="kvlist-value">${esc(p.value)}</td>
+            </tr>
+          `
+            )
+            .join("")}
+        </tbody>
+      </table>
     `;
   }
 
