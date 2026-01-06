@@ -569,7 +569,7 @@
 
 .confluence-input {
   flex: 1;
-  max-width: 400px;
+  /* max-width: 400px; */
   padding: 8px 12px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
@@ -713,25 +713,26 @@
   background: hsl(var(--muted));
 }
 
-/* Status Indicators */
+/* Conflu Style Indicators */
 .status-plain {
   color: hsl(var(--foreground));
 }
 
-.status-new {
-  color: #22c55e;
-  font-weight: 500;
-}
-
-.status-removed {
+.status-striked {
   color: hsl(var(--muted-foreground));
   text-decoration: line-through;
 }
 
-.status-removed-new {
-  color: #f59e0b;
-  text-decoration: line-through;
-  font-weight: 500;
+/* Column alignment */
+.confluence-table th.col-center,
+.confluence-table td.col-center {
+  text-align: center;
+}
+
+.confluence-table th.col-action,
+.confluence-table td.col-action {
+  width: 1%;
+  white-space: nowrap;
 }
 
 /* In Remote Indicators */
@@ -745,43 +746,12 @@
   font-weight: 600;
 }
 
-/* Confluence Controls Row (combined cached pages + URL input) */
+/* Confluence Controls Row */
 .confluence-controls-row {
   display: flex;
   gap: 8px;
   align-items: center;
   margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.cached-pages-selector {
-  flex: 0 1 280px;
-  min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-size: 0.75rem;
-}
-
-.confluence-controls-divider {
-  flex-shrink: 0;
-  width: 1px;
-  height: 24px;
-  background: hsl(var(--border));
-  margin: 0 4px;
-}
-
-.confluence-controls-row .confluence-input {
-  flex: 1;
-  min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-size: 0.75rem;
 }
 
 .btn-icon {
@@ -895,3 +865,100 @@
 .hidden-keys-table tbody tr {
   background: hsl(var(--muted) / 0.5);
 }
+
+/* Page Search Dropdown */
+.page-search-container {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+.page-search-container .confluence-input {
+  width: 100%;
+}
+
+.page-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-top: none;
+  border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
+}
+
+.page-search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  transition: background 0.1s ease;
+}
+
+.page-search-item:last-child {
+  border-bottom: none;
+}
+
+.page-search-item:hover,
+.page-search-item.selected {
+  background: hsl(var(--accent));
+}
+
+.page-search-item .item-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.page-search-item .item-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-search-item.fetch-new {
+  background: hsl(var(--primary) / 0.05);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.page-search-item.fetch-new:hover,
+.page-search-item.fetch-new.selected {
+  background: hsl(var(--primary) / 0.15);
+}
+
+.page-search-item.fetch-new .item-icon {
+  color: hsl(var(--primary));
+}
+
+.page-search-item.fetch-new .item-text {
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+
+.page-search-empty {
+  padding: 12px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.confluence-controls-row .btn-confluence {
+  flex-shrink: 0;
+}
+
+.btn-confluence.btn-danger:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.1);
+  border-color: hsl(var(--destructive));
+  color: hsl(var(--destructive));
+}
+

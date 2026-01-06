@@ -50,6 +50,14 @@ class MasterLockey extends BaseTool {
     this.currentConfluencePageId = null;
     this.currentConfluenceTitle = null;
     this.hiddenKeys = [];
+
+    // Page search state (for unified input)
+    this.pageSearchState = {
+      cachedPages: [], // All cached pages for search
+      selectedIndex: -1,
+      visibleItems: [],
+    };
+    this.pageSearchDebounceTimer = null;
   }
 
   getIconSvg() {
@@ -103,13 +111,9 @@ class MasterLockey extends BaseTool {
     if (targetTab === "lockey") {
       this.els.lockeyPanel.classList.add("active");
       this.els.confluencePanel.classList.remove("active");
-      // Show domain controls
-      this.els.domainControls.style.display = "flex";
     } else if (targetTab === "confluence") {
       this.els.lockeyPanel.classList.remove("active");
       this.els.confluencePanel.classList.add("active");
-      // Hide domain controls (only for Lockey tab)
-      this.els.domainControls.style.display = "none";
       // Initialize Confluence section when switching to tab
       this.showConfluenceSection();
     }
@@ -142,7 +146,8 @@ class MasterLockey extends BaseTool {
       tableBody: this.container.querySelector("#table-body"),
       // Confluence elements
       confluenceSection: this.container.querySelector("#confluence-section"),
-      cachedPagesSelector: this.container.querySelector("#cached-pages-selector"),
+      pageSearchContainer: this.container.querySelector(".page-search-container"),
+      pageSearchDropdown: this.container.querySelector("#page-search-dropdown"),
       btnRefreshPage: this.container.querySelector("#btn-refresh-page"),
       btnDeleteCache: this.container.querySelector("#btn-delete-cache"),
       confluencePageInput: this.container.querySelector("#confluence-page-input"),
@@ -151,8 +156,8 @@ class MasterLockey extends BaseTool {
       confluenceResults: this.container.querySelector("#confluence-results"),
       confluenceResultsCount: this.container.querySelector("#confluence-results-count"),
       confluenceTableBody: this.container.querySelector("#confluence-table-body"),
-      btnExportTsv: this.container.querySelector("#btn-export-tsv"),
-      btnExportCsv: this.container.querySelector("#btn-export-csv"),
+      btnCopyLockey: this.container.querySelector("#btn-copy-lockey"),
+      btnCopyTable: this.container.querySelector("#btn-copy-table"),
       hiddenKeysSection: this.container.querySelector("#hidden-keys-section"),
       hiddenKeysToggle: this.container.querySelector("#hidden-keys-toggle"),
       hiddenKeysCount: this.container.querySelector("#hidden-keys-count"),
@@ -160,6 +165,7 @@ class MasterLockey extends BaseTool {
       hiddenKeysBody: this.container.querySelector("#hidden-keys-body"),
       confluencePatWarning: this.container.querySelector("#confluence-pat-warning"),
       confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
+      confluenceDomainHeader: this.container.querySelector("#confluence-domain-header"),
       // Tab elements
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
       lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
@@ -260,41 +266,45 @@ class MasterLockey extends BaseTool {
   }
 
   setupConfluenceListeners() {
-    // Enable/disable fetch button based on input
+    // Page search input handler with debounce
     this.els.confluencePageInput.addEventListener("input", () => {
       const value = this.els.confluencePageInput.value.trim();
       this.els.btnFetchConfluence.disabled = !value;
+      this.handlePageSearchInputDebounced();
+    });
+
+    // Focus handler - show dropdown with all pages
+    this.els.confluencePageInput.addEventListener("focus", () => {
+      this.handlePageSearchInput();
+    });
+
+    // Keyboard navigation
+    this.els.confluencePageInput.addEventListener("keydown", (e) => {
+      if (this.els.pageSearchDropdown.style.display === "block") {
+        this.handlePageSearchKeyDown(e);
+      } else if (e.key === "Enter" && !this.els.btnFetchConfluence.disabled) {
+        this.fetchFromConfluence();
+      } else if (e.key === "ArrowDown") {
+        this.handlePageSearchInput();
+      }
+    });
+
+    // Click outside to close dropdown
+    document.addEventListener("click", (e) => {
+      if (this.els.pageSearchContainer && !this.els.pageSearchContainer.contains(e.target)) {
+        this.hidePageSearchDropdown();
+      }
     });
 
     // Fetch button click
     this.els.btnFetchConfluence.addEventListener("click", () => {
+      this.hidePageSearchDropdown();
       this.fetchFromConfluence();
     });
 
-    // Enter key in input
-    this.els.confluencePageInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !this.els.btnFetchConfluence.disabled) {
-        this.fetchFromConfluence();
-      }
-    });
-
-    // Export buttons
-    this.els.btnExportTsv.addEventListener("click", () => this.exportResults("tsv"));
-    this.els.btnExportCsv.addEventListener("click", () => this.exportResults("csv"));
-
-    // Cached pages selector change
-    this.els.cachedPagesSelector.addEventListener("change", () => {
-      const pageId = this.els.cachedPagesSelector.value;
-      if (pageId) {
-        this.loadCachedPage(pageId);
-        this.els.btnRefreshPage.disabled = false;
-        this.els.btnDeleteCache.disabled = false;
-      } else {
-        this.els.btnRefreshPage.disabled = true;
-        this.els.btnDeleteCache.disabled = true;
-        this.els.confluenceResults.style.display = "none";
-      }
-    });
+    // Copy buttons
+    this.els.btnCopyLockey.addEventListener("click", () => this.copyLockeyColumn());
+    this.els.btnCopyTable.addEventListener("click", () => this.copyTableAsTsv());
 
     // Refresh button
     this.els.btnRefreshPage.addEventListener("click", () => {
@@ -315,6 +325,165 @@ class MasterLockey extends BaseTool {
       const isExpanded = this.els.hiddenKeysToggle.classList.toggle("expanded");
       this.els.hiddenKeysContent.style.display = isExpanded ? "block" : "none";
     });
+  }
+
+  handlePageSearchInputDebounced() {
+    if (this.pageSearchDebounceTimer) {
+      clearTimeout(this.pageSearchDebounceTimer);
+    }
+    this.pageSearchDebounceTimer = setTimeout(() => {
+      this.handlePageSearchInput();
+    }, 150);
+  }
+
+  handlePageSearchInput() {
+    const input = this.els.confluencePageInput.value.trim();
+    const cachedPages = this.pageSearchState.cachedPages;
+
+    // Determine if input looks like a URL or page ID
+    const isUrlLike = input && (input.includes("/") || input.includes("http") || /^\d+$/.test(input));
+
+    // Filter cached pages by title (case-insensitive)
+    let matchedPages = [];
+    if (input) {
+      const lowerInput = input.toLowerCase();
+      matchedPages = cachedPages.filter((page) => page.title && page.title.toLowerCase().includes(lowerInput));
+    } else {
+      // Show all cached pages when empty
+      matchedPages = cachedPages.slice(0, 10);
+    }
+
+    this.showPageSearchDropdown(matchedPages, input, isUrlLike);
+  }
+
+  showPageSearchDropdown(pages, inputValue, isUrlLike) {
+    const dropdown = this.els.pageSearchDropdown;
+    dropdown.innerHTML = "";
+    this.pageSearchState.visibleItems = [];
+    this.pageSearchState.selectedIndex = -1;
+
+    // If input looks like URL/ID, show "Fetch new page" option first
+    if (isUrlLike && inputValue) {
+      const fetchItem = document.createElement("div");
+      fetchItem.className = "page-search-item fetch-new";
+      fetchItem.innerHTML = `
+        <span class="item-icon">+</span>
+        <span class="item-text">Fetch: ${this.truncateText(inputValue, 40)}</span>
+      `;
+      fetchItem.dataset.action = "fetch";
+      fetchItem.dataset.value = inputValue;
+      fetchItem.addEventListener("click", () => {
+        this.hidePageSearchDropdown();
+        this.fetchFromConfluence();
+      });
+      dropdown.appendChild(fetchItem);
+      this.pageSearchState.visibleItems.push(fetchItem);
+    }
+
+    // Show cached pages
+    if (pages.length > 0) {
+      pages.forEach((page) => {
+        const item = document.createElement("div");
+        item.className = "page-search-item";
+        item.innerHTML = `
+          <span class="item-icon">📄</span>
+          <span class="item-text">${this.escapeHtml(page.title)}</span>
+        `;
+        item.dataset.action = "load";
+        item.dataset.pageId = page.pageId;
+        item.addEventListener("click", () => {
+          this.selectPageFromDropdown(page.pageId, page.title);
+        });
+        dropdown.appendChild(item);
+        this.pageSearchState.visibleItems.push(item);
+      });
+    }
+
+    // Show empty state if no results
+    if (this.pageSearchState.visibleItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "page-search-empty";
+      empty.textContent = "No cached pages. Enter a Confluence URL to fetch.";
+      dropdown.appendChild(empty);
+    }
+
+    dropdown.style.display = "block";
+  }
+
+  hidePageSearchDropdown() {
+    this.els.pageSearchDropdown.style.display = "none";
+    this.pageSearchState.selectedIndex = -1;
+  }
+
+  selectPageFromDropdown(pageId, title) {
+    this.els.confluencePageInput.value = title || "";
+    this.hidePageSearchDropdown();
+    this.loadCachedPage(pageId);
+    this.els.btnFetchConfluence.disabled = true; // Disable since we're loading cached
+  }
+
+  handlePageSearchKeyDown(event) {
+    const items = this.pageSearchState.visibleItems;
+    if (items.length === 0) return;
+
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        this.pageSearchState.selectedIndex = Math.min(this.pageSearchState.selectedIndex + 1, items.length - 1);
+        this.updatePageSearchSelection();
+        break;
+
+      case "ArrowUp":
+        event.preventDefault();
+        this.pageSearchState.selectedIndex = Math.max(this.pageSearchState.selectedIndex - 1, -1);
+        this.updatePageSearchSelection();
+        break;
+
+      case "Enter":
+        event.preventDefault();
+        if (this.pageSearchState.selectedIndex >= 0 && this.pageSearchState.selectedIndex < items.length) {
+          const selectedItem = items[this.pageSearchState.selectedIndex];
+          if (selectedItem.dataset.action === "fetch") {
+            this.hidePageSearchDropdown();
+            this.fetchFromConfluence();
+          } else if (selectedItem.dataset.action === "load") {
+            const pageId = selectedItem.dataset.pageId;
+            const page = this.pageSearchState.cachedPages.find((p) => p.pageId === pageId);
+            this.selectPageFromDropdown(pageId, page?.title);
+          }
+        } else if (!this.els.btnFetchConfluence.disabled) {
+          this.hidePageSearchDropdown();
+          this.fetchFromConfluence();
+        }
+        break;
+
+      case "Escape":
+        this.hidePageSearchDropdown();
+        break;
+    }
+  }
+
+  updatePageSearchSelection() {
+    this.pageSearchState.visibleItems.forEach((item, index) => {
+      if (index === this.pageSearchState.selectedIndex) {
+        item.classList.add("selected");
+        item.scrollIntoView({ block: "nearest" });
+      } else {
+        item.classList.remove("selected");
+      }
+    });
+  }
+
+  truncateText(text, maxLength) {
+    if (!text || text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  }
+
+  escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   applyFilterDebounced() {
@@ -461,8 +630,8 @@ class MasterLockey extends BaseTool {
     this.hideEmpty();
     this.els.tableContainer.style.display = "block";
 
-    // Show Confluence section (Tauri only)
-    this.showConfluenceSection();
+    // Update Confluence comparison with new domain data
+    this.refreshConfluenceComparison();
   }
 
   buildTableHeaders(languages) {
@@ -714,14 +883,12 @@ class MasterLockey extends BaseTool {
       if (hasPat && domain && username) {
         // Full credentials configured - hide warning, enable controls
         this.els.confluencePatWarning.style.display = "none";
-        this.els.cachedPagesSelector.disabled = false;
         this.els.confluencePageInput.disabled = false;
         // Load cached pages dropdown
         await this.loadCachedPagesDropdown();
       } else {
         // Missing credentials - show warning, disable controls
         this.els.confluencePatWarning.style.display = "block";
-        this.els.cachedPagesSelector.disabled = true;
         this.els.confluencePageInput.disabled = true;
         this.els.btnFetchConfluence.disabled = true;
 
@@ -735,31 +902,39 @@ class MasterLockey extends BaseTool {
           });
         }
       }
+
     } catch (_) {
       // Not available (web mode) - show warning with message
-      this.els.confluencePatWarning.style.display = "block";
-      this.els.confluencePatWarning.textContent = "Confluence integration is only available in the desktop app.";
-      this.els.cachedPagesSelector.disabled = true;
+      // this.els.confluencePatWarning.style.display = "block";
+      // this.els.confluencePatWarning.textContent = "Confluence integration is only available in the desktop app.";
       this.els.confluencePageInput.disabled = true;
       this.els.btnFetchConfluence.disabled = true;
     }
   }
 
+  /**
+   * Refresh confluence results comparison with current domain data
+   */
+  refreshConfluenceComparison() {
+    if (!this.confluenceResults || this.confluenceResults.length === 0) return;
+
+    // Re-compare with current domain data
+    // Get the original lockeys without inRemote status
+    const originalLockeys = this.confluenceResults.map(({ key, status }) => ({ key, status }));
+    this.confluenceResults = this.service.compareLockeyWithRemote(originalLockeys, this.parsedData);
+
+    // Re-display results
+    this.displayConfluenceResults();
+  }
+
   async loadCachedPagesDropdown() {
     try {
       const pages = await this.service.loadAllCachedPages();
-
-      // Clear and rebuild dropdown
-      this.els.cachedPagesSelector.innerHTML = '<option value="">-- Select cached page --</option>';
-
-      pages.forEach((page) => {
-        const option = document.createElement("option");
-        option.value = page.pageId;
-        option.textContent = page.title || `Page ${page.pageId}`;
-        this.els.cachedPagesSelector.appendChild(option);
-      });
+      // Store pages in search state for the unified search input
+      this.pageSearchState.cachedPages = pages;
     } catch (error) {
       console.error("Failed to load cached pages:", error);
+      this.pageSearchState.cachedPages = [];
     }
   }
 
@@ -775,6 +950,11 @@ class MasterLockey extends BaseTool {
       this.currentConfluenceTitle = cached.title;
       this.confluenceResults = cached.lockeys;
       this.hiddenKeys = cached.hiddenKeys || [];
+
+      // Update input field with page title and enable buttons
+      this.els.confluencePageInput.value = cached.title || "";
+      this.els.btnRefreshPage.disabled = false;
+      this.els.btnDeleteCache.disabled = false;
 
       UsageTracker.trackEvent("master_lockey", "confluence_load_cached", {
         pageId,
@@ -836,14 +1016,11 @@ class MasterLockey extends BaseTool {
       // Display results
       this.displayConfluenceResults();
 
-      // Refresh dropdown and select current page
+      // Refresh cached pages list and update input to show page title
       await this.loadCachedPagesDropdown();
-      this.els.cachedPagesSelector.value = pageData.id;
+      this.els.confluencePageInput.value = formattedTitle;
       this.els.btnRefreshPage.disabled = false;
       this.els.btnDeleteCache.disabled = false;
-
-      // Clear input
-      this.els.confluencePageInput.value = "";
       this.els.btnFetchConfluence.disabled = true;
     } catch (error) {
       console.error("Confluence fetch error:", error);
@@ -867,16 +1044,37 @@ class MasterLockey extends BaseTool {
     const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
     const hiddenResults = this.confluenceResults.filter((r) => hiddenKeys.includes(r.key));
 
-    // Update count (no page title needed - it's in the dropdown)
-    this.els.confluenceResultsCount.textContent = `${visibleResults.length} lockeys${
-      hiddenResults.length > 0 ? ` (${hiddenResults.length} hidden)` : ""
-    }`;
+    // Count active vs striked
+    const activeCount = visibleResults.filter((r) => r.status === "plain").length;
+    const strikedCount = visibleResults.filter((r) => r.status === "striked").length;
+
+    // Update domain header with current domain name
+    this.els.confluenceDomainHeader.textContent = this.currentDomain || "In Remote";
+
+    // Update count format: "X active lockeys, and Y striked lockeys on the screen"
+    let countText = `${activeCount} active lockey${activeCount !== 1 ? "s" : ""}`;
+    if (strikedCount > 0) {
+      countText += `, and ${strikedCount} striked lockey${strikedCount !== 1 ? "s" : ""} on the screen`;
+    }
+    if (hiddenResults.length > 0) {
+      countText += ` (${hiddenResults.length} hidden)`;
+    }
+    this.els.confluenceResultsCount.textContent = countText;
+
+    // Build a map of remote lockey data for EN/ID lookup
+    const remoteKeyMap = new Map();
+    if (this.parsedData?.rows) {
+      this.parsedData.rows.forEach((row) => {
+        remoteKeyMap.set(row.key, row);
+      });
+    }
 
     // Clear and populate table
     this.els.confluenceTableBody.innerHTML = "";
 
     visibleResults.forEach((item) => {
       const tr = document.createElement("tr");
+      const remoteData = remoteKeyMap.get(item.key);
 
       // Lockey cell
       const keyCell = document.createElement("td");
@@ -884,29 +1082,39 @@ class MasterLockey extends BaseTool {
       keyCell.className = `status-${item.status}`;
       tr.appendChild(keyCell);
 
-      // Status cell
+      // EN cell
+      const enCell = document.createElement("td");
+      enCell.textContent = remoteData?.en || "-";
+      enCell.className = `status-${item.status}`;
+      enCell.title = remoteData?.en || "";
+      tr.appendChild(enCell);
+
+      // ID cell
+      const idCell = document.createElement("td");
+      idCell.textContent = remoteData?.id || "-";
+      idCell.className = `status-${item.status}`;
+      idCell.title = remoteData?.id || "";
+      tr.appendChild(idCell);
+
+      // Conflu Style cell (center aligned)
       const statusCell = document.createElement("td");
-      const statusLabels = {
-        plain: "Released",
-        new: "New (In Dev)",
-        removed: "Removed (Previous)",
-        "removed-new": "Removed (Current)",
-      };
-      statusCell.textContent = statusLabels[item.status] || item.status;
-      statusCell.className = `status-${item.status}`;
+      const styleLabels = { plain: "Plain", striked: "Striked" };
+      statusCell.textContent = styleLabels[item.status] || item.status;
+      statusCell.className = `status-${item.status} col-center`;
       tr.appendChild(statusCell);
 
-      // In Remote cell
+      // Domain column cell (center aligned)
       const inRemoteCell = document.createElement("td");
       inRemoteCell.textContent = item.inRemote ? "✓" : "✗";
-      inRemoteCell.className = item.inRemote ? "in-remote-yes" : "in-remote-no";
+      inRemoteCell.className = (item.inRemote ? "in-remote-yes" : "in-remote-no") + " col-center";
       tr.appendChild(inRemoteCell);
 
-      // Action cell
+      // Action cell (center aligned, minimal width)
       const actionCell = document.createElement("td");
+      actionCell.className = "col-center col-action";
       const hideBtn = document.createElement("button");
       hideBtn.className = "btn-hide";
-      hideBtn.textContent = "Hide";
+      hideBtn.textContent = "Hide Row";
       hideBtn.addEventListener("click", () => this.hideKey(item.key));
       actionCell.appendChild(hideBtn);
       tr.appendChild(actionCell);
@@ -990,11 +1198,12 @@ class MasterLockey extends BaseTool {
 
       // Clear UI
       this.els.confluenceResults.style.display = "none";
-      this.els.cachedPagesSelector.value = "";
+      this.els.confluencePageInput.value = "";
       this.els.btnRefreshPage.disabled = true;
       this.els.btnDeleteCache.disabled = true;
+      this.els.btnFetchConfluence.disabled = true;
 
-      // Refresh dropdown
+      // Refresh cached pages list
       await this.loadCachedPagesDropdown();
 
       this.showSuccess("Cache deleted");
@@ -1013,27 +1222,74 @@ class MasterLockey extends BaseTool {
     this.els.confluenceError.style.display = "none";
   }
 
-  exportResults(format) {
+  /**
+   * Copy only lockey column to clipboard
+   */
+  copyLockeyColumn() {
     if (!this.confluenceResults || this.confluenceResults.length === 0) return;
 
-    // Export only visible (non-hidden) results
     const hiddenKeys = this.hiddenKeys || [];
     const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
 
-    let content;
-    if (format === "tsv") {
-      content = this.service.exportAsTsv(visibleResults);
-    } else {
-      content = this.service.exportAsCsv(visibleResults);
-    }
+    // Just the lockey keys, one per line
+    const content = visibleResults.map((r) => r.key).join("\n");
 
-    // Copy to clipboard
     navigator.clipboard
       .writeText(content)
       .then(() => {
-        this.showSuccess(`Copied ${visibleResults.length} rows as ${format.toUpperCase()}`);
+        this.showSuccess(`Copied ${visibleResults.length} lockeys`);
+        UsageTracker.trackEvent("master_lockey", "confluence_copy_lockey", {
+          rowCount: visibleResults.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
+  }
 
-        UsageTracker.trackEvent("master_lockey", `confluence_export_${format}`, {
+  /**
+   * Copy full table as TSV for Excel paste
+   */
+  copyTableAsTsv() {
+    if (!this.confluenceResults || this.confluenceResults.length === 0) return;
+
+    const hiddenKeys = this.hiddenKeys || [];
+    const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
+
+    // Build remote key map for EN/ID
+    const remoteKeyMap = new Map();
+    if (this.parsedData?.rows) {
+      this.parsedData.rows.forEach((row) => {
+        remoteKeyMap.set(row.key, row);
+      });
+    }
+
+    const domainName = this.currentDomain || "In Remote";
+    const styleLabels = { plain: "Plain", striked: "Striked" };
+
+    // Header row
+    const header = ["Lockey", "EN", "ID", "Conflu Style", domainName].join("\t");
+
+    // Data rows
+    const rows = visibleResults.map((item) => {
+      const remoteData = remoteKeyMap.get(item.key);
+      return [
+        item.key,
+        remoteData?.en || "-",
+        remoteData?.id || "-",
+        styleLabels[item.status] || item.status,
+        item.inRemote ? "Yes" : "No",
+      ].join("\t");
+    });
+
+    const content = [header, ...rows].join("\n");
+
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        this.showSuccess(`Copied ${visibleResults.length} rows to clipboard`);
+        UsageTracker.trackEvent("master_lockey", "confluence_copy_table", {
           rowCount: visibleResults.length,
         });
       })

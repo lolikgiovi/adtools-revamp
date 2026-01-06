@@ -359,6 +359,7 @@ class MasterLockeyService {
    */
   parseConfluenceTableForLockeys(htmlContent) {
     if (!htmlContent) return [];
+    console.log("[Parse] HTML content:", htmlContent);
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, "text/html");
@@ -445,8 +446,37 @@ class MasterLockeyService {
       });
     });
 
-    console.log(`[Parse] Total lockeys found: ${lockeys.length}`);
-    return lockeys;
+    console.log(`[Parse] Total lockeys found (before dedup): ${lockeys.length}`);
+
+    // Deduplicate: if same lockey appears multiple times, prefer "plain" over "striked"
+    const deduped = this.deduplicateLockeys(lockeys);
+    console.log(`[Parse] Total lockeys after dedup: ${deduped.length}`);
+
+    return deduped;
+  }
+
+  /**
+   * Deduplicate lockeys, preferring "plain" over "striked" for duplicates
+   * @param {Array<{key: string, status: string}>} lockeys
+   * @returns {Array<{key: string, status: string}>}
+   */
+  deduplicateLockeys(lockeys) {
+    const keyMap = new Map();
+
+    for (const lockey of lockeys) {
+      const existing = keyMap.get(lockey.key);
+      if (!existing) {
+        // First occurrence
+        keyMap.set(lockey.key, lockey);
+      } else if (existing.status === "striked" && lockey.status === "plain") {
+        // Prefer plain over striked
+        keyMap.set(lockey.key, lockey);
+        console.log(`[Dedup] Key "${lockey.key}" has both striked and plain entries, keeping plain`);
+      }
+      // If existing is plain, or both are same status, keep existing
+    }
+
+    return Array.from(keyMap.values());
   }
 
   /**
@@ -532,7 +562,7 @@ class MasterLockeyService {
   /**
    * Detect the status of a table cell based on styling
    * @param {Element} cell - TD element
-   * @returns {string} Status: 'plain' | 'new' | 'removed' | 'removed-new'
+   * @returns {string} Status: 'plain' | 'striked'
    */
   detectCellStatus(cell) {
     const html = cell.innerHTML;
@@ -545,39 +575,7 @@ class MasterLockeyService {
       html.includes("text-decoration: line-through") ||
       html.includes("text-decoration:line-through");
 
-    // Check for color (non-black/default color indicates new)
-    const hasColor = this.detectNonDefaultColor(cell);
-
-    if (hasStrikethrough && hasColor) return "removed-new";
-    if (hasStrikethrough) return "removed";
-    if (hasColor) return "new";
-    return "plain";
-  }
-
-  /**
-   * Detect if cell has non-default (non-black) text color
-   * @param {Element} cell - TD element
-   * @returns {boolean}
-   */
-  detectNonDefaultColor(cell) {
-    // Check for color on spans, fonts, or inline styles
-    const colorElements = cell.querySelectorAll("[style*='color'], [color], font[color]");
-    if (colorElements.length > 0) return true;
-
-    // Check inline style on the cell itself
-    const style = cell.getAttribute("style") || "";
-    if (style.includes("color:") || style.includes("color :")) {
-      // Exclude black variants
-      const colorMatch = style.match(/color\s*:\s*([^;]+)/i);
-      if (colorMatch) {
-        const colorValue = colorMatch[1].toLowerCase().trim();
-        if (colorValue !== "black" && colorValue !== "#000" && colorValue !== "#000000" && colorValue !== "rgb(0, 0, 0)") {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return hasStrikethrough ? "striked" : "plain";
   }
 
   /**
@@ -598,22 +596,37 @@ class MasterLockeyService {
   }
 
   /**
+   * Get style label for export
+   * @param {string} status - Internal status key
+   * @returns {string} Human-readable style label
+   */
+  getStyleLabel(status) {
+    const styleLabels = {
+      plain: "Plain",
+      striked: "Striked",
+    };
+    return styleLabels[status] || status;
+  }
+
+  /**
    * Export comparison results as TSV
    * @param {Array<{key: string, status: string, inRemote: boolean}>} data
+   * @param {string} domainName - Domain name for column header
    * @returns {string} TSV string
    */
-  exportAsTsv(data) {
-    const header = "Lockey\tStatus\tIn Remote";
-    const rows = data.map((row) => `${row.key}\t${row.status}\t${row.inRemote ? "Yes" : "No"}`);
+  exportAsTsv(data, domainName = "In Remote") {
+    const header = `Lockey\tConflu Style\t${domainName}`;
+    const rows = data.map((row) => `${row.key}\t${this.getStyleLabel(row.status)}\t${row.inRemote ? "Yes" : "No"}`);
     return [header, ...rows].join("\n");
   }
 
   /**
    * Export comparison results as CSV
    * @param {Array<{key: string, status: string, inRemote: boolean}>} data
+   * @param {string} domainName - Domain name for column header
    * @returns {string} CSV string
    */
-  exportAsCsv(data) {
+  exportAsCsv(data, domainName = "In Remote") {
     const escapeCSV = (value) => {
       const str = String(value);
       if (str.includes(",") || str.includes('"') || str.includes("\n")) {
@@ -622,8 +635,8 @@ class MasterLockeyService {
       return str;
     };
 
-    const header = "Lockey,Status,In Remote";
-    const rows = data.map((row) => `${escapeCSV(row.key)},${escapeCSV(row.status)},${row.inRemote ? "Yes" : "No"}`);
+    const header = `Lockey,Conflu Style,${escapeCSV(domainName)}`;
+    const rows = data.map((row) => `${escapeCSV(row.key)},${escapeCSV(this.getStyleLabel(row.status))},${row.inRemote ? "Yes" : "No"}`);
     return [header, ...rows].join("\n");
   }
 

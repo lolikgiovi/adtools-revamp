@@ -92,23 +92,22 @@ export const MasterLockeyTemplate = /* html */ `
         <div id="confluence-section" class="confluence-section">
             <!-- PAT Not Configured Warning -->
             <div id="confluence-pat-warning" class="confluence-warning" style="display: none;">
-                ⚠️ Confluence credentials not configured. 
+                ⚠️ Confluence credentials not configured.
                 <a href="#" id="confluence-settings-link">Go to Settings</a> to add your domain, username, and PAT.
             </div>
-            
-            <!-- Cached Pages + New Page Input (single row) -->
+
+            <!-- Page Search Input (unified search + URL input) -->
             <div class="confluence-controls-row">
-                <select id="cached-pages-selector" class="cached-pages-selector">
-                    <option value="">-- Select cached page --</option>
-                </select>
-                <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
-                <button id="btn-delete-cache" class="btn-confluence" title="Delete from cache" disabled>Delete</button>
-                <div class="confluence-controls-divider"></div>
-                <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Enter page URL or ID">
+                <div class="page-search-container">
+                    <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Search cached pages or enter URL" autocomplete="off">
+                    <div id="page-search-dropdown" class="page-search-dropdown" style="display: none;"></div>
+                </div>
                 <button id="btn-fetch-confluence" class="btn-confluence" disabled>
                     <span class="btn-text">Fetch Lockeys</span>
                     <span class="btn-spinner" style="display: none;">⟳</span>
                 </button>
+                <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
+                <button id="btn-delete-cache" class="btn-confluence btn-danger" title="Delete from cache" disabled>Delete</button>
             </div>
             
             <div id="confluence-error" class="confluence-error" style="display: none;"></div>
@@ -116,8 +115,8 @@ export const MasterLockeyTemplate = /* html */ `
                 <div class="results-header">
                     <span id="confluence-results-count" class="results-count-label"></span>
                     <div class="export-buttons">
-                        <button id="btn-export-tsv" class="btn-export" title="Copy as Tab-Separated Values">📋 TSV</button>
-                        <button id="btn-export-csv" class="btn-export" title="Copy as Comma-Separated Values">📋 CSV</button>
+                        <button id="btn-copy-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
+                        <button id="btn-copy-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
                     </div>
                 </div>
                 <div class="confluence-table-container">
@@ -125,9 +124,11 @@ export const MasterLockeyTemplate = /* html */ `
                         <thead>
                             <tr>
                                 <th>Lockey</th>
-                                <th>Status</th>
-                                <th>In Remote</th>
-                                <th>Action</th>
+                                <th>EN</th>
+                                <th>ID</th>
+                                <th class="col-center">Conflu Style</th>
+                                <th id="confluence-domain-header" class="col-center">In Remote</th>
+                                <th class="col-center col-action">Action</th>
                             </tr>
                         </thead>
                         <tbody id="confluence-table-body">

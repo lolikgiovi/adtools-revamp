@@ -16,7 +16,7 @@
 }
 
 .sidebar-trigger:hover {
-  background-color: hsl(var(--accent));
+  background-color: hsl(var(--sidebar-accent));
   color: hsl(var(--accent-foreground));
 }
 
@@ -131,7 +131,7 @@
 
 .breadcrumb-link:hover {
   color: hsl(var(--foreground));
-  background-color: hsl(var(--accent));
+  background-color: hsl(var(--sidebar-accent));
 }
 
 .breadcrumb-link:focus-visible {
@@ -236,7 +236,7 @@
 }
 
 .tool-card:hover {
-  background-color: hsl(var(--accent));
+  background-color: hsl(var(--sidebar-accent));
   border-color: hsl(var(--ring));
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -260,4 +260,3 @@
   color: hsl(var(--muted-foreground));
   line-height: 1.4;
 }
-
