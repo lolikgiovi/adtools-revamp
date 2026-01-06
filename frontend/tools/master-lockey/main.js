@@ -111,11 +111,19 @@ class MasterLockey extends BaseTool {
     if (targetTab === "lockey") {
       this.els.lockeyPanel.classList.add("active");
       this.els.confluencePanel.classList.remove("active");
+      this.els.bulkSearchPanel.classList.remove("active");
     } else if (targetTab === "confluence") {
       this.els.lockeyPanel.classList.remove("active");
       this.els.confluencePanel.classList.add("active");
+      this.els.bulkSearchPanel.classList.remove("active");
       // Initialize Confluence section when switching to tab
       this.showConfluenceSection();
+    } else if (targetTab === "bulk-search") {
+      this.els.lockeyPanel.classList.remove("active");
+      this.els.confluencePanel.classList.remove("active");
+      this.els.bulkSearchPanel.classList.add("active");
+      // Check if data is loaded and update UI
+      this.updateBulkSearchState();
     }
   }
 
@@ -171,6 +179,18 @@ class MasterLockey extends BaseTool {
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
       lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
       confluencePanel: this.container.querySelector("#confluence-tab-panel"),
+      // Bulk search elements
+      bulkSearchPanel: this.container.querySelector("#bulk-search-tab-panel"),
+      bulkSearchInput: this.container.querySelector("#bulk-search-input"),
+      btnBulkSearch: this.container.querySelector("#btn-bulk-search"),
+      btnClearBulk: this.container.querySelector("#btn-clear-bulk"),
+      bulkSearchNoData: this.container.querySelector("#bulk-search-no-data"),
+      bulkSearchResults: this.container.querySelector("#bulk-search-results"),
+      bulkSearchResultsCount: this.container.querySelector("#bulk-search-results-count"),
+      bulkSearchTableBody: this.container.querySelector("#bulk-search-table-body"),
+      btnCopyBulkResults: this.container.querySelector("#btn-copy-bulk-results"),
+      bulkSearchEnHeader: this.container.querySelector("#bulk-search-en-header"),
+      bulkSearchIdHeader: this.container.querySelector("#bulk-search-id-header"),
     };
   }
 
@@ -261,6 +281,9 @@ class MasterLockey extends BaseTool {
     this.els.tableContainer.addEventListener("scroll", () => {
       this.handleTableScroll();
     });
+
+    // Bulk search event listeners
+    this.setupBulkSearchListeners();
 
     // Confluence event listeners
     this.setupConfluenceListeners();
@@ -560,6 +583,7 @@ class MasterLockey extends BaseTool {
         this.parsedData = cached.data;
         this.displayData();
         this.showCache(cached.timestamp);
+        this.updateBulkSearchState();
 
         UsageTracker.trackEvent("master_lockey", "load_from_cache", { domain: this.currentDomain });
       } else {
@@ -594,6 +618,7 @@ class MasterLockey extends BaseTool {
       this.displayData();
       this.showCache(Date.now());
       this.hideLoading();
+      this.updateBulkSearchState();
 
       this.showSuccess("Data fetched successfully!");
     } catch (error) {
@@ -1281,6 +1306,171 @@ class MasterLockey extends BaseTool {
         this.showSuccess(`Copied ${visibleResults.length} rows to clipboard`);
         UsageTracker.trackEvent("master_lockey", "confluence_copy_table", {
           rowCount: visibleResults.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
+  }
+
+  // =====================
+  // Bulk Search Feature
+  // =====================
+
+  setupBulkSearchListeners() {
+    // Input change handler - enable search button when input has content
+    this.els.bulkSearchInput.addEventListener("input", () => {
+      const hasInput = this.els.bulkSearchInput.value.trim().length > 0;
+      const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
+      this.els.btnBulkSearch.disabled = !hasInput || !hasData;
+    });
+
+    // Search button click
+    this.els.btnBulkSearch.addEventListener("click", () => {
+      this.performBulkSearch();
+    });
+
+    // Clear button click
+    this.els.btnClearBulk.addEventListener("click", () => {
+      this.els.bulkSearchInput.value = "";
+      this.els.bulkSearchResults.style.display = "none";
+      this.els.btnBulkSearch.disabled = true;
+    });
+
+    // Copy results button click
+    this.els.btnCopyBulkResults.addEventListener("click", () => {
+      this.copyBulkResults();
+    });
+
+    // Allow Enter+Ctrl/Cmd to trigger search
+    this.els.bulkSearchInput.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !this.els.btnBulkSearch.disabled) {
+        this.performBulkSearch();
+      }
+    });
+  }
+
+  updateBulkSearchState() {
+    const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
+
+    if (hasData) {
+      this.els.bulkSearchNoData.style.display = "none";
+      this.els.bulkSearchInput.disabled = false;
+
+      // Check if input has content and enable search button
+      const hasInput = this.els.bulkSearchInput.value.trim().length > 0;
+      this.els.btnBulkSearch.disabled = !hasInput;
+    } else {
+      this.els.bulkSearchNoData.style.display = "block";
+      this.els.bulkSearchInput.disabled = true;
+      this.els.btnBulkSearch.disabled = true;
+      this.els.bulkSearchResults.style.display = "none";
+    }
+  }
+
+  performBulkSearch() {
+    const input = this.els.bulkSearchInput.value.trim();
+    if (!input || !this.parsedData) return;
+
+    // Parse input - split by newlines, trim each line, filter empty lines
+    const keys = input
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (keys.length === 0) return;
+
+    // Build a Map of all remote keys for O(1) lookup with content
+    const remoteKeyMap = new Map();
+    this.parsedData.rows.forEach((row) => {
+      remoteKeyMap.set(row.key, row);
+    });
+
+    // Check each key against remote data and get content
+    const results = keys.map((key) => {
+      const remoteData = remoteKeyMap.get(key);
+      return {
+        key,
+        exists: !!remoteData,
+        en: remoteData?.en || "-",
+        id: remoteData?.id || "-",
+      };
+    });
+
+    // Store results for copy functionality
+    this.bulkSearchResults = results;
+
+    // Track usage
+    UsageTracker.trackEvent("master_lockey", "bulk_search", {
+      inputCount: keys.length,
+      foundCount: results.filter((r) => r.exists).length,
+      domain: this.currentDomain,
+    });
+
+    // Display results
+    this.displayBulkSearchResults(results);
+  }
+
+  displayBulkSearchResults(results) {
+    // Update count
+    const foundCount = results.filter((r) => r.exists).length;
+    const notFoundCount = results.length - foundCount;
+    this.els.bulkSearchResultsCount.textContent = `${results.length} lockey${
+      results.length !== 1 ? "s" : ""
+    }: ${foundCount} found, ${notFoundCount} not found`;
+
+    // Update EN/ID headers with domain name
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+    this.els.bulkSearchEnHeader.textContent = `EN${domainSuffix}`;
+    this.els.bulkSearchIdHeader.textContent = `ID${domainSuffix}`;
+
+    // Clear and populate table
+    this.els.bulkSearchTableBody.innerHTML = "";
+
+    results.forEach((item) => {
+      const tr = document.createElement("tr");
+
+      // Lockey cell
+      const keyCell = document.createElement("td");
+      keyCell.textContent = item.key;
+      keyCell.className = item.exists ? "" : "status-not-found";
+      tr.appendChild(keyCell);
+
+      // EN cell
+      const enCell = document.createElement("td");
+      enCell.textContent = item.en;
+      enCell.title = item.en;
+      tr.appendChild(enCell);
+
+      // ID cell
+      const idCell = document.createElement("td");
+      idCell.textContent = item.id;
+      idCell.title = item.id;
+      tr.appendChild(idCell);
+
+      this.els.bulkSearchTableBody.appendChild(tr);
+    });
+
+    // Show results
+    this.els.bulkSearchResults.style.display = "block";
+  }
+
+  copyBulkResults() {
+    if (!this.bulkSearchResults || this.bulkSearchResults.length === 0) return;
+
+    // Format as TSV: Lockey\tEN\tID
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+    const header = `Lockey\tEN${domainSuffix}\tID${domainSuffix}`;
+    const rows = this.bulkSearchResults.map((r) => `${r.key}\t${r.en}\t${r.id}`);
+    const content = [header, ...rows].join("\n");
+
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        this.showSuccess(`Copied ${this.bulkSearchResults.length} results to clipboard`);
+        UsageTracker.trackEvent("master_lockey", "bulk_search_copy", {
+          rowCount: this.bulkSearchResults.length,
         });
       })
       .catch((err) => {

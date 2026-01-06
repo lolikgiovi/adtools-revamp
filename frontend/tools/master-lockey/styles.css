@@ -957,3 +957,132 @@
   border-color: hsl(var(--destructive));
   color: hsl(var(--destructive));
 }
+
+/* ===================== */
+/* Bulk Search Section   */
+/* ===================== */
+
+.bulk-search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.bulk-search-intro {
+  margin-bottom: 0;
+}
+
+.bulk-search-hint {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+.bulk-search-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bulk-search-input {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.bulk-search-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+}
+
+.bulk-search-input::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.6;
+}
+
+.bulk-search-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.bulk-search-warning {
+  padding: 12px;
+  background: hsl(45 93% 47% / 0.1);
+  border: 1px solid hsl(45 93% 47%);
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(45 93% 30%);
+  font-size: 0.75rem;
+}
+
+.bulk-search-results {
+  margin-top: 8px;
+}
+
+.bulk-search-results .results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.bulk-search-table-container {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.bulk-search-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+}
+
+.bulk-search-table thead {
+  position: sticky;
+  top: 0;
+  background: hsl(var(--muted));
+  z-index: 10;
+}
+
+.bulk-search-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid hsl(var(--border));
+}
+
+.bulk-search-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.bulk-search-table td:first-child {
+  font-family: monospace;
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+
+.bulk-search-table tbody tr:hover {
+  background: hsl(var(--muted));
+}
+
+/* Bulk Search Status Indicators */
+.status-found {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.status-not-found {
+  color: hsl(var(--destructive));
+  font-weight: 600;
+}

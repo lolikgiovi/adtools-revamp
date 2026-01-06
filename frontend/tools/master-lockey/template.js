@@ -14,6 +14,9 @@ export const MasterLockeyTemplate = /* html */ `
             <button class="tab-button" data-tab="confluence">
                 📄 Confluence Lookup 
             </button>
+            <button class="tab-button" data-tab="bulk-search">
+                🔍 Bulk Search
+            </button>
         </div>
         <!-- Domain Controls (visible only on Lockey tab) -->
         <div class="tabs-right" id="domain-controls">
@@ -154,6 +157,52 @@ export const MasterLockeyTemplate = /* html */ `
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Search Tab Panel -->
+    <div id="bulk-search-tab-panel" class="ml-tab-panel" data-panel="bulk-search">
+        <div class="bulk-search-section">
+            <div class="bulk-search-intro">
+                <p class="bulk-search-hint">Enter lockey keys below (one per line) to check if they exist in the loaded remote data.</p>
+            </div>
+            
+            <div class="bulk-search-input-section">
+                <textarea id="bulk-search-input" class="bulk-search-input" placeholder="livinCareMilestoneSubtitleLabel&#10;livinCareMilestoneDoneTitleLabel&#10;livinCareMilestoneRejectedDisclaimerLabel"></textarea>
+                <div class="bulk-search-controls">
+                    <button id="btn-bulk-search" class="btn-confluence" disabled>
+                        <span class="btn-text">Search</span>
+                    </button>
+                    <button id="btn-clear-bulk" class="btn-confluence">Clear</button>
+                </div>
+            </div>
+
+            <div id="bulk-search-no-data" class="bulk-search-warning" style="display: none;">
+                ⚠️ No remote data loaded. Please select a domain and fetch data from the Lockey tab first.
+            </div>
+            
+            <div id="bulk-search-results" class="bulk-search-results" style="display: none;">
+                <div class="results-header">
+                    <span id="bulk-search-results-count" class="results-count-label"></span>
+                    <div class="export-buttons">
+                        <button id="btn-copy-bulk-results" class="btn-export" title="Copy results to clipboard">Copy Results</button>
+                    </div>
+                </div>
+                <div class="bulk-search-table-container">
+                    <table class="bulk-search-table">
+                        <thead>
+                            <tr>
+                                <th>Lockey</th>
+                                <th id="bulk-search-en-header">EN</th>
+                                <th id="bulk-search-id-header">ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulk-search-table-body">
+                            <!-- Bulk search results will be inserted here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
