@@ -5,13 +5,12 @@
 
 export const MasterLockeyTemplate = /* html */ `
 <div class="master-lockey-container">
+    <!-- Domain Controls Header -->
     <div class="master-lockey-header">
         <div class="master-lockey-controls">
-            <div class="control-group">
-                <select id="domain-selector" class="domain-selector">
-                    <option value="">Pick Domain</option>
-                </select>
-            </div>
+            <select id="domain-selector" class="domain-selector">
+                <option value="">Pick Domain</option>
+            </select>
             <button class="btn-fetch" id="btn-fetch-data" disabled>
                 <span class="btn-text">Get Latest Data</span>
                 <span class="btn-spinner" style="display: none;">⟳</span>
@@ -28,64 +27,77 @@ export const MasterLockeyTemplate = /* html */ `
         </div>
     </div>
 
-    <!-- Search -->
-  <div id="search-section" class="master-lockey-search" style="display: none;">
-    <div class="search-container">
-      <div class="search-mode-wrapper">
-        <span class="dropdown-icon">▼</span>
-        <select id="search-mode" class="search-mode-selector">
-          <option value="key">Search by Key</option>
-          <option value="content">Search by Content</option>
-        </select>
-      </div>
-      <input type="text" id="search-input" class="search-input" placeholder="Enter search term...">
-      <button id="btn-clear-search" class="btn-clear-search" title="Clear search">×</button>
-      <button id="btn-whole-word" class="btn-whole-word" title="Match whole word only">
-        Match Word
-      </button>
+    <!-- Tab Navigation -->
+    <div class="tabs-container ml-tabs">
+        <div class="tabs-left">
+            <button class="tab-button active" data-tab="lockey">
+                🌐 Lockey
+            </button>
+            <button class="tab-button" data-tab="confluence">
+                📄 Confluence Lookup
+            </button>
+        </div>
     </div>
-    <div class="search-meta">
-      <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
-      <div id="results-count" class="search-results-count" style="display: none;"><span id="results-text"></span></div>
-    </div>
-  </div>
 
-    <div class="master-lockey-content" id="lockey-content">
-        <div class="empty-state" id="empty-state">
-            <div class="empty-state-icon">🌐</div>
-            <h3>No Data Loaded</h3>
-            <p>Select a domain and click "Fetch Latest Data" to get started.</p>
-        </div>
-
-        <div class="loading-state" id="loading-state" style="display: none;">
-            <div class="spinner"></div>
-            <p>Loading localization data...</p>
-        </div>
-
-        <div class="error-state" id="error-state" style="display: none;">
-            <div class="error-icon">⚠️</div>
-            <h3 id="error-title">Error</h3>
-            <p id="error-message"></p>
-            <button class="btn-retry" id="btn-retry">Retry</button>
-        </div>
-
-        <div class="table-container" id="table-container" style="display: none;">
-            <table class="lockey-table" id="lockey-table">
-                <thead id="table-head">
-                    <!-- Dynamic headers will be inserted here -->
-                </thead>
-                <tbody id="table-body">
-                    <!-- Data rows will be inserted here -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Confluence Integration Section -->
-        <div id="confluence-section" class="confluence-section" style="display: none;">
-            <div class="confluence-header">
-                <h4>📄 Confluence Lockeys</h4>
+    <!-- Lockey Tab Panel -->
+    <div id="lockey-tab-panel" class="ml-tab-panel active" data-panel="lockey">
+        <!-- Search -->
+        <div id="search-section" class="master-lockey-search" style="display: none;">
+            <div class="search-container">
+                <div class="search-mode-wrapper">
+                    <span class="dropdown-icon">▼</span>
+                    <select id="search-mode" class="search-mode-selector">
+                        <option value="key">Search by Key</option>
+                        <option value="content">Search by Content</option>
+                    </select>
+                </div>
+                <input type="text" id="search-input" class="search-input" placeholder="Enter search term...">
+                <button id="btn-clear-search" class="btn-clear-search" title="Clear search">×</button>
+                <button id="btn-whole-word" class="btn-whole-word" title="Match whole word only">
+                    Match Word
+                </button>
             </div>
-            
+            <div class="search-meta">
+                <p id="search-hint" class="search-hint">Tip: For key search, use comma-separated values (e.g., key1, key2)</p>
+                <div id="results-count" class="search-results-count" style="display: none;"><span id="results-text"></span></div>
+            </div>
+        </div>
+
+        <div class="master-lockey-content" id="lockey-content">
+            <div class="empty-state" id="empty-state">
+                <div class="empty-state-icon">🌐</div>
+                <h3>No Data Loaded</h3>
+                <p>Select a domain and click "Get Latest Data" to get started.</p>
+            </div>
+
+            <div class="loading-state" id="loading-state" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading localization data...</p>
+            </div>
+
+            <div class="error-state" id="error-state" style="display: none;">
+                <div class="error-icon">⚠️</div>
+                <h3 id="error-title">Error</h3>
+                <p id="error-message"></p>
+                <button class="btn-retry" id="btn-retry">Retry</button>
+            </div>
+
+            <div class="table-container" id="table-container" style="display: none;">
+                <table class="lockey-table" id="lockey-table">
+                    <thead id="table-head">
+                        <!-- Dynamic headers will be inserted here -->
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Data rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confluence Lookup Tab Panel -->
+    <div id="confluence-tab-panel" class="ml-tab-panel" data-panel="confluence">
+        <div id="confluence-section" class="confluence-section">
             <!-- PAT Not Configured Warning -->
             <div id="confluence-pat-warning" class="confluence-warning" style="display: none;">
                 ⚠️ Confluence credentials not configured. 

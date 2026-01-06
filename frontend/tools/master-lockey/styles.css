@@ -11,6 +11,26 @@
   background: hsl(var(--background));
 }
 
+/* Tab Panels */
+.ml-tab-panel {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.ml-tab-panel.active {
+  display: flex;
+}
+
+/* Tabs Right Controls */
+.tabs-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 /* Header Controls */
 .master-lockey-header {
   display: flex;
@@ -473,9 +493,7 @@
 /* ===================== */
 
 .confluence-section {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid hsl(var(--border));
+  padding-top: 8px;
 }
 
 .confluence-header {
@@ -569,7 +587,6 @@
 .confluence-warning a:hover {
   opacity: 0.8;
 }
-
 
 .confluence-results {
   margin-top: 12px;

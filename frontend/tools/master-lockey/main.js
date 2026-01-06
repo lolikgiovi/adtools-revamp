@@ -64,12 +64,39 @@ class MasterLockey extends BaseTool {
     this.bindElements();
     this.loadDomainConfig();
     this.setupEventListeners();
+    this.setupTabListeners();
 
     // Track feature usage
     UsageTracker.trackFeature("master_lockey", "mount");
 
     // Try to load cached data for the first selected domain
     this.tryLoadCache();
+  }
+
+  setupTabListeners() {
+    this.els.tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const targetTab = btn.dataset.tab;
+
+        // Update active state on buttons
+        this.els.tabButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        // Toggle panels
+        if (targetTab === "lockey") {
+          this.els.lockeyPanel.classList.add("active");
+          this.els.confluencePanel.classList.remove("active");
+        } else if (targetTab === "confluence") {
+          this.els.lockeyPanel.classList.remove("active");
+          this.els.confluencePanel.classList.add("active");
+          // Initialize Confluence section when switching to tab
+          this.showConfluenceSection();
+        }
+
+        // Track tab switch
+        UsageTracker.trackEvent("master_lockey", "tab_switch", { tab: targetTab });
+      });
+    });
   }
 
   bindElements() {
@@ -119,6 +146,10 @@ class MasterLockey extends BaseTool {
       hiddenKeysBody: this.container.querySelector("#hidden-keys-body"),
       confluencePatWarning: this.container.querySelector("#confluence-pat-warning"),
       confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
+      // Tab elements
+      tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
+      lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
+      confluencePanel: this.container.querySelector("#confluence-tab-panel"),
     };
   }
 
@@ -667,9 +698,6 @@ class MasterLockey extends BaseTool {
       const domain = localStorage.getItem("config.confluence.domain");
       const username = localStorage.getItem("config.confluence.username");
 
-      // Always show the section so user can see what's needed
-      this.els.confluenceSection.style.display = "block";
-
       if (hasPat && domain && username) {
         // Full credentials configured - hide warning, enable controls
         this.els.confluencePatWarning.style.display = "none";
@@ -684,16 +712,23 @@ class MasterLockey extends BaseTool {
         this.els.confluencePageInput.disabled = true;
         this.els.btnFetchConfluence.disabled = true;
 
-        // Add click handler for settings link
-        this.els.confluenceSettingsLink?.addEventListener("click", (e) => {
-          e.preventDefault();
-          // Navigate to settings page
-          this.eventBus?.emit?.("navigate", { page: "settings" });
-        });
+        // Add click handler for settings link (only once)
+        if (!this._confluenceSettingsLinkBound) {
+          this._confluenceSettingsLinkBound = true;
+          this.els.confluenceSettingsLink?.addEventListener("click", (e) => {
+            e.preventDefault();
+            // Navigate to settings page
+            this.eventBus?.emit?.("navigate", { page: "settings" });
+          });
+        }
       }
     } catch (_) {
-      // Not available (web mode) - hide section entirely
-      this.els.confluenceSection.style.display = "none";
+      // Not available (web mode) - show warning with message
+      this.els.confluencePatWarning.style.display = "block";
+      this.els.confluencePatWarning.textContent = "Confluence integration is only available in the desktop app.";
+      this.els.cachedPagesSelector.disabled = true;
+      this.els.confluencePageInput.disabled = true;
+      this.els.btnFetchConfluence.disabled = true;
     }
   }
 
