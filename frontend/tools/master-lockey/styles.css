@@ -678,7 +678,7 @@
 }
 
 .confluence-table-container {
-  max-height: 400px;
+  max-height: 500px;
   overflow: auto;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
@@ -816,15 +816,10 @@
   gap: 2px;
 }
 
-.page-title {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: hsl(var(--foreground));
-}
-
-.results-count {
-  font-size: 0.7rem;
+.results-count-label {
+  font-size: 0.75rem;
   color: hsl(var(--muted-foreground));
+  font-weight: 500;
 }
 
 /* Hide/Unhide Buttons */

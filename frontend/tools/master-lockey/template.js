@@ -99,10 +99,10 @@ export const MasterLockeyTemplate = /* html */ `
             <!-- Cached Pages + New Page Input (single row) -->
             <div class="confluence-controls-row">
                 <select id="cached-pages-selector" class="cached-pages-selector">
-                    <option value="">-- Select cached page or enter new --</option>
+                    <option value="">-- Select cached page --</option>
                 </select>
-                <button id="btn-refresh-page" class="btn-icon" title="Refresh from Confluence" disabled>🔄</button>
-                <button id="btn-delete-cache" class="btn-icon btn-danger" title="Delete from cache" disabled>🗑️</button>
+                <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
+                <button id="btn-delete-cache" class="btn-confluence" title="Delete from cache" disabled>Delete</button>
                 <div class="confluence-controls-divider"></div>
                 <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Enter page URL or ID">
                 <button id="btn-fetch-confluence" class="btn-confluence" disabled>
@@ -114,10 +114,7 @@ export const MasterLockeyTemplate = /* html */ `
             <div id="confluence-error" class="confluence-error" style="display: none;"></div>
             <div id="confluence-results" class="confluence-results" style="display: none;">
                 <div class="results-header">
-                    <div class="results-info">
-                        <span id="confluence-page-title" class="page-title"></span>
-                        <span id="confluence-results-count" class="results-count"></span>
-                    </div>
+                    <span id="confluence-results-count" class="results-count-label"></span>
                     <div class="export-buttons">
                         <button id="btn-export-tsv" class="btn-export" title="Copy as Tab-Separated Values">📋 TSV</button>
                         <button id="btn-export-csv" class="btn-export" title="Copy as Comma-Separated Values">📋 CSV</button>

@@ -149,7 +149,6 @@ class MasterLockey extends BaseTool {
       btnFetchConfluence: this.container.querySelector("#btn-fetch-confluence"),
       confluenceError: this.container.querySelector("#confluence-error"),
       confluenceResults: this.container.querySelector("#confluence-results"),
-      confluencePageTitle: this.container.querySelector("#confluence-page-title"),
       confluenceResultsCount: this.container.querySelector("#confluence-results-count"),
       confluenceTableBody: this.container.querySelector("#confluence-table-body"),
       btnExportTsv: this.container.querySelector("#btn-export-tsv"),
@@ -751,7 +750,7 @@ class MasterLockey extends BaseTool {
       const pages = await this.service.loadAllCachedPages();
 
       // Clear and rebuild dropdown
-      this.els.cachedPagesSelector.innerHTML = '<option value="">-- Select cached page or enter new --</option>';
+      this.els.cachedPagesSelector.innerHTML = '<option value="">-- Select cached page --</option>';
 
       pages.forEach((page) => {
         const option = document.createElement("option");
@@ -868,10 +867,7 @@ class MasterLockey extends BaseTool {
     const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
     const hiddenResults = this.confluenceResults.filter((r) => hiddenKeys.includes(r.key));
 
-    // Update page title
-    this.els.confluencePageTitle.textContent = this.currentConfluenceTitle || "";
-
-    // Update count
+    // Update count (no page title needed - it's in the dropdown)
     this.els.confluenceResultsCount.textContent = `${visibleResults.length} lockeys${
       hiddenResults.length > 0 ? ` (${hiddenResults.length} hidden)` : ""
     }`;
