@@ -58,6 +58,9 @@ class MasterLockey extends BaseTool {
       visibleItems: [],
     };
     this.pageSearchDebounceTimer = null;
+
+    // Bulk Confluence search state
+    this.bulkConfluenceResults = null; // Array of { screenName, lockeys: [...], error? }
   }
 
   getIconSvg() {
@@ -194,6 +197,22 @@ class MasterLockey extends BaseTool {
       bulkSearchFilter: this.container.querySelector("#bulk-search-filter"),
       bulkSearchEnHeader: this.container.querySelector("#bulk-search-en-header"),
       bulkSearchIdHeader: this.container.querySelector("#bulk-search-id-header"),
+      // Confluence mode toggle elements
+      confluenceModeButtons: this.container.querySelectorAll(".confluence-mode-btn"),
+      confluenceSingleMode: this.container.querySelector("#confluence-single-mode"),
+      confluenceBulkMode: this.container.querySelector("#confluence-bulk-mode"),
+      // Bulk Confluence elements
+      bulkConfluenceInput: this.container.querySelector("#bulk-confluence-input"),
+      btnBulkConfluenceSearch: this.container.querySelector("#btn-bulk-confluence-search"),
+      btnPasteBulkConfluence: this.container.querySelector("#btn-paste-bulk-confluence"),
+      btnClearBulkConfluence: this.container.querySelector("#btn-clear-bulk-confluence"),
+      bulkConfluenceError: this.container.querySelector("#bulk-confluence-error"),
+      bulkConfluenceResults: this.container.querySelector("#bulk-confluence-results"),
+      bulkConfluenceResultsCount: this.container.querySelector("#bulk-confluence-results-count"),
+      bulkConfluenceGroupedResults: this.container.querySelector("#bulk-confluence-grouped-results"),
+      bulkConfluenceIncludeScreen: this.container.querySelector("#bulk-confluence-include-screen"),
+      btnCopyBulkConfluenceLockey: this.container.querySelector("#btn-copy-bulk-confluence-lockey"),
+      btnCopyBulkConfluenceTable: this.container.querySelector("#btn-copy-bulk-confluence-table"),
     };
   }
 
@@ -351,6 +370,86 @@ class MasterLockey extends BaseTool {
     this.els.hiddenKeysToggle.addEventListener("click", () => {
       const isExpanded = this.els.hiddenKeysToggle.classList.toggle("expanded");
       this.els.hiddenKeysContent.style.display = isExpanded ? "block" : "none";
+    });
+
+    // Mode toggle listeners (Single / Bulk)
+    this.els.confluenceModeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.mode;
+        this.switchConfluenceMode(mode);
+      });
+    });
+
+    // Bulk Confluence event listeners
+    this.setupBulkConfluenceListeners();
+  }
+
+  switchConfluenceMode(mode) {
+    // Update button active states
+    this.els.confluenceModeButtons.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
+
+    // Toggle panels
+    if (mode === "single") {
+      this.els.confluenceSingleMode.classList.add("active");
+      this.els.confluenceBulkMode.classList.remove("active");
+    } else {
+      this.els.confluenceSingleMode.classList.remove("active");
+      this.els.confluenceBulkMode.classList.add("active");
+    }
+
+    // Track mode switch
+    UsageTracker.trackEvent("master_lockey", "confluence_mode_switch", { mode });
+  }
+
+  setupBulkConfluenceListeners() {
+    // Input change - enable/disable search button
+    this.els.bulkConfluenceInput.addEventListener("input", () => {
+      const value = this.els.bulkConfluenceInput.value.trim();
+      this.els.btnBulkConfluenceSearch.disabled = !value;
+    });
+
+    // Search button
+    this.els.btnBulkConfluenceSearch.addEventListener("click", () => {
+      this.performBulkConfluenceSearch();
+    });
+
+    // Paste button
+    this.els.btnPasteBulkConfluence.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        this.els.bulkConfluenceInput.value = text;
+        this.els.btnBulkConfluenceSearch.disabled = !text.trim();
+      } catch (err) {
+        console.error("Failed to paste:", err);
+      }
+    });
+
+    // Clear button
+    this.els.btnClearBulkConfluence.addEventListener("click", () => {
+      this.els.bulkConfluenceInput.value = "";
+      this.els.btnBulkConfluenceSearch.disabled = true;
+      this.els.bulkConfluenceResults.style.display = "none";
+      this.els.bulkConfluenceError.style.display = "none";
+      this.bulkConfluenceResults = null;
+    });
+
+    // Copy lockey button
+    this.els.btnCopyBulkConfluenceLockey.addEventListener("click", () => {
+      this.copyBulkConfluenceLockey();
+    });
+
+    // Copy table button
+    this.els.btnCopyBulkConfluenceTable.addEventListener("click", () => {
+      this.copyBulkConfluenceTable();
+    });
+
+    // Include screen checkbox - re-render when toggled
+    this.els.bulkConfluenceIncludeScreen.addEventListener("change", () => {
+      if (this.bulkConfluenceResults) {
+        this.displayBulkConfluenceResults(this.bulkConfluenceResults);
+      }
     });
   }
 
@@ -1559,6 +1658,357 @@ class MasterLockey extends BaseTool {
         this.showSuccess(`Copied ${filteredResults.length} lockeys to clipboard`);
         UsageTracker.trackEvent("master_lockey", "bulk_search_copy_lockey", {
           rowCount: filteredResults.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
+  }
+
+  // ================================
+  // Bulk Confluence Search Methods
+  // ================================
+
+  async performBulkConfluenceSearch() {
+    const inputValue = this.els.bulkConfluenceInput.value.trim();
+    if (!inputValue) return;
+
+    // Parse URLs/page IDs (one per line)
+    const pageInputs = inputValue
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (pageInputs.length === 0) return;
+
+    // Show loading
+    this.els.btnBulkConfluenceSearch.classList.add("loading");
+    this.els.btnBulkConfluenceSearch.querySelector(".btn-spinner").style.display = "inline";
+    this.els.btnBulkConfluenceSearch.disabled = true;
+    this.els.bulkConfluenceError.style.display = "none";
+    this.els.bulkConfluenceResults.style.display = "none";
+
+    UsageTracker.trackEvent("master_lockey", "bulk_confluence_search", {
+      pageCount: pageInputs.length,
+    });
+
+    const results = [];
+
+    // Fetch each page sequentially (to avoid overwhelming the server)
+    for (const pageInput of pageInputs) {
+      try {
+        // Fetch page content
+        const pageData = await this.service.fetchConfluencePage(pageInput);
+
+        // Parse table for lockeys
+        const lockeys = this.service.parseConfluenceTableForLockeys(pageData.html);
+
+        // Compare with remote data
+        const comparedLockeys = this.service.compareLockeyWithRemote(lockeys, this.parsedData);
+
+        // Format title
+        const formattedTitle = this.service.formatPageTitle(pageData.title);
+
+        results.push({
+          screenName: formattedTitle,
+          pageId: pageData.id,
+          lockeys: comparedLockeys,
+          error: null,
+        });
+      } catch (error) {
+        // Store error for this page
+        results.push({
+          screenName: pageInput.substring(0, 50) + (pageInput.length > 50 ? "..." : ""),
+          pageId: null,
+          lockeys: [],
+          error: error.message,
+        });
+      }
+    }
+
+    // Hide loading
+    this.els.btnBulkConfluenceSearch.classList.remove("loading");
+    this.els.btnBulkConfluenceSearch.querySelector(".btn-spinner").style.display = "none";
+    this.els.btnBulkConfluenceSearch.disabled = false;
+
+    // Store results
+    this.bulkConfluenceResults = results;
+
+    // Display results
+    this.displayBulkConfluenceResults(results);
+  }
+
+  displayBulkConfluenceResults(results) {
+    if (!results || results.length === 0) return;
+
+    const includeScreen = this.els.bulkConfluenceIncludeScreen.checked;
+
+    // Calculate totals
+    let totalLockeys = 0;
+    let totalActive = 0;
+    let totalStriked = 0;
+    let successfulPages = 0;
+    let failedPages = 0;
+
+    results.forEach((result) => {
+      if (result.error) {
+        failedPages++;
+      } else {
+        successfulPages++;
+        totalLockeys += result.lockeys.length;
+        totalActive += result.lockeys.filter((l) => l.status === "plain").length;
+        totalStriked += result.lockeys.filter((l) => l.status === "striked").length;
+      }
+    });
+
+    // Update count label
+    let countText = `${successfulPages} page${successfulPages !== 1 ? "s" : ""} fetched`;
+    if (failedPages > 0) {
+      countText += `, ${failedPages} failed`;
+    }
+    countText += ` • ${totalLockeys} lockey${totalLockeys !== 1 ? "s" : ""} (${totalActive} active`;
+    if (totalStriked > 0) {
+      countText += `, ${totalStriked} striked`;
+    }
+    countText += ")";
+    this.els.bulkConfluenceResultsCount.textContent = countText;
+
+    // Build grouped results
+    const groupedContainer = this.els.bulkConfluenceGroupedResults;
+    groupedContainer.innerHTML = "";
+
+    // Build a map of remote lockey data for EN/ID lookup
+    const remoteKeyMap = new Map();
+    if (this.parsedData?.rows) {
+      this.parsedData.rows.forEach((row) => {
+        remoteKeyMap.set(row.key, row);
+      });
+    }
+
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+
+    results.forEach((result, index) => {
+      const group = document.createElement("div");
+      group.className = `screen-group${result.error ? " has-error" : ""} expanded`;
+
+      // Header
+      const header = document.createElement("div");
+      header.className = "screen-group-header";
+
+      const titleDiv = document.createElement("div");
+      titleDiv.className = "screen-group-title";
+
+      const toggleIcon = document.createElement("span");
+      toggleIcon.className = "toggle-icon";
+      toggleIcon.textContent = "▶";
+      titleDiv.appendChild(toggleIcon);
+
+      const titleText = document.createElement("span");
+      titleText.textContent = result.screenName;
+      titleDiv.appendChild(titleText);
+
+      header.appendChild(titleDiv);
+
+      if (!result.error) {
+        const stats = document.createElement("div");
+        stats.className = "screen-group-stats";
+        const activeCount = result.lockeys.filter((l) => l.status === "plain").length;
+        const strikedCount = result.lockeys.filter((l) => l.status === "striked").length;
+        stats.innerHTML = `<span class="stat-active">${activeCount} active</span>`;
+        if (strikedCount > 0) {
+          stats.innerHTML += `, <span class="stat-striked">${strikedCount} striked</span>`;
+        }
+        header.appendChild(stats);
+      }
+
+      group.appendChild(header);
+
+      // Content
+      const content = document.createElement("div");
+      content.className = "screen-group-content";
+
+      if (result.error) {
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "screen-group-error";
+        errorDiv.textContent = `Error: ${result.error}`;
+        content.appendChild(errorDiv);
+      } else if (result.lockeys.length === 0) {
+        const emptyDiv = document.createElement("div");
+        emptyDiv.className = "screen-group-error";
+        emptyDiv.textContent = "No lockeys found on this page.";
+        content.appendChild(emptyDiv);
+      } else {
+        // Table
+        const tableContainer = document.createElement("div");
+        tableContainer.className = "screen-group-table-container";
+
+        const table = document.createElement("table");
+        table.className = "screen-group-table";
+
+        // Header row
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+
+        if (includeScreen) {
+          const screenTh = document.createElement("th");
+          screenTh.textContent = "Screen";
+          headerRow.appendChild(screenTh);
+        }
+
+        const lockeyTh = document.createElement("th");
+        lockeyTh.textContent = "Lockey";
+        headerRow.appendChild(lockeyTh);
+
+        const enTh = document.createElement("th");
+        enTh.textContent = `EN${domainSuffix}`;
+        headerRow.appendChild(enTh);
+
+        const idTh = document.createElement("th");
+        idTh.textContent = `ID${domainSuffix}`;
+        headerRow.appendChild(idTh);
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement("tbody");
+
+        result.lockeys.forEach((lockey) => {
+          const tr = document.createElement("tr");
+          tr.className = lockey.status === "striked" ? "status-striked" : "";
+
+          if (includeScreen) {
+            const screenTd = document.createElement("td");
+            screenTd.className = "col-screen-name";
+            screenTd.textContent = result.screenName;
+            screenTd.title = result.screenName;
+            tr.appendChild(screenTd);
+          }
+
+          const lockeyTd = document.createElement("td");
+          lockeyTd.textContent = lockey.key;
+          lockeyTd.title = lockey.key;
+          tr.appendChild(lockeyTd);
+
+          // Lookup EN/ID from remote data
+          const remoteRow = remoteKeyMap.get(lockey.key);
+          const enValue = remoteRow?.en || "";
+          const idValue = remoteRow?.id || "";
+
+          const enTd = document.createElement("td");
+          enTd.textContent = enValue;
+          enTd.title = enValue;
+          tr.appendChild(enTd);
+
+          const idTd = document.createElement("td");
+          idTd.textContent = idValue;
+          idTd.title = idValue;
+          tr.appendChild(idTd);
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        content.appendChild(tableContainer);
+      }
+
+      group.appendChild(content);
+
+      // Toggle collapse on header click
+      header.addEventListener("click", () => {
+        group.classList.toggle("expanded");
+      });
+
+      groupedContainer.appendChild(group);
+    });
+
+    // Show results
+    this.els.bulkConfluenceResults.style.display = "block";
+  }
+
+  copyBulkConfluenceLockey() {
+    if (!this.bulkConfluenceResults || this.bulkConfluenceResults.length === 0) return;
+
+    // Collect all lockeys from all successful results
+    const lockeys = [];
+    this.bulkConfluenceResults.forEach((result) => {
+      if (!result.error && result.lockeys) {
+        result.lockeys.forEach((l) => lockeys.push(l.key));
+      }
+    });
+
+    if (lockeys.length === 0) return;
+
+    const content = lockeys.join("\n");
+
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        this.showSuccess(`Copied ${lockeys.length} lockeys to clipboard`);
+        UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_lockey", {
+          rowCount: lockeys.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
+  }
+
+  copyBulkConfluenceTable() {
+    if (!this.bulkConfluenceResults || this.bulkConfluenceResults.length === 0) return;
+
+    const includeScreen = this.els.bulkConfluenceIncludeScreen.checked;
+
+    // Build a map of remote lockey data for EN/ID lookup
+    const remoteKeyMap = new Map();
+    if (this.parsedData?.rows) {
+      this.parsedData.rows.forEach((row) => {
+        remoteKeyMap.set(row.key, row);
+      });
+    }
+
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+
+    // Build TSV content
+    const rows = [];
+
+    // Header
+    const headerParts = [];
+    if (includeScreen) headerParts.push("Screen");
+    headerParts.push("Lockey", `EN${domainSuffix}`, `ID${domainSuffix}`);
+    rows.push(headerParts.join("\t"));
+
+    // Data rows
+    this.bulkConfluenceResults.forEach((result) => {
+      if (!result.error && result.lockeys) {
+        result.lockeys.forEach((lockey) => {
+          const remoteRow = remoteKeyMap.get(lockey.key);
+          const enValue = remoteRow?.en || "";
+          const idValue = remoteRow?.id || "";
+
+          const rowParts = [];
+          if (includeScreen) rowParts.push(result.screenName);
+          rowParts.push(lockey.key, enValue, idValue);
+          rows.push(rowParts.join("\t"));
+        });
+      }
+    });
+
+    if (rows.length <= 1) return; // Only header, no data
+
+    const content = rows.join("\n");
+
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        const dataRowCount = rows.length - 1;
+        this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
+        UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
+          rowCount: dataRowCount,
+          includeScreen,
         });
       })
       .catch((err) => {

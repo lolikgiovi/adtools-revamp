@@ -99,63 +99,111 @@ export const MasterLockeyTemplate = /* html */ `
                 <a href="#" id="confluence-settings-link">Go to Settings</a> to add your domain, username, and PAT.
             </div>
 
-            <!-- Page Search Input (unified search + URL input) -->
-            <div class="confluence-controls-row">
-                <div class="page-search-container">
-                    <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Search cached pages or enter URL" autocomplete="off">
-                    <div id="page-search-dropdown" class="page-search-dropdown" style="display: none;"></div>
-                </div>
-                <button id="btn-fetch-confluence" class="btn-confluence" disabled>
-                    <span class="btn-text">Fetch Lockeys</span>
-                    <span class="btn-spinner" style="display: none;">↻</span>
-                </button>
-                <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
-                <button id="btn-delete-cache" class="btn-confluence btn-danger" title="Delete from cache" disabled>Delete</button>
+            <!-- Sub-tab Toggle: Single / Bulk -->
+            <div class="confluence-mode-toggle">
+                <button class="confluence-mode-btn active" data-mode="single">Single Page</button>
+                <button class="confluence-mode-btn" data-mode="bulk">Bulk Pages</button>
             </div>
-            
-            <div id="confluence-error" class="confluence-error" style="display: none;"></div>
-            <div id="confluence-results" class="confluence-results" style="display: none;">
-                <div class="results-header">
-                    <span id="confluence-results-count" class="results-count-label"></span>
-                    <div class="export-buttons">
-                        <button id="btn-copy-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
-                        <button id="btn-copy-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
+
+            <!-- Single Page Mode (existing) -->
+            <div id="confluence-single-mode" class="confluence-mode-panel active">
+                <!-- Page Search Input (unified search + URL input) -->
+                <div class="confluence-controls-row">
+                    <div class="page-search-container">
+                        <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Search cached pages or enter URL" autocomplete="off">
+                        <div id="page-search-dropdown" class="page-search-dropdown" style="display: none;"></div>
                     </div>
-                </div>
-                <div class="confluence-table-container">
-                    <table class="confluence-table" id="confluence-table">
-                        <thead>
-                            <tr>
-                                <th>Lockey</th>
-                                <th id="confluence-en-header">EN</th>
-                                <th id="confluence-id-header">ID</th>
-                                <th class="col-center col-action">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="confluence-table-body">
-                            <!-- Confluence lockey rows will be inserted here -->
-                        </tbody>
-                    </table>
+                    <button id="btn-fetch-confluence" class="btn-confluence" disabled>
+                        <span class="btn-text">Fetch Lockeys</span>
+                        <span class="btn-spinner" style="display: none;">↻</span>
+                    </button>
+                    <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
+                    <button id="btn-delete-cache" class="btn-confluence btn-danger" title="Delete from cache" disabled>Delete</button>
                 </div>
                 
-                <!-- Hidden Keys Section -->
-                <div id="hidden-keys-section" class="hidden-keys-section" style="display: none;">
-                    <div class="hidden-keys-header" id="hidden-keys-toggle">
-                        <span class="toggle-icon">▶</span>
-                        <span>Hidden Keys (<span id="hidden-keys-count">0</span>)</span>
+                <div id="confluence-error" class="confluence-error" style="display: none;"></div>
+                <div id="confluence-results" class="confluence-results" style="display: none;">
+                    <div class="results-header">
+                        <span id="confluence-results-count" class="results-count-label"></span>
+                        <div class="export-buttons">
+                            <button id="btn-copy-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
+                            <button id="btn-copy-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
+                        </div>
                     </div>
-                    <div id="hidden-keys-content" class="hidden-keys-content" style="display: none;">
-                        <table class="confluence-table hidden-keys-table">
+                    <div class="confluence-table-container">
+                        <table class="confluence-table" id="confluence-table">
                             <thead>
                                 <tr>
                                     <th>Lockey</th>
-                                    <th>Action</th>
+                                    <th id="confluence-en-header">EN</th>
+                                    <th id="confluence-id-header">ID</th>
+                                    <th class="col-center col-action">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="hidden-keys-body">
-                                <!-- Hidden keys will be inserted here -->
+                            <tbody id="confluence-table-body">
+                                <!-- Confluence lockey rows will be inserted here -->
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <!-- Hidden Keys Section -->
+                    <div id="hidden-keys-section" class="hidden-keys-section" style="display: none;">
+                        <div class="hidden-keys-header" id="hidden-keys-toggle">
+                            <span class="toggle-icon">▶</span>
+                            <span>Hidden Keys (<span id="hidden-keys-count">0</span>)</span>
+                        </div>
+                        <div id="hidden-keys-content" class="hidden-keys-content" style="display: none;">
+                            <table class="confluence-table hidden-keys-table">
+                                <thead>
+                                    <tr>
+                                        <th>Lockey</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hidden-keys-body">
+                                    <!-- Hidden keys will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Pages Mode (new) -->
+            <div id="confluence-bulk-mode" class="confluence-mode-panel">
+                <div class="bulk-confluence-intro">
+                    <p class="bulk-confluence-hint">Enter multiple Confluence page URLs or IDs below (one per line) to fetch lockeys from all pages at once.</p>
+                </div>
+                
+                <div class="bulk-confluence-input-section">
+                    <textarea id="bulk-confluence-input" class="bulk-confluence-input" placeholder="https://confluence.example.com/pages/viewpage.action?pageId=123456&#10;https://confluence.example.com/pages/viewpage.action?pageId=789012&#10;..."></textarea>
+                    <div class="bulk-confluence-controls">
+                        <button id="btn-bulk-confluence-search" class="btn-confluence" disabled>
+                            <span class="btn-text">Fetch All</span>
+                            <span class="btn-spinner" style="display: none;">↻</span>
+                        </button>
+                        <button id="btn-paste-bulk-confluence" class="btn-confluence">Paste</button>
+                        <button id="btn-clear-bulk-confluence" class="btn-confluence">Clear</button>
+                    </div>
+                </div>
+
+                <div id="bulk-confluence-error" class="confluence-error" style="display: none;"></div>
+                
+                <div id="bulk-confluence-results" class="bulk-confluence-results" style="display: none;">
+                    <div class="results-header">
+                        <span id="bulk-confluence-results-count" class="results-count-label"></span>
+                        <div class="export-buttons">
+                            <label class="screen-column-toggle">
+                                <input type="checkbox" id="bulk-confluence-include-screen" checked>
+                                <span>Include Screen Name</span>
+                            </label>
+                            <button id="btn-copy-bulk-confluence-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
+                            <button id="btn-copy-bulk-confluence-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
+                        </div>
+                    </div>
+                    
+                    <div id="bulk-confluence-grouped-results" class="bulk-confluence-grouped-results">
+                        <!-- Grouped results by screen will be inserted here -->
                     </div>
                 </div>
             </div>
