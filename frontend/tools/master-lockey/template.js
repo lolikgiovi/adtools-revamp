@@ -5,29 +5,7 @@
 
 export const MasterLockeyTemplate = /* html */ `
 <div class="master-lockey-container">
-    <!-- Domain Controls Header -->
-    <div class="master-lockey-header">
-        <div class="master-lockey-controls">
-            <select id="domain-selector" class="domain-selector">
-                <option value="">Pick Domain</option>
-            </select>
-            <button class="btn-fetch" id="btn-fetch-data" disabled>
-                <span class="btn-text">Get Latest Data</span>
-                <span class="btn-spinner" style="display: none;">⟳</span>
-            </button>
-            <div class="cache-info" id="cache-info" style="display: none;">
-                <span class="cache-badge">Cached</span>
-                <span class="cache-timestamp" id="cache-timestamp"></span>
-            </div>
-            <div id="lockey-info" class="master-lockey-info" style="display: none;">
-                <span id="info-domain-name" class="domain-name"></span>
-                <span class="separator">-</span>
-                <span class="version-info">Language Pack Version: <span id="info-version"></span></span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tab Navigation -->
+    <!-- Tab Navigation Row (tabs left, domain controls right) -->
     <div class="tabs-container ml-tabs">
         <div class="tabs-left">
             <button class="tab-button active" data-tab="lockey">
@@ -36,6 +14,20 @@ export const MasterLockeyTemplate = /* html */ `
             <button class="tab-button" data-tab="confluence">
                 📄 Confluence Lookup
             </button>
+        </div>
+        <!-- Domain Controls (visible only on Lockey tab) -->
+        <div class="tabs-right" id="domain-controls">
+            <select id="domain-selector" class="domain-selector-compact">
+                <option value="">Pick Domain</option>
+            </select>
+            <button class="btn-fetch-compact" id="btn-fetch-data" disabled>
+                <span class="btn-text">Fetch</span>
+                <span class="btn-spinner" style="display: none;">⟳</span>
+            </button>
+            <div class="cache-info-compact" id="cache-info" style="display: none;">
+                <span class="cache-timestamp" id="cache-timestamp"></span>
+            </div>
+            <span id="info-version" class="version-hash" style="display: none;"></span>
         </div>
     </div>
 
@@ -72,7 +64,7 @@ export const MasterLockeyTemplate = /* html */ `
 
             <div class="loading-state" id="loading-state" style="display: none;">
                 <div class="spinner"></div>
-                <p>Loading localization data...</p>
+                <p>Fetching lockey from remote...</p>
             </div>
 
             <div class="error-state" id="error-state" style="display: none;">
@@ -104,17 +96,14 @@ export const MasterLockeyTemplate = /* html */ `
                 <a href="#" id="confluence-settings-link">Go to Settings</a> to add your domain, username, and PAT.
             </div>
             
-            <!-- Cached Pages Selector -->
-            <div class="cached-pages-row">
+            <!-- Cached Pages + New Page Input (single row) -->
+            <div class="confluence-controls-row">
                 <select id="cached-pages-selector" class="cached-pages-selector">
                     <option value="">-- Select cached page or enter new --</option>
                 </select>
                 <button id="btn-refresh-page" class="btn-icon" title="Refresh from Confluence" disabled>🔄</button>
                 <button id="btn-delete-cache" class="btn-icon btn-danger" title="Delete from cache" disabled>🗑️</button>
-            </div>
-            
-            <!-- New Page Input -->
-            <div class="confluence-controls">
+                <div class="confluence-controls-divider"></div>
                 <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Enter page URL or ID">
                 <button id="btn-fetch-confluence" class="btn-confluence" disabled>
                     <span class="btn-text">Fetch Lockeys</span>

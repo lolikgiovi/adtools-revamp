@@ -74,29 +74,45 @@ class MasterLockey extends BaseTool {
   }
 
   setupTabListeners() {
+    // Restore last saved tab
+    const savedTab = localStorage.getItem("masterLockeyActiveTab") || "lockey";
+    const savedButton = Array.from(this.els.tabButtons).find((b) => b.dataset.tab === savedTab);
+    if (savedButton) {
+      this.switchTab(savedTab);
+    }
+
     this.els.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         const targetTab = btn.dataset.tab;
-
-        // Update active state on buttons
-        this.els.tabButtons.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-
-        // Toggle panels
-        if (targetTab === "lockey") {
-          this.els.lockeyPanel.classList.add("active");
-          this.els.confluencePanel.classList.remove("active");
-        } else if (targetTab === "confluence") {
-          this.els.lockeyPanel.classList.remove("active");
-          this.els.confluencePanel.classList.add("active");
-          // Initialize Confluence section when switching to tab
-          this.showConfluenceSection();
-        }
-
+        this.switchTab(targetTab);
+        // Save tab state
+        localStorage.setItem("masterLockeyActiveTab", targetTab);
         // Track tab switch
         UsageTracker.trackEvent("master_lockey", "tab_switch", { tab: targetTab });
       });
     });
+  }
+
+  switchTab(targetTab) {
+    // Update active state on buttons
+    this.els.tabButtons.forEach((b) => b.classList.remove("active"));
+    const targetButton = Array.from(this.els.tabButtons).find((b) => b.dataset.tab === targetTab);
+    if (targetButton) targetButton.classList.add("active");
+
+    // Toggle panels
+    if (targetTab === "lockey") {
+      this.els.lockeyPanel.classList.add("active");
+      this.els.confluencePanel.classList.remove("active");
+      // Show domain controls
+      this.els.domainControls.style.display = "flex";
+    } else if (targetTab === "confluence") {
+      this.els.lockeyPanel.classList.remove("active");
+      this.els.confluencePanel.classList.add("active");
+      // Hide domain controls (only for Lockey tab)
+      this.els.domainControls.style.display = "none";
+      // Initialize Confluence section when switching to tab
+      this.showConfluenceSection();
+    }
   }
 
   bindElements() {
@@ -105,8 +121,7 @@ class MasterLockey extends BaseTool {
       btnFetch: this.container.querySelector("#btn-fetch-data"),
       cacheInfo: this.container.querySelector("#cache-info"),
       cacheTimestamp: this.container.querySelector("#cache-timestamp"),
-      lockeyInfo: this.container.querySelector("#lockey-info"),
-      infoDomainName: this.container.querySelector("#info-domain-name"),
+      domainControls: this.container.querySelector("#domain-controls"),
       infoVersion: this.container.querySelector("#info-version"),
       searchSection: this.container.querySelector("#search-section"),
       searchMode: this.container.querySelector("#search-mode"),
@@ -430,10 +445,9 @@ class MasterLockey extends BaseTool {
 
     const { languagePackId, languages, rows } = this.parsedData;
 
-    // Update info section
-    this.els.infoDomainName.textContent = this.currentDomain;
+    // Update version hash display (just show the hash, domain is visible in dropdown)
     this.els.infoVersion.textContent = languagePackId;
-    this.els.lockeyInfo.style.display = "block";
+    this.els.infoVersion.style.display = "inline";
 
     // Show search section
     this.els.searchSection.style.display = "flex";
@@ -641,7 +655,7 @@ class MasterLockey extends BaseTool {
     this.els.emptyState.style.display = "none";
     this.els.errorState.style.display = "none";
     this.els.tableContainer.style.display = "none";
-    this.els.lockeyInfo.style.display = "none";
+    this.els.infoVersion.style.display = "none";
     this.els.searchSection.style.display = "none";
 
     this.els.btnFetch.classList.add("loading");
@@ -662,7 +676,7 @@ class MasterLockey extends BaseTool {
     this.els.errorState.style.display = "flex";
     this.els.emptyState.style.display = "none";
     this.els.tableContainer.style.display = "none";
-    this.els.lockeyInfo.style.display = "none";
+    this.els.infoVersion.style.display = "none";
     this.els.searchSection.style.display = "none";
   }
 

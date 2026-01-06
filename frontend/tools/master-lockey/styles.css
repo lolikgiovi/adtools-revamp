@@ -23,12 +23,65 @@
   display: flex;
 }
 
-/* Tabs Right Controls */
+/* Tabs Right Controls (Domain picker on Lockey tab) */
 .tabs-right {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+.domain-selector-compact {
+  width: 120px;
+  padding: 4px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.7rem;
+  cursor: pointer;
+  height: 28px;
+}
+
+.btn-fetch-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  height: 28px;
+}
+
+.btn-fetch-compact:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.9);
+}
+
+.btn-fetch-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cache-info-compact {
+  display: flex;
+  align-items: center;
+  font-size: 0.65rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.version-hash {
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: hsl(var(--muted-foreground));
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Header Controls */
@@ -692,17 +745,37 @@
   font-weight: 600;
 }
 
-/* Cached Pages Row */
-.cached-pages-row {
+/* Confluence Controls Row (combined cached pages + URL input) */
+.confluence-controls-row {
   display: flex;
   gap: 8px;
   align-items: center;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .cached-pages-selector {
+  flex: 0 1 280px;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.confluence-controls-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  background: hsl(var(--border));
+  margin: 0 4px;
+}
+
+.confluence-controls-row .confluence-input {
   flex: 1;
-  max-width: 400px;
+  min-width: 200px;
   padding: 8px 12px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
@@ -712,6 +785,7 @@
 }
 
 .btn-icon {
+  flex-shrink: 0;
   padding: 6px 10px;
   background: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
