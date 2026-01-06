@@ -183,12 +183,15 @@ class MasterLockey extends BaseTool {
       bulkSearchPanel: this.container.querySelector("#bulk-search-tab-panel"),
       bulkSearchInput: this.container.querySelector("#bulk-search-input"),
       btnBulkSearch: this.container.querySelector("#btn-bulk-search"),
+      btnPasteBulk: this.container.querySelector("#btn-paste-bulk"),
       btnClearBulk: this.container.querySelector("#btn-clear-bulk"),
       bulkSearchNoData: this.container.querySelector("#bulk-search-no-data"),
       bulkSearchResults: this.container.querySelector("#bulk-search-results"),
       bulkSearchResultsCount: this.container.querySelector("#bulk-search-results-count"),
       bulkSearchTableBody: this.container.querySelector("#bulk-search-table-body"),
+      btnCopyBulkLockey: this.container.querySelector("#btn-copy-bulk-lockey"),
       btnCopyBulkResults: this.container.querySelector("#btn-copy-bulk-results"),
+      bulkSearchFilter: this.container.querySelector("#bulk-search-filter"),
       bulkSearchEnHeader: this.container.querySelector("#bulk-search-en-header"),
       bulkSearchIdHeader: this.container.querySelector("#bulk-search-id-header"),
     };
@@ -1338,9 +1341,35 @@ class MasterLockey extends BaseTool {
       this.els.btnBulkSearch.disabled = true;
     });
 
+    // Paste button click
+    this.els.btnPasteBulk.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        this.els.bulkSearchInput.value = text;
+        // Update search button state
+        const hasData = this.parsedData && this.parsedData.rows && this.parsedData.rows.length > 0;
+        this.els.btnBulkSearch.disabled = !text.trim() || !hasData;
+      } catch (err) {
+        console.error("Paste failed:", err);
+        this.showError("Paste Failed", "Unable to read from clipboard");
+      }
+    });
+
+    // Copy lockey only button click
+    this.els.btnCopyBulkLockey.addEventListener("click", () => {
+      this.copyBulkLockeyOnly();
+    });
+
     // Copy results button click
     this.els.btnCopyBulkResults.addEventListener("click", () => {
       this.copyBulkResults();
+    });
+
+    // Filter change
+    this.els.bulkSearchFilter.addEventListener("change", () => {
+      if (this.bulkSearchResults) {
+        this.displayBulkSearchResults(this.bulkSearchResults);
+      }
     });
 
     // Allow Enter+Ctrl/Cmd to trigger search
@@ -1413,12 +1442,25 @@ class MasterLockey extends BaseTool {
   }
 
   displayBulkSearchResults(results) {
-    // Update count
+    // Get filter value
+    const filter = this.els.bulkSearchFilter.value;
+
+    // Apply filter
+    let filteredResults = results;
+    if (filter === "found") {
+      filteredResults = results.filter((r) => r.exists);
+    } else if (filter === "not-found") {
+      filteredResults = results.filter((r) => !r.exists);
+    }
+
+    // Update count (show filtered vs total)
     const foundCount = results.filter((r) => r.exists).length;
     const notFoundCount = results.length - foundCount;
-    this.els.bulkSearchResultsCount.textContent = `${results.length} lockey${
-      results.length !== 1 ? "s" : ""
-    }: ${foundCount} found, ${notFoundCount} not found`;
+    let countText = `${results.length} lockey${results.length !== 1 ? "s" : ""}: ${foundCount} found, ${notFoundCount} not found`;
+    if (filter !== "all") {
+      countText += ` (showing ${filteredResults.length})`;
+    }
+    this.els.bulkSearchResultsCount.textContent = countText;
 
     // Update EN/ID headers with domain name
     const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
@@ -1428,13 +1470,17 @@ class MasterLockey extends BaseTool {
     // Clear and populate table
     this.els.bulkSearchTableBody.innerHTML = "";
 
-    results.forEach((item) => {
+    filteredResults.forEach((item) => {
       const tr = document.createElement("tr");
+
+      // Add class for not-found rows
+      if (!item.exists) {
+        tr.className = "row-not-found";
+      }
 
       // Lockey cell
       const keyCell = document.createElement("td");
       keyCell.textContent = item.key;
-      keyCell.className = item.exists ? "" : "status-not-found";
       tr.appendChild(keyCell);
 
       // EN cell
@@ -1459,18 +1505,60 @@ class MasterLockey extends BaseTool {
   copyBulkResults() {
     if (!this.bulkSearchResults || this.bulkSearchResults.length === 0) return;
 
+    // Apply current filter
+    const filter = this.els.bulkSearchFilter.value;
+    let filteredResults = this.bulkSearchResults;
+    if (filter === "found") {
+      filteredResults = this.bulkSearchResults.filter((r) => r.exists);
+    } else if (filter === "not-found") {
+      filteredResults = this.bulkSearchResults.filter((r) => !r.exists);
+    }
+
+    if (filteredResults.length === 0) return;
+
     // Format as TSV: Lockey\tEN\tID
     const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
     const header = `Lockey\tEN${domainSuffix}\tID${domainSuffix}`;
-    const rows = this.bulkSearchResults.map((r) => `${r.key}\t${r.en}\t${r.id}`);
+    const rows = filteredResults.map((r) => `${r.key}\t${r.en}\t${r.id}`);
     const content = [header, ...rows].join("\n");
 
     navigator.clipboard
       .writeText(content)
       .then(() => {
-        this.showSuccess(`Copied ${this.bulkSearchResults.length} results to clipboard`);
+        this.showSuccess(`Copied ${filteredResults.length} results to clipboard`);
         UsageTracker.trackEvent("master_lockey", "bulk_search_copy", {
-          rowCount: this.bulkSearchResults.length,
+          rowCount: filteredResults.length,
+        });
+      })
+      .catch((err) => {
+        console.error("Copy failed:", err);
+        this.showError("Copy Failed", "Unable to copy to clipboard");
+      });
+  }
+
+  copyBulkLockeyOnly() {
+    if (!this.bulkSearchResults || this.bulkSearchResults.length === 0) return;
+
+    // Apply current filter
+    const filter = this.els.bulkSearchFilter.value;
+    let filteredResults = this.bulkSearchResults;
+    if (filter === "found") {
+      filteredResults = this.bulkSearchResults.filter((r) => r.exists);
+    } else if (filter === "not-found") {
+      filteredResults = this.bulkSearchResults.filter((r) => !r.exists);
+    }
+
+    if (filteredResults.length === 0) return;
+
+    // Just the lockey keys, one per line
+    const content = filteredResults.map((r) => r.key).join("\n");
+
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        this.showSuccess(`Copied ${filteredResults.length} lockeys to clipboard`);
+        UsageTracker.trackEvent("master_lockey", "bulk_search_copy_lockey", {
+          rowCount: filteredResults.length,
         });
       })
       .catch((err) => {

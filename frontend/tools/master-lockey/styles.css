@@ -1014,6 +1014,16 @@
   gap: 8px;
 }
 
+.bulk-search-filter {
+  padding: 4px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
 .bulk-search-warning {
   padding: 12px;
   background: hsl(45 93% 47% / 0.1);
@@ -1085,4 +1095,9 @@
 .status-not-found {
   color: hsl(var(--destructive));
   font-weight: 600;
+}
+
+/* Row styling for not-found entries */
+.bulk-search-table .row-not-found td {
+  color: hsl(var(--destructive));
 }

@@ -9,13 +9,13 @@ export const MasterLockeyTemplate = /* html */ `
     <div class="tabs-container ml-tabs">
         <div class="tabs-left">
             <button class="tab-button active" data-tab="lockey">
-                🌐 Lockey
+                Lockey
             </button>
             <button class="tab-button" data-tab="confluence">
-                📄 Confluence Lookup 
+                Confluence Lookup 
             </button>
             <button class="tab-button" data-tab="bulk-search">
-                🔍 Bulk Search
+                Bulk Search
             </button>
         </div>
         <!-- Domain Controls (visible only on Lockey tab) -->
@@ -175,6 +175,7 @@ export const MasterLockeyTemplate = /* html */ `
                     <button id="btn-bulk-search" class="btn-confluence" disabled>
                         <span class="btn-text">Search</span>
                     </button>
+                    <button id="btn-paste-bulk" class="btn-confluence">Paste</button>
                     <button id="btn-clear-bulk" class="btn-confluence">Clear</button>
                 </div>
             </div>
@@ -187,7 +188,13 @@ export const MasterLockeyTemplate = /* html */ `
                 <div class="results-header">
                     <span id="bulk-search-results-count" class="results-count-label"></span>
                     <div class="export-buttons">
-                        <button id="btn-copy-bulk-results" class="btn-export" title="Copy results to clipboard">Copy Results</button>
+                        <select id="bulk-search-filter" class="bulk-search-filter">
+                            <option value="all">Show All</option>
+                            <option value="found">Found Only</option>
+                            <option value="not-found">Not Found Only</option>
+                        </select>
+                        <button id="btn-copy-bulk-lockey" class="btn-export" title="Copy lockey keys only">Copy Lockey</button>
+                        <button id="btn-copy-bulk-results" class="btn-export" title="Copy full results to clipboard">Copy Results</button>
                     </div>
                 </div>
                 <div class="bulk-search-table-container">
