@@ -78,7 +78,7 @@
   font-size: 0.6rem;
   font-family: monospace;
   color: hsl(var(--muted-foreground));
-  max-width: 180px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -545,10 +545,6 @@
 /* Confluence Integration */
 /* ===================== */
 
-.confluence-section {
-  padding-top: 8px;
-}
-
 .confluence-header {
   margin-bottom: 12px;
 }
@@ -719,8 +715,8 @@
 }
 
 .status-striked {
-  color: hsl(var(--muted-foreground));
-  text-decoration: line-through;
+  color: hsl(var(--destructive));
+  /* text-decoration: line-through; */
 }
 
 /* Column alignment */
@@ -961,4 +957,3 @@
   border-color: hsl(var(--destructive));
   color: hsl(var(--destructive));
 }
-

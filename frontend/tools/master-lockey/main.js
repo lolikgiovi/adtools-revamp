@@ -165,7 +165,8 @@ class MasterLockey extends BaseTool {
       hiddenKeysBody: this.container.querySelector("#hidden-keys-body"),
       confluencePatWarning: this.container.querySelector("#confluence-pat-warning"),
       confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
-      confluenceDomainHeader: this.container.querySelector("#confluence-domain-header"),
+      confluenceEnHeader: this.container.querySelector("#confluence-en-header"),
+      confluenceIdHeader: this.container.querySelector("#confluence-id-header"),
       // Tab elements
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
       lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
@@ -386,7 +387,6 @@ class MasterLockey extends BaseTool {
         const item = document.createElement("div");
         item.className = "page-search-item";
         item.innerHTML = `
-          <span class="item-icon">📄</span>
           <span class="item-text">${this.escapeHtml(page.title)}</span>
         `;
         item.dataset.action = "load";
@@ -902,7 +902,6 @@ class MasterLockey extends BaseTool {
           });
         }
       }
-
     } catch (_) {
       // Not available (web mode) - show warning with message
       // this.els.confluencePatWarning.style.display = "block";
@@ -1033,7 +1032,7 @@ class MasterLockey extends BaseTool {
       // Hide loading
       this.els.btnFetchConfluence.classList.remove("loading");
       this.els.btnFetchConfluence.querySelector(".btn-spinner").style.display = "none";
-      this.els.btnFetchConfluence.disabled = !this.els.confluencePageInput.value.trim();
+      // Note: Don't re-enable button here - it's handled in try/catch blocks appropriately
     }
   }
 
@@ -1047,14 +1046,18 @@ class MasterLockey extends BaseTool {
     // Count active vs striked
     const activeCount = visibleResults.filter((r) => r.status === "plain").length;
     const strikedCount = visibleResults.filter((r) => r.status === "striked").length;
+    const totalCount = visibleResults.length;
 
-    // Update domain header with current domain name
-    this.els.confluenceDomainHeader.textContent = this.currentDomain || "In Remote";
+    // Update EN/ID headers with domain name
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+    this.els.confluenceEnHeader.textContent = `EN${domainSuffix}`;
+    this.els.confluenceIdHeader.textContent = `ID${domainSuffix}`;
 
-    // Update count format: "X active lockeys, and Y striked lockeys on the screen"
-    let countText = `${activeCount} active lockey${activeCount !== 1 ? "s" : ""}`;
+    // Update count format: "22 lockeys: 16 active lockeys, and 6 striked lockeys (colored red below) on the screen"
+    let countText = `${totalCount} lockey${totalCount !== 1 ? "s" : ""}: `;
+    countText += `${activeCount} active lockey${activeCount !== 1 ? "s" : ""}`;
     if (strikedCount > 0) {
-      countText += `, and ${strikedCount} striked lockey${strikedCount !== 1 ? "s" : ""} on the screen`;
+      countText += `, and ${strikedCount} striked lockey${strikedCount !== 1 ? "s" : ""} (colored red below) on the screen`;
     }
     if (hiddenResults.length > 0) {
       countText += ` (${hiddenResults.length} hidden)`;
@@ -1095,19 +1098,6 @@ class MasterLockey extends BaseTool {
       idCell.className = `status-${item.status}`;
       idCell.title = remoteData?.id || "";
       tr.appendChild(idCell);
-
-      // Conflu Style cell (center aligned)
-      const statusCell = document.createElement("td");
-      const styleLabels = { plain: "Plain", striked: "Striked" };
-      statusCell.textContent = styleLabels[item.status] || item.status;
-      statusCell.className = `status-${item.status} col-center`;
-      tr.appendChild(statusCell);
-
-      // Domain column cell (center aligned)
-      const inRemoteCell = document.createElement("td");
-      inRemoteCell.textContent = item.inRemote ? "✓" : "✗";
-      inRemoteCell.className = (item.inRemote ? "in-remote-yes" : "in-remote-no") + " col-center";
-      tr.appendChild(inRemoteCell);
 
       // Action cell (center aligned, minimal width)
       const actionCell = document.createElement("td");

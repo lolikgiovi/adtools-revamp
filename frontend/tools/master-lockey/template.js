@@ -12,22 +12,22 @@ export const MasterLockeyTemplate = /* html */ `
                 🌐 Lockey
             </button>
             <button class="tab-button" data-tab="confluence">
-                📄 Confluence Lookup
+                📄 Confluence Lookup 
             </button>
         </div>
         <!-- Domain Controls (visible only on Lockey tab) -->
         <div class="tabs-right" id="domain-controls">
+            <div class="cache-info-compact" id="cache-info" style="display: none;">
+                <span class="cache-timestamp" id="cache-timestamp"></span>
+            </div>
+            <span id="info-version" class="version-hash" style="display: none;"></span>
             <select id="domain-selector" class="domain-selector-compact">
                 <option value="">Pick Domain</option>
             </select>
             <button class="btn-fetch-compact" id="btn-fetch-data" disabled>
                 <span class="btn-text">Fetch</span>
-                <span class="btn-spinner" style="display: none;">⟳</span>
+                <span class="btn-spinner" style="display: none;">↻</span>
             </button>
-            <div class="cache-info-compact" id="cache-info" style="display: none;">
-                <span class="cache-timestamp" id="cache-timestamp"></span>
-            </div>
-            <span id="info-version" class="version-hash" style="display: none;"></span>
         </div>
     </div>
 
@@ -104,7 +104,7 @@ export const MasterLockeyTemplate = /* html */ `
                 </div>
                 <button id="btn-fetch-confluence" class="btn-confluence" disabled>
                     <span class="btn-text">Fetch Lockeys</span>
-                    <span class="btn-spinner" style="display: none;">⟳</span>
+                    <span class="btn-spinner" style="display: none;">↻</span>
                 </button>
                 <button id="btn-refresh-page" class="btn-confluence" title="Refresh from Confluence" disabled>Reload</button>
                 <button id="btn-delete-cache" class="btn-confluence btn-danger" title="Delete from cache" disabled>Delete</button>
@@ -124,10 +124,8 @@ export const MasterLockeyTemplate = /* html */ `
                         <thead>
                             <tr>
                                 <th>Lockey</th>
-                                <th>EN</th>
-                                <th>ID</th>
-                                <th class="col-center">Conflu Style</th>
-                                <th id="confluence-domain-header" class="col-center">In Remote</th>
+                                <th id="confluence-en-header">EN</th>
+                                <th id="confluence-id-header">ID</th>
                                 <th class="col-center col-action">Action</th>
                             </tr>
                         </thead>

@@ -411,23 +411,29 @@ class MasterLockeyService {
         if (rowIndex === 0) return; // Skip header row
 
         const cells = row.querySelectorAll(":scope > td");
-        if (cells.length <= lockeyColIndex) return;
 
-        const cell = cells[lockeyColIndex];
+        // Due to rowspan/colspan in Confluence tables, column indices can shift
+        // So we need to check ALL cells in the row for nested tables with matching columns
+        let foundNestedTable = false;
+        cells.forEach((cell, cellIndex) => {
+          const nestedTable = cell.querySelector("table");
+          if (nestedTable) {
+            // Try to extract from this nested table
+            const nestedLockeys = this.extractFromNestedTable(nestedTable, lockeyColumnNames);
+            if (nestedLockeys.length > 0) {
+              foundNestedTable = true;
+              console.log(`[Parse] Row ${rowIndex} cell ${cellIndex} has nested table with ${nestedLockeys.length} lockeys`);
+              nestedLockeys.forEach((lockey) => {
+                lockeys.push(lockey);
+                console.log(`[Parse] From nested table: ${lockey.key} (status: ${lockey.status})`);
+              });
+            }
+          }
+        });
 
-        // Check if cell contains a nested table
-        const nestedTable = cell.querySelector("table");
-
-        if (nestedTable) {
-          // Extract lockeys from nested table's "Localization Key" column
-          console.log(`[Parse] Row ${rowIndex} has nested table, extracting lockeys...`);
-          const nestedLockeys = this.extractFromNestedTable(nestedTable, lockeyColumnNames);
-          nestedLockeys.forEach((key) => {
-            const status = this.detectCellStatus(cell);
-            lockeys.push({ key, status });
-            console.log(`[Parse] From nested table: ${key} (status: ${status})`);
-          });
-        } else {
+        // If no nested tables with lockeys found, try the expected column for direct text
+        if (!foundNestedTable && cells.length > lockeyColIndex) {
+          const cell = cells[lockeyColIndex];
           // Extract lockeys from paragraphs or cell text
           const paragraphs = cell.querySelectorAll("p");
           const elements = paragraphs.length > 0 ? Array.from(paragraphs) : [cell];
@@ -485,14 +491,14 @@ class MasterLockeyService {
    * Returns only standalone camelCase values (not prefixed like "context.x.key")
    * @param {Element} nestedTable - Table element inside a cell
    * @param {string[]} columnNames - Column names to search for
-   * @returns {string[]} Array of extracted lockey keys
+   * @returns {Array<{key: string, status: string}>} Array of extracted lockey objects with status
    */
   extractFromNestedTable(nestedTable, columnNames) {
-    const keys = [];
+    const results = [];
     const headerRow = nestedTable.querySelector("tr");
     if (!headerRow) {
       console.log("[Nested Table] No header row found");
-      return keys;
+      return results;
     }
 
     // Find the value column index (case-insensitive)
@@ -514,7 +520,7 @@ class MasterLockeyService {
 
     if (valueColIndex === -1) {
       console.log("[Nested Table] No matching column found. Looking for:", columnNames);
-      return keys;
+      return results;
     }
 
     // Get ALL data rows (not just the first one)
@@ -525,20 +531,23 @@ class MasterLockeyService {
       const cells = rows[i].querySelectorAll("td");
       if (cells.length <= valueColIndex) continue;
 
-      const cellText = (cells[valueColIndex].textContent || "").trim();
+      const cell = cells[valueColIndex];
+      const cellText = (cell.textContent || "").trim();
       console.log(`[Nested Table] Row ${i} cell text: "${cellText}"`);
 
       // Check if this is a standalone camelCase value (not prefixed)
       if (this.isStandaloneCamelCase(cellText)) {
-        keys.push(cellText);
-        console.log(`[Nested Table] Added key: ${cellText}`);
+        // Detect status from THIS cell, not the parent
+        const status = this.detectCellStatus(cell);
+        results.push({ key: cellText, status });
+        console.log(`[Nested Table] Added key: ${cellText} (status: ${status})`);
       } else {
         console.log(`[Nested Table] Rejected "${cellText}" - not camelCase`);
       }
     }
 
-    console.log(`[Nested Table] Total keys extracted: ${keys.length}`);
-    return keys;
+    console.log(`[Nested Table] Total keys extracted: ${results.length}`);
+    return results;
   }
 
   /**

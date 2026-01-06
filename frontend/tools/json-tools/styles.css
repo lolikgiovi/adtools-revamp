@@ -434,11 +434,9 @@
   color: hsl(var(--foreground));
   max-width: 300px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* text-overflow: ellipsis;
+  white-space: nowrap; */
 }
-
-
 
 .json-table .row-index-header,
 .json-table .row-index {
@@ -497,7 +495,6 @@
 
 /* Responsive table */
 @media (max-width: 768px) {
-
   .json-table th,
   .json-table td {
     padding: 0.5rem;
