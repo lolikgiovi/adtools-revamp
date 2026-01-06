@@ -244,12 +244,6 @@ class MasterLockeyService {
   async fetchConfluencePage(pageIdOrUrl) {
     const { invoke } = await import("@tauri-apps/api/core");
 
-    // Extract page ID from URL if necessary
-    const pageId = this.extractPageId(pageIdOrUrl);
-    if (!pageId) {
-      throw new Error("Invalid page URL or ID");
-    }
-
     // Get settings from localStorage
     const domain = localStorage.getItem("config.confluence.domain");
     const username = localStorage.getItem("config.confluence.username");
@@ -261,6 +255,33 @@ class MasterLockeyService {
       throw new Error("Confluence username not configured. Go to Settings → Confluence Integration.");
     }
 
+    // Check for display URL format first
+    const displayInfo = this.parseDisplayUrl(pageIdOrUrl);
+
+    if (displayInfo) {
+      // Use direct lookup by space key and title (like Python PoC)
+      console.log(`[Confluence] Fetching by space="${displayInfo.space}" title="${displayInfo.title}"`);
+      try {
+        return await invoke("confluence_fetch_by_space_title", {
+          domain,
+          spaceKey: displayInfo.space,
+          title: displayInfo.title,
+          username,
+        });
+      } catch (error) {
+        if (typeof error === "string") throw new Error(error);
+        throw new Error(error.message || "Failed to fetch Confluence page");
+      }
+    }
+
+    // Extract page ID from URL if necessary
+    const pageId = this.extractPageId(pageIdOrUrl);
+    if (!pageId) {
+      throw new Error(
+        "Invalid page URL or ID. Supported formats:\n• Page ID (e.g., 12345)\n• URL with pageId parameter\n• Display URL: /display/SPACE/PageTitle"
+      );
+    }
+
     try {
       // Returns { id, title, html }
       return await invoke("confluence_fetch_page", { domain, pageId, username });
@@ -268,6 +289,33 @@ class MasterLockeyService {
       if (typeof error === "string") throw new Error(error);
       throw new Error(error.message || "Failed to fetch Confluence page");
     }
+  }
+
+  /**
+   * Parse /display/SPACE/PageTitle URL format
+   * @param {string} input - URL to parse
+   * @returns {{space: string, title: string}|null} Parsed info or null
+   */
+  parseDisplayUrl(input) {
+    if (!input || typeof input !== "string") return null;
+
+    try {
+      const url = new URL(input.trim());
+      const path = url.pathname;
+
+      // Match /display/SPACE/PageTitle pattern
+      const displayMatch = path.match(/\/display\/([^/]+)\/(.+)/);
+      if (displayMatch) {
+        const space = decodeURIComponent(displayMatch[1]);
+        // Page titles in URLs use + for spaces
+        const title = decodeURIComponent(displayMatch[2].replace(/\+/g, " "));
+        return { space, title };
+      }
+    } catch (_) {
+      // Not a valid URL
+    }
+
+    return null;
   }
 
   /**
@@ -314,30 +362,41 @@ class MasterLockeyService {
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, "text/html");
-    // Get only top-level tables (not nested ones)
-    const tables = doc.querySelectorAll("body > table, body > * > table");
+
+    // Find all tables (like Python's soup.select("table.confluenceTable"))
+    // Then filter out nested tables
+    const allTables = doc.querySelectorAll("table");
     const lockeys = [];
+
+    console.log(`[Parse] Found ${allTables.length} total tables`);
 
     // Column name variations (case-insensitive)
     const lockeyColumnNames = ["localization key", "lockey", "loc key", "localizationkey", "loc_key"];
-    // Column names for nested tables
-    const nestedLockeyColumns = ["lockey", "localization key", "value"];
 
-    tables.forEach((table) => {
-      // Skip if this table is nested inside another table's cell
-      if (table.closest("td") || table.closest("th")) return;
+    allTables.forEach((table, tableIndex) => {
+      // Skip if this table is nested inside another table's cell (it's a nested table)
+      if (table.closest("td") || table.closest("th")) {
+        console.log(`[Parse] Table ${tableIndex} skipped - nested in td/th`);
+        return;
+      }
 
       const headerRow = table.querySelector("tr");
       if (!headerRow) return;
 
       // Find the lockey column index (case-insensitive)
       const headers = Array.from(headerRow.querySelectorAll("th, td"));
+      console.log(
+        `[Parse] Table ${tableIndex} headers:`,
+        headers.map((h) => h.textContent?.trim())
+      );
+
       let lockeyColIndex = -1;
 
       headers.forEach((header, index) => {
         const text = (header.textContent || "").trim().toLowerCase();
         if (lockeyColumnNames.includes(text)) {
           lockeyColIndex = index;
+          console.log(`[Parse] Found lockey column "${text}" at index ${index}`);
         }
       });
 
@@ -345,6 +404,8 @@ class MasterLockeyService {
 
       // Process data rows
       const rows = table.querySelectorAll(":scope > tbody > tr, :scope > tr");
+      console.log(`[Parse] Table ${tableIndex} has ${rows.length} rows`);
+
       rows.forEach((row, rowIndex) => {
         if (rowIndex === 0) return; // Skip header row
 
@@ -355,71 +416,99 @@ class MasterLockeyService {
 
         // Check if cell contains a nested table
         const nestedTable = cell.querySelector("table");
-        let key = null;
 
         if (nestedTable) {
-          // Extract from nested table
-          key = this.extractFromNestedTable(nestedTable, nestedLockeyColumns);
+          // Extract lockeys from nested table's "Localization Key" column
+          console.log(`[Parse] Row ${rowIndex} has nested table, extracting lockeys...`);
+          const nestedLockeys = this.extractFromNestedTable(nestedTable, lockeyColumnNames);
+          nestedLockeys.forEach((key) => {
+            const status = this.detectCellStatus(cell);
+            lockeys.push({ key, status });
+            console.log(`[Parse] From nested table: ${key} (status: ${status})`);
+          });
         } else {
-          // Simple text extraction - also validate for standalone camelCase
-          const rawKey = (cell.textContent || "").trim();
-          // Only accept if it's standalone (no dot prefixes like "context.x.key")
-          key = this.isStandaloneCamelCase(rawKey) ? rawKey : null;
+          // Extract lockeys from paragraphs or cell text
+          const paragraphs = cell.querySelectorAll("p");
+          const elements = paragraphs.length > 0 ? Array.from(paragraphs) : [cell];
+
+          elements.forEach((element) => {
+            const text = (element.textContent || "").trim();
+
+            // Check if it's a standalone camelCase value
+            if (this.isStandaloneCamelCase(text)) {
+              const status = this.detectCellStatus(element);
+              lockeys.push({ key: text, status });
+              console.log(`[Parse] Found camelCase key: ${text} (status: ${status})`);
+            }
+          });
         }
-
-        if (!key) return;
-
-        // Detect styling
-        const status = this.detectCellStatus(cell);
-
-        lockeys.push({ key, status });
       });
     });
 
+    console.log(`[Parse] Total lockeys found: ${lockeys.length}`);
     return lockeys;
   }
 
   /**
-   * Extract standalone camelCase lockey value from a nested table
+   * Extract ALL standalone camelCase lockey values from a nested table
    * Looks for columns: "lockey", "localization key", "value" (case-insensitive)
    * Returns only standalone camelCase values (not prefixed like "context.x.key")
    * @param {Element} nestedTable - Table element inside a cell
    * @param {string[]} columnNames - Column names to search for
-   * @returns {string|null} Extracted lockey key or null
+   * @returns {string[]} Array of extracted lockey keys
    */
   extractFromNestedTable(nestedTable, columnNames) {
+    const keys = [];
     const headerRow = nestedTable.querySelector("tr");
-    if (!headerRow) return null;
+    if (!headerRow) {
+      console.log("[Nested Table] No header row found");
+      return keys;
+    }
 
     // Find the value column index (case-insensitive)
     const headers = Array.from(headerRow.querySelectorAll("th, td"));
+    console.log(
+      "[Nested Table] Headers found:",
+      headers.map((h) => h.textContent?.trim())
+    );
+
     let valueColIndex = -1;
 
     headers.forEach((header, index) => {
       const text = (header.textContent || "").trim().toLowerCase();
       if (columnNames.includes(text)) {
         valueColIndex = index;
+        console.log(`[Nested Table] Found matching column "${text}" at index ${index}`);
       }
     });
 
-    if (valueColIndex === -1) return null;
+    if (valueColIndex === -1) {
+      console.log("[Nested Table] No matching column found. Looking for:", columnNames);
+      return keys;
+    }
 
-    // Get the first data row
+    // Get ALL data rows (not just the first one)
     const rows = nestedTable.querySelectorAll("tr");
+    console.log(`[Nested Table] Found ${rows.length - 1} data rows`);
+
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i].querySelectorAll("td");
       if (cells.length <= valueColIndex) continue;
 
       const cellText = (cells[valueColIndex].textContent || "").trim();
+      console.log(`[Nested Table] Row ${i} cell text: "${cellText}"`);
 
       // Check if this is a standalone camelCase value (not prefixed)
-      // Reject patterns like "context.x.key", "x.camelCase", "prefix.key"
       if (this.isStandaloneCamelCase(cellText)) {
-        return cellText;
+        keys.push(cellText);
+        console.log(`[Nested Table] Added key: ${cellText}`);
+      } else {
+        console.log(`[Nested Table] Rejected "${cellText}" - not camelCase`);
       }
     }
 
-    return null;
+    console.log(`[Nested Table] Total keys extracted: ${keys.length}`);
+    return keys;
   }
 
   /**

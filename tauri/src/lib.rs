@@ -22,6 +22,7 @@ pub fn run() {
       set_confluence_pat,
       has_confluence_pat,
       confluence_fetch_page,
+      confluence_fetch_by_space_title,
       confluence_search_pages
     ])
     .setup(|app| {
@@ -53,6 +54,16 @@ fn http_client() -> Client {
     .timeout(Duration::from_secs(30))
     .build()
     .expect("failed to build reqwest client")
+}
+
+// HTTP client for Confluence that accepts invalid/self-signed SSL certs
+// Needed for Confluence instances on IP addresses or with internal certs
+fn confluence_http_client() -> Client {
+  Client::builder()
+    .timeout(Duration::from_secs(30))
+    .danger_accept_invalid_certs(true)
+    .build()
+    .expect("failed to build confluence http client")
 }
 
 pub async fn load_credentials() -> Result<Credentials, String> {
@@ -324,7 +335,7 @@ async fn confluence_fetch_page(
   username: String
 ) -> Result<confluence::PageContent, String> {
   let pat = load_confluence_pat().await?;
-  let client = http_client();
+  let client = confluence_http_client();
   confluence::fetch_page_content(&client, &domain, &page_id, &username, &pat).await
 }
 
@@ -335,6 +346,18 @@ async fn confluence_search_pages(
   username: String
 ) -> Result<Vec<confluence::PageInfo>, String> {
   let pat = load_confluence_pat().await?;
-  let client = http_client();
+  let client = confluence_http_client();
   confluence::search_pages(&client, &domain, &query, &username, &pat).await
+}
+
+#[tauri::command]
+async fn confluence_fetch_by_space_title(
+  domain: String,
+  space_key: String,
+  title: String,
+  username: String
+) -> Result<confluence::PageContent, String> {
+  let pat = load_confluence_pat().await?;
+  let client = confluence_http_client();
+  confluence::fetch_page_by_space_title(&client, &domain, &space_key, &title, &username, &pat).await
 }

@@ -126,6 +126,70 @@ pub async fn fetch_page_content(
     })
 }
 
+/// Content list response for spaceKey+title lookup
+#[derive(Debug, Deserialize)]
+struct ContentListResponse {
+    results: Vec<ContentResponse>,
+}
+
+/// Fetch page by space key and title (direct lookup)
+/// Uses /rest/api/content?spaceKey=X&title=Y like the Python proof of concept
+pub async fn fetch_page_by_space_title(
+    client: &Client,
+    domain: &str,
+    space_key: &str,
+    title: &str,
+    _username: &str,
+    pat: &str,
+) -> Result<PageContent, String> {
+    // Try with and without /wiki prefix (like Python PoC)
+    for prefix in ["/wiki", ""].iter() {
+        let url = format!(
+            "{}{}/rest/api/content?spaceKey={}&title={}&expand=body.storage",
+            domain.trim_end_matches('/'),
+            prefix,
+            urlencoding::encode(space_key),
+            urlencoding::encode(title)
+        );
+
+        let response = match client
+            .get(&url)
+            .bearer_auth(pat)
+            .header("X-Atlassian-Token", "no-check")
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => continue, // Try next prefix
+        };
+
+        if !response.status().is_success() {
+            continue; // Try next prefix
+        }
+
+        let content_list: ContentListResponse = match response.json().await {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        if let Some(page) = content_list.results.into_iter().next() {
+            let body_html = page
+                .body
+                .and_then(|b| b.storage)
+                .map(|s| s.value)
+                .unwrap_or_default();
+
+            return Ok(PageContent {
+                id: page.id,
+                title: page.title,
+                html: body_html,
+            });
+        }
+    }
+
+    Err(format!("Page '{}' not found in space '{}'", title, space_key))
+}
+
 /// Search for pages in Confluence
 /// Uses CQL (Confluence Query Language) to search by title
 pub async fn search_pages(
@@ -316,5 +380,67 @@ mod tests {
         assert_eq!(result[0].title, "Page One");
         assert_eq!(result[0].space_key, Some("PROJ".to_string()));
         assert_eq!(result[1].space_key, None);
+    }
+
+    #[tokio::test]
+    async fn fetch_page_by_space_title_returns_content() {
+        let server = MockServer::start();
+        let _m = server.mock(|when, then| {
+            when.method(GET)
+                .path("/rest/api/content")
+                .query_param("spaceKey", "EV")
+                .query_param("title", "Test Page Title")
+                .query_param("expand", "body.storage");
+            then.status(200).json_body(serde_json::json!({
+                "results": [{
+                    "id": "12345",
+                    "title": "Test Page Title",
+                    "body": {
+                        "storage": {
+                            "value": "<table><tr><td>lockey</td></tr></table>"
+                        }
+                    }
+                }]
+            }));
+        });
+
+        let result = fetch_page_by_space_title(
+            &client(),
+            &server.base_url(),
+            "EV",
+            "Test Page Title",
+            "user",
+            "pat123",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.id, "12345");
+        assert_eq!(result.title, "Test Page Title");
+        assert!(result.html.contains("<table>"));
+    }
+
+    #[tokio::test]
+    async fn fetch_page_by_space_title_handles_not_found() {
+        let server = MockServer::start();
+        let _m = server.mock(|when, then| {
+            when.method(GET).path("/rest/api/content");
+            then.status(200).json_body(serde_json::json!({
+                "results": []
+            }));
+        });
+
+        let result = fetch_page_by_space_title(
+            &client(),
+            &server.base_url(),
+            "EV",
+            "Non Existent Page",
+            "user",
+            "pat123",
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
     }
 }
