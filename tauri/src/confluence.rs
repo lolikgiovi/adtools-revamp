@@ -95,13 +95,13 @@ pub async fn fetch_page_content(
 
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("Authentication failed: Invalid username or PAT".to_string());
+        return Err("Authentication failed (401): Invalid or expired PAT. Please update your Confluence credentials in Settings.".to_string());
     }
     if status == reqwest::StatusCode::FORBIDDEN {
-        return Err("Access denied: You don't have permission to view this page".to_string());
+        return Err("Access denied (403): You don't have permission to view this page.".to_string());
     }
     if status == reqwest::StatusCode::NOT_FOUND {
-        return Err("Page not found: Check the page ID".to_string());
+        return Err("Page not found (404): Check the page ID.".to_string());
     }
     if !status.is_success() {
         let reason = status.canonical_reason().unwrap_or("Unknown");
@@ -143,6 +143,8 @@ pub async fn fetch_page_by_space_title(
     pat: &str,
 ) -> Result<PageContent, String> {
     // Try with and without /wiki prefix (like Python PoC)
+    let mut last_status: Option<reqwest::StatusCode> = None;
+    
     for prefix in ["/wiki", ""].iter() {
         let url = format!(
             "{}{}/rest/api/content?spaceKey={}&title={}&expand=body.storage",
@@ -163,8 +165,19 @@ pub async fn fetch_page_by_space_title(
             Err(_) => continue, // Try next prefix
         };
 
-        if !response.status().is_success() {
-            continue; // Try next prefix
+        let status = response.status();
+        last_status = Some(status);
+        
+        // Handle auth errors immediately - don't try other prefixes
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("Authentication failed (401): Invalid or expired PAT. Please update your Confluence credentials in Settings.".to_string());
+        }
+        if status == reqwest::StatusCode::FORBIDDEN {
+            return Err("Access denied (403): You don't have permission to access this page.".to_string());
+        }
+
+        if !status.is_success() {
+            continue; // Try next prefix for other errors
         }
 
         let content_list: ContentListResponse = match response.json().await {
@@ -187,7 +200,23 @@ pub async fn fetch_page_by_space_title(
         }
     }
 
-    Err(format!("Page '{}' not found in space '{}'", title, space_key))
+    // Provide more specific error based on last status
+    match last_status {
+        Some(status) if status == reqwest::StatusCode::NOT_FOUND => {
+            Err(format!("Page '{}' not found in space '{}' (404). This could also indicate an authentication issue - please verify your PAT is correct.", title, space_key))
+        }
+        Some(status) if status.is_success() => {
+            // Got 200 OK but page not in results - genuine "not found"
+            Err(format!("Page '{}' not found in space '{}'", title, space_key))
+        }
+        Some(status) => {
+            Err(format!("Failed to fetch page '{}' in space '{}': HTTP {} {}", 
+                title, space_key, status.as_u16(), status.canonical_reason().unwrap_or("Unknown")))
+        }
+        None => {
+            Err(format!("Could not connect to Confluence to fetch page '{}' in space '{}'", title, space_key))
+        }
+    }
 }
 
 /// Search for pages in Confluence
@@ -442,5 +471,29 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn fetch_page_by_space_title_handles_401() {
+        let server = MockServer::start();
+        let _m = server.mock(|when, then| {
+            when.method(GET).path("/wiki/rest/api/content");
+            then.status(401);
+        });
+
+        let result = fetch_page_by_space_title(
+            &client(),
+            &server.base_url(),
+            "EV",
+            "Test Page",
+            "user",
+            "bad_pat",
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("401"));
+        assert!(err.contains("Authentication failed"));
     }
 }
