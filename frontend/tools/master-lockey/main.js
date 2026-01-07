@@ -178,6 +178,8 @@ class MasterLockey extends BaseTool {
       confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
       confluenceEnHeader: this.container.querySelector("#confluence-en-header"),
       confluenceIdHeader: this.container.querySelector("#confluence-id-header"),
+      confluenceSearchInput: this.container.querySelector("#confluence-search-input"),
+      btnClearConfluenceSearch: this.container.querySelector("#btn-clear-confluence-search"),
       // Tab elements
       tabButtons: this.container.querySelectorAll(".ml-tabs .tab-button"),
       lockeyPanel: this.container.querySelector("#lockey-tab-panel"),
@@ -352,6 +354,19 @@ class MasterLockey extends BaseTool {
     // Copy buttons
     this.els.btnCopyLockey.addEventListener("click", () => this.copyLockeyColumn());
     this.els.btnCopyTable.addEventListener("click", () => this.copyTableAsTsv());
+
+    // Confluence search filter
+    this.els.confluenceSearchInput.addEventListener("input", () => {
+      this.confluenceSearchQuery = this.els.confluenceSearchInput.value.trim().toLowerCase();
+      this.displayConfluenceResults();
+    });
+
+    // Clear search button
+    this.els.btnClearConfluenceSearch.addEventListener("click", () => {
+      this.els.confluenceSearchInput.value = "";
+      this.confluenceSearchQuery = "";
+      this.displayConfluenceResults();
+    });
 
     // Refresh button
     this.els.btnRefreshPage.addEventListener("click", () => {
@@ -1176,12 +1191,33 @@ class MasterLockey extends BaseTool {
     if (!this.confluenceResults) return;
 
     const hiddenKeys = this.hiddenKeys || [];
-    const visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
+    let visibleResults = this.confluenceResults.filter((r) => !hiddenKeys.includes(r.key));
     const hiddenResults = this.confluenceResults.filter((r) => hiddenKeys.includes(r.key));
 
-    // Count active vs striked
+    // Build a map of remote lockey data for EN/ID lookup (needed for search)
+    const remoteKeyMap = new Map();
+    if (this.parsedData?.rows) {
+      this.parsedData.rows.forEach((row) => {
+        remoteKeyMap.set(row.key, row);
+      });
+    }
+
+    // Apply search filter if query exists
+    const searchQuery = this.confluenceSearchQuery || "";
+    if (searchQuery) {
+      visibleResults = visibleResults.filter((r) => {
+        const remoteData = remoteKeyMap.get(r.key);
+        const keyMatch = r.key.toLowerCase().includes(searchQuery);
+        const enMatch = (remoteData?.en || "").toLowerCase().includes(searchQuery);
+        const idMatch = (remoteData?.id || "").toLowerCase().includes(searchQuery);
+        return keyMatch || enMatch || idMatch;
+      });
+    }
+
+    // Count active vs striked vs uncertain
     const activeCount = visibleResults.filter((r) => r.status === "plain").length;
     const strikedCount = visibleResults.filter((r) => r.status === "striked").length;
+    const uncertainCount = visibleResults.filter((r) => r.status === "uncertain").length;
     const totalCount = visibleResults.length;
 
     // Update EN/ID headers with domain name
@@ -1189,24 +1225,22 @@ class MasterLockey extends BaseTool {
     this.els.confluenceEnHeader.textContent = `EN${domainSuffix}`;
     this.els.confluenceIdHeader.textContent = `ID${domainSuffix}`;
 
-    // Update count format: "22 lockeys: 16 active lockeys, and 6 striked lockeys (colored red below) on the screen"
-    let countText = `${totalCount} lockey${totalCount !== 1 ? "s" : ""}: `;
-    countText += `${activeCount} active lockey${activeCount !== 1 ? "s" : ""}`;
+    // Update count format: "22 lockeys: 16 active, 4 uncertain (orange), 6 striked (red)"
+    let countText = `${totalCount} lockey${totalCount !== 1 ? "s" : ""}`;
+    if (searchQuery) {
+      countText += ` matching "${searchQuery}"`;
+    }
+    countText += `: ${activeCount} active`;
+    if (uncertainCount > 0) {
+      countText += `, ${uncertainCount} uncertain (orange)`;
+    }
     if (strikedCount > 0) {
-      countText += `, and ${strikedCount} striked lockey${strikedCount !== 1 ? "s" : ""} (colored red below) on the screen`;
+      countText += `, ${strikedCount} striked (red)`;
     }
     if (hiddenResults.length > 0) {
       countText += ` (${hiddenResults.length} hidden)`;
     }
     this.els.confluenceResultsCount.textContent = countText;
-
-    // Build a map of remote lockey data for EN/ID lookup
-    const remoteKeyMap = new Map();
-    if (this.parsedData?.rows) {
-      this.parsedData.rows.forEach((row) => {
-        remoteKeyMap.set(row.key, row);
-      });
-    }
 
     // Clear and populate table
     this.els.confluenceTableBody.innerHTML = "";
@@ -1392,7 +1426,7 @@ class MasterLockey extends BaseTool {
     }
 
     const domainName = this.currentDomain || "In Remote";
-    const styleLabels = { plain: "Plain", striked: "Striked" };
+    const styleLabels = { plain: "Plain", uncertain: "Uncertain", striked: "Striked" };
 
     // Header row
     const header = ["Lockey", "EN", "ID", "Conflu Style", domainName].join("\t");
@@ -1757,6 +1791,7 @@ class MasterLockey extends BaseTool {
     let totalLockeys = 0;
     let totalActive = 0;
     let totalStriked = 0;
+    let totalUncertain = 0;
     let successfulPages = 0;
     let failedPages = 0;
 
@@ -1768,6 +1803,7 @@ class MasterLockey extends BaseTool {
         totalLockeys += result.lockeys.length;
         totalActive += result.lockeys.filter((l) => l.status === "plain").length;
         totalStriked += result.lockeys.filter((l) => l.status === "striked").length;
+        totalUncertain += result.lockeys.filter((l) => l.status === "uncertain").length;
       }
     });
 
@@ -1777,6 +1813,9 @@ class MasterLockey extends BaseTool {
       countText += `, ${failedPages} failed`;
     }
     countText += ` • ${totalLockeys} lockey${totalLockeys !== 1 ? "s" : ""} (${totalActive} active`;
+    if (totalUncertain > 0) {
+      countText += `, ${totalUncertain} uncertain`;
+    }
     if (totalStriked > 0) {
       countText += `, ${totalStriked} striked`;
     }
@@ -1809,7 +1848,10 @@ class MasterLockey extends BaseTool {
       // Data rows for this screen
       result.lockeys.forEach((lockey) => {
         const tr = document.createElement("tr");
-        tr.className = lockey.status === "striked" ? "status-striked" : "";
+        // Apply status class for styling
+        if (lockey.status !== "plain") {
+          tr.className = `status-${lockey.status}`;
+        }
 
         // Screen column with hyperlink
         const screenTd = document.createElement("td");
@@ -1923,9 +1965,15 @@ class MasterLockey extends BaseTool {
           const escapedEn = enValue.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
           const escapedId = idValue.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-          // Style lockey based on status: red + strikethrough for striked, black for active
-          const lockeyStyle =
-            lockey.status === "striked" ? 'style="color: #ef4444; text-decoration: line-through;"' : 'style="color: #000000;"';
+          // Style lockey based on status: red for striked, orange for uncertain, black for active
+          let lockeyStyle;
+          if (lockey.status === "striked") {
+            lockeyStyle = 'style="color: #ef4444; text-decoration: line-through;"';
+          } else if (lockey.status === "uncertain") {
+            lockeyStyle = 'style="color: #f59e0b;"'; // Orange/amber
+          } else {
+            lockeyStyle = 'style="color: #000000;"';
+          }
 
           htmlRows.push(
             `<tr><td><a href="${escapedUrl}" style="color: #3b82f6; text-decoration: underline;">${escapedName}</a></td><td ${lockeyStyle}>${escapedLockey}</td><td>${escapedEn}</td><td>${escapedId}</td></tr>`

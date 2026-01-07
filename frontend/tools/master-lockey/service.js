@@ -371,8 +371,11 @@ class MasterLockeyService {
 
     console.log(`[Parse] Found ${allTables.length} total tables`);
 
-    // Column name variations (case-insensitive)
-    const lockeyColumnNames = ["localization key", "lockey", "loc key", "localizationkey", "loc_key"];
+    // Column name variations (case-insensitive) - exact matches
+    const lockeyColumnExactNames = ["localization key", "lockey", "loc key", "localizationkey", "loc_key", "localization"];
+
+    // Partial matches - if header contains these patterns
+    const lockeyColumnPatterns = ["lockey", "localization", "loc key"];
 
     allTables.forEach((table, tableIndex) => {
       // Skip if this table is nested inside another table's cell (it's a nested table)
@@ -385,21 +388,51 @@ class MasterLockeyService {
       if (!headerRow) return;
 
       // Find the lockey column index (case-insensitive)
-      const headers = Array.from(headerRow.querySelectorAll("th, td"));
+      // Handle colspan by tracking logical column positions
+      const headerCells = Array.from(headerRow.querySelectorAll("th, td"));
+      const headers = [];
+      let logicalIndex = 0;
+
+      headerCells.forEach((header) => {
+        const colspan = parseInt(header.getAttribute("colspan") || "1", 10);
+        const text = (header.textContent || "").trim();
+        // Store the first logical index for this header
+        headers.push({ text, logicalIndex, colspan });
+        logicalIndex += colspan;
+      });
+
       console.log(
         `[Parse] Table ${tableIndex} headers:`,
-        headers.map((h) => h.textContent?.trim())
+        headers.map((h) => h.text)
       );
 
       let lockeyColIndex = -1;
+      let matchedHeader = "";
 
-      headers.forEach((header, index) => {
-        const text = (header.textContent || "").trim().toLowerCase();
-        if (lockeyColumnNames.includes(text)) {
-          lockeyColIndex = index;
-          console.log(`[Parse] Found lockey column "${text}" at index ${index}`);
+      // First try exact matches
+      headers.forEach((header) => {
+        const text = header.text.toLowerCase();
+        if (lockeyColumnExactNames.includes(text)) {
+          lockeyColIndex = header.logicalIndex;
+          matchedHeader = header.text;
+          console.log(`[Parse] Found lockey column "${text}" at index ${lockeyColIndex} (exact match)`);
         }
       });
+
+      // If no exact match, try partial matches
+      if (lockeyColIndex === -1) {
+        headers.forEach((header) => {
+          const text = header.text.toLowerCase();
+          for (const pattern of lockeyColumnPatterns) {
+            if (text.includes(pattern)) {
+              lockeyColIndex = header.logicalIndex;
+              matchedHeader = header.text;
+              console.log(`[Parse] Found lockey column "${header.text}" at index ${lockeyColIndex} (partial match: "${pattern}")`);
+              break;
+            }
+          }
+        });
+      }
 
       if (lockeyColIndex === -1) return;
 
@@ -407,10 +440,39 @@ class MasterLockeyService {
       const rows = table.querySelectorAll(":scope > tbody > tr, :scope > tr");
       console.log(`[Parse] Table ${tableIndex} has ${rows.length} rows`);
 
+      // Track rowspan state for each LOGICAL column (accounting for colspan in headers)
+      // logicalIndex from the last header gives us the total logical column count
+      const totalLogicalCols = headers.reduce((max, h) => Math.max(max, h.logicalIndex + h.colspan), 0);
+      const rowspanState = new Array(totalLogicalCols).fill(0);
+
       rows.forEach((row, rowIndex) => {
         if (rowIndex === 0) return; // Skip header row
 
         const cells = row.querySelectorAll(":scope > td");
+
+        // Calculate effective cell index accounting for active rowspans
+        let skipCount = 0;
+        for (let col = 0; col < lockeyColIndex; col++) {
+          if (rowspanState[col] > 0) {
+            skipCount++;
+            rowspanState[col]--;
+          }
+        }
+        const effectiveLockeyIndex = lockeyColIndex - skipCount;
+
+        // Debug log for rowspan handling
+        if (skipCount > 0) {
+          console.log(`[Parse] Row ${rowIndex}: skipCount=${skipCount}, effectiveIndex=${effectiveLockeyIndex} (cells: ${cells.length})`);
+        }
+
+        // Update rowspan state for cells in this row
+        cells.forEach((cell, idx) => {
+          const actualCol = idx + skipCount; // Map back to actual column
+          const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
+          if (rowspan > 1 && actualCol < rowspanState.length) {
+            rowspanState[actualCol] = rowspan - 1;
+          }
+        });
 
         // Due to rowspan/colspan in Confluence tables, column indices can shift
         // So we need to check ALL cells in the row for nested tables with matching columns
@@ -419,7 +481,7 @@ class MasterLockeyService {
           const nestedTable = cell.querySelector("table");
           if (nestedTable) {
             // Try to extract from this nested table
-            const nestedLockeys = this.extractFromNestedTable(nestedTable, lockeyColumnNames);
+            const nestedLockeys = this.extractFromNestedTable(nestedTable, lockeyColumnExactNames);
             if (nestedLockeys.length > 0) {
               foundNestedTable = true;
               console.log(`[Parse] Row ${rowIndex} cell ${cellIndex} has nested table with ${nestedLockeys.length} lockeys`);
@@ -432,22 +494,44 @@ class MasterLockeyService {
         });
 
         // If no nested tables with lockeys found, try the expected column for direct text
-        if (!foundNestedTable && cells.length > lockeyColIndex) {
-          const cell = cells[lockeyColIndex];
+        if (!foundNestedTable && effectiveLockeyIndex >= 0 && effectiveLockeyIndex < cells.length) {
+          const cell = cells[effectiveLockeyIndex];
           // Extract lockeys from paragraphs or cell text
           const paragraphs = cell.querySelectorAll("p");
           const elements = paragraphs.length > 0 ? Array.from(paragraphs) : [cell];
 
+          let foundInRow = false;
           elements.forEach((element) => {
             const text = (element.textContent || "").trim();
 
-            // Check if it's a standalone camelCase value
+            // Check if it's a standalone camelCase value (high confidence)
             if (this.isStandaloneCamelCase(text)) {
               const status = this.detectCellStatus(element);
               lockeys.push({ key: text, status });
               console.log(`[Parse] Found camelCase key: ${text} (status: ${status})`);
+              foundInRow = true;
+            } else if (text && text.length > 0) {
+              // Try to extract camelCase keys from within inline statements (uncertain)
+              const embeddedKeys = this.extractCamelCaseKeysFromText(text);
+              embeddedKeys.forEach((key) => {
+                // Mark as 'uncertain' since extracted from inline text
+                lockeys.push({ key, status: "uncertain" });
+                console.log(`[Parse] Found embedded key: ${key} (status: uncertain)`);
+                foundInRow = true;
+              });
             }
           });
+
+          // Debug: log when row has content but no lockey found
+          if (!foundInRow) {
+            const cellText = (cell.textContent || "").trim();
+            if (cellText && cellText.length > 0 && cellText.length < 100) {
+              console.log(`[Parse] Row ${rowIndex} has content but no lockey: "${cellText.substring(0, 50)}..."`);
+            }
+          }
+        } else if (!foundNestedTable) {
+          // Debug: log when we couldn't access the expected cell
+          console.log(`[Parse] Row ${rowIndex} skipped: effectiveIndex=${effectiveLockeyIndex} out of bounds (cells: ${cells.length})`);
         }
       });
     });
@@ -462,24 +546,30 @@ class MasterLockeyService {
   }
 
   /**
-   * Deduplicate lockeys, preferring "plain" over "striked" for duplicates
+   * Deduplicate lockeys, preferring higher confidence statuses
+   * Priority: plain > uncertain > striked
    * @param {Array<{key: string, status: string}>} lockeys
    * @returns {Array<{key: string, status: string}>}
    */
   deduplicateLockeys(lockeys) {
     const keyMap = new Map();
+    // Priority: plain (2) > uncertain (1) > striked (0)
+    const statusPriority = { plain: 2, uncertain: 1, striked: 0 };
 
     for (const lockey of lockeys) {
       const existing = keyMap.get(lockey.key);
       if (!existing) {
         // First occurrence
         keyMap.set(lockey.key, lockey);
-      } else if (existing.status === "striked" && lockey.status === "plain") {
-        // Prefer plain over striked
-        keyMap.set(lockey.key, lockey);
-        console.log(`[Dedup] Key "${lockey.key}" has both striked and plain entries, keeping plain`);
+      } else {
+        const existingPriority = statusPriority[existing.status] ?? 0;
+        const newPriority = statusPriority[lockey.status] ?? 0;
+        if (newPriority > existingPriority) {
+          // Higher priority status found
+          keyMap.set(lockey.key, lockey);
+          console.log(`[Dedup] Key "${lockey.key}" upgraded from ${existing.status} to ${lockey.status}`);
+        }
       }
-      // If existing is plain, or both are same status, keep existing
     }
 
     return Array.from(keyMap.values());
@@ -501,6 +591,9 @@ class MasterLockeyService {
       return results;
     }
 
+    // Column patterns for partial matching
+    const partialPatterns = ["lockey", "localization", "loc key"];
+
     // Find the value column index (case-insensitive)
     const headers = Array.from(headerRow.querySelectorAll("th, td"));
     console.log(
@@ -510,13 +603,28 @@ class MasterLockeyService {
 
     let valueColIndex = -1;
 
+    // First try exact matches
     headers.forEach((header, index) => {
       const text = (header.textContent || "").trim().toLowerCase();
       if (columnNames.includes(text)) {
         valueColIndex = index;
-        console.log(`[Nested Table] Found matching column "${text}" at index ${index}`);
+        console.log(`[Nested Table] Found matching column "${text}" at index ${index} (exact)`);
       }
     });
+
+    // If no exact match, try partial matches
+    if (valueColIndex === -1) {
+      headers.forEach((header, index) => {
+        const text = (header.textContent || "").trim().toLowerCase();
+        for (const pattern of partialPatterns) {
+          if (text.includes(pattern)) {
+            valueColIndex = index;
+            console.log(`[Nested Table] Found matching column "${text}" at index ${index} (partial: "${pattern}")`);
+            break;
+          }
+        }
+      });
+    }
 
     if (valueColIndex === -1) {
       console.log("[Nested Table] No matching column found. Looking for:", columnNames);
@@ -527,22 +635,59 @@ class MasterLockeyService {
     const rows = nestedTable.querySelectorAll("tr");
     console.log(`[Nested Table] Found ${rows.length - 1} data rows`);
 
+    // Track rowspan state for each column
+    const rowspanState = new Array(headers.length).fill(0);
+
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i].querySelectorAll("td");
-      if (cells.length <= valueColIndex) continue;
 
-      const cell = cells[valueColIndex];
+      // Calculate effective cell index accounting for active rowspans
+      // Cells in columns with active rowspan are "missing" from this row
+      let effectiveIndex = valueColIndex;
+      let skipCount = 0;
+      for (let col = 0; col < valueColIndex; col++) {
+        if (rowspanState[col] > 0) {
+          skipCount++;
+          rowspanState[col]--;
+        }
+      }
+      effectiveIndex = valueColIndex - skipCount;
+
+      // Update rowspan state for cells in this row
+      cells.forEach((cell, idx) => {
+        const actualCol = idx + skipCount; // Map back to actual column
+        const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
+        if (rowspan > 1 && actualCol < rowspanState.length) {
+          rowspanState[actualCol] = rowspan - 1;
+        }
+      });
+
+      // Check if we can access the cell
+      if (effectiveIndex < 0 || effectiveIndex >= cells.length) {
+        console.log(`[Nested Table] Row ${i} skipped - effective index ${effectiveIndex} out of bounds (cells: ${cells.length})`);
+        continue;
+      }
+
+      const cell = cells[effectiveIndex];
       const cellText = (cell.textContent || "").trim();
-      console.log(`[Nested Table] Row ${i} cell text: "${cellText}"`);
+      console.log(`[Nested Table] Row ${i} cell text: "${cellText}" (effectiveIndex: ${effectiveIndex})`);
 
-      // Check if this is a standalone camelCase value (not prefixed)
+      // Check if this is a standalone camelCase value (not prefixed) - high confidence
       if (this.isStandaloneCamelCase(cellText)) {
         // Detect status from THIS cell, not the parent
         const status = this.detectCellStatus(cell);
         results.push({ key: cellText, status });
         console.log(`[Nested Table] Added key: ${cellText} (status: ${status})`);
       } else {
-        console.log(`[Nested Table] Rejected "${cellText}" - not camelCase`);
+        // Try to extract camelCase keys from within inline statements (uncertain)
+        const embeddedKeys = this.extractCamelCaseKeysFromText(cellText);
+        embeddedKeys.forEach((key) => {
+          results.push({ key, status: "uncertain" });
+          console.log(`[Nested Table] Added embedded key: ${key} (status: uncertain)`);
+        });
+        if (embeddedKeys.length === 0) {
+          console.log(`[Nested Table] Rejected "${cellText}" - not camelCase and no embedded keys`);
+        }
       }
     }
 
@@ -566,6 +711,62 @@ class MasterLockeyService {
     // camelCase pattern: starts with lowercase, can have uppercase letters
     const camelCasePattern = /^[a-z][a-zA-Z0-9]*$/;
     return camelCasePattern.test(value);
+  }
+
+  /**
+   * Extract camelCase lockey keys from within inline text/statements
+   * Used for cells containing conditional logic like "IF... ELSE..." with embedded lockeys
+   * @param {string} text - Text that may contain embedded lockey keys
+   * @returns {Array<string>} Array of extracted camelCase keys (15+ chars)
+   */
+  extractCamelCaseKeysFromText(text) {
+    if (!text || typeof text !== "string") return [];
+
+    // Preprocess: Add spaces to separate concatenated words
+    let processedText = text;
+
+    // 1. Handle space-separated lowercase keywords (already have spaces around them)
+    //    e.g., "someKey else anotherKey" - just needs word boundary splitting
+    //    This regex is safe because it requires word boundaries (spaces/start/end)
+    processedText = processedText.replace(/\b(if|else|then|and|or|when|contains|feature)\b/gi, " $1 ");
+
+    // 2. Add space before ALL-CAPS words (2+ uppercase letters) when preceded by lowercase
+    //    e.g., "someLabelELSE" → "someLabel ELSE"
+    //    This handles: IFsomething, ELSEanother, THENfoo, etc.
+    processedText = processedText.replace(/([a-z])([A-Z]{2,})/g, "$1 $2");
+
+    // 3. Add space after ALL-CAPS words when followed by lowercase
+    //    e.g., "ELSEsomeKey" → "ELSE someKey"
+    processedText = processedText.replace(/([A-Z]{2,})([a-z])/g, "$1 $2");
+
+    // Clean up multiple spaces
+    processedText = processedText.replace(/\s+/g, " ").trim();
+
+    console.log(`[ExtractFromText] Preprocessed text: "${processedText}"`);
+
+    // Find potential camelCase patterns:
+    // - Start with lowercase letter
+    // - Contain at least one uppercase letter (true camelCase)
+    // - Only alphanumeric characters
+    // - 15+ characters to filter out common programming keywords
+    const pattern = /\b([a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*)\b/g;
+    const matches = [...processedText.matchAll(pattern)];
+
+    const results = [];
+    for (const match of matches) {
+      const key = match[1];
+
+      // Must be 15+ characters to avoid false positives like forEach, getElementById
+      if (key.length < 15) continue;
+
+      // Skip if contains dots (shouldn't happen with word boundary but safety check)
+      if (key.includes(".")) continue;
+
+      results.push(key);
+    }
+
+    console.log(`[ExtractFromText] Found ${results.length} potential lockeys in text:`, results);
+    return results;
   }
 
   /**
@@ -612,6 +813,7 @@ class MasterLockeyService {
   getStyleLabel(status) {
     const styleLabels = {
       plain: "Plain",
+      uncertain: "Uncertain",
       striked: "Striked",
     };
     return styleLabels[status] || status;
