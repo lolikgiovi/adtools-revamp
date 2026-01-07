@@ -508,6 +508,77 @@ describe("MasterLockeyService", () => {
     });
   });
 
+  describe("parseConfluenceTableForLockeys with ul/ol lists", () => {
+    it("should extract lockeys from nested ul/li structure as 'plain'", () => {
+      const html = `
+        <table>
+          <tr><th>Element</th><th>Type</th><th>Localization Key</th></tr>
+          <tr>
+            <td colspan="2">Inline Logic Bullet Point</td>
+            <td>
+              <ul>
+                <li>IF logic == A
+                  <ul><li>testScreenBulletPointInlineLogic1</li></ul>
+                </li>
+                <li>else if logic == b
+                  <ul><li>testScreenBulletPointInlineLogic2</li></ul>
+                </li>
+                <li>else testScreenBulletPointInlineLogic3</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(3);
+      // Innermost li elements should be extracted as 'plain'
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic1")?.status).toBe("plain");
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic2")?.status).toBe("plain");
+      // The third one is mixed text, so it's extracted as 'uncertain'
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic3")?.status).toBe("uncertain");
+    });
+
+    it("should handle simple ul with direct lockey values", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr>
+            <td>
+              <ul>
+                <li>firstLockeyKeyItem</li>
+                <li>secondLockeyKeyItem</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.status === "plain")).toBe(true);
+      expect(result.map((r) => r.key)).toContain("firstLockeyKeyItem");
+      expect(result.map((r) => r.key)).toContain("secondLockeyKeyItem");
+    });
+
+    it("should handle ol (ordered list) elements", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr>
+            <td>
+              <ol>
+                <li>orderedListLockeyKey</li>
+              </ol>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("orderedListLockeyKey");
+      expect(result[0].status).toBe("plain");
+    });
+  });
+
   describe("compareLockeyWithRemote", () => {
     const remoteData = {
       rows: [{ key: "existing.key1" }, { key: "existing.key2" }],
