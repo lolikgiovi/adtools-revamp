@@ -685,6 +685,12 @@ class MasterLockeyService {
 
     if (valueColIndex === -1) {
       console.log("[Nested Table] No matching column found. Looking for:", columnNames);
+      // Fallback: Check for key-value row pattern (e.g., "localizationKey" | "eKtpConfirmationNIKPlaceholder")
+      // This handles tables where the first column is the key name and second column is the value
+      const keyValueResults = this.extractFromKeyValueTable(nestedTable, columnNames, partialPatterns);
+      if (keyValueResults.length > 0) {
+        return keyValueResults;
+      }
       return results;
     }
 
@@ -770,6 +776,71 @@ class MasterLockeyService {
     }
 
     console.log(`[Nested Table] Total keys extracted: ${results.length}`);
+    return results;
+  }
+
+  /**
+   * Extract lockeys from a key-value table pattern
+   * This handles tables where the first column is a key name (e.g., "localizationKey")
+   * and the second column contains the value (e.g., "eKtpConfirmationNIKPlaceholder")
+   * @param {Element} table - Table element
+   * @param {string[]} exactNames - Exact key names to match (case-insensitive)
+   * @param {string[]} partialPatterns - Partial patterns to match
+   * @returns {Array<{key: string, status: string}>} Extracted lockeys with status
+   */
+  extractFromKeyValueTable(table, exactNames, partialPatterns) {
+    const results = [];
+    const rows = table.querySelectorAll("tr");
+
+    console.log(`[Key-Value Table] Checking ${rows.length} rows for key-value pattern`);
+
+    rows.forEach((row, rowIndex) => {
+      const cells = row.querySelectorAll("td, th");
+      if (cells.length < 2) return; // Need at least 2 cells for key-value
+
+      const keyCell = cells[0];
+      const valueCell = cells[1];
+      const keyText = (keyCell.textContent || "").trim().toLowerCase();
+      const valueText = (valueCell.textContent || "").trim();
+
+      // Check if the key cell matches our lockey patterns
+      let isMatch = false;
+
+      // Check exact matches
+      if (exactNames.includes(keyText)) {
+        isMatch = true;
+        console.log(`[Key-Value Table] Row ${rowIndex}: Found exact key match "${keyText}"`);
+      }
+
+      // Check partial matches
+      if (!isMatch) {
+        for (const pattern of partialPatterns) {
+          if (keyText.includes(pattern)) {
+            isMatch = true;
+            console.log(`[Key-Value Table] Row ${rowIndex}: Found partial key match "${keyText}" (pattern: "${pattern}")`);
+            break;
+          }
+        }
+      }
+
+      if (isMatch) {
+        // Extract the value from the second column
+        if (this.isStandaloneCamelCase(valueText)) {
+          const status = this.detectCellStatus(valueCell);
+          results.push({ key: valueText, status });
+          console.log(`[Key-Value Table] Extracted key: ${valueText} (status: ${status})`);
+        } else if (valueText && valueText.length > 0) {
+          // Try heuristic extraction
+          const embeddedKeys = this.extractCamelCaseKeysFromText(valueText);
+          embeddedKeys.forEach((key) => {
+            results.push({ key, status: "uncertain" });
+            console.log(`[Key-Value Table] Extracted embedded key: ${key} (status: uncertain)`);
+          });
+        }
+      }
+    });
+
+    console.log(`[Key-Value Table] Total keys extracted: ${results.length}`);
     return results;
   }
 

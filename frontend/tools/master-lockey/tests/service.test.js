@@ -376,6 +376,30 @@ describe("MasterLockeyService", () => {
       const result = service.parseConfluenceTableForLockeys(html);
       expect(result).toHaveLength(0);
     });
+
+    it("should extract from key-value table pattern with 'localizationKey' row label", () => {
+      // This tests tables where first column is the key name (e.g., "localizationKey")
+      // and second column is the value (e.g., "eKtpConfirmationNIKPlaceholder")
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>
+            <table>
+              <tr><th>Context</th><th>Source</th></tr>
+              <tr><td>dynamicFields[]</td><td>context.ektpData.dynamicFields[]</td></tr>
+              <tr><td>fieldKey</td><td>eKtpConfirmationNIK</td></tr>
+              <tr><td>localizationKey</td><td>eKtpConfirmationNIKPlaceholder</td></tr>
+              <tr><td>value</td><td>context.ektpData.nik</td></tr>
+              <tr><td>valueType</td><td>STRING</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("eKtpConfirmationNIKPlaceholder");
+      expect(result[0].status).toBe("plain");
+    });
   });
 
   describe("isStandaloneCamelCase", () => {
