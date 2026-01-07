@@ -450,29 +450,53 @@ class MasterLockeyService {
 
         const cells = row.querySelectorAll(":scope > td");
 
-        // Calculate effective cell index accounting for active rowspans
-        let skipCount = 0;
-        for (let col = 0; col < lockeyColIndex; col++) {
+        // Build a set of logical columns that are occupied by rowspans from previous rows
+        const rowspanOccupiedCols = new Set();
+        for (let col = 0; col < totalLogicalCols; col++) {
           if (rowspanState[col] > 0) {
-            skipCount++;
+            rowspanOccupiedCols.add(col);
             rowspanState[col]--;
           }
         }
-        const effectiveLockeyIndex = lockeyColIndex - skipCount;
 
-        // Debug log for rowspan handling
-        if (skipCount > 0) {
-          console.log(`[Parse] Row ${rowIndex}: skipCount=${skipCount}, effectiveIndex=${effectiveLockeyIndex} (cells: ${cells.length})`);
+        // Map physical cells to their logical column positions, accounting for:
+        // 1. Columns occupied by rowspans from previous rows
+        // 2. Colspan in current row's cells
+        let logicalCol = 0;
+        let targetPhysicalCellIndex = -1;
+        const cellLogicalPositions = []; // Track each cell's logical start column
+
+        for (let physicalIdx = 0; physicalIdx < cells.length; physicalIdx++) {
+          // Skip logical columns occupied by rowspans
+          while (rowspanOccupiedCols.has(logicalCol)) {
+            logicalCol++;
+          }
+
+          const cell = cells[physicalIdx];
+          const colspan = parseInt(cell.getAttribute("colspan") || "1", 10);
+          const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
+
+          cellLogicalPositions.push({ physicalIdx, logicalStart: logicalCol, colspan });
+
+          // Check if this cell contains or starts at the target lockey column
+          if (targetPhysicalCellIndex === -1 && logicalCol <= lockeyColIndex && lockeyColIndex < logicalCol + colspan) {
+            targetPhysicalCellIndex = physicalIdx;
+          }
+
+          // Update rowspan state for this cell's logical columns
+          if (rowspan > 1) {
+            for (let c = logicalCol; c < logicalCol + colspan && c < totalLogicalCols; c++) {
+              rowspanState[c] = rowspan - 1;
+            }
+          }
+
+          logicalCol += colspan;
         }
 
-        // Update rowspan state for cells in this row
-        cells.forEach((cell, idx) => {
-          const actualCol = idx + skipCount; // Map back to actual column
-          const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
-          if (rowspan > 1 && actualCol < rowspanState.length) {
-            rowspanState[actualCol] = rowspan - 1;
-          }
-        });
+        // Debug log for complex rows
+        if (rowspanOccupiedCols.size > 0 || targetPhysicalCellIndex !== -1) {
+          console.log(`[Parse] Row ${rowIndex}: targetLogical=${lockeyColIndex}, targetPhysical=${targetPhysicalCellIndex}, rowspanCols=[${[...rowspanOccupiedCols].join(",")}] (cells: ${cells.length})`);
+        }
 
         // Due to rowspan/colspan in Confluence tables, column indices can shift
         // So we need to check ALL cells in the row for nested tables with matching columns
@@ -494,8 +518,8 @@ class MasterLockeyService {
         });
 
         // If no nested tables with lockeys found, try the expected column for direct text
-        if (!foundNestedTable && effectiveLockeyIndex >= 0 && effectiveLockeyIndex < cells.length) {
-          const cell = cells[effectiveLockeyIndex];
+        if (!foundNestedTable && targetPhysicalCellIndex >= 0 && targetPhysicalCellIndex < cells.length) {
+          const cell = cells[targetPhysicalCellIndex];
           // Extract lockeys from paragraphs or cell text
           const paragraphs = cell.querySelectorAll("p");
           const elements = paragraphs.length > 0 ? Array.from(paragraphs) : [cell];
@@ -531,7 +555,7 @@ class MasterLockeyService {
           }
         } else if (!foundNestedTable) {
           // Debug: log when we couldn't access the expected cell
-          console.log(`[Parse] Row ${rowIndex} skipped: effectiveIndex=${effectiveLockeyIndex} out of bounds (cells: ${cells.length})`);
+          console.log(`[Parse] Row ${rowIndex} skipped: targetPhysical=${targetPhysicalCellIndex} (lockeyCol=${lockeyColIndex}, cells: ${cells.length})`);
         }
       });
     });
@@ -594,32 +618,41 @@ class MasterLockeyService {
     // Column patterns for partial matching
     const partialPatterns = ["lockey", "localization", "loc key"];
 
-    // Find the value column index (case-insensitive)
-    const headers = Array.from(headerRow.querySelectorAll("th, td"));
+    // Find the value column index (case-insensitive), accounting for colspan
+    const headerCells = Array.from(headerRow.querySelectorAll("th, td"));
     console.log(
       "[Nested Table] Headers found:",
-      headers.map((h) => h.textContent?.trim())
+      headerCells.map((h) => h.textContent?.trim())
     );
+
+    // Build headers with logical index (accounting for colspan)
+    const headers = [];
+    let logicalIndex = 0;
+    headerCells.forEach((header) => {
+      const text = (header.textContent || "").trim().toLowerCase();
+      const colspan = parseInt(header.getAttribute("colspan") || "1", 10);
+      headers.push({ text, logicalIndex, colspan });
+      logicalIndex += colspan;
+    });
+    const totalLogicalCols = logicalIndex;
 
     let valueColIndex = -1;
 
     // First try exact matches
-    headers.forEach((header, index) => {
-      const text = (header.textContent || "").trim().toLowerCase();
-      if (columnNames.includes(text)) {
-        valueColIndex = index;
-        console.log(`[Nested Table] Found matching column "${text}" at index ${index} (exact)`);
+    headers.forEach((header) => {
+      if (columnNames.includes(header.text)) {
+        valueColIndex = header.logicalIndex;
+        console.log(`[Nested Table] Found matching column "${header.text}" at logical index ${header.logicalIndex} (exact)`);
       }
     });
 
     // If no exact match, try partial matches
     if (valueColIndex === -1) {
-      headers.forEach((header, index) => {
-        const text = (header.textContent || "").trim().toLowerCase();
+      headers.forEach((header) => {
         for (const pattern of partialPatterns) {
-          if (text.includes(pattern)) {
-            valueColIndex = index;
-            console.log(`[Nested Table] Found matching column "${text}" at index ${index} (partial: "${pattern}")`);
+          if (header.text.includes(pattern)) {
+            valueColIndex = header.logicalIndex;
+            console.log(`[Nested Table] Found matching column "${header.text}" at logical index ${header.logicalIndex} (partial: "${pattern}")`);
             break;
           }
         }
@@ -635,42 +668,59 @@ class MasterLockeyService {
     const rows = nestedTable.querySelectorAll("tr");
     console.log(`[Nested Table] Found ${rows.length - 1} data rows`);
 
-    // Track rowspan state for each column
-    const rowspanState = new Array(headers.length).fill(0);
+    // Track rowspan state for each logical column
+    const rowspanState = new Array(totalLogicalCols).fill(0);
 
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i].querySelectorAll("td");
 
-      // Calculate effective cell index accounting for active rowspans
-      // Cells in columns with active rowspan are "missing" from this row
-      let effectiveIndex = valueColIndex;
-      let skipCount = 0;
-      for (let col = 0; col < valueColIndex; col++) {
+      // Build a set of logical columns occupied by rowspans from previous rows
+      const rowspanOccupiedCols = new Set();
+      for (let col = 0; col < totalLogicalCols; col++) {
         if (rowspanState[col] > 0) {
-          skipCount++;
+          rowspanOccupiedCols.add(col);
           rowspanState[col]--;
         }
       }
-      effectiveIndex = valueColIndex - skipCount;
 
-      // Update rowspan state for cells in this row
-      cells.forEach((cell, idx) => {
-        const actualCol = idx + skipCount; // Map back to actual column
-        const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
-        if (rowspan > 1 && actualCol < rowspanState.length) {
-          rowspanState[actualCol] = rowspan - 1;
+      // Map physical cells to logical columns, find the target cell
+      let logicalCol = 0;
+      let targetPhysicalCellIndex = -1;
+
+      for (let physicalIdx = 0; physicalIdx < cells.length; physicalIdx++) {
+        // Skip logical columns occupied by rowspans
+        while (rowspanOccupiedCols.has(logicalCol)) {
+          logicalCol++;
         }
-      });
+
+        const cell = cells[physicalIdx];
+        const colspan = parseInt(cell.getAttribute("colspan") || "1", 10);
+        const rowspan = parseInt(cell.getAttribute("rowspan") || "1", 10);
+
+        // Check if this cell contains the target logical column
+        if (targetPhysicalCellIndex === -1 && logicalCol <= valueColIndex && valueColIndex < logicalCol + colspan) {
+          targetPhysicalCellIndex = physicalIdx;
+        }
+
+        // Update rowspan state for this cell's logical columns
+        if (rowspan > 1) {
+          for (let c = logicalCol; c < logicalCol + colspan && c < totalLogicalCols; c++) {
+            rowspanState[c] = rowspan - 1;
+          }
+        }
+
+        logicalCol += colspan;
+      }
 
       // Check if we can access the cell
-      if (effectiveIndex < 0 || effectiveIndex >= cells.length) {
-        console.log(`[Nested Table] Row ${i} skipped - effective index ${effectiveIndex} out of bounds (cells: ${cells.length})`);
+      if (targetPhysicalCellIndex < 0 || targetPhysicalCellIndex >= cells.length) {
+        console.log(`[Nested Table] Row ${i} skipped - targetPhysical=${targetPhysicalCellIndex} (valueCol=${valueColIndex}, cells: ${cells.length})`);
         continue;
       }
 
-      const cell = cells[effectiveIndex];
+      const cell = cells[targetPhysicalCellIndex];
       const cellText = (cell.textContent || "").trim();
-      console.log(`[Nested Table] Row ${i} cell text: "${cellText}" (effectiveIndex: ${effectiveIndex})`);
+      console.log(`[Nested Table] Row ${i} cell text: "${cellText}" (physicalIndex: ${targetPhysicalCellIndex}, logicalCol: ${valueColIndex})`);
 
       // Check if this is a standalone camelCase value (not prefixed) - high confidence
       if (this.isStandaloneCamelCase(cellText)) {
@@ -739,6 +789,13 @@ class MasterLockeyService {
     //    e.g., "ELSEsomeKey" → "ELSE someKey"
     processedText = processedText.replace(/([A-Z]{2,})([a-z])/g, "$1 $2");
 
+    // 4. Separate comparison values from camelCase patterns
+    //    When there's "== X<camelCase>", the X is likely a comparison value, not part of the key
+    //    e.g., "== AtestScreenLabel" → "== A testScreenLabel"
+    //    e.g., "== btestScreenLabel" → "== b testScreenLabel"
+    //    This handles HTML list items concatenated without whitespace
+    processedText = processedText.replace(/([=<>!]=?\s*)([a-zA-Z0-9])([a-z]+[A-Z])/g, "$1$2 $3");
+
     // Clean up multiple spaces
     processedText = processedText.replace(/\s+/g, " ").trim();
 
@@ -755,12 +812,19 @@ class MasterLockeyService {
     const results = [];
     for (const match of matches) {
       const key = match[1];
+      const matchIndex = match.index;
 
       // Must be 15+ characters to avoid false positives like forEach, getElementById
       if (key.length < 15) continue;
 
       // Skip if contains dots (shouldn't happen with word boundary but safety check)
       if (key.includes(".")) continue;
+
+      // Skip if preceded by a dot (property accessor like "context.someThing")
+      if (matchIndex > 0 && processedText[matchIndex - 1] === ".") {
+        console.log(`[ExtractFromText] Skipping "${key}" - preceded by dot (property accessor)`);
+        continue;
+      }
 
       results.push(key);
     }

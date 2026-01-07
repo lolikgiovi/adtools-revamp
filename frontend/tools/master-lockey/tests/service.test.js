@@ -432,11 +432,12 @@ describe("MasterLockeyService", () => {
       expect(service.extractCamelCaseKeysFromText(undefined)).toEqual([]);
     });
 
-    it("should not extract dotted values", () => {
+    it("should not extract dotted values (property accessors)", () => {
       const text = "context.x.livinCareLandingCallUsCardVoipTitleLabel";
       const result = service.extractCamelCaseKeysFromText(text);
-      // Should still extract because regex uses word boundary
-      expect(result).toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      // Should NOT extract because it's preceded by a dot (property accessor)
+      expect(result).not.toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      expect(result).toHaveLength(0);
     });
 
     it("should handle lowercase keywords with spaces (if, else)", () => {

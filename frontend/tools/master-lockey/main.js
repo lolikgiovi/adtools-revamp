@@ -50,6 +50,7 @@ class MasterLockey extends BaseTool {
     this.currentConfluencePageId = null;
     this.currentConfluenceTitle = null;
     this.hiddenKeys = [];
+    this.confluenceSortOrder = "natural"; // "natural" | "asc" | "desc"
 
     // Page search state (for unified input)
     this.pageSearchState = {
@@ -178,6 +179,7 @@ class MasterLockey extends BaseTool {
       confluenceSettingsLink: this.container.querySelector("#confluence-settings-link"),
       confluenceEnHeader: this.container.querySelector("#confluence-en-header"),
       confluenceIdHeader: this.container.querySelector("#confluence-id-header"),
+      confluenceLockeyHeader: this.container.querySelector("#confluence-lockey-header"),
       confluenceSearchInput: this.container.querySelector("#confluence-search-input"),
       btnClearConfluenceSearch: this.container.querySelector("#btn-clear-confluence-search"),
       // Tab elements
@@ -386,6 +388,11 @@ class MasterLockey extends BaseTool {
     this.els.hiddenKeysToggle.addEventListener("click", () => {
       const isExpanded = this.els.hiddenKeysToggle.classList.toggle("expanded");
       this.els.hiddenKeysContent.style.display = isExpanded ? "block" : "none";
+    });
+
+    // Lockey header sort toggle
+    this.els.confluenceLockeyHeader.addEventListener("click", () => {
+      this.toggleConfluenceSort();
     });
 
     // Mode toggle listeners (Single / Bulk)
@@ -1242,6 +1249,12 @@ class MasterLockey extends BaseTool {
     }
     this.els.confluenceResultsCount.textContent = countText;
 
+    // Sort results
+    visibleResults = this.sortConfluenceResults(visibleResults);
+
+    // Update sort indicator
+    this.updateSortIndicator();
+
     // Clear and populate table
     this.els.confluenceTableBody.innerHTML = "";
 
@@ -1287,6 +1300,62 @@ class MasterLockey extends BaseTool {
 
     // Show results
     this.els.confluenceResults.style.display = "block";
+  }
+
+  /**
+   * Toggle sort order for confluence results: natural -> asc -> desc -> natural
+   */
+  toggleConfluenceSort() {
+    const order = this.confluenceSortOrder;
+    if (order === "natural") {
+      this.confluenceSortOrder = "asc";
+    } else if (order === "asc") {
+      this.confluenceSortOrder = "desc";
+    } else {
+      this.confluenceSortOrder = "natural";
+    }
+    this.updateSortIndicator();
+    this.displayConfluenceResults();
+  }
+
+  /**
+   * Update the sort indicator CSS class on the header
+   */
+  updateSortIndicator() {
+    const header = this.els.confluenceLockeyHeader;
+    header.classList.remove("sort-asc", "sort-desc");
+    if (this.confluenceSortOrder === "asc") {
+      header.classList.add("sort-asc");
+    } else if (this.confluenceSortOrder === "desc") {
+      header.classList.add("sort-desc");
+    }
+  }
+
+  /**
+   * Alphanumeric sort comparator (numeric-aware)
+   * e.g., "key2" < "key10" (unlike alphabetical where "key10" < "key2")
+   */
+  alphanumericSortCompare(a, b) {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return collator.compare(a, b);
+  }
+
+  /**
+   * Sort results based on current sort order
+   * @param {Array} results - Array of { key, status, ... }
+   * @returns {Array} Sorted array (or original order for "natural")
+   */
+  sortConfluenceResults(results) {
+    if (this.confluenceSortOrder === "natural") {
+      // Natural = original parse order (no sorting)
+      return results;
+    } else if (this.confluenceSortOrder === "asc") {
+      // Alphanumeric ascending (key2 < key10)
+      return [...results].sort((a, b) => this.alphanumericSortCompare(a.key, b.key));
+    } else {
+      // Alphanumeric descending
+      return [...results].sort((a, b) => this.alphanumericSortCompare(b.key, a.key));
+    }
   }
 
   displayHiddenKeys(hiddenResults) {

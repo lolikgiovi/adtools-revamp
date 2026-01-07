@@ -136,7 +136,7 @@ export const MasterLockeyTemplate = /* html */ `
                         <table class="confluence-table" id="confluence-table">
                             <thead>
                                 <tr>
-                                    <th>Lockey</th>
+                                    <th id="confluence-lockey-header" class="sortable-header">Lockey <span class="sort-indicator"></span></th>
                                     <th id="confluence-en-header">EN</th>
                                     <th id="confluence-id-header">ID</th>
                                     <th class="col-center col-action">Action</th>

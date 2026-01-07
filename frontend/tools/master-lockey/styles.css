@@ -749,6 +749,41 @@
   border-bottom: 2px solid hsl(var(--border));
 }
 
+/* Sortable header */
+.confluence-table th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.confluence-table th.sortable-header:hover {
+  background: hsl(var(--muted));
+}
+
+.confluence-table th .sort-indicator {
+  margin-left: 4px;
+  font-size: 0.75em;
+  opacity: 0.5;
+}
+
+.confluence-table th .sort-indicator::after {
+  content: "⇅";
+}
+
+.confluence-table th.sort-asc .sort-indicator::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.confluence-table th.sort-desc .sort-indicator::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.confluence-table th.sort-asc .sort-indicator,
+.confluence-table th.sort-desc .sort-indicator {
+  opacity: 1;
+}
+
 .confluence-table td {
   padding: 8px 12px;
   border-bottom: 1px solid hsl(var(--border));
