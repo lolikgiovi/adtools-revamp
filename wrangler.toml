@@ -1,5 +1,5 @@
 name = "adtools"
-main = "src/worker.js"
+main = "backend-workers/worker.js"
 compatibility_date = "2024-10-01"
 workers_dev = true
 
@@ -48,6 +48,7 @@ preview_id = "cfe36e546aaa428cbdf468a1b337a87c"
 binding = "DB"
 database_name = "adtools"
 database_id = "9a9a1466-05be-4b18-af48-6e8902fab81a"
+migrations_dir = "backend-workers/migrations"
 
 [observability]
 [observability.logs]

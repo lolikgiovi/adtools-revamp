@@ -1,0 +1,20 @@
+{
+  "version": "1.0.2",
+  "minVersion": "1.0.2",
+  "notes": "Fixing Quick Query Scroll, Clob splitting, Fix base64 decoding from text",
+  "pub_date": "2025-11-18T07:12:11Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSNE9sSnNrTEdaRW1JcEU5azNlZXNzbFRjckx2VUo2VTdzdy9aaU4zMWM2UmI0MC8zOTRQaFNQbWg3b3JwQmlvanAxQzN6ZlhsSGZiRWR6T3JrZUswSDRnVlY2ME52QWc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDQ5OTMwCWZpbGU6QURUb29scy0xLjAuMi1tYWMtYXJtNjQuYXBwLnRhci5negpDWTRleTk1NEUyeDJBOHluRlFieHZmN1JhbmFJaVk2Wm5LNHFkOU84ckFNek1HOEhHcW9WQk0vL2FZZTE3N1gvZENZbnNscmhISVNDUEpQRENiT3NEQT09Cg==",
+      "url": "https://adtools.lolik.workers.dev/releases/1.0.2/stable/darwin-aarch64/ADTools-1.0.2-mac-arm64.app.tar.gz",
+      "installer": "https://adtools.lolik.workers.dev/releases/1.0.2/stable/darwin-aarch64/ADTools-1.0.2-mac-arm64.dmg",
+      "installer_sha256": "9cb8fcd9061f2b8191caa17e76805f226c33df9f77e5c10ec8e8421d71300d69"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSNE9sSnNrTEdaRWc5M25CdmVHZTlzMzVpYkFUZmJ6eVRmU1lqYkVzSHlFL0VpZndEblhwZ1UvRXQyOHk3ME9VaWpyNmhrd0VFOFhmNml2eVdzYzZKWWV6N21iS1J4SEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDQ5OTMxCWZpbGU6QURUb29scy0xLjAuMi1tYWMtaW50ZWwuYXBwLnRhci5negowWGRwRmx6US8yZmp4TVhGMjZNdUJTdjBDZU9VcDhMeUpGWXV2Z2ZBZUZqNjI4RVRBcEhmLzJodXpZd0lVSUwwU2g2aFNZTHNJbG84SHUwY1BLWkxEZz09Cg==",
+      "url": "https://adtools.lolik.workers.dev/releases/1.0.2/stable/darwin-x86_64/ADTools-1.0.2-mac-intel.app.tar.gz",
+      "installer": "https://adtools.lolik.workers.dev/releases/1.0.2/stable/darwin-x86_64/ADTools-1.0.2-mac-intel.dmg",
+      "installer_sha256": "620197ea28738ccdd216d7a8de4cfa43cdd9d493d328a00acea9ace6b500a38f"
+    }
+  }
+}

@@ -33,9 +33,9 @@ coverage/
 *.local
 
 # Tauri / Cargo build artifacts
-src-tauri/target/
+tauri/target/
 # Tauri generated schemas (dev-time only)
-src-tauri/gen/
+tauri/gen/
 
 # macOS signing/notarization artifacts (never commit secrets)
 *.p12
@@ -56,7 +56,7 @@ keys/
 *.key
 
 # releases app
-src-tauri/releases/
+tauri/releases/
 
 # rust analyzer
 target/

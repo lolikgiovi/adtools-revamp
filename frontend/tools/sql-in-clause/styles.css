@@ -1,0 +1,112 @@
+/* SQL IN Clause Tool Styles - aligned with HTML/Splunk template containers */
+.tool-container.sql-in-clause {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  width: 100%;
+  height: calc(100vh - 90px);
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.sql-in-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr);
+  /* 50:50 split */
+  gap: 0.75rem;
+}
+
+/* Pane styles to match template tools */
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  min-height: 52px;
+  /* Standardized height to sync Input/Output headers */
+}
+
+/* Controls */
+.format-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.format-select-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+.format-select {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+
+.output-config {
+  display: none;
+  /* toggled by JS when SELECT format */
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.select-details {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.select-details input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.output-text {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  padding: 0.75rem;
+  resize: none;
+  /* Removed vertical resize to maintain pane height sync */
+}
+
+.hint {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .sql-in-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+    /* Set to equal heights for stacked layout */
+  }
+}

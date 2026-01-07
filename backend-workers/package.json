@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.11.1",
+    "vitest": "^3.2.4"
+  }
+}

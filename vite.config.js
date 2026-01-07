@@ -1,7 +1,13 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  root: "./frontend",
+  publicDir: "public",
   base: "./",
+  build: {
+    outDir: "../dist",
+    emptyOutDir: true,
+  },
   server: {
     open: false,
     proxy: {
@@ -15,7 +21,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": "/app",
+      "@": "/",
     },
   },
 });

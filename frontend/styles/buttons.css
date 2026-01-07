@@ -1,0 +1,370 @@
+/* Button Enhancements */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--ring));
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.btn-primary {
+  background: hsl(var(--primary, 0 0% 0%));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary, 0 0% 0%));
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: hsl(var(--primary-hover));
+  border-color: hsl(var(--primary-hover));
+}
+
+.btn-secondary {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: hsl(var(--primary-hover) / 0.15);
+  border-color: hsl(var(--ring));
+}
+
+.btn-outline {
+  background: transparent;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--primary, 0 0% 0%));
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.btn-sm svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Extra-small (xs) button size */
+.btn-xs {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.btn-xs svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+/* Ghost button - minimal, no border */
+.btn-ghost {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+/* Danger button - destructive actions */
+.btn-danger {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  border-color: hsl(var(--destructive));
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.9);
+  border-color: hsl(var(--destructive) / 0.9);
+}
+
+/* Icon-only button */
+.btn-icon-only {
+  padding: 0.5rem;
+  aspect-ratio: 1;
+}
+
+.btn-icon-only.btn-sm {
+  padding: 0.375rem;
+}
+
+.btn-icon-only.btn-xs {
+  padding: 0.25rem;
+}
+
+.btn-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ============================================
+   INPUT COMPONENTS
+   ============================================ */
+
+.input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-sm {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.textarea-mono {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+}
+
+.select {
+  width: 100%;
+  padding: 0.625rem 2rem 0.625rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 0.875rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20'><path fill='%23666' d='M5.5 7.5l4.5 5 4.5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 12px;
+}
+
+.select:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+}
+
+.select-sm {
+  padding: 0.375rem 1.75rem 0.375rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* ============================================
+   TAB COMPONENTS
+   ============================================ */
+
+.tab-nav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.tab-btn:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.tab-btn.active {
+  color: hsl(var(--primary));
+  background: hsl(var(--background));
+}
+
+.tab-btn.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: hsl(var(--primary));
+}
+
+.tab-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* ============================================
+   CARD COMPONENTS
+   ============================================ */
+
+.card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+}
+
+.card-header h3,
+.card-header h4 {
+  margin: 0;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+.card-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.5);
+}
+
+/* Compact card variant */
+.card-sm .card-header {
+  padding: 0.75rem 1rem;
+}
+
+.card-sm .card-body {
+  padding: 1rem;
+}
+
+.card-sm .card-footer {
+  padding: 0.75rem 1rem;
+}
+
+/* ============================================
+   FORM GROUP
+   ============================================ */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.form-error {
+  font-size: 0.75rem;
+  color: hsl(var(--destructive));
+}
+
+/* ============================================
+   BUTTON GROUP
+   ============================================ */
+
+.btn-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-group-compact {
+  gap: 0.25rem;
+}
