@@ -123,6 +123,10 @@ export const MasterLockeyTemplate = /* html */ `
                 <div id="confluence-results" class="confluence-results" style="display: none;">
                     <div class="results-header">
                         <span id="confluence-results-count" class="results-count-label"></span>
+                        <div class="confluence-search-bar">
+                            <input type="text" id="confluence-search-input" class="confluence-search-input" placeholder="Filter lockeys...">
+                            <button id="btn-clear-confluence-search" class="btn-clear-search" title="Clear search">×</button>
+                        </div>
                         <div class="export-buttons">
                             <button id="btn-copy-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
                             <button id="btn-copy-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
@@ -132,7 +136,7 @@ export const MasterLockeyTemplate = /* html */ `
                         <table class="confluence-table" id="confluence-table">
                             <thead>
                                 <tr>
-                                    <th>Lockey</th>
+                                    <th id="confluence-lockey-header" class="sortable-header">Lockey <span class="sort-indicator"></span></th>
                                     <th id="confluence-en-header">EN</th>
                                     <th id="confluence-id-header">ID</th>
                                     <th class="col-center col-action">Action</th>

@@ -376,6 +376,30 @@ describe("MasterLockeyService", () => {
       const result = service.parseConfluenceTableForLockeys(html);
       expect(result).toHaveLength(0);
     });
+
+    it("should extract from key-value table pattern with 'localizationKey' row label", () => {
+      // This tests tables where first column is the key name (e.g., "localizationKey")
+      // and second column is the value (e.g., "eKtpConfirmationNIKPlaceholder")
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>
+            <table>
+              <tr><th>Context</th><th>Source</th></tr>
+              <tr><td>dynamicFields[]</td><td>context.ektpData.dynamicFields[]</td></tr>
+              <tr><td>fieldKey</td><td>eKtpConfirmationNIK</td></tr>
+              <tr><td>localizationKey</td><td>eKtpConfirmationNIKPlaceholder</td></tr>
+              <tr><td>value</td><td>context.ektpData.nik</td></tr>
+              <tr><td>valueType</td><td>STRING</td></tr>
+            </table>
+          </td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("eKtpConfirmationNIKPlaceholder");
+      expect(result[0].status).toBe("plain");
+    });
   });
 
   describe("isStandaloneCamelCase", () => {
@@ -397,6 +421,185 @@ describe("MasterLockeyService", () => {
       expect(service.isStandaloneCamelCase(null)).toBe(false);
       expect(service.isStandaloneCamelCase("123key")).toBe(false);
       expect(service.isStandaloneCamelCase("Key")).toBe(false); // Starts with uppercase
+    });
+  });
+
+  describe("extractCamelCaseKeysFromText", () => {
+    it("should extract camelCase keys (15+ chars) from inline text", () => {
+      const text =
+        "IF features[] contains 'livin-care-voip' then livinCareLandingCallUsCardVoipTitleLabel ELSE livinCareLandingCallUsCardCallCenterTitleLabel";
+      const result = service.extractCamelCaseKeysFromText(text);
+      expect(result).toHaveLength(2);
+      expect(result).toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      expect(result).toContain("livinCareLandingCallUsCardCallCenterTitleLabel");
+    });
+
+    it("should reject keys shorter than 15 characters", () => {
+      const text = "forEach indexOf myShortKey someLongerKeyThatMakesIt";
+      const result = service.extractCamelCaseKeysFromText(text);
+      // Only someLongerKeyThatMakesIt should pass (21 chars)
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe("someLongerKeyThatMakesIt");
+    });
+
+    it("should require at least one uppercase letter after first char", () => {
+      const text = "somelongertextwithnouppercase ALLUPPER SomeLongCamelCaseKey";
+      const result = service.extractCamelCaseKeysFromText(text);
+      // Only SomeLongCamelCaseKey would match but it starts with uppercase
+      // Actually, pattern requires lowercase start, so nothing matches uppercase start
+      expect(result).toHaveLength(0);
+    });
+
+    it("should handle empty or null input", () => {
+      expect(service.extractCamelCaseKeysFromText("")).toEqual([]);
+      expect(service.extractCamelCaseKeysFromText(null)).toEqual([]);
+      expect(service.extractCamelCaseKeysFromText(undefined)).toEqual([]);
+    });
+
+    it("should not extract dotted values (property accessors)", () => {
+      const text = "context.x.livinCareLandingCallUsCardVoipTitleLabel";
+      const result = service.extractCamelCaseKeysFromText(text);
+      // Should NOT extract because it's preceded by a dot (property accessor)
+      expect(result).not.toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      expect(result).toHaveLength(0);
+    });
+
+    it("should handle lowercase keywords with spaces (if, else)", () => {
+      // Lowercase keywords work when they have spaces around them (realistic Confluence output)
+      const text = "if someCondition then livinCareLandingCallUsTitle else livinCareLandingCallUsDescription";
+      const result = service.extractCamelCaseKeysFromText(text);
+      expect(result).toHaveLength(2);
+      expect(result).toContain("livinCareLandingCallUsTitle");
+      expect(result).toContain("livinCareLandingCallUsDescription");
+    });
+
+    it("should handle ALL-CAPS keywords concatenated (ELSE)", () => {
+      // This is the realistic case when Confluence bullet points get stripped
+      // The text becomes: "...TitleLabelELSE..." which is handled by the ALL-CAPS splitting
+      const text = "livinCareLandingCallUsCardVoipTitleLabelELSElivinCareLandingCallUsCardCallCenterTitleLabel";
+      const result = service.extractCamelCaseKeysFromText(text);
+      expect(result).toHaveLength(2);
+      expect(result).toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      expect(result).toContain("livinCareLandingCallUsCardCallCenterTitleLabel");
+    });
+
+    it("should not break camelCase words containing keyword substrings", () => {
+      // Words like "Landing" contain "and", "Contains" contains "contain"
+      // These should NOT be split
+      const text = "livinCareLandingCallUsCardVoipTitleLabel";
+      const result = service.extractCamelCaseKeysFromText(text);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe("livinCareLandingCallUsCardVoipTitleLabel");
+    });
+
+    it("should handle mixed case keywords with spaces", () => {
+      // Mixed case keywords work when space-separated
+      const text = "someValue Else anotherVeryLongValueHere";
+      const result = service.extractCamelCaseKeysFromText(text);
+      expect(result).toHaveLength(1);
+      expect(result).toContain("anotherVeryLongValueHere");
+    });
+  });
+
+  describe("parseConfluenceTableForLockeys with inline statements", () => {
+    it("should extract embedded lockeys from inline statements as 'uncertain'", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>IF features[] contains 'voip' livinCareLandingCallUsCardVoipTitleLabel ELSE livinCareLandingCallUsCardCenterLabel</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.status === "uncertain")).toBe(true);
+      expect(result.map((r) => r.key)).toContain("livinCareLandingCallUsCardVoipTitleLabel");
+      expect(result.map((r) => r.key)).toContain("livinCareLandingCallUsCardCenterLabel");
+    });
+
+    it("should prefer 'plain' over 'uncertain' in deduplication", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr><td>homeScreenTitleLabel</td></tr>
+          <tr><td>Also homeScreenTitleLabel embedded in text</td></tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      // homeScreenTitleLabel should appear once with 'plain' status
+      const homeKey = result.find((r) => r.key === "homeScreenTitleLabel");
+      expect(homeKey).toBeDefined();
+      expect(homeKey.status).toBe("plain");
+    });
+  });
+
+  describe("parseConfluenceTableForLockeys with ul/ol lists", () => {
+    it("should extract lockeys from nested ul/li structure as 'plain'", () => {
+      const html = `
+        <table>
+          <tr><th>Element</th><th>Type</th><th>Localization Key</th></tr>
+          <tr>
+            <td colspan="2">Inline Logic Bullet Point</td>
+            <td>
+              <ul>
+                <li>IF logic == A
+                  <ul><li>testScreenBulletPointInlineLogic1</li></ul>
+                </li>
+                <li>else if logic == b
+                  <ul><li>testScreenBulletPointInlineLogic2</li></ul>
+                </li>
+                <li>else testScreenBulletPointInlineLogic3</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(3);
+      // Innermost li elements should be extracted as 'plain'
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic1")?.status).toBe("plain");
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic2")?.status).toBe("plain");
+      // The third one is mixed text, so it's extracted as 'uncertain'
+      expect(result.find((r) => r.key === "testScreenBulletPointInlineLogic3")?.status).toBe("uncertain");
+    });
+
+    it("should handle simple ul with direct lockey values", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr>
+            <td>
+              <ul>
+                <li>firstLockeyKeyItem</li>
+                <li>secondLockeyKeyItem</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.status === "plain")).toBe(true);
+      expect(result.map((r) => r.key)).toContain("firstLockeyKeyItem");
+      expect(result.map((r) => r.key)).toContain("secondLockeyKeyItem");
+    });
+
+    it("should handle ol (ordered list) elements", () => {
+      const html = `
+        <table>
+          <tr><th>Lockey</th></tr>
+          <tr>
+            <td>
+              <ol>
+                <li>orderedListLockeyKey</li>
+              </ol>
+            </td>
+          </tr>
+        </table>
+      `;
+      const result = service.parseConfluenceTableForLockeys(html);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe("orderedListLockeyKey");
+      expect(result[0].status).toBe("plain");
     });
   });
 

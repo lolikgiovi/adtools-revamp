@@ -653,6 +653,55 @@
   color: hsl(var(--muted-foreground));
 }
 
+.confluence-search-bar {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+.confluence-search-input {
+  flex: 1;
+  padding: 4px 28px 4px 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.7rem;
+}
+
+.confluence-search-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+}
+
+.confluence-search-input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.confluence-search-bar .btn-clear-search {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: calc(var(--radius) - 2px);
+  line-height: 1;
+}
+
+.confluence-search-bar .btn-clear-search:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
 .export-buttons {
   display: flex;
   gap: 6px;
@@ -700,6 +749,41 @@
   border-bottom: 2px solid hsl(var(--border));
 }
 
+/* Sortable header */
+.confluence-table th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.confluence-table th.sortable-header:hover {
+  background: hsl(var(--muted));
+}
+
+.confluence-table th .sort-indicator {
+  margin-left: 4px;
+  font-size: 0.75em;
+  opacity: 0.5;
+}
+
+.confluence-table th .sort-indicator::after {
+  content: "⇅";
+}
+
+.confluence-table th.sort-asc .sort-indicator::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.confluence-table th.sort-desc .sort-indicator::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.confluence-table th.sort-asc .sort-indicator,
+.confluence-table th.sort-desc .sort-indicator {
+  opacity: 1;
+}
+
 .confluence-table td {
   padding: 8px 12px;
   border-bottom: 1px solid hsl(var(--border));
@@ -717,6 +801,10 @@
 .status-striked {
   color: hsl(var(--destructive));
   /* text-decoration: line-through; */
+}
+
+.status-uncertain {
+  color: hsl(35 92% 50%); /* Orange/amber for uncertain matches */
 }
 
 /* Column alignment */
