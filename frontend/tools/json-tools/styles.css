@@ -421,7 +421,7 @@
 .json-table th {
   background: hsl(var(--muted));
   color: hsl(var(--foreground));
-  font-weight: 600;
+  font-weight: 100;
   padding: 0.125rem 1rem;
   text-align: left;
   border-bottom: 2px solid hsl(var(--border));
@@ -648,7 +648,6 @@
 
 /* Transposed table styling */
 .json-table.transposed .row-index {
-  font-weight: 600;
   white-space: nowrap;
   background: hsl(var(--muted));
   text-align: left;
