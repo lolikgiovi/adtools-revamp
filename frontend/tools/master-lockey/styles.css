@@ -1224,143 +1224,83 @@
   cursor: pointer;
 }
 
-/* Grouped Results */
-.bulk-confluence-grouped-results {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: calc(100vh - 350px);
-  overflow-y: auto;
-}
-
-/* Screen Group */
-.screen-group {
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  overflow: hidden;
-}
-
-.screen-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
+/* Screen Separator Rows (inline in table) */
+.screen-separator-row {
   background: hsl(var(--muted));
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease;
 }
 
-.screen-group-header:hover {
-  background: hsl(var(--accent));
-}
-
-.screen-group-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: hsl(var(--foreground));
-}
-
-.screen-group-title .toggle-icon {
-  font-size: 0.65rem;
-  color: hsl(var(--muted-foreground));
-  transition: transform 0.2s ease;
-}
-
-.screen-group.expanded .screen-group-title .toggle-icon {
-  transform: rotate(90deg);
-}
-
-.screen-group-stats {
-  font-size: 0.7rem;
-  color: hsl(var(--muted-foreground));
-}
-
-.screen-group-stats .stat-active {
-  color: hsl(var(--foreground));
-}
-
-.screen-group-stats .stat-striked {
-  color: hsl(var(--destructive));
-}
-
-.screen-group-content {
+.screen-separator-row.hidden {
   display: none;
 }
 
-.screen-group.expanded .screen-group-content {
-  display: block;
-}
-
-/* Screen Group Table */
-.screen-group-table-container {
-  max-height: 300px;
-  overflow: auto;
-}
-
-.screen-group-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.7rem;
-}
-
-.screen-group-table thead {
-  position: sticky;
-  top: 0;
-  background: hsl(var(--background));
-  z-index: 5;
-}
-
-.screen-group-table th {
-  padding: 8px 12px;
-  text-align: left;
+.screen-separator-cell {
+  padding: 10px 12px !important;
   font-weight: 600;
-  border-bottom: 1px solid hsl(var(--border));
-  font-size: 0.65rem;
-  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
 }
 
-.screen-group-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
+.screen-separator-cell > span {
+  display: inline;
 }
 
-.screen-group-table td:first-child {
-  font-family: monospace;
-  color: hsl(var(--primary));
-  font-weight: 500;
+.screen-name-label {
+  color: hsl(var(--foreground));
 }
 
-.screen-group-table tbody tr:hover {
-  background: hsl(var(--muted) / 0.5);
+.screen-stats {
+  font-weight: normal;
+  font-size: 0.7rem;
+  float: right;
 }
 
-/* Screen name column */
+.stat-active {
+  color: hsl(var(--foreground));
+}
+
+.stat-striked {
+  color: hsl(var(--destructive));
+}
+
+.screen-error {
+  color: hsl(var(--destructive));
+}
+
+.error-row .screen-separator-cell {
+  background: hsl(var(--destructive) / 0.1);
+}
+
+/* Screen name column in data rows */
 .col-screen-name {
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: hsl(var(--muted-foreground)) !important;
   font-family: inherit !important;
   font-weight: normal !important;
 }
 
-/* Error indicator for failed fetches in bulk mode */
-.screen-group.has-error .screen-group-header {
-  background: hsl(var(--destructive) / 0.1);
+.col-screen-name a {
+  color: hsl(var(--primary));
+  text-decoration: none;
 }
 
-.screen-group.has-error .screen-group-title {
-  color: hsl(var(--destructive));
+.col-screen-name a:hover {
+  text-decoration: underline;
 }
 
-.screen-group-error {
-  padding: 10px 14px;
-  font-size: 0.7rem;
-  color: hsl(var(--destructive));
-  background: hsl(var(--destructive) / 0.05);
+/* Bulk Confluence table uses same styling as single page */
+#bulk-confluence-table {
+  table-layout: auto;
+}
+
+#bulk-confluence-table th.col-screen-name,
+#bulk-confluence-table td.col-screen-name {
+  min-width: 150px;
+  max-width: 250px;
+}
+
+/* Ensure EN/ID columns have enough width */
+#bulk-confluence-en-header,
+#bulk-confluence-id-header {
+  min-width: 100px;
 }

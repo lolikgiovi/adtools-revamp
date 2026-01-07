@@ -209,8 +209,9 @@ class MasterLockey extends BaseTool {
       bulkConfluenceError: this.container.querySelector("#bulk-confluence-error"),
       bulkConfluenceResults: this.container.querySelector("#bulk-confluence-results"),
       bulkConfluenceResultsCount: this.container.querySelector("#bulk-confluence-results-count"),
-      bulkConfluenceGroupedResults: this.container.querySelector("#bulk-confluence-grouped-results"),
-      bulkConfluenceIncludeScreen: this.container.querySelector("#bulk-confluence-include-screen"),
+      bulkConfluenceTableBody: this.container.querySelector("#bulk-confluence-table-body"),
+      bulkConfluenceEnHeader: this.container.querySelector("#bulk-confluence-en-header"),
+      bulkConfluenceIdHeader: this.container.querySelector("#bulk-confluence-id-header"),
       btnCopyBulkConfluenceLockey: this.container.querySelector("#btn-copy-bulk-confluence-lockey"),
       btnCopyBulkConfluenceTable: this.container.querySelector("#btn-copy-bulk-confluence-table"),
     };
@@ -254,7 +255,7 @@ class MasterLockey extends BaseTool {
         this.currentDomainUrl = value;
         this.els.btnFetch.disabled = false;
 
-        // Try to load cached data for this domain
+        // Try to load cached data for this domain (will refresh bulk confluence results after loading)
         this.tryLoadCache();
       } else {
         this.currentDomain = null;
@@ -411,8 +412,18 @@ class MasterLockey extends BaseTool {
     });
 
     // Search button
-    this.els.btnBulkConfluenceSearch.addEventListener("click", () => {
-      this.performBulkConfluenceSearch();
+    this.els.btnBulkConfluenceSearch.addEventListener("click", async () => {
+      try {
+        await this.performBulkConfluenceSearch();
+      } catch (err) {
+        console.error("Bulk confluence search error:", err);
+        this.els.bulkConfluenceError.textContent = `Error: ${err.message}`;
+        this.els.bulkConfluenceError.style.display = "block";
+        // Reset button state on error
+        this.els.btnBulkConfluenceSearch.classList.remove("loading");
+        this.els.btnBulkConfluenceSearch.querySelector(".btn-spinner").style.display = "none";
+        this.els.btnBulkConfluenceSearch.disabled = false;
+      }
     });
 
     // Paste button
@@ -443,13 +454,6 @@ class MasterLockey extends BaseTool {
     // Copy table button
     this.els.btnCopyBulkConfluenceTable.addEventListener("click", () => {
       this.copyBulkConfluenceTable();
-    });
-
-    // Include screen checkbox - re-render when toggled
-    this.els.bulkConfluenceIncludeScreen.addEventListener("change", () => {
-      if (this.bulkConfluenceResults) {
-        this.displayBulkConfluenceResults(this.bulkConfluenceResults);
-      }
     });
   }
 
@@ -688,6 +692,11 @@ class MasterLockey extends BaseTool {
         this.updateBulkSearchState();
 
         UsageTracker.trackEvent("master_lockey", "load_from_cache", { domain: this.currentDomain });
+
+        // Refresh bulk confluence results if they exist (EN/ID values depend on parsedData)
+        if (this.bulkConfluenceResults && this.bulkConfluenceResults.length > 0) {
+          this.displayBulkConfluenceResults(this.bulkConfluenceResults);
+        }
       } else {
         this.hideCache();
       }
@@ -1713,6 +1722,7 @@ class MasterLockey extends BaseTool {
         results.push({
           screenName: formattedTitle,
           pageId: pageData.id,
+          pageUrl: pageInput, // Store the original URL for hyperlinks
           lockeys: comparedLockeys,
           error: null,
         });
@@ -1721,6 +1731,7 @@ class MasterLockey extends BaseTool {
         results.push({
           screenName: pageInput.substring(0, 50) + (pageInput.length > 50 ? "..." : ""),
           pageId: null,
+          pageUrl: pageInput,
           lockeys: [],
           error: error.message,
         });
@@ -1741,8 +1752,6 @@ class MasterLockey extends BaseTool {
 
   displayBulkConfluenceResults(results) {
     if (!results || results.length === 0) return;
-
-    const includeScreen = this.els.bulkConfluenceIncludeScreen.checked;
 
     // Calculate totals
     let totalLockeys = 0;
@@ -1774,9 +1783,10 @@ class MasterLockey extends BaseTool {
     countText += ")";
     this.els.bulkConfluenceResultsCount.textContent = countText;
 
-    // Build grouped results
-    const groupedContainer = this.els.bulkConfluenceGroupedResults;
-    groupedContainer.innerHTML = "";
+    // Update EN/ID headers with domain name
+    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+    this.els.bulkConfluenceEnHeader.textContent = `EN${domainSuffix}`;
+    this.els.bulkConfluenceIdHeader.textContent = `ID${domainSuffix}`;
 
     // Build a map of remote lockey data for EN/ID lookup
     const remoteKeyMap = new Map();
@@ -1786,142 +1796,59 @@ class MasterLockey extends BaseTool {
       });
     }
 
-    const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
+    // Build table body - simple flat table with Screen column always visible
+    const tbody = this.els.bulkConfluenceTableBody;
+    tbody.innerHTML = "";
 
-    results.forEach((result, index) => {
-      const group = document.createElement("div");
-      group.className = `screen-group${result.error ? " has-error" : ""} expanded`;
-
-      // Header
-      const header = document.createElement("div");
-      header.className = "screen-group-header";
-
-      const titleDiv = document.createElement("div");
-      titleDiv.className = "screen-group-title";
-
-      const toggleIcon = document.createElement("span");
-      toggleIcon.className = "toggle-icon";
-      toggleIcon.textContent = "▶";
-      titleDiv.appendChild(toggleIcon);
-
-      const titleText = document.createElement("span");
-      titleText.textContent = result.screenName;
-      titleDiv.appendChild(titleText);
-
-      header.appendChild(titleDiv);
-
-      if (!result.error) {
-        const stats = document.createElement("div");
-        stats.className = "screen-group-stats";
-        const activeCount = result.lockeys.filter((l) => l.status === "plain").length;
-        const strikedCount = result.lockeys.filter((l) => l.status === "striked").length;
-        stats.innerHTML = `<span class="stat-active">${activeCount} active</span>`;
-        if (strikedCount > 0) {
-          stats.innerHTML += `, <span class="stat-striked">${strikedCount} striked</span>`;
-        }
-        header.appendChild(stats);
-      }
-
-      group.appendChild(header);
-
-      // Content
-      const content = document.createElement("div");
-      content.className = "screen-group-content";
-
+    results.forEach((result) => {
       if (result.error) {
-        const errorDiv = document.createElement("div");
-        errorDiv.className = "screen-group-error";
-        errorDiv.textContent = `Error: ${result.error}`;
-        content.appendChild(errorDiv);
-      } else if (result.lockeys.length === 0) {
-        const emptyDiv = document.createElement("div");
-        emptyDiv.className = "screen-group-error";
-        emptyDiv.textContent = "No lockeys found on this page.";
-        content.appendChild(emptyDiv);
-      } else {
-        // Table
-        const tableContainer = document.createElement("div");
-        tableContainer.className = "screen-group-table-container";
-
-        const table = document.createElement("table");
-        table.className = "screen-group-table";
-
-        // Header row
-        const thead = document.createElement("thead");
-        const headerRow = document.createElement("tr");
-
-        if (includeScreen) {
-          const screenTh = document.createElement("th");
-          screenTh.textContent = "Screen";
-          headerRow.appendChild(screenTh);
-        }
-
-        const lockeyTh = document.createElement("th");
-        lockeyTh.textContent = "Lockey";
-        headerRow.appendChild(lockeyTh);
-
-        const enTh = document.createElement("th");
-        enTh.textContent = `EN${domainSuffix}`;
-        headerRow.appendChild(enTh);
-
-        const idTh = document.createElement("th");
-        idTh.textContent = `ID${domainSuffix}`;
-        headerRow.appendChild(idTh);
-
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        // Body
-        const tbody = document.createElement("tbody");
-
-        result.lockeys.forEach((lockey) => {
-          const tr = document.createElement("tr");
-          tr.className = lockey.status === "striked" ? "status-striked" : "";
-
-          if (includeScreen) {
-            const screenTd = document.createElement("td");
-            screenTd.className = "col-screen-name";
-            screenTd.textContent = result.screenName;
-            screenTd.title = result.screenName;
-            tr.appendChild(screenTd);
-          }
-
-          const lockeyTd = document.createElement("td");
-          lockeyTd.textContent = lockey.key;
-          lockeyTd.title = lockey.key;
-          tr.appendChild(lockeyTd);
-
-          // Lookup EN/ID from remote data
-          const remoteRow = remoteKeyMap.get(lockey.key);
-          const enValue = remoteRow?.en || "";
-          const idValue = remoteRow?.id || "";
-
-          const enTd = document.createElement("td");
-          enTd.textContent = enValue;
-          enTd.title = enValue;
-          tr.appendChild(enTd);
-
-          const idTd = document.createElement("td");
-          idTd.textContent = idValue;
-          idTd.title = idValue;
-          tr.appendChild(idTd);
-
-          tbody.appendChild(tr);
-        });
-
-        table.appendChild(tbody);
-        tableContainer.appendChild(table);
-        content.appendChild(tableContainer);
+        // Skip error pages - just don't show their rows
+        return;
       }
 
-      group.appendChild(content);
+      // Data rows for this screen
+      result.lockeys.forEach((lockey) => {
+        const tr = document.createElement("tr");
+        tr.className = lockey.status === "striked" ? "status-striked" : "";
 
-      // Toggle collapse on header click
-      header.addEventListener("click", () => {
-        group.classList.toggle("expanded");
+        // Screen column with hyperlink
+        const screenTd = document.createElement("td");
+        screenTd.className = "col-screen-name";
+
+        const screenLink = document.createElement("a");
+        screenLink.href = result.pageUrl;
+        screenLink.target = "_blank";
+        screenLink.rel = "noopener noreferrer";
+        screenLink.textContent = result.screenName;
+        screenLink.title = result.screenName;
+        screenTd.appendChild(screenLink);
+        tr.appendChild(screenTd);
+
+        // Lockey column
+        const lockeyTd = document.createElement("td");
+        lockeyTd.textContent = lockey.key;
+        lockeyTd.title = lockey.key;
+        tr.appendChild(lockeyTd);
+
+        // Lookup EN/ID from remote data
+        const remoteRow = remoteKeyMap.get(lockey.key);
+        const enValue = remoteRow?.en || "";
+        const idValue = remoteRow?.id || "";
+
+        // EN column
+        const enTd = document.createElement("td");
+        enTd.textContent = enValue;
+        enTd.title = enValue;
+        tr.appendChild(enTd);
+
+        // ID column
+        const idTd = document.createElement("td");
+        idTd.textContent = idValue;
+        idTd.title = idValue;
+        tr.appendChild(idTd);
+
+        tbody.appendChild(tr);
       });
-
-      groupedContainer.appendChild(group);
     });
 
     // Show results
@@ -1960,8 +1887,6 @@ class MasterLockey extends BaseTool {
   copyBulkConfluenceTable() {
     if (!this.bulkConfluenceResults || this.bulkConfluenceResults.length === 0) return;
 
-    const includeScreen = this.els.bulkConfluenceIncludeScreen.checked;
-
     // Build a map of remote lockey data for EN/ID lookup
     const remoteKeyMap = new Map();
     if (this.parsedData?.rows) {
@@ -1972,14 +1897,13 @@ class MasterLockey extends BaseTool {
 
     const domainSuffix = this.currentDomain ? ` - ${this.currentDomain}` : "";
 
-    // Build TSV content
-    const rows = [];
+    // Build both HTML and plain text versions
+    const plainRows = [];
+    let htmlRows = [];
 
-    // Header
-    const headerParts = [];
-    if (includeScreen) headerParts.push("Screen");
-    headerParts.push("Lockey", `EN${domainSuffix}`, `ID${domainSuffix}`);
-    rows.push(headerParts.join("\t"));
+    // Headers
+    plainRows.push(["Screen", "Lockey", `EN${domainSuffix}`, `ID${domainSuffix}`].join("\t"));
+    htmlRows.push(`<tr><th>Screen</th><th>Lockey</th><th>EN${domainSuffix}</th><th>ID${domainSuffix}</th></tr>`);
 
     // Data rows
     this.bulkConfluenceResults.forEach((result) => {
@@ -1989,32 +1913,80 @@ class MasterLockey extends BaseTool {
           const enValue = remoteRow?.en || "";
           const idValue = remoteRow?.id || "";
 
-          const rowParts = [];
-          if (includeScreen) rowParts.push(result.screenName);
-          rowParts.push(lockey.key, enValue, idValue);
-          rows.push(rowParts.join("\t"));
+          // Plain text version
+          plainRows.push([result.screenName, lockey.key, enValue, idValue].join("\t"));
+
+          // HTML version with hyperlink and lockey styling
+          const escapedUrl = result.pageUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+          const escapedName = result.screenName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const escapedLockey = lockey.key.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const escapedEn = enValue.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const escapedId = idValue.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+          // Style lockey based on status: red + strikethrough for striked, black for active
+          const lockeyStyle =
+            lockey.status === "striked" ? 'style="color: #ef4444; text-decoration: line-through;"' : 'style="color: #000000;"';
+
+          htmlRows.push(
+            `<tr><td><a href="${escapedUrl}" style="color: #3b82f6; text-decoration: underline;">${escapedName}</a></td><td ${lockeyStyle}>${escapedLockey}</td><td>${escapedEn}</td><td>${escapedId}</td></tr>`
+          );
         });
       }
     });
 
-    if (rows.length <= 1) return; // Only header, no data
+    if (plainRows.length <= 1) return; // Only header, no data
 
-    const content = rows.join("\n");
+    const plainText = plainRows.join("\n");
+    const htmlContent = `<table>${htmlRows.join("")}</table>`;
 
-    navigator.clipboard
-      .writeText(content)
-      .then(() => {
-        const dataRowCount = rows.length - 1;
-        this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
-        UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
-          rowCount: dataRowCount,
-          includeScreen,
-        });
-      })
-      .catch((err) => {
-        console.error("Copy failed:", err);
-        this.showError("Copy Failed", "Unable to copy to clipboard");
+    // Use ClipboardItem to write both HTML and plain text
+    const dataRowCount = plainRows.length - 1;
+
+    try {
+      const clipboardItem = new ClipboardItem({
+        "text/html": new Blob([htmlContent], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" }),
       });
+
+      navigator.clipboard
+        .write([clipboardItem])
+        .then(() => {
+          this.showSuccess(`Copied ${dataRowCount} results to clipboard (with hyperlinks)`);
+          UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
+            rowCount: dataRowCount,
+            format: "html",
+          });
+        })
+        .catch((err) => {
+          console.error("HTML clipboard failed, falling back to plain text:", err);
+          // Fallback to plain text
+          navigator.clipboard
+            .writeText(plainText)
+            .then(() => {
+              this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
+            })
+            .catch((err2) => {
+              console.error("Copy failed:", err2);
+              this.showError("Copy Failed", "Unable to copy to clipboard");
+            });
+        });
+    } catch (err) {
+      // ClipboardItem not supported, fallback to plain text
+      console.warn("ClipboardItem not supported, using plain text:", err);
+      navigator.clipboard
+        .writeText(plainText)
+        .then(() => {
+          this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
+          UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
+            rowCount: dataRowCount,
+            format: "plain",
+          });
+        })
+        .catch((err2) => {
+          console.error("Copy failed:", err2);
+          this.showError("Copy Failed", "Unable to copy to clipboard");
+        });
+    }
   }
 }
 

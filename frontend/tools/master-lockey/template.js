@@ -11,11 +11,11 @@ export const MasterLockeyTemplate = /* html */ `
             <button class="tab-button active" data-tab="lockey">
                 Lockey
             </button>
-            <button class="tab-button" data-tab="confluence">
-                Confluence Lookup 
-            </button>
             <button class="tab-button" data-tab="bulk-search">
                 Bulk Search
+            </button>
+            <button class="tab-button" data-tab="confluence">
+                Confluence Lookup 
             </button>
         </div>
         <!-- Domain Controls (visible only on Lockey tab) -->
@@ -190,17 +190,25 @@ export const MasterLockeyTemplate = /* html */ `
                     <div class="results-header">
                         <span id="bulk-confluence-results-count" class="results-count-label"></span>
                         <div class="export-buttons">
-                            <label class="screen-column-toggle">
-                                <input type="checkbox" id="bulk-confluence-include-screen" checked>
-                                <span>Include Screen Name</span>
-                            </label>
                             <button id="btn-copy-bulk-confluence-lockey" class="btn-export" title="Copy lockey column to clipboard">Copy Lockey</button>
                             <button id="btn-copy-bulk-confluence-table" class="btn-export" title="Copy table as TSV for Excel">Copy Table</button>
                         </div>
                     </div>
                     
-                    <div id="bulk-confluence-grouped-results" class="bulk-confluence-grouped-results">
-                        <!-- Grouped results by screen will be inserted here -->
+                    <div class="confluence-table-container">
+                        <table class="confluence-table" id="bulk-confluence-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-screen-name">Screen</th>
+                                    <th>Lockey</th>
+                                    <th id="bulk-confluence-en-header">EN</th>
+                                    <th id="bulk-confluence-id-header">ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulk-confluence-table-body">
+                                <!-- Bulk results will be inserted here -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
