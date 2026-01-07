@@ -53,7 +53,7 @@
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: hsl(var(--accent));
+  background: hsl(var(--primary-hover) / 0.15);
   border-color: hsl(var(--ring));
 }
 
@@ -368,4 +368,3 @@
 .btn-group-compact {
   gap: 0.25rem;
 }
-
