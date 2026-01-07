@@ -99,19 +99,17 @@ export const MasterLockeyTemplate = /* html */ `
                 <a href="#" id="confluence-settings-link">Go to Settings</a> to add your domain, username, and PAT.
             </div>
 
-            <!-- Sub-tab Toggle: Single / Bulk -->
-            <div class="confluence-mode-toggle">
-                <button class="confluence-mode-btn active" data-mode="single">Single Page</button>
-                <button class="confluence-mode-btn" data-mode="bulk">Bulk Pages</button>
-            </div>
-
             <!-- Single Page Mode (existing) -->
             <div id="confluence-single-mode" class="confluence-mode-panel active">
-                <!-- Page Search Input (unified search + URL input) -->
+                <!-- Input + Toggle + Buttons all inline -->
                 <div class="confluence-controls-row">
                     <div class="page-search-container">
                         <input type="text" id="confluence-page-input" class="confluence-input" placeholder="Search cached pages or enter URL" autocomplete="off">
                         <div id="page-search-dropdown" class="page-search-dropdown" style="display: none;"></div>
+                    </div>
+                    <div class="confluence-mode-toggle">
+                        <button class="confluence-mode-btn active" data-mode="single">Single Page</button>
+                        <button class="confluence-mode-btn" data-mode="bulk">Bulk Pages</button>
                     </div>
                     <button id="btn-fetch-confluence" class="btn-confluence" disabled>
                         <span class="btn-text">Fetch Lockeys</span>
@@ -171,20 +169,19 @@ export const MasterLockeyTemplate = /* html */ `
 
             <!-- Bulk Pages Mode (new) -->
             <div id="confluence-bulk-mode" class="confluence-mode-panel">
-                <div class="bulk-confluence-intro">
-                    <p class="bulk-confluence-hint">Enter multiple Confluence page URLs or IDs below (one per line) to fetch lockeys from all pages at once.</p>
-                </div>
-                
-                <div class="bulk-confluence-input-section">
-                    <textarea id="bulk-confluence-input" class="bulk-confluence-input" placeholder="https://confluence.example.com/pages/viewpage.action?pageId=123456&#10;https://confluence.example.com/pages/viewpage.action?pageId=789012&#10;..."></textarea>
-                    <div class="bulk-confluence-controls">
-                        <button id="btn-bulk-confluence-search" class="btn-confluence" disabled>
-                            <span class="btn-text">Fetch All</span>
-                            <span class="btn-spinner" style="display: none;">↻</span>
-                        </button>
-                        <button id="btn-paste-bulk-confluence" class="btn-confluence">Paste</button>
-                        <button id="btn-clear-bulk-confluence" class="btn-confluence">Clear</button>
+                <!-- Same layout as Single: Textarea + Toggle + Buttons inline -->
+                <div class="confluence-controls-row bulk-mode-row">
+                    <textarea id="bulk-confluence-input" class="bulk-confluence-input" placeholder="Enter Confluence URLs (one per line)..."></textarea>
+                    <div class="confluence-mode-toggle">
+                        <button class="confluence-mode-btn" data-mode="single">Single Page</button>
+                        <button class="confluence-mode-btn active" data-mode="bulk">Bulk Pages</button>
                     </div>
+                    <button id="btn-bulk-confluence-search" class="btn-confluence" disabled>
+                        <span class="btn-text">Fetch All</span>
+                        <span class="btn-spinner" style="display: none;">↻</span>
+                    </button>
+                    <button id="btn-paste-bulk-confluence" class="btn-confluence">Paste</button>
+                    <button id="btn-clear-bulk-confluence" class="btn-confluence">Clear</button>
                 </div>
 
                 <div id="bulk-confluence-error" class="confluence-error" style="display: none;"></div>

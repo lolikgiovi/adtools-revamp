@@ -1109,22 +1109,26 @@
 .confluence-mode-toggle {
   display: flex;
   gap: 0;
-  margin-bottom: 16px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
   width: fit-content;
+  flex-shrink: 0;
+  /* height: 36px;  */
 }
 
 .confluence-mode-btn {
-  padding: 8px 16px;
+  padding: 9px 12px;
   background: hsl(var(--background));
   border: none;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   transition: all 0.15s ease;
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .confluence-mode-btn:not(:last-child) {
@@ -1153,33 +1157,25 @@
 /* Bulk Confluence Search Section  */
 /* =============================== */
 
-.bulk-confluence-intro {
-  margin-bottom: 8px;
-}
-
-.bulk-confluence-hint {
-  font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
-  margin: 0;
-}
-
-.bulk-confluence-input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* Bulk mode uses same confluence-controls-row as single mode */
+.bulk-mode-row {
+  align-items: flex-start; /* Align to top since textarea is taller */
 }
 
 .bulk-confluence-input {
-  width: 100%;
-  min-height: 120px;
-  padding: 12px;
+  flex: 1;
+  min-width: 200px;
+  height: 70px;
+  min-height: 36px;
+  max-height: 120px;
+  padding: 8px 12px;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: monospace;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: 0.7rem;
+  line-height: 1.4;
   resize: vertical;
 }
 
@@ -1191,11 +1187,6 @@
 .bulk-confluence-input::placeholder {
   color: hsl(var(--muted-foreground));
   opacity: 0.6;
-}
-
-.bulk-confluence-controls {
-  display: flex;
-  gap: 8px;
 }
 
 .bulk-confluence-results {
