@@ -68,7 +68,7 @@
       "order": 50
     },
     {
-      "id": "jenkins-runner",
+      "id": "run-query",
       "name": "Run Query",
       "category": "jenkins",
       "icon": "jenkins-query",

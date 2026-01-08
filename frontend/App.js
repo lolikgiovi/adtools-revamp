@@ -25,7 +25,7 @@ import { AnalyticsSender } from "./core/AnalyticsSender.js";
 import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
-import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { JenkinsRunner } from "./tools/run-query/main.js";
 import { RunBatch } from "./tools/run-batch/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
 import { RegisterPage } from "./pages/register/main.js";

@@ -179,7 +179,7 @@ Click **Generate Query** to create your SQL in the editor panel.
           `,
         },
         {
-          id: "jenkins-runner",
+          id: "run-query",
           title: "Jenkins Runner",
           content: `
 # Jenkins Runner

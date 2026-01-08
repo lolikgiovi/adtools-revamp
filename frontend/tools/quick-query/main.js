@@ -588,10 +588,10 @@ export class QuickQueryUI {
 
       // Navigate to Jenkins Runner and pass current SQL via router data
       if (window?.app?.router) {
-        window.app.router.navigate("jenkins-runner", { sql });
+        window.app.router.navigate("run-query", { sql });
       } else if (window?.app) {
         // Fallback: simple navigation without data
-        window.app.navigateToTool("jenkins-runner");
+        window.app.navigateToTool("run-query");
         // As a fallback, store SQL in session for Jenkins Runner to consume if implemented
         try {
           sessionStorage.setItem("jenkinsRunner.injectSql", sql);
