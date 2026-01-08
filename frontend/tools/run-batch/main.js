@@ -270,9 +270,6 @@ export class RunBatch extends BaseTool {
             batchNameInput.value = cfg.batchName || "";
             jobNameInput.value = cfg.jobName || "";
             toggleRunEnabled();
-            try {
-              UsageTracker.trackEvent("run-batch", "config_loaded", { configId: id });
-            } catch (_) {}
           }
         });
       });
@@ -364,7 +361,6 @@ export class RunBatch extends BaseTool {
 
       try {
         statusEl.textContent = "Triggering batch job…";
-        UsageTracker.trackEvent("run-batch", "run_started", { env, batchName, jobName });
 
         await subscribeToLogs();
 
@@ -418,7 +414,11 @@ export class RunBatch extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Error: " + errorMapping(err);
         this.showError(errorMapping(err));
-        UsageTracker.trackEvent("run-batch", "run_error", { error: String(err) });
+        UsageTracker.trackEvent(
+          "run-batch",
+          "run_error",
+          UsageTracker.enrichErrorMeta(err, { env, batchName, jobName, context: "trigger" })
+        );
 
         // Record history on error
         addHistoryEntry({
@@ -498,10 +498,6 @@ export class RunBatch extends BaseTool {
       renderSavedConfigs();
       closeSaveModal();
       statusEl.textContent = "Configuration saved";
-
-      try {
-        UsageTracker.trackEvent("run-batch", "config_saved", { configId: newConfig.id });
-      } catch (_) {}
     });
 
     // Confirm delete modal
@@ -525,9 +521,6 @@ export class RunBatch extends BaseTool {
         const configs = loadSavedConfigs().filter((c) => c.id !== _pendingDeleteId);
         saveSavedConfigs(configs);
         renderSavedConfigs();
-        try {
-          UsageTracker.trackEvent("run-batch", "config_deleted", { configId: _pendingDeleteId });
-        } catch (_) {}
       }
       closeConfirmModal();
     });
@@ -594,9 +587,6 @@ export class RunBatch extends BaseTool {
         renderSavedConfigs();
         closeEditModal();
         statusEl.textContent = "Configuration updated";
-        try {
-          UsageTracker.trackEvent("run-batch", "config_updated", { configId: id });
-        } catch (_) {}
       }
     });
 
