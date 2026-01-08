@@ -1,9 +1,19 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({
+// Production backend URL for Tauri builds
+const WORKER_BASE = "https://adtools.lolik.workers.dev";
+
+export default defineConfig(({ mode }) => ({
   root: "./frontend",
   publicDir: "public",
   base: "./",
+  // Set VITE_WORKER_BASE for tauri production builds
+  define:
+    mode === "tauri"
+      ? {
+          "import.meta.env.VITE_WORKER_BASE": JSON.stringify(WORKER_BASE),
+        }
+      : {},
   build: {
     outDir: "../dist",
     emptyOutDir: true,
@@ -24,4 +34,4 @@ export default defineConfig({
       "@": "/",
     },
   },
-});
+}));
