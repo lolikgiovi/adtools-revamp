@@ -402,10 +402,36 @@ export class RunBatch extends BaseTool {
 
         statusEl.textContent = `Streaming logs for build #${buildNumber}…`;
         await this.service.streamLogs(this.state.jenkinsUrl, buildNumber);
+
+        // Record history on success
+        addHistoryEntry({
+          id: crypto.randomUUID(),
+          time: new Date().toLocaleString(),
+          configName: batchName,
+          batchName,
+          jobName,
+          env,
+          status: "Success",
+          buildNumber,
+          buildUrl: executableUrl || "",
+        });
       } catch (err) {
         statusEl.textContent = "Error: " + errorMapping(err);
         this.showError(errorMapping(err));
         UsageTracker.trackEvent("run-batch", "run_error", { error: String(err) });
+
+        // Record history on error
+        addHistoryEntry({
+          id: crypto.randomUUID(),
+          time: new Date().toLocaleString(),
+          configName: batchName,
+          batchName,
+          jobName,
+          env,
+          status: "Failed",
+          buildNumber: this.state.buildNumber || null,
+          buildUrl: this.state.executableUrl || "",
+        });
       } finally {
         runBtn.disabled = false;
         toggleRunEnabled();
@@ -581,8 +607,8 @@ export class RunBatch extends BaseTool {
       tabRunBtn.setAttribute("aria-selected", isRun.toString());
       tabHistoryBtn.classList.toggle("active", !isRun);
       tabHistoryBtn.setAttribute("aria-selected", (!isRun).toString());
-      tabRunPanel.style.display = isRun ? "flex" : "none";
-      tabHistoryPanel.style.display = isRun ? "none" : "flex";
+      tabRunPanel.style.display = isRun ? "" : "none";
+      tabHistoryPanel.style.display = isRun ? "none" : "";
     };
 
     tabRunBtn.addEventListener("click", () => switchTab("run"));

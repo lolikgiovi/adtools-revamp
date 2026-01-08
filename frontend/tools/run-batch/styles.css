@@ -40,13 +40,20 @@
 }
 
 /* Tab panels */
+#rb-tab-run {
+  display: grid;
+  gap: 10px;
+}
+
 #rb-tab-run,
 #rb-tab-history {
   min-height: 0;
   overflow: auto;
+}
+
+#rb-tab-history {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 /* Run tab content - 40:60 layout */
@@ -54,9 +61,13 @@
   display: grid;
   grid-template-columns: 2fr 3fr;
   gap: 16px;
-  flex: 1;
-  min-height: 0;
   align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .rb-run-content {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
@@ -262,22 +273,18 @@ a.rb-saved-name.rb-conflu-link:hover {
 
 /* Logs Section */
 .rb-logs-section {
-  display: flex;
-  flex-direction: column;
+  background: var(--rb-panel);
   border: 1px solid var(--rb-border);
   border-radius: 8px;
-  background: var(--rb-panel);
-  min-height: 180px;
-  max-height: 280px;
+  padding: 10px;
+  overflow: visible;
 }
 
 .rb-log-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--rb-border);
-  background: hsl(var(--muted) / 0.05);
+  margin-bottom: 8px;
 }
 
 .rb-log-title {
@@ -308,18 +315,22 @@ a.rb-saved-name.rb-conflu-link:hover {
 }
 
 .rb-log {
-  flex: 1;
-  margin: 0;
+  background: hsl(var(--card));
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
   padding: 12px;
+  margin: 0;
+  height: clamp(160px, 24vh, 300px);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.8rem;
   line-height: 1.4;
   color: var(--rb-text);
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  background: hsl(var(--card));
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* History tab */
