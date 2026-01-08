@@ -683,8 +683,8 @@ class App {
     this.eventBus.on("update:hide-banner", () => {
       this.removeUpdateBanner();
     });
-    this.eventBus.on("update:forced", ({ policy, unsupported }) => {
-      this.showForcedUpdateModal(policy, unsupported);
+    this.eventBus.on("update:forced", ({ policy, unsupported, manifest }) => {
+      this.showForcedUpdateModal(policy, unsupported, manifest);
     });
     this.eventBus.on("update:error", ({ message }) => {
       // Surface error and reflect error state in UI
@@ -742,16 +742,25 @@ class App {
 
     const version = result?.version ? String(result.version) : "";
     const channel = result?.channel ? String(result.channel) : "";
+    const notes = result?.manifest?.notes || "";
     const label = version ? `Update available: v${version}${channel ? ` (${channel})` : ""}` : "Update available";
 
     this._updateBannerEl.innerHTML = /*html*/ `
       <div class="update-banner-content">
-        <span class="update-banner-label">${label}</span>
+        <div class="update-banner-header">
+          <span class="update-banner-label">${label}</span>
+          ${
+            notes
+              ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="false">What\'s new?</button>'
+              : ""
+          }
+        </div>
         <div class="update-banner-actions">
           <button type="button" class="btn btn-sm btn-primary update-banner-update">Update Now</button>
           <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
         </div>
       </div>
+      ${notes ? `<div class="update-banner-notes" aria-hidden="true"><p>${this.#escapeHtml(notes)}</p></div>` : ""}
       <div class="update-banner-progress" aria-hidden="true">
         <div class="update-banner-progressbox"><div class="update-banner-progressbar" style="width: 0%"></div></div>
         <span class="update-banner-stage">Ready</span>
@@ -765,6 +774,18 @@ class App {
     if (!this._updateBannerEl) return;
     const updateBtn = this._updateBannerEl.querySelector(".update-banner-update");
     const laterBtn = this._updateBannerEl.querySelector(".update-banner-later");
+    const toggleBtn = this._updateBannerEl.querySelector(".update-banner-toggle");
+    const notesEl = this._updateBannerEl.querySelector(".update-banner-notes");
+
+    if (toggleBtn && notesEl) {
+      toggleBtn.onclick = () => {
+        const isExpanded = toggleBtn.getAttribute("aria-expanded") === "true";
+        toggleBtn.setAttribute("aria-expanded", String(!isExpanded));
+        notesEl.setAttribute("aria-hidden", String(isExpanded));
+        toggleBtn.textContent = isExpanded ? "What's new?" : "Hide notes";
+      };
+    }
+
     if (updateBtn) {
       updateBtn.onclick = async () => {
         if (!isTauri()) {
@@ -806,7 +827,7 @@ class App {
     this._updateBannerEl = null;
   }
 
-  showForcedUpdateModal(policy, unsupported) {
+  showForcedUpdateModal(policy, unsupported, manifest) {
     // Ensure only one modal exists
     if (!this._updateModalEl) {
       const overlay = document.createElement("div");
@@ -828,10 +849,20 @@ class App {
 
     const current = policy?.current ? String(policy.current) : "";
     const min = policy?.forceMinVersion ? String(policy.forceMinVersion) : "";
+    const notes = manifest?.notes || "";
     const title = unsupported ? "Update required (Desktop only)" : "Update required";
     const desc = unsupported
       ? "A forced update is required, but the desktop runtime is not available in the browser. Please run AD Tools desktop to continue."
       : `A mandatory update is required to continue. Current: v${current || "?"}, minimum required: v${min || "?"}.`;
+
+    const notesSection = notes
+      ? `
+      <div class="update-modal-notes">
+        <h4>What's new:</h4>
+        <p>${this.#escapeHtml(notes)}</p>
+      </div>
+    `
+      : "";
 
     const inner = `
       <div class="update-modal-header">
@@ -839,6 +870,7 @@ class App {
       </div>
       <div class="update-modal-body">
         <p class="update-modal-desc">${desc}</p>
+        ${notesSection}
         <div class="update-modal-progress">
           <div class="update-modal-progressbox"><div class="update-modal-progressbar" style="width:0%"></div></div>
           <span class="update-modal-stage">Waiting…</span>
@@ -921,6 +953,17 @@ class App {
       default:
         return stage ? String(stage) : "";
     }
+  }
+
+  #escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;")
+      .replace(/\n/g, "<br>");
   }
 
   /**

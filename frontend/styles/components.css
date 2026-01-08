@@ -480,18 +480,21 @@ body.global-search-open {
 /* Update UI (banner + modal) */
 .update-banner {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0;
   background: hsl(var(--bg-secondary));
   border: 1px solid hsl(var(--border));
-  border-radius: 999px;
-  padding: 0.25rem 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  max-width: 450px;
 }
 
 .update-banner-content {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .update-banner-label {
@@ -533,6 +536,40 @@ body.global-search-open {
 .update-banner-stage {
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
+}
+
+.update-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.update-banner-toggle {
+  color: hsl(var(--primary));
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.update-banner-notes {
+  display: none;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 0.375rem;
+  margin-top: 0.5rem;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.update-banner-notes[aria-hidden="false"] {
+  display: block;
+}
+
+.update-banner-notes p {
+  margin: 0;
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .update-overlay {
@@ -619,6 +656,29 @@ body.global-search-open {
   margin-top: 0.75rem;
   display: flex;
   justify-content: flex-end;
+}
+
+.update-modal-notes {
+  background: hsl(var(--muted) / 0.3);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.update-modal-notes h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: hsl(var(--text-primary));
+}
+
+.update-modal-notes p {
+  margin: 0;
+  color: hsl(var(--text-secondary));
+  font-size: 0.85rem;
+  line-height: 1.6;
 }
 
 @media (max-width: 600px) {
