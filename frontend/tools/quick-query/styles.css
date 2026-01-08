@@ -161,7 +161,7 @@
 }
 
 .monaco-editor .suggest-widget .monaco-icon-label .label-name,
-.monaco-editor .suggest-widget .monaco-icon-label .label-name>span {
+.monaco-editor .suggest-widget .monaco-icon-label .label-name > span {
   color: #d4d4d4 !important;
   opacity: 1 !important;
 }
@@ -347,6 +347,82 @@
 #warningMessages {
   margin-bottom: 10px;
   font-size: 12px;
+}
+
+/* Collapsible Warning Styles */
+.qq-warning-collapsible {
+  background: hsla(38, 100%, 50%, 0.1);
+  border: 1px solid hsla(38, 100%, 50%, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.qq-warning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.qq-warning-header:hover {
+  background: hsla(38, 100%, 50%, 0.15);
+}
+
+.qq-warning-toggle {
+  font-size: 10px;
+  transition: transform 0.2s;
+  color: orange;
+}
+
+.qq-warning-details.expanded + .qq-warning-header .qq-warning-toggle,
+.qq-warning-details.expanded ~ .qq-warning-header .qq-warning-toggle {
+  transform: rotate(90deg);
+}
+
+/* Fix: Target the toggle when details is expanded (sibling relationship via parent) */
+.qq-warning-collapsible:has(.qq-warning-details.expanded) .qq-warning-toggle {
+  transform: rotate(90deg);
+}
+
+.qq-warning-summary {
+  font-weight: 600;
+  color: orange;
+}
+
+.qq-warning-hint {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.qq-warning-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+  padding: 0 12px;
+}
+
+.qq-warning-details.expanded {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px;
+  border-top: 1px solid hsla(38, 100%, 50%, 0.2);
+}
+
+.qq-warning-details-content {
+  line-height: 1.6;
+  color: hsl(var(--foreground));
+}
+
+.qq-warning-note {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed hsla(38, 100%, 50%, 0.3);
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Schema Management */

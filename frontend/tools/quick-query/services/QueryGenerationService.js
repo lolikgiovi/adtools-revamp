@@ -15,7 +15,7 @@ export class QueryGenerationService {
    * @returns {string} Excel-style column letter
    */
   columnIndexToLetter(index) {
-    let letter = '';
+    let letter = "";
     while (index >= 0) {
       letter = String.fromCharCode(65 + (index % 26)) + letter;
       index = Math.floor(index / 26) - 1;
@@ -108,6 +108,7 @@ export class QueryGenerationService {
     // Generate warning message if duplicates found
     let warningMessage = null;
     if (duplicates.length > 0) {
+      const MAX_ROWS_TO_SHOW = 5;
       const warningMessages = duplicates
         .map((duplicate) => {
           const pkDescription =
@@ -116,11 +117,27 @@ export class QueryGenerationService {
               : `Primary key combination (${duplicate.pkFields.join(", ")})`;
           const valueDescription =
             duplicate.pkValues.length === 1 ? `value '${duplicate.pkValues[0]}'` : `values (${duplicate.pkValues.join(", ")})`;
-          return `${pkDescription} with ${valueDescription} appears multiple times on rows: ${duplicate.rows.join(", ")}<br>`;
-        })
-        .join("\n");
 
-      warningMessage = `Warning: Duplicate primary keys detected:<br>${warningMessages}This may cause unexpected behavior.`;
+          // Truncate row list if too many
+          let rowsText;
+          if (duplicate.rows.length <= MAX_ROWS_TO_SHOW) {
+            rowsText = duplicate.rows.join(", ");
+          } else {
+            const visibleRows = duplicate.rows.slice(0, MAX_ROWS_TO_SHOW).join(", ");
+            const remainingCount = duplicate.rows.length - MAX_ROWS_TO_SHOW;
+            rowsText = `${visibleRows} and ${remainingCount} more rows`;
+          }
+
+          return `${pkDescription} with ${valueDescription} appears multiple times on rows: ${rowsText}`;
+        })
+        .join("<br>");
+
+      const totalAffectedRows = duplicates.reduce((sum, d) => sum + d.rows.length, 0);
+      warningMessage = {
+        summary: `Warning: Duplicate primary keys detected (${totalAffectedRows} rows affected)`,
+        details: warningMessages,
+        note: "This may cause unexpected behavior.",
+      };
     }
 
     return {
@@ -317,14 +334,16 @@ export class QueryGenerationService {
               // Find column index for this primary key field
               const colIndex = fieldNames.indexOf(pk);
               const columnLetter = colIndex >= 0 ? this.columnIndexToLetter(colIndex) : "?";
-              
+
               UsageTracker.trackEvent("quick-query", "generation_error", {
                 type: "pk_missing_in_row",
                 row: rowIndex + 2,
                 column: columnLetter,
                 pk,
               });
-              throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`);
+              throw new Error(
+                `Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`
+              );
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;
           })

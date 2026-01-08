@@ -451,7 +451,26 @@ export class QuickQueryUI {
 
   showWarning(message) {
     if (this.elements.warningMessages) {
-      this.elements.warningMessages.innerHTML = message;
+      // Support both string messages (legacy) and structured warning objects
+      if (typeof message === "object" && message.summary) {
+        const warningId = `warning-${Date.now()}`;
+        this.elements.warningMessages.innerHTML = `
+          <div class="qq-warning-collapsible">
+            <div class="qq-warning-header" onclick="document.getElementById('${warningId}').classList.toggle('expanded')">
+              <span class="qq-warning-toggle">▶</span>
+              <span class="qq-warning-summary">${message.summary}</span>
+              <span class="qq-warning-hint">(click to expand)</span>
+            </div>
+            <div id="${warningId}" class="qq-warning-details">
+              <div class="qq-warning-details-content">${message.details}</div>
+              <div class="qq-warning-note">${message.note}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        // Legacy string message support
+        this.elements.warningMessages.innerHTML = message;
+      }
       this.elements.warningMessages.style.display = "block";
       this.elements.warningMessages.style.color = "orange";
     }
