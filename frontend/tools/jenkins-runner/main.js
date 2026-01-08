@@ -15,7 +15,7 @@ export class JenkinsRunner extends BaseTool {
       id: "jenkins-runner",
       name: "Jenkins Query Runner",
       description: "Run Oracle SQL Query via Jenkins job and stream the build logs",
-      icon: "jenkins",
+      icon: "jenkins-query",
       category: "config",
       eventBus,
     });
@@ -1407,31 +1407,32 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal controls =====
     if (splitModalCloseBtn) splitModalCloseBtn.addEventListener("click", () => closeSplitModal());
-    if (splitCancelBtn) splitCancelBtn.addEventListener("click", () => {
-      // If execution hasn't started, just close the modal
-      if (!this.state.split.started) {
-        closeSplitModal();
-        return;
-      }
-      
-      // Show confirmation when execution is in progress
-      const titleEl = this.container.querySelector("#jr-confirm-modal-title");
-      if (titleEl) titleEl.textContent = "Cancel Execution?";
-      if (confirmDeleteBtn) {
-        confirmDeleteBtn.textContent = "Confirm Cancel";
-        confirmDeleteBtn.className = "btn btn-primary btn-sm-xs";
-      }
-      if (confirmCancelBtn) confirmCancelBtn.textContent = "Continue Execution";
-      
-      openConfirmModal(
-        "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
-        () => {
-          this.state.split.cancelRequested = true;
-          closeConfirmModal();
+    if (splitCancelBtn)
+      splitCancelBtn.addEventListener("click", () => {
+        // If execution hasn't started, just close the modal
+        if (!this.state.split.started) {
           closeSplitModal();
+          return;
         }
-      );
-    });
+
+        // Show confirmation when execution is in progress
+        const titleEl = this.container.querySelector("#jr-confirm-modal-title");
+        if (titleEl) titleEl.textContent = "Cancel Execution?";
+        if (confirmDeleteBtn) {
+          confirmDeleteBtn.textContent = "Confirm Cancel";
+          confirmDeleteBtn.className = "btn btn-primary btn-sm-xs";
+        }
+        if (confirmCancelBtn) confirmCancelBtn.textContent = "Continue Execution";
+
+        openConfirmModal(
+          "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
+          () => {
+            this.state.split.cancelRequested = true;
+            closeConfirmModal();
+            closeSplitModal();
+          }
+        );
+      });
     if (splitModalOverlay)
       splitModalOverlay.addEventListener("click", (e) => {
         if (e.target === splitModalOverlay) closeSplitModal();
@@ -2212,17 +2213,17 @@ export class JenkinsRunner extends BaseTool {
                     logsEl.textContent = "";
                     if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
                     let lastBuildUrl = null;
-                      for (let idx = 0; idx < chunks.length; idx++) {
-                        // Check if user requested cancellation
-                        if (this.state.split.cancelRequested) {
-                          statusEl.textContent = "Execution cancelled by user.";
-                          if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
-                          appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
-                          splitExecuteAllBtn.disabled = false;
-                          return;
-                        }
+                    for (let idx = 0; idx < chunks.length; idx++) {
+                      // Check if user requested cancellation
+                      if (this.state.split.cancelRequested) {
+                        statusEl.textContent = "Execution cancelled by user.";
+                        if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
+                        appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
+                        splitExecuteAllBtn.disabled = false;
+                        return;
+                      }
 
-                        const chunkSql = chunks[idx];
+                      const chunkSql = chunks[idx];
                       // Seed a history entry per chunk with table-derived title
                       const arrSeed = loadHistory();
                       const chunkTitle = deriveChunkTitle(chunkSql, idx);

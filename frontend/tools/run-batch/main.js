@@ -14,7 +14,7 @@ export class RunBatch extends BaseTool {
       id: "run-batch",
       name: "Run Batch",
       description: "Trigger Jenkins batch jobs with configurable parameters",
-      icon: "jenkins",
+      icon: "jenkins-batch",
       category: "jenkins",
       eventBus,
     });
