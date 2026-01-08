@@ -1,0 +1,495 @@
+/* Run Batch styles - theme-aware, responsive, accessible */
+.run-batch {
+  /* Map to global CSS variables so light/dark are respected */
+  --rb-bg: hsl(var(--background));
+  --rb-panel: hsl(var(--card));
+  --rb-border: hsl(var(--border));
+  --rb-text: hsl(var(--foreground));
+  --rb-muted: hsl(var(--muted-foreground));
+  --rb-primary: hsl(var(--primary, 0 0% 0%));
+  --rb-primary-contrast: hsl(var(--primary-foreground));
+  --rb-danger: hsl(var(--destructive, 0 0% 0%));
+  --rb-focus: hsl(var(--ring));
+
+  color: var(--rb-text);
+  background: var(--rb-bg);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Ensure children can shrink when main width changes */
+.run-batch > * {
+  min-width: 0;
+}
+
+/* Tab container */
+.rb-tabs {
+  background: var(--rb-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rb-status {
+  font-size: 0.95rem;
+  color: var(--rb-muted);
+}
+
+/* Tab panels */
+#rb-tab-run,
+#rb-tab-history {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Run tab content - 40:60 layout */
+.rb-run-content {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .rb-run-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form section */
+.rb-form-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.rb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: var(--rb-panel);
+  border-radius: 8px;
+  border: 1px solid var(--rb-border);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rb-field label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--rb-text);
+}
+
+.rb-input {
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  background-color: hsl(var(--card));
+  color: var(--rb-text);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.rb-input:focus {
+  outline: none;
+  border-color: var(--rb-focus);
+  box-shadow: 0 0 0 3px var(--rb-focus / 0.3);
+}
+
+.rb-input:hover {
+  border-color: hsl(var(--muted-foreground) / 0.3);
+}
+
+.rb-input::placeholder {
+  color: var(--rb-muted);
+}
+
+/* Normalize select height */
+.run-batch select.rb-input {
+  height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  padding-right: 1.5rem;
+}
+
+.rb-hint {
+  font-size: 0.8rem;
+  color: var(--rb-muted);
+}
+
+.rb-error {
+  font-size: 0.85rem;
+  color: var(--rb-danger);
+  margin-top: 4px;
+}
+
+.rb-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/* Saved Section */
+.rb-saved-section {
+  display: flex;
+  flex-direction: column;
+  background: var(--rb-panel);
+  border-radius: 8px;
+  border: 1px solid var(--rb-border);
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* List controls / Search bar */
+.rb-list-controls {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--rb-panel);
+  border-bottom: 1px solid var(--rb-border);
+}
+
+.rb-search-control {
+  flex: 1 1 240px;
+  min-width: 150px;
+}
+
+.rb-search-control .rb-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rb-saved-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.rb-empty-message {
+  text-align: center;
+  color: var(--rb-muted);
+  font-size: 0.9rem;
+  padding: 24px;
+}
+
+.rb-saved-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: hsl(var(--card));
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.rb-saved-card:hover {
+  border-color: var(--rb-primary);
+  background: hsl(var(--muted) / 0.1);
+}
+
+.rb-saved-card:last-child {
+  margin-bottom: 0;
+}
+
+.rb-saved-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rb-saved-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--rb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Clickable name with confluence link */
+a.rb-saved-name.rb-conflu-link {
+  color: var(--rb-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.rb-saved-name.rb-conflu-link:hover {
+  text-decoration: underline;
+}
+
+.rb-saved-details {
+  font-size: 0.8rem;
+  color: var(--rb-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rb-saved-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Logs Section */
+.rb-logs-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rb-border);
+  border-radius: 8px;
+  background: var(--rb-panel);
+  min-height: 180px;
+  max-height: 280px;
+}
+
+.rb-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rb-border);
+  background: hsl(var(--muted) / 0.05);
+}
+
+.rb-log-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--rb-text);
+}
+
+.rb-build-number {
+  font-size: 0.8rem;
+  color: var(--rb-muted);
+  font-weight: 600;
+}
+
+.rb-build-number::before {
+  content: ":";
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
+.rb-log-header-right a {
+  font-size: 0.85rem;
+  color: var(--rb-primary);
+  text-decoration: underline;
+}
+
+.rb-log {
+  flex: 1;
+  margin: 0;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--rb-text);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  background: hsl(var(--card));
+}
+
+/* History tab */
+.rb-history {
+  background: var(--rb-panel);
+  border: 1px solid var(--rb-border);
+  border-radius: 8px;
+  padding: 0 12px 12px;
+  overflow: auto;
+  height: 100%;
+  max-height: 100%;
+}
+
+.rb-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 80ch;
+}
+
+.rb-history-table th,
+.rb-history-table td {
+  border-bottom: 1px solid var(--rb-border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.rb-history-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--rb-panel);
+}
+
+.rb-history-table tbody td {
+  font-size: calc(1em - 2pt);
+}
+
+.rb-history-table col.rb-col-time {
+  width: 18ch;
+}
+
+.rb-history-table col.rb-col-config {
+  width: auto;
+}
+
+.rb-history-table col.rb-col-env {
+  width: 10ch;
+}
+
+.rb-history-table col.rb-col-status {
+  width: 10ch;
+}
+
+.rb-history-table col.rb-col-actions {
+  width: 18ch;
+}
+
+.rb-history-table tbody tr:hover {
+  background: hsl(var(--muted) / 0.06);
+}
+
+/* Modals */
+.rb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+}
+
+.rb-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.rb-modal-content {
+  background: hsl(var(--card));
+  border: 1px solid var(--rb-border);
+  border-radius: 10px;
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+}
+
+.rb-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rb-border);
+}
+
+.rb-modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--rb-text);
+}
+
+/* Modal close button - matches other tools */
+.rb-modal-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rb-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.rb-modal-close-btn:hover {
+  background: hsl(var(--muted) / 0.2);
+  color: var(--rb-text);
+}
+
+.rb-modal-close-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--rb-focus);
+}
+
+.rb-modal-close-btn svg {
+  flex-shrink: 0;
+}
+
+.rb-modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rb-modal-body p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--rb-text);
+}
+
+.rb-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--rb-border);
+}
+
+.setting-required {
+  color: var(--rb-danger);
+}
+
+/* Screen reader only helper */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

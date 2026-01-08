@@ -6,6 +6,11 @@
       "order": 10
     },
     {
+      "id": "jenkins",
+      "name": "Jenkins",
+      "order": 15
+    },
+    {
       "id": "general",
       "name": "General",
       "order": 20
@@ -64,8 +69,8 @@
     },
     {
       "id": "jenkins-runner",
-      "name": "Jenkins Runner",
-      "category": "config",
+      "name": "Run Query",
+      "category": "jenkins",
       "icon": "jenkins",
       "showInSidebar": true,
       "showOnHome": true,
@@ -73,6 +78,18 @@
       "requiresTauri": true,
       "order": 55
     },
+    {
+      "id": "run-batch",
+      "name": "Run Batch",
+      "category": "jenkins",
+      "icon": "jenkins",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "requiresTauri": true,
+      "order": 56
+    },
+
     {
       "id": "html-template",
       "name": "HTML Template",

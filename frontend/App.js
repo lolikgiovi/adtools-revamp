@@ -26,6 +26,7 @@ import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
 import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
 import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/jenkins-runner/main.js";
+import { RunBatch } from "./tools/run-batch/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { AnalyticsDashboardPage } from "./pages/analytics-dashboard/main.js";
@@ -151,7 +152,8 @@ class App {
     this.categoriesConfigMap.clear();
     if (cats.length > 0) {
       cats.forEach((c) => {
-        if (c && c.id) this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
+        if (c && c.id)
+          this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
       });
     } else {
       // Fallback defaults
@@ -268,6 +270,10 @@ class App {
     // Register Jenkins Runner
     const jenkinsRunner = new JenkinsRunner(this.eventBus);
     this.registerTool(jenkinsRunner);
+
+    // Register Run Batch
+    const runBatch = new RunBatch(this.eventBus);
+    this.registerTool(runBatch);
 
     // Register Master Lockey
     const masterLockey = new MasterLockey(this.eventBus);
