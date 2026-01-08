@@ -30,6 +30,7 @@ MAIL_FROM = "otp-adtools@lolik.cloud"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
+ANALYTICS_DASHBOARD_PASSWORD = "Saya suka makan protein"
 
 [[kv_namespaces]]
 binding = "WHITELIST"

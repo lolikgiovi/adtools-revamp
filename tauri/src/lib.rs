@@ -10,6 +10,7 @@ pub fn run() {
       has_jenkins_token,
       jenkins_get_env_choices,
       jenkins_trigger_job,
+      jenkins_trigger_batch_job,
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
       open_url,
@@ -146,6 +147,14 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
 
   Ok(())
 }
+
+#[tauri::command]
+async fn jenkins_trigger_batch_job(base_url: String, env: String, batch_name: String, job_name: String) -> Result<String, String> {
+  let creds = load_credentials().await?;
+  let client = http_client();
+  jenkins::trigger_batch_job(&client, &base_url, &env, &batch_name, &job_name, &creds).await
+}
+
 // Open an external URL using the system default browser
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {

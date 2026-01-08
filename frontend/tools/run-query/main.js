@@ -12,10 +12,10 @@ import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../.
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
     super({
-      id: "jenkins-runner",
+      id: "run-query",
       name: "Jenkins Query Runner",
       description: "Run Oracle SQL Query via Jenkins job and stream the build logs",
-      icon: "jenkins",
+      icon: "jenkins-query",
       category: "config",
       eventBus,
     });
@@ -397,7 +397,7 @@ export class JenkinsRunner extends BaseTool {
         await listen("jenkins:log-complete", () => {
           statusEl.textContent = "Complete";
           try {
-            UsageTracker.trackEvent("jenkins-runner", "run_success", { buildNumber: this.state.buildNumber || null });
+            UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
           } catch (_) {}
         })
       );
@@ -418,11 +418,11 @@ export class JenkinsRunner extends BaseTool {
       statusEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
-    const persistEnvKey = "tool:jenkins-runner:env";
+    const persistEnvKey = "tool:run-query:env";
     const savedEnv = localStorage.getItem(persistEnvKey) || "";
 
     // Persist last UI state (URL, job, env, SQL)
-    const persistStateKey = "tool:jenkins-runner:lastState";
+    const persistStateKey = "tool:run-query:lastState";
     let lastState = {};
     try {
       lastState = JSON.parse(localStorage.getItem(persistStateKey) || "{}");
@@ -597,7 +597,7 @@ export class JenkinsRunner extends BaseTool {
     };
 
     // Templates: storage and rendering
-    const persistTemplatesKey = "tool:jenkins-runner:templates";
+    const persistTemplatesKey = "tool:run-query:templates";
     const loadTemplates = () => {
       try {
         const raw = localStorage.getItem(persistTemplatesKey) || "[]";
@@ -1078,7 +1078,7 @@ export class JenkinsRunner extends BaseTool {
     });
 
     // History persistence and rendering
-    const persistHistoryKey = "tool:jenkins-runner:history";
+    const persistHistoryKey = "tool:run-query:history";
     const loadHistory = () => {
       try {
         const raw = localStorage.getItem(persistHistoryKey) || "[]";
@@ -1329,7 +1329,7 @@ export class JenkinsRunner extends BaseTool {
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           toggleSubmitEnabled();
           try {
-            UsageTracker.trackFeature("jenkins-runner", "template_run_click", {
+            UsageTracker.trackFeature("run-query", "template_run_click", {
               name: tpl.name,
               job: tpl.job,
               env: tpl.env,
@@ -1407,31 +1407,32 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal controls =====
     if (splitModalCloseBtn) splitModalCloseBtn.addEventListener("click", () => closeSplitModal());
-    if (splitCancelBtn) splitCancelBtn.addEventListener("click", () => {
-      // If execution hasn't started, just close the modal
-      if (!this.state.split.started) {
-        closeSplitModal();
-        return;
-      }
-      
-      // Show confirmation when execution is in progress
-      const titleEl = this.container.querySelector("#jr-confirm-modal-title");
-      if (titleEl) titleEl.textContent = "Cancel Execution?";
-      if (confirmDeleteBtn) {
-        confirmDeleteBtn.textContent = "Confirm Cancel";
-        confirmDeleteBtn.className = "btn btn-primary btn-sm-xs";
-      }
-      if (confirmCancelBtn) confirmCancelBtn.textContent = "Continue Execution";
-      
-      openConfirmModal(
-        "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
-        () => {
-          this.state.split.cancelRequested = true;
-          closeConfirmModal();
+    if (splitCancelBtn)
+      splitCancelBtn.addEventListener("click", () => {
+        // If execution hasn't started, just close the modal
+        if (!this.state.split.started) {
           closeSplitModal();
+          return;
         }
-      );
-    });
+
+        // Show confirmation when execution is in progress
+        const titleEl = this.container.querySelector("#jr-confirm-modal-title");
+        if (titleEl) titleEl.textContent = "Cancel Execution?";
+        if (confirmDeleteBtn) {
+          confirmDeleteBtn.textContent = "Confirm Cancel";
+          confirmDeleteBtn.className = "btn btn-primary btn-sm-xs";
+        }
+        if (confirmCancelBtn) confirmCancelBtn.textContent = "Continue Execution";
+
+        openConfirmModal(
+          "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
+          () => {
+            this.state.split.cancelRequested = true;
+            closeConfirmModal();
+            closeSplitModal();
+          }
+        );
+      });
     if (splitModalOverlay)
       splitModalOverlay.addEventListener("click", (e) => {
         if (e.target === splitModalOverlay) closeSplitModal();
@@ -1912,7 +1913,7 @@ export class JenkinsRunner extends BaseTool {
       // Reset source after tracking (next run will be manual unless set again)
       this._querySource = null;
       try {
-        UsageTracker.trackFeature("jenkins-runner", "run_click", { job, env, sql_len: sql.length, source });
+        UsageTracker.trackFeature("run-query", "run_click", { job, env, sql_len: sql.length, source });
       } catch (_) {}
 
       // Require statements to end with semicolon; show the line if missing
@@ -2166,7 +2167,7 @@ export class JenkinsRunner extends BaseTool {
             } catch (err) {
               statusEl.textContent = "Polling error";
               try {
-                UsageTracker.trackEvent("jenkins-runner", "run_error", UsageTracker.enrichErrorMeta(err, { context: "polling" }));
+                UsageTracker.trackEvent("run-query", "run_error", UsageTracker.enrichErrorMeta(err, { context: "polling" }));
               } catch (_) {}
               this.showError(String(err));
               runBtn.disabled = false;
@@ -2212,17 +2213,17 @@ export class JenkinsRunner extends BaseTool {
                     logsEl.textContent = "";
                     if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
                     let lastBuildUrl = null;
-                      for (let idx = 0; idx < chunks.length; idx++) {
-                        // Check if user requested cancellation
-                        if (this.state.split.cancelRequested) {
-                          statusEl.textContent = "Execution cancelled by user.";
-                          if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
-                          appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
-                          splitExecuteAllBtn.disabled = false;
-                          return;
-                        }
+                    for (let idx = 0; idx < chunks.length; idx++) {
+                      // Check if user requested cancellation
+                      if (this.state.split.cancelRequested) {
+                        statusEl.textContent = "Execution cancelled by user.";
+                        if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
+                        appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
+                        splitExecuteAllBtn.disabled = false;
+                        return;
+                      }
 
-                        const chunkSql = chunks[idx];
+                      const chunkSql = chunks[idx];
                       // Seed a history entry per chunk with table-derived title
                       const arrSeed = loadHistory();
                       const chunkTitle = deriveChunkTitle(chunkSql, idx);
@@ -2334,7 +2335,7 @@ export class JenkinsRunner extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Trigger failed";
         try {
-          UsageTracker.trackEvent("jenkins-runner", "run_error", UsageTracker.enrichErrorMeta(err, { job, env, context: "trigger" }));
+          UsageTracker.trackEvent("run-query", "run_error", UsageTracker.enrichErrorMeta(err, { job, env, context: "trigger" }));
         } catch (_) {}
         this.showError(errorMapping(err));
         runBtn.disabled = false;

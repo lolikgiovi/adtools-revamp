@@ -228,11 +228,19 @@ class SettingsPage {
         const policy = await evaluatePolicy();
         if (policy?.mustForce) {
           const { isTauri } = await import("../../core/Runtime.js");
+          // Fetch manifest to get release notes
+          let manifest = null;
+          try {
+            const { fetchManifest } = await import("../../core/Updater.js");
+            const result = await fetchManifest?.(policy.channel);
+            manifest = result?.manifest || null;
+          } catch (_) {}
+
           if (!isTauri()) {
-            this.eventBus?.emit?.("update:forced", { policy, unsupported: true });
+            this.eventBus?.emit?.("update:forced", { policy, unsupported: true, manifest });
             this.eventBus?.emit?.("notification:error", { message: "A forced update is required, but desktop runtime is not available." });
           } else {
-            this.eventBus?.emit?.("update:forced", { policy, unsupported: false });
+            this.eventBus?.emit?.("update:forced", { policy, unsupported: false, manifest });
             const ok = await performUpdate(
               (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
               (stage) => this.eventBus?.emit?.("update:stage", { stage })

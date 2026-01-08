@@ -451,7 +451,26 @@ export class QuickQueryUI {
 
   showWarning(message) {
     if (this.elements.warningMessages) {
-      this.elements.warningMessages.innerHTML = message;
+      // Support both string messages (legacy) and structured warning objects
+      if (typeof message === "object" && message.summary) {
+        const warningId = `warning-${Date.now()}`;
+        this.elements.warningMessages.innerHTML = `
+          <div class="qq-warning-collapsible">
+            <div class="qq-warning-header" onclick="document.getElementById('${warningId}').classList.toggle('expanded')">
+              <span class="qq-warning-toggle">▶</span>
+              <span class="qq-warning-summary">${message.summary}</span>
+              <span class="qq-warning-hint">(click to expand)</span>
+            </div>
+            <div id="${warningId}" class="qq-warning-details">
+              <div class="qq-warning-details-content">${message.details}</div>
+              <div class="qq-warning-note">${message.note}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        // Legacy string message support
+        this.elements.warningMessages.innerHTML = message;
+      }
       this.elements.warningMessages.style.display = "block";
       this.elements.warningMessages.style.color = "orange";
     }
@@ -588,10 +607,10 @@ export class QuickQueryUI {
 
       // Navigate to Jenkins Runner and pass current SQL via router data
       if (window?.app?.router) {
-        window.app.router.navigate("jenkins-runner", { sql });
+        window.app.router.navigate("run-query", { sql });
       } else if (window?.app) {
         // Fallback: simple navigation without data
-        window.app.navigateToTool("jenkins-runner");
+        window.app.navigateToTool("run-query");
         // As a fallback, store SQL in session for Jenkins Runner to consume if implemented
         try {
           sessionStorage.setItem("jenkinsRunner.injectSql", sql);

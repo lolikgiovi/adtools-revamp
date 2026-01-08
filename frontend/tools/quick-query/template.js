@@ -43,7 +43,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
                     <button id="downloadSQL" class="btn btn-primary btn-sm">Download SQL</button>
                     <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
-                    <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Execute in Jenkins Runner</button>
+                    <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Run Query</button>
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>

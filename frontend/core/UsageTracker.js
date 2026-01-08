@@ -1,4 +1,4 @@
-import { AnalyticsSender } from './AnalyticsSender.js';
+import { AnalyticsSender } from "./AnalyticsSender.js";
 /**
  * UsageTracker - Centralized usage analytics with localStorage persistence
  * - Records feature/action events with timestamps
@@ -82,7 +82,7 @@ class UsageTracker {
       if (Number.isFinite(envMs) && envMs > 0) return envMs;
     } catch (_) {}
     try {
-      const ls = Number(localStorage.getItem('usage.analytics.batch.interval.ms'));
+      const ls = Number(localStorage.getItem("usage.analytics.batch.interval.ms"));
       if (Number.isFinite(ls) && ls > 0) return ls;
     } catch (_) {}
     return this.BATCH_FLUSH_INTERVAL_MS;
@@ -98,10 +98,10 @@ class UsageTracker {
     const counts = this._state.counts;
 
     // Quick Query: keep only actual query types (merge, insert, update)
-    if (counts['quick-query']) {
-      const allowed = ['merge', 'insert', 'update'];
-      const quickQuery = counts['quick-query'];
-      Object.keys(quickQuery).forEach(action => {
+    if (counts["quick-query"]) {
+      const allowed = ["merge", "insert", "update"];
+      const quickQuery = counts["quick-query"];
+      Object.keys(quickQuery).forEach((action) => {
         if (!allowed.includes(action)) {
           delete quickQuery[action];
         }
@@ -109,10 +109,10 @@ class UsageTracker {
     }
 
     // Jenkins Runner: keep only run_click (feature usage), remove run_success (event)
-    if (counts['jenkins-runner']) {
-      const allowed = ['run_click'];
-      const jenkinsRunner = counts['jenkins-runner'];
-      Object.keys(jenkinsRunner).forEach(action => {
+    if (counts["run-query"]) {
+      const allowed = ["run_click"];
+      const jenkinsRunner = counts["run-query"];
+      Object.keys(jenkinsRunner).forEach((action) => {
         if (!allowed.includes(action)) {
           delete jenkinsRunner[action];
         }
@@ -120,21 +120,21 @@ class UsageTracker {
     }
 
     // Clean up daily tracking for removed actions
-    if (this._state.daily && typeof this._state.daily === 'object') {
-      Object.keys(this._state.daily).forEach(day => {
+    if (this._state.daily && typeof this._state.daily === "object") {
+      Object.keys(this._state.daily).forEach((day) => {
         const dayData = this._state.daily[day];
-        if (dayData && typeof dayData === 'object') {
-          Object.keys(dayData).forEach(key => {
+        if (dayData && typeof dayData === "object") {
+          Object.keys(dayData).forEach((key) => {
             // Format: "featureId.action"
-            if (key.startsWith('quick-query.')) {
-              const action = key.split('.')[1];
-              if (!['merge', 'insert', 'update'].includes(action)) {
+            if (key.startsWith("quick-query.")) {
+              const action = key.split(".")[1];
+              if (!["merge", "insert", "update"].includes(action)) {
                 delete dayData[key];
               }
             }
-            if (key.startsWith('jenkins-runner.')) {
-              const action = key.split('.')[1];
-              if (action !== 'run_click') {
+            if (key.startsWith("run-query.")) {
+              const action = key.split(".")[1];
+              if (action !== "run_click") {
                 delete dayData[key];
               }
             }
@@ -145,7 +145,7 @@ class UsageTracker {
 
     // Persist cleaned data
     this.flushSync();
-    console.log('Usage counts sanitized - removed event tracking from counts');
+    console.log("Usage counts sanitized - removed event tracking from counts");
   }
 
   /** Track a usage event (simple: increment counts and daily, flush immediately) */
@@ -179,7 +179,6 @@ class UsageTracker {
     try {
       this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
     } catch (_) {}
-
   }
 
   /** Alias for feature-centric tracking */
@@ -207,8 +206,8 @@ class UsageTracker {
       let userEmail = null;
       let deviceId = null;
       try {
-        const email = localStorage.getItem('user.email');
-        const device = localStorage.getItem('adtools.deviceId');
+        const email = localStorage.getItem("user.email");
+        const device = localStorage.getItem("adtools.deviceId");
         deviceId = device ? String(device).trim() : null;
         userEmail = email ? String(email).trim().toLowerCase() : null;
       } catch (_) {}
@@ -325,13 +324,13 @@ class UsageTracker {
     try {
       return {
         ...baseMeta,
-        message: String(error?.message || error || '').slice(0, 200),
-        name: error?.name || 'Error',
+        message: String(error?.message || error || "").slice(0, 200),
+        name: error?.name || "Error",
         code: error?.code || null,
-        stack: error?.stack?.split('\n').slice(0, 5).join('\n').slice(0, 500) || null,
+        stack: error?.stack?.split("\n").slice(0, 5).join("\n").slice(0, 500) || null,
       };
     } catch (_) {
-      return { ...baseMeta, message: String(error || 'Unknown error').slice(0, 200) };
+      return { ...baseMeta, message: String(error || "Unknown error").slice(0, 200) };
     }
   }
 
@@ -426,14 +425,14 @@ class UsageTracker {
         } else {
           // Validate timestamps on existing events
           state.events = Array.isArray(state.events) ? state.events.filter((ev) => this._validateEvent(ev)) : [];
-          
+
           // Time-based rotation: drop events older than 7 days
-          const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+          const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
           state.events = state.events.filter((ev) => {
             const evTime = new Date(ev.ts).getTime();
             return !Number.isNaN(evTime) && evTime > sevenDaysAgo;
           });
-          
+
           if (state.events.length > this.MAX_EVENTS) {
             state.events = state.events.slice(state.events.length - this.MAX_EVENTS);
           }
@@ -473,21 +472,21 @@ class UsageTracker {
       const d = iso ? new Date(iso) : new Date();
       const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
       const Y = shifted.getUTCFullYear();
-      const M = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-      const D = String(shifted.getUTCDate()).padStart(2, '0');
-      const h = String(shifted.getUTCHours()).padStart(2, '0');
-      const m = String(shifted.getUTCMinutes()).padStart(2, '0');
-      const s = String(shifted.getUTCSeconds()).padStart(2, '0');
+      const M = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+      const D = String(shifted.getUTCDate()).padStart(2, "0");
+      const h = String(shifted.getUTCHours()).padStart(2, "0");
+      const m = String(shifted.getUTCMinutes()).padStart(2, "0");
+      const s = String(shifted.getUTCSeconds()).padStart(2, "0");
       return `${Y}-${M}-${D} ${h}:${m}:${s}`;
     } catch (_) {
       const d = new Date();
       const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
       const Y = shifted.getUTCFullYear();
-      const M = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-      const D = String(shifted.getUTCDate()).padStart(2, '0');
-      const h = String(shifted.getUTCHours()).padStart(2, '0');
-      const m = String(shifted.getUTCMinutes()).padStart(2, '0');
-      const s = String(shifted.getUTCSeconds()).padStart(2, '0');
+      const M = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+      const D = String(shifted.getUTCDate()).padStart(2, "0");
+      const h = String(shifted.getUTCHours()).padStart(2, "0");
+      const m = String(shifted.getUTCMinutes()).padStart(2, "0");
+      const s = String(shifted.getUTCSeconds()).padStart(2, "0");
       return `${Y}-${M}-${D} ${h}:${m}:${s}`;
     }
   }
@@ -504,11 +503,11 @@ class UsageTracker {
     // Get user email from localStorage
     let userEmail = null;
     try {
-      const email = localStorage.getItem('user.email');
+      const email = localStorage.getItem("user.email");
       userEmail = email ? String(email).trim().toLowerCase() : null;
     } catch (_) {}
 
-    const events = (Array.isArray(s.events) ? s.events : []).map(ev => ({
+    const events = (Array.isArray(s.events) ? s.events : []).map((ev) => ({
       type: ev.featureId,
       action: ev.action,
       event_name: `${ev.featureId}.${ev.action}`,
@@ -521,9 +520,9 @@ class UsageTracker {
     const device_usage = [];
     const nowPlain = this._nowGmt7Plain();
     const counts = s.counts || {};
-    
+
     for (const [tool_id, actions] of Object.entries(counts)) {
-      if (!actions || typeof actions !== 'object') continue;
+      if (!actions || typeof actions !== "object") continue;
       for (const [action, count] of Object.entries(actions)) {
         const c = Number(count || 0);
         if (c > 0) {
@@ -561,31 +560,33 @@ class UsageTracker {
 
   static _getOrCreateDeviceId() {
     try {
-      const keyNew = 'adtools.deviceId';
-      const keyOld = 'adtools.installId';
-      const existingNew = (typeof localStorage !== 'undefined') ? localStorage.getItem(keyNew) : null;
+      const keyNew = "adtools.deviceId";
+      const keyOld = "adtools.installId";
+      const existingNew = typeof localStorage !== "undefined" ? localStorage.getItem(keyNew) : null;
       let id = existingNew;
       if (!id) {
-        const existingOld = (typeof localStorage !== 'undefined') ? localStorage.getItem(keyOld) : null;
-        id = existingOld || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
-        if (id && typeof id === 'string' && id.startsWith('anon-')) {
+        const existingOld = typeof localStorage !== "undefined" ? localStorage.getItem(keyOld) : null;
+        id = existingOld || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Math.random()}`);
+        if (id && typeof id === "string" && id.startsWith("anon-")) {
           const suffix = id.slice(5);
           id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suffix)
             ? suffix
-            : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
+            : typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Math.random()}`;
         }
       }
-      if (typeof localStorage !== 'undefined') localStorage.setItem(keyNew, id);
+      if (typeof localStorage !== "undefined") localStorage.setItem(keyNew, id);
       return id;
     } catch (_) {
-      return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
+      return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Math.random()}`;
     }
   }
 
   static getDeviceId() {
     if (this._state?.deviceId) return this._state.deviceId;
     try {
-      return localStorage.getItem('adtools.deviceId') || this._getOrCreateDeviceId();
+      return localStorage.getItem("adtools.deviceId") || this._getOrCreateDeviceId();
     } catch (_) {
       return this._getOrCreateDeviceId();
     }
@@ -593,21 +594,23 @@ class UsageTracker {
 
   static _getOrCreateInstallId() {
     try {
-      const key = 'adtools.installId';
-      const existing = (typeof localStorage !== 'undefined') ? localStorage.getItem(key) : null;
+      const key = "adtools.installId";
+      const existing = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
       let id = existing;
       if (!id) {
-        id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
-      } else if (id && typeof id === 'string' && id.startsWith('anon-')) {
+        id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Math.random()}`;
+      } else if (id && typeof id === "string" && id.startsWith("anon-")) {
         const suffix = id.slice(5);
         id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suffix)
           ? suffix
-          : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`);
+          : typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Math.random()}`;
       }
-      if (typeof localStorage !== 'undefined') localStorage.setItem(key, id);
+      if (typeof localStorage !== "undefined") localStorage.setItem(key, id);
       return id;
     } catch (_) {
-      return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Math.random()}`;
+      return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Math.random()}`;
     }
   }
 

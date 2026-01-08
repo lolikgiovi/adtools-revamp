@@ -57,7 +57,9 @@ async function detectArch() {
       // Normalize to plugin-updater platform keys (darwin-*)
       if (arch === "aarch64" || arch === "arm64") return "darwin-aarch64";
       if (arch === "x86_64" || arch === "x64" || arch === "amd64") return "darwin-x86_64";
-      const a = String(arch || "").trim().toLowerCase();
+      const a = String(arch || "")
+        .trim()
+        .toLowerCase();
       if (a.includes("arm") || a.includes("aarch")) return "darwin-aarch64";
       return "darwin-x86_64";
     } catch (_) {
@@ -68,7 +70,7 @@ async function detectArch() {
   return "darwin-aarch64";
 }
 
-async function fetchManifest(channel) {
+export async function fetchManifest(channel) {
   // Unify on plugin-updater JSON schema served at /update/<channel>.json
   const url = `https://adtools.lolik.workers.dev/update/${channel}.json`;
   const res = await fetch(url, {
@@ -136,9 +138,10 @@ export async function checkUpdate(opts = {}) {
     const latest = manifest?.version || manifest?.latest || undefined;
     const available = Boolean(latest && semverGt(latest, current));
     // Unified schema: plugin-updater style platforms with darwin-* keys; support fallback mapping
-    const platformEntry = manifest?.platforms?.[arch]
-      || manifest?.platforms?.[arch.replace("darwin-", "")] // tolerate old keys
-      || undefined;
+    const platformEntry =
+      manifest?.platforms?.[arch] ||
+      manifest?.platforms?.[arch.replace("darwin-", "")] || // tolerate old keys
+      undefined;
     const base = "https://adtools.lolik.workers.dev";
     const normalizeUrl = (u) => (typeof u === "string" && u.startsWith("/") ? base + u : u);
     const url = normalizeUrl(platformEntry?.url || manifest?.url || undefined);
@@ -226,7 +229,7 @@ export function setupAutoUpdate(options = {}) {
   // Desktop-only: no scheduling or events on web
   if (!isTauri()) {
     return {
-      cancel() {}
+      cancel() {},
     };
   }
 
@@ -244,7 +247,13 @@ export function setupAutoUpdate(options = {}) {
     try {
       const policy = await evaluatePolicy();
       if (!policy.mustForce) return false;
-      emit("update:forced", { policy, unsupported: false });
+      // Fetch manifest to get release notes
+      let manifest = null;
+      try {
+        const result = await fetchManifest(policy.channel);
+        manifest = result?.manifest || null;
+      } catch (_) {}
+      emit("update:forced", { policy, unsupported: false, manifest });
       console.log("Forced update enforced");
       const ok = await performUpdate(
         (loaded, total) => emit("update:progress", { loaded, total }),
@@ -302,4 +311,4 @@ export function setupAutoUpdate(options = {}) {
 }
 
 // Named export group for clarity in imports
-export default { checkUpdate, performUpdate, evaluatePolicy, getCurrentVersionSafe, setupAutoUpdate };
+export default { checkUpdate, performUpdate, evaluatePolicy, getCurrentVersionSafe, setupAutoUpdate, fetchManifest };

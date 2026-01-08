@@ -2,6 +2,7 @@
 export const CATEGORIES = {
   GENERAL: "general",
   CONFIG: "config",
+  JENKINS: "jenkins",
 };
 
 // Normalize raw category strings to a known set
@@ -12,6 +13,9 @@ export function normalizeCategory(value) {
   const configAliases = ["config", "configuration", "settings", "admin", "setup"];
   if (configAliases.includes(v)) return CATEGORIES.CONFIG;
 
+  const jenkinsAliases = ["jenkins"];
+  if (jenkinsAliases.includes(v)) return CATEGORIES.JENKINS;
+
   return CATEGORIES.GENERAL;
 }
 
@@ -20,6 +24,7 @@ export function categorizeTool(tool) {
   if (!tool) return CATEGORIES.GENERAL;
   const base = normalizeCategory(tool.category);
   if (base === CATEGORIES.CONFIG) return CATEGORIES.CONFIG;
+  if (base === CATEGORIES.JENKINS) return CATEGORIES.JENKINS;
 
   const id = (tool.id || "").toLowerCase();
   const name = (tool.name || "").toLowerCase();

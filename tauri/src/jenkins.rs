@@ -36,7 +36,8 @@ pub async fn fetch_env_choices(client: &Client, base_url: &str, job: &str, creds
     for p in props {
       for def in p.parameter_definitions {
         if let JobParamDefinition::Choice { name, choices } = def {
-          if name == "ENV" { env_choices = choices; }
+          // Support both ENV and ENVIRONMENT parameter names
+          if name == "ENV" || name == "ENVIRONMENT" { env_choices = choices; }
         }
       }
     }
@@ -135,6 +136,56 @@ pub async fn progressive_log_once(client: &Client, base_url: &str, job: &str, bu
     .unwrap_or(false);
   Ok((text, next, more))
 }
+
+/// Trigger tester-batch-manual-trigger job with ENVIRONMENT, BATCH_NAME, and JOB_NAME parameters
+pub async fn trigger_batch_job(client: &Client, base_url: &str, env: &str, batch_name: &str, job_name: &str, creds: &Credentials) -> Result<String, String> {
+  let base = base_url.trim_end_matches('/');
+  let job = "tester-batch-manual-trigger";
+  let url = format!("{}/job/{}/buildWithParameters", base, job);
+
+  // Build form data with required parameters
+  let form = [
+    ("ENVIRONMENT", env),
+    ("BATCH_NAME", batch_name),
+    ("JOB_NAME", job_name),
+  ];
+
+  let mut req = client
+    .post(&url)
+    .basic_auth(&creds.username, Some(&creds.token))
+    .form(&form);
+
+  // Try crumb issuer; ignore failures
+  let crumb_url = format!("{}/crumbIssuer/api/json", base);
+  if let Ok(r) = client
+    .get(&crumb_url)
+    .basic_auth(&creds.username, Some(&creds.token))
+    .send()
+    .await
+  {
+    if r.status().is_success() {
+      if let Ok(v) = r.json::<serde_json::Value>().await {
+        if let (Some(field), Some(crumb)) = (
+          v.get("crumbRequestField").and_then(|x| x.as_str()),
+          v.get("crumb").and_then(|x| x.as_str()),
+        ) {
+          req = req.header(field, crumb);
+        }
+      }
+    }
+  }
+
+  let res = req.send().await.map_err(|e| e.to_string())?;
+  if res.status() != StatusCode::CREATED { return Err(format!("Trigger failed: HTTP {}", res.status())); }
+  let loc = res
+    .headers()
+    .get(reqwest::header::LOCATION)
+    .and_then(|v| v.to_str().ok())
+    .ok_or_else(|| "Missing Location header".to_string())?;
+  let q = format!("{}/api/json", loc.trim_end_matches('/'));
+  Ok(q)
+}
+
 
 #[cfg(test)]
 mod tests {
