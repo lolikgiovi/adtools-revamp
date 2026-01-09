@@ -509,7 +509,12 @@ export class VTLJSONEditorService {
 
     // Step 1: Split multi-directive lines onto separate lines
     // Insert newline BEFORE #else, #elseif, #end (but not at start of line)
+    // Also split AFTER #if(...) and #foreach(...) when followed by content
     let normalized = template
+      // Split after #if(...) when followed by content (not just whitespace/newline)
+      .replace(/(#if\s*\([^)]+\))\s*(?=[^\s\n])/g, "$1\n")
+      // Split after #foreach(...) when followed by content
+      .replace(/(#foreach\s*\([^)]+\))\s*(?=[^\s\n])/g, "$1\n")
       // Split before #elseif (but not at line start)
       .replace(/([^\n])#elseif/g, "$1\n#elseif")
       // Split before #else (but not #elseif, and not at line start)
@@ -542,20 +547,31 @@ export class VTLJSONEditorService {
         if (jsonStartBrace !== -1 && jsonEndBrace !== -1) {
           const jsonPart = jsonContent.substring(jsonStartBrace, jsonEndBrace + 1);
 
-          // Try to parse and format JSON (replacing VTL vars temporarily)
-          let cleanedJson = jsonPart.replace(/\$!?\{?[\w.]+\}?/g, '"__VTL_VAR__"');
+          // Try to parse and format JSON (replacing VTL expressions temporarily)
+          // Use indexed placeholders to restore correctly
+          let cleanedJson = jsonPart;
+          const vtlMatches = [];
+
+          // Replace all VTL patterns with indexed placeholders
+          // Match method calls first: $fn.method() or chained $fn.method().another()
+          cleanedJson = cleanedJson.replace(/\$!?[\w.]+\([^)]*\)(?:\.[\w]+\([^)]*\))*/g, (match) => {
+            vtlMatches.push(match);
+            return `__VTL_${vtlMatches.length - 1}__`;
+          });
+
+          // Then simple variables: $var, $!var, ${var}, $var.path
+          cleanedJson = cleanedJson.replace(/\$!?\{?[\w.]+\}?/g, (match) => {
+            vtlMatches.push(match);
+            return `__VTL_${vtlMatches.length - 1}__`;
+          });
 
           try {
             const parsed = JSON.parse(cleanedJson);
             let prettyJson = JSON.stringify(parsed, null, 2);
 
-            // Restore VTL variables
-            const vtlVars = jsonPart.match(/\$!?\{?[\w.]+\}?/g) || [];
-            let varIndex = 0;
-            prettyJson = prettyJson.replace(/"__VTL_VAR__"/g, () => {
-              const originalVar = vtlVars[varIndex] || "__VTL_VAR__";
-              varIndex++;
-              return `"${originalVar}"`;
+            // Restore all VTL expressions by index
+            prettyJson = prettyJson.replace(/__VTL_(\d+)__/g, (_, idx) => {
+              return vtlMatches[parseInt(idx)] || `__VTL_${idx}__`;
             });
 
             formatted.push(prettyJson);
@@ -572,12 +588,29 @@ export class VTLJSONEditorService {
       }
 
       // VTL section formatting
+
+      // Add blank line BEFORE comments (## section headers)
+      if (trimmed.startsWith("##") && formatted.length > 0 && formatted[formatted.length - 1] !== "") {
+        formatted.push("");
+      }
+
       // Decrease indent BEFORE outputting if line starts with #end, #else, #elseif
       if (/^#(end|else|elseif)\b/.test(trimmed)) {
         vtlIndentLevel = Math.max(0, vtlIndentLevel - 1);
       }
 
       formatted.push(indentStr.repeat(vtlIndentLevel) + trimmed);
+
+      // Add blank line after #end ONLY if:
+      // 1. Next line is NOT a comment (comment will add its own blank line)
+      // 2. Next line is NOT already empty (avoid double spacing)
+      if (/^#end\b/.test(trimmed)) {
+        const nextLine = (lines[i + 1] || "").trim();
+        // Skip adding blank if next line is comment or already empty
+        if (!nextLine.startsWith("##") && nextLine !== "") {
+          formatted.push("");
+        }
+      }
 
       // Increase indent AFTER outputting if line is #if, #foreach, #macro, #define, #else, #elseif
       if (/^#(if|foreach|macro|define|else|elseif)\b/.test(trimmed)) {
@@ -607,8 +640,7 @@ export class VTLJSONEditorService {
       // Skip empty lines
       if (!trimmed) continue;
 
-      // Skip VTL comments (##)
-      if (trimmed.startsWith("##")) continue;
+      // Keep VTL comments (##) - they're important for documentation
 
       // Detect JSON section start
       if (trimmed.startsWith("{")) {
@@ -619,23 +651,20 @@ export class VTLJSONEditorService {
         // Just add trimmed JSON lines
         minified.push(trimmed);
       } else {
-        // VTL directives - compact them
-        // Multiple VTL directives on same line if they're simple
-        const lastLine = minified[minified.length - 1];
+        // VTL directives - compact them onto fewer lines
+        const lastLine = minified[minified.length - 1] || "";
 
-        // Can merge #else with previous #end or standalone
-        if (trimmed.startsWith("#else") && lastLine && !lastLine.includes("{")) {
-          minified[minified.length - 1] = lastLine + trimmed;
+        // Can merge content after #if or #foreach (simple one-liners)
+        if (lastLine.match(/^#(if|foreach)\s*\([^)]+\)$/) && !trimmed.startsWith("#if") && !trimmed.startsWith("#foreach")) {
+          minified[minified.length - 1] = lastLine + " " + trimmed;
         }
-        // Can merge #end after simple content
-        else if (
-          trimmed === "#end" &&
-          lastLine &&
-          !lastLine.startsWith("#if") &&
-          !lastLine.startsWith("#foreach") &&
-          !lastLine.includes("{")
-        ) {
-          minified[minified.length - 1] = lastLine + "#end";
+        // Can merge #else/#elseif with previous content
+        else if (trimmed.startsWith("#else") && lastLine && !lastLine.includes("{")) {
+          minified[minified.length - 1] = lastLine + " " + trimmed;
+        }
+        // Can merge #end after simple content (not after #if/#foreach opening)
+        else if (trimmed === "#end" && lastLine && !lastLine.match(/^#(if|foreach)\s*\([^)]+\)$/) && !lastLine.includes("{")) {
+          minified[minified.length - 1] = lastLine + " #end";
         } else {
           minified.push(trimmed);
         }

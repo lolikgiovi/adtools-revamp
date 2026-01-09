@@ -307,20 +307,23 @@ Active
       expect(lines[1]).toMatch(/^\s{2}#set\(\$name/);
       // Line 2 should be #end at no indent
       expect(lines[2]).toBe("#end");
-      // Line 3 should be the next set at no indent
-      expect(lines[3]).toBe('#set($other = "value")');
+      // Line 3 should be blank (after #end)
+      expect(lines[3]).toBe("");
+      // Line 4 should be the next set at no indent
+      expect(lines[4]).toBe('#set($other = "value")');
     });
   });
 
   describe("minifyTemplate", () => {
-    it("should remove comments and compact VTL", () => {
+    it("should preserve comments and compact VTL", () => {
       const template = `## This is a comment
 #set($name = "test")
 {
   "key": "$name"
 }`;
       const minified = VTLJSONEditorService.minifyTemplate(template);
-      expect(minified).not.toContain("## This is a comment");
+      // Comments should be preserved
+      expect(minified).toContain("## This is a comment");
       expect(minified).toContain("#set($name");
     });
 
