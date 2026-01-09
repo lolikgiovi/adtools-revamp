@@ -70,6 +70,17 @@ describe("VTLJSONEditorService", () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    it("should handle #else and #end on the same line", () => {
+      const template = `#if($foo)
+  A
+#elseif($bar)
+  B
+#else#set($x="C")#end`;
+      const result = VTLJSONEditorService.validateVTL(template);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
   });
 
   describe("validateJSON", () => {
@@ -284,6 +295,44 @@ Active
       expect(lines[1]).toMatch(/^\s{2}#if/);
       // Active should be indented twice
       expect(lines[2]).toMatch(/^\s{4}Active/);
+    });
+
+    it("should split inline #end onto separate line and de-indent", () => {
+      const template = `#if($dataUser.id)
+#set($name = $dataUser.name)#end
+#set($other = "value")`;
+      const formatted = VTLJSONEditorService.formatTemplate(template);
+      const lines = formatted.split("\n");
+      // Line 1 should be indented (inside #if)
+      expect(lines[1]).toMatch(/^\s{2}#set\(\$name/);
+      // Line 2 should be #end at no indent
+      expect(lines[2]).toBe("#end");
+      // Line 3 should be the next set at no indent
+      expect(lines[3]).toBe('#set($other = "value")');
+    });
+  });
+
+  describe("minifyTemplate", () => {
+    it("should remove comments and compact VTL", () => {
+      const template = `## This is a comment
+#set($name = "test")
+{
+  "key": "$name"
+}`;
+      const minified = VTLJSONEditorService.minifyTemplate(template);
+      expect(minified).not.toContain("## This is a comment");
+      expect(minified).toContain("#set($name");
+    });
+
+    it("should compact JSON section", () => {
+      const template = `#set($x = "value")
+{
+  "key": "$x",
+  "other": "value"
+}`;
+      const minified = VTLJSONEditorService.minifyTemplate(template);
+      // JSON should be compacted (no spaces after colons in keys)
+      expect(minified).toContain('"key":"');
     });
   });
 });

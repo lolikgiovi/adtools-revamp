@@ -23,6 +23,8 @@ export const VTLJSONEditorTemplate = /* html */ `
                     <button class="btn btn-ghost btn-sm btn-clear" title="Clear Editor">Clear</button>
                     <button class="btn btn-ghost btn-sm btn-copy-input" title="Copy Input">Copy</button>
                     <button class="btn btn-ghost btn-sm btn-paste" title="Paste from Clipboard">Paste</button>
+                    <button class="btn btn-ghost btn-sm btn-format" title="Format/Beautify Template">Format</button>
+                    <button class="btn btn-ghost btn-sm btn-minify" title="Minify Template">Minify</button>
                     <button class="btn btn-primary btn-sm btn-action-primary" title="Perform Action">Validate</button>
                 </div>
             </div>

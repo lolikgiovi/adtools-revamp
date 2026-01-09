@@ -250,6 +250,16 @@ class VTLJSONEditor extends BaseTool {
       this.pasteFromClipboard();
     });
 
+    // Format
+    document.querySelector(".btn-format").addEventListener("click", () => {
+      this.formatTemplate();
+    });
+
+    // Minify
+    document.querySelector(".btn-minify").addEventListener("click", () => {
+      this.minifyTemplate();
+    });
+
     // Copy output
     document.querySelector(".btn-copy-output").addEventListener("click", () => {
       this.copyOutput();
@@ -502,6 +512,26 @@ class VTLJSONEditor extends BaseTool {
     const mockPanel = document.getElementById("vtl-mock-panel");
     mockPanel.classList.toggle("collapsed");
     this.isMockPanelCollapsed = mockPanel.classList.contains("collapsed");
+  }
+
+  formatTemplate() {
+    const template = this.inputEditor.getValue();
+    if (!template.trim()) return;
+
+    const formatted = VTLJSONEditorService.formatTemplate(template);
+    this.inputEditor.setValue(formatted);
+    UsageTracker.trackFeature("vtl-json-editor", "format");
+    this.showSuccess("Template formatted!");
+  }
+
+  minifyTemplate() {
+    const template = this.inputEditor.getValue();
+    if (!template.trim()) return;
+
+    const minified = VTLJSONEditorService.minifyTemplate(template);
+    this.inputEditor.setValue(minified);
+    UsageTracker.trackFeature("vtl-json-editor", "minify");
+    this.showSuccess("Template minified!");
   }
 
   showEmptyState() {

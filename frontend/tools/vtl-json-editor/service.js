@@ -59,16 +59,9 @@ export class VTLJSONEditorService {
         }
       }
 
-      // Check for #end
-      if (/#end\b/.test(trimmedLine)) {
-        if (blockStack.length === 0) {
-          errors.push({ line: lineNum, message: "Unexpected #end without matching opening directive" });
-        } else {
-          blockStack.pop();
-        }
-      }
-
-      // Check for #else/#elseif - must be inside #if block
+      // IMPORTANT: Check for #else/#elseif BEFORE #end
+      // This prevents false positives when #else and #end are on the same line
+      // e.g., #else#set($x="y")#end
       if (/#else\b/.test(trimmedLine) && !/#elseif/.test(trimmedLine)) {
         const hasIf = blockStack.some((b) => b.name === "#if");
         if (!hasIf) {
@@ -79,6 +72,15 @@ export class VTLJSONEditorService {
         const hasIf = blockStack.some((b) => b.name === "#if");
         if (!hasIf) {
           errors.push({ line: lineNum, message: "#elseif without matching #if" });
+        }
+      }
+
+      // Check for #end (after #else/#elseif checks)
+      if (/#end\b/.test(trimmedLine)) {
+        if (blockStack.length === 0) {
+          errors.push({ line: lineNum, message: "Unexpected #end without matching opening directive" });
+        } else {
+          blockStack.pop();
         }
       }
 
@@ -503,32 +505,164 @@ export class VTLJSONEditorService {
    * @returns {string}
    */
   static formatTemplate(template) {
-    const lines = template.split("\n");
-    const formatted = [];
-    let indentLevel = 0;
     const indentStr = "  ";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+    // Step 1: Split multi-directive lines onto separate lines
+    // Insert newline BEFORE #else, #elseif, #end (but not at start of line)
+    let normalized = template
+      // Split before #elseif (but not at line start)
+      .replace(/([^\n])#elseif/g, "$1\n#elseif")
+      // Split before #else (but not #elseif, and not at line start)
+      .replace(/([^\n])#else(?!if)/g, "$1\n#else")
+      // Split before #end (but not at line start)
+      .replace(/([^\n])#end\b/g, "$1\n#end");
+
+    const lines = normalized.split("\n");
+    const formatted = [];
+    let vtlIndentLevel = 0;
+    let inJsonSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+
       if (!trimmed) {
         formatted.push("");
         continue;
       }
 
-      // Decrease indent before #end, #else, #elseif
+      // Detect JSON section start
+      if (trimmed.startsWith("{") && !inJsonSection) {
+        inJsonSection = true;
+
+        // Extract and format JSON
+        const jsonContent = lines.slice(i).join("\n");
+        const jsonStartBrace = jsonContent.indexOf("{");
+        const jsonEndBrace = jsonContent.lastIndexOf("}");
+
+        if (jsonStartBrace !== -1 && jsonEndBrace !== -1) {
+          const jsonPart = jsonContent.substring(jsonStartBrace, jsonEndBrace + 1);
+
+          // Try to parse and format JSON (replacing VTL vars temporarily)
+          let cleanedJson = jsonPart.replace(/\$!?\{?[\w.]+\}?/g, '"__VTL_VAR__"');
+
+          try {
+            const parsed = JSON.parse(cleanedJson);
+            let prettyJson = JSON.stringify(parsed, null, 2);
+
+            // Restore VTL variables
+            const vtlVars = jsonPart.match(/\$!?\{?[\w.]+\}?/g) || [];
+            let varIndex = 0;
+            prettyJson = prettyJson.replace(/"__VTL_VAR__"/g, () => {
+              const originalVar = vtlVars[varIndex] || "__VTL_VAR__";
+              varIndex++;
+              return `"${originalVar}"`;
+            });
+
+            formatted.push(prettyJson);
+          } catch (e) {
+            // JSON parse failed, push original
+            for (let j = i; j < lines.length; j++) {
+              formatted.push(lines[j].trim());
+            }
+          }
+        } else {
+          formatted.push(trimmed);
+        }
+        break; // Done processing
+      }
+
+      // VTL section formatting
+      // Decrease indent BEFORE outputting if line starts with #end, #else, #elseif
       if (/^#(end|else|elseif)\b/.test(trimmed)) {
-        indentLevel = Math.max(0, indentLevel - 1);
+        vtlIndentLevel = Math.max(0, vtlIndentLevel - 1);
       }
 
-      formatted.push(indentStr.repeat(indentLevel) + trimmed);
+      formatted.push(indentStr.repeat(vtlIndentLevel) + trimmed);
 
-      // Increase indent after #if, #foreach, #macro, #else, #elseif
-      if (/^#(if|foreach|macro|else|elseif)\b/.test(trimmed)) {
-        indentLevel++;
+      // Increase indent AFTER outputting if line is #if, #foreach, #macro, #define, #else, #elseif
+      if (/^#(if|foreach|macro|define|else|elseif)\b/.test(trimmed)) {
+        vtlIndentLevel++;
       }
+
+      // Decrease for #end (if not at start - already handled)
+      // Now that lines are split, #end should always be at start if it exists
     }
 
     return formatted.join("\n");
+  }
+
+  /**
+   * Minify VTL template (remove unnecessary whitespace)
+   * @param {string} template
+   * @returns {string}
+   */
+  static minifyTemplate(template) {
+    const lines = template.split("\n");
+    const minified = [];
+    let inJsonSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+
+      // Skip empty lines
+      if (!trimmed) continue;
+
+      // Skip VTL comments (##)
+      if (trimmed.startsWith("##")) continue;
+
+      // Detect JSON section start
+      if (trimmed.startsWith("{")) {
+        inJsonSection = true;
+      }
+
+      if (inJsonSection) {
+        // Just add trimmed JSON lines
+        minified.push(trimmed);
+      } else {
+        // VTL directives - compact them
+        // Multiple VTL directives on same line if they're simple
+        const lastLine = minified[minified.length - 1];
+
+        // Can merge #else with previous #end or standalone
+        if (trimmed.startsWith("#else") && lastLine && !lastLine.includes("{")) {
+          minified[minified.length - 1] = lastLine + trimmed;
+        }
+        // Can merge #end after simple content
+        else if (
+          trimmed === "#end" &&
+          lastLine &&
+          !lastLine.startsWith("#if") &&
+          !lastLine.startsWith("#foreach") &&
+          !lastLine.includes("{")
+        ) {
+          minified[minified.length - 1] = lastLine + "#end";
+        } else {
+          minified.push(trimmed);
+        }
+      }
+    }
+
+    // Final pass: compact JSON section
+    let result = minified.join("\n");
+
+    // Find JSON and minify it
+    const jsonStart = result.indexOf("{");
+    const jsonEnd = result.lastIndexOf("}");
+
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      const vtlPart = result.substring(0, jsonStart);
+      const jsonPart = result.substring(jsonStart, jsonEnd + 1);
+
+      // Compact JSON by removing newlines between braces/brackets
+      const compactJson = jsonPart
+        .replace(/\n\s*/g, "") // Remove newlines and following spaces
+        .replace(/\s*:\s*/g, ":") // Remove spaces around colons
+        .replace(/,\s*/g, ","); // Remove spaces after commas
+
+      result = vtlPart + "\n" + compactJson;
+    }
+
+    return result.trim();
   }
 
   /**
@@ -566,7 +700,9 @@ export class VTLJSONEditorService {
     const usedVars = this.extractVariables(template);
 
     // Built-in context variables that are typically available
+    // These are provided by the system/framework, not defined in the template
     const builtInVars = new Set([
+      // VTL built-in helpers
       "fn",
       "util",
       "ctx",
@@ -576,10 +712,30 @@ export class VTLJSONEditorService {
       "foreach",
       "velocityCount",
       "velocityHasNext",
+      // Common request/event context
+      "header",
+      "headers",
+      "body",
+      "params",
+      "query",
+      "eventBodyData",
       "bodyData",
+      "eventBody",
+      // Common data context
+      "dataUser",
+      "userData",
+      "user",
+      "data",
       "logData",
       "getInfo",
-      "responseTokenCis", // Common in user's templates
+      "responseTokenCis",
+      // AWS AppSync / API Gateway context
+      "input",
+      "prev",
+      "stash",
+      "source",
+      "args",
+      "identity",
     ]);
 
     for (const used of usedVars) {
