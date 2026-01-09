@@ -1,0 +1,390 @@
+/**
+ * VTL JSON Editor Styles
+ * Styling for the VTL template editor tool
+ */
+
+/* Container */
+.vtl-editor-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 90px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Header with tabs */
+.vtl-editor-header {
+  flex-shrink: 0;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.vtl-editor-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  border-bottom: none;
+}
+
+.vtl-editor-tabs .tabs-left {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+/* Main content area */
+.vtl-editor-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Input section */
+.vtl-input-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid hsl(var(--border));
+}
+
+.vtl-input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: hsl(var(--foreground));
+}
+
+.vtl-input-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.vtl-input-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Output section */
+.vtl-output-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vtl-output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: hsl(var(--foreground));
+}
+
+.vtl-output-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.vtl-output-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Monaco editor containers */
+.vtl-monaco-editor {
+  flex: 1;
+  min-height: 300px;
+  border: none;
+  background: hsl(var(--background));
+}
+
+/* Output panels */
+.vtl-output-panel {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  background: hsl(var(--background));
+}
+
+/* Validation results */
+.vtl-validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vtl-validation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.vtl-validation-item.error {
+  background: hsl(0 84% 60% / 0.1);
+  border-left: 3px solid hsl(0, 84%, 60%);
+  color: hsl(var(--foreground));
+}
+
+.vtl-validation-item.error .vtl-validation-line {
+  color: hsl(0, 84%, 60%);
+}
+
+.vtl-validation-item.warning {
+  background: hsl(38 92% 50% / 0.1);
+  border-left: 3px solid hsl(38, 92%, 50%);
+  color: hsl(var(--foreground));
+}
+
+.vtl-validation-item.warning .vtl-validation-line {
+  color: hsl(38, 92%, 50%);
+}
+
+.vtl-validation-item.success {
+  background: hsl(142 76% 36% / 0.1);
+  border-left: 3px solid hsl(142, 76%, 36%);
+  color: hsl(var(--foreground));
+}
+
+.vtl-validation-item.success .vtl-validation-line {
+  color: hsl(142, 76%, 36%);
+}
+
+.vtl-validation-line {
+  font-weight: 600;
+  white-space: nowrap;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.vtl-validation-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* Validation summary */
+.vtl-validation-summary {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.vtl-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.vtl-summary-stat.errors {
+  color: hsl(0 84% 60%);
+}
+
+.vtl-summary-stat.warnings {
+  color: hsl(38 92% 50%);
+}
+
+.vtl-summary-stat.success {
+  color: hsl(142 76% 36%);
+}
+
+/* Variables table */
+.vtl-variables-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.vtl-variables-table th,
+.vtl-variables-table td {
+  padding: 0.625rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.vtl-variables-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.vtl-variables-table th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vtl-variables-table td {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  color: hsl(var(--foreground));
+}
+
+.vtl-variables-table td:first-child {
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+
+.vtl-variables-table td:last-child {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+.vtl-variables-table tbody tr:hover td {
+  background: hsl(var(--muted) / 0.5);
+}
+
+/* Mock data panel */
+.vtl-mock-panel {
+  flex-shrink: 0;
+  background: hsl(var(--card));
+  border-top: 1px solid hsl(var(--border));
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+}
+
+.vtl-mock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.vtl-mock-header:hover {
+  background: hsl(var(--accent));
+}
+
+.vtl-mock-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.vtl-mock-editor {
+  flex: 1;
+  min-height: 150px;
+}
+
+/* Mock panel collapsed state */
+.vtl-mock-panel.collapsed .vtl-mock-editor {
+  display: none;
+}
+
+.vtl-mock-panel.collapsed {
+  max-height: none;
+}
+
+.vtl-mock-panel.collapsed .vtl-mock-header {
+  border-bottom: none;
+}
+
+.vtl-mock-panel.collapsed .btn-toggle-mock svg {
+  transform: rotate(180deg);
+}
+
+/* Empty state */
+.vtl-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  padding: 2rem;
+}
+
+.vtl-empty-state svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+  stroke: currentColor;
+}
+
+.vtl-empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Scrollbar styling */
+.vtl-output-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.vtl-output-panel::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+.vtl-output-panel::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+.vtl-output-panel::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .vtl-editor-main {
+    flex-direction: column;
+  }
+
+  .vtl-input-section {
+    border-right: none;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .vtl-input-section,
+  .vtl-output-section {
+    min-height: 300px;
+  }
+
+  .vtl-input-actions,
+  .vtl-output-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* Animation for smooth transitions */
+.vtl-mock-panel {
+  transition: max-height 0.2s ease;
+}
+
+.btn-toggle-mock svg {
+  transition: transform 0.2s ease;
+}

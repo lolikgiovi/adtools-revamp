@@ -8,7 +8,7 @@
     <link rel="icon" type="image/x-icon" href="../tauri/icons/128x128@2x.png">
     <!-- Prevent flash of wrong theme by applying class before CSS loads -->
     <script>
-        (function() {
+        (function () {
             var theme = localStorage.getItem('theme');
             if (theme && theme !== 'light') {
                 document.documentElement.classList.add(theme);
@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="tools/html-editor/styles.css">
     <link rel="stylesheet" href="tools/image-checker/styles.css">
     <link rel="stylesheet" href="tools/run-query/styles.css">
+    <link rel="stylesheet" href="tools/vtl-json-editor/styles.css">
 </head>
 
 <body>

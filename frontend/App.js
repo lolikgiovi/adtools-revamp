@@ -28,6 +28,7 @@ import { CheckImageTool } from "./tools/image-checker/main.js";
 import { JenkinsRunner } from "./tools/run-query/main.js";
 import { RunBatch } from "./tools/run-batch/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
+import { VTLJSONEditor } from "./tools/vtl-json-editor/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { AnalyticsDashboardPage } from "./pages/analytics-dashboard/main.js";
 import { isTauri } from "./core/Runtime.js";
@@ -278,6 +279,10 @@ class App {
     // Register Master Lockey
     const masterLockey = new MasterLockey(this.eventBus);
     this.registerTool(masterLockey);
+
+    // Register VTL JSON Editor
+    const vtlJsonEditor = new VTLJSONEditor(this.eventBus);
+    this.registerTool(vtlJsonEditor);
 
     // Add more tools here as they are implemented
   }

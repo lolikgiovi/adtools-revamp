@@ -140,6 +140,16 @@
       "enabled": true,
       "requiresTauri": true,
       "order": 100
+    },
+    {
+      "id": "vtl-json-editor",
+      "name": "VTL JSON Editor",
+      "category": "config",
+      "icon": "vtl-json",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 65
     }
   ]
 }

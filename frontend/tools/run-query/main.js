@@ -418,6 +418,33 @@ export class JenkinsRunner extends BaseTool {
       statusEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
+    // ===== MIGRATION: Migrate from old jenkins-runner keys to new run-query keys =====
+    // This handles the rename from jenkins-runner to run-query, ensuring users keep their data.
+    const migrationDone = localStorage.getItem("tool:run-query:migrated");
+    if (!migrationDone) {
+      const oldKeys = [
+        { from: "tool:jenkins-runner:env", to: "tool:run-query:env" },
+        { from: "tool:jenkins-runner:lastState", to: "tool:run-query:lastState" },
+        { from: "tool:jenkins-runner:templates", to: "tool:run-query:templates" },
+        { from: "tool:jenkins-runner:history", to: "tool:run-query:history" },
+      ];
+      for (const { from, to } of oldKeys) {
+        try {
+          const oldData = localStorage.getItem(from);
+          const newData = localStorage.getItem(to);
+          // Only migrate if old key has data and new key is empty/missing
+          if (oldData && !newData) {
+            localStorage.setItem(to, oldData);
+          }
+          // Remove old key after migration
+          if (oldData) {
+            localStorage.removeItem(from);
+          }
+        } catch (_) {}
+      }
+      localStorage.setItem("tool:run-query:migrated", "1");
+    }
+
     const persistEnvKey = "tool:run-query:env";
     const savedEnv = localStorage.getItem(persistEnvKey) || "";
 
