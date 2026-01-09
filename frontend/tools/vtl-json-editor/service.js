@@ -561,9 +561,84 @@ export class VTLJSONEditorService {
       issues.push({ line: warning.line, severity: "warning", message: warning.message });
     }
 
+    // Check for undefined variables: used in JSON but not defined in VTL
+    const definedVars = this.extractDefinedVariables(template);
+    const usedVars = this.extractVariables(template);
+
+    // Built-in context variables that are typically available
+    const builtInVars = new Set([
+      "fn",
+      "util",
+      "ctx",
+      "context",
+      "request",
+      "response",
+      "foreach",
+      "velocityCount",
+      "velocityHasNext",
+      "bodyData",
+      "logData",
+      "getInfo",
+      "responseTokenCis", // Common in user's templates
+    ]);
+
+    for (const used of usedVars) {
+      const rootVar = used.name;
+      if (!definedVars.has(rootVar) && !builtInVars.has(rootVar)) {
+        issues.push({
+          line: used.line,
+          severity: "warning",
+          message: `Variable "$${rootVar}" is used but not defined with #set or #foreach`,
+        });
+      }
+    }
+
     // Sort by line number
     issues.sort((a, b) => a.line - b.line);
 
     return issues;
+  }
+
+  /**
+   * Extract variables that are defined in VTL directives (#set, #foreach)
+   * @param {string} template
+   * @returns {Set<string>} - Set of variable names that are defined
+   */
+  static extractDefinedVariables(template) {
+    const defined = new Set();
+    const lines = template.split("\n");
+
+    for (const line of lines) {
+      // Extract from #set directive: #set($varName = ...)
+      const setMatch = line.match(/#set\s*\(\s*\$(\w+)/);
+      if (setMatch) {
+        defined.add(setMatch[1]);
+      }
+
+      // Extract from #foreach directive: #foreach($item in $list)
+      const foreachMatch = line.match(/#foreach\s*\(\s*\$(\w+)\s+in/);
+      if (foreachMatch) {
+        defined.add(foreachMatch[1]);
+      }
+
+      // Extract from #macro arguments: #macro(name $arg1 $arg2)
+      const macroMatch = line.match(/#macro\s*\(\s*\w+\s+(.*?)\)/);
+      if (macroMatch) {
+        const args = macroMatch[1].match(/\$(\w+)/g);
+        if (args) {
+          for (const arg of args) {
+            defined.add(arg.substring(1)); // Remove the $
+          }
+        }
+      }
+
+      // Extract from #define: #define($blockName)
+      const defineMatch = line.match(/#define\s*\(\s*\$(\w+)/);
+      if (defineMatch) {
+        defined.add(defineMatch[1]);
+      }
+    }
+
+    return defined;
   }
 }

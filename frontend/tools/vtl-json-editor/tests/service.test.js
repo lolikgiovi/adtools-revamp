@@ -230,6 +230,36 @@ another: $c`;
         expect(issues[i].line).toBeGreaterThanOrEqual(issues[i - 1].line);
       }
     });
+
+    it("should warn about undefined variables", () => {
+      const template = `#set($defined = "value")
+{
+  "key": "$undefined",
+  "other": "$defined"
+}`;
+      const issues = VTLJSONEditorService.lintTemplate(template);
+      const undefinedWarning = issues.find((i) => i.message.includes("$undefined") && i.message.includes("not defined"));
+      expect(undefinedWarning).toBeTruthy();
+      expect(undefinedWarning.severity).toBe("warning");
+    });
+  });
+
+  describe("extractDefinedVariables", () => {
+    it("should extract variables from #set directives", () => {
+      const template = `#set($name = "test")
+#set($value = 123)`;
+      const defined = VTLJSONEditorService.extractDefinedVariables(template);
+      expect(defined.has("name")).toBe(true);
+      expect(defined.has("value")).toBe(true);
+    });
+
+    it("should extract loop variable from #foreach", () => {
+      const template = `#foreach($item in $list)
+  $item
+#end`;
+      const defined = VTLJSONEditorService.extractDefinedVariables(template);
+      expect(defined.has("item")).toBe(true);
+    });
   });
 
   describe("formatTemplate", () => {
