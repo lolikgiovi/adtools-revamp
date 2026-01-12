@@ -171,6 +171,12 @@ class JSONTools extends BaseTool {
       }
     });
 
+    // Export to Excel button
+    document.querySelector(".btn-export-excel").addEventListener("click", () => {
+      this.clearErrors();
+      this.exportToExcel();
+    });
+
     // Extract keys options
     document.querySelectorAll('input[name="extract-type"]').forEach((radio) => {
       radio.addEventListener("change", () => {
@@ -335,9 +341,11 @@ class JSONTools extends BaseTool {
       tableOutput.style.display = "block";
       if (transposeBtn) transposeBtn.style.display = "inline-flex";
       if (expandBtn) expandBtn.style.display = "inline-flex";
-      // Show search toggle button
+      // Show search toggle button and export button
       const searchToggleBtn = document.querySelector(".btn-toggle-search");
       if (searchToggleBtn) searchToggleBtn.style.display = "inline-flex";
+      const exportExcelBtn = document.querySelector(".btn-export-excel");
+      if (exportExcelBtn) exportExcelBtn.style.display = "inline-flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
@@ -349,6 +357,9 @@ class JSONTools extends BaseTool {
       if (searchToggleBtn) searchToggleBtn.style.display = "none";
       if (searchGroup) searchGroup.style.display = "none";
       this.isSearchOpen = false;
+      // Hide export button
+      const exportExcelBtn = document.querySelector(".btn-export-excel");
+      if (exportExcelBtn) exportExcelBtn.style.display = "none";
     }
 
     // Process current content
@@ -886,9 +897,6 @@ class JSONTools extends BaseTool {
     });
   }
 
-  /**
-   * Format a value for TSV - handles nested objects/arrays by JSON stringifying
-   */
   formatValueForTSV(value) {
     if (value === null) return "null";
     if (value === undefined) return "";
@@ -896,6 +904,60 @@ class JSONTools extends BaseTool {
       return JSON.stringify(value).replace(/[\t\n\r]/g, " ");
     }
     return String(value).replace(/[\t\n\r]/g, " ");
+  }
+
+  /**
+   * Export table data to Excel (.xlsx) file
+   */
+  async exportToExcel() {
+    if (!this.validatedJson) {
+      this.showError("No data to export");
+      return;
+    }
+
+    try {
+      // Dynamic import of xlsx library
+      const XLSX = await import("xlsx");
+
+      // Get flattened data for export
+      const flattenedPairs = [];
+      this.flattenObject(this.validatedJson, "", flattenedPairs);
+
+      if (flattenedPairs.length === 0) {
+        this.showError("No data to export");
+        return;
+      }
+
+      // Create worksheet data with headers
+      const wsData = [["Key", "Value"]];
+      flattenedPairs.forEach(({ key, value }) => {
+        wsData.push([key, value]);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Auto-size columns
+      const maxKeyLength = Math.max(...flattenedPairs.map((p) => p.key.length), 3);
+      const maxValueLength = Math.min(Math.max(...flattenedPairs.map((p) => String(p.value).length), 5), 100);
+      ws["!cols"] = [{ wch: Math.min(maxKeyLength + 2, 60) }, { wch: Math.min(maxValueLength + 2, 100) }];
+
+      XLSX.utils.book_append_sheet(wb, ws, "JSON Data");
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
+      const filename = `json_export_${timestamp}.xlsx`;
+
+      // Trigger download
+      XLSX.writeFile(wb, filename);
+
+      this.showSuccess(`Exported to ${filename}`);
+      UsageTracker.trackEvent("json_tools", "export_excel");
+    } catch (error) {
+      console.error("Export failed:", error);
+      this.showError("Failed to export to Excel");
+    }
   }
 
   async copyToClipboard(text) {

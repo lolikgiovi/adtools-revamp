@@ -73,6 +73,7 @@ export const JSONToolsTemplate = /* html */ `
                             </div>
                         </div>
                     </div>
+                    <button class="btn btn-primary btn-sm btn-export-excel" title="Export to Excel" style="display: none;">Export Excel</button>
                     <button class="btn btn-primary btn-sm btn-copy-output" title="Copy Output">Copy</button>
                 </div>
             </div>
