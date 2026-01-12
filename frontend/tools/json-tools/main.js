@@ -158,8 +158,16 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-copy-output").addEventListener("click", () => {
       this.clearErrors();
-      const output = this.outputEditor ? this.outputEditor.getValue() : "";
-      this.copyToClipboard(output);
+      if (this.currentTab === "json-to-table") {
+        // Extract table as HTML for Excel compatibility (preserves nested tables)
+        const html = this.extractTableAsHTML();
+        if (html) {
+          this.copyHTMLToClipboard(html);
+        }
+      } else {
+        const output = this.outputEditor ? this.outputEditor.getValue() : "";
+        this.copyToClipboard(output);
+      }
     });
 
     // Extract keys options
@@ -312,7 +320,7 @@ class JSONTools extends BaseTool {
     const expandBtn = document.querySelector(".btn-expand-table");
     const inputSection = document.querySelector(".json-editor-section");
     const outputSection = document.querySelector(".json-output-section");
-    
+
     // Reset expand state when switching tabs
     if (this.isExpanded) {
       this.isExpanded = false;
@@ -320,7 +328,7 @@ class JSONTools extends BaseTool {
       if (outputSection) outputSection.classList.remove("expanded");
       if (expandBtn) expandBtn.textContent = "Expand";
     }
-    
+
     if (tabName === "json-to-table") {
       jsonOutput.style.display = "none";
       tableOutput.style.display = "block";
@@ -505,7 +513,7 @@ class JSONTools extends BaseTool {
       tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
     } else {
       tableOutput.innerHTML = res.result || "";
-      
+
       // Add click handler for Key header sort toggle (only in transposed view)
       if (this.isTransposed) {
         const keyHeader = tableOutput.querySelector(".key-header-sortable");
@@ -546,7 +554,7 @@ class JSONTools extends BaseTool {
     const inputSection = document.querySelector(".json-editor-section");
     const outputSection = document.querySelector(".json-output-section");
     const expandBtn = document.querySelector(".btn-expand-table");
-    
+
     if (!inputSection || !outputSection) return;
 
     this.isExpanded = !this.isExpanded;
@@ -567,37 +575,37 @@ class JSONTools extends BaseTool {
   searchTable(query) {
     const tableOutput = document.getElementById("json-table-output");
     const matchCountEl = document.querySelector(".search-match-count");
-    
+
     // Clear previous highlights
-    tableOutput.querySelectorAll(".search-match, .search-current").forEach(el => {
+    tableOutput.querySelectorAll(".search-match, .search-current").forEach((el) => {
       el.classList.remove("search-match", "search-current");
     });
     this.searchMatches = [];
     this.currentMatchIndex = -1;
-    
+
     if (!query || query.trim() === "") {
       if (matchCountEl) matchCountEl.textContent = "";
       return;
     }
-    
+
     const lowerQuery = query.toLowerCase();
-    
+
     // Find all leaf td cells (cells without nested tables inside)
     const cells = tableOutput.querySelectorAll(".json-table td");
-    cells.forEach(cell => {
+    cells.forEach((cell) => {
       // Skip cells that contain nested tables - we'll search their children instead
       if (cell.querySelector(".nested-table")) return;
-      
+
       // Skip key-index cells (row numbers)
       if (cell.classList.contains("key-index")) return;
-      
+
       const text = cell.textContent.toLowerCase();
       if (text.includes(lowerQuery)) {
         cell.classList.add("search-match");
         this.searchMatches.push(cell);
       }
     });
-    
+
     // Update match count
     if (matchCountEl) {
       if (this.searchMatches.length > 0) {
@@ -613,12 +621,12 @@ class JSONTools extends BaseTool {
 
   navigateSearch(direction) {
     if (this.searchMatches.length === 0) return;
-    
+
     // Remove current highlight
     if (this.currentMatchIndex >= 0) {
       this.searchMatches[this.currentMatchIndex].classList.remove("search-current");
     }
-    
+
     // Move to next/prev
     this.currentMatchIndex += direction;
     if (this.currentMatchIndex >= this.searchMatches.length) {
@@ -626,12 +634,12 @@ class JSONTools extends BaseTool {
     } else if (this.currentMatchIndex < 0) {
       this.currentMatchIndex = this.searchMatches.length - 1;
     }
-    
+
     // Highlight new current
     const current = this.searchMatches[this.currentMatchIndex];
     current.classList.add("search-current");
     current.scrollIntoView({ behavior: "smooth", block: "center" });
-    
+
     // Update counter
     const matchCountEl = document.querySelector(".search-match-count");
     if (matchCountEl) {
@@ -642,9 +650,9 @@ class JSONTools extends BaseTool {
   toggleSearch() {
     const searchGroup = document.querySelector(".table-search-group");
     const searchInput = document.querySelector(".table-search-input");
-    
+
     this.isSearchOpen = !this.isSearchOpen;
-    
+
     if (this.isSearchOpen) {
       if (searchGroup) searchGroup.style.display = "flex";
       if (searchInput) searchInput.focus();
@@ -711,6 +719,98 @@ class JSONTools extends BaseTool {
 
   clearOutput() {
     if (this.outputEditor) this.outputEditor.setValue("");
+  }
+
+  /**
+   * Extract table HTML for clipboard - Excel can parse HTML tables directly
+   * @returns {string|null} HTML string or null if no table
+   */
+  extractTableAsHTML() {
+    const tableOutput = document.getElementById("json-table-output");
+    const table = tableOutput?.querySelector(".json-table");
+    if (!table) {
+      this.showError("No table to copy");
+      return null;
+    }
+    // Return the outer HTML of the table
+    return table.outerHTML;
+  }
+
+  /**
+   * Extract nested table data as an object/array for JSON stringification
+   */
+  extractNestedTableData(table) {
+    const rows = table.querySelectorAll("tr");
+    const result = [];
+
+    rows.forEach((tr) => {
+      const cells = tr.querySelectorAll("td");
+      if (cells.length === 2) {
+        // Key-value pair (object-like)
+        const key = cells[0].textContent.trim();
+        const nestedTable = cells[1].querySelector(".nested-table");
+        if (nestedTable) {
+          result.push({ [key]: this.extractNestedTableData(nestedTable) });
+        } else {
+          result.push({ [key]: cells[1].textContent.trim() });
+        }
+      } else if (cells.length === 1) {
+        // Array element
+        const nestedTable = cells[0].querySelector(".nested-table");
+        if (nestedTable) {
+          result.push(this.extractNestedTableData(nestedTable));
+        } else {
+          result.push(cells[0].textContent.trim());
+        }
+      }
+    });
+
+    return result.length === 1 ? result[0] : result;
+  }
+
+  /**
+   * Copy HTML content to clipboard - Excel can parse HTML tables
+   */
+  async copyHTMLToClipboard(html) {
+    try {
+      const blob = new Blob([html], { type: "text/html" });
+      const clipboardItem = new ClipboardItem({
+        "text/html": blob,
+        // Also provide plain text fallback
+        "text/plain": new Blob([this.htmlToPlainText(html)], { type: "text/plain" }),
+      });
+      await navigator.clipboard.write([clipboardItem]);
+      this.showSuccess("Copied to clipboard!");
+    } catch (error) {
+      // Fallback to text copy if HTML clipboard fails
+      console.warn("HTML clipboard failed, falling back to text:", error);
+      const plainText = this.htmlToPlainText(html);
+      this.copyToClipboard(plainText);
+    }
+  }
+
+  /**
+   * Convert HTML table to plain text (TSV format) as fallback
+   */
+  htmlToPlainText(html) {
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+    const rows = [];
+    temp.querySelectorAll("tr").forEach((tr) => {
+      const cells = [];
+      tr.querySelectorAll("th, td").forEach((cell) => {
+        // Skip nested table content for plain text
+        if (cell.querySelector(".nested-table")) {
+          cells.push("[nested]");
+        } else {
+          cells.push(cell.textContent.trim().replace(/[\t\n]/g, " "));
+        }
+      });
+      if (cells.length > 0) {
+        rows.push(cells.join("\t"));
+      }
+    });
+    return rows.join("\n");
   }
 
   async copyToClipboard(text) {
