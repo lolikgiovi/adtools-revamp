@@ -9,6 +9,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {
@@ -770,47 +771,131 @@ class JSONTools extends BaseTool {
 
   /**
    * Copy HTML content to clipboard - Excel can parse HTML tables
+   * Uses Tauri native clipboard API when available for full HTML support
    */
   async copyHTMLToClipboard(html) {
+    console.log("[Clipboard] HTML length:", html.length, "chars");
+    const inTauri = isTauri();
+    console.log("[Clipboard] Tauri detected:", inTauri);
+
+    // Check if running in Tauri environment
+    if (inTauri) {
+      try {
+        // Dynamic import of Tauri clipboard plugin
+        console.log("[Clipboard] Using Tauri writeHtml...");
+        const { writeHtml } = await import("@tauri-apps/plugin-clipboard-manager");
+        // writeHtml accepts HTML string and optional plain text fallback
+        await writeHtml(html, this.generateTSVFromData());
+        console.log("[Clipboard] Tauri writeHtml SUCCESS");
+        this.showSuccess("Copied to clipboard!");
+        return;
+      } catch (error) {
+        console.warn("[Clipboard] Tauri clipboard failed, falling back to browser API:", error);
+        // Fall through to browser API
+      }
+    }
+
+    // Browser API fallback (works in Chrome, may fail in some WebViews)
     try {
       const blob = new Blob([html], { type: "text/html" });
       const clipboardItem = new ClipboardItem({
         "text/html": blob,
-        // Also provide plain text fallback
-        "text/plain": new Blob([this.htmlToPlainText(html)], { type: "text/plain" }),
+        "text/plain": new Blob([this.generateTSVFromData()], { type: "text/plain" }),
       });
       await navigator.clipboard.write([clipboardItem]);
       this.showSuccess("Copied to clipboard!");
     } catch (error) {
-      // Fallback to text copy if HTML clipboard fails
-      console.warn("HTML clipboard failed, falling back to text:", error);
-      const plainText = this.htmlToPlainText(html);
-      this.copyToClipboard(plainText);
+      // Final fallback to plain text TSV
+      console.warn("HTML clipboard failed, falling back to TSV:", error);
+      const tsv = this.generateTSVFromData();
+      this.copyToClipboard(tsv);
     }
   }
 
   /**
-   * Convert HTML table to plain text (TSV format) as fallback
+   * Generate TSV from validated JSON data using flattened dot-notation
+   * Excel for Mac doesn't support nested HTML tables, so we flatten nested objects
    */
-  htmlToPlainText(html) {
-    const temp = document.createElement("div");
-    temp.innerHTML = html;
+  generateTSVFromData() {
+    if (!this.validatedJson) return "";
+
+    const data = this.validatedJson;
     const rows = [];
-    temp.querySelectorAll("tr").forEach((tr) => {
-      const cells = [];
-      tr.querySelectorAll("th, td").forEach((cell) => {
-        // Skip nested table content for plain text
-        if (cell.querySelector(".nested-table")) {
-          cells.push("[nested]");
-        } else {
-          cells.push(cell.textContent.trim().replace(/[\t\n]/g, " "));
-        }
-      });
-      if (cells.length > 0) {
-        rows.push(cells.join("\t"));
-      }
+
+    // Flatten the data - collect all key-value pairs with dot-notation for nested
+    const flattenedPairs = [];
+    this.flattenObject(data, "", flattenedPairs);
+
+    if (flattenedPairs.length === 0) return "";
+
+    // Generate TSV with Key/Value columns
+    rows.push("Key\tValue");
+    flattenedPairs.forEach(({ key, value }) => {
+      rows.push(`${key}\t${value}`);
     });
+
     return rows.join("\n");
+  }
+
+  /**
+   * Recursively flatten an object/array into key-value pairs with dot-notation
+   * @param {*} obj - Object to flatten
+   * @param {string} prefix - Current path prefix (e.g., "dataHeader" or "data[0]")
+   * @param {Array} result - Array to push results to
+   */
+  flattenObject(obj, prefix, result) {
+    if (obj === null) {
+      result.push({ key: prefix || "(root)", value: "null" });
+      return;
+    }
+
+    if (obj === undefined) {
+      result.push({ key: prefix || "(root)", value: "" });
+      return;
+    }
+
+    if (typeof obj !== "object") {
+      // Primitive value
+      const value = String(obj).replace(/[\t\n\r]/g, " ");
+      result.push({ key: prefix || "(root)", value });
+      return;
+    }
+
+    if (Array.isArray(obj)) {
+      if (obj.length === 0) {
+        result.push({ key: prefix || "(root)", value: "[]" });
+        return;
+      }
+      obj.forEach((item, index) => {
+        const newPrefix = prefix ? `${prefix}[${index}]` : `[${index}]`;
+        this.flattenObject(item, newPrefix, result);
+      });
+      return;
+    }
+
+    // Object
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+      result.push({ key: prefix || "(root)", value: "{}" });
+      return;
+    }
+
+    keys.forEach((key) => {
+      const newPrefix = prefix ? `${prefix}.${key}` : key;
+      this.flattenObject(obj[key], newPrefix, result);
+    });
+  }
+
+  /**
+   * Format a value for TSV - handles nested objects/arrays by JSON stringifying
+   */
+  formatValueForTSV(value) {
+    if (value === null) return "null";
+    if (value === undefined) return "";
+    if (typeof value === "object") {
+      return JSON.stringify(value).replace(/[\t\n\r]/g, " ");
+    }
+    return String(value).replace(/[\t\n\r]/g, " ");
   }
 
   async copyToClipboard(text) {

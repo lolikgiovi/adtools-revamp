@@ -10,7 +10,9 @@
     "updater:allow-check",
     "updater:allow-install",
     "process:allow-restart",
-    "process:default"
+    "process:default",
+    "clipboard-manager:allow-write-html",
+    "clipboard-manager:allow-write-text"
   ],
   "platforms": ["macOS"]
 }
