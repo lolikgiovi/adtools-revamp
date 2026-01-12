@@ -9,6 +9,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {
@@ -158,8 +159,22 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-copy-output").addEventListener("click", () => {
       this.clearErrors();
-      const output = this.outputEditor ? this.outputEditor.getValue() : "";
-      this.copyToClipboard(output);
+      if (this.currentTab === "json-to-table") {
+        // Extract table as HTML for Excel compatibility (preserves nested tables)
+        const html = this.extractTableAsHTML();
+        if (html) {
+          this.copyHTMLToClipboard(html);
+        }
+      } else {
+        const output = this.outputEditor ? this.outputEditor.getValue() : "";
+        this.copyToClipboard(output);
+      }
+    });
+
+    // Export to Excel button
+    document.querySelector(".btn-export-excel").addEventListener("click", () => {
+      this.clearErrors();
+      this.exportToExcel();
     });
 
     // Extract keys options
@@ -312,7 +327,7 @@ class JSONTools extends BaseTool {
     const expandBtn = document.querySelector(".btn-expand-table");
     const inputSection = document.querySelector(".json-editor-section");
     const outputSection = document.querySelector(".json-output-section");
-    
+
     // Reset expand state when switching tabs
     if (this.isExpanded) {
       this.isExpanded = false;
@@ -320,15 +335,17 @@ class JSONTools extends BaseTool {
       if (outputSection) outputSection.classList.remove("expanded");
       if (expandBtn) expandBtn.textContent = "Expand";
     }
-    
+
     if (tabName === "json-to-table") {
       jsonOutput.style.display = "none";
       tableOutput.style.display = "block";
       if (transposeBtn) transposeBtn.style.display = "inline-flex";
       if (expandBtn) expandBtn.style.display = "inline-flex";
-      // Show search toggle button
+      // Show search toggle button and export button
       const searchToggleBtn = document.querySelector(".btn-toggle-search");
       if (searchToggleBtn) searchToggleBtn.style.display = "inline-flex";
+      const exportExcelBtn = document.querySelector(".btn-export-excel");
+      if (exportExcelBtn) exportExcelBtn.style.display = "inline-flex";
     } else {
       jsonOutput.style.display = "block";
       tableOutput.style.display = "none";
@@ -340,6 +357,9 @@ class JSONTools extends BaseTool {
       if (searchToggleBtn) searchToggleBtn.style.display = "none";
       if (searchGroup) searchGroup.style.display = "none";
       this.isSearchOpen = false;
+      // Hide export button
+      const exportExcelBtn = document.querySelector(".btn-export-excel");
+      if (exportExcelBtn) exportExcelBtn.style.display = "none";
     }
 
     // Process current content
@@ -505,7 +525,7 @@ class JSONTools extends BaseTool {
       tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
     } else {
       tableOutput.innerHTML = res.result || "";
-      
+
       // Add click handler for Key header sort toggle (only in transposed view)
       if (this.isTransposed) {
         const keyHeader = tableOutput.querySelector(".key-header-sortable");
@@ -546,7 +566,7 @@ class JSONTools extends BaseTool {
     const inputSection = document.querySelector(".json-editor-section");
     const outputSection = document.querySelector(".json-output-section");
     const expandBtn = document.querySelector(".btn-expand-table");
-    
+
     if (!inputSection || !outputSection) return;
 
     this.isExpanded = !this.isExpanded;
@@ -567,37 +587,37 @@ class JSONTools extends BaseTool {
   searchTable(query) {
     const tableOutput = document.getElementById("json-table-output");
     const matchCountEl = document.querySelector(".search-match-count");
-    
+
     // Clear previous highlights
-    tableOutput.querySelectorAll(".search-match, .search-current").forEach(el => {
+    tableOutput.querySelectorAll(".search-match, .search-current").forEach((el) => {
       el.classList.remove("search-match", "search-current");
     });
     this.searchMatches = [];
     this.currentMatchIndex = -1;
-    
+
     if (!query || query.trim() === "") {
       if (matchCountEl) matchCountEl.textContent = "";
       return;
     }
-    
+
     const lowerQuery = query.toLowerCase();
-    
+
     // Find all leaf td cells (cells without nested tables inside)
     const cells = tableOutput.querySelectorAll(".json-table td");
-    cells.forEach(cell => {
+    cells.forEach((cell) => {
       // Skip cells that contain nested tables - we'll search their children instead
       if (cell.querySelector(".nested-table")) return;
-      
+
       // Skip key-index cells (row numbers)
       if (cell.classList.contains("key-index")) return;
-      
+
       const text = cell.textContent.toLowerCase();
       if (text.includes(lowerQuery)) {
         cell.classList.add("search-match");
         this.searchMatches.push(cell);
       }
     });
-    
+
     // Update match count
     if (matchCountEl) {
       if (this.searchMatches.length > 0) {
@@ -613,12 +633,12 @@ class JSONTools extends BaseTool {
 
   navigateSearch(direction) {
     if (this.searchMatches.length === 0) return;
-    
+
     // Remove current highlight
     if (this.currentMatchIndex >= 0) {
       this.searchMatches[this.currentMatchIndex].classList.remove("search-current");
     }
-    
+
     // Move to next/prev
     this.currentMatchIndex += direction;
     if (this.currentMatchIndex >= this.searchMatches.length) {
@@ -626,12 +646,12 @@ class JSONTools extends BaseTool {
     } else if (this.currentMatchIndex < 0) {
       this.currentMatchIndex = this.searchMatches.length - 1;
     }
-    
+
     // Highlight new current
     const current = this.searchMatches[this.currentMatchIndex];
     current.classList.add("search-current");
     current.scrollIntoView({ behavior: "smooth", block: "center" });
-    
+
     // Update counter
     const matchCountEl = document.querySelector(".search-match-count");
     if (matchCountEl) {
@@ -642,9 +662,9 @@ class JSONTools extends BaseTool {
   toggleSearch() {
     const searchGroup = document.querySelector(".table-search-group");
     const searchInput = document.querySelector(".table-search-input");
-    
+
     this.isSearchOpen = !this.isSearchOpen;
-    
+
     if (this.isSearchOpen) {
       if (searchGroup) searchGroup.style.display = "flex";
       if (searchInput) searchInput.focus();
@@ -711,6 +731,233 @@ class JSONTools extends BaseTool {
 
   clearOutput() {
     if (this.outputEditor) this.outputEditor.setValue("");
+  }
+
+  /**
+   * Extract table HTML for clipboard - Excel can parse HTML tables directly
+   * @returns {string|null} HTML string or null if no table
+   */
+  extractTableAsHTML() {
+    const tableOutput = document.getElementById("json-table-output");
+    const table = tableOutput?.querySelector(".json-table");
+    if (!table) {
+      this.showError("No table to copy");
+      return null;
+    }
+    // Return the outer HTML of the table
+    return table.outerHTML;
+  }
+
+  /**
+   * Extract nested table data as an object/array for JSON stringification
+   */
+  extractNestedTableData(table) {
+    const rows = table.querySelectorAll("tr");
+    const result = [];
+
+    rows.forEach((tr) => {
+      const cells = tr.querySelectorAll("td");
+      if (cells.length === 2) {
+        // Key-value pair (object-like)
+        const key = cells[0].textContent.trim();
+        const nestedTable = cells[1].querySelector(".nested-table");
+        if (nestedTable) {
+          result.push({ [key]: this.extractNestedTableData(nestedTable) });
+        } else {
+          result.push({ [key]: cells[1].textContent.trim() });
+        }
+      } else if (cells.length === 1) {
+        // Array element
+        const nestedTable = cells[0].querySelector(".nested-table");
+        if (nestedTable) {
+          result.push(this.extractNestedTableData(nestedTable));
+        } else {
+          result.push(cells[0].textContent.trim());
+        }
+      }
+    });
+
+    return result.length === 1 ? result[0] : result;
+  }
+
+  /**
+   * Copy HTML content to clipboard - Excel can parse HTML tables
+   * Uses Tauri native clipboard API when available for full HTML support
+   */
+  async copyHTMLToClipboard(html) {
+    console.log("[Clipboard] HTML length:", html.length, "chars");
+    const inTauri = isTauri();
+    console.log("[Clipboard] Tauri detected:", inTauri);
+
+    // Check if running in Tauri environment
+    if (inTauri) {
+      try {
+        // Dynamic import of Tauri clipboard plugin
+        console.log("[Clipboard] Using Tauri writeHtml...");
+        const { writeHtml } = await import("@tauri-apps/plugin-clipboard-manager");
+        // writeHtml accepts HTML string and optional plain text fallback
+        await writeHtml(html, this.generateTSVFromData());
+        console.log("[Clipboard] Tauri writeHtml SUCCESS");
+        this.showSuccess("Copied to clipboard!");
+        return;
+      } catch (error) {
+        console.warn("[Clipboard] Tauri clipboard failed, falling back to browser API:", error);
+        // Fall through to browser API
+      }
+    }
+
+    // Browser API fallback (works in Chrome, may fail in some WebViews)
+    try {
+      const blob = new Blob([html], { type: "text/html" });
+      const clipboardItem = new ClipboardItem({
+        "text/html": blob,
+        "text/plain": new Blob([this.generateTSVFromData()], { type: "text/plain" }),
+      });
+      await navigator.clipboard.write([clipboardItem]);
+      this.showSuccess("Copied to clipboard!");
+    } catch (error) {
+      // Final fallback to plain text TSV
+      console.warn("HTML clipboard failed, falling back to TSV:", error);
+      const tsv = this.generateTSVFromData();
+      this.copyToClipboard(tsv);
+    }
+  }
+
+  /**
+   * Generate TSV from validated JSON data using flattened dot-notation
+   * Excel for Mac doesn't support nested HTML tables, so we flatten nested objects
+   */
+  generateTSVFromData() {
+    if (!this.validatedJson) return "";
+
+    const data = this.validatedJson;
+    const rows = [];
+
+    // Flatten the data - collect all key-value pairs with dot-notation for nested
+    const flattenedPairs = [];
+    this.flattenObject(data, "", flattenedPairs);
+
+    if (flattenedPairs.length === 0) return "";
+
+    // Generate TSV with Key/Value columns
+    rows.push("Key\tValue");
+    flattenedPairs.forEach(({ key, value }) => {
+      rows.push(`${key}\t${value}`);
+    });
+
+    return rows.join("\n");
+  }
+
+  /**
+   * Recursively flatten an object/array into key-value pairs with dot-notation
+   * @param {*} obj - Object to flatten
+   * @param {string} prefix - Current path prefix (e.g., "dataHeader" or "data[0]")
+   * @param {Array} result - Array to push results to
+   */
+  flattenObject(obj, prefix, result) {
+    if (obj === null) {
+      result.push({ key: prefix || "(root)", value: "null" });
+      return;
+    }
+
+    if (obj === undefined) {
+      result.push({ key: prefix || "(root)", value: "" });
+      return;
+    }
+
+    if (typeof obj !== "object") {
+      // Primitive value
+      const value = String(obj).replace(/[\t\n\r]/g, " ");
+      result.push({ key: prefix || "(root)", value });
+      return;
+    }
+
+    if (Array.isArray(obj)) {
+      if (obj.length === 0) {
+        result.push({ key: prefix || "(root)", value: "[]" });
+        return;
+      }
+      obj.forEach((item, index) => {
+        const newPrefix = prefix ? `${prefix}[${index}]` : `[${index}]`;
+        this.flattenObject(item, newPrefix, result);
+      });
+      return;
+    }
+
+    // Object
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+      result.push({ key: prefix || "(root)", value: "{}" });
+      return;
+    }
+
+    keys.forEach((key) => {
+      const newPrefix = prefix ? `${prefix}.${key}` : key;
+      this.flattenObject(obj[key], newPrefix, result);
+    });
+  }
+
+  formatValueForTSV(value) {
+    if (value === null) return "null";
+    if (value === undefined) return "";
+    if (typeof value === "object") {
+      return JSON.stringify(value).replace(/[\t\n\r]/g, " ");
+    }
+    return String(value).replace(/[\t\n\r]/g, " ");
+  }
+
+  /**
+   * Export table data to Excel (.xlsx) file
+   */
+  async exportToExcel() {
+    if (!this.validatedJson) {
+      this.showError("No data to export");
+      return;
+    }
+
+    try {
+      // Dynamic import of xlsx library
+      const XLSX = await import("xlsx");
+
+      // Get flattened data for export
+      const flattenedPairs = [];
+      this.flattenObject(this.validatedJson, "", flattenedPairs);
+
+      if (flattenedPairs.length === 0) {
+        this.showError("No data to export");
+        return;
+      }
+
+      // Create worksheet data with headers
+      const wsData = [["Key", "Value"]];
+      flattenedPairs.forEach(({ key, value }) => {
+        wsData.push([key, value]);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Auto-size columns
+      const maxKeyLength = Math.max(...flattenedPairs.map((p) => p.key.length), 3);
+      const maxValueLength = Math.min(Math.max(...flattenedPairs.map((p) => String(p.value).length), 5), 100);
+      ws["!cols"] = [{ wch: Math.min(maxKeyLength + 2, 60) }, { wch: Math.min(maxValueLength + 2, 100) }];
+
+      XLSX.utils.book_append_sheet(wb, ws, "JSON Data");
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
+      const filename = `json_export_${timestamp}.xlsx`;
+
+      // Trigger download
+      XLSX.writeFile(wb, filename);
+
+      this.showSuccess(`Exported to ${filename}`);
+      UsageTracker.trackEvent("json_tools", "export_excel");
+    } catch (error) {
+      console.error("Export failed:", error);
+      this.showError("Failed to export to Excel");
+    }
   }
 
   async copyToClipboard(text) {

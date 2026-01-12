@@ -1592,8 +1592,10 @@ export class QuickQueryUI {
       // [5]: Default Value
       // [6]: Comments
 
-      // Transform nullable from TRUE/FALSE to Yes/No
-      const nullable = String(row[4]).toLowerCase() === "true" ? "Yes" : "No";
+      // Transform "Not Null" from TRUE/FALSE to our "Null" column (Yes/No)
+      // DBeaver's "Not Null = true" means the field is NOT nullable, so our Null = "No"
+      // DBeaver's "Not Null = false" means the field IS nullable, so our Null = "Yes"
+      const nullable = String(row[4]).toLowerCase() === "true" ? "No" : "Yes";
 
       // Transform [NULL] to empty string
       const defaultValue = row[5] === "[NULL]" ? "" : row[5];
