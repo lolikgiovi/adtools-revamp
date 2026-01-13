@@ -90,7 +90,37 @@ class SettingsPage {
     // Bind toolbar actions
     root.querySelector(".settings-load-defaults")?.addEventListener("click", () => this.openOtpModal());
     root.querySelector(".settings-check-update")?.addEventListener("click", () => this.handleManualCheckUpdate());
+
+    // Migrate Jenkins username from keychain to localStorage (one-time)
+    await this.#migrateJenkinsUsername();
+
     await this.reloadConfig();
+  }
+
+  /**
+   * One-time migration: read Jenkins username from macOS Keychain and store to localStorage.
+   * After migration, the username is read from localStorage, token stays in keychain.
+   */
+  async #migrateJenkinsUsername() {
+    // Skip if already migrated (username exists in localStorage)
+    const existingUsername = localStorage.getItem("config.jenkins.username");
+    if (existingUsername) return;
+
+    // Skip if not running in Tauri
+    if (this.runtime !== "tauri") return;
+
+    try {
+      // Read username from keychain via Tauri command
+      const keychainUsername = await invoke("get_jenkins_username");
+      if (keychainUsername && typeof keychainUsername === "string" && keychainUsername.trim()) {
+        // Store to localStorage
+        localStorage.setItem("config.jenkins.username", keychainUsername.trim());
+        console.log("[Settings] Migrated Jenkins username from keychain to localStorage");
+      }
+    } catch (err) {
+      // Silent fail - user may not have any credentials yet
+      console.debug("[Settings] No Jenkins username in keychain to migrate:", err);
+    }
   }
 
   async openOtpModal() {
@@ -572,22 +602,19 @@ class SettingsPage {
         let stored;
         if (storageKey === "secure.jenkins.token") {
           try {
-            await invoke("set_jenkins_token", { token: value });
+            // Pass username from localStorage to store token under that key
+            const username = localStorage.getItem("config.jenkins.username") || "";
+            if (!username) {
+              errorEl.textContent = "Set Jenkins Username first";
+              return;
+            }
+            await invoke("set_jenkins_token", { username, token: value });
           } catch (err) {
             errorEl.textContent = String(err);
             return;
           }
           // Store a marker only, not the token itself
           stored = this.service.setValue(storageKey, "secret", "set", item.apply);
-        } else if (storageKey === "secure.jenkins.username") {
-          try {
-            await invoke("set_jenkins_username", { username: value });
-          } catch (err) {
-            errorEl.textContent = String(err);
-            return;
-          }
-          // Persist username for display
-          stored = this.service.setValue(storageKey, "string", value, item.apply);
         } else if (storageKey === "secure.confluence.pat") {
           try {
             await invoke("set_confluence_pat", { pat: value });

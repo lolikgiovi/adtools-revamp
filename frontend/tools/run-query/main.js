@@ -1902,6 +1902,52 @@ export class JenkinsRunner extends BaseTool {
       });
     };
 
+    // Clear button - empties the SQL editor
+    const clearBtn = this.container.querySelector("#jenkins-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (this.editor && typeof this.editor.setValue === "function") {
+          this.editor.setValue("");
+          this._querySource = null; // Reset source
+          saveLastState({ sql: "" });
+          toggleSubmitEnabled();
+          statusEl.textContent = "Editor cleared";
+        }
+      });
+    }
+
+    // Paste button - reads clipboard and inserts into editor
+    const pasteBtn = this.container.querySelector("#jenkins-paste");
+    if (pasteBtn) {
+      pasteBtn.addEventListener("click", async () => {
+        try {
+          // Use Tauri clipboard plugin if available, otherwise fallback to browser API
+          let text = "";
+          if (isTauri()) {
+            try {
+              const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+              text = (await readText()) || "";
+            } catch (_) {
+              // Fallback to browser clipboard API
+              text = await navigator.clipboard.readText();
+            }
+          } else {
+            text = await navigator.clipboard.readText();
+          }
+          if (this.editor && typeof this.editor.setValue === "function" && text) {
+            this.editor.setValue(text);
+            this._querySource = "paste";
+            saveLastState({ sql: text });
+            toggleSubmitEnabled();
+            statusEl.textContent = "Pasted from clipboard";
+          }
+        } catch (err) {
+          statusEl.textContent = "Failed to read clipboard";
+          console.error("Paste failed:", err);
+        }
+      });
+    }
+
     runBtn.addEventListener("click", async () => {
       const baseUrl = this.state.jenkinsUrl;
       const job = jobInput.value.trim();

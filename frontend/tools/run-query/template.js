@@ -19,6 +19,8 @@ export const JenkinsRunnerTemplate = /*html*/ `
               <option value="tester-execute-query">tester-execute-query</option>
             </select>
             <select id="jenkins-env" class="jr-input" aria-label="ENV Choice"></select>
+            <button id="jenkins-clear" class="btn btn-secondary btn-sm-xs" title="Clear editor">Clear</button>
+            <button id="jenkins-paste" class="btn btn-secondary btn-sm-xs" title="Paste from clipboard">Paste</button>
             <button id="jenkins-run" class="btn btn-primary btn-sm-xs">Run on Jenkins</button>
           </div>
         </div>
