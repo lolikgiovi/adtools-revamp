@@ -56,14 +56,27 @@ export class ImageCheckerService {
    * Probe an image URL and return width/height. No CORS, no extra fetch.
    * @param {string} baseUrl
    * @param {string} imagePath
+   * @param {number} timeoutMs - Timeout in milliseconds (default: 15000)
    */
-  async checkImage(baseUrl, imagePath = "") {
+  async checkImage(baseUrl, imagePath = "", timeoutMs = 15000) {
     const url = baseUrl.replace(/\/$/, "") + "/" + imagePath.replace(/^\//, "");
 
     return new Promise((resolve) => {
       const img = new Image();
+      let settled = false;
+
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          img.src = ""; // Cancel the request
+          resolve({ exists: false, url, timeout: true });
+        }
+      }, timeoutMs);
 
       img.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         const width = img.naturalWidth;
         const height = img.naturalHeight;
         resolve({
@@ -75,7 +88,12 @@ export class ImageCheckerService {
         });
       };
 
-      img.onerror = () => resolve({ exists: false, url });
+      img.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve({ exists: false, url });
+      };
 
       img.src = url + (url.includes("?") ? "&" : "?") + `cb=${Date.now()}`;
     });
