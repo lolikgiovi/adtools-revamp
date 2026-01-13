@@ -40,6 +40,43 @@ export class JenkinsRunner extends BaseTool {
     return JenkinsRunnerTemplate;
   }
 
+  /**
+   * One-time migration: read Jenkins username from macOS Keychain and store to localStorage.
+   * After migration, the username is read from localStorage, token stays in keychain.
+   */
+  async #migrateJenkinsUsername() {
+    console.log("[RunQuery] Checking Jenkins username migration...");
+
+    // Skip if already migrated (username exists in localStorage)
+    const existingUsername = localStorage.getItem("config.jenkins.username");
+    if (existingUsername) {
+      console.log("[RunQuery] Migration skipped: username already in localStorage");
+      return;
+    }
+
+    // Skip if not running in Tauri
+    if (!isTauri()) {
+      console.log("[RunQuery] Migration skipped: not running in Tauri");
+      return;
+    }
+
+    try {
+      // Read username from keychain via Tauri command
+      console.log("[RunQuery] Attempting to read username from keychain...");
+      const keychainUsername = await invoke("get_jenkins_username");
+      if (keychainUsername && typeof keychainUsername === "string" && keychainUsername.trim()) {
+        // Store to localStorage
+        localStorage.setItem("config.jenkins.username", keychainUsername.trim());
+        console.log("[RunQuery] Migrated Jenkins username from keychain to localStorage");
+      } else {
+        console.log("[RunQuery] No username found in keychain");
+      }
+    } catch (err) {
+      // Silent fail - user may not have any credentials yet
+      console.debug("[RunQuery] No Jenkins username in keychain to migrate:", err);
+    }
+  }
+
   // Receive route data passed by App.showTool and inject into editor
   onRouteData(data) {
     try {
@@ -59,6 +96,9 @@ export class JenkinsRunner extends BaseTool {
   }
 
   async onMount() {
+    // Migrate Jenkins username from keychain to localStorage (one-time)
+    await this.#migrateJenkinsUsername();
+
     const baseUrlInput = this.container.querySelector("#jenkins-baseurl");
     const jobInput = this.container.querySelector("#jenkins-job");
     const envSelect = this.container.querySelector("#jenkins-env");
