@@ -49,6 +49,7 @@ class CheckImageTool extends BaseTool {
   bindElements() {
     this.elements = {
       batchImagePathsInput: this.root.querySelector("#batchImagePathsInput"),
+      pasteButton: this.root.querySelector("#pasteButton"),
       checkImageButton: this.root.querySelector("#checkImageButton"),
       clearButton: this.root.querySelector("#clearButton"),
       resultsContainer: this.root.querySelector("#resultsContainer"),
@@ -65,6 +66,17 @@ class CheckImageTool extends BaseTool {
       this.clearSavedValues();
       this.elements.batchImagePathsInput.value = "";
       this.elements.batchImagePathsInput.focus();
+    });
+    this.elements.pasteButton.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const textarea = this.elements.batchImagePathsInput;
+        const currentVal = textarea.value.trim();
+        textarea.value = currentVal ? currentVal + "\n" + text : text;
+        textarea.focus();
+      } catch (err) {
+        console.error("Failed to read clipboard:", err);
+      }
     });
 
     // Batch mode enter key handler
