@@ -170,3 +170,41 @@ describe('QueryGenerationService - NULL and whitespace handling', () => {
     expect(sql).toContain("VALUES (1, ' ', 10, SYSDATE, 'SYSTEM', SYSDATE, 'USER1')")
   })
 })
+
+describe('QueryGenerationService - Running number PK SELECT generation', () => {
+  const svc = new QueryGenerationService()
+  const schema = buildLowercaseSchema()
+  const headers = ['id','type','sequence','created_time','created_by','updated_time','updated_by']
+
+  it('uses FETCH FIRST N ROWS when PK is a running number (max)', () => {
+    // When user enters "max" for the PK, it generates a subquery like (SELECT NVL(MAX(id)+1, 1) FROM table)
+    // The SELECT statement should use FETCH FIRST instead of WHERE IN with the subquery
+    const row = ['max','menu','10','','', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'merge', schema, [headers, row], [])
+
+    // Should NOT contain the nonsensical WHERE IN with subquery
+    expect(sql).not.toContain('WHERE id IN ((SELECT NVL(MAX')
+
+    // Should contain FETCH FIRST approach
+    expect(sql).toContain('SELECT * FROM my_table ORDER BY updated_time DESC FETCH FIRST 1 ROWS ONLY')
+  })
+
+  it('uses FETCH FIRST with correct row count for multiple rows', () => {
+    const row1 = ['max','menu1','10','','', '', 'user1']
+    const row2 = ['max','menu2','20','','', '', 'user2']
+    const row3 = ['max','menu3','30','','', '', 'user3']
+    const sql = svc.generateQuery('my_table', 'merge', schema, [headers, row1, row2, row3], [])
+
+    // Should use FETCH FIRST 3 for 3 rows
+    expect(sql).toContain('SELECT * FROM my_table ORDER BY updated_time DESC FETCH FIRST 3 ROWS ONLY')
+  })
+
+  it('uses WHERE IN when PK is a regular value (not running number)', () => {
+    const row = ['123','menu','10','','', '', 'user1']
+    const sql = svc.generateQuery('my_table', 'merge', schema, [headers, row], [])
+
+    // Should use regular WHERE IN approach
+    expect(sql).toContain('SELECT * FROM my_table WHERE id IN (123)')
+    expect(sql).not.toContain('FETCH FIRST')
+  })
+})
