@@ -6,8 +6,6 @@ export class ValueProcessorService {
   constructor() {}
 
   processValue(value, dataType, nullable, fieldName, tableName, queryType = null) {
-    console.log("Processing value:", value);
-
     // Constants
     const AUDIT_FIELDS = {
       time: ["created_time", "updated_time"],
@@ -80,7 +78,7 @@ export class ValueProcessorService {
     switch (fieldDataType.type) {
       case "NUMBER":
         let normalizedValue = value.toString().trim();
-        
+
         // 1. Handle multiple commas (e.g. 10,000,000) -> Remove all commas
         if ((normalizedValue.match(/,/g) || []).length > 1) {
           normalizedValue = normalizedValue.replace(/,/g, "");
@@ -89,7 +87,7 @@ export class ValueProcessorService {
         else if (normalizedValue.includes(",") && normalizedValue.includes(".")) {
           const lastCommaIndex = normalizedValue.lastIndexOf(",");
           const lastDotIndex = normalizedValue.lastIndexOf(".");
-          
+
           if (lastCommaIndex < lastDotIndex) {
             // Format: 10,000.50 (Comma is thousands)
             normalizedValue = normalizedValue.replace(/,/g, "");
@@ -109,7 +107,7 @@ export class ValueProcessorService {
             normalizedValue = normalizedValue.replace(",", ".");
           }
         }
-        
+
         const num = parseFloat(normalizedValue);
 
         if (isNaN(num)) {
@@ -131,7 +129,11 @@ export class ValueProcessorService {
 
         if (value.toLowerCase() === "uuid") {
           if (fieldDataType.maxLength && fieldDataType.maxLength < UUID_V4_MAXLENGTH) {
-            UsageTracker.trackEvent("quick-query", "value_error", { type: "uuid_length_too_small", fieldName, maxLength: fieldDataType.maxLength });
+            UsageTracker.trackEvent("quick-query", "value_error", {
+              type: "uuid_length_too_small",
+              fieldName,
+              maxLength: fieldDataType.maxLength,
+            });
             throw new Error(
               `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. Minimum required length is ${UUID_V4_MAXLENGTH}.`
             );
@@ -143,7 +145,13 @@ export class ValueProcessorService {
           const length = fieldDataType.unit === "BYTE" ? new TextEncoder().encode(value).length : value.length;
 
           if (length > fieldDataType.maxLength) {
-            UsageTracker.trackEvent("quick-query", "value_error", { type: "max_length_exceeded", fieldName, maxLength: fieldDataType.maxLength, length, unit: fieldDataType.unit });
+            UsageTracker.trackEvent("quick-query", "value_error", {
+              type: "max_length_exceeded",
+              fieldName,
+              maxLength: fieldDataType.maxLength,
+              length,
+              unit: fieldDataType.unit,
+            });
             throw new Error(`Value exceeds maximum length of ${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`);
           }
         }
@@ -221,8 +229,6 @@ export class ValueProcessorService {
   }
 
   findPrimaryKeys(data, tableName) {
-    console.log("Finding primary keys for:", tableName);
-
     // For config table, use field parameter_key if exist as primary key
     if (tableName.toLowerCase().endsWith("config")) {
       const parameterKeyField = data.find((field) => field[0].toLowerCase() === "parameter_key");
@@ -267,7 +273,9 @@ export class ValueProcessorService {
 
           if (precision > 0) {
             // Reconstruct the timestamp with timezone
-            return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalMatch[1].substring(0, precision)}${parsed.format("Z")}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
+            return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalMatch[1].substring(0, precision)}${parsed.format(
+              "Z"
+            )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}TZH:TZM')`;
           }
           return `TO_TIMESTAMP_TZ('${parsed.format("YYYY-MM-DD HH:mm:ssZ")}', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')`;
         }
@@ -284,7 +292,7 @@ export class ValueProcessorService {
         // Try parsing the date part strictly first
         const parsed = moment(datePart, ["DD-MM-YYYY HH:mm:ss", "YYYY-MM-DD HH:mm:ss", "DD.MM.YYYY HH:mm:ss"], true);
         if (parsed.isValid()) {
-           return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
+          return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractionalPart.substring(
             0,
             precision
           )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
@@ -337,24 +345,27 @@ export class ValueProcessorService {
             return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}', 'YYYY-MM-DD HH24:MI:SS')`;
           }
         }
-        
+
         // Handle AM/PM with fractional seconds
         // e.g. 10/15/2026 12:00:00.000000 AM
         const fractionalAmPmMatch = value.match(/^(.+?)\.(\d+)\s+([AP]M)$/i);
         if (fractionalAmPmMatch) {
-             const [_, datePart, fractional, ampm] = fractionalAmPmMatch;
-             const formats = [
-               "MM/DD/YYYY hh:mm:ss A", 
-               "M/DD/YYYY hh:mm:ss A", 
-               "M/D/YYYY hh:mm:ss A", 
-               "MM/D/YYYY hh:mm:ss A", 
-               "YYYY-MM-DD hh:mm:ss A"
-             ];
-             const parsed = moment(`${datePart} ${ampm}`, formats, true);
-             if (parsed.isValid()) {
-                 const precision = Math.min(fractional.length, 9);
-                 return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractional.substring(0, precision)}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
-             }
+          const [_, datePart, fractional, ampm] = fractionalAmPmMatch;
+          const formats = [
+            "MM/DD/YYYY hh:mm:ss A",
+            "M/DD/YYYY hh:mm:ss A",
+            "M/D/YYYY hh:mm:ss A",
+            "MM/D/YYYY hh:mm:ss A",
+            "YYYY-MM-DD hh:mm:ss A",
+          ];
+          const parsed = moment(`${datePart} ${ampm}`, formats, true);
+          if (parsed.isValid()) {
+            const precision = Math.min(fractional.length, 9);
+            return `TO_TIMESTAMP('${parsed.format("YYYY-MM-DD HH:mm:ss")}.${fractional.substring(
+              0,
+              precision
+            )}', 'YYYY-MM-DD HH24:MI:SS.FF${precision}')`;
+          }
         }
       }
 
