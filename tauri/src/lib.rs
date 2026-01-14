@@ -1,3 +1,14 @@
+use std::sync::Mutex;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+// Zoom state: stores current zoom level (default 90%, range 80%-110%)
+struct ZoomState(Mutex<f64>);
+
+const ZOOM_DEFAULT: f64 = 0.9;
+const ZOOM_MIN: f64 = 0.8;
+const ZOOM_MAX: f64 = 1.1;
+const ZOOM_STEP: f64 = 0.05;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -6,6 +17,7 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    .manage(ZoomState(Mutex::new(ZOOM_DEFAULT)))
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
       get_jenkins_username,
@@ -38,14 +50,131 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      // Build custom menu with zoom controls
+      let menu = build_menu(app.handle())?;
+      app.set_menu(menu)?;
+
       // Set default zoom level to 90%
       if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_zoom(0.9);
+        let _ = window.set_zoom(ZOOM_DEFAULT);
       }
       Ok(())
     })
+    .on_menu_event(|app, event| {
+      let id = event.id().as_ref();
+      match id {
+        "zoom_in" => adjust_zoom(app, ZOOM_STEP),
+        "zoom_out" => adjust_zoom(app, -ZOOM_STEP),
+        "zoom_reset" => set_zoom(app, ZOOM_DEFAULT),
+        _ => {}
+      }
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
+}
+
+fn build_menu(handle: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
+  let menu = Menu::new(handle)?;
+
+  // App menu (macOS)
+  #[cfg(target_os = "macos")]
+  {
+    let app_menu = Submenu::with_items(
+      handle,
+      "AD Tools",
+      true,
+      &[
+        &PredefinedMenuItem::about(handle, Some("About AD Tools"), None)?,
+        &PredefinedMenuItem::separator(handle)?,
+        &PredefinedMenuItem::services(handle, None)?,
+        &PredefinedMenuItem::separator(handle)?,
+        &PredefinedMenuItem::hide(handle, None)?,
+        &PredefinedMenuItem::hide_others(handle, None)?,
+        &PredefinedMenuItem::show_all(handle, None)?,
+        &PredefinedMenuItem::separator(handle)?,
+        &PredefinedMenuItem::quit(handle, None)?,
+      ],
+    )?;
+    menu.append(&app_menu)?;
+  }
+
+  // Edit menu
+  let edit_menu = Submenu::with_items(
+    handle,
+    "Edit",
+    true,
+    &[
+      &PredefinedMenuItem::undo(handle, None)?,
+      &PredefinedMenuItem::redo(handle, None)?,
+      &PredefinedMenuItem::separator(handle)?,
+      &PredefinedMenuItem::cut(handle, None)?,
+      &PredefinedMenuItem::copy(handle, None)?,
+      &PredefinedMenuItem::paste(handle, None)?,
+      &PredefinedMenuItem::select_all(handle, None)?,
+    ],
+  )?;
+  menu.append(&edit_menu)?;
+
+  // View menu with zoom controls
+  let zoom_in = MenuItem::with_id(handle, "zoom_in", "Zoom In", true, Some("CmdOrCtrl+="))?;
+  let zoom_out = MenuItem::with_id(handle, "zoom_out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+  let zoom_reset = MenuItem::with_id(handle, "zoom_reset", "Reset Zoom", true, Some("CmdOrCtrl+0"))?;
+
+  let view_menu = Submenu::with_items(
+    handle,
+    "View",
+    true,
+    &[
+      &zoom_in,
+      &zoom_out,
+      &zoom_reset,
+      &PredefinedMenuItem::separator(handle)?,
+      &PredefinedMenuItem::fullscreen(handle, None)?,
+    ],
+  )?;
+  menu.append(&view_menu)?;
+
+  // Window menu
+  let window_menu = Submenu::with_items(
+    handle,
+    "Window",
+    true,
+    &[
+      &PredefinedMenuItem::minimize(handle, None)?,
+      &PredefinedMenuItem::maximize(handle, None)?,
+      &PredefinedMenuItem::separator(handle)?,
+      &PredefinedMenuItem::close_window(handle, None)?,
+    ],
+  )?;
+  menu.append(&window_menu)?;
+
+  Ok(menu)
+}
+
+fn adjust_zoom(app: &tauri::AppHandle, delta: f64) {
+  let state = app.state::<ZoomState>();
+  let mut zoom = state.0.lock().unwrap();
+  let new_zoom = (*zoom + delta).clamp(ZOOM_MIN, ZOOM_MAX);
+  // Round to avoid floating point drift
+  let new_zoom = (new_zoom * 100.0).round() / 100.0;
+  *zoom = new_zoom;
+  drop(zoom);
+  apply_zoom(app, new_zoom);
+}
+
+fn set_zoom(app: &tauri::AppHandle, level: f64) {
+  let state = app.state::<ZoomState>();
+  let mut zoom = state.0.lock().unwrap();
+  *zoom = level;
+  drop(zoom);
+  apply_zoom(app, level);
+}
+
+fn apply_zoom(app: &tauri::AppHandle, level: f64) {
+  if let Some(window) = app.get_webview_window("main") {
+    let _ = window.set_zoom(level);
+  }
 }
 pub mod jenkins;
 pub mod confluence;
