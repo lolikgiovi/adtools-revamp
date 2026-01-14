@@ -3,6 +3,15 @@ use std::fs;
 
 use ad_tools_lib::{jenkins, load_credentials};
 use reqwest::Client;
+use keyring::Entry;
+
+const KEYCHAIN_SERVICE: &str = "ad-tools:jenkins";
+
+/// Read Jenkins username from keychain (for CLI use - no localStorage available)
+fn get_username_from_keychain() -> Result<String, String> {
+  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
+  entry.get_password().map_err(|e| format!("Username not found in keychain: {}", e))
+}
 
 fn main() {
   tauri::async_runtime::block_on(async_main());
@@ -70,53 +79,65 @@ fn print_usage() {
 fn client() -> Client { Client::builder().build().unwrap() }
 
 async fn run_env_choices(base_url: &str, job: &str) {
-  match load_credentials().await {
-    Ok(creds) => match jenkins::fetch_env_choices(&client(), base_url, job, &creds).await {
-      Ok(choices) => {
-        for c in choices { println!("{}", c); }
-      }
-      Err(e) => eprintln!("Error: {}", e),
+  match get_username_from_keychain() {
+    Ok(username) => match load_credentials(username).await {
+      Ok(creds) => match jenkins::fetch_env_choices(&client(), base_url, job, &creds).await {
+        Ok(choices) => {
+          for c in choices { println!("{}", c); }
+        }
+        Err(e) => eprintln!("Error: {}", e),
+      },
+      Err(e) => eprintln!("Credentials error: {}", e),
     },
     Err(e) => eprintln!("Credentials error: {}", e),
   }
 }
 
 async fn run_trigger_job(base_url: &str, job: &str, env_name: &str, sql_text: &str) {
-  match load_credentials().await {
-    Ok(creds) => match jenkins::trigger_job(&client(), base_url, job, env_name, sql_text, &creds).await {
-      Ok(queue_url) => println!("{}", queue_url),
-      Err(e) => eprintln!("Error: {}", e),
+  match get_username_from_keychain() {
+    Ok(username) => match load_credentials(username).await {
+      Ok(creds) => match jenkins::trigger_job(&client(), base_url, job, env_name, sql_text, &creds).await {
+        Ok(queue_url) => println!("{}", queue_url),
+        Err(e) => eprintln!("Error: {}", e),
+      },
+      Err(e) => eprintln!("Credentials error: {}", e),
     },
     Err(e) => eprintln!("Credentials error: {}", e),
   }
 }
 
 async fn run_poll_queue(queue_url: &str) {
-  match load_credentials().await {
-    Ok(creds) => match jenkins::poll_queue_for_build(&client(), queue_url, &creds).await {
-      Ok((num, url)) => println!("number={:?} url={:?}", num, url),
-      Err(e) => eprintln!("Error: {}", e),
+  match get_username_from_keychain() {
+    Ok(username) => match load_credentials(username).await {
+      Ok(creds) => match jenkins::poll_queue_for_build(&client(), queue_url, &creds).await {
+        Ok((num, url)) => println!("number={:?} url={:?}", num, url),
+        Err(e) => eprintln!("Error: {}", e),
+      },
+      Err(e) => eprintln!("Credentials error: {}", e),
     },
     Err(e) => eprintln!("Credentials error: {}", e),
   }
 }
 
 async fn run_stream_logs(base_url: &str, job: &str, build_number: u64) {
-  match load_credentials().await {
-    Ok(creds) => {
-      let mut start: u64 = 0;
-      loop {
-        match jenkins::progressive_log_once(&client(), base_url, job, build_number, start, &creds).await {
-          Ok((text, next, more)) => {
-            print!("{}", text);
-            if !more { break; }
-            start = next;
+  match get_username_from_keychain() {
+    Ok(username) => match load_credentials(username).await {
+      Ok(creds) => {
+        let mut start: u64 = 0;
+        loop {
+          match jenkins::progressive_log_once(&client(), base_url, job, build_number, start, &creds).await {
+            Ok((text, next, more)) => {
+              print!("{}", text);
+              if !more { break; }
+              start = next;
+            }
+            Err(e) => { eprintln!("Error: {}", e); break; }
           }
-          Err(e) => { eprintln!("Error: {}", e); break; }
+          tokio::time::sleep(std::time::Duration::from_millis(800)).await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
       }
-    }
+      Err(e) => eprintln!("Credentials error: {}", e),
+    },
     Err(e) => eprintln!("Credentials error: {}", e),
   }
 }

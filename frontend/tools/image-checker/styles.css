@@ -193,7 +193,7 @@
   padding: 8px 12px;
   border: 1px solid var(--border-color, hsl(var(--border)));
   text-align: center;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .batch-results-table th {
@@ -209,6 +209,9 @@
 
 .batch-results-table .status-icon {
   font-size: 16px;
+  line-height: 1;
+  display: inline-block;
+  transform: scale(0.7);
 }
 
 .mini-image-preview {
@@ -268,6 +271,88 @@
   .image-size-info {
     display: none;
   }
+}
+
+/* Cell Loading States */
+.status-cell.loading {
+  background-color: var(--bg-light, hsl(var(--muted) / 0.3));
+}
+
+.cell-loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 60px;
+}
+
+.cell-loading-spinner .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color, hsl(var(--border)));
+  border-top-color: var(--primary, hsl(var(--primary)));
+  border-radius: 50%;
+  animation: cell-spin 0.8s linear infinite;
+}
+
+@keyframes cell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cell-loading-spinner .loading-text {
+  font-size: 10px;
+  color: var(--text-muted, hsl(var(--muted-foreground)));
+}
+
+/* Timeout/Error states with retry */
+.status-cell.timeout {
+  background-color: var(--warning-bg, hsl(45 100% 50% / 0.1));
+}
+
+.cell-timeout-content,
+.cell-error-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 60px;
+}
+
+.timeout-icon,
+.image-error-icon {
+  font-size: 16px;
+  line-height: 1;
+  display: inline-block;
+  transform: scale(0.7);
+}
+
+.timeout-text,
+.error-text {
+  font-size: 10px;
+  color: var(--text-muted, hsl(var(--muted-foreground)));
+}
+
+.retry-button {
+  padding: 4px 8px;
+  font-size: 10px;
+  border: 1px solid var(--border-color, hsl(var(--border)));
+  border-radius: 4px;
+  background-color: var(--bg-light, hsl(var(--card)));
+  color: var(--text-color, hsl(var(--foreground)));
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.retry-button:hover {
+  background-color: var(--primary, hsl(var(--primary)));
+  border-color: var(--primary, hsl(var(--primary)));
+  color: var(--primary-foreground, hsl(var(--primary-foreground)));
 }
 
 /* Image Details Modal */

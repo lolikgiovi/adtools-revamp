@@ -6,6 +6,7 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
+      get_jenkins_username,
       set_jenkins_username,
       set_jenkins_token,
       has_jenkins_token,
@@ -68,12 +69,23 @@ fn confluence_http_client() -> Client {
     .expect("failed to build confluence http client")
 }
 
-pub async fn load_credentials() -> Result<Credentials, String> {
-  let user_entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
-  let username = user_entry.get_password().map_err(|e| e.to_string())?;
+pub async fn load_credentials(username: String) -> Result<Credentials, String> {
   let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
   let token = token_entry.get_password().map_err(|e| e.to_string())?;
   Ok(Credentials { username, token })
+}
+
+/// Get the Jenkins username from keychain (for migration to localStorage)
+#[tauri::command]
+fn get_jenkins_username() -> Result<Option<String>, String> {
+  let entry = match Entry::new(KEYCHAIN_SERVICE, "__username__") {
+    Ok(e) => e,
+    Err(_) => return Ok(None),
+  };
+  match entry.get_password() {
+    Ok(u) => Ok(Some(u)),
+    Err(_) => Ok(None),
+  }
 }
 
 #[tauri::command]
@@ -83,46 +95,45 @@ fn set_jenkins_username(username: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_jenkins_token(token: String) -> Result<(), String> {
-  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
-  let username = entry.get_password().map_err(|e| e.to_string())?;
+fn set_jenkins_token(username: String, token: String) -> Result<(), String> {
   let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
   token_entry.set_password(&token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn has_jenkins_token() -> Result<bool, String> {
-  let entry = Entry::new(KEYCHAIN_SERVICE, "__username__").map_err(|e| e.to_string())?;
-  let username = match entry.get_password() { Ok(u) => u, Err(_) => return Ok(false) };
+fn has_jenkins_token(username: String) -> Result<bool, String> {
+  if username.is_empty() {
+    return Ok(false);
+  }
   let token_entry = match Entry::new(KEYCHAIN_SERVICE, &username) { Ok(e) => e, Err(_) => return Ok(false) };
   match token_entry.get_password() { Ok(_) => Ok(true), Err(_) => Ok(false) }
 }
 
 
 #[tauri::command]
-async fn jenkins_get_env_choices(base_url: String, job: String) -> Result<Vec<String>, String> {
-  let creds = load_credentials().await?;
+async fn jenkins_get_env_choices(base_url: String, job: String, username: String) -> Result<Vec<String>, String> {
+  let creds = load_credentials(username).await?;
   let client = http_client();
   jenkins::fetch_env_choices(&client, &base_url, &job, &creds).await
 }
 
 #[tauri::command]
-async fn jenkins_trigger_job(base_url: String, job: String, env: String, sql_text: String) -> Result<String, String> {
-  let creds = load_credentials().await?;
+async fn jenkins_trigger_job(base_url: String, job: String, env: String, sql_text: String, username: String) -> Result<String, String> {
+  let creds = load_credentials(username).await?;
   let client = http_client();
   jenkins::trigger_job(&client, &base_url, &job, &env, &sql_text, &creds).await
 }
 
 #[tauri::command]
-async fn jenkins_poll_queue_for_build(_base_url: String, queue_url: String) -> Result<(Option<u64>, Option<String>), String> {
-  let creds = load_credentials().await?;
+async fn jenkins_poll_queue_for_build(_base_url: String, queue_url: String, username: String) -> Result<(Option<u64>, Option<String>), String> {
+  let creds = load_credentials(username).await?;
   let client = http_client();
   jenkins::poll_queue_for_build(&client, &queue_url, &creds).await
 }
 
 #[tauri::command]
-async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, build_number: u64) -> Result<(), String> {
-  let creds = load_credentials().await?;
+async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, build_number: u64, username: String) -> Result<(), String> {
+  let creds = load_credentials(username).await?;
   let client = http_client();
 
   tauri::async_runtime::spawn(async move {
@@ -150,8 +161,8 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
 }
 
 #[tauri::command]
-async fn jenkins_trigger_batch_job(base_url: String, env: String, batch_name: String, job_name: String) -> Result<String, String> {
-  let creds = load_credentials().await?;
+async fn jenkins_trigger_batch_job(base_url: String, env: String, batch_name: String, job_name: String, username: String) -> Result<String, String> {
+  let creds = load_credentials(username).await?;
   let client = http_client();
   jenkins::trigger_batch_job(&client, &base_url, &env, &batch_name, &job_name, &creds).await
 }

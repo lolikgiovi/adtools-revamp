@@ -383,6 +383,7 @@ export class QueryGenerationService {
 
     // Collect formatted values for each primary key
     const pkValueMap = new Map(primaryKeys.map((pk) => [pk, new Set()]));
+    let hasRunningNumberPK = false;
 
     // Go through each processed row to collect PK values
     processedRows.forEach((row) => {
@@ -390,13 +391,29 @@ export class QueryGenerationService {
         if (pkValueMap.has(field.fieldName)) {
           // Only add non-null values
           if (field.formattedValue !== "NULL") {
-            pkValueMap.get(field.fieldName).add(field.formattedValue);
+            // Check if this is a running number (subquery like SELECT MAX...)
+            if (field.formattedValue.startsWith("(SELECT")) {
+              hasRunningNumberPK = true;
+            } else {
+              pkValueMap.get(field.fieldName).add(field.formattedValue);
+            }
           }
         }
       });
     });
 
-    // Build WHERE conditions
+    const rowCount = processedRows.length;
+
+    // If any PK is a running number, use FETCH FIRST approach instead of WHERE IN
+    if (hasRunningNumberPK) {
+      let selectStatement = `\nSELECT * FROM ${tableName} ORDER BY updated_time DESC FETCH FIRST ${rowCount} ROWS ONLY;`;
+      selectStatement += `\nSELECT ${primaryKeys
+        .map((pk) => pk.toLowerCase())
+        .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+      return selectStatement;
+    }
+
+    // Build WHERE conditions (existing logic for non-running-number PKs)
     const whereConditions = [];
 
     pkValueMap.forEach((values, pkName) => {

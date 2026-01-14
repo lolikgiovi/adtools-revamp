@@ -40,6 +40,43 @@ export class JenkinsRunner extends BaseTool {
     return JenkinsRunnerTemplate;
   }
 
+  /**
+   * One-time migration: read Jenkins username from macOS Keychain and store to localStorage.
+   * After migration, the username is read from localStorage, token stays in keychain.
+   */
+  async #migrateJenkinsUsername() {
+    console.log("[RunQuery] Checking Jenkins username migration...");
+
+    // Skip if already migrated (username exists in localStorage)
+    const existingUsername = localStorage.getItem("config.jenkins.username");
+    if (existingUsername) {
+      console.log("[RunQuery] Migration skipped: username already in localStorage");
+      return;
+    }
+
+    // Skip if not running in Tauri
+    if (!isTauri()) {
+      console.log("[RunQuery] Migration skipped: not running in Tauri");
+      return;
+    }
+
+    try {
+      // Read username from keychain via Tauri command
+      console.log("[RunQuery] Attempting to read username from keychain...");
+      const keychainUsername = await invoke("get_jenkins_username");
+      if (keychainUsername && typeof keychainUsername === "string" && keychainUsername.trim()) {
+        // Store to localStorage
+        localStorage.setItem("config.jenkins.username", keychainUsername.trim());
+        console.log("[RunQuery] Migrated Jenkins username from keychain to localStorage");
+      } else {
+        console.log("[RunQuery] No username found in keychain");
+      }
+    } catch (err) {
+      // Silent fail - user may not have any credentials yet
+      console.debug("[RunQuery] No Jenkins username in keychain to migrate:", err);
+    }
+  }
+
   // Receive route data passed by App.showTool and inject into editor
   onRouteData(data) {
     try {
@@ -59,6 +96,9 @@ export class JenkinsRunner extends BaseTool {
   }
 
   async onMount() {
+    // Migrate Jenkins username from keychain to localStorage (one-time)
+    await this.#migrateJenkinsUsername();
+
     const baseUrlInput = this.container.querySelector("#jenkins-baseurl");
     const jobInput = this.container.querySelector("#jenkins-job");
     const envSelect = this.container.querySelector("#jenkins-env");
@@ -1901,6 +1941,52 @@ export class JenkinsRunner extends BaseTool {
           });
       });
     };
+
+    // Clear button - empties the SQL editor
+    const clearBtn = this.container.querySelector("#jenkins-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (this.editor && typeof this.editor.setValue === "function") {
+          this.editor.setValue("");
+          this._querySource = null; // Reset source
+          saveLastState({ sql: "" });
+          toggleSubmitEnabled();
+          statusEl.textContent = "Editor cleared";
+        }
+      });
+    }
+
+    // Paste button - reads clipboard and inserts into editor
+    const pasteBtn = this.container.querySelector("#jenkins-paste");
+    if (pasteBtn) {
+      pasteBtn.addEventListener("click", async () => {
+        try {
+          // Use Tauri clipboard plugin if available, otherwise fallback to browser API
+          let text = "";
+          if (isTauri()) {
+            try {
+              const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+              text = (await readText()) || "";
+            } catch (_) {
+              // Fallback to browser clipboard API
+              text = await navigator.clipboard.readText();
+            }
+          } else {
+            text = await navigator.clipboard.readText();
+          }
+          if (this.editor && typeof this.editor.setValue === "function" && text) {
+            this.editor.setValue(text);
+            this._querySource = "paste";
+            saveLastState({ sql: text });
+            toggleSubmitEnabled();
+            statusEl.textContent = "Pasted from clipboard";
+          }
+        } catch (err) {
+          statusEl.textContent = "Failed to read clipboard";
+          console.error("Paste failed:", err);
+        }
+      });
+    }
 
     runBtn.addEventListener("click", async () => {
       const baseUrl = this.state.jenkinsUrl;

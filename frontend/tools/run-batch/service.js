@@ -11,10 +11,19 @@ export class RunBatchService {
     }
   }
 
+  loadUsername() {
+    try {
+      return localStorage.getItem("config.jenkins.username") || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   async hasToken() {
     if (!isTauri()) return false;
     try {
-      return await invoke("has_jenkins_token");
+      const username = this.loadUsername();
+      return await invoke("has_jenkins_token", { username });
     } catch (_) {
       return false;
     }
@@ -25,25 +34,30 @@ export class RunBatchService {
       // Return mock data for web development/testing
       return ["dev1", "dev2", "sit1", "sit2", "uat", "prod"];
     }
-    return await invoke("jenkins_get_env_choices", { baseUrl, job: "tester-batch-manual-trigger" });
+    const username = this.loadUsername();
+    return await invoke("jenkins_get_env_choices", { baseUrl, job: "tester-batch-manual-trigger", username });
   }
 
   async triggerBatchJob(baseUrl, env, batchName, jobName) {
     if (!isTauri()) throw new Error("Batch job is only available in the desktop app.");
-    return await invoke("jenkins_trigger_batch_job", { baseUrl, env, batchName, jobName });
+    const username = this.loadUsername();
+    return await invoke("jenkins_trigger_batch_job", { baseUrl, env, batchName, jobName, username });
   }
 
   async pollQueue(baseUrl, queueUrl) {
     if (!isTauri()) throw new Error("Job execution is only available in the desktop app.");
+    const username = this.loadUsername();
     const [buildNumber, executableUrl] = await invoke("jenkins_poll_queue_for_build", {
       baseUrl,
       queueUrl,
+      username,
     });
     return { buildNumber, executableUrl };
   }
 
   async streamLogs(baseUrl, buildNumber) {
     if (!isTauri()) throw new Error("Log streaming is only available in the desktop app.");
-    await invoke("jenkins_stream_logs", { baseUrl, job: "tester-batch-manual-trigger", buildNumber });
+    const username = this.loadUsername();
+    await invoke("jenkins_stream_logs", { baseUrl, job: "tester-batch-manual-trigger", buildNumber, username });
   }
 }

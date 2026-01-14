@@ -166,6 +166,7 @@
 
 .table-wrapper {
   flex: 1;
+  min-height: 0; /* Allow flex to shrink, enabling overflow scroll */
   overflow: auto;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
