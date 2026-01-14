@@ -7,7 +7,11 @@ export const imageCheckerTemplate = /*html*/ `
         <div class="button-group check-image-button-group">
         <button id="clearButton" class="btn btn-sm btn-secondary">Clear</button>
         <button id="pasteButton" class="btn btn-sm btn-secondary">Paste</button>
+        <select id="envSelector" class="env-selector">
+          <option value="all">All Environments</option>
+        </select>
         <button id="checkImageButton" class="btn btn-sm btn-primary">Check Images</button>
+        <button id="retryAllTimeoutsBtn" class="btn btn-sm btn-secondary" style="display: none;">Retry All Timeouts</button>
         </div>
       </div>
       <div id="resultsContainer" class="results-container check-image-results-container" aria-live="polite">
