@@ -11,6 +11,7 @@
     "updater:allow-install",
     "process:allow-restart",
     "process:default",
+    "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-html",
     "clipboard-manager:allow-write-text",
     "dialog:default",
