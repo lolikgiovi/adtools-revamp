@@ -1295,3 +1295,45 @@
     padding-bottom: 12px;
   }
 }
+
+/* ===== Progress Indicator for Async Query Generation ===== */
+.qq-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+}
+
+.qq-progress.hidden {
+  display: none;
+}
+
+.qq-progress-bar-container {
+  flex: 1;
+  height: 6px;
+  background: hsl(var(--border));
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.qq-progress-bar {
+  height: 100%;
+  background: hsl(var(--primary));
+  border-radius: 3px;
+  transition: width 0.2s ease-out;
+}
+
+.qq-progress-text {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.qq-progress #cancelGeneration {
+  flex-shrink: 0;
+}

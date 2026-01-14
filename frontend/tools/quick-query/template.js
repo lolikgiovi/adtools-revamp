@@ -47,6 +47,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>
+                <div id="queryProgress" class="qq-progress hidden">
+                    <div class="qq-progress-bar-container">
+                        <div class="qq-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <span class="qq-progress-text">Processing...</span>
+                    <button id="cancelGeneration" class="btn btn-outline btn-xs">Cancel</button>
+                </div>
                 <div id="queryEditor" class="quick-query-content-area"></div>
             </div>
         </div>
