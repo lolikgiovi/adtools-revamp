@@ -1337,3 +1337,38 @@
 .qq-progress #cancelGeneration {
   flex-shrink: 0;
 }
+
+/* ===== Excel Import Info ===== */
+.excel-import-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  border-left: 3px solid hsl(var(--primary));
+}
+
+.excel-import-info.hidden {
+  display: none;
+}
+
+.excel-import-icon {
+  font-size: 16px;
+}
+
+#excelImportRowCount {
+  flex: 1;
+  font-size: 12px;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+#clearExcelImport {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1;
+}

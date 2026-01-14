@@ -3,6 +3,7 @@ import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
+import { ExcelImportService } from "./services/ExcelImportService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
@@ -60,6 +61,7 @@ export class QuickQueryUI {
     this.schemaValidationService = new SchemaValidationService();
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
+    this.excelImportService = new ExcelImportService();
     this.queryWorkerService = new QueryWorkerService();
     this.splitWorkerService = new SplitWorkerService();
     this.isGuideActive = false;
@@ -203,6 +205,13 @@ export class QuickQueryUI {
       progressBar: document.querySelector("#queryProgress .qq-progress-bar"),
       progressText: document.querySelector("#queryProgress .qq-progress-text"),
       cancelGenerationButton: document.getElementById("cancelGeneration"),
+
+      // Excel import elements
+      importExcelButton: document.getElementById("importExcel"),
+      excelFileInput: document.getElementById("excelFileInput"),
+      excelImportInfo: document.getElementById("excelImportInfo"),
+      excelImportRowCount: document.getElementById("excelImportRowCount"),
+      clearExcelImportButton: document.getElementById("clearExcelImport"),
     };
   }
 
@@ -291,6 +300,17 @@ export class QuickQueryUI {
       },
       clearData: {
         click: () => this.handleClearData(),
+      },
+
+      // Excel import buttons
+      importExcelButton: {
+        click: () => this.handleImportExcelClick(),
+      },
+      excelFileInput: {
+        change: (e) => this.handleExcelFileInput(e),
+      },
+      clearExcelImportButton: {
+        click: () => this.handleClearExcelImport(),
       },
 
       // Schema related buttons
@@ -510,7 +530,10 @@ export class QuickQueryUI {
       const queryType = this.elements.queryTypeSelect.value;
 
       const schemaData = this.schemaTable.getData().filter((row) => row[0]);
-      const inputData = this.dataTable.getData();
+
+      // Use imported Excel data if available, otherwise use Handsontable data
+      const hasExcelData = this.excelImportService.hasData();
+      const inputData = hasExcelData ? this.excelImportService.getDataForQuery() : this.dataTable.getData();
 
       if (!tableName) {
         throw new Error("Please fill in schema_name.table_name.");
@@ -534,8 +557,13 @@ export class QuickQueryUI {
       this.schemaValidationService.validateSchema(schemaData);
       this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
-      // Save schema before processing
-      this.localStorageService.saveSchema(tableName, schemaData, inputData);
+      // Save schema before processing (only save if not using Excel data to avoid memory issues)
+      if (!hasExcelData) {
+        this.localStorageService.saveSchema(tableName, schemaData, inputData);
+      } else {
+        // Just save schema without data for large Excel imports
+        this.localStorageService.saveSchema(tableName, schemaData, null);
+      }
 
       // Check if we should use the worker (1000+ rows)
       if (this.queryWorkerService.shouldUseWorker(inputData)) {
@@ -702,6 +730,9 @@ export class QuickQueryUI {
 
     this.clearError();
     this.elements.queryTypeSelect.value = "merge";
+
+    // Clear imported Excel data
+    this.handleClearExcelImport();
   }
 
   handleDownloadSql() {
@@ -1159,6 +1190,163 @@ export class QuickQueryUI {
     const newData = [fieldNames, Array(fieldNames.length).fill(null)];
 
     this.dataTable.loadData(newData);
+    // Also clear any imported Excel data
+    this.handleClearExcelImport();
+  }
+
+  // ===== Excel Import Methods =====
+
+  /**
+   * Handle click on Import Excel button
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleImportExcelClick() {
+    if (isTauri()) {
+      await this._handleImportExcelTauri();
+    } else {
+      this._handleImportExcelWeb();
+    }
+  }
+
+  /**
+   * Handle Import Excel for Tauri (desktop)
+   * Uses Tauri dialog plugin to open file picker
+   */
+  async _handleImportExcelTauri() {
+    try {
+      // Dynamic import of Tauri plugins
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+
+      // Open file dialog for Excel files
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Excel Files",
+            extensions: ["xlsx", "xls"],
+          },
+        ],
+        title: "Select Excel File",
+      });
+
+      if (!selected) {
+        // User cancelled
+        return;
+      }
+
+      // Read file contents
+      const fileData = await readFile(selected);
+
+      // Process Excel file
+      const result = this.excelImportService.processFromUint8Array(fileData);
+      this._onExcelImportSuccess(result);
+    } catch (error) {
+      console.error("Failed to import Excel (Tauri):", error);
+      this.showError(`Failed to import Excel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle Import Excel for Web
+   * Triggers the hidden file input
+   */
+  _handleImportExcelWeb() {
+    if (this.elements.excelFileInput) {
+      this.elements.excelFileInput.click();
+    }
+  }
+
+  /**
+   * Handle file input change event (Web)
+   */
+  async handleExcelFileInput(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const result = await this.excelImportService.processFromFile(file);
+      this._onExcelImportSuccess(result);
+    } catch (error) {
+      console.error("Failed to import Excel:", error);
+      this.showError(`Failed to import Excel: ${error.message}`);
+    }
+
+    // Reset file input for subsequent selections
+    event.target.value = "";
+  }
+
+  /**
+   * Called when Excel import is successful
+   * Updates UI to show row count without rendering to Handsontable
+   */
+  _onExcelImportSuccess(result) {
+    const { header, rowCount } = result;
+
+    // Validate header matches schema if schema exists
+    const schemaData = this.schemaTable.getData().filter((row) => row[0]);
+    if (schemaData.length > 0) {
+      const schemaFieldNames = schemaData.map((row) => row[0]);
+      const headerLower = header.map((h) => (h || "").toLowerCase());
+      const schemaLower = schemaFieldNames.map((f) => (f || "").toLowerCase());
+
+      // Check if headers match schema field names
+      const mismatches = [];
+      for (let i = 0; i < Math.max(headerLower.length, schemaLower.length); i++) {
+        if (headerLower[i] !== schemaLower[i]) {
+          mismatches.push({
+            index: i,
+            excel: header[i] || "(empty)",
+            schema: schemaFieldNames[i] || "(missing)",
+          });
+        }
+      }
+
+      if (mismatches.length > 0) {
+        const mismatchDetails = mismatches
+          .slice(0, 5)
+          .map((m) => `Column ${m.index + 1}: Excel="${m.excel}" vs Schema="${m.schema}"`)
+          .join(", ");
+        const suffix = mismatches.length > 5 ? ` and ${mismatches.length - 5} more...` : "";
+        this.showWarning(`Header mismatch detected: ${mismatchDetails}${suffix}. Data will be used as-is.`);
+      }
+    }
+
+    // Update UI to show row count
+    this._updateExcelImportUI(rowCount);
+
+    // Show success notification
+    if (this.eventBus) {
+      this.eventBus.emit("notification:success", {
+        message: `Imported ${rowCount.toLocaleString()} rows from Excel`,
+        duration: 2500,
+      });
+    }
+  }
+
+  /**
+   * Update the Excel import info UI
+   */
+  _updateExcelImportUI(rowCount) {
+    if (this.elements.excelImportInfo) {
+      this.elements.excelImportInfo.classList.remove("hidden");
+    }
+    if (this.elements.excelImportRowCount) {
+      this.elements.excelImportRowCount.textContent = `${rowCount.toLocaleString()} rows imported from Excel (will be used for query generation)`;
+    }
+  }
+
+  /**
+   * Clear imported Excel data
+   */
+  handleClearExcelImport() {
+    this.excelImportService.clear();
+    if (this.elements.excelImportInfo) {
+      this.elements.excelImportInfo.classList.add("hidden");
+    }
+    if (this.elements.excelImportRowCount) {
+      this.elements.excelImportRowCount.textContent = "0 rows imported from Excel";
+    }
   }
 
   handleAddNewSchemaRow() {

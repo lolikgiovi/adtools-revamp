@@ -63,7 +63,14 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
+                <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
                 <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
+            </div>
+            <div id="excelImportInfo" class="excel-import-info hidden">
+                <span class="excel-import-icon">📊</span>
+                <span id="excelImportRowCount">0 rows imported from Excel</span>
+                <button id="clearExcelImport" class="btn btn-outline btn-xs" title="Clear imported data">×</button>
             </div>
             <div id="spreadsheet-data"></div>
         </div>
