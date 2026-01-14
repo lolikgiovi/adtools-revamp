@@ -168,11 +168,11 @@
   flex-direction: column;
   min-width: 0;
   background-color: hsl(var(--background));
-  transition: margin-left 0.2s ease;
   height: 100vh;
   max-height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
+  /* No transition - sidebar slides independently */
 }
 
 /* Desktop: Main content adjusts for sidebar */
