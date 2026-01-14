@@ -38,6 +38,10 @@ pub fn run() {
             .build(),
         )?;
       }
+      // Set default zoom level to 90%
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_zoom(0.9);
+      }
       Ok(())
     })
     .run(tauri::generate_context!())
