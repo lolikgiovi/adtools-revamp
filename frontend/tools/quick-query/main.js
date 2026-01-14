@@ -16,6 +16,7 @@ import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { importSchemasPayload } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
+import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import JSZip from "jszip";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
@@ -60,9 +61,11 @@ export class QuickQueryUI {
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
     this.queryWorkerService = new QueryWorkerService();
+    this.splitWorkerService = new SplitWorkerService();
     this.isGuideActive = false;
     this.isAttachmentActive = false;
     this.isGenerating = false; // Track async generation state
+    this.isSplitting = false; // Track async split state
     this.processedFiles = [];
 
     this._layoutState = { height: "auto", fixedRowsTop: 0 };
@@ -858,7 +861,23 @@ export class QuickQueryUI {
   }
 
   _performSplit(mode, value) {
+    // Prevent duplicate split
+    if (this.isSplitting) return;
+
     const sql = (this.editor?.getValue() || "").trim();
+
+    // Check if we should use the worker (SQL > 100KB)
+    if (this.splitWorkerService.shouldUseWorker(sql)) {
+      this._performSplitAsync(sql, mode, value);
+    } else {
+      this._performSplitSync(sql, mode, value);
+    }
+  }
+
+  /**
+   * Synchronous split for small SQL files
+   */
+  _performSplitSync(sql, mode, value) {
     const statements = splitSqlStatementsSafely(sql);
 
     // Filter out SET DEFINE OFF statements for processing
@@ -881,6 +900,41 @@ export class QuickQueryUI {
       metadata = result.metadata;
     }
 
+    this._finishSplit(chunks, metadata, mode, value);
+  }
+
+  /**
+   * Asynchronous split using Web Worker for large SQL files
+   */
+  async _performSplitAsync(sql, mode, value) {
+    try {
+      this.isSplitting = true;
+      this._showProgress(`Splitting SQL...`, 10);
+
+      const result = await this.splitWorkerService.split(sql, mode, value, (percent, message) => {
+        this._updateProgress(message, percent);
+      });
+
+      this._hideProgress();
+      this.isSplitting = false;
+
+      this._finishSplit(result.chunks, result.metadata, mode, value);
+    } catch (error) {
+      this._hideProgress();
+      this.isSplitting = false;
+
+      if (error.message === "Split cancelled") {
+        return;
+      }
+
+      this.showError(error.message);
+    }
+  }
+
+  /**
+   * Complete the split operation (shared by sync/async)
+   */
+  _finishSplit(chunks, metadata, mode, value) {
     if (chunks.length === 0) {
       this.showError("No valid queries to split.");
       return;
