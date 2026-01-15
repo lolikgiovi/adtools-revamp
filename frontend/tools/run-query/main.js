@@ -880,6 +880,11 @@ export class JenkinsRunner extends BaseTool {
       if (splitMiniLogsEl) {
         splitMiniLogsEl.textContent = "";
       }
+      // Reset Execute All button for new split session
+      if (splitExecuteAllBtn) {
+        splitExecuteAllBtn.textContent = "Execute All";
+        splitExecuteAllBtn.disabled = false;
+      }
       updateSplitCurrentView();
     };
 
@@ -2164,10 +2169,23 @@ export class JenkinsRunner extends BaseTool {
                     appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
                   }
                   renderHistory();
-                  statusEl.textContent = "All chunks completed.";
-                  if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
-                  // Final status is shown in progress and logs
-                  splitExecuteAllBtn.disabled = false;
+                  // Calculate success report
+                  const successCount = this.state.split.statuses.filter((s) => s === "success").length;
+                  const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
+                  const completionMessage =
+                    `✓ Execution Complete: ${successCount}/${chunks.length} chunks succeeded` +
+                    (failedCount > 0 ? ` (${failedCount} failed)` : "") +
+                    ` on ${env}`;
+                  statusEl.textContent = completionMessage;
+                  if (splitProgressEl) {
+                    splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${chunks.length} chunks executed successfully on ${env}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
+                  }
+                  // Update button to indicate completion and prevent accidental re-run
+                  splitExecuteAllBtn.textContent = "✓ Execution Complete";
+                  splitExecuteAllBtn.disabled = true;
+                  appendLog(
+                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
+                  );
                 } catch (err) {
                   splitExecuteAllBtn.disabled = false;
                   this.showError(errorMapping(err));
@@ -2399,10 +2417,23 @@ export class JenkinsRunner extends BaseTool {
                       appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
                     }
                     renderHistory();
-                    statusEl.textContent = "All chunks completed.";
-                    if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
-                    // Final status is shown in progress and logs
-                    splitExecuteAllBtn.disabled = false;
+                    // Calculate success report
+                    const successCount = this.state.split.statuses.filter((s) => s === "success").length;
+                    const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
+                    const completionMessage =
+                      `✓ Execution Complete: ${successCount}/${chunks.length} chunks succeeded` +
+                      (failedCount > 0 ? ` (${failedCount} failed)` : "") +
+                      ` on ${env}`;
+                    statusEl.textContent = completionMessage;
+                    if (splitProgressEl) {
+                      splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${chunks.length} chunks executed successfully on ${env}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
+                    }
+                    // Update button to indicate completion and prevent accidental re-run
+                    splitExecuteAllBtn.textContent = "✓ Execution Complete";
+                    splitExecuteAllBtn.disabled = true;
+                    appendLog(
+                      `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
+                    );
                   } catch (err) {
                     splitExecuteAllBtn.disabled = false;
                     this.showError(errorMapping(err));
