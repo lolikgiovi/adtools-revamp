@@ -29,6 +29,12 @@
   color: var(--text-primary);
 }
 
+/* Override default tool-container max-width for full-width layout */
+.compare-config-container.tool-container {
+  max-width: 100%;
+  width: 100%;
+}
+
 .compare-tabs {
   display: flex;
   gap: 0.25rem;
