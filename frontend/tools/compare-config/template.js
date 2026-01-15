@@ -55,9 +55,11 @@ export const CompareConfigTemplate = /* html */ `
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
         <!-- Query Mode Tabs -->
-        <div class="compare-tabs">
-            <button class="compare-tab-button active" data-tab="schema-table">Schema/Table</button>
-            <button class="compare-tab-button" data-tab="raw-sql">Raw SQL</button>
+        <div class="tabs-container">
+            <div class="tabs-left">
+                <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
+                <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
+            </div>
         </div>
 
         <!-- Environment Selection -->

@@ -27,48 +27,9 @@
    TABS
    ============================================ */
 
-.compare-tabs {
-  display: flex;
-  gap: 0.25rem;
+.tabs-container {
   background: hsl(var(--card));
-  border-bottom: 1px solid hsl(var(--border));
-}
-
-.compare-tab-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: var(--radius) var(--radius) 0 0;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.compare-tab-button:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--muted));
-}
-
-.compare-tab-button.active {
-  color: hsl(var(--primary));
-  background: hsl(var(--background));
-}
-
-.compare-tab-button.active::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  left: 10%;
-  right: 10%;
-  height: 2px;
-  background: hsl(var(--primary));
-  border-radius: 1px;
+  margin-bottom: 1rem;
 }
 
 /* ============================================

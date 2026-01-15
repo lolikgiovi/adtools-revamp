@@ -230,7 +230,7 @@ class CompareConfigTool extends BaseTool {
    */
   bindEvents() {
     // Tab switching events
-    const tabButtons = document.querySelectorAll(".compare-tab-button");
+    const tabButtons = document.querySelectorAll(".tab-button");
     tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         const tab = btn.dataset.tab;
@@ -406,7 +406,7 @@ class CompareConfigTool extends BaseTool {
     this.queryMode = tab;
 
     // Update tab button states
-    const tabButtons = document.querySelectorAll(".compare-tab-button");
+    const tabButtons = document.querySelectorAll(".tab-button");
     tabButtons.forEach((btn) => {
       if (btn.dataset.tab === tab) {
         btn.classList.add("active");
