@@ -32,15 +32,15 @@ export const Base64ToolsTemplate = /* html */ `
       <div class="input-header">
         <label for="encode-input">Input</label>
         <div class="input-actions">
-          <label class="btn btn-secondary file-upload-btn">
-            <input type="file" id="encode-file-input" class="file-input" multiple style="display: none;" />
+          <input type="file" id="encode-file-input" class="file-input" multiple style="display: none;" />
+          <button id="encode-file-upload-btn" class="btn btn-secondary file-upload-btn" type="button">
             <svg id="base64-upload-icon-encode" class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             Upload Any File(s)
-          </label>
+          </button>
           <button id="encode-paste-btn" class="btn btn-sm paste-btn" data-target="encode-input" title="Paste from clipboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
@@ -145,15 +145,15 @@ export const Base64ToolsTemplate = /* html */ `
       <div class="input-header">
         <label for="decode-input">Base64 Input</label>
         <div class="input-actions">
-          <label class="btn btn-secondary file-upload-btn">
-            <input type="file" id="decode-file-input" class="file-input" multiple accept=".txt,.base64" style="display: none;" />
+          <input type="file" id="decode-file-input" class="file-input" multiple accept=".txt,.base64" style="display: none;" />
+          <button id="decode-file-upload-btn" class="btn btn-secondary file-upload-btn" type="button">
             <svg id="base64-upload-icon-decode" class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             Upload Base64 File
-          </label>
+          </button>
           <button id="decode-paste-btn" class="btn btn-sm paste-btn" data-target="decode-input" title="Paste from clipboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
