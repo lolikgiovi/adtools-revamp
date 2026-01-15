@@ -9,6 +9,7 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { VerticalCardView } from "./views/VerticalCardView.js";
 import { MasterDetailView } from "./views/MasterDetailView.js";
+import { GridView } from "./views/GridView.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -65,6 +66,7 @@ class CompareConfigTool extends BaseTool {
     // View instances
     this.verticalCardView = new VerticalCardView();
     this.masterDetailView = new MasterDetailView();
+    this.gridView = new GridView();
   }
 
   getIconSvg() {
@@ -1432,6 +1434,11 @@ class CompareConfigTool extends BaseTool {
         resultsContent.innerHTML = html;
         // Attach event listeners for master-detail view
         this.masterDetailView.attachEventListeners(resultsContent);
+        break;
+
+      case "grid":
+        html = this.gridView.render(comparisons, env1_name, env2_name);
+        resultsContent.innerHTML = html;
         break;
 
       default:

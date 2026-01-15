@@ -232,6 +232,7 @@ export const CompareConfigTemplate = /* html */ `
                 <label>View:</label>
                 <select id="view-type" class="form-select">
                     <option value="expandable">Expandable Rows</option>
+                    <option value="grid">Summary Grid</option>
                     <option value="vertical">Cards</option>
                     <option value="master-detail">Master-Detail</option>
                 </select>

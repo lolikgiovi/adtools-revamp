@@ -1114,6 +1114,174 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* ============================================
+   SMART GRID VIEW (SUMMARY)
+   ============================================ */
+
+.grid-view-container.smart-grid {
+  width: 100%;
+  margin: 1.5rem 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-scroll-wrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.grid-view-table {
+  width: auto; /* Allow table to define its own width based on content */
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  table-layout: auto; /* Critical for grid view */
+}
+
+.grid-view-table th {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  border-bottom: 2px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.5);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Header Env Labels */
+.field-header {
+  min-width: 250px;
+}
+
+.env-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.env-label-divider {
+  opacity: 0.3;
+}
+
+.grid-view-table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground));
+  vertical-align: middle;
+}
+
+.grid-view-table .sticky-col {
+  position: sticky;
+  left: 0;
+  background: hsl(var(--card));
+  z-index: 5;
+  border-right: 2px solid hsl(var(--border));
+  box-shadow: 2px 0 5px hsl(0 0% 0% / 0.05);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid-view-table th.sticky-col {
+  z-index: 15;
+  background: hsl(var(--muted));
+}
+
+.grid-row:hover .sticky-col {
+  background: hsl(var(--muted) / 0.3);
+}
+
+.grid-row:hover {
+  background: hsl(var(--muted) / 0.2);
+}
+
+/* Horizontal Side-by-Side Cells */
+.grid-cell {
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.cell-match {
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+}
+
+.cell-differ {
+  padding: 0.25rem 0.5rem !important;
+}
+
+.diff-horizontal {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+}
+
+.val-slot {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.val-env1 {
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  text-align: right;
+}
+
+.val-divider {
+  flex: 0 0 1px;
+  background: hsl(var(--border));
+  height: 1.2rem;
+  padding: 0;
+}
+
+.val-env2 {
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+}
+
+.grid-info-footer {
+  padding: 0.75rem 1.5rem;
+  background: hsl(var(--muted) / 0.5);
+  border-top: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.grid-info-footer svg {
+  flex-shrink: 0;
+}
+
+.pk-cell {
+  font-weight: 500;
+}
+
+.status-cell {
+  width: 100px;
+}
+
 /* Placeholder message */
 .placeholder-message {
   text-align: center;
