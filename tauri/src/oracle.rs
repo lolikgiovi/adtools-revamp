@@ -13,6 +13,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "oracle")]
+use oracle::sql_type::OracleType;
+#[cfg(feature = "oracle")]
 use oracle::Connection;
 
 const ORACLE_KEYCHAIN_SERVICE: &str = "ad-tools:oracle";
@@ -588,6 +590,10 @@ fn query_table_metadata(conn: &Connection, owner: &str, table_name: &str) -> Res
     Ok(TableMetadata { columns, primary_key })
 }
 
+/// Maximum size for CLOB/text data (1MB)
+#[cfg(feature = "oracle")]
+const MAX_LOB_SIZE_BYTES: usize = 1_048_576;
+
 #[cfg(feature = "oracle")]
 pub fn execute_select(
     conn: &Connection,
@@ -600,15 +606,18 @@ pub fn execute_select(
     let mut results = Vec::new();
     let rows = conn.query(&limited_sql, &[])?;
 
-    // Get column info
+    // Get column info including types
     let col_info = rows.column_info();
-    let col_names: Vec<String> = col_info.iter().map(|c| c.name().to_string()).collect();
+    let columns: Vec<(String, OracleType)> = col_info
+        .iter()
+        .map(|c| (c.name().to_string(), c.oracle_type().clone()))
+        .collect();
 
     for row_result in rows {
         let row = row_result?;
         let mut record = HashMap::new();
-        for (i, col_name) in col_names.iter().enumerate() {
-            let value = row_to_json_value(&row, i)?;
+        for (i, (col_name, col_type)) in columns.iter().enumerate() {
+            let value = row_to_json_value(&row, i, col_type)?;
             record.insert(col_name.clone(), value);
         }
         results.push(record);
@@ -618,7 +627,69 @@ pub fn execute_select(
 }
 
 #[cfg(feature = "oracle")]
-fn row_to_json_value(row: &oracle::Row, idx: usize) -> Result<serde_json::Value, OracleError> {
+fn row_to_json_value(
+    row: &oracle::Row,
+    idx: usize,
+    col_type: &OracleType,
+) -> Result<serde_json::Value, OracleError> {
+
+    match col_type {
+        // BLOB: Show placeholder with size
+        OracleType::BLOB => {
+            match row.get::<_, Option<Vec<u8>>>(idx) {
+                Ok(Some(bytes)) => {
+                    Ok(serde_json::Value::String(format!("[BLOB: {} bytes]", bytes.len())))
+                }
+                Ok(None) => Ok(serde_json::Value::Null),
+                Err(_) => Ok(serde_json::Value::String("[BLOB: unable to read]".to_string())),
+            }
+        }
+
+        // RAW/LONG RAW: Also show placeholder
+        OracleType::Raw(_) | OracleType::LongRaw => {
+            match row.get::<_, Option<Vec<u8>>>(idx) {
+                Ok(Some(bytes)) => {
+                    Ok(serde_json::Value::String(format!("[RAW: {} bytes]", bytes.len())))
+                }
+                Ok(None) => Ok(serde_json::Value::Null),
+                Err(_) => Ok(serde_json::Value::String("[RAW: unable to read]".to_string())),
+            }
+        }
+
+        // CLOB/NCLOB: Return as string, truncate if > 1MB
+        OracleType::CLOB | OracleType::NCLOB => {
+            match row.get::<_, Option<String>>(idx) {
+                Ok(Some(s)) => {
+                    if s.len() > MAX_LOB_SIZE_BYTES {
+                        // Truncate at 1MB and add indicator
+                        let truncated = format!(
+                            "{}... [truncated, total {} bytes]",
+                            &s[..MAX_LOB_SIZE_BYTES],
+                            s.len()
+                        );
+                        Ok(serde_json::Value::String(truncated))
+                    } else {
+                        Ok(serde_json::Value::String(s))
+                    }
+                }
+                Ok(None) => Ok(serde_json::Value::Null),
+                Err(_) => Ok(serde_json::Value::String("[CLOB: unable to read]".to_string())),
+            }
+        }
+
+        // BFILE: External file reference, show placeholder
+        OracleType::BFILE => {
+            Ok(serde_json::Value::String("[BFILE: external file]".to_string()))
+        }
+
+        // All other types: use default handling
+        _ => row_to_json_value_default(row, idx),
+    }
+}
+
+/// Default value extraction for non-LOB types
+#[cfg(feature = "oracle")]
+fn row_to_json_value_default(row: &oracle::Row, idx: usize) -> Result<serde_json::Value, OracleError> {
     // Try to get as different types
     if let Ok(v) = row.get::<_, Option<String>>(idx) {
         return Ok(v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null));
@@ -1177,6 +1248,12 @@ mod tests {
     #[cfg(feature = "oracle")]
     fn test_max_connections_is_4() {
         assert_eq!(MAX_CONNECTIONS, 4, "Max connections should be 4");
+    }
+
+    #[test]
+    #[cfg(feature = "oracle")]
+    fn test_max_lob_size_is_1mb() {
+        assert_eq!(MAX_LOB_SIZE_BYTES, 1_048_576, "Max LOB size should be 1MB (1,048,576 bytes)");
     }
 
     // -------------------------------------------------------------------------

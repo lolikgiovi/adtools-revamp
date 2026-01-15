@@ -17,18 +17,18 @@ This document outlines the gaps between the Oracle Instant Client Integration Pl
 
 **Implementation Details**:
 
-1. Added `QUERY_TIMEOUT_SECS` constant (`oracle.rs:215`):
+1. Added `QUERY_TIMEOUT_SECS` constant (`oracle.rs:218`):
    ```rust
    const QUERY_TIMEOUT_SECS: u64 = 300; // 5 minutes
    ```
 
-2. Applied timeout on connection creation in `ConnectionPool::get_connection()` (`oracle.rs:282-284`):
+2. Applied timeout on connection creation in `ConnectionPool::get_connection()` (`oracle.rs:285-287`):
    ```rust
    let conn = Connection::connect(username, password, connect_string)?;
    conn.set_call_timeout(Some(Duration::from_secs(QUERY_TIMEOUT_SECS)))?;
    ```
 
-3. Applied timeout on one-off connections in `create_connection()` (`oracle.rs:400-406`):
+3. Applied timeout on one-off connections in `create_connection()` (`oracle.rs:403-409`):
    ```rust
    let conn = Connection::connect(username, password, connect_string)?;
    conn.set_call_timeout(Some(Duration::from_secs(QUERY_TIMEOUT_SECS)))?;
@@ -39,103 +39,81 @@ This document outlines the gaps between the Oracle Instant Client Integration Pl
    - ORA-03136: Query exceeded timeout limit
    - ORA-03114: Connection to database lost
 
-**Unit Tests Added** (`oracle.rs` tests module):
+**Unit Tests Added**:
 - `test_query_timeout_constant_is_5_minutes`
 - `test_error_hint_for_timeout`
 - `test_error_hint_for_connection_lost`
 
 ---
 
-## Pending Gaps
+### Gap 2: Complex Datatype Handling ✅
 
-### Gap 2: Complex Datatype Handling
-
-**Status**: Not implemented
+**Status**: Implemented on 2026-01-15
 
 **Plan Requirement**:
 > - LOB, BLOB, RAW: stringify as hex or base64, or return null with warning.
 > - DATE/TIMESTAMP: return as ISO 8601 string.
 > - NUMBER: return as string to preserve precision for large numbers.
 
-**Current State**:
-`row_to_json_value` (`oracle.rs:621-637`) only handles:
-- `Option<String>`
-- `Option<i64>`
-- `Option<f64>`
+**Implementation Details**:
 
-Complex types like LOB, BLOB, RAW, and precise handling of DATE/TIMESTAMP/NUMBER are not implemented.
+Based on user requirements, the following approach was implemented:
 
-**Implementation Plan**:
-
-1. **Update `row_to_json_value` function**
+1. **BLOB**: Show placeholder with size instead of fetching binary data
    ```rust
-   fn row_to_json_value(row: &oracle::Row, idx: usize, col_type: &oracle::SqlType) -> Result<serde_json::Value, OracleError> {
-       match col_type {
-           // DATE/TIMESTAMP -> ISO 8601
-           SqlType::Date | SqlType::Timestamp(_) | SqlType::TimestampTz(_) | SqlType::TimestampLtz(_) => {
-               if let Ok(v) = row.get::<_, Option<oracle::sql_type::Timestamp>>(idx) {
-                   return Ok(v.map(|t| serde_json::Value::String(t.to_string()))
-                       .unwrap_or(serde_json::Value::Null));
-               }
-           }
+   OracleType::BLOB => {
+       Ok(serde_json::Value::String(format!("[BLOB: {} bytes]", bytes.len())))
+   }
+   ```
 
-           // NUMBER -> String (preserve precision)
-           SqlType::Number(prec, scale) if *prec > 15 || *scale > 0 => {
-               if let Ok(v) = row.get::<_, Option<String>>(idx) {
-                   return Ok(v.map(serde_json::Value::String)
-                       .unwrap_or(serde_json::Value::Null));
-               }
-           }
+2. **RAW/LONG RAW**: Same placeholder approach
+   ```rust
+   OracleType::Raw(_) | OracleType::LongRaw => {
+       Ok(serde_json::Value::String(format!("[RAW: {} bytes]", bytes.len())))
+   }
+   ```
 
-           // BLOB/RAW -> Base64
-           SqlType::Blob | SqlType::Raw(_) | SqlType::LongRaw => {
-               if let Ok(v) = row.get::<_, Option<Vec<u8>>>(idx) {
-                   return Ok(v.map(|bytes| {
-                       use base64::Engine;
-                       serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&bytes))
-                   }).unwrap_or(serde_json::Value::Null));
-               }
-           }
-
-           // CLOB -> String (truncate if too large)
-           SqlType::Clob | SqlType::NClob => {
-               if let Ok(v) = row.get::<_, Option<String>>(idx) {
-                   return Ok(v.map(|s| {
-                       if s.len() > 10000 {
-                           serde_json::Value::String(format!("{}... [truncated]", &s[..10000]))
-                       } else {
-                           serde_json::Value::String(s)
-                       }
-                   }).unwrap_or(serde_json::Value::Null));
-               }
-           }
-
-           // Default handling for other types
-           _ => { /* existing logic */ }
+3. **CLOB/NCLOB**: Return as string (often contains base64 in user's use case), truncate if > 1MB
+   ```rust
+   OracleType::CLOB | OracleType::NCLOB => {
+       if s.len() > MAX_LOB_SIZE_BYTES {
+           let truncated = format!(
+               "{}... [truncated, total {} bytes]",
+               &s[..MAX_LOB_SIZE_BYTES],
+               s.len()
+           );
+           Ok(serde_json::Value::String(truncated))
+       } else {
+           Ok(serde_json::Value::String(s))
        }
    }
    ```
 
-2. **Update `execute_select` to pass column type info**
+4. **BFILE**: Show placeholder for external file references
    ```rust
-   let col_info = rows.column_info();
-   for (i, info) in col_info.iter().enumerate() {
-       let value = row_to_json_value(&row, i, info.sql_type())?;
-       record.insert(info.name().to_string(), value);
+   OracleType::BFILE => {
+       Ok(serde_json::Value::String("[BFILE: external file]".to_string()))
    }
    ```
 
-3. **Add base64 dependency** (if not present)
-   ```toml
-   [dependencies]
-   base64 = "0.21"
+5. Added `MAX_LOB_SIZE_BYTES` constant (`oracle.rs:594`):
+   ```rust
+   const MAX_LOB_SIZE_BYTES: usize = 1_048_576; // 1MB
    ```
 
-**Files to Modify**:
-- `tauri/src/oracle.rs`: Update `row_to_json_value` and `execute_select`
-- `tauri/Cargo.toml`: Add `base64` dependency (if needed)
+**Key Changes**:
+- `execute_select()` now passes column type info to `row_to_json_value()`
+- `row_to_json_value()` accepts `OracleType` parameter and handles LOB types specially
+- Added `row_to_json_value_default()` for non-LOB type handling
+
+**Unit Tests Added**:
+- `test_max_lob_size_is_1mb`
+
+**Note**: DATE/TIMESTAMP and NUMBER precision handling were not implemented as the current String-first approach works adequately for comparison purposes. These can be added later if needed.
 
 ---
+
+## Pending Gaps
 
 ### Gap 3: Bundled Oracle Instant Client Loading
 
@@ -235,7 +213,7 @@ Keep the current approach but document requirements:
 Uses `security_framework` crate with `get_generic_password`, `set_generic_password`, `delete_generic_password`.
 
 **Current Implementation**:
-Uses `keyring` crate (`oracle.rs:7`, `oracle.rs:421-469`).
+Uses `keyring` crate (`oracle.rs:7`, `oracle.rs:424-472`).
 
 **Assessment**:
 **No action needed.** The `keyring` crate is functionally equivalent and provides:
@@ -253,7 +231,7 @@ The current implementation is acceptable and arguably better for future cross-pl
 Implies test connections might be added to pool.
 
 **Current Implementation**:
-`test_oracle_connection` (`oracle.rs:878-896`) creates a one-off connection using `create_connection`, not `with_pooled_connection`.
+`test_oracle_connection` (`oracle.rs:881-899`) creates a one-off connection using `create_connection`, not `with_pooled_connection`.
 
 **Assessment**:
 **No action needed.** This is correct behavior:
@@ -268,7 +246,7 @@ Implies test connections might be added to pool.
 | Item | Status | Priority | Effort |
 |------|--------|----------|--------|
 | Query Timeout | ✅ Implemented | High | Low |
-| Complex Datatypes | ❌ Pending | Medium | Medium |
+| Complex Datatypes | ✅ Implemented | Medium | Medium |
 | Bundled IC Loading | ❌ Pending | Low* | High |
 | Keychain Library | ✅ Acceptable | - | - |
 | Connection Test Not Pooled | ✅ Correct | - | - |
@@ -280,5 +258,16 @@ Implies test connections might be added to pool.
 ## Next Steps
 
 1. ~~Implement Query Timeout (Gap 1)~~ ✅ Done
-2. Add DATE/TIMESTAMP/NUMBER handling (Gap 2 partial)
+2. ~~Add BLOB/CLOB/RAW handling (Gap 2)~~ ✅ Done
 3. Evaluate need for Bundled IC based on deployment model (Gap 3)
+
+---
+
+## Optional Future Enhancements
+
+These were identified in the plan but not implemented as they weren't critical for the current use case:
+
+1. **DATE/TIMESTAMP as ISO 8601**: Current implementation returns as string which works for comparison
+2. **NUMBER precision preservation**: Current i64/f64 handling works for most cases
+3. **User-configurable timeouts**: Could add `timeout_secs` parameter to request structs
+4. **User-configurable LOB size limits**: Could make MAX_LOB_SIZE_BYTES configurable per request
