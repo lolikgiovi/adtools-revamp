@@ -11,8 +11,8 @@ export class MasterDetailView {
   constructor() {
     this.selectedIndex = 0;
     this.comparisons = [];
-    this.env1Name = '';
-    this.env2Name = '';
+    this.env1Name = "";
+    this.env2Name = "";
   }
 
   /**
@@ -47,12 +47,32 @@ export class MasterDetailView {
   }
 
   /**
+   * Formats a primary key HashMap into a display string
+   */
+  formatPrimaryKey(keyMap) {
+    if (!keyMap || typeof keyMap !== "object") return "";
+    const entries = Object.entries(keyMap);
+    if (entries.length === 0) return "";
+    if (entries.length === 1) {
+      return this.formatValue(entries[0][1]);
+    }
+    return entries.map(([k, v]) => `${k}=${this.formatValue(v)}`).join(", ");
+  }
+
+  /**
+   * Formats a value for display
+   */
+  formatValue(value) {
+    if (value === null || value === undefined) return "(null)";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  /**
    * Renders the master list (left pane)
    */
   renderMasterList() {
-    const itemsHtml = this.comparisons
-      .map((comp, index) => this.renderMasterItem(comp, index))
-      .join('');
+    const itemsHtml = this.comparisons.map((comp, index) => this.renderMasterItem(comp, index)).join("");
 
     return `
       <div class="master-list">
@@ -70,14 +90,15 @@ export class MasterDetailView {
    * Renders a single master list item
    */
   renderMasterItem(comparison, index) {
-    const statusClass = comparison.status.toLowerCase().replace('_', '-');
+    const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
     const isSelected = index === this.selectedIndex;
+    const pkDisplay = this.formatPrimaryKey(comparison.key);
 
     return `
-      <div class="master-item ${isSelected ? 'selected' : ''} status-${statusClass}"
+      <div class="master-item ${isSelected ? "selected" : ""} status-${statusClass}"
            data-index="${index}">
-        <div class="master-item-pk">${this.escapeHtml(comparison.primary_key)}</div>
+        <div class="master-item-pk">${this.escapeHtml(pkDisplay)}</div>
         <span class="status-badge status-${statusClass}">${statusLabel}</span>
       </div>
     `;
@@ -105,24 +126,27 @@ export class MasterDetailView {
    * Renders detail panel header
    */
   renderDetailHeader(comparison) {
-    const statusClass = comparison.status.toLowerCase().replace('_', '-');
+    const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
+    const pkDisplay = this.formatPrimaryKey(comparison.key);
 
     return `
       <div class="detail-header">
         <div>
-          <h3>${this.escapeHtml(comparison.primary_key)}</h3>
+          <h3>${this.escapeHtml(pkDisplay)}</h3>
           <span class="status-badge status-${statusClass}">${statusLabel}</span>
         </div>
         <div class="detail-nav">
-          <button class="btn-nav" id="btn-prev-detail" ${this.selectedIndex === 0 ? 'disabled' : ''}>
+          <button class="btn btn-outline btn-sm" id="btn-prev-detail" ${this.selectedIndex === 0 ? "disabled" : ""}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
             Previous
           </button>
           <span class="detail-position">${this.selectedIndex + 1} / ${this.comparisons.length}</span>
-          <button class="btn-nav" id="btn-next-detail" ${this.selectedIndex === this.comparisons.length - 1 ? 'disabled' : ''}>
+          <button class="btn btn-outline btn-sm" id="btn-next-detail" ${
+            this.selectedIndex === this.comparisons.length - 1 ? "disabled" : ""
+          }>
             Next
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"></polyline>
@@ -137,7 +161,7 @@ export class MasterDetailView {
    * Renders detail panel body
    */
   renderDetailBody(comparison) {
-    if (comparison.status === 'only_in_env1') {
+    if (comparison.status === "only_in_env1") {
       return `
         <div class="detail-body">
           <div class="detail-message">
@@ -148,7 +172,7 @@ export class MasterDetailView {
       `;
     }
 
-    if (comparison.status === 'only_in_env2') {
+    if (comparison.status === "only_in_env2") {
       return `
         <div class="detail-body">
           <div class="detail-message">
@@ -159,18 +183,22 @@ export class MasterDetailView {
       `;
     }
 
-    if (comparison.status === 'match') {
+    if (comparison.status === "match") {
       return `
         <div class="detail-body">
           <div class="detail-message">
             <p>✓ Records match perfectly</p>
           </div>
-          ${this.renderDetailData(comparison.env1_data, 'Data')}
+          ${this.renderDetailData(comparison.env1_data, "Data")}
         </div>
       `;
     }
 
     // Status is 'differ' - show field-by-field comparison
+    const diffFields = comparison.differences || [];
+    const env1Data = comparison.env1_data || {};
+    const env2Data = comparison.env2_data || {};
+
     return `
       <div class="detail-body">
         <div class="detail-diff-table">
@@ -183,7 +211,7 @@ export class MasterDetailView {
               </tr>
             </thead>
             <tbody>
-              ${comparison.differences.map(diff => this.renderDetailDiffRow(diff)).join('')}
+              ${diffFields.map((fieldName) => this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName])).join("")}
             </tbody>
           </table>
         </div>
@@ -194,51 +222,24 @@ export class MasterDetailView {
   /**
    * Renders a detail diff row
    */
-  renderDetailDiffRow(diff) {
-    const env1ValueHtml = this.renderDiffChunks(diff.env1_diff_chunks);
-    const env2ValueHtml = this.renderDiffChunks(diff.env2_diff_chunks);
+  renderDetailDiffRow(fieldName, env1Value, env2Value) {
+    const env1Display = this.formatValue(env1Value);
+    const env2Display = this.formatValue(env2Value);
 
     return `
       <tr class="field-diff-row">
-        <td class="field-name">${this.escapeHtml(diff.field_name)}</td>
-        <td class="field-value">${env1ValueHtml}</td>
-        <td class="field-value">${env2ValueHtml}</td>
+        <td class="field-name">${this.escapeHtml(fieldName)}</td>
+        <td class="field-value diff-removed">${this.escapeHtml(env1Display)}</td>
+        <td class="field-value diff-added">${this.escapeHtml(env2Display)}</td>
       </tr>
     `;
-  }
-
-  /**
-   * Renders diff chunks with highlighting
-   */
-  renderDiffChunks(chunks) {
-    if (!chunks || chunks.length === 0) {
-      return '<span class="empty-value">(empty)</span>';
-    }
-
-    return chunks
-      .map(chunk => {
-        const escapedText = this.escapeHtml(chunk.text);
-        switch (chunk.chunk_type) {
-          case 'same':
-            return `<span class="diff-same">${escapedText}</span>`;
-          case 'added':
-            return `<span class="diff-added">${escapedText}</span>`;
-          case 'removed':
-            return `<span class="diff-removed">${escapedText}</span>`;
-          case 'modified':
-            return `<span class="diff-modified">${escapedText}</span>`;
-          default:
-            return `<span>${escapedText}</span>`;
-        }
-      })
-      .join('');
   }
 
   /**
    * Renders data object as table
    */
   renderDetailData(data, title) {
-    if (!data) return '';
+    if (!data) return "";
 
     const entries = Object.entries(data);
     return `
@@ -246,12 +247,16 @@ export class MasterDetailView {
         <h4>${title}</h4>
         <table class="data-table">
           <tbody>
-            ${entries.map(([key, value]) => `
+            ${entries
+              .map(
+                ([key, value]) => `
               <tr>
                 <td class="data-key">${this.escapeHtml(key)}</td>
-                <td class="data-value">${this.escapeHtml(JSON.stringify(value))}</td>
+                <td class="data-value">${this.escapeHtml(this.formatValue(value))}</td>
               </tr>
-            `).join('')}
+            `
+              )
+              .join("")}
           </tbody>
         </table>
       </div>
@@ -263,17 +268,17 @@ export class MasterDetailView {
    */
   attachEventListeners(container) {
     // Master item click
-    container.querySelectorAll('.master-item').forEach(item => {
-      item.addEventListener('click', (e) => {
+    container.querySelectorAll(".master-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
         const index = parseInt(e.currentTarget.dataset.index);
         this.selectItem(index, container);
       });
     });
 
     // Previous button
-    const btnPrev = container.querySelector('#btn-prev-detail');
+    const btnPrev = container.querySelector("#btn-prev-detail");
     if (btnPrev) {
-      btnPrev.addEventListener('click', () => {
+      btnPrev.addEventListener("click", () => {
         if (this.selectedIndex > 0) {
           this.selectItem(this.selectedIndex - 1, container);
         }
@@ -281,9 +286,9 @@ export class MasterDetailView {
     }
 
     // Next button
-    const btnNext = container.querySelector('#btn-next-detail');
+    const btnNext = container.querySelector("#btn-next-detail");
     if (btnNext) {
-      btnNext.addEventListener('click', () => {
+      btnNext.addEventListener("click", () => {
         if (this.selectedIndex < this.comparisons.length - 1) {
           this.selectItem(this.selectedIndex + 1, container);
         }
@@ -310,14 +315,14 @@ export class MasterDetailView {
    */
   getStatusLabel(status) {
     switch (status) {
-      case 'match':
-        return 'Match';
-      case 'differ':
-        return 'Differ';
-      case 'only_in_env1':
-        return 'Only in Env 1';
-      case 'only_in_env2':
-        return 'Only in Env 2';
+      case "match":
+        return "Match";
+      case "differ":
+        return "Differ";
+      case "only_in_env1":
+        return "Only in Env 1";
+      case "only_in_env2":
+        return "Only in Env 2";
       default:
         return status;
     }
@@ -327,8 +332,8 @@ export class MasterDetailView {
    * Escapes HTML to prevent XSS
    */
   escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
+    if (text === null || text === undefined) return "";
+    const div = document.createElement("div");
     div.textContent = String(text);
     return div.innerHTML;
   }

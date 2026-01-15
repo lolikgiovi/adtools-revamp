@@ -23,9 +23,7 @@ export class VerticalCardView {
       `;
     }
 
-    const cardsHtml = comparisons
-      .map(comp => this.renderCard(comp, env1Name, env2Name))
-      .join('');
+    const cardsHtml = comparisons.map((comp) => this.renderCard(comp, env1Name, env2Name)).join("");
 
     return `
       <div class="vertical-card-view">
@@ -37,19 +35,42 @@ export class VerticalCardView {
   }
 
   /**
+   * Formats a primary key HashMap into a display string
+   */
+  formatPrimaryKey(keyMap) {
+    if (!keyMap || typeof keyMap !== "object") return "";
+    const entries = Object.entries(keyMap);
+    if (entries.length === 0) return "";
+    if (entries.length === 1) {
+      return this.formatValue(entries[0][1]);
+    }
+    return entries.map(([k, v]) => `${k}=${this.formatValue(v)}`).join(", ");
+  }
+
+  /**
+   * Formats a value for display
+   */
+  formatValue(value) {
+    if (value === null || value === undefined) return "(null)";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  /**
    * Renders a single comparison card
    */
   renderCard(comparison, env1Name, env2Name) {
-    const statusClass = comparison.status.toLowerCase().replace('_', '-');
+    const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
+    const pkDisplay = this.formatPrimaryKey(comparison.key);
 
     return `
       <div class="comparison-card status-${statusClass}">
         <div class="card-header">
-          <div class="card-pk">${this.escapeHtml(comparison.primary_key)}</div>
+          <div class="card-pk">${this.escapeHtml(pkDisplay)}</div>
           <span class="status-badge status-${statusClass}">${statusLabel}</span>
         </div>
-        <div class="card-content">
+        <div class="card-body">
           ${this.renderCardContent(comparison, env1Name, env2Name)}
         </div>
       </div>
@@ -60,7 +81,7 @@ export class VerticalCardView {
    * Renders card content based on status
    */
   renderCardContent(comparison, env1Name, env2Name) {
-    if (comparison.status === 'only_in_env1') {
+    if (comparison.status === "only_in_env1") {
       return `
         <div class="card-message">
           <p>Only exists in <strong>${env1Name}</strong></p>
@@ -69,7 +90,7 @@ export class VerticalCardView {
       `;
     }
 
-    if (comparison.status === 'only_in_env2') {
+    if (comparison.status === "only_in_env2") {
       return `
         <div class="card-message">
           <p>Only exists in <strong>${env2Name}</strong></p>
@@ -78,7 +99,7 @@ export class VerticalCardView {
       `;
     }
 
-    if (comparison.status === 'match') {
+    if (comparison.status === "match") {
       return `
         <div class="card-message">
           <p>✓ Records match perfectly</p>
@@ -86,20 +107,24 @@ export class VerticalCardView {
       `;
     }
 
-    // Status is 'differ' - show differences
+    // Status is 'differ' - show differences using env1_data and env2_data
+    const diffFields = comparison.differences || [];
+    const env1Data = comparison.env1_data || {};
+    const env2Data = comparison.env2_data || {};
+
     return `
       <div class="card-diff-section">
         <div class="diff-grid">
           <div class="diff-column">
             <h4>${this.escapeHtml(env1Name)}</h4>
             <div class="diff-fields">
-              ${comparison.differences.map(diff => this.renderCardDiffField(diff, 'env1')).join('')}
+              ${diffFields.map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName])).join("")}
             </div>
           </div>
           <div class="diff-column">
             <h4>${this.escapeHtml(env2Name)}</h4>
             <div class="diff-fields">
-              ${comparison.differences.map(diff => this.renderCardDiffField(diff, 'env2')).join('')}
+              ${diffFields.map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName])).join("")}
             </div>
           </div>
         </div>
@@ -110,60 +135,35 @@ export class VerticalCardView {
   /**
    * Renders a single field difference for a card
    */
-  renderCardDiffField(diff, envKey) {
-    const chunks = envKey === 'env1' ? diff.env1_diff_chunks : diff.env2_diff_chunks;
-    const valueHtml = this.renderDiffChunks(chunks);
-
+  renderCardDiffField(fieldName, value) {
+    const displayValue = this.formatValue(value);
     return `
       <div class="card-field">
-        <div class="card-field-name">${this.escapeHtml(diff.field_name)}</div>
-        <div class="card-field-value">${valueHtml}</div>
+        <div class="card-field-name">${this.escapeHtml(fieldName)}</div>
+        <div class="card-field-value">${this.escapeHtml(displayValue)}</div>
       </div>
     `;
-  }
-
-  /**
-   * Renders diff chunks with highlighting
-   */
-  renderDiffChunks(chunks) {
-    if (!chunks || chunks.length === 0) {
-      return '<span class="empty-value">(empty)</span>';
-    }
-
-    return chunks
-      .map(chunk => {
-        const escapedText = this.escapeHtml(chunk.text);
-        switch (chunk.chunk_type) {
-          case 'same':
-            return `<span class="diff-same">${escapedText}</span>`;
-          case 'added':
-            return `<span class="diff-added">${escapedText}</span>`;
-          case 'removed':
-            return `<span class="diff-removed">${escapedText}</span>`;
-          case 'modified':
-            return `<span class="diff-modified">${escapedText}</span>`;
-          default:
-            return `<span>${escapedText}</span>`;
-        }
-      })
-      .join('');
   }
 
   /**
    * Renders card data object
    */
   renderCardData(data) {
-    if (!data) return '';
+    if (!data) return "";
 
     const entries = Object.entries(data).slice(0, 5); // Show first 5 fields
     return `
       <div class="card-data">
-        ${entries.map(([key, value]) => `
+        ${entries
+          .map(
+            ([key, value]) => `
           <div class="card-data-row">
             <span class="card-data-key">${this.escapeHtml(key)}:</span>
-            <span class="card-data-value">${this.escapeHtml(JSON.stringify(value))}</span>
+            <span class="card-data-value">${this.escapeHtml(this.formatValue(value))}</span>
           </div>
-        `).join('')}
+        `
+          )
+          .join("")}
       </div>
     `;
   }
@@ -173,14 +173,14 @@ export class VerticalCardView {
    */
   getStatusLabel(status) {
     switch (status) {
-      case 'match':
-        return 'Match';
-      case 'differ':
-        return 'Differ';
-      case 'only_in_env1':
-        return 'Only in Env 1';
-      case 'only_in_env2':
-        return 'Only in Env 2';
+      case "match":
+        return "Match";
+      case "differ":
+        return "Differ";
+      case "only_in_env1":
+        return "Only in Env 1";
+      case "only_in_env2":
+        return "Only in Env 2";
       default:
         return status;
     }
@@ -190,8 +190,8 @@ export class VerticalCardView {
    * Escapes HTML to prevent XSS
    */
   escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
+    if (text === null || text === undefined) return "";
+    const div = document.createElement("div");
     div.textContent = String(text);
     return div.innerHTML;
   }
