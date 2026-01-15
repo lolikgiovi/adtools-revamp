@@ -9,6 +9,7 @@ import MinifyWorker from "./minify.worker.js?worker";
 import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
 class HTMLTemplateTool extends BaseTool {
@@ -150,6 +151,18 @@ class HTMLTemplateTool extends BaseTool {
     const btnReload = document.getElementById("btnReloadPreview");
     const btnCloseVtl = document.getElementById("btnCloseVtl");
     const btnResetVtl = document.getElementById("btnResetVtl");
+    const btnImport = document.getElementById("btnImportHtml");
+    const htmlFileInput = document.getElementById("htmlFileInput");
+
+    // Import button
+    if (btnImport) {
+      btnImport.addEventListener("click", () => this.handleImportClick());
+    }
+
+    // File input change handler (web)
+    if (htmlFileInput) {
+      htmlFileInput.addEventListener("change", (e) => this.handleFileInputChange(e));
+    }
 
     if (btnFormat) {
       btnFormat.addEventListener("click", async () => {
@@ -431,6 +444,89 @@ class HTMLTemplateTool extends BaseTool {
 
     // Re-render preview with updated substitution
     this.renderPreview(this.editor.getValue(), true);
+  }
+
+  // ===== Import HTML Methods =====
+
+  /**
+   * Handle Import button click
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleImportClick() {
+    if (isTauri()) {
+      await this._handleImportTauri();
+    } else {
+      // Web: trigger the hidden file input
+      const fileInput = document.getElementById("htmlFileInput");
+      if (fileInput) {
+        fileInput.click();
+      }
+    }
+  }
+
+  /**
+   * Handle Import for Tauri (desktop)
+   */
+  async _handleImportTauri() {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
+        title: "Select HTML File to Import",
+      });
+
+      if (!selected) {
+        return; // User cancelled
+      }
+
+      // Read file contents as text
+      const content = await readTextFile(selected);
+      this._loadHtmlContent(content);
+    } catch (error) {
+      console.error("Failed to import HTML (Tauri):", error);
+      this.showError(`Failed to import HTML: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle file input change (web)
+   */
+  handleFileInputChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result;
+      if (typeof content === "string") {
+        this._loadHtmlContent(content);
+      }
+    };
+    reader.onerror = () => {
+      this.showError("Failed to read HTML file");
+    };
+    reader.readAsText(file);
+
+    // Reset file input for subsequent selections
+    e.target.value = "";
+  }
+
+  /**
+   * Load HTML content into the editor
+   */
+  _loadHtmlContent(content) {
+    this.editor.setValue(content);
+    this.renderPreview(content);
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", content);
+    } catch (_) {}
+
+    this.showSuccess("HTML file imported successfully");
   }
 
   initializeResizer() {
