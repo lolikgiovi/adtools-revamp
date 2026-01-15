@@ -1,11 +1,12 @@
 /**
- * GridView - Renders comparison results as a clean, smart comparison grid.
+ * GridView - Renders comparison results as a robust HTML Table with an Excel-Style Two-Tier Header.
  *
  * Features:
- * - Smart Column Filtering: Only shows columns that have differences across the result set.
- * - Horizontal Side-by-Side: Comparisons are shown side-by-side (Value 1 | Value 2) for consistent row height.
- * - Sticky Primary Key: PK column remains fixed on the left for context while scrolling.
- * - Compact & Focused: Hides noise and highlights exactly what changed.
+ * - Robust Table: Uses standard <table>, <thead>, and <tbody> for structural integrity.
+ * - Two-Tier Header: Field names span two columns via colspan; PK/Status span two rows via rowspan.
+ * - Dynamic PK Head: Automatically uses the primary key field names (e.g., PARAMETER_KEY).
+ * - Excel Parity: Neutral styling with clear borders and professional typography.
+ * - Smart Filtering: Hides columns that are identical across all records.
  */
 export class GridView {
   /**
@@ -24,50 +25,55 @@ export class GridView {
     }
 
     // 1. Identify which fields have differences across the WHOLE set
-    // This allows us to hide columns that are 100% identical.
     const fieldsWithDiffs = new Set();
     const allFieldNames = new Set();
 
     comparisons.forEach((comp) => {
-      // Collect all field names
       if (comp.env1_data) Object.keys(comp.env1_data).forEach((f) => allFieldNames.add(f));
       if (comp.env2_data) Object.keys(comp.env2_data).forEach((f) => allFieldNames.add(f));
-
-      // Collect fields that differ in THIS record
       if (comp.differences) {
         comp.differences.forEach((f) => fieldsWithDiffs.add(f));
       }
     });
 
-    // 2. Filter fields to only those that have at least one difference
-    // This makes the grid "Smart" by removing noise.
+    // 2. Filter fields for Smart Diff View
     const activeFields = Array.from(allFieldNames)
       .filter((f) => fieldsWithDiffs.has(f))
       .sort();
 
-    // If NO fields have differences (e.g., all match), but user wants to see them
-    // fall back to showing all fields if activeFields is empty but results exist
     const fieldsToDisplay = activeFields.length > 0 ? activeFields : Array.from(allFieldNames).sort();
 
+    // 3. Determine PK Header name from actual metadata
+    let pkHeaderName = "PRIMARY KEY";
+    if (comparisons.length > 0 && comparisons[0].key) {
+      const pkKeys = Object.keys(comparisons[0].key);
+      if (pkKeys.length > 0) {
+        pkHeaderName = pkKeys.join(", ").toUpperCase();
+      }
+    }
+
     return `
-      <div class="grid-view-container smart-grid">
-        <div class="grid-scroll-wrapper">
-          <table class="grid-view-table">
+      <div class="excel-table-container">
+        <div class="table-scroll-area">
+          <table class="excel-table">
             <thead>
-              <tr class="main-header">
-                <th class="sticky-col" rowspan="2">Primary Key</th>
-                <th rowspan="2">Status</th>
+              <tr class="h-row-1">
+                <th rowspan="2" class="sticky-col pk-header">${this.escapeHtml(pkHeaderName)}</th>
+                <th rowspan="2" class="sticky-col status-header">STATUS</th>
                 ${fieldsToDisplay
                   .map(
                     (f) => `
-                  <th class="field-header">
-                    <div class="field-label">${this.escapeHtml(f)}</div>
-                    <div class="env-labels">
-                      <span class="env-label-1">${this.escapeHtml(env1Name)}</span>
-                      <span class="env-label-divider">|</span>
-                      <span class="env-label-2">${this.escapeHtml(env2Name)}</span>
-                    </div>
-                  </th>
+                  <th colspan="2" class="field-header-main">${this.escapeHtml(f)}</th>
+                `
+                  )
+                  .join("")}
+              </tr>
+              <tr class="h-row-2">
+                ${fieldsToDisplay
+                  .map(
+                    (f) => `
+                  <th class="env-header-sub env-1">${this.escapeHtml(env1Name)}</th>
+                  <th class="env-header-sub env-2">${this.escapeHtml(env2Name)}</th>
                 `
                   )
                   .join("")}
@@ -78,6 +84,7 @@ export class GridView {
             </tbody>
           </table>
         </div>
+        
         ${
           activeFields.length > 0 && activeFields.length < allFieldNames.size
             ? `
@@ -87,7 +94,7 @@ export class GridView {
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
-            <span>Smart Filter active: Showing only ${activeFields.length} columns with differences (hiding ${
+            <span>Smart Filter: Showing only ${activeFields.length} columns with differences (hiding ${
                 allFieldNames.size - activeFields.length
               } identical columns).</span>
           </div>
@@ -99,27 +106,30 @@ export class GridView {
   }
 
   /**
-   * Renders a single row in the grid
+   * Renders a single row
    */
   renderRow(comparison, fields) {
     const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
-    const pkDisplay = this.formatPrimaryKey(comparison.key);
+    const pkValue = this.formatPrimaryKey(comparison.key);
     const diffFields = new Set(comparison.differences || []);
 
     return `
-      <tr class="grid-row status-${statusClass}">
-        <td class="sticky-col pk-cell">${this.escapeHtml(pkDisplay)}</td>
-        <td class="status-cell">
+      <tr class="data-row status-${statusClass}">
+        <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${this.escapeHtml(pkValue)}</td>
+        <td class="sticky-col status-cell">
           <span class="status-badge status-${statusClass}">${statusLabel}</span>
         </td>
         ${fields
           .map((fieldName) => {
-            const v1 = comparison.env1_data ? comparison.env1_data[fieldName] : undefined;
-            const v2 = comparison.env2_data ? comparison.env2_data[fieldName] : undefined;
+            const v1 = comparison.env1_data && fieldName in comparison.env1_data ? comparison.env1_data[fieldName] : undefined;
+            const v2 = comparison.env2_data && fieldName in comparison.env2_data ? comparison.env2_data[fieldName] : undefined;
+
+            const hasV1 = v1 !== undefined;
+            const hasV2 = v2 !== undefined;
             const isDifferent = diffFields.has(fieldName);
 
-            return this.renderCell(v1, v2, isDifferent);
+            return this.renderCellPair(v1, v2, hasV1, hasV2, isDifferent);
           })
           .join("")}
       </tr>
@@ -127,30 +137,26 @@ export class GridView {
   }
 
   /**
-   * Renders a single cell content with horizontal side-by-side comparison
+   * Renders a pair of cells (Env 1 and Env 2) for a field
    */
-  renderCell(v1, v2, isDifferent) {
-    const displayV1 = this.formatValue(v1);
-    const displayV2 = this.formatValue(v2);
+  renderCellPair(v1, v2, hasV1, hasV2, isDifferent) {
+    const val1 = hasV1 ? this.formatValue(v1) : "";
+    const val2 = hasV2 ? this.formatValue(v2) : "";
 
-    if (!isDifferent) {
-      // Matching values - show single value centered or across both slots
-      return `
-        <td class="grid-cell cell-match">
-          <div class="val-combined">${this.escapeHtml(displayV1)}</div>
-        </td>
-      `;
+    let c1Class = "val-cell env-1";
+    let c2Class = "val-cell env-2";
+
+    if (isDifferent) {
+      c1Class += " is-diff";
+      c2Class += " is-diff";
+    } else {
+      c1Class += " is-match";
+      c2Class += " is-match";
     }
 
-    // Records differ - show horizontal split
     return `
-      <td class="grid-cell cell-differ">
-        <div class="diff-horizontal">
-          <div class="val-slot val-env1" title="Env 1: ${this.escapeHtml(displayV1)}">${this.escapeHtml(displayV1)}</div>
-          <div class="val-slot val-divider"></div>
-          <div class="val-slot val-env2" title="Env 2: ${this.escapeHtml(displayV2)}">${this.escapeHtml(displayV2)}</div>
-        </div>
-      </td>
+      <td class="${c1Class}">${this.escapeHtml(val1)}</td>
+      <td class="${c2Class}">${this.escapeHtml(val2)}</td>
     `;
   }
 
