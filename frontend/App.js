@@ -153,7 +153,12 @@ class App {
     if (cats.length > 0) {
       cats.forEach((c) => {
         if (c && c.id)
-          this.categoriesConfigMap.set(String(c.id), { id: String(c.id), name: String(c.name || c.id), order: Number(c.order) || 0 });
+          this.categoriesConfigMap.set(String(c.id), {
+            id: String(c.id),
+            name: String(c.name || c.id),
+            order: Number(c.order) || 0,
+            requiresTauri: Boolean(c.requiresTauri),
+          });
       });
     } else {
       // Fallback defaults

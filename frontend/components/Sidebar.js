@@ -386,7 +386,10 @@ class Sidebar {
     };
 
     // Build category groups dynamically based on categoriesMap order
-    const categoriesList = Array.from(this.categoriesMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Filter out categories that require Tauri if not running in Tauri
+    const categoriesList = Array.from(this.categoriesMap.values())
+      .filter((cat) => !(cat.requiresTauri && !runtimeIsTauri))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     // Clear existing category groups inside sidebar-content
     sidebarContent.innerHTML = "";
