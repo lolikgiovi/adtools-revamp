@@ -16,7 +16,9 @@
     "cf:dev": "npm run build && npx wrangler dev",
     "cf:publish": "npm run build && npx wrangler publish",
     "release:build": "bash tauri/scripts/build_release.sh",
-    "release:upload": "bash tauri/scripts/upload_to_r2.sh"
+    "release:upload": "bash tauri/scripts/upload_to_r2.sh",
+    "tauri:dev": "OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient npx tauri dev --features oracle",
+    "tauri:build": "OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient npx tauri build --features oracle"
   },
   "keywords": [],
   "author": "",
