@@ -72,8 +72,12 @@ export class GridView {
                 ${fieldsToDisplay
                   .map(
                     (f) => `
-                  <th class="env-header-sub env-1">${this.escapeHtml(env1Name)}</th>
-                  <th class="env-header-sub env-2">${this.escapeHtml(env2Name)}</th>
+                  <th class="env-header-sub env-1">
+                    <div class="h-label-clip">${this.escapeHtml(env1Name)}</div>
+                  </th>
+                  <th class="env-header-sub env-2 field-boundary">
+                    <div class="h-label-clip">${this.escapeHtml(env2Name)}</div>
+                  </th>
                 `
                   )
                   .join("")}
@@ -156,7 +160,7 @@ export class GridView {
 
     return `
       <td class="${c1Class}">${this.escapeHtml(val1)}</td>
-      <td class="${c2Class}">${this.escapeHtml(val2)}</td>
+      <td class="${c2Class} field-boundary">${this.escapeHtml(val2)}</td>
     `;
   }
 

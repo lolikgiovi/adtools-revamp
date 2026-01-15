@@ -1157,7 +1157,7 @@
   padding: 0.6rem 0.75rem;
   font-weight: 700;
   border-bottom: 2px solid hsl(var(--border));
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.3); /* Softer divider between envs */
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -1167,6 +1167,7 @@
 .excel-table .field-header-main {
   background: hsl(var(--muted) / 0.9);
   border-bottom: 1px solid hsl(var(--border));
+  border-right: 2px solid hsl(var(--border)); /* Stronger boundary for top tier */
 }
 
 .excel-table .env-header-sub {
@@ -1176,11 +1177,18 @@
   background: hsl(var(--muted) / 0.8);
 }
 
+.excel-table .h-label-clip {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Cells */
 .excel-table td {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid hsl(var(--border));
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.3); /* Softer divider between envs */
   color: hsl(var(--foreground));
   word-break: break-all;
   line-height: 1.4;
@@ -1188,12 +1196,17 @@
   background-color: hsl(var(--card)); /* Opaque background by default */
 }
 
+/* Boundaries */
+.excel-table .field-boundary {
+  border-right: 2px solid hsl(var(--border)) !important; /* High-contrast field boundary */
+}
+
 /* Sticky Headers & Columns */
 .excel-table .sticky-col {
   position: sticky;
   z-index: 20;
   background-color: hsl(var(--card)) !important; /* Force opacity */
-  border-right: 2px solid hsl(var(--border));
+  border-right: 2px solid hsl(var(--border)) !important;
   opacity: 1 !important;
 }
 
