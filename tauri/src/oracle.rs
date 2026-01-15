@@ -442,10 +442,18 @@ pub fn compare_data(
     use std::collections::HashSet;
 
     // Build lookup maps by primary key
+    // Note: Oracle returns column names in uppercase, but user may specify lowercase
+    // So we do case-insensitive matching by looking up with uppercase key
     let build_key = |row: &HashMap<String, serde_json::Value>| -> String {
         primary_key
             .iter()
-            .map(|k| row.get(k).map(|v| v.to_string()).unwrap_or_default())
+            .map(|k| {
+                // Try exact match first, then uppercase
+                row.get(k)
+                    .or_else(|| row.get(&k.to_uppercase()))
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
+            })
             .collect::<Vec<_>>()
             .join("|")
     };
@@ -467,13 +475,13 @@ pub fn compare_data(
         let env1_row = env1_map.get(&key_str);
         let env2_row = env2_map.get(&key_str);
 
-        // Build key map for output
+        // Build key map for output (case-insensitive lookup)
         let key: HashMap<String, serde_json::Value> = primary_key
             .iter()
             .map(|k| {
                 let v = env1_row
                     .or(env2_row)
-                    .and_then(|r| r.get(k))
+                    .and_then(|r| r.get(k).or_else(|| r.get(&k.to_uppercase())))
                     .cloned()
                     .unwrap_or(serde_json::Value::Null);
                 (k.clone(), v)
@@ -482,10 +490,11 @@ pub fn compare_data(
 
         let (status, differences) = match (env1_row, env2_row) {
             (Some(r1), Some(r2)) => {
-                // Compare all fields
+                // Compare all fields (exclude primary key fields, case-insensitive)
+                let pk_upper: Vec<String> = primary_key.iter().map(|s| s.to_uppercase()).collect();
                 let diffs: Vec<String> = r1
                     .keys()
-                    .filter(|k| !primary_key.contains(k))
+                    .filter(|k| !pk_upper.contains(&k.to_uppercase()))
                     .filter(|k| r1.get(*k) != r2.get(*k))
                     .cloned()
                     .collect();

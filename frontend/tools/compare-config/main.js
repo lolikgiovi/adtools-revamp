@@ -1047,16 +1047,15 @@ class CompareConfigTool extends BaseTool {
             .filter((f) => f.length > 0)
         : [];
 
-      // Build comparison request
+      // Build comparison request matching RawSqlRequest struct
       // Primary key will be auto-detected as the first column from SQL results if not provided
       const request = {
-        env1_name: this.rawenv1.connection.name,
-        env1_connection: this.rawenv1.connection,
-        env1_sql: cleanSql,
-        env2_name: this.rawenv2.connection.name,
-        env2_connection: this.rawenv2.connection,
-        env2_sql: cleanSql,
-        primary_key: primaryKeyFields,
+        env1_connection_name: this.rawenv1.connection.name,
+        env1_config: this.rawenv1.connection,
+        env2_connection_name: this.rawenv2.connection.name,
+        env2_config: this.rawenv2.connection,
+        sql: cleanSql,
+        primary_key: primaryKeyFields.length > 0 ? primaryKeyFields.join(",") : null,
         max_rows: this.rawMaxRows,
       };
 
@@ -1264,17 +1263,18 @@ class CompareConfigTool extends BaseTool {
     const { summary } = this.comparisonResult;
 
     // Render summary cards as clickable filter buttons
+    // Note: Rust CompareSummary uses 'total', 'matches', 'differs'
     summaryContainer.innerHTML = `
       <button class="summary-stat ${this.statusFilter === null ? "selected" : ""}" data-filter="all">
-        <div class="stat-value">${summary.total_records}</div>
+        <div class="stat-value">${summary.total}</div>
         <div class="stat-label">Total Records</div>
       </button>
       <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match">
-        <div class="stat-value">${summary.matching}</div>
+        <div class="stat-value">${summary.matches}</div>
         <div class="stat-label">Matching</div>
       </button>
       <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ">
-        <div class="stat-value">${summary.differing}</div>
+        <div class="stat-value">${summary.differs}</div>
         <div class="stat-label">Differing</div>
       </button>
       <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
@@ -1315,15 +1315,16 @@ class CompareConfigTool extends BaseTool {
   getFilteredComparisons() {
     if (!this.comparisonResult) return [];
 
-    const { comparisons } = this.comparisonResult;
+    // Backend returns 'rows' in CompareResult struct
+    const rows = this.comparisonResult.rows || [];
 
-    // If no filter, return all comparisons
+    // If no filter, return all rows
     if (!this.statusFilter) {
-      return comparisons;
+      return rows;
     }
 
     // Filter by status
-    return comparisons.filter((comp) => comp.status === this.statusFilter);
+    return rows.filter((comp) => comp.status === this.statusFilter);
   }
 
   /**
@@ -1393,6 +1394,9 @@ class CompareConfigTool extends BaseTool {
     const statusLabel = this.getStatusLabel(comparison.status);
     const statusBadge = `<span class="status-badge status-${statusClass}">${statusLabel}</span>`;
 
+    // Format primary key from HashMap (Rust 'key' field)
+    const pkDisplay = this.formatPrimaryKey(comparison.key);
+
     return /*html*/ `
       <tr class="comparison-row" data-row-id="${index}">
         <td>
@@ -1402,12 +1406,10 @@ class CompareConfigTool extends BaseTool {
             </svg>
           </button>
         </td>
-        <td class="pk-cell">${this.escapeHtml(comparison.primary_key)}</td>
+        <td class="pk-cell">${this.escapeHtml(pkDisplay)}</td>
         <td>${statusBadge}</td>
         <td>
-          <button class="btn btn-sm btn-sm-xs btn-copy-pk" data-pk="${this.escapeHtml(
-            comparison.primary_key
-          )}" title="Copy Primary Key">Copy PK</button>
+          <button class="btn btn-sm btn-sm-xs btn-copy-pk" data-pk="${this.escapeHtml(pkDisplay)}" title="Copy Primary Key">Copy PK</button>
         </td>
       </tr>
       <tr class="comparison-detail" data-row-id="${index}" style="display: none;">
@@ -1450,6 +1452,11 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Status is 'differ' - show field-by-field comparison
+    // Rust 'differences' is an array of field names that differ
+    const diffFields = comparison.differences || [];
+    const env1Data = comparison.env1_data || {};
+    const env2Data = comparison.env2_data || {};
+
     return `
       <div class="comparison-detail-content">
         <table class="field-comparison-table">
@@ -1461,7 +1468,7 @@ class CompareConfigTool extends BaseTool {
             </tr>
           </thead>
           <tbody>
-            ${comparison.differences.map((diff) => this.renderFieldDifference(diff)).join("")}
+            ${diffFields.map((fieldName) => this.renderFieldDifferenceSimple(fieldName, env1Data[fieldName], env2Data[fieldName])).join("")}
           </tbody>
         </table>
       </div>
@@ -1509,6 +1516,46 @@ class CompareConfigTool extends BaseTool {
         }
       })
       .join("");
+  }
+
+  /**
+   * Formats a primary key HashMap into a display string
+   */
+  formatPrimaryKey(keyMap) {
+    if (!keyMap || typeof keyMap !== "object") return "";
+    const entries = Object.entries(keyMap);
+    if (entries.length === 0) return "";
+    if (entries.length === 1) {
+      // Single key - just show the value
+      return this.formatValue(entries[0][1]);
+    }
+    // Composite key - show key=value pairs
+    return entries.map(([k, v]) => `${k}=${this.formatValue(v)}`).join(", ");
+  }
+
+  /**
+   * Formats a value for display (handles JSON values)
+   */
+  formatValue(value) {
+    if (value === null || value === undefined) return "(null)";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  /**
+   * Renders a simple field difference (field name + values from each env)
+   */
+  renderFieldDifferenceSimple(fieldName, env1Value, env2Value) {
+    const env1Display = this.formatValue(env1Value);
+    const env2Display = this.formatValue(env2Value);
+
+    return `
+      <tr class="field-diff-row">
+        <td class="field-name">${this.escapeHtml(fieldName)}</td>
+        <td class="field-value diff-removed">${this.escapeHtml(env1Display)}</td>
+        <td class="field-value diff-added">${this.escapeHtml(env2Display)}</td>
+      </tr>
+    `;
   }
 
   /**
@@ -1616,12 +1663,12 @@ class CompareConfigTool extends BaseTool {
 
       // Create a blob and trigger browser download
       const blob = new Blob([exportData.content], {
-        type: format === 'json' ? 'application/json' : 'text/csv'
+        type: format === "json" ? "application/json" : "text/csv",
       });
       const url = URL.createObjectURL(blob);
 
       // Create temporary download link and click it
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = exportData.filename;
       document.body.appendChild(a);

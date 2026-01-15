@@ -513,6 +513,10 @@ class SettingsPage {
       const statusEl = wrapper.querySelector(".oracle-form-status");
       let editingIndex = -1;
 
+      // Local escape function for HTML content
+      const esc = (s) =>
+        String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+
       const renderList = () => {
         const conns = this.service.getValue(storageKey, "oracle-connections", []);
         if (!conns || conns.length === 0) {
@@ -524,8 +528,8 @@ class SettingsPage {
             (c, i) => `
           <div class="oracle-connection-row" data-index="${i}">
             <div class="oracle-conn-info">
-              <span class="oracle-conn-name">${this.esc(c.name)}</span>
-              <span class="oracle-conn-string">${this.esc(c.connect_string)}</span>
+              <span class="oracle-conn-name">${esc(c.name)}</span>
+              <span class="oracle-conn-string">${esc(c.connect_string)}</span>
             </div>
             <div class="oracle-conn-actions">
               <button class="btn btn-outline btn-sm oracle-edit-conn" data-index="${i}">Edit</button>
