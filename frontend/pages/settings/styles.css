@@ -210,11 +210,11 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.switch input:checked+.slider {
+.switch input:checked + .slider {
   background-color: var(--toggle-on-bg, #4ade80);
 }
 
-.switch input:checked+.slider::before {
+.switch input:checked + .slider::before {
   transform: translateX(1.25rem);
 }
 
@@ -525,4 +525,141 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 0.75rem;
+}
+
+/* Oracle Connections */
+.setting-item-oracle {
+  padding: 0.75rem;
+}
+
+.oracle-connections-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.setting-description {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+  margin: 0 0 0.75rem;
+}
+
+.oracle-connections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.oracle-empty {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
+.oracle-connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--muted) / 0.3);
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+}
+
+.oracle-conn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.oracle-conn-name {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+}
+
+.oracle-conn-string {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-family: monospace;
+}
+
+.oracle-conn-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.oracle-connection-form {
+  background: hsl(var(--muted) / 0.2);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+.oracle-form-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.oracle-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.oracle-form-row label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.oracle-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 0.85rem;
+}
+
+.oracle-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.3);
+}
+
+.oracle-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.oracle-form-status {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  min-height: 1.2em;
+}
+
+.oracle-form-status.success {
+  color: #22c55e;
+}
+
+.oracle-form-status.error {
+  color: #ef4444;
+}
+
+.btn-danger {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-danger:hover {
+  background: #ef4444;
+  color: white;
 }

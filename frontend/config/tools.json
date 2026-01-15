@@ -69,6 +69,17 @@
       "order": 50
     },
     {
+      "id": "compare-config",
+      "name": "Compare Config",
+      "category": "config",
+      "icon": "database-compare",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "requiresTauri": true,
+      "order": 51
+    },
+    {
       "id": "run-query",
       "name": "Run Query",
       "category": "jenkins",

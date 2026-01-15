@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 #[cfg(feature = "oracle")]
-use oracle::{Connection, pool::Pool};
+use oracle::{Connection, DbError};
 
 const ORACLE_KEYCHAIN_SERVICE: &str = "ad-tools:oracle";
 
@@ -63,7 +63,7 @@ impl std::error::Error for OracleError {}
 #[cfg(feature = "oracle")]
 impl From<oracle::Error> for OracleError {
     fn from(e: oracle::Error) -> Self {
-        let code = e.oci_error().map(|o| o.code()).unwrap_or(0);
+        let code = e.db_error().map(|o| o.code()).unwrap_or(0);
         OracleError::new(code, e.to_string())
     }
 }

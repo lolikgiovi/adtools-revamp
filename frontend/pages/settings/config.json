@@ -178,6 +178,22 @@
       ]
     },
     {
+      "id": "oracle",
+      "label": "Oracle Connections",
+      "requiresTauri": true,
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.oracle.connections",
+          "storageKey": "config.oracle.connections",
+          "label": "Database Connections",
+          "type": "oracle-connections",
+          "default": [],
+          "description": "Manage Oracle database connections for Compare Config tool. Credentials are stored securely in macOS Keychain."
+        }
+      ]
+    },
+    {
       "id": "credentials",
       "requiresTauri": true,
       "label": "Credential Management",
