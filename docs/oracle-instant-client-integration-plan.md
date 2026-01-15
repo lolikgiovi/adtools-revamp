@@ -1,188 +1,658 @@
 # Oracle Instant Client Integration Plan (macOS, Tauri Desktop)
 
 ## Goals
-- Enable optional Oracle SELECT capabilities in the desktop app without breaking when the client isn’t installed.
-- Keep installation user-driven (no admin rights), with a predictable local path.
+
+- Enable Oracle SELECT capabilities in the desktop app with zero user setup.
+- Bundle Oracle Instant Client within the app for each architecture (arm64, x86_64).
 - Integrate with Quick Query for table properties and Jenkins Runner for preflight backup SELECTs.
 
 ## Summary Approach
-- Ship app code compiled with the Rust `oracle` crate, but do not bundle the Oracle Instant Client.
-- Provide an installer script that places Instant Client under `~/Documents/adtools_library/instantclient` and records the path.
-- At runtime, explicitly load `libclntsh.dylib` from that path (no reliance on `DYLD_LIBRARY_PATH`).
-- Gate UI features in Quick Query and Jenkins Runner based on a readiness check. If not ready, show guidance but keep the app fully usable.
 
-## Install Location
-- Target directory: `~/Documents/adtools_library/instantclient`
-- Rationale:
-  - User-writable; no admin privileges required.
-  - Not in `Applications`; avoids system-level constraints and auto-managed updates.
-  - Easy for users to inspect and back up.
+- Ship app with Oracle Instant Client (Basic Lite, ~30MB) bundled inside the app bundle.
+- Each architecture build (arm64, x86_64) includes the matching IC binaries.
+- At runtime, load `libclntsh.dylib` from the app bundle using `@executable_path` relative paths.
+- Use connection pooling (max 4 connections) and result streaming for large queries.
+- Store Oracle credentials in macOS Keychain as a single consolidated entry.
+
+## Existing Frontend (Cherry-picked from e25e4d8)
+
+The Compare Config tool UI has been cherry-picked from branch `backup-before-compare-config-revert` (commit e25e4d8). This provides a complete frontend implementation.
+
+### Files
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `app/tools/compare-config/main.js` | ~1700 | Full tool logic, state management, UI binding |
+| `app/tools/compare-config/template.js` | ~240 | HTML template with installation guide, forms, results |
+| `app/tools/compare-config/service.js` | ~180 | Tauri invoke calls (backend interface) |
+| `app/tools/compare-config/styles.css` | ~800 | Complete styling |
+| `app/tools/compare-config/icon.js` | ~20 | Tool icon |
+| `app/tools/compare-config/views/` | - | MasterDetailView.js, VerticalCardView.js |
+
+### Features Implemented (UI only, backend pending)
+
+- **Installation Guide**: Shows when Oracle client not detected (adapt for bundled mode)
+- **Schema/Table Mode**: Connection → Schema → Table → Field selection → Compare
+- **Raw SQL Mode**: Custom SQL queries against two environments
+- **Result Views**: Expandable rows, vertical cards, master-detail
+- **Export**: JSON/CSV download
+- **Connection Management**: Save/load connections, Keychain credentials
+
+### Adaptation Needed for Bundled IC
+
+Since IC is now bundled (not user-installed), the installation guide should become an error state:
+
+```javascript
+// In main.js checkOracleClient(), change showInstallationGuide() to show error:
+showInstallationGuide() {
+  // Change message from "install Oracle client" to
+  // "Oracle client failed to load. Please reinstall the app or contact support."
+}
+```
+
+## Bundle Structure
+
+```
+ADTools.app/
+└── Contents/
+    ├── MacOS/
+    │   └── ad-tools (main executable)
+    └── Frameworks/
+        └── instantclient/
+            ├── libclntsh.dylib
+            ├── libclntsh.dylib.19.1 (or current version)
+            ├── libnnz19.dylib
+            ├── libociei.dylib
+            └── ... (other IC files)
+```
+
+### Build & Signing Requirements
+
+- Copy IC files into `Frameworks/instantclient/` during Tauri build.
+- Sign all dylibs: `codesign --force --sign "$IDENTITY" --timestamp Contents/Frameworks/instantclient/*.dylib`
+- Notarization should cover bundled dylibs automatically if signed correctly.
+- Add to `tauri.conf.json` resources or use build script to copy files.
 
 ## Backend Safety Requirements
-- Never panic if the client isn’t present. All Tauri commands must return `Result<_, String>`.
-- Provide a dedicated “readiness” command that returns `true/false` and a friendly error message when loading fails.
-- Only attempt to load the client on demand (when the user initiates an Oracle action).
-- Explicitly load `libclntsh.dylib` using `libloading::Library::new(path)` and keep the handle alive (e.g., leak/park the handle) to ensure it stays loaded.
-- Prefer setting `ODPI_LIB_DIR` or `OCI_LIB_DIR` to point to the Instant Client directory before creating Oracle connections, but the primary approach is explicit loading.
 
-## Runtime Detection & Gating (UI)
-- On tool init (Quick Query, Jenkins Runner):
-  - Call `check_oracle_client_ready(customDir?)`.
-  - If `false`, disable local-execution buttons and show: “Oracle client not installed. Run installer and configure path.”
-  - If `true`, call `prime_oracle_client(customDir?)` once to load `libclntsh.dylib`.
-- Avoid relying on `DYLD_LIBRARY_PATH` for Finder-launched apps; explicit loading is deterministic on macOS.
+- Never panic if the client fails to load. All Tauri commands must return `Result<T, OracleError>`.
+- Use `OnceLock` for library handle - load once, clean lifecycle, no memory leaks.
+- Load the client lazily on first Oracle action (not at app startup).
+- Implement query timeout (default 5 minutes) to prevent hung connections.
 
-## Tauri Backend Commands (Examples)
-- Readiness check:
+### Library Loading with OnceLock (No Memory Leak)
+
 ```rust
-#[tauri::command]
-fn check_oracle_client_ready(custom_dir: Option<String>) -> Result<bool, String> {
-  // Resolve directory (custom or default) and check existence of libclntsh.dylib
+use std::sync::OnceLock;
+use libloading::Library;
+
+static ORACLE_LIB: OnceLock<Library> = OnceLock::new();
+
+fn get_oracle_lib() -> Result<&'static Library, OracleError> {
+    ORACLE_LIB.get_or_try_init(|| {
+        let exe_path = std::env::current_exe()
+            .map_err(|e| OracleError::new(0, format!("Failed to get exe path: {}", e)))?;
+        let frameworks_path = exe_path
+            .parent()  // MacOS/
+            .and_then(|p| p.parent())  // Contents/
+            .map(|p| p.join("Frameworks/instantclient/libclntsh.dylib"))
+            .ok_or_else(|| OracleError::new(0, "Invalid app bundle structure".into()))?;
+
+        unsafe { Library::new(&frameworks_path) }
+            .map_err(|e| OracleError::new(0, format!("Failed to load Oracle client: {}", e)))
+    })
 }
 ```
 
-- Prime loader:
+## Connection Pooling
+
+- Use `oracle` crate's connection pool or implement simple pool with `deadpool`.
+- Configuration:
+  - `min_connections`: 0 (create on demand)
+  - `max_connections`: 4
+  - `connection_timeout`: 30 seconds
+  - `idle_timeout`: 300 seconds (close idle connections after 5 min)
+- Connections are heavyweight (~1-5MB each); limit prevents memory bloat.
+
 ```rust
-#[tauri::command]
-fn prime_oracle_client(custom_dir: Option<String>) -> Result<bool, String> {
-  // Load libclntsh.dylib via libloading::Library::new()
+use oracle::pool::{Pool, PoolBuilder};
+
+fn create_pool(connect_string: &str, user: &str, pass: &str) -> Result<Pool, OracleError> {
+    PoolBuilder::new(user, pass, connect_string)
+        .min_connections(0)
+        .max_connections(4)
+        .connection_timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| map_oracle_error(e))
 }
 ```
 
-- Execute SELECT and return JSON:
+## Result Streaming
+
+For large result sets, stream rows in batches to prevent memory exhaustion.
+
+### Streaming Strategy
+
+- Fetch rows in batches of 1000.
+- Send batches to frontend via Tauri events or chunked responses.
+- Frontend renders incrementally (virtualized list recommended).
+- Optional: User can set row limit before executing.
+
 ```rust
 #[tauri::command]
-fn oracle_select_json(connect: String, username: String, password: String, sql: String) -> Result<serde_json::Value, String> {
-  // Ensure client loaded, connect via oracle::Connection, execute query, map rows to JSON
+async fn oracle_select_stream(
+    window: Window,
+    connect: String,
+    username: String,
+    password: String,
+    sql: String,
+    batch_size: Option<u32>,
+    row_limit: Option<u32>,
+) -> Result<StreamInfo, OracleError> {
+    let batch = batch_size.unwrap_or(1000);
+    let limit = row_limit; // None = unlimited
+
+    // Execute query and stream batches via events
+    let conn = get_connection(&connect, &username, &password)?;
+    let mut stmt = conn.statement(&sql).build()?;
+    let rows = stmt.query(&[])?;
+
+    let mut count = 0u32;
+    let mut batch_rows = Vec::with_capacity(batch as usize);
+
+    for row_result in rows {
+        let row = row_result.map_err(map_oracle_error)?;
+        batch_rows.push(row_to_json(&row)?);
+        count += 1;
+
+        if batch_rows.len() >= batch as usize {
+            window.emit("oracle-rows", &batch_rows)?;
+            batch_rows.clear();
+        }
+
+        if let Some(max) = limit {
+            if count >= max { break; }
+        }
+    }
+
+    // Emit remaining rows
+    if !batch_rows.is_empty() {
+        window.emit("oracle-rows", &batch_rows)?;
+    }
+
+    window.emit("oracle-complete", count)?;
+    Ok(StreamInfo { total_rows: count })
 }
 ```
 
-- Fetch table properties (for Quick Query):
+## Rich Error Handling
+
+Map Oracle errors to user-friendly messages with actionable hints.
+
 ```rust
-#[tauri::command]
-fn oracle_table_properties(owner: String, table: String, connect: String, username: String, password: String) -> Result<serde_json::Value, String> {
-  // Query ALL_TAB_COLUMNS / ALL_CONSTRAINTS to produce columns + PK flags
+#[derive(Debug, Serialize, Clone)]
+pub struct OracleError {
+    pub code: i32,
+    pub message: String,
+    pub hint: Option<String>,
+}
+
+impl OracleError {
+    pub fn new(code: i32, message: String) -> Self {
+        let hint = match code {
+            1017 => Some("Check your username and password.".into()),
+            12154 => Some("Verify connection string format: host:port/service_name".into()),
+            12170 => Some("Connection timed out. Check network and firewall.".into()),
+            12541 => Some("No listener at specified host:port. Verify the address.".into()),
+            942 => Some("Table or view does not exist, or you lack permissions.".into()),
+            1031 => Some("Insufficient privileges. Contact your DBA.".into()),
+            _ => None,
+        };
+        Self { code, message, hint }
+    }
+}
+
+fn map_oracle_error(e: oracle::Error) -> OracleError {
+    let code = e.oci_error().map(|o| o.code()).unwrap_or(0);
+    let message = e.to_string();
+    OracleError::new(code, message)
 }
 ```
 
-## SQL for Table Properties
-- Columns and datatypes:
-```sql
-SELECT c.COLUMN_ID,
-       c.COLUMN_NAME,
-       c.DATA_TYPE,
-       c.DATA_LENGTH,
-       c.DATA_PRECISION,
-       c.DATA_SCALE,
-       c.NULLABLE,
-       c.DATA_DEFAULT
-FROM   ALL_TAB_COLUMNS c
-WHERE  c.OWNER = :owner
-AND    c.TABLE_NAME = :table
-ORDER BY c.COLUMN_ID;
+## Tauri Backend Commands
+
+These commands map directly to the existing `CompareConfigService` in `app/tools/compare-config/service.js`.
+
+### Command Mapping (service.js → Rust)
+
+| Frontend Method | Tauri Command | Description |
+|-----------------|---------------|-------------|
+| `checkOracleClientReady()` | `check_oracle_client_ready` | Check if IC is loaded |
+| `primeOracleClient()` | `prime_oracle_client` | Load IC library |
+| `testConnection(config, user, pass)` | `test_oracle_connection` | Validate connection |
+| `fetchSchemas(name, config)` | `fetch_schemas` | List available schemas |
+| `fetchTables(name, config, owner)` | `fetch_tables` | List tables in schema |
+| `fetchTableMetadata(name, config, owner, table)` | `fetch_table_metadata` | Get columns, PKs |
+| `compareConfigurations(request)` | `compare_configurations` | Compare two environments |
+| `compareRawSql(request)` | `compare_raw_sql` | Compare raw SQL results |
+| `exportComparisonResult(result, format)` | `export_comparison_result` | Export to JSON/CSV |
+| `setOracleCredentials(name, user, pass)` | `set_oracle_credentials` | Store in Keychain |
+| `getOracleCredentials(name)` | `get_oracle_credentials` | Retrieve from Keychain |
+| `deleteOracleCredentials(name)` | `delete_oracle_credentials` | Remove from Keychain |
+| `hasOracleCredentials(name)` | `has_oracle_credentials` | Check if exists |
+
+### Client Readiness Commands
+
+```rust
+#[tauri::command]
+fn check_oracle_client_ready() -> Result<bool, String> {
+    get_oracle_lib().map(|_| true).map_err(|e| e.message)
+}
+
+#[tauri::command]
+fn prime_oracle_client() -> Result<(), String> {
+    get_oracle_lib().map(|_| ()).map_err(|e| e.message)
+}
 ```
 
-- Primary key columns:
-```sql
-SELECT cc.COLUMN_NAME
-FROM   ALL_CONSTRAINTS cons
-JOIN   ALL_CONS_COLUMNS cc
-  ON   cons.OWNER = cc.OWNER
- AND   cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
-WHERE  cons.OWNER = :owner
-AND    cons.TABLE_NAME = :table
-AND    cons.CONSTRAINT_TYPE = 'P';
+### Connection Commands
+
+```rust
+#[tauri::command]
+fn test_oracle_connection(
+    config: ConnectionConfig,
+    username: String,
+    password: String,
+) -> Result<String, OracleError> {
+    let conn = create_connection(&config.connect_string, &username, &password)?;
+    // Simple query to verify connection
+    conn.query_row_as::<String>("SELECT 'OK' FROM DUAL", &[])?;
+    Ok("Connection successful".into())
+}
+
+#[tauri::command]
+fn fetch_schemas(
+    connection_name: String,
+    config: ConnectionConfig,
+) -> Result<Vec<String>, OracleError> {
+    let (username, password) = get_credentials_from_keychain(&connection_name)?;
+    let conn = get_pooled_connection(&config.connect_string, &username, &password)?;
+
+    let sql = "SELECT DISTINCT OWNER FROM ALL_TABLES ORDER BY OWNER";
+    let rows = conn.query_as::<String>(sql, &[])?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+fn fetch_tables(
+    connection_name: String,
+    config: ConnectionConfig,
+    owner: String,
+) -> Result<Vec<String>, OracleError> {
+    let (username, password) = get_credentials_from_keychain(&connection_name)?;
+    let conn = get_pooled_connection(&config.connect_string, &username, &password)?;
+
+    let sql = "SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = :1 ORDER BY TABLE_NAME";
+    let rows = conn.query_as::<String>(sql, &[&owner])?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
 ```
 
-- Merge PK info by marking columns returned in the PK query.
+### Table Metadata Command
 
-## Quick Query Integration
-- UI changes:
-  - Add “Fetch Table Properties” action that calls `oracle_table_properties` and populates the schema grid.
-  - Add “Execute Locally” action to run ad-hoc SELECT using `oracle_select_json`.
-- Behavior when client missing:
-  - Disable both actions and show a short tip, but keep the editor and other tooling usable.
-- Data mapping:
-  - Map `columns` to grid headers and `rows` to table body.
-  - Validate schema using existing `SchemaValidationService` after fetching.
+```rust
+#[derive(Serialize)]
+struct TableMetadata {
+    columns: Vec<ColumnInfo>,
+    primary_key: Vec<String>,
+}
 
-## Jenkins Runner Integration
-- New preflight step (optional toggle):
-  - Before running MERGE/INSERT/UPDATE, perform a local SELECT snapshot of the target table (limited rows, e.g., `FETCH FIRST 100 ROWS ONLY`).
-  - Save as JSON/CSV under `~/Documents/adtools_library/backups/<schema>.<table>-<timestamp>.json`.
-- Behavior when client missing:
-  - Show “Local snapshot unavailable” and allow proceeding with Jenkins execution.
-- Example snapshot query:
-```sql
-SELECT * FROM :owner.:table FETCH FIRST 100 ROWS ONLY;
+#[derive(Serialize)]
+struct ColumnInfo {
+    column_id: i32,
+    column_name: String,
+    data_type: String,
+    data_length: Option<i32>,
+    data_precision: Option<i32>,
+    data_scale: Option<i32>,
+    nullable: bool,
+    data_default: Option<String>,
+}
+
+#[tauri::command]
+fn fetch_table_metadata(
+    connection_name: String,
+    config: ConnectionConfig,
+    owner: String,
+    table_name: String,
+) -> Result<TableMetadata, OracleError> {
+    let safe_owner = validate_identifier(&owner)?;
+    let safe_table = validate_identifier(&table_name)?;
+
+    let (username, password) = get_credentials_from_keychain(&connection_name)?;
+    let conn = get_pooled_connection(&config.connect_string, &username, &password)?;
+
+    // Fetch columns
+    let columns_sql = r#"
+        SELECT COLUMN_ID, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
+               DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT
+        FROM ALL_TAB_COLUMNS
+        WHERE OWNER = :1 AND TABLE_NAME = :2
+        ORDER BY COLUMN_ID
+    "#;
+
+    // Fetch primary key
+    let pk_sql = r#"
+        SELECT cc.COLUMN_NAME
+        FROM ALL_CONSTRAINTS cons
+        JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER
+            AND cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+        WHERE cons.OWNER = :1 AND cons.TABLE_NAME = :2
+            AND cons.CONSTRAINT_TYPE = 'P'
+        ORDER BY cc.POSITION
+    "#;
+
+    // Execute and build response...
+}
 ```
-- Note: Use bound variables or sanitized identifiers; for identifiers, resolve via `oracle_table_properties` to avoid injection.
 
-## Installer Script Plan (install-oracle-client.sh)
-- Goals:
-  - Download or accept path to official Instant Client (Basic Light) ZIP for macOS.
-  - Install to `~/Documents/adtools_library/instantclient` without admin rights.
-  - Create `libclntsh.dylib` symlink if only versioned file exists.
-  - Record path for the app to discover (e.g., `~/.adtools/oracle_ic_path`).
-  - Do not auto-update; store a fixed version and never change it without explicit user action.
+### Comparison Commands
 
-- Architecture detection:
-  - Detect CPU via `uname -m` (`arm64` vs `x86_64`).
-  - Validate the ZIP matches the architecture; error/warn if mismatch.
+```rust
+#[derive(Deserialize)]
+struct CompareRequest {
+    env1_connection_name: String,
+    env1_config: ConnectionConfig,
+    env2_connection_name: String,
+    env2_config: ConnectionConfig,
+    owner: String,
+    table_name: String,
+    primary_key: Vec<String>,
+    fields: Vec<String>,
+    where_clause: Option<String>,
+    max_rows: Option<u32>,
+}
 
-- Download modes:
-  1) Manual: user downloads the ZIP from Oracle and passes the local path to the script.
-  2) Direct URL (advanced): if a direct, authenticated URL is provided, use `curl` to fetch. The script never stores credentials.
+#[derive(Serialize)]
+struct CompareResult {
+    env1_name: String,
+    env2_name: String,
+    table: String,
+    summary: CompareSummary,
+    rows: Vec<CompareRow>,
+}
 
-- Steps:
-  - Create directories: `~/Documents/adtools_library/instantclient` and `~/.adtools`.
-  - Unzip into the instantclient directory; flatten nested structure if needed.
-  - Ensure `libclntsh.dylib` exists; create a symlink to `libclntsh.dylib.*` if only versioned file is present.
-  - Write path to `~/.adtools/oracle_ic_path`.
-  - Optionally write `version.lock` with the installed version string.
-  - Print concise success message and short usage tip.
+#[tauri::command]
+fn compare_configurations(request: CompareRequest) -> Result<CompareResult, OracleError> {
+    // Fetch data from both environments
+    // Compare rows by primary key
+    // Categorize: match, differ, only_in_env1, only_in_env2
+    // Return structured result
+}
 
-- Example outline:
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-ARCH="$(uname -m)" # arm64 or x86_64
-TARGET="$HOME/Documents/adtools_library/instantclient"
-CONF_DIR="$HOME/.adtools"
-ZIP_PATH="${1:-}"
+#[derive(Deserialize)]
+struct RawSqlRequest {
+    env1_connection_name: String,
+    env1_config: ConnectionConfig,
+    env2_connection_name: String,
+    env2_config: ConnectionConfig,
+    sql: String,
+    primary_key: Option<String>,
+    max_rows: Option<u32>,
+}
 
-mkdir -p "$TARGET" "$CONF_DIR"
+#[tauri::command]
+fn compare_raw_sql(request: RawSqlRequest) -> Result<CompareResult, OracleError> {
+    // Execute same SQL on both environments
+    // Compare results
+}
+```
 
-if [[ -z "$ZIP_PATH" ]]; then
-  echo "Usage: install-oracle-client.sh /path/to/instantclient-basiclite-<arch>.zip"
-  exit 1
-fi
+### Export Command
 
-unzip -q "$ZIP_PATH" -d "$TARGET"
-# Flatten and link libclntsh.dylib, record path, write version.lock
+```rust
+#[derive(Serialize)]
+struct ExportData {
+    filename: String,
+    content: String,
+    format: String,
+}
+
+#[tauri::command]
+fn export_comparison_result(
+    result: CompareResult,
+    format: String,
+) -> Result<ExportData, OracleError> {
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("comparison_{}_{}.{}", result.table, timestamp, format);
+
+    let content = match format.as_str() {
+        "json" => serde_json::to_string_pretty(&result)?,
+        "csv" => convert_to_csv(&result)?,
+        _ => return Err(OracleError::new(0, "Invalid format".into())),
+    };
+
+    Ok(ExportData { filename, content, format })
+}
+```
+
+### Credential Commands (Keychain)
+
+```rust
+use security_framework::passwords::{get_generic_password, set_generic_password, delete_generic_password};
+
+const KEYCHAIN_SERVICE: &str = "com.adtools.oracle";
+
+#[tauri::command]
+fn set_oracle_credentials(name: String, username: String, password: String) -> Result<(), String> {
+    let account = format!("{}:user", name);
+    let pass_account = format!("{}:pass", name);
+
+    set_generic_password(KEYCHAIN_SERVICE, &account, username.as_bytes())
+        .map_err(|e| e.to_string())?;
+    set_generic_password(KEYCHAIN_SERVICE, &pass_account, password.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_oracle_credentials(name: String) -> Result<(String, String), String> {
+    let account = format!("{}:user", name);
+    let pass_account = format!("{}:pass", name);
+
+    let username = get_generic_password(KEYCHAIN_SERVICE, &account)
+        .map_err(|e| e.to_string())?;
+    let password = get_generic_password(KEYCHAIN_SERVICE, &pass_account)
+        .map_err(|e| e.to_string())?;
+
+    Ok((
+        String::from_utf8(username).map_err(|e| e.to_string())?,
+        String::from_utf8(password).map_err(|e| e.to_string())?,
+    ))
+}
+
+#[tauri::command]
+fn delete_oracle_credentials(name: String) -> Result<(), String> {
+    let account = format!("{}:user", name);
+    let pass_account = format!("{}:pass", name);
+
+    let _ = delete_generic_password(KEYCHAIN_SERVICE, &account);
+    let _ = delete_generic_password(KEYCHAIN_SERVICE, &pass_account);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn has_oracle_credentials(name: String) -> Result<bool, String> {
+    let account = format!("{}:user", name);
+    Ok(get_generic_password(KEYCHAIN_SERVICE, &account).is_ok())
+}
+```
+
+### Identifier Validation
+
+```rust
+/// Validate Oracle identifier to prevent SQL injection
+fn validate_identifier(s: &str) -> Result<String, OracleError> {
+    let valid = s.len() <= 128
+        && s.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$' || c == '#');
+
+    if valid {
+        Ok(s.to_uppercase())
+    } else {
+        Err(OracleError::new(0, format!("Invalid identifier: {}", s)))
+    }
+}
 ```
 
 ## Security & Credentials
-- Do not store DB credentials in `localStorage`.
-- Reuse macOS Keychain (similar to Jenkins credentials) for Oracle username/password.
-- Use read-only DB users for SELECT operations and strictly read-only data paths.
-- For TCPS/wallets: users can place wallet files under `~/.adtools/wallet` and set `TNS_ADMIN` via app config; document separately if needed.
+
+### macOS Keychain Storage
+
+Store Oracle credentials per connection in Keychain. Connection metadata (name, connect string) stored in localStorage; only sensitive credentials go to Keychain.
+
+**Storage Strategy:**
+- **localStorage**: Connection profiles (name, connect_string, environment label)
+- **Keychain**: Username/password pairs, keyed by connection name
+
+This matches the existing `CompareConfigService` interface which stores/retrieves credentials per connection name.
+
+### Security Guidelines
+
+- Never log credentials or include in error messages.
+- Use read-only DB users for SELECT operations.
+- Connection strings use Easy Connect format: `host:port/service_name`
+- No support for TCPS/Wallet initially (can add later if needed).
+
+## Quick Query Integration
+
+### UI Changes
+
+- Add "Fetch Schema" button that calls `oracle_table_properties`.
+- Add "Run Locally" button to execute SELECT via `oracle_select_json` or streaming variant.
+- Add connection profile dropdown (populated from Keychain).
+- Add optional row limit input (default: unlimited, with warning for large results).
+
+### Behavior
+
+- On tool init, call `check_oracle_ready()`.
+- If ready, enable Oracle features.
+- If not ready (bundled IC failed to load), show error and disable features.
+
+## Jenkins Runner Integration
+
+### Preflight Snapshot (Optional)
+
+- Toggle in UI: "Create local backup before execution"
+- Before running MERGE/INSERT/UPDATE, SELECT current data (limited rows).
+- Save snapshot to `~/Documents/adtools_library/backups/<schema>.<table>-<timestamp>.json`.
+
+### Snapshot Query
+
+```rust
+fn snapshot_table(owner: &str, table: &str, conn: &Connection) -> Result<Vec<serde_json::Value>, OracleError> {
+    let safe_owner = validate_identifier(owner)?;
+    let safe_table = validate_identifier(table)?;
+
+    // Build query with validated identifiers (not bind variables for identifiers)
+    let sql = format!(
+        "SELECT * FROM \"{}\".\"{}\" FETCH FIRST 100 ROWS ONLY",
+        safe_owner, safe_table
+    );
+
+    let rows = conn.query(&sql, &[]).map_err(map_oracle_error)?;
+    // ... convert to JSON
+}
+```
+
+### Behavior When Unavailable
+
+- If Oracle client fails to load, show "Local snapshot unavailable" and allow proceeding.
+- Snapshot is optional enhancement, not a blocker.
 
 ## Testing & Verification
-- Unit test backend commands with mocked availability (client present/absent) to ensure safe fallbacks.
-- Manual tests:
-  - With no client installed: app loads, buttons disabled, clear guidance shown.
-  - With client installed: prime load succeeds; SELECT returns rows; table properties populate correctly.
-  - Wrong architecture ZIP: installer warns and aborts.
+
+### Unit Tests
+
+- Mock `OnceLock` initialization to test client-absent scenarios.
+- Test identifier validation with edge cases (SQL injection attempts).
+- Test error mapping for common Oracle error codes.
+
+### Integration Tests (Local)
+
+- Verify bundled IC loads correctly from app bundle path.
+- Test connection pool lifecycle (create, use, idle timeout, reconnect).
+- Test streaming with various result sizes (10, 1000, 100000 rows).
+- Test Keychain save/load cycle.
+
+### Manual Tests
+
+- Fresh app launch: Oracle features work immediately (no setup).
+- Large query: streaming works, memory stays bounded.
+- Network timeout: proper error message with hint.
+- Invalid credentials: clear error message.
 
 ## Known Caveats
-- Oracle licensing requires user acceptance and login for downloads; avoid embedding credentials or scraping.
-- Apple Silicon vs Intel builds are not interchangeable; enforce architecture checks.
-- Complex datatypes (LOBs, RAW) require careful mapping; initial implementation can stringify or null.
 
-## Next Steps
-- Implement the readiness and prime commands in `src-tauri`.
-- Add Settings entries for DSN and optional custom Instant Client path.
-- Wire Quick Query actions to fetch properties and run local SELECT.
-- Add Jenkins Runner preflight snapshot toggle and storage path.
-- Create `scripts/install-oracle-client.sh` following the outline above.
+### Licensing
+
+- Oracle Instant Client is free to redistribute.
+- No user acceptance required since IC is bundled (not downloaded).
+
+### Bundle Size
+
+- Basic Lite adds ~30MB per architecture to app bundle.
+- Total app size increase: ~30MB (since builds are per-architecture).
+
+### Complex Datatypes
+
+- LOB, BLOB, RAW: stringify as hex or base64, or return null with warning.
+- DATE/TIMESTAMP: return as ISO 8601 string.
+- NUMBER: return as string to preserve precision for large numbers.
+
+### Architecture
+
+- arm64 build bundles arm64 IC.
+- x86_64 build bundles x86_64 IC.
+- Universal binary not recommended (doubles IC size for no benefit).
+
+## Implementation Order
+
+### Phase 1: Core Infrastructure
+1. **Bundle Setup**: Add IC files to Tauri build, configure signing.
+2. **Backend Core**: Implement `OnceLock` loading, `check_oracle_client_ready`, `prime_oracle_client`.
+3. **Connection Pool**: Implement pool with limits and timeouts.
+4. **Keychain Commands**: Implement `set/get/delete/has_oracle_credentials`.
+
+### Phase 2: Compare Config Backend (Frontend already exists)
+5. **Test Connection**: Implement `test_oracle_connection`.
+6. **Schema/Table Fetch**: Implement `fetch_schemas`, `fetch_tables`.
+7. **Table Metadata**: Implement `fetch_table_metadata`.
+8. **Comparison Logic**: Implement `compare_configurations`, `compare_raw_sql`.
+9. **Export**: Implement `export_comparison_result`.
+10. **Adapt Installation Guide**: Update UI for bundled IC (error state vs install guide).
+
+### Phase 3: Quick Query Integration
+11. **Quick Query UI**: Add connection selector, Run Locally button.
+12. **Streaming**: Implement `oracle_select_stream` for large results.
+
+### Phase 4: Jenkins Runner Integration
+13. **Jenkins Snapshot**: Add preflight backup toggle and storage.
+
+### Phase 5: Polish
+14. **Error Polish**: Refine error messages and hints.
+15. **Testing**: Full integration tests.
+
+## Open Questions (Resolved)
+
+| Question                      | Decision                                   |
+| ----------------------------- | ------------------------------------------ |
+| User-installed vs bundled IC? | **Bundled** - zero setup for users         |
+| Basic vs Basic Lite?          | **Basic Lite** - smaller, UTF-8 sufficient |
+| Connection pooling?           | **Yes**, max 4 connections                 |
+| Result streaming?             | **Yes**, batch size 1000                   |
+| Credential storage?           | **macOS Keychain**, per-connection entries |
+| Windows support?              | **No**, macOS only                         |
+| Compare Config UI?            | **Reuse existing** from e25e4d8 branch     |
