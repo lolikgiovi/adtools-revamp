@@ -54,7 +54,11 @@ pub fn run() {
       oracle::set_oracle_credentials,
       oracle::get_oracle_credentials,
       oracle::delete_oracle_credentials,
-      oracle::has_oracle_credentials
+      oracle::has_oracle_credentials,
+      // Oracle connection pool commands
+      oracle::get_active_connections,
+      oracle::close_all_connections,
+      oracle::close_connection
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -1294,6 +1294,84 @@
 }
 
 /* ============================================
+   CONNECTION STATUS INDICATOR
+   ============================================ */
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: hsl(var(--success) / 0.1);
+  border: 1px solid hsl(var(--success) / 0.3);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  color: hsl(var(--success));
+  animation: fadeIn 0.2s ease-out;
+}
+
+.connection-indicator {
+  width: 8px;
+  height: 8px;
+  background: hsl(var(--success));
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+}
+
+.connection-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.connection-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: hsl(var(--success) / 0.15);
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: hsl(var(--success));
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-close-connections {
+  margin-left: 4px;
+  padding: 2px 4px !important;
+  color: hsl(var(--success) / 0.7);
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.btn-close-connections:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+}
+
+.btn-xs {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* ============================================
    RESPONSIVE - VIEWS
    ============================================ */
 

@@ -167,28 +167,37 @@ fn get_oracle_lib() -> Result<&'static Library, OracleError> {
 }
 ```
 
-## Connection Pooling
+## Connection Pooling (Implemented)
 
-- Use `oracle` crate's connection pool or implement simple pool with `deadpool`.
-- Configuration:
-  - `min_connections`: 0 (create on demand)
-  - `max_connections`: 4
-  - `connection_timeout`: 30 seconds
-  - `idle_timeout`: 300 seconds (close idle connections after 5 min)
-- Connections are heavyweight (~1-5MB each); limit prevents memory bloat.
+Custom connection pool implemented in `tauri/src/oracle.rs`:
+- `MAX_CONNECTIONS`: 4 (limit prevents memory bloat)
+- `IDLE_TIMEOUT_SECS`: 300 (5 minutes - auto-cleanup idle connections)
+- Connections keyed by (connect_string, username) tuple
+- Automatic connection health check via `ping()` before reuse
+- Dead connections automatically removed and recreated
 
 ```rust
-use oracle::pool::{Pool, PoolBuilder};
-
-fn create_pool(connect_string: &str, user: &str, pass: &str) -> Result<Pool, OracleError> {
-    PoolBuilder::new(user, pass, connect_string)
-        .min_connections(0)
-        .max_connections(4)
-        .connection_timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| map_oracle_error(e))
-}
+// Pool is accessed via helper function
+fn with_pooled_connection<T, F>(
+    connect_string: &str,
+    username: &str,
+    password: &str,
+    f: F,
+) -> Result<T, OracleError>
+where
+    F: FnOnce(&Connection) -> Result<T, OracleError>;
 ```
+
+### Connection Status UI
+
+The UI includes a connection status indicator showing:
+- Number of active connections (green pulse indicator)
+- "Close all" button to manually disconnect
+
+Commands for connection management:
+- `get_active_connections`: Returns status of all pooled connections
+- `close_all_connections`: Closes all connections in the pool
+- `close_connection`: Closes a specific connection
 
 ## Result Streaming
 

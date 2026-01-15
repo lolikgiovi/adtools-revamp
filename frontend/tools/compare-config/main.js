@@ -67,6 +67,9 @@ class CompareConfigTool extends BaseTool {
     this.verticalCardView = new VerticalCardView();
     this.masterDetailView = new MasterDetailView();
     this.gridView = new GridView();
+
+    // Connection status polling
+    this.connectionStatusInterval = null;
   }
 
   getIconSvg() {
@@ -89,6 +92,8 @@ class CompareConfigTool extends BaseTool {
       this.loadSavedConnections();
       // Load last tool state
       this.loadToolState();
+      // Start connection status polling
+      this.startConnectionStatusPolling();
     }
   }
 
@@ -393,6 +398,12 @@ class CompareConfigTool extends BaseTool {
         this.switchTab(tab);
       });
     });
+
+    // Connection status close button
+    const closeConnectionsBtn = document.querySelector(".btn-close-connections");
+    if (closeConnectionsBtn) {
+      closeConnectionsBtn.addEventListener("click", () => this.closeAllConnections());
+    }
 
     // Installation guide events
     const checkAgainBtn = document.getElementById("btn-check-again");
@@ -1165,6 +1176,7 @@ class CompareConfigTool extends BaseTool {
   async executeComparison() {
     // Validate
     if (!this.validateComparisonRequest()) {
+      console.log("[Compare] Validation failed");
       return;
     }
 
@@ -1186,8 +1198,13 @@ class CompareConfigTool extends BaseTool {
         max_rows: this.maxRows || 100,
       };
 
+      console.log("[Compare] Sending request:", JSON.stringify(request, null, 2));
+
       // Execute comparison
       const result = await CompareConfigService.compareConfigurations(request);
+
+      console.log("[Compare] Result received:", result);
+      console.log("[Compare] Result rows:", result?.rows?.length || 0);
 
       this.results[this.queryMode] = result;
 
@@ -1200,7 +1217,7 @@ class CompareConfigTool extends BaseTool {
       // Emit event
       this.eventBus.emit("comparison:complete", result);
     } catch (error) {
-      console.error("Comparison failed:", error);
+      console.error("[Compare] Comparison failed:", error);
       this.hideLoading();
 
       this.eventBus.emit("notification:show", {
@@ -1308,7 +1325,17 @@ class CompareConfigTool extends BaseTool {
    * Validates comparison request
    */
   validateComparisonRequest() {
+    console.log("[Validate] env1.connection:", this.env1.connection);
+    console.log("[Validate] env2.connection:", this.env2.connection);
+    console.log("[Validate] schema:", this.schema);
+    console.log("[Validate] table:", this.table);
+    console.log("[Validate] env2SchemaExists:", this.env2SchemaExists);
+    console.log("[Validate] env2TableExists:", this.env2TableExists);
+    console.log("[Validate] metadata:", this.metadata);
+    console.log("[Validate] selectedFields:", this.selectedFields);
+
     if (!this.env1.connection || !this.env2.connection) {
+      console.log("[Validate] FAILED: Missing connections");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Please select connections for both environments",
@@ -1317,6 +1344,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (!this.schema) {
+      console.log("[Validate] FAILED: Missing schema");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Please select a schema",
@@ -1325,6 +1353,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (!this.table) {
+      console.log("[Validate] FAILED: Missing table");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Please select a table",
@@ -1333,6 +1362,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (!this.env2SchemaExists) {
+      console.log("[Validate] FAILED: Schema not in Env2");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Schema "${this.schema}" does not exist in Env 2`,
@@ -1341,6 +1371,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (!this.env2TableExists) {
+      console.log("[Validate] FAILED: Table not in Env2");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Table "${this.schema}.${this.table}" does not exist in Env 2`,
@@ -1349,6 +1380,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (!this.metadata) {
+      console.log("[Validate] FAILED: No metadata");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Table metadata not loaded",
@@ -1357,6 +1389,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (this.selectedFields.length === 0) {
+      console.log("[Validate] FAILED: No fields selected");
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "Please select at least one field to compare",
@@ -1364,6 +1397,7 @@ class CompareConfigTool extends BaseTool {
       return false;
     }
 
+    console.log("[Validate] PASSED");
     return true;
   }
 
@@ -1963,8 +1997,105 @@ class CompareConfigTool extends BaseTool {
     this.saveToolState();
   }
 
+  /**
+   * Starts polling for connection status
+   */
+  startConnectionStatusPolling() {
+    // Update immediately
+    this.updateConnectionStatus();
+
+    // Poll every 5 seconds
+    this.connectionStatusInterval = setInterval(() => {
+      this.updateConnectionStatus();
+    }, 5000);
+  }
+
+  /**
+   * Stops connection status polling
+   */
+  stopConnectionStatusPolling() {
+    if (this.connectionStatusInterval) {
+      clearInterval(this.connectionStatusInterval);
+      this.connectionStatusInterval = null;
+    }
+  }
+
+  /**
+   * Updates the connection status indicator UI
+   */
+  async updateConnectionStatus() {
+    try {
+      const connections = await CompareConfigService.getActiveConnections();
+      const statusEl = document.getElementById("connection-status");
+      const listEl = statusEl?.querySelector(".connection-list");
+
+      if (!statusEl || !listEl) return;
+
+      const activeConnections = connections.filter((c) => c.is_alive);
+
+      if (activeConnections.length > 0) {
+        statusEl.style.display = "flex";
+        listEl.innerHTML = activeConnections
+          .map((conn) => {
+            // Look up the saved connection name (saved as connect_string with underscore)
+            const savedConn = this.savedConnections.find(
+              (sc) => sc.connect_string === conn.connect_string
+            );
+            const displayName = savedConn?.name || conn.connect_string;
+            return `<span class="connection-chip" title="${conn.connect_string}">${displayName}</span>`;
+          })
+          .join("");
+      } else {
+        statusEl.style.display = "none";
+        listEl.innerHTML = "";
+      }
+    } catch (error) {
+      console.error("Failed to update connection status:", error);
+    }
+  }
+
+  /**
+   * Handles closing all connections
+   */
+  async closeAllConnections() {
+    try {
+      await CompareConfigService.closeAllConnections();
+      this.updateConnectionStatus();
+
+      // If no comparison results, reset to empty state
+      if (!this.results[this.queryMode]) {
+        this.resetToEmptyState();
+      }
+    } catch (error) {
+      console.error("Failed to close connections:", error);
+    }
+  }
+
+  /**
+   * Resets the UI to empty state (no results)
+   */
+  resetToEmptyState() {
+    const resultsSection = document.getElementById("results-section");
+    if (resultsSection) {
+      resultsSection.style.display = "none";
+    }
+
+    // Clear results content
+    const resultsContent = document.getElementById("results-content");
+    if (resultsContent) {
+      resultsContent.innerHTML = "";
+    }
+
+    // Clear summary
+    const resultsSummary = document.getElementById("results-summary");
+    if (resultsSummary) {
+      resultsSummary.innerHTML = "";
+    }
+  }
+
   onUnmount() {
-    // Cleanup if needed
+    // Stop connection status polling
+    this.stopConnectionStatusPolling();
   }
 }
 

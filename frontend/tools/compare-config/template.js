@@ -60,7 +60,21 @@ export const CompareConfigTemplate = /* html */ `
                 <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
                 <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
             </div>
-            <div class="tabs-right"></div>
+            <div class="tabs-right">
+                <!-- Connection Status Indicator -->
+                <div id="connection-status" class="connection-status" style="display: none;">
+                    <span class="connection-indicator"></span>
+                    <div class="connection-list">
+                        <!-- Connection chips will be populated here -->
+                    </div>
+                    <button class="btn btn-ghost btn-xs btn-close-connections" title="Close all connections">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Environment Selection -->

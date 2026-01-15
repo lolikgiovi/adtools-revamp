@@ -8,10 +8,12 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(feature = "oracle")]
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
+#[cfg(feature = "oracle")]
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "oracle")]
-use oracle::{Connection, DbError};
+use oracle::Connection;
 
 const ORACLE_KEYCHAIN_SERVICE: &str = "ad-tools:oracle";
 
@@ -198,9 +200,198 @@ fn init_oracle_client() -> Result<(), OracleError> {
 }
 
 // ============================================================================
-// Connection Management
+// Connection Pool Management
 // ============================================================================
 
+/// Maximum number of pooled connections
+#[cfg(feature = "oracle")]
+const MAX_CONNECTIONS: usize = 4;
+
+/// Idle timeout before connection is closed (5 minutes)
+#[cfg(feature = "oracle")]
+const IDLE_TIMEOUT_SECS: u64 = 300;
+
+/// Tracks a pooled connection with metadata
+#[cfg(feature = "oracle")]
+struct PooledConnection {
+    connection: Connection,
+    connect_string: String,
+    username: String,
+    last_used: Instant,
+}
+
+/// Connection pool state
+#[cfg(feature = "oracle")]
+struct ConnectionPool {
+    connections: Vec<PooledConnection>,
+}
+
+#[cfg(feature = "oracle")]
+impl ConnectionPool {
+    fn new() -> Self {
+        Self { connections: Vec::new() }
+    }
+
+    /// Get or create a connection. Reuses existing connection if available.
+    fn get_connection(
+        &mut self,
+        connect_string: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<&Connection, OracleError> {
+        // Clean up idle connections first
+        self.cleanup_idle();
+
+        // Look for existing connection with same credentials
+        let idx = self.connections.iter().position(|pc| {
+            pc.connect_string == connect_string && pc.username == username
+        });
+
+        if let Some(idx) = idx {
+            // Update last used time and return existing connection
+            self.connections[idx].last_used = Instant::now();
+
+            // Check if connection is still valid
+            if self.connections[idx].connection.ping().is_ok() {
+                return Ok(&self.connections[idx].connection);
+            }
+
+            // Connection is dead, remove it
+            self.connections.remove(idx);
+        }
+
+        // Check if we're at capacity
+        if self.connections.len() >= MAX_CONNECTIONS {
+            // Remove oldest connection
+            if let Some(oldest_idx) = self.connections
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, pc)| pc.last_used)
+                .map(|(i, _)| i)
+            {
+                self.connections.remove(oldest_idx);
+            }
+        }
+
+        // Create new connection
+        let conn = Connection::connect(username, password, connect_string)
+            .map_err(OracleError::from)?;
+
+        self.connections.push(PooledConnection {
+            connection: conn,
+            connect_string: connect_string.to_string(),
+            username: username.to_string(),
+            last_used: Instant::now(),
+        });
+
+        Ok(&self.connections.last().unwrap().connection)
+    }
+
+    /// Remove connections that have been idle too long
+    fn cleanup_idle(&mut self) {
+        let timeout = Duration::from_secs(IDLE_TIMEOUT_SECS);
+        self.connections.retain(|pc| pc.last_used.elapsed() < timeout);
+    }
+
+    /// Get information about active connections for UI
+    fn get_status(&self) -> Vec<ConnectionStatus> {
+        self.connections
+            .iter()
+            .map(|pc| ConnectionStatus {
+                connect_string: pc.connect_string.clone(),
+                username: pc.username.clone(),
+                idle_seconds: pc.last_used.elapsed().as_secs(),
+                is_alive: pc.connection.ping().is_ok(),
+            })
+            .collect()
+    }
+
+    /// Close all connections
+    fn close_all(&mut self) {
+        self.connections.clear();
+    }
+
+    /// Close a specific connection
+    fn close_connection(&mut self, connect_string: &str, username: &str) -> bool {
+        if let Some(idx) = self.connections.iter().position(|pc| {
+            pc.connect_string == connect_string && pc.username == username
+        }) {
+            self.connections.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Connection status for UI display
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectionStatus {
+    pub connect_string: String,
+    pub username: String,
+    pub idle_seconds: u64,
+    pub is_alive: bool,
+}
+
+/// Global connection pool
+#[cfg(feature = "oracle")]
+static CONNECTION_POOL: OnceLock<Mutex<ConnectionPool>> = OnceLock::new();
+
+#[cfg(feature = "oracle")]
+fn get_pool() -> &'static Mutex<ConnectionPool> {
+    CONNECTION_POOL.get_or_init(|| Mutex::new(ConnectionPool::new()))
+}
+
+/// Execute a function with a pooled connection
+/// This handles connection lifecycle: get/create, execute, and keeps connection alive
+#[cfg(feature = "oracle")]
+pub fn with_pooled_connection<T, F>(
+    connect_string: &str,
+    username: &str,
+    password: &str,
+    f: F,
+) -> Result<T, OracleError>
+where
+    F: FnOnce(&Connection) -> Result<T, OracleError>,
+{
+    let pool = get_pool();
+    let mut guard = pool.lock().map_err(|_| OracleError::internal("Connection pool lock poisoned"))?;
+    let conn = guard.get_connection(connect_string, username, password)?;
+    f(conn)
+}
+
+/// Get connection pool status for UI
+#[cfg(feature = "oracle")]
+pub fn get_connection_pool_status() -> Vec<ConnectionStatus> {
+    let pool = get_pool();
+    if let Ok(guard) = pool.lock() {
+        guard.get_status()
+    } else {
+        Vec::new()
+    }
+}
+
+/// Close all pooled connections
+#[cfg(feature = "oracle")]
+pub fn close_all_pool_connections() {
+    let pool = get_pool();
+    if let Ok(mut guard) = pool.lock() {
+        guard.close_all();
+    }
+}
+
+/// Close a specific pooled connection
+#[cfg(feature = "oracle")]
+pub fn close_pool_connection(connect_string: &str, username: &str) -> bool {
+    let pool = get_pool();
+    if let Ok(mut guard) = pool.lock() {
+        guard.close_connection(connect_string, username)
+    } else {
+        false
+    }
+}
+
+/// Create a one-off connection (for testing, not pooled)
 #[cfg(feature = "oracle")]
 pub fn create_connection(connect_string: &str, username: &str, password: &str) -> Result<Connection, OracleError> {
     Connection::connect(username, password, connect_string).map_err(OracleError::from)
@@ -701,9 +892,10 @@ pub fn fetch_schemas(
     #[cfg(feature = "oracle")]
     {
         let (username, password) = get_credentials(&connection_name)?;
-        let conn = create_connection(&config.connect_string, &username, &password)
-            .map_err(|e| e.message)?;
-        query_schemas(&conn).map_err(|e| e.message)
+        with_pooled_connection(&config.connect_string, &username, &password, |conn| {
+            query_schemas(conn)
+        })
+        .map_err(|e| e.message)
     }
     #[cfg(not(feature = "oracle"))]
     {
@@ -721,9 +913,10 @@ pub fn fetch_tables(
     #[cfg(feature = "oracle")]
     {
         let (username, password) = get_credentials(&connection_name)?;
-        let conn = create_connection(&config.connect_string, &username, &password)
-            .map_err(|e| e.message)?;
-        query_tables(&conn, &owner).map_err(|e| e.message)
+        with_pooled_connection(&config.connect_string, &username, &password, |conn| {
+            query_tables(conn, &owner)
+        })
+        .map_err(|e| e.message)
     }
     #[cfg(not(feature = "oracle"))]
     {
@@ -742,9 +935,10 @@ pub fn fetch_table_metadata(
     #[cfg(feature = "oracle")]
     {
         let (username, password) = get_credentials(&connection_name)?;
-        let conn = create_connection(&config.connect_string, &username, &password)
-            .map_err(|e| e.message)?;
-        query_table_metadata(&conn, &owner, &table_name).map_err(|e| e.message)
+        with_pooled_connection(&config.connect_string, &username, &password, |conn| {
+            query_table_metadata(conn, &owner, &table_name)
+        })
+        .map_err(|e| e.message)
     }
     #[cfg(not(feature = "oracle"))]
     {
@@ -760,12 +954,6 @@ pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, 
         // Get credentials for both environments
         let (user1, pass1) = get_credentials(&request.env1_connection_name)?;
         let (user2, pass2) = get_credentials(&request.env2_connection_name)?;
-
-        // Connect to both databases
-        let conn1 = create_connection(&request.env1_config.connect_string, &user1, &pass1)
-            .map_err(|e| format!("Env1 connection failed: {}", e.message))?;
-        let conn2 = create_connection(&request.env2_config.connect_string, &user2, &pass2)
-            .map_err(|e| format!("Env2 connection failed: {}", e.message))?;
 
         // Validate identifiers
         let owner = validate_identifier(&request.owner).map_err(|e| e.message)?;
@@ -785,11 +973,25 @@ pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, 
             }
         }
 
-        // Fetch data from both environments
-        let env1_data = execute_select(&conn1, &sql, request.max_rows)
-            .map_err(|e| format!("Env1 query failed: {}", e.message))?;
-        let env2_data = execute_select(&conn2, &sql, request.max_rows)
-            .map_err(|e| format!("Env2 query failed: {}", e.message))?;
+        // Fetch data from env1 (uses pooled connection)
+        let max_rows = request.max_rows;
+        let sql_clone = sql.clone();
+        let env1_data = with_pooled_connection(
+            &request.env1_config.connect_string,
+            &user1,
+            &pass1,
+            |conn| execute_select(conn, &sql_clone, max_rows),
+        )
+        .map_err(|e| format!("Env1 query failed: {}", e.message))?;
+
+        // Fetch data from env2 (uses pooled connection)
+        let env2_data = with_pooled_connection(
+            &request.env2_config.connect_string,
+            &user2,
+            &pass2,
+            |conn| execute_select(conn, &sql, max_rows),
+        )
+        .map_err(|e| format!("Env2 query failed: {}", e.message))?;
 
         // Compare
         let result = compare_data(
@@ -818,17 +1020,25 @@ pub fn compare_raw_sql(request: RawSqlRequest) -> Result<CompareResult, String> 
         let (user1, pass1) = get_credentials(&request.env1_connection_name)?;
         let (user2, pass2) = get_credentials(&request.env2_connection_name)?;
 
-        // Connect to both databases
-        let conn1 = create_connection(&request.env1_config.connect_string, &user1, &pass1)
-            .map_err(|e| format!("Env1 connection failed: {}", e.message))?;
-        let conn2 = create_connection(&request.env2_config.connect_string, &user2, &pass2)
-            .map_err(|e| format!("Env2 connection failed: {}", e.message))?;
+        // Fetch data from env1 (uses pooled connection)
+        let max_rows = request.max_rows;
+        let sql = request.sql.clone();
+        let env1_data = with_pooled_connection(
+            &request.env1_config.connect_string,
+            &user1,
+            &pass1,
+            |conn| execute_select(conn, &sql, max_rows),
+        )
+        .map_err(|e| format!("Env1 query failed: {}", e.message))?;
 
-        // Fetch data from both environments
-        let env1_data = execute_select(&conn1, &request.sql, request.max_rows)
-            .map_err(|e| format!("Env1 query failed: {}", e.message))?;
-        let env2_data = execute_select(&conn2, &request.sql, request.max_rows)
-            .map_err(|e| format!("Env2 query failed: {}", e.message))?;
+        // Fetch data from env2 (uses pooled connection)
+        let env2_data = with_pooled_connection(
+            &request.env2_config.connect_string,
+            &user2,
+            &pass2,
+            |conn| execute_select(conn, &request.sql, max_rows),
+        )
+        .map_err(|e| format!("Env2 query failed: {}", e.message))?;
 
         // Determine primary key
         let primary_key: Vec<String> = if let Some(pk) = &request.primary_key {
@@ -880,4 +1090,49 @@ pub fn export_comparison_result(
         content,
         format,
     })
+}
+
+// ============================================================================
+// Connection Pool Management Commands
+// ============================================================================
+
+/// Get status of all active connections in the pool
+#[tauri::command]
+pub fn get_active_connections() -> Vec<ConnectionStatus> {
+    #[cfg(feature = "oracle")]
+    {
+        get_connection_pool_status()
+    }
+    #[cfg(not(feature = "oracle"))]
+    {
+        Vec::new()
+    }
+}
+
+/// Close all connections in the pool
+#[tauri::command]
+pub fn close_all_connections() -> bool {
+    #[cfg(feature = "oracle")]
+    {
+        close_all_pool_connections();
+        true
+    }
+    #[cfg(not(feature = "oracle"))]
+    {
+        false
+    }
+}
+
+/// Close a specific connection in the pool
+#[tauri::command]
+#[allow(unused_variables)]
+pub fn close_connection(connect_string: String, username: String) -> bool {
+    #[cfg(feature = "oracle")]
+    {
+        close_pool_connection(&connect_string, &username)
+    }
+    #[cfg(not(feature = "oracle"))]
+    {
+        false
+    }
 }

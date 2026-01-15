@@ -176,4 +176,50 @@ export class CompareConfigService {
       name,
     });
   }
+
+  // Connection pool management methods
+
+  /**
+   * Gets status of all active connections in the pool
+   * @returns {Promise<Array<{connect_string: string, username: string, idle_seconds: number, is_alive: boolean}>>}
+   */
+  static async getActiveConnections() {
+    try {
+      return await invoke("get_active_connections");
+    } catch (error) {
+      console.error("Failed to get active connections:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Closes all connections in the pool
+   * @returns {Promise<boolean>}
+   */
+  static async closeAllConnections() {
+    try {
+      return await invoke("close_all_connections");
+    } catch (error) {
+      console.error("Failed to close all connections:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Closes a specific connection in the pool
+   * @param {string} connectString - The connection string
+   * @param {string} username - The username
+   * @returns {Promise<boolean>}
+   */
+  static async closeConnection(connectString, username) {
+    try {
+      return await invoke("close_connection", {
+        connectString,
+        username,
+      });
+    } catch (error) {
+      console.error("Failed to close connection:", error);
+      return false;
+    }
+  }
 }
