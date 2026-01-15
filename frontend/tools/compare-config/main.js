@@ -54,10 +54,13 @@ class CompareConfigTool extends BaseTool {
     this.rawPrimaryKey = ""; // Optional primary key field(s) for raw SQL mode
     this.rawMaxRows = 100; // Max rows for raw SQL mode (default: 100)
 
-    // Common state
-    this.comparisonResult = null;
-    this.currentView = "expandable"; // Default view
     this.statusFilter = null; // null = show all, or "match", "differ", "only_in_env1", "only_in_env2"
+
+    // Multi-tab results support
+    this.results = {
+      "schema-table": null,
+      "raw-sql": null,
+    };
 
     // View instances
     this.verticalCardView = new VerticalCardView();
@@ -82,6 +85,8 @@ class CompareConfigTool extends BaseTool {
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
       this.loadSavedConnections();
+      // Load last tool state
+      this.loadToolState();
     }
   }
 
@@ -143,6 +148,155 @@ class CompareConfigTool extends BaseTool {
     } catch (error) {
       console.error("Failed to load saved connections:", error);
       this.savedConnections = [];
+    }
+  }
+
+  /**
+   * Saves current tool state to localStorage
+   */
+  saveToolState() {
+    try {
+      const state = {
+        queryMode: this.queryMode,
+        env1: this.env1.connection ? this.env1.connection.name : null,
+        env2: this.env2.connection ? this.env2.connection.name : null,
+        schema: this.schema,
+        table: this.table,
+        metadata: this.metadata,
+        customPrimaryKey: this.customPrimaryKey,
+        selectedFields: this.selectedFields,
+        whereClause: this.whereClause,
+        maxRows: this.maxRows,
+
+        rawenv1: this.rawenv1.connection ? this.rawenv1.connection.name : null,
+        rawenv2: this.rawenv2.connection ? this.rawenv2.connection.name : null,
+        rawSql: this.rawSql,
+        rawPrimaryKey: this.rawPrimaryKey,
+        rawMaxRows: this.rawMaxRows,
+
+        currentView: this.currentView,
+        statusFilter: this.statusFilter,
+        results: this.results,
+      };
+
+      // Try to save to localStorage
+      try {
+        localStorage.setItem("compare-config.last-state", JSON.stringify(state));
+      } catch (e) {
+        // If quota exceeded, try saving without large results
+        console.warn("Could not save full state to localStorage (likely quota exceeded). Saving without results.");
+        state.results = { "schema-table": null, "raw-sql": null };
+        localStorage.setItem("compare-config.last-state", JSON.stringify(state));
+      }
+    } catch (error) {
+      console.error("Failed to save tool state:", error);
+    }
+  }
+
+  /**
+   * Loads last tool state from localStorage
+   */
+  loadToolState() {
+    try {
+      const saved = localStorage.getItem("compare-config.last-state");
+      if (!saved) return;
+
+      const state = JSON.parse(saved);
+
+      // Restore basic state
+      this.queryMode = state.queryMode || "schema-table";
+      this.schema = state.schema;
+      this.table = state.table;
+      this.metadata = state.metadata;
+      this.customPrimaryKey = state.customPrimaryKey || [];
+      this.selectedFields = state.selectedFields || [];
+      this.whereClause = state.whereClause || "";
+      this.maxRows = state.maxRows || 100;
+
+      this.rawSql = state.rawSql || "";
+      this.rawPrimaryKey = state.rawPrimaryKey || "";
+      this.rawMaxRows = state.rawMaxRows || 100;
+
+      this.currentView = state.currentView || "expandable";
+      this.statusFilter = state.statusFilter;
+      this.results = state.results || { "schema-table": null, "raw-sql": null };
+
+      // Restore connections
+      if (state.env1) {
+        this.env1.connection = this.savedConnections.find((c) => c.name === state.env1) || null;
+      }
+      if (state.env2) {
+        this.env2.connection = this.savedConnections.find((c) => c.name === state.env2) || null;
+      }
+      if (state.rawenv1) {
+        this.rawenv1.connection = this.savedConnections.find((c) => c.name === state.rawenv1) || null;
+      }
+      if (state.rawenv2) {
+        this.rawenv2.connection = this.savedConnections.find((c) => c.name === state.rawenv2) || null;
+      }
+
+      // Restore UI
+      this.restoreUIFromState();
+    } catch (error) {
+      console.error("Failed to load tool state:", error);
+    }
+  }
+
+  /**
+   * Restores UI elements from loaded state
+   */
+  restoreUIFromState() {
+    // 1. Set active tab
+    this.switchTab(this.queryMode);
+
+    // 2. Set dropdowns and inputs
+    const env1Select = document.getElementById("env1-connection");
+    const env2Select = document.getElementById("env2-connection");
+    const schemaSelect = document.getElementById("schema-select");
+    const tableSelect = document.getElementById("table-select");
+    const whereClauseInput = document.getElementById("where-clause");
+    const maxRowsInput = document.getElementById("max-rows");
+
+    if (env1Select && this.env1.connection) env1Select.value = this.env1.connection.name;
+    if (env2Select && this.env2.connection) env2Select.value = this.env2.connection.name;
+
+    // If we have metadata, we can show fields and set schema/table
+    if (this.metadata && this.schema && this.table) {
+      this.showFieldSelection();
+      if (schemaSelect) {
+        schemaSelect.innerHTML = `<option value="${this.schema}">${this.schema}</option>`;
+        schemaSelect.value = this.schema;
+        schemaSelect.disabled = false;
+      }
+      if (tableSelect) {
+        tableSelect.innerHTML = `<option value="${this.table}">${this.table}</option>`;
+        tableSelect.value = this.table;
+        tableSelect.disabled = false;
+      }
+    }
+
+    if (whereClauseInput) whereClauseInput.value = this.whereClause;
+    if (maxRowsInput) maxRowsInput.value = this.maxRows;
+
+    // 3. Set Raw SQL inputs
+    const rawEnv1Select = document.getElementById("raw-env1-connection");
+    const rawEnv2Select = document.getElementById("raw-env2-connection");
+    const rawSqlInput = document.getElementById("raw-sql");
+    const rawPrimaryKeyInput = document.getElementById("raw-primary-key");
+    const rawMaxRowsInput = document.getElementById("raw-max-rows");
+
+    if (rawEnv1Select && this.rawenv1.connection) rawEnv1Select.value = this.rawenv1.connection.name;
+    if (rawEnv2Select && this.rawenv2.connection) rawEnv2Select.value = this.rawenv2.connection.name;
+    if (rawSqlInput) rawSqlInput.value = this.rawSql;
+    if (rawPrimaryKeyInput) rawPrimaryKeyInput.value = this.rawPrimaryKey;
+    if (rawMaxRowsInput) rawMaxRowsInput.value = this.rawMaxRows;
+
+    // 4. Show results if they exist for current tab
+    if (this.results[this.queryMode]) {
+      this.showResults();
+      // Set view type selector
+      const viewTypeSelect = document.getElementById("view-type");
+      if (viewTypeSelect) viewTypeSelect.value = this.currentView;
     }
   }
 
@@ -419,6 +573,7 @@ class CompareConfigTool extends BaseTool {
     const envSelection = document.querySelector(".environment-selection");
     const fieldSelection = document.getElementById("field-selection");
     const rawSqlMode = document.getElementById("raw-sql-mode");
+    const resultsSection = document.getElementById("results-section");
 
     if (tab === "schema-table") {
       if (envSelection) envSelection.style.display = "block";
@@ -429,6 +584,16 @@ class CompareConfigTool extends BaseTool {
       if (fieldSelection) fieldSelection.style.display = "none";
       if (rawSqlMode) rawSqlMode.style.display = "block";
     }
+
+    // Toggle results visibility based on current tab's results
+    if (this.results[tab]) {
+      this.showResults();
+    } else if (resultsSection) {
+      resultsSection.style.display = "none";
+    }
+
+    // Save state
+    this.saveToolState();
   }
 
   /**
@@ -447,6 +612,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     this[`raw${envKey}`] = { connection };
+    this.saveToolState();
   }
 
   /**
@@ -542,6 +708,7 @@ class CompareConfigTool extends BaseTool {
     if (this.env1.connection && this.env2.connection) {
       await this.onBothConnectionsSelected();
     }
+    this.saveToolState();
   }
 
   /**
@@ -650,6 +817,7 @@ class CompareConfigTool extends BaseTool {
 
     // Fetch tables from Env 1
     await this.fetchTables();
+    this.saveToolState();
   }
 
   /**
@@ -747,6 +915,7 @@ class CompareConfigTool extends BaseTool {
 
     // Show field selection
     this.showFieldSelection();
+    this.saveToolState();
   }
 
   /**
@@ -853,7 +1022,12 @@ class CompareConfigTool extends BaseTool {
       checkbox.type = "checkbox";
       checkbox.id = `pk-${column.name}`;
       checkbox.value = column.name;
-      checkbox.checked = column.is_pk; // Pre-check default PK fields
+      // Use saved state if available, otherwise use metadata default
+      if (this.customPrimaryKey && this.customPrimaryKey.length > 0) {
+        checkbox.checked = this.customPrimaryKey.includes(column.name);
+      } else {
+        checkbox.checked = column.is_pk;
+      }
 
       checkbox.addEventListener("change", () => this.updateCustomPrimaryKey());
 
@@ -877,8 +1051,10 @@ class CompareConfigTool extends BaseTool {
       pkFieldList.appendChild(fieldDiv);
     });
 
-    // Initialize custom PK with default PK fields
-    this.customPrimaryKey = this.metadata.primary_key.slice();
+    // Initialize custom PK with default PK fields if not already set
+    if (!this.customPrimaryKey || this.customPrimaryKey.length === 0) {
+      this.customPrimaryKey = this.metadata.primary_key ? this.metadata.primary_key.slice() : [];
+    }
 
     // Render field checkboxes
     this.metadata.columns.forEach((column) => {
@@ -889,7 +1065,12 @@ class CompareConfigTool extends BaseTool {
       checkbox.type = "checkbox";
       checkbox.id = `field-${column.name}`;
       checkbox.value = column.name;
-      checkbox.checked = true; // Pre-check all fields
+      // Use saved state if available, otherwise default to all checked
+      if (this.selectedFields && this.selectedFields.length > 0) {
+        checkbox.checked = this.selectedFields.includes(column.name);
+      } else {
+        checkbox.checked = true;
+      }
 
       checkbox.addEventListener("change", () => this.updateSelectedFields());
 
@@ -911,7 +1092,10 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Initialize selected fields with all fields
-    this.selectedFields = this.metadata.columns.map((c) => c.name);
+    // Initialize selected fields if not already set
+    if (!this.selectedFields || this.selectedFields.length === 0) {
+      this.selectedFields = this.metadata.columns.map((c) => c.name);
+    }
 
     // Show field selection section
     fieldSelection.style.display = "block";
@@ -956,6 +1140,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     this.updateCustomPrimaryKey();
+    this.saveToolState();
   }
 
   /**
@@ -969,6 +1154,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     this.updateSelectedFields();
+    this.saveToolState();
   }
 
   /**
@@ -1001,7 +1187,7 @@ class CompareConfigTool extends BaseTool {
       // Execute comparison
       const result = await CompareConfigService.compareConfigurations(request);
 
-      this.comparisonResult = result;
+      this.results[this.queryMode] = result;
 
       // Hide loading
       this.hideLoading();
@@ -1061,7 +1247,7 @@ class CompareConfigTool extends BaseTool {
       // Execute comparison
       const result = await CompareConfigService.compareRawSql(request);
 
-      this.comparisonResult = result;
+      this.results[this.queryMode] = result;
 
       // Hide loading
       this.hideLoading();
@@ -1216,6 +1402,7 @@ class CompareConfigTool extends BaseTool {
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
+    this.saveToolState();
   }
 
   /**
@@ -1223,9 +1410,9 @@ class CompareConfigTool extends BaseTool {
    */
   renderResults() {
     const resultsContent = document.getElementById("results-content");
-    if (!resultsContent || !this.comparisonResult) return;
+    if (!resultsContent || !this.results[this.queryMode]) return;
 
-    const { env1_name, env2_name } = this.comparisonResult;
+    const { env1_name, env2_name } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
 
     let html = "";
@@ -1257,9 +1444,9 @@ class CompareConfigTool extends BaseTool {
    */
   renderSummary() {
     const summaryContainer = document.getElementById("results-summary");
-    if (!summaryContainer || !this.comparisonResult) return;
+    if (!summaryContainer || !this.results[this.queryMode]) return;
 
-    const { summary } = this.comparisonResult;
+    const { summary } = this.results[this.queryMode];
 
     // Render summary cards as clickable filter buttons
     // Note: Rust CompareSummary uses 'total', 'matches', 'differs'
@@ -1278,11 +1465,11 @@ class CompareConfigTool extends BaseTool {
       </button>
       <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
         <div class="stat-value">${summary.only_in_env1}</div>
-        <div class="stat-label">Only in ${this.comparisonResult.env1_name}</div>
+        <div class="stat-label">Only in ${this.results[this.queryMode].env1_name}</div>
       </button>
       <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
         <div class="stat-value">${summary.only_in_env2}</div>
-        <div class="stat-label">Only in ${this.comparisonResult.env2_name}</div>
+        <div class="stat-label">Only in ${this.results[this.queryMode].env2_name}</div>
       </button>
     `;
 
@@ -1312,10 +1499,10 @@ class CompareConfigTool extends BaseTool {
    * Gets filtered comparisons based on current status filter
    */
   getFilteredComparisons() {
-    if (!this.comparisonResult) return [];
+    if (!this.results[this.queryMode]) return [];
 
     // Backend returns 'rows' in CompareResult struct
-    const rows = this.comparisonResult.rows || [];
+    const rows = this.results[this.queryMode].rows || [];
 
     // If no filter, return all rows
     if (!this.statusFilter) {
@@ -1331,9 +1518,9 @@ class CompareConfigTool extends BaseTool {
    */
   renderExpandableView() {
     const resultsContent = document.getElementById("results-content");
-    if (!resultsContent || !this.comparisonResult) return;
+    if (!resultsContent || !this.results[this.queryMode]) return;
 
-    const { env1_name, env2_name } = this.comparisonResult;
+    const { env1_name, env2_name } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
 
     if (comparisons.length === 0) {
@@ -1644,13 +1831,14 @@ class CompareConfigTool extends BaseTool {
   changeView(viewType) {
     this.currentView = viewType;
     this.renderResults();
+    this.saveToolState();
   }
 
   /**
    * Exports comparison results
    */
   async exportResults(format) {
-    if (!this.comparisonResult) {
+    if (!this.results[this.queryMode]) {
       this.eventBus.emit("notification:show", {
         type: "error",
         message: "No comparison results to export",
@@ -1660,7 +1848,7 @@ class CompareConfigTool extends BaseTool {
 
     try {
       // Get export data from backend
-      const exportData = await CompareConfigService.exportComparisonResult(this.comparisonResult, format);
+      const exportData = await CompareConfigService.exportComparisonResult(this.results[this.queryMode], format);
 
       // Create a blob and trigger browser download
       const blob = new Blob([exportData.content], {
@@ -1714,7 +1902,7 @@ class CompareConfigTool extends BaseTool {
     };
     this.selectedFields = [];
     this.whereClause = "";
-    this.comparisonResult = null;
+    this.results[this.queryMode] = null;
 
     // Reset UI
     const env1Connection = document.getElementById("env1-connection");
@@ -1756,6 +1944,7 @@ class CompareConfigTool extends BaseTool {
 
     // Scroll to top
     window.scrollTo({ top: 0, behavior: "smooth" });
+    this.saveToolState();
   }
 
   onUnmount() {
