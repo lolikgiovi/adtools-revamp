@@ -1,5 +1,68 @@
 # Oracle Instant Client Integration Plan (macOS, Tauri Desktop)
 
+## Development Setup
+
+### Prerequisites
+
+1. **Oracle Instant Client** installed at:
+   ```
+   ~/Documents/adtools_library/oracle_instantclient/
+   ```
+
+2. **Required files** in the IC directory:
+   - `libclntsh.dylib` (symlink to versioned file)
+   - `libclntsh.dylib.XX.1` (actual library)
+   - `libnnz.dylib`
+   - `libociei.dylib`
+
+### Installing Oracle Instant Client (if not installed)
+
+1. Download from Oracle:
+   - [ARM64 (Apple Silicon)](https://www.oracle.com/database/technologies/instant-client/macos-arm64-downloads.html)
+   - [x86_64 (Intel)](https://www.oracle.com/database/technologies/instant-client/macos-intel-x86-downloads.html)
+
+2. Extract and install:
+   ```bash
+   mkdir -p ~/Documents/adtools_library/oracle_instantclient
+   # Extract the downloaded DMG/ZIP contents to the above directory
+   # Ensure libclntsh.dylib symlink exists
+   cd ~/Documents/adtools_library/oracle_instantclient
+   ln -sf libclntsh.dylib.*.1 libclntsh.dylib
+   ```
+
+### Building with Oracle Support
+
+**Development build:**
+```bash
+# Set environment variable for the current terminal session
+export OCI_LIB_DIR="$HOME/Documents/adtools_library/oracle_instantclient"
+
+# Build with oracle feature
+cd tauri
+cargo build --features oracle
+```
+
+**Release build:**
+```bash
+# The build script auto-detects IC at the default location
+npm run release:build
+```
+
+The `build_release.sh` script automatically:
+- Detects Oracle IC at `~/Documents/adtools_library/oracle_instantclient/`
+- Sets `OCI_LIB_DIR` if found
+- Enables `--features oracle` when IC is available
+- Falls back to building without Oracle if IC not found
+
+### Building WITHOUT Oracle Support
+
+```bash
+cd tauri
+cargo build  # No --features oracle
+```
+
+The app will still compile and run, but Oracle commands will return "Oracle support not compiled".
+
 ## Goals
 
 - Enable Oracle SELECT capabilities in the desktop app with zero user setup.

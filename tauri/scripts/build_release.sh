@@ -150,11 +150,32 @@ build_tauri_targets() {
   echo "Building web assets (vite build --mode tauri)..."
   npm run build:tauri
 
+  # Oracle Instant Client setup for oracle feature
+  # Default location: ~/Documents/adtools_library/oracle_instantclient
+  if [[ -z "${OCI_LIB_DIR:-}" ]]; then
+    local default_oci="$HOME/Documents/adtools_library/oracle_instantclient"
+    if [[ -d "$default_oci" && -f "$default_oci/libclntsh.dylib" ]]; then
+      export OCI_LIB_DIR="$default_oci"
+      echo "Using Oracle Instant Client at: $OCI_LIB_DIR"
+    else
+      echo "WARNING: Oracle Instant Client not found at $default_oci"
+      echo "         Building without Oracle support (--features oracle disabled)"
+      echo "         To enable: install IC and set OCI_LIB_DIR environment variable"
+    fi
+  fi
+
+  # Build with oracle feature if OCI_LIB_DIR is set
+  local cargo_features=""
+  if [[ -n "${OCI_LIB_DIR:-}" ]]; then
+    cargo_features="--features oracle"
+    echo "Oracle feature enabled"
+  fi
+
   echo "Building Tauri app for aarch64-apple-darwin..."
-  npx tauri build --target aarch64-apple-darwin
+  npx tauri build --target aarch64-apple-darwin $cargo_features
 
   echo "Building Tauri app for x86_64-apple-darwin..."
-  npx tauri build --target x86_64-apple-darwin
+  npx tauri build --target x86_64-apple-darwin $cargo_features
   popd >/dev/null
 }
 
