@@ -60,6 +60,7 @@ export const CompareConfigTemplate = /* html */ `
                 <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
                 <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
             </div>
+            <div class="tabs-right"></div>
         </div>
 
         <!-- Environment Selection -->

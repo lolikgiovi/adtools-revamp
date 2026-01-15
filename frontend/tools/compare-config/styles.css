@@ -16,11 +16,10 @@
   color: hsl(var(--foreground));
 }
 
-/* Override default tool-container max-width for full-width layout */
 .compare-config-container.tool-container {
   max-width: 100%;
   width: 100%;
-  padding: 2rem;
+  padding: 0; /* Remove top-level padding to allow flush sticky header */
 }
 
 /* ============================================
@@ -28,8 +27,36 @@
    ============================================ */
 
 .tabs-container {
-  background: hsl(var(--card));
-  margin-bottom: 1rem;
+  background-color: hsl(var(--card)) !important; /* Ensure solid background */
+  margin-bottom: 0;
+  z-index: 101;
+  position: sticky;
+  top: 0; /* Align with tool top */
+  box-shadow: 0 4px 12px hsl(var(--shadow) / 0.15);
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.5rem 2rem 0; /* Internal horizontal padding */
+}
+
+.tabs-left {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 100%;
+}
+
+.tabs-left::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-button {
+  padding: 10px 16px !important;
+  white-space: nowrap !important;
+  transition: all 0.2s ease !important;
+}
+
+.tabs-right {
+  padding-right: 1rem;
 }
 
 /* ============================================
@@ -59,7 +86,7 @@
    ============================================ */
 
 .environment-selection {
-  margin: 1.5rem 0 1.5rem 0;
+  margin: 1.5rem 2rem;
 }
 
 .selection-card {
@@ -157,7 +184,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1.5rem;
-  margin-top: 1.5rem;
+  margin: 1.5rem 2rem 0;
 }
 
 .raw-sql-connections {
@@ -241,7 +268,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1.5rem;
-  margin-top: 1.5rem;
+  margin: 2rem 2rem 0;
 }
 
 .field-header {
@@ -489,7 +516,7 @@
   border-radius: var(--radius);
   padding: 1.5rem;
   border-left: 4px solid hsl(var(--primary) / 0.4);
-  margin-top: 2rem;
+  margin: 2rem;
 }
 
 .results-header {
