@@ -1224,8 +1224,9 @@
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 14px;
-  min-height: 400px;
+  min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .qq-split-sidebar {
