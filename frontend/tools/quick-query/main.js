@@ -263,10 +263,10 @@ export class QuickQueryUI {
 
       // Attachments related (button only; no drag-and-drop)
       addFilesButton: {
-        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+        click: () => this.handleAddFilesClick(),
       },
       filesEmpty: {
-        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+        click: () => this.handleAddFilesClick(),
         keydown: (e) => this.handleEmptyStateKeydown(e),
       },
       attachmentsInput: {
@@ -2058,6 +2058,189 @@ export class QuickQueryUI {
     }
   }
 
+  // ===== Attachment Methods =====
+
+  /**
+   * Handle click on Add Files button
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleAddFilesClick() {
+    if (isTauri()) {
+      await this._handleAddFilesTauri();
+    } else {
+      // Web: trigger the hidden file input
+      if (this.elements.attachmentsInput) {
+        this.elements.attachmentsInput.click();
+      }
+    }
+  }
+
+  /**
+   * Handle Add Files for Tauri (desktop)
+   * Uses Tauri dialog plugin to open file picker
+   */
+  async _handleAddFilesTauri() {
+    try {
+      // Dynamic import of Tauri plugins
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+
+      // Open file dialog for supported file types
+      const selected = await open({
+        multiple: true,
+        filters: [
+          {
+            name: "Supported Files",
+            extensions: ["txt", "jpg", "jpeg", "png", "html", "pdf", "json"],
+          },
+        ],
+        title: "Select Files to Attach",
+      });
+
+      if (!selected || (Array.isArray(selected) && selected.length === 0)) {
+        // User cancelled
+        return;
+      }
+
+      // Ensure we have an array of paths
+      const paths = Array.isArray(selected) ? selected : [selected];
+
+      // Process each file
+      await this._processFilesFromPaths(paths, readFile);
+    } catch (error) {
+      console.error("Failed to add files (Tauri):", error);
+      this.showError(`Failed to add files: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process files from Tauri file paths
+   */
+  async _processFilesFromPaths(paths, readFile) {
+    const filesToProcess = [];
+
+    for (const filePath of paths) {
+      try {
+        // Extract filename from path
+        const fileName = filePath.split(/[/\\]/).pop();
+        const ext = fileName.split(".").pop().toLowerCase();
+
+        // Read file contents
+        const fileData = await readFile(filePath);
+
+        // Determine MIME type based on extension
+        const mimeTypes = {
+          txt: "text/plain",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          html: "text/html",
+          pdf: "application/pdf",
+          json: "application/json",
+        };
+        const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+        // Create a File-like object
+        const blob = new Blob([fileData], { type: mimeType });
+        const file = new File([blob], fileName, { type: mimeType });
+
+        filesToProcess.push(file);
+      } catch (error) {
+        console.error(`Failed to read file ${filePath}:`, error);
+      }
+    }
+
+    if (filesToProcess.length === 0) {
+      return;
+    }
+
+    // Process the files using existing attachment processor
+    try {
+      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess);
+      this.processedFiles = [...this.processedFiles, ...addedFiles];
+
+      // Clear current file items and re-render full list
+      this._renderAttachmentsList();
+
+      // Update action buttons state
+      this.updateAttachmentControlsState();
+      this.clearError();
+
+      if (this.eventBus) {
+        this.eventBus.emit("notification:success", {
+          message: `Added ${addedFiles.length} file(s)`,
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      this.showError(`Error processing attachments: ${error.message}`);
+    }
+  }
+
+  /**
+   * Render the attachments list (extracted for reuse)
+   */
+  _renderAttachmentsList() {
+    const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+    if (container) container.innerHTML = "";
+
+    this.processedFiles.forEach((file) => {
+      const fileButton = document.createElement("button");
+      fileButton.className = "file-button";
+      fileButton.setAttribute("aria-label", `View ${file.name}`);
+      fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
+
+      const copyBtn = fileButton.querySelector(".copy-filename");
+      copyBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        navigator.clipboard.writeText(file.name);
+        copyBtn.classList.add("copied");
+        setTimeout(() => copyBtn.classList.remove("copied"), 1000);
+      });
+
+      const deleteBtn = fileButton.querySelector(".delete-file");
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const idx = this.processedFiles.findIndex((f) => f.name === file.name);
+        if (idx !== -1) {
+          this.processedFiles.splice(idx, 1);
+          fileButton.remove();
+        }
+
+        // If no files left, return to empty state
+        if (this.processedFiles.length === 0) {
+          this._renderEmptyAttachmentsState();
+        }
+
+        this.updateAttachmentControlsState();
+      });
+
+      fileButton.addEventListener("click", () => this.showFileViewer(file));
+      container.appendChild(fileButton);
+    });
+  }
+
+  /**
+   * Render empty attachments state
+   */
+  _renderEmptyAttachmentsState() {
+    const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+    if (!container) return;
+
+    container.innerHTML = "";
+    const emptyEl = document.createElement("div");
+    emptyEl.id = "files-empty";
+    emptyEl.className = "empty-file-button";
+    emptyEl.setAttribute("role", "button");
+    emptyEl.setAttribute("tabindex", "0");
+    emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
+    emptyEl.textContent = "No file attached, click to attach file";
+    emptyEl.addEventListener("click", () => this.handleAddFilesClick());
+    emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
+    container.appendChild(emptyEl);
+    this.elements.filesEmpty = emptyEl;
+  }
+
   async handleAttachmentsInput(e) {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -2071,55 +2254,7 @@ export class QuickQueryUI {
       this.elements.attachmentsInput.value = "";
 
       // Clear current file items and re-render full list
-      const container = this.elements.fileItemsContainer || this.elements.filesContainer;
-      if (container) container.innerHTML = "";
-
-      this.processedFiles.forEach((file) => {
-        const fileButton = document.createElement("button");
-        fileButton.className = "file-button";
-        fileButton.setAttribute("aria-label", `View ${file.name}`);
-        fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
-
-        const copyBtn = fileButton.querySelector(".copy-filename");
-        copyBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          navigator.clipboard.writeText(file.name);
-          copyBtn.classList.add("copied");
-          setTimeout(() => copyBtn.classList.remove("copied"), 1000);
-        });
-
-        const deleteBtn = fileButton.querySelector(".delete-file");
-        deleteBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const idx = this.processedFiles.findIndex((f) => f.name === file.name);
-          if (idx !== -1) {
-            this.processedFiles.splice(idx, 1);
-            fileButton.remove();
-          }
-
-          // If no files left, return to empty state
-          if (this.processedFiles.length === 0) {
-            const c = this.elements.fileItemsContainer || this.elements.filesContainer;
-            c.innerHTML = "";
-            const emptyEl = document.createElement("div");
-            emptyEl.id = "files-empty";
-            emptyEl.className = "empty-file-button";
-            emptyEl.setAttribute("role", "button");
-            emptyEl.setAttribute("tabindex", "0");
-            emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
-            emptyEl.textContent = "No file attached, click to attach file";
-            emptyEl.addEventListener("click", () => this.elements.attachmentsInput?.click());
-            emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
-            c.appendChild(emptyEl);
-            this.elements.filesEmpty = emptyEl;
-          }
-
-          this.updateAttachmentControlsState();
-        });
-
-        fileButton.addEventListener("click", () => this.showFileViewer(file));
-        (this.elements.fileItemsContainer || this.elements.filesContainer).appendChild(fileButton);
-      });
+      this._renderAttachmentsList();
 
       // Update action buttons state
       this.updateAttachmentControlsState();
