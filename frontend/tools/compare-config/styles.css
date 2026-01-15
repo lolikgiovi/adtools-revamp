@@ -27,14 +27,14 @@
    ============================================ */
 
 .tabs-container {
-  background-color: hsl(var(--card)) !important; /* Ensure solid background */
+  background-color: hsl(var(--background)) !important; /* Switch to background for better blending */
   margin-bottom: 0;
   z-index: 101;
   position: sticky;
-  top: 0; /* Align with tool top */
-  box-shadow: 0 4px 12px hsl(var(--shadow) / 0.15);
-  border-bottom: 1px solid hsl(var(--border));
-  padding: 0.5rem 2rem 0; /* Internal horizontal padding */
+  top: 0;
+  box-shadow: 0 4px 10px hsl(0 0% 0% / 0.1); /* Slightly softer shadow */
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  padding: 0.5rem 2rem 0;
 }
 
 .tabs-left {
