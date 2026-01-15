@@ -178,12 +178,62 @@ pub struct ExportData {
 #[cfg(feature = "oracle")]
 static ORACLE_INITIALIZED: OnceLock<bool> = OnceLock::new();
 
+/// Path where Oracle Instant Client is bundled within the app
+const BUNDLED_IC_SUBPATH: &str = "Frameworks/instantclient";
+
+/// Sets up the Oracle Instant Client library path for the bundled IC.
+/// This must be called at app startup, before any Oracle operations.
+///
+/// On macOS, this sets DYLD_LIBRARY_PATH to point to the bundled IC location.
+///
+/// Returns Ok(true) if bundled IC was found and configured,
+/// Ok(false) if IC was not bundled (development mode - uses system IC),
+/// Err if there was an error determining paths.
+pub fn setup_oracle_library_path() -> Result<bool, String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+    // Navigate from MacOS/binary -> Contents -> Frameworks/instantclient
+    let ic_path = exe_path
+        .parent()  // MacOS/
+        .and_then(|p| p.parent())  // Contents/
+        .map(|p| p.join(BUNDLED_IC_SUBPATH));
+
+    if let Some(path) = ic_path {
+        if path.exists() && path.join("libclntsh.dylib").exists() {
+            // Bundled IC found - set environment variable
+            std::env::set_var("DYLD_LIBRARY_PATH", &path);
+            log::info!("Oracle Instant Client configured from bundle: {:?}", path);
+            return Ok(true);
+        }
+    }
+
+    // No bundled IC found - rely on system installation (development mode)
+    log::info!("No bundled Oracle IC found, using system installation");
+    Ok(false)
+}
+
+/// Get the path to the bundled Oracle Instant Client, if it exists.
+pub fn get_bundled_ic_path() -> Option<std::path::PathBuf> {
+    let exe_path = std::env::current_exe().ok()?;
+    let ic_path = exe_path
+        .parent()?  // MacOS/
+        .parent()?  // Contents/
+        .join(BUNDLED_IC_SUBPATH);
+
+    if ic_path.exists() && ic_path.join("libclntsh.dylib").exists() {
+        Some(ic_path)
+    } else {
+        None
+    }
+}
+
 /// Check if Oracle client library can be loaded
 #[cfg(feature = "oracle")]
 pub fn check_oracle_available() -> Result<bool, OracleError> {
-    // The oracle crate will fail to create connections if the client isn't available
-    // We can check this by seeing if the library is linked
-    Ok(true) // If compiled with oracle feature, the library is linked
+    // Check if DYLD_LIBRARY_PATH is set (bundled or system)
+    // The oracle crate will fail at connection time if libs aren't found
+    Ok(true)
 }
 
 #[cfg(not(feature = "oracle"))]

@@ -195,6 +195,52 @@ find_artifacts() {
   echo "$app_path|$dmg_path"
 }
 
+# Bundle Oracle Instant Client into the app
+# Copies IC dylibs to Contents/Frameworks/instantclient/
+bundle_oracle_ic() {
+  local app_path="$1"
+  local ic_source="${OCI_LIB_DIR:-}"
+
+  if [[ -z "$ic_source" || ! -d "$ic_source" ]]; then
+    echo "Skipping Oracle IC bundling (OCI_LIB_DIR not set or not found)"
+    return 0
+  fi
+
+  local ic_dest="$app_path/Contents/Frameworks/instantclient"
+  echo "Bundling Oracle Instant Client into $ic_dest..."
+
+  mkdir -p "$ic_dest"
+
+  # Copy required dylibs
+  # Core library
+  cp "$ic_source"/libclntsh.dylib* "$ic_dest/" 2>/dev/null || true
+  # Network library
+  cp "$ic_source"/libnnz*.dylib "$ic_dest/" 2>/dev/null || true
+  # Optional: OCI Instant Client Environment
+  cp "$ic_source"/libociei.dylib "$ic_dest/" 2>/dev/null || true
+  # Optional: OCCI library
+  cp "$ic_source"/libocci*.dylib "$ic_dest/" 2>/dev/null || true
+  # Optional: Client core
+  cp "$ic_source"/libclntshcore*.dylib "$ic_dest/" 2>/dev/null || true
+
+  # Verify at least libclntsh.dylib was copied
+  if [[ ! -f "$ic_dest/libclntsh.dylib" ]]; then
+    echo "ERROR: Failed to copy libclntsh.dylib to bundle" >&2
+    return 1
+  fi
+
+  # Sign the bundled dylibs (ad-hoc signing for now, proper signing done by Tauri)
+  echo "Signing bundled Oracle IC dylibs..."
+  for dylib in "$ic_dest"/*.dylib; do
+    if [[ -f "$dylib" ]]; then
+      codesign --force --sign - --timestamp=none "$dylib" 2>/dev/null || true
+    fi
+  done
+
+  echo "Oracle IC bundled successfully ($(ls -1 "$ic_dest" | wc -l | tr -d ' ') files)"
+  ls -la "$ic_dest"
+}
+
 compress_app() {
   local app_dir="$1" out_file="$2"
   local app_parent app_name

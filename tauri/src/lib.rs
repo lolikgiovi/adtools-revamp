@@ -69,6 +69,14 @@ pub fn run() {
         )?;
       }
 
+      // Setup Oracle Instant Client library path (must be done before any Oracle operations)
+      #[cfg(feature = "oracle")]
+      {
+        if let Err(e) = oracle::setup_oracle_library_path() {
+          eprintln!("Warning: Failed to setup Oracle library path: {}", e);
+        }
+      }
+
       // Build custom menu with zoom controls
       let menu = build_menu(app.handle())?;
       app.set_menu(menu)?;
