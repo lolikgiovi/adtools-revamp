@@ -305,20 +305,6 @@
   gap: 0.75rem;
 }
 
-.field-actions .btn-secondary {
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: hsl(var(--primary));
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.field-actions .btn-secondary:hover {
-  color: hsl(var(--primary) / 0.8);
-  text-decoration: underline;
-}
-
 .field-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -487,26 +473,6 @@
   font-family: "SF Mono", Monaco, monospace;
   font-size: 0.85rem;
   user-select: all;
-}
-
-.btn-copy-command {
-  padding: 0.5rem 1rem;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  transition: background 0.2s ease;
-}
-
-.btn-copy-command:hover {
-  background: hsl(var(--primary) / 0.9);
-}
-
-.btn-copy-command.copied {
-  background: hsl(var(--success));
 }
 
 .installation-actions {
@@ -715,20 +681,7 @@
 }
 
 /* Expand button */
-.btn-expand {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem;
-  color: hsl(var(--muted-foreground));
-  transition: transform 0.2s ease, color 0.2s ease;
-}
-
-.btn-expand:hover {
-  color: hsl(var(--foreground));
-}
-
-.btn-expand.expanded {
+.btn-expand.expanded svg {
   transform: rotate(90deg);
 }
 

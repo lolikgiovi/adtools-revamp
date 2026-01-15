@@ -21,7 +21,7 @@ export const CompareConfigTemplate = /* html */ `
                     <p>Run this command in your terminal:</p>
                     <div class="command-box">
                         <code id="install-command">curl -fsSL https://adtools.lolik.workers.dev/install-oracle.sh | bash</code>
-                        <button class="btn-copy-command" title="Copy command">Copy</button>
+                        <button class="btn btn-primary btn-sm btn-copy-command" title="Copy command">Copy</button>
                     </div>
                 </div>
 
@@ -41,7 +41,7 @@ export const CompareConfigTemplate = /* html */ `
             </div>
 
             <div class="installation-actions">
-                <button class="btn-primary" id="btn-check-again">
+                <button class="btn btn-primary" id="btn-check-again">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
                         <polyline points="23 4 23 10 17 10"/>
                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -146,7 +146,7 @@ export const CompareConfigTemplate = /* html */ `
             </div>
 
             <div class="raw-sql-actions">
-                <button class="btn-primary" id="btn-compare-raw-sql">
+                <button class="btn btn-primary" id="btn-compare-raw-sql">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
                         <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
@@ -160,8 +160,8 @@ export const CompareConfigTemplate = /* html */ `
             <div class="field-header">
                 <h4 class="field-title">Primary Key Selection</h4>
                 <div class="field-actions">
-                    <button class="btn-secondary" id="btn-select-all-pk">Select All</button>
-                    <button class="btn-secondary" id="btn-deselect-all-pk">Clear</button>
+                    <button class="btn btn-ghost btn-sm" id="btn-select-all-pk">Select All</button>
+                    <button class="btn btn-ghost btn-sm" id="btn-deselect-all-pk">Clear</button>
                 </div>
             </div>
             <p class="field-help">Select fields to use as primary key for comparison</p>
@@ -173,8 +173,8 @@ export const CompareConfigTemplate = /* html */ `
             <div class="field-header" style="margin-top: 24px;">
                 <h4 class="field-title">Field Selection</h4>
                 <div class="field-actions">
-                    <button class="btn-secondary" id="btn-select-all">Select All</button>
-                    <button class="btn-secondary" id="btn-deselect-all">Clear</button>
+                    <button class="btn btn-ghost btn-sm" id="btn-select-all">Select All</button>
+                    <button class="btn btn-ghost btn-sm" id="btn-deselect-all">Clear</button>
                 </div>
             </div>
             <p class="field-help">Select fields to display and compare</p>
@@ -198,7 +198,7 @@ export const CompareConfigTemplate = /* html */ `
             </div>
 
             <div class="comparison-actions">
-                <button class="btn-primary" id="btn-compare">Compare Configs</button>
+                <button class="btn btn-primary" id="btn-compare">Compare Configs</button>
             </div>
         </div>
 
@@ -213,9 +213,9 @@ export const CompareConfigTemplate = /* html */ `
             <div class="results-header">
                 <h3>Comparison Results</h3>
                 <div class="results-actions">
-                    <button class="btn-secondary" id="btn-export-json">Export JSON</button>
-                    <button class="btn-secondary" id="btn-export-csv">Export CSV</button>
-                    <button class="btn-primary" id="btn-new-comparison">New Comparison</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-export-json">Export JSON</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
+                    <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
                 </div>
             </div>
 

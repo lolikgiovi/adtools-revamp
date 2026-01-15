@@ -205,7 +205,7 @@ class CompareConfigTool extends BaseTool {
       <div class="installation-card">
         <h3>No Oracle Connections Configured</h3>
         <p>Please configure Oracle database connections in Settings before using this tool.</p>
-        <button class="btn-primary" id="btn-go-to-settings">Go to Settings</button>
+        <button class="btn btn-primary" id="btn-go-to-settings">Go to Settings</button>
       </div>
     `;
 
@@ -1399,7 +1399,7 @@ class CompareConfigTool extends BaseTool {
     return /*html*/ `
       <tr class="comparison-row" data-row-id="${index}">
         <td>
-          <button class="btn-expand" data-row-id="${index}" title="Expand/Collapse">
+          <button class="btn btn-ghost btn-icon-only btn-expand" data-row-id="${index}" title="Expand/Collapse">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
@@ -1408,7 +1408,9 @@ class CompareConfigTool extends BaseTool {
         <td class="pk-cell">${this.escapeHtml(pkDisplay)}</td>
         <td>${statusBadge}</td>
         <td>
-          <button class="btn btn-sm btn-sm-xs btn-copy-pk" data-pk="${this.escapeHtml(pkDisplay)}" title="Copy Primary Key">Copy PK</button>
+          <button class="btn btn-outline btn-xs btn-copy-pk" data-pk="${this.escapeHtml(
+            pkDisplay
+          )}" title="Copy Primary Key">Copy PK</button>
         </td>
       </tr>
       <tr class="comparison-detail" data-row-id="${index}" style="display: none;">
