@@ -212,6 +212,13 @@ export class QuickQueryUI {
       excelImportInfo: document.getElementById("excelImportInfo"),
       excelImportRowCount: document.getElementById("excelImportRowCount"),
       clearExcelImportButton: document.getElementById("clearExcelImport"),
+
+      // Excel import modal elements
+      excelImportOverlay: document.getElementById("excelImportOverlay"),
+      excelImportModal: document.getElementById("excelImportModal"),
+      closeExcelImportButton: document.getElementById("closeExcelImport"),
+      confirmExcelImportButton: document.getElementById("confirmExcelImport"),
+      cancelExcelImportButton: document.getElementById("cancelExcelImport"),
     };
   }
 
@@ -304,13 +311,30 @@ export class QuickQueryUI {
 
       // Excel import buttons
       importExcelButton: {
-        click: () => this.handleImportExcelClick(),
+        click: () => this._showExcelImportModal(),
       },
       excelFileInput: {
         change: (e) => this.handleExcelFileInput(e),
       },
       clearExcelImportButton: {
         click: () => this.handleClearExcelImport(),
+      },
+      // Excel import modal buttons
+      closeExcelImportButton: {
+        click: () => this._closeExcelImportModal(),
+      },
+      confirmExcelImportButton: {
+        click: () => this._confirmExcelImport(),
+      },
+      cancelExcelImportButton: {
+        click: () => this._closeExcelImportModal(),
+      },
+      excelImportOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.excelImportOverlay) {
+            this._closeExcelImportModal();
+          }
+        },
       },
 
       // Schema related buttons
@@ -1195,6 +1219,40 @@ export class QuickQueryUI {
   }
 
   // ===== Excel Import Methods =====
+
+  /**
+   * Show the Excel import instruction modal
+   */
+  _showExcelImportModal() {
+    if (this.elements.excelImportOverlay) {
+      this.elements.excelImportOverlay.classList.remove("hidden");
+      this.elements.excelImportOverlay.setAttribute("aria-hidden", "false");
+    }
+    if (this.elements.excelImportModal) {
+      this.elements.excelImportModal.classList.remove("hidden");
+    }
+  }
+
+  /**
+   * Close the Excel import instruction modal
+   */
+  _closeExcelImportModal() {
+    if (this.elements.excelImportOverlay) {
+      this.elements.excelImportOverlay.classList.add("hidden");
+      this.elements.excelImportOverlay.setAttribute("aria-hidden", "true");
+    }
+    if (this.elements.excelImportModal) {
+      this.elements.excelImportModal.classList.add("hidden");
+    }
+  }
+
+  /**
+   * Handle confirm from Excel import modal - close modal and proceed with file selection
+   */
+  _confirmExcelImport() {
+    this._closeExcelImportModal();
+    this.handleImportExcelClick();
+  }
 
   /**
    * Handle click on Import Excel button

@@ -201,6 +201,43 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <button id="cancelSplitResults" class="btn">Close</button>
         </div>
     </div>
+</div>
+
+<!-- Excel Import Instruction Modal -->
+<div id="excelImportOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="excelImportModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="excelImportTitle">
+    <div class="qq-modal-content qq-excel-import-content">
+        <div class="qq-modal-header">
+            <h3 id="excelImportTitle">Import Excel File</h3>
+            <button id="closeExcelImport" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <div class="qq-excel-import-instructions">
+                <p class="qq-instruction-main">Please prepare your Excel file with the following format:</p>
+                <ul class="qq-instruction-list">
+                    <li><strong>Sheet 1</strong> will be used for data import</li>
+                    <li><strong>First row</strong> must contain column headers (field names)</li>
+                    <li>Data rows should start from row 2</li>
+                </ul>
+                <div class="qq-instruction-example">
+                    <span class="qq-example-label">Example:</span>
+                    <table class="qq-example-table">
+                        <thead>
+                            <tr><th>FIELD_A</th><th>FIELD_B</th><th>FIELD_C</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>value1</td><td>value2</td><td>value3</td></tr>
+                            <tr><td>...</td><td>...</td><td>...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="qq-modal-footer">
+            <button id="confirmExcelImport" class="btn btn-primary">Choose File</button>
+            <button id="cancelExcelImport" class="btn">Cancel</button>
+        </div>
+    </div>
 </div>`;
 
 export const FILE_BUTTON_TEMPLATE = (file) => {

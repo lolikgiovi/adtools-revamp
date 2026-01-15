@@ -1406,3 +1406,72 @@
   font-size: 14px;
   line-height: 1;
 }
+
+/* Excel Import Instruction Modal */
+.qq-excel-import-content {
+  width: min(520px, 92vw);
+}
+
+.qq-excel-import-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qq-instruction-main {
+  font-size: 14px;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.qq-instruction-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qq-instruction-list li {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  line-height: 1.5;
+}
+
+.qq-instruction-example {
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.qq-example-label {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  display: block;
+  margin-bottom: 8px;
+}
+
+.qq-example-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qq-example-table th,
+.qq-example-table td {
+  border: 1px solid hsl(var(--border));
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.qq-example-table th {
+  background: hsl(var(--background));
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.qq-example-table td {
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
