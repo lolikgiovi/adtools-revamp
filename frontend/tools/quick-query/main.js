@@ -3,6 +3,7 @@ import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
+import { ExcelImportService } from "./services/ExcelImportService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
@@ -15,6 +16,8 @@ import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { importSchemasPayload } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
+import { QueryWorkerService } from "./services/QueryWorkerService.js";
+import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import JSZip from "jszip";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
@@ -58,8 +61,13 @@ export class QuickQueryUI {
     this.schemaValidationService = new SchemaValidationService();
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
+    this.excelImportService = new ExcelImportService();
+    this.queryWorkerService = new QueryWorkerService();
+    this.splitWorkerService = new SplitWorkerService();
     this.isGuideActive = false;
     this.isAttachmentActive = false;
+    this.isGenerating = false; // Track async generation state
+    this.isSplitting = false; // Track async split state
     this.processedFiles = [];
 
     this._layoutState = { height: "auto", fixedRowsTop: 0 };
@@ -191,6 +199,26 @@ export class QuickQueryUI {
       // Attachment Preview Overlay Elements
       filePreviewOverlay: document.getElementById("fileViewerOverlay"),
       closeFilePreviewOverlayButton: document.getElementById("closeFileViewer"),
+
+      // Progress indicator elements
+      queryProgress: document.getElementById("queryProgress"),
+      progressBar: document.querySelector("#queryProgress .qq-progress-bar"),
+      progressText: document.querySelector("#queryProgress .qq-progress-text"),
+      cancelGenerationButton: document.getElementById("cancelGeneration"),
+
+      // Excel import elements
+      importExcelButton: document.getElementById("importExcel"),
+      excelFileInput: document.getElementById("excelFileInput"),
+      excelImportInfo: document.getElementById("excelImportInfo"),
+      excelImportRowCount: document.getElementById("excelImportRowCount"),
+      clearExcelImportButton: document.getElementById("clearExcelImport"),
+
+      // Excel import modal elements
+      excelImportOverlay: document.getElementById("excelImportOverlay"),
+      excelImportModal: document.getElementById("excelImportModal"),
+      closeExcelImportButton: document.getElementById("closeExcelImport"),
+      confirmExcelImportButton: document.getElementById("confirmExcelImport"),
+      cancelExcelImportButton: document.getElementById("cancelExcelImport"),
     };
   }
 
@@ -235,10 +263,10 @@ export class QuickQueryUI {
 
       // Attachments related (button only; no drag-and-drop)
       addFilesButton: {
-        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+        click: () => this.handleAddFilesClick(),
       },
       filesEmpty: {
-        click: () => this.elements.attachmentsInput && this.elements.attachmentsInput.click(),
+        click: () => this.handleAddFilesClick(),
         keydown: (e) => this.handleEmptyStateKeydown(e),
       },
       attachmentsInput: {
@@ -281,6 +309,34 @@ export class QuickQueryUI {
         click: () => this.handleClearData(),
       },
 
+      // Excel import buttons
+      importExcelButton: {
+        click: () => this._showExcelImportModal(),
+      },
+      excelFileInput: {
+        change: (e) => this.handleExcelFileInput(e),
+      },
+      clearExcelImportButton: {
+        click: () => this.handleClearExcelImport(),
+      },
+      // Excel import modal buttons
+      closeExcelImportButton: {
+        click: () => this._closeExcelImportModal(),
+      },
+      confirmExcelImportButton: {
+        click: () => this._confirmExcelImport(),
+      },
+      cancelExcelImportButton: {
+        click: () => this._closeExcelImportModal(),
+      },
+      excelImportOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.excelImportOverlay) {
+            this._closeExcelImportModal();
+          }
+        },
+      },
+
       // Schema related buttons
       addNewSchemaRow: {
         click: () => this.handleAddNewSchemaRow(),
@@ -315,6 +371,9 @@ export class QuickQueryUI {
       },
       importSchemasButton: {
         click: () => this.elements.schemaFileInput.click(),
+      },
+      cancelGenerationButton: {
+        click: () => this.handleCancelGeneration(),
       },
     };
 
@@ -487,12 +546,18 @@ export class QuickQueryUI {
 
   // Event Handlers
   handleGenerateQuery() {
+    // Prevent duplicate generation
+    if (this.isGenerating) return;
+
     try {
       const tableName = this.elements.tableNameInput.value.trim();
       const queryType = this.elements.queryTypeSelect.value;
 
       const schemaData = this.schemaTable.getData().filter((row) => row[0]);
-      const inputData = this.dataTable.getData();
+
+      // Use imported Excel data if available, otherwise use Handsontable data
+      const hasExcelData = this.excelImportService.hasData();
+      const inputData = hasExcelData ? this.excelImportService.getDataForQuery() : this.dataTable.getData();
 
       if (!tableName) {
         throw new Error("Please fill in schema_name.table_name.");
@@ -512,33 +577,157 @@ export class QuickQueryUI {
         throw new Error("Schema data adjusted from DBeaver to SQL Developer format. Please refill the data sheet.");
       }
 
+      // Validate before processing (same for both sync and async)
       this.schemaValidationService.validateSchema(schemaData);
       this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
-      this.localStorageService.saveSchema(tableName, schemaData, inputData);
+      // Save schema before processing (only save if not using Excel data to avoid memory issues)
+      if (!hasExcelData) {
+        this.localStorageService.saveSchema(tableName, schemaData, inputData);
+      } else {
+        // Just save schema without data for large Excel imports
+        this.localStorageService.saveSchema(tableName, schemaData, null);
+      }
 
+      // Check if we should use the worker (1000+ rows)
+      if (this.queryWorkerService.shouldUseWorker(inputData)) {
+        this._generateQueryAsync(tableName, queryType, schemaData, inputData);
+      } else {
+        this._generateQuerySync(tableName, queryType, schemaData, inputData);
+      }
+    } catch (error) {
+      this.showError(error.message);
+      this.editor.setValue("");
+    }
+  }
+
+  /**
+   * Synchronous query generation for small datasets (< 1000 rows)
+   */
+  _generateQuerySync(tableName, queryType, schemaData, inputData) {
+    try {
       const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles);
 
       this.editor.setValue(query);
       this.clearError();
 
-      // Check for duplicate primary keys for MERGE and UPDATE operations
+      // Check for duplicate primary keys
       const duplicateResult = this.queryGenerationService.detectDuplicatePrimaryKeys(schemaData, inputData, tableName);
       if (duplicateResult.hasDuplicates && duplicateResult.warningMessage) {
         this.showWarning(duplicateResult.warningMessage);
-        console.log("Detected duplicate result");
       }
-      UsageTracker.trackFeature("quick-query", queryType); // Track query generated by type
-      UsageTracker.trackEvent("quick-query", "query_generated", {
-        queryType,
-        tableName,
-        rowCount: inputData.length,
-        hasAttachments: this.processedFiles.length > 0,
-      });
+
+      this._trackQueryGenerated(queryType, tableName, inputData.length, false);
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
     }
+  }
+
+  /**
+   * Asynchronous query generation using Web Worker for large datasets (1000+ rows)
+   */
+  async _generateQueryAsync(tableName, queryType, schemaData, inputData) {
+    const rowCount = inputData.length - 1; // Exclude header
+
+    try {
+      this.isGenerating = true;
+      this._showProgress(`Processing ${rowCount.toLocaleString()} rows...`, 0);
+
+      const result = await this.queryWorkerService.generateQuery(
+        tableName,
+        queryType,
+        schemaData,
+        inputData,
+        this.processedFiles,
+        (percent, message) => {
+          this._updateProgress(message, percent);
+        }
+      );
+
+      this._hideProgress();
+      this.isGenerating = false;
+
+      this.editor.setValue(result.sql);
+      this.clearError();
+
+      // Show duplicate warning if any
+      if (result.duplicateResult?.hasDuplicates && result.duplicateResult?.warningMessage) {
+        this.showWarning(result.duplicateResult.warningMessage);
+      }
+
+      this._trackQueryGenerated(queryType, tableName, rowCount, true);
+    } catch (error) {
+      this._hideProgress();
+      this.isGenerating = false;
+
+      if (error.message === "Generation cancelled") {
+        // User cancelled, don't show error
+        return;
+      }
+
+      this.showError(error.message);
+      this.editor.setValue("");
+    }
+  }
+
+  /**
+   * Cancel ongoing async generation
+   */
+  handleCancelGeneration() {
+    if (this.isGenerating) {
+      this.queryWorkerService.cancel();
+      this._hideProgress();
+      this.isGenerating = false;
+    }
+  }
+
+  /**
+   * Show progress indicator
+   */
+  _showProgress(message, percent = 0) {
+    if (this.elements.queryProgress) {
+      this.elements.queryProgress.classList.remove("hidden");
+    }
+    this._updateProgress(message, percent);
+  }
+
+  /**
+   * Update progress indicator
+   */
+  _updateProgress(message, percent) {
+    if (this.elements.progressBar) {
+      this.elements.progressBar.style.width = `${percent}%`;
+    }
+    if (this.elements.progressText) {
+      this.elements.progressText.textContent = message;
+    }
+  }
+
+  /**
+   * Hide progress indicator
+   */
+  _hideProgress() {
+    if (this.elements.queryProgress) {
+      this.elements.queryProgress.classList.add("hidden");
+    }
+    if (this.elements.progressBar) {
+      this.elements.progressBar.style.width = "0%";
+    }
+  }
+
+  /**
+   * Track query generation analytics
+   */
+  _trackQueryGenerated(queryType, tableName, rowCount, usedWorker) {
+    UsageTracker.trackFeature("quick-query", queryType);
+    UsageTracker.trackEvent("quick-query", "query_generated", {
+      queryType,
+      tableName,
+      rowCount,
+      hasAttachments: this.processedFiles.length > 0,
+      usedWorker,
+    });
   }
 
   handleClearAll() {
@@ -565,6 +754,9 @@ export class QuickQueryUI {
 
     this.clearError();
     this.elements.queryTypeSelect.value = "merge";
+
+    // Clear imported Excel data
+    this.handleClearExcelImport();
   }
 
   handleDownloadSql() {
@@ -724,7 +916,23 @@ export class QuickQueryUI {
   }
 
   _performSplit(mode, value) {
+    // Prevent duplicate split
+    if (this.isSplitting) return;
+
     const sql = (this.editor?.getValue() || "").trim();
+
+    // Check if we should use the worker (SQL > 100KB)
+    if (this.splitWorkerService.shouldUseWorker(sql)) {
+      this._performSplitAsync(sql, mode, value);
+    } else {
+      this._performSplitSync(sql, mode, value);
+    }
+  }
+
+  /**
+   * Synchronous split for small SQL files
+   */
+  _performSplitSync(sql, mode, value) {
     const statements = splitSqlStatementsSafely(sql);
 
     // Filter out SET DEFINE OFF statements for processing
@@ -747,6 +955,41 @@ export class QuickQueryUI {
       metadata = result.metadata;
     }
 
+    this._finishSplit(chunks, metadata, mode, value);
+  }
+
+  /**
+   * Asynchronous split using Web Worker for large SQL files
+   */
+  async _performSplitAsync(sql, mode, value) {
+    try {
+      this.isSplitting = true;
+      this._showProgress(`Splitting SQL...`, 10);
+
+      const result = await this.splitWorkerService.split(sql, mode, value, (percent, message) => {
+        this._updateProgress(message, percent);
+      });
+
+      this._hideProgress();
+      this.isSplitting = false;
+
+      this._finishSplit(result.chunks, result.metadata, mode, value);
+    } catch (error) {
+      this._hideProgress();
+      this.isSplitting = false;
+
+      if (error.message === "Split cancelled") {
+        return;
+      }
+
+      this.showError(error.message);
+    }
+  }
+
+  /**
+   * Complete the split operation (shared by sync/async)
+   */
+  _finishSplit(chunks, metadata, mode, value) {
     if (chunks.length === 0) {
       this.showError("No valid queries to split.");
       return;
@@ -971,6 +1214,197 @@ export class QuickQueryUI {
     const newData = [fieldNames, Array(fieldNames.length).fill(null)];
 
     this.dataTable.loadData(newData);
+    // Also clear any imported Excel data
+    this.handleClearExcelImport();
+  }
+
+  // ===== Excel Import Methods =====
+
+  /**
+   * Show the Excel import instruction modal
+   */
+  _showExcelImportModal() {
+    if (this.elements.excelImportOverlay) {
+      this.elements.excelImportOverlay.classList.remove("hidden");
+      this.elements.excelImportOverlay.setAttribute("aria-hidden", "false");
+    }
+    if (this.elements.excelImportModal) {
+      this.elements.excelImportModal.classList.remove("hidden");
+    }
+  }
+
+  /**
+   * Close the Excel import instruction modal
+   */
+  _closeExcelImportModal() {
+    if (this.elements.excelImportOverlay) {
+      this.elements.excelImportOverlay.classList.add("hidden");
+      this.elements.excelImportOverlay.setAttribute("aria-hidden", "true");
+    }
+    if (this.elements.excelImportModal) {
+      this.elements.excelImportModal.classList.add("hidden");
+    }
+  }
+
+  /**
+   * Handle confirm from Excel import modal - close modal and proceed with file selection
+   */
+  _confirmExcelImport() {
+    this._closeExcelImportModal();
+    this.handleImportExcelClick();
+  }
+
+  /**
+   * Handle click on Import Excel button
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleImportExcelClick() {
+    if (isTauri()) {
+      await this._handleImportExcelTauri();
+    } else {
+      this._handleImportExcelWeb();
+    }
+  }
+
+  /**
+   * Handle Import Excel for Tauri (desktop)
+   * Uses Tauri dialog plugin to open file picker
+   */
+  async _handleImportExcelTauri() {
+    try {
+      // Dynamic import of Tauri plugins
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+
+      // Open file dialog for Excel files
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Excel Files",
+            extensions: ["xlsx", "xls"],
+          },
+        ],
+        title: "Select Excel File",
+      });
+
+      if (!selected) {
+        // User cancelled
+        return;
+      }
+
+      // Read file contents
+      const fileData = await readFile(selected);
+
+      // Process Excel file
+      const result = this.excelImportService.processFromUint8Array(fileData);
+      this._onExcelImportSuccess(result);
+    } catch (error) {
+      console.error("Failed to import Excel (Tauri):", error);
+      this.showError(`Failed to import Excel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle Import Excel for Web
+   * Triggers the hidden file input
+   */
+  _handleImportExcelWeb() {
+    if (this.elements.excelFileInput) {
+      this.elements.excelFileInput.click();
+    }
+  }
+
+  /**
+   * Handle file input change event (Web)
+   */
+  async handleExcelFileInput(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const result = await this.excelImportService.processFromFile(file);
+      this._onExcelImportSuccess(result);
+    } catch (error) {
+      console.error("Failed to import Excel:", error);
+      this.showError(`Failed to import Excel: ${error.message}`);
+    }
+
+    // Reset file input for subsequent selections
+    event.target.value = "";
+  }
+
+  /**
+   * Called when Excel import is successful
+   * Updates UI to show row count without rendering to Handsontable
+   */
+  _onExcelImportSuccess(result) {
+    const { header, rowCount } = result;
+
+    // Validate header matches schema if schema exists
+    const schemaData = this.schemaTable.getData().filter((row) => row[0]);
+    if (schemaData.length > 0) {
+      const schemaFieldNames = schemaData.map((row) => row[0]);
+      const headerLower = header.map((h) => (h || "").toLowerCase());
+      const schemaLower = schemaFieldNames.map((f) => (f || "").toLowerCase());
+
+      // Check if headers match schema field names
+      const mismatches = [];
+      for (let i = 0; i < Math.max(headerLower.length, schemaLower.length); i++) {
+        if (headerLower[i] !== schemaLower[i]) {
+          mismatches.push({
+            index: i,
+            excel: header[i] || "(empty)",
+            schema: schemaFieldNames[i] || "(missing)",
+          });
+        }
+      }
+
+      if (mismatches.length > 0) {
+        const mismatchDetails = mismatches
+          .slice(0, 5)
+          .map((m) => `Column ${m.index + 1}: Excel="${m.excel}" vs Schema="${m.schema}"`)
+          .join(", ");
+        const suffix = mismatches.length > 5 ? ` and ${mismatches.length - 5} more...` : "";
+        this.showWarning(`Header mismatch detected: ${mismatchDetails}${suffix}. Data will be used as-is.`);
+      }
+    }
+
+    // Update UI to show row count
+    this._updateExcelImportUI(rowCount);
+
+    // Show success notification
+    if (this.eventBus) {
+      this.eventBus.emit("notification:success", {
+        message: `Imported ${rowCount.toLocaleString()} rows from Excel`,
+        duration: 2500,
+      });
+    }
+  }
+
+  /**
+   * Update the Excel import info UI
+   */
+  _updateExcelImportUI(rowCount) {
+    if (this.elements.excelImportInfo) {
+      this.elements.excelImportInfo.classList.remove("hidden");
+    }
+    if (this.elements.excelImportRowCount) {
+      this.elements.excelImportRowCount.textContent = `${rowCount.toLocaleString()} rows imported from Excel (will be used for query generation)`;
+    }
+  }
+
+  /**
+   * Clear imported Excel data
+   */
+  handleClearExcelImport() {
+    this.excelImportService.clear();
+    if (this.elements.excelImportInfo) {
+      this.elements.excelImportInfo.classList.add("hidden");
+    }
+    if (this.elements.excelImportRowCount) {
+      this.elements.excelImportRowCount.textContent = "0 rows imported from Excel";
+    }
   }
 
   handleAddNewSchemaRow() {
@@ -1624,6 +2058,189 @@ export class QuickQueryUI {
     }
   }
 
+  // ===== Attachment Methods =====
+
+  /**
+   * Handle click on Add Files button
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleAddFilesClick() {
+    if (isTauri()) {
+      await this._handleAddFilesTauri();
+    } else {
+      // Web: trigger the hidden file input
+      if (this.elements.attachmentsInput) {
+        this.elements.attachmentsInput.click();
+      }
+    }
+  }
+
+  /**
+   * Handle Add Files for Tauri (desktop)
+   * Uses Tauri dialog plugin to open file picker
+   */
+  async _handleAddFilesTauri() {
+    try {
+      // Dynamic import of Tauri plugins
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+
+      // Open file dialog for supported file types
+      const selected = await open({
+        multiple: true,
+        filters: [
+          {
+            name: "Supported Files",
+            extensions: ["txt", "jpg", "jpeg", "png", "html", "pdf", "json"],
+          },
+        ],
+        title: "Select Files to Attach",
+      });
+
+      if (!selected || (Array.isArray(selected) && selected.length === 0)) {
+        // User cancelled
+        return;
+      }
+
+      // Ensure we have an array of paths
+      const paths = Array.isArray(selected) ? selected : [selected];
+
+      // Process each file
+      await this._processFilesFromPaths(paths, readFile);
+    } catch (error) {
+      console.error("Failed to add files (Tauri):", error);
+      this.showError(`Failed to add files: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process files from Tauri file paths
+   */
+  async _processFilesFromPaths(paths, readFile) {
+    const filesToProcess = [];
+
+    for (const filePath of paths) {
+      try {
+        // Extract filename from path
+        const fileName = filePath.split(/[/\\]/).pop();
+        const ext = fileName.split(".").pop().toLowerCase();
+
+        // Read file contents
+        const fileData = await readFile(filePath);
+
+        // Determine MIME type based on extension
+        const mimeTypes = {
+          txt: "text/plain",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          html: "text/html",
+          pdf: "application/pdf",
+          json: "application/json",
+        };
+        const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+        // Create a File-like object
+        const blob = new Blob([fileData], { type: mimeType });
+        const file = new File([blob], fileName, { type: mimeType });
+
+        filesToProcess.push(file);
+      } catch (error) {
+        console.error(`Failed to read file ${filePath}:`, error);
+      }
+    }
+
+    if (filesToProcess.length === 0) {
+      return;
+    }
+
+    // Process the files using existing attachment processor
+    try {
+      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess);
+      this.processedFiles = [...this.processedFiles, ...addedFiles];
+
+      // Clear current file items and re-render full list
+      this._renderAttachmentsList();
+
+      // Update action buttons state
+      this.updateAttachmentControlsState();
+      this.clearError();
+
+      if (this.eventBus) {
+        this.eventBus.emit("notification:success", {
+          message: `Added ${addedFiles.length} file(s)`,
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      this.showError(`Error processing attachments: ${error.message}`);
+    }
+  }
+
+  /**
+   * Render the attachments list (extracted for reuse)
+   */
+  _renderAttachmentsList() {
+    const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+    if (container) container.innerHTML = "";
+
+    this.processedFiles.forEach((file) => {
+      const fileButton = document.createElement("button");
+      fileButton.className = "file-button";
+      fileButton.setAttribute("aria-label", `View ${file.name}`);
+      fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
+
+      const copyBtn = fileButton.querySelector(".copy-filename");
+      copyBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        navigator.clipboard.writeText(file.name);
+        copyBtn.classList.add("copied");
+        setTimeout(() => copyBtn.classList.remove("copied"), 1000);
+      });
+
+      const deleteBtn = fileButton.querySelector(".delete-file");
+      deleteBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const idx = this.processedFiles.findIndex((f) => f.name === file.name);
+        if (idx !== -1) {
+          this.processedFiles.splice(idx, 1);
+          fileButton.remove();
+        }
+
+        // If no files left, return to empty state
+        if (this.processedFiles.length === 0) {
+          this._renderEmptyAttachmentsState();
+        }
+
+        this.updateAttachmentControlsState();
+      });
+
+      fileButton.addEventListener("click", () => this.showFileViewer(file));
+      container.appendChild(fileButton);
+    });
+  }
+
+  /**
+   * Render empty attachments state
+   */
+  _renderEmptyAttachmentsState() {
+    const container = this.elements.fileItemsContainer || this.elements.filesContainer;
+    if (!container) return;
+
+    container.innerHTML = "";
+    const emptyEl = document.createElement("div");
+    emptyEl.id = "files-empty";
+    emptyEl.className = "empty-file-button";
+    emptyEl.setAttribute("role", "button");
+    emptyEl.setAttribute("tabindex", "0");
+    emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
+    emptyEl.textContent = "No file attached, click to attach file";
+    emptyEl.addEventListener("click", () => this.handleAddFilesClick());
+    emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
+    container.appendChild(emptyEl);
+    this.elements.filesEmpty = emptyEl;
+  }
+
   async handleAttachmentsInput(e) {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -1637,55 +2254,7 @@ export class QuickQueryUI {
       this.elements.attachmentsInput.value = "";
 
       // Clear current file items and re-render full list
-      const container = this.elements.fileItemsContainer || this.elements.filesContainer;
-      if (container) container.innerHTML = "";
-
-      this.processedFiles.forEach((file) => {
-        const fileButton = document.createElement("button");
-        fileButton.className = "file-button";
-        fileButton.setAttribute("aria-label", `View ${file.name}`);
-        fileButton.innerHTML = FILE_BUTTON_TEMPLATE(file);
-
-        const copyBtn = fileButton.querySelector(".copy-filename");
-        copyBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          navigator.clipboard.writeText(file.name);
-          copyBtn.classList.add("copied");
-          setTimeout(() => copyBtn.classList.remove("copied"), 1000);
-        });
-
-        const deleteBtn = fileButton.querySelector(".delete-file");
-        deleteBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const idx = this.processedFiles.findIndex((f) => f.name === file.name);
-          if (idx !== -1) {
-            this.processedFiles.splice(idx, 1);
-            fileButton.remove();
-          }
-
-          // If no files left, return to empty state
-          if (this.processedFiles.length === 0) {
-            const c = this.elements.fileItemsContainer || this.elements.filesContainer;
-            c.innerHTML = "";
-            const emptyEl = document.createElement("div");
-            emptyEl.id = "files-empty";
-            emptyEl.className = "empty-file-button";
-            emptyEl.setAttribute("role", "button");
-            emptyEl.setAttribute("tabindex", "0");
-            emptyEl.setAttribute("aria-label", "No file attached, click to attach file");
-            emptyEl.textContent = "No file attached, click to attach file";
-            emptyEl.addEventListener("click", () => this.elements.attachmentsInput?.click());
-            emptyEl.addEventListener("keydown", (evt) => this.handleEmptyStateKeydown(evt));
-            c.appendChild(emptyEl);
-            this.elements.filesEmpty = emptyEl;
-          }
-
-          this.updateAttachmentControlsState();
-        });
-
-        fileButton.addEventListener("click", () => this.showFileViewer(file));
-        (this.elements.fileItemsContainer || this.elements.filesContainer).appendChild(fileButton);
-      });
+      this._renderAttachmentsList();
 
       // Update action buttons state
       this.updateAttachmentControlsState();

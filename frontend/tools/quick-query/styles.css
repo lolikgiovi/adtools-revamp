@@ -79,6 +79,12 @@
   overflow: visible;
 }
 
+/* Add left border to first column cells in schema table */
+#spreadsheet-schema .handsontable .htCore td:first-child,
+#spreadsheet-schema .handsontable .htCore th:first-child {
+  border-left: 1px solid hsl(var(--border));
+}
+
 /* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
   /* Keep the table within the visible viewport minus app header */
@@ -86,6 +92,25 @@
   overflow-x: auto;
   /* enable vertical and horizontal scroll inside container */
   /* overscroll-behavior: contain; */
+}
+
+/* Add left border to corner cell and first column in data table */
+#spreadsheet-data .handsontable .ht_clone_top_left_corner th,
+#spreadsheet-data .handsontable .ht_clone_left th,
+#spreadsheet-data .handsontable .htCore td:first-child {
+  border-left: 1px solid hsl(var(--border));
+}
+
+/* Remove rounded corners from data spreadsheet header cells */
+#spreadsheet-data .handsontable.ht-theme-main th,
+#spreadsheet-data .handsontable.ht-theme-main thead th,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner th,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner table,
+#spreadsheet-data .handsontable .ht_clone_top th,
+#spreadsheet-data .handsontable .ht_clone_left th,
+#spreadsheet-data .handsontable .wtSpreader,
+#spreadsheet-data .handsontable table {
+  border-radius: 0 !important;
 }
 
 /* Hide scrollbar in spreadsheet-data */
@@ -336,6 +361,15 @@
 .handsontable .wtBorder,
 .handsontable .wtHolder {
   border-radius: 4px;
+}
+
+/* Remove rounded corners from data spreadsheet holders */
+#spreadsheet-data .handsontable .wtBorder,
+#spreadsheet-data .handsontable .wtHolder,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner .wtHolder,
+#spreadsheet-data .handsontable .ht_clone_left .wtHolder {
+  border-radius: 0 !important;
 }
 
 #errorMessages {
@@ -1294,4 +1328,150 @@
     border-bottom: 1px solid hsl(var(--border));
     padding-bottom: 12px;
   }
+}
+
+/* ===== Progress Indicator for Async Query Generation ===== */
+.qq-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+}
+
+.qq-progress.hidden {
+  display: none;
+}
+
+.qq-progress-bar-container {
+  flex: 1;
+  height: 6px;
+  background: hsl(var(--border));
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.qq-progress-bar {
+  height: 100%;
+  background: hsl(var(--primary));
+  border-radius: 3px;
+  transition: width 0.2s ease-out;
+}
+
+.qq-progress-text {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.qq-progress #cancelGeneration {
+  flex-shrink: 0;
+}
+
+/* ===== Excel Import Info ===== */
+.excel-import-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  border-left: 3px solid hsl(var(--primary));
+}
+
+.excel-import-info.hidden {
+  display: none;
+}
+
+.excel-import-icon {
+  font-size: 16px;
+}
+
+#excelImportRowCount {
+  flex: 1;
+  font-size: 12px;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+#clearExcelImport {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Excel Import Instruction Modal */
+.qq-excel-import-content {
+  width: min(520px, 92vw);
+}
+
+.qq-excel-import-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qq-instruction-main {
+  font-size: 14px;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.qq-instruction-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qq-instruction-list li {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  line-height: 1.5;
+}
+
+.qq-instruction-example {
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.qq-example-label {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  display: block;
+  margin-bottom: 8px;
+}
+
+.qq-example-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qq-example-table th,
+.qq-example-table td {
+  border: 1px solid hsl(var(--border));
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.qq-example-table th {
+  background: hsl(var(--background));
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.qq-example-table td {
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
 }

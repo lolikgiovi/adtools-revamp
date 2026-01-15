@@ -19,6 +19,8 @@ class CheckImageTool extends BaseTool {
     this.imageCheckerService = new ImageCheckerService(this.baseUrlService);
     this.root = null;
     this.elements = null;
+    // Track timeout cells for "Retry All Timeouts" feature
+    this.timeoutCells = new Map(); // Map<cellId, { originalPath, env, rowIndex, colIndex }>
   }
 
   getIconSvg() {
@@ -52,6 +54,8 @@ class CheckImageTool extends BaseTool {
       pasteButton: this.root.querySelector("#pasteButton"),
       checkImageButton: this.root.querySelector("#checkImageButton"),
       clearButton: this.root.querySelector("#clearButton"),
+      envSelector: this.root.querySelector("#envSelector"),
+      retryAllTimeoutsBtn: this.root.querySelector("#retryAllTimeoutsBtn"),
       resultsContainer: this.root.querySelector("#resultsContainer"),
     };
   }
@@ -87,8 +91,58 @@ class CheckImageTool extends BaseTool {
       }
     });
 
+    // Retry all timeouts button
+    this.elements.retryAllTimeoutsBtn.addEventListener("click", () => {
+      this.retryAllTimeouts();
+    });
+
+    // Populate environment selector
+    this.populateEnvSelector();
+
     // Load saved values
     this.loadSavedValues();
+  }
+
+  /**
+   * Populate the environment selector dropdown with configured environments
+   */
+  populateEnvSelector() {
+    const selector = this.elements.envSelector;
+    if (!selector) return;
+
+    // Clear existing options except "All"
+    selector.innerHTML = '<option value="all">All Environments</option>';
+
+    // Get all configured environments
+    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+
+    // Add each environment as an option
+    baseUrls.forEach((env, index) => {
+      const option = document.createElement("option");
+      option.value = index.toString();
+      option.textContent = env.name || `Environment ${index + 1}`;
+      selector.appendChild(option);
+    });
+  }
+
+  /**
+   * Get the selected environments based on dropdown selection
+   * @returns {Array} Array of { name, url } objects
+   */
+  getSelectedEnvironments() {
+    const selector = this.elements.envSelector;
+    const allUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+
+    if (!selector || selector.value === "all") {
+      return allUrls;
+    }
+
+    const selectedIndex = parseInt(selector.value, 10);
+    if (selectedIndex >= 0 && selectedIndex < allUrls.length) {
+      return [allUrls[selectedIndex]];
+    }
+
+    return allUrls;
   }
 
   /* ──────────────── Core actions ──────────────── */
@@ -112,14 +166,15 @@ class CheckImageTool extends BaseTool {
       return;
     }
 
-    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+    // Get selected environments from dropdown
+    const baseUrls = this.getSelectedEnvironments();
     if (baseUrls.length === 0) {
       this.showError("No base URLs configured. Please add base URLs in the HTML Template tool.");
       return;
     }
 
     try {
-      UsageTracker.trackEvent("check-image", "check_start", { images: imagePaths.length });
+      UsageTracker.trackEvent("check-image", "check_start", { images: imagePaths.length, envs: baseUrls.length });
     } catch (_) {}
 
     // Render the table structure first with loading states
@@ -134,6 +189,7 @@ class CheckImageTool extends BaseTool {
    */
   renderProgressiveTable(imagePaths, baseUrls) {
     this.clearResults();
+    this.timeoutCells.clear(); // Reset timeout tracking
     const resultsContainer = this.elements.resultsContainer;
 
     const resultsWrapper = document.createElement("div");
@@ -252,7 +308,11 @@ class CheckImageTool extends BaseTool {
    * Update a cell with the check result
    */
   updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex) {
+    const cellId = `cell-${rowIndex}-${colIndex}`;
     cell.className = `status-cell ${result.exists ? "success" : result.timeout ? "timeout" : "error"}`;
+
+    // Remove from timeout tracking if it was there (in case of retry success)
+    this.timeoutCells.delete(cellId);
 
     if (result.exists) {
       // Create success content with image preview
@@ -279,6 +339,9 @@ class CheckImageTool extends BaseTool {
       cell.style.cursor = "pointer";
       cell.addEventListener("click", () => this.showImageDetails(result, originalPath));
     } else if (result.timeout) {
+      // Track this timeout cell
+      this.timeoutCells.set(cellId, { originalPath, env, rowIndex, colIndex });
+
       // Timeout state with retry button
       cell.innerHTML = `
         <div class="cell-timeout-content">
@@ -287,7 +350,7 @@ class CheckImageTool extends BaseTool {
           <button class="retry-button">Retry</button>
         </div>
       `;
-      cell.title = "Request timed out";
+      cell.title = "Request timed out (after 5 attempts)";
       const retryBtn = cell.querySelector(".retry-button");
       retryBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -303,6 +366,40 @@ class CheckImageTool extends BaseTool {
       `;
       cell.title = "Image not found";
     }
+
+    // Update retry all button visibility
+    this.updateRetryAllButtonVisibility();
+  }
+
+  /**
+   * Update the visibility of the "Retry All Timeouts" button
+   */
+  updateRetryAllButtonVisibility() {
+    const retryAllBtn = this.elements?.retryAllTimeoutsBtn;
+    if (retryAllBtn) {
+      const hasTimeouts = this.timeoutCells.size > 0;
+      retryAllBtn.style.display = hasTimeouts ? "inline-block" : "none";
+      retryAllBtn.textContent = `Retry All Timeouts (${this.timeoutCells.size})`;
+    }
+  }
+
+  /**
+   * Retry all cells that timed out
+   */
+  async retryAllTimeouts() {
+    if (this.timeoutCells.size === 0) return;
+
+    // Get all timeout cells and clear the map (they'll be re-added if they timeout again)
+    const cellsToRetry = Array.from(this.timeoutCells.values());
+    this.timeoutCells.clear();
+    this.updateRetryAllButtonVisibility();
+
+    // Retry all timeout cells in parallel
+    const retryPromises = cellsToRetry.map(({ originalPath, env, rowIndex, colIndex }) =>
+      this.retryCell(originalPath, env, rowIndex, colIndex)
+    );
+
+    await Promise.all(retryPromises);
   }
 
   /**

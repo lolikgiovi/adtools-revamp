@@ -1056,7 +1056,7 @@ class MasterLockey extends BaseTool {
           this.els.confluenceSettingsLink?.addEventListener("click", (e) => {
             e.preventDefault();
             // Navigate to settings page
-            this.eventBus?.emit?.("navigate", { page: "settings" });
+            window.location.hash = "settings";
           });
         }
       }

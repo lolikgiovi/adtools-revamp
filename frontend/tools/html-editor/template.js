@@ -5,6 +5,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
         <div class="pane-header">
           <h3>Editor</h3>
           <div class="toolbar-left">
+            <input type="file" id="htmlFileInput" accept=".html,.htm" style="display: none;" />
+            <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
             <button id="btnFormatHtml" class="btn btn-primary btn-sm" title="Format HTML">Format</button>
             <button id="btnMinifyHtml" class="btn btn-primary btn-sm" title="Minify HTML">Minify</button>
             <button id="btnExtractVtl" class="btn btn-primary btn-sm" title="Extract VTL Fields">Extract VTL Fields</button>

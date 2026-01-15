@@ -4,6 +4,7 @@ import { Base64ToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 import JSZip from "jszip";
 
 class Base64Tools extends BaseTool {
@@ -162,7 +163,7 @@ class Base64Tools extends BaseTool {
   setupFileHandling() {
     const container = this.validateContainer();
 
-    // Setup file input handlers for multiple file selection
+    // Setup file input handlers for multiple file selection (web fallback)
     const encodeFileInput = container.querySelector("#encode-file-input");
     const decodeFileInput = container.querySelector("#decode-file-input");
 
@@ -175,6 +176,128 @@ class Base64Tools extends BaseTool {
     if (decodeFileInput) {
       decodeFileInput.addEventListener("change", (e) => {
         this.handleMultipleFileUpload(e, "decode");
+      });
+    }
+
+    // Setup upload button click handlers
+    const encodeUploadBtn = container.querySelector("#encode-file-upload-btn");
+    const decodeUploadBtn = container.querySelector("#decode-file-upload-btn");
+
+    if (encodeUploadBtn) {
+      encodeUploadBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.handleFileUploadClick("encode");
+      });
+    }
+
+    if (decodeUploadBtn) {
+      decodeUploadBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.handleFileUploadClick("decode");
+      });
+    }
+  }
+
+  /**
+   * Handle file upload button click
+   * Uses Tauri file dialog in desktop, file input in web
+   */
+  async handleFileUploadClick(mode) {
+    if (isTauri()) {
+      await this._handleFileUploadTauri(mode);
+    } else {
+      // Web: trigger the hidden file input
+      const container = this.validateContainer();
+      const fileInput = container.querySelector(`#${mode}-file-input`);
+      if (fileInput) {
+        fileInput.click();
+      }
+    }
+  }
+
+  /**
+   * Handle file upload for Tauri (desktop)
+   * Uses Tauri dialog plugin to open file picker
+   */
+  async _handleFileUploadTauri(mode) {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
+
+      // Build dialog options
+      const options = {
+        multiple: true,
+        title: mode === "encode" ? "Select Files to Encode" : "Select Base64 Files to Decode",
+      };
+
+      // Only add filters for decode mode (encode should allow all files)
+      if (mode === "decode") {
+        options.filters = [{ name: "Base64 Files", extensions: ["txt", "base64"] }];
+      }
+
+      const selected = await open(options);
+
+      if (!selected || (Array.isArray(selected) && selected.length === 0)) {
+        return;
+      }
+
+      const paths = Array.isArray(selected) ? selected : [selected];
+      await this._processFilesFromPaths(paths, readFile, mode);
+    } catch (error) {
+      console.error(`Failed to upload files (Tauri, ${mode}):`, error);
+      this.showError(`Failed to upload files: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process files from Tauri file paths
+   */
+  async _processFilesFromPaths(paths, readFile, mode) {
+    for (const filePath of paths) {
+      try {
+        const fileName = filePath.split(/[/\\]/).pop();
+        const ext = fileName.split(".").pop().toLowerCase();
+        const fileData = await readFile(filePath);
+
+        // Determine MIME type
+        const mimeTypes = {
+          txt: "text/plain",
+          base64: "text/plain",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          gif: "image/gif",
+          webp: "image/webp",
+          svg: "image/svg+xml",
+          pdf: "application/pdf",
+          json: "application/json",
+          html: "text/html",
+          css: "text/css",
+          js: "text/javascript",
+          xml: "application/xml",
+          zip: "application/zip",
+        };
+        const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+        // Create File object
+        const blob = new Blob([fileData], { type: mimeType });
+        const file = new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
+
+        // Add file to selection
+        const fileId = `${mode}-${crypto.randomUUID()}-${Date.now()}`;
+        this.selectedFiles.set(fileId, { file, mode });
+        this.displayFileCard(file, fileId, mode);
+      } catch (error) {
+        console.error(`Failed to read file ${filePath}:`, error);
+      }
+    }
+
+    this.showInputFileContainer(mode);
+
+    if (this.eventBus) {
+      this.eventBus.emit("notification:success", {
+        message: `Added ${paths.length} file(s)`,
+        duration: 2000,
       });
     }
   }
@@ -433,23 +556,23 @@ class Base64Tools extends BaseTool {
       // Single file: output to textarea
       const [fileId, { file }] = selectedFilesForMode[0];
       const outputArea = container.querySelector("#encode-output");
-      
+
       try {
         const arrayBuffer = await this.readFileAsArrayBuffer(file);
         const uint8Array = new Uint8Array(arrayBuffer);
         const base64Result = Base64ToolsService.toBase64FromBytes(uint8Array);
         const mimeType = Base64ToolsService.getMimeTypeFromBase64(file, uint8Array);
         const dataUri = `data:${mimeType};base64,${base64Result}`;
-        
+
         outputArea.value = dataUri;
         outputArea.style.display = "block";
-        
+
         // Hide processed files display if it was shown
         const processedDisplay = container.querySelector("#encode-processed-files");
         if (processedDisplay) {
           processedDisplay.style.display = "none";
         }
-        
+
         this.updateOutputHeaderButtons("encode", false); // false = not multi-file
         this.showSuccess("Encoded to Base64!");
       } catch (error) {
@@ -471,13 +594,13 @@ class Base64Tools extends BaseTool {
         this.showSuccess("Encoded to Base64!");
         outputArea.value = encoded;
         outputArea.style.display = "block";
-        
+
         // Hide processed files display if it was shown
         const processedDisplay = container.querySelector("#encode-processed-files");
         if (processedDisplay) {
           processedDisplay.style.display = "none";
         }
-        
+
         this.updateOutputHeaderButtons("encode", false); // false = not multi-file
       } catch (error) {
         this.showError("Failed to encode text to Base64");
@@ -520,7 +643,7 @@ class Base64Tools extends BaseTool {
           outputArea.style.display = "block";
           this.decodedBlob = null;
           this.decodedFilename = null;
-          
+
           // Enable copy button for text output
           this.updateOutputHeaderButtons("decode", false); // false = single file, text output
         } else {
@@ -538,8 +661,7 @@ class Base64Tools extends BaseTool {
             const url = URL.createObjectURL(blob);
             const { width, height } = await new Promise((resolve, reject) => {
               const img = new Image();
-              img.onload = () =>
-                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+              img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
               img.onerror = (e) => reject(e);
               img.src = url;
             });
@@ -577,7 +699,7 @@ class Base64Tools extends BaseTool {
           }
 
           this.displayProcessedFiles(processedFiles, "decode");
-          
+
           // Disable copy button for binary output (single file showing as card)
           const copyBtn = container.querySelector("#decode-copy-btn");
           if (copyBtn) {
@@ -690,8 +812,11 @@ class Base64Tools extends BaseTool {
         }
       } catch (error) {
         console.error("❌ [DEBUG] Failed to process file:", file.name, error);
-        UsageTracker.trackEvent("base64-tools", mode === "encode" ? "encode_error" : "decode_error", 
-          UsageTracker.enrichErrorMeta(error, { type: "multi_file", file: file.name }));
+        UsageTracker.trackEvent(
+          "base64-tools",
+          mode === "encode" ? "encode_error" : "decode_error",
+          UsageTracker.enrichErrorMeta(error, { type: "multi_file", file: file.name })
+        );
         this.showError(`Failed to process ${file.name}: ${error.message}`);
       }
     }
@@ -749,12 +874,12 @@ class Base64Tools extends BaseTool {
             this.downloadBlob(blob, imageData.name);
           },
         };
-        
+
         // Add copy button for encode mode
         if (mode === "encode") {
           actions.copy = () => this.copyFileContent(fileData.content, index);
         }
-        
+
         card = this.buildFileCard(
           {
             variant: "image",
@@ -774,12 +899,12 @@ class Base64Tools extends BaseTool {
             this.downloadBlob(blob, fileInfo.name);
           },
         };
-        
+
         // Add copy button for encode mode
         if (mode === "encode") {
           actions.copy = () => this.copyFileContent(fileData.content, index);
         }
-        
+
         card = this.buildFileCard(
           {
             variant: "binary",
@@ -794,12 +919,12 @@ class Base64Tools extends BaseTool {
         const actions = {
           download: () => this.downloadProcessedFile(fileData),
         };
-        
+
         // Add copy button for encode mode
         if (mode === "encode") {
           actions.copy = () => this.copyFileContent(fileData.content, index);
         }
-        
+
         card = this.buildFileCard(
           {
             variant: "text",
@@ -816,7 +941,7 @@ class Base64Tools extends BaseTool {
 
     processedDisplay.style.display = "block";
     outputTextarea.style.display = "none";
-    
+
     // Update header buttons for multi-file mode
     if (mode === "encode" || mode === "decode") {
       this.updateOutputHeaderButtons(mode, true); // true = multi-file
@@ -832,7 +957,7 @@ class Base64Tools extends BaseTool {
     try {
       // Handle different content types
       let textToCopy = "";
-      
+
       if (typeof content === "string") {
         textToCopy = content;
       } else if (content && typeof content === "object") {
@@ -841,7 +966,7 @@ class Base64Tools extends BaseTool {
         this.showError("Cannot copy binary content to clipboard");
         return;
       }
-      
+
       await navigator.clipboard.writeText(textToCopy);
       this.showSuccess("Copied to clipboard!");
     } catch (error) {
@@ -853,7 +978,7 @@ class Base64Tools extends BaseTool {
     const container = this.validateContainer();
     const copyBtn = container.querySelector(`#${mode}-copy-btn`);
     const downloadBtn = container.querySelector(`#${mode}-download-btn`);
-    
+
     if (isMultiFile) {
       // Disable copy button for multi-file output
       if (copyBtn) {
@@ -861,7 +986,7 @@ class Base64Tools extends BaseTool {
         copyBtn.style.opacity = "0.5";
         copyBtn.style.cursor = "not-allowed";
       }
-      
+
       // Update download button text to "Download All"
       if (downloadBtn) {
         const textNode = downloadBtn.childNodes[downloadBtn.childNodes.length - 1];
@@ -876,7 +1001,7 @@ class Base64Tools extends BaseTool {
         copyBtn.style.opacity = "1";
         copyBtn.style.cursor = "pointer";
       }
-      
+
       // Reset download button text to "Download"
       if (downloadBtn) {
         const textNode = downloadBtn.childNodes[downloadBtn.childNodes.length - 1];
@@ -890,8 +1015,8 @@ class Base64Tools extends BaseTool {
   getFormattedDate() {
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   }
 
@@ -1007,7 +1132,7 @@ class Base64Tools extends BaseTool {
     // Check if processed cards are visible for encode mode
     const processedDisplay = container.querySelector(`#${mode}-processed-files`);
     const processedContainer = container.querySelector(`#${mode}-processed-container`);
-    
+
     if (mode === "encode" && processedDisplay && processedDisplay.style.display === "block") {
       // Multi-file encode: Create ZIP with all encoded files
       const fileCards = processedContainer.querySelectorAll(".file-card");
@@ -1015,11 +1140,11 @@ class Base64Tools extends BaseTool {
         this.showError("No files to download");
         return;
       }
-      
+
       try {
         const zip = new JSZip();
         const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "encode");
-        
+
         // Process each file and add to ZIP
         for (const [fileId, { file }] of selectedFilesForMode) {
           const arrayBuffer = await this.readFileAsArrayBuffer(file);
@@ -1027,12 +1152,12 @@ class Base64Tools extends BaseTool {
           const base64Result = Base64ToolsService.toBase64FromBytes(uint8Array);
           const mimeType = Base64ToolsService.getMimeTypeFromBase64(file, uint8Array);
           const dataUri = `data:${mimeType};base64,${base64Result}`;
-          
+
           // Add to ZIP with .txt extension
           const fileName = `${file.name.split(".")[0]}.txt`;
           zip.file(fileName, dataUri);
         }
-        
+
         // Generate and download ZIP with date format
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const dateStr = this.getFormattedDate();
@@ -1044,7 +1169,7 @@ class Base64Tools extends BaseTool {
       }
       return;
     }
-    
+
     // For decode mode with processed cards - create ZIP
     if (mode === "decode" && processedDisplay && processedDisplay.style.display === "block") {
       const fileCards = processedContainer.querySelectorAll(".file-card");
@@ -1052,33 +1177,33 @@ class Base64Tools extends BaseTool {
         this.showError("No files to download");
         return;
       }
-      
+
       try {
         const zip = new JSZip();
         const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "decode");
-        
+
         // Process each file and add to ZIP
         for (const [fileId, { file }] of selectedFilesForMode) {
           const text = await this.readFileAsText(file);
           const base64Content = text.trim();
-          
+
           if (!Base64ToolsService.isValidBase64(base64Content)) {
             continue; // Skip invalid files
           }
-          
+
           const { base64: actualBase64 } = Base64ToolsService.normalizeDataUri(base64Content);
           const binaryString = Base64ToolsService.decodeToBinaryString(actualBase64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          
+
           const contentType = Base64ToolsService.detectContentType(bytes);
-          
+
           // Determine file extension and content
           let fileName;
           let content;
-          
+
           if (Base64ToolsService.isTextContent(binaryString)) {
             fileName = `${file.name.split(".")[0]}.txt`;
             content = binaryString;
@@ -1087,10 +1212,10 @@ class Base64Tools extends BaseTool {
             fileName = `${file.name.split(".")[0]}.${extension}`;
             content = bytes;
           }
-          
+
           zip.file(fileName, content);
         }
-        
+
         // Generate and download ZIP with date format
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const dateStr = this.getFormattedDate();

@@ -53,17 +53,18 @@ export class ImageCheckerService {
   }
 
   /**
-   * Probe an image URL and return width/height. No CORS, no extra fetch.
-   * @param {string} baseUrl
-   * @param {string} imagePath
-   * @param {number} timeoutMs - Timeout in milliseconds (default: 15000)
+   * Probe an image URL once and return width/height. No CORS, no extra fetch.
+   * Uses img.decode() to ensure image is fully loaded and ready to render.
+   * @param {string} url - Full URL to check
+   * @param {number} timeoutMs - Timeout in milliseconds
    */
-  async checkImage(baseUrl, imagePath = "", timeoutMs = 15000) {
-    const url = baseUrl.replace(/\/$/, "") + "/" + imagePath.replace(/^\//, "");
-
+  checkImageOnce(url, timeoutMs) {
     return new Promise((resolve) => {
       const img = new Image();
       let settled = false;
+
+      // Add cache-buster to ensure fresh load
+      const loadUrl = url + (url.includes("?") ? "&" : "?") + `cb=${Date.now()}`;
 
       const timeoutId = setTimeout(() => {
         if (!settled) {
@@ -73,20 +74,39 @@ export class ImageCheckerService {
         }
       }, timeoutMs);
 
-      img.onload = () => {
+      const handleSuccess = async () => {
+        if (settled) return;
+
+        try {
+          // Wait for image to be fully decoded and ready to render
+          await img.decode();
+        } catch (_) {
+          // decode() might fail for some images, continue anyway
+        }
+
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
+
         const width = img.naturalWidth;
         const height = img.naturalHeight;
+
+        // Check if dimensions are valid (image actually loaded)
+        if (width === 0 || height === 0) {
+          resolve({ exists: false, url });
+          return;
+        }
+
         resolve({
           exists: true,
-          url,
+          url: loadUrl, // Return the actual loaded URL for consistent display
           width,
           height,
           aspectRatio: (width / height).toFixed(2),
         });
       };
+
+      img.onload = handleSuccess;
 
       img.onerror = () => {
         if (settled) return;
@@ -95,8 +115,39 @@ export class ImageCheckerService {
         resolve({ exists: false, url });
       };
 
-      img.src = url + (url.includes("?") ? "&" : "?") + `cb=${Date.now()}`;
+      img.src = loadUrl;
     });
+  }
+
+  /**
+   * Probe an image URL and return width/height. Retries up to maxRetries times on timeout.
+   * @param {string} baseUrl
+   * @param {string} imagePath
+   * @param {number} timeoutMs - Timeout in milliseconds per attempt (default: 15000)
+   * @param {number} maxRetries - Maximum number of retry attempts on timeout (default: 5)
+   */
+  async checkImage(baseUrl, imagePath = "", timeoutMs = 5000, maxRetries = 3) {
+    const url = baseUrl.replace(/\/$/, "") + "/" + imagePath.replace(/^\//, "");
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const result = await this.checkImageOnce(url, timeoutMs);
+
+      // If not a timeout, return immediately (success or error)
+      if (!result.timeout) {
+        return result;
+      }
+
+      // If this was the last attempt, return the timeout result
+      if (attempt === maxRetries) {
+        return result;
+      }
+
+      // Otherwise, retry after a short delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    // Fallback (should not reach here)
+    return { exists: false, url, timeout: true };
   }
 
   async checkImageAgainstAllUrls(imagePath) {

@@ -173,12 +173,13 @@ class Sidebar {
       sidebar.setAttribute("data-mobile", "false");
     }
 
-    // Update main content margin based on sidebar state
+    // Update main content position based on sidebar state
     if (main) {
       if (this.state.isMobile) {
         main.style.marginLeft = "0";
       } else {
-        main.style.marginLeft = this.state.isCollapsed ? "0" : "12rem";
+        const sidebarWidth = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width").trim() || "12rem";
+        main.style.marginLeft = this.state.isCollapsed ? "0" : sidebarWidth;
       }
     }
 
@@ -385,7 +386,10 @@ class Sidebar {
     };
 
     // Build category groups dynamically based on categoriesMap order
-    const categoriesList = Array.from(this.categoriesMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Filter out categories that require Tauri if not running in Tauri
+    const categoriesList = Array.from(this.categoriesMap.values())
+      .filter((cat) => !(cat.requiresTauri && !runtimeIsTauri))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     // Clear existing category groups inside sidebar-content
     sidebarContent.innerHTML = "";

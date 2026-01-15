@@ -47,6 +47,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>
+                <div id="queryProgress" class="qq-progress hidden">
+                    <div class="qq-progress-bar-container">
+                        <div class="qq-progress-bar" style="width: 0%"></div>
+                    </div>
+                    <span class="qq-progress-text">Processing...</span>
+                    <button id="cancelGeneration" class="btn btn-outline btn-xs">Cancel</button>
+                </div>
                 <div id="queryEditor" class="quick-query-content-area"></div>
             </div>
         </div>
@@ -56,7 +63,14 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
+                <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
                 <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
+            </div>
+            <div id="excelImportInfo" class="excel-import-info hidden">
+                <span class="excel-import-icon">📊</span>
+                <span id="excelImportRowCount">0 rows imported from Excel</span>
+                <button id="clearExcelImport" class="btn btn-outline btn-xs" title="Clear imported data">×</button>
             </div>
             <div id="spreadsheet-data"></div>
         </div>
@@ -185,6 +199,43 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="qq-modal-footer">
             <button id="downloadAllChunks" class="btn btn-primary">Download All (ZIP)</button>
             <button id="cancelSplitResults" class="btn">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Excel Import Instruction Modal -->
+<div id="excelImportOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="excelImportModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="excelImportTitle">
+    <div class="qq-modal-content qq-excel-import-content">
+        <div class="qq-modal-header">
+            <h3 id="excelImportTitle">Import Excel File</h3>
+            <button id="closeExcelImport" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <div class="qq-excel-import-instructions">
+                <p class="qq-instruction-main">Please prepare your Excel file with the following format:</p>
+                <ul class="qq-instruction-list">
+                    <li><strong>Sheet 1</strong> will be used for data import</li>
+                    <li><strong>First row</strong> must contain column headers (field names)</li>
+                    <li>Data rows should start from row 2</li>
+                </ul>
+                <div class="qq-instruction-example">
+                    <span class="qq-example-label">Example:</span>
+                    <table class="qq-example-table">
+                        <thead>
+                            <tr><th>FIELD_A</th><th>FIELD_B</th><th>FIELD_C</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>value1</td><td>value2</td><td>value3</td></tr>
+                            <tr><td>...</td><td>...</td><td>...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="qq-modal-footer">
+            <button id="confirmExcelImport" class="btn btn-primary">Choose File</button>
+            <button id="cancelExcelImport" class="btn">Cancel</button>
         </div>
     </div>
 </div>`;

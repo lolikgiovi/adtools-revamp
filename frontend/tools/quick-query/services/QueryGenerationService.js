@@ -150,15 +150,12 @@ export class QueryGenerationService {
   generateQuery(tableName, queryType, schemaData, inputData, attachments) {
     // 1. Get field names from first row of input data
     const fieldNames = inputData[0].map((name) => name);
-    console.log("Field names extracted", fieldNames);
 
     // 2. Get data rows (excluding header row)
     const dataRows = inputData.slice(1).filter((row) => row.some((cell) => cell !== null && cell !== ""));
-    console.log("Data rows extracted");
 
     // 3. Map schema with field name as key
     const schemaMap = new Map(schemaData.map((row) => [row[0], row]));
-    console.log("Schema Map:", schemaMap);
 
     // 4. Process each row of data
     const processedRows = dataRows.map((rowData, rowIndex) => {
@@ -202,38 +199,32 @@ export class QueryGenerationService {
       }
     });
 
-    console.log("Data processed", processedRows);
-
     // 6. Find primary keys for MERGE statements
     const primaryKeys = this.ValueProcessorService.findPrimaryKeys(schemaData, tableName);
-    console.log("Primary keys found:", primaryKeys);
 
-    // 7. Generate SQL based on query type
-    let query = `SET DEFINE OFF;\n\n`;
+    // 7. Generate SQL based on query type using Array.join() for O(n) performance
+    const queryParts = [`SET DEFINE OFF;`];
 
     if (queryType === "insert") {
-      processedRows.forEach((processedFields) => {
-        query += this.generateInsertStatement(tableName, processedFields);
-        query += "\n\n";
-      });
+      for (const processedFields of processedRows) {
+        queryParts.push(this.generateInsertStatement(tableName, processedFields));
+      }
     } else if (queryType === "update") {
-      query += this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames);
-      query += "\n\n";
+      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames));
     } else {
-      processedRows.forEach((processedFields) => {
-        query += this.generateMergeStatement(tableName, processedFields, primaryKeys);
-        query += "\n\n";
-      });
+      for (const processedFields of processedRows) {
+        queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys));
+      }
     }
 
     // 8. Add select query to verify results
     const selectQuery = this.generateSelectStatement(tableName, primaryKeys, processedRows);
 
     if (selectQuery) {
-      query += selectQuery;
+      queryParts.push(selectQuery);
     }
 
-    return query;
+    return queryParts.join("\n\n");
   }
 
   generateInsertStatement(tableName, processedFields) {
@@ -245,7 +236,6 @@ export class QueryGenerationService {
 
   generateMergeStatement(tableName, processedFields, primaryKeys) {
     // Format fields for SELECT part
-    console.log("primaryKeys", primaryKeys);
     const selectFields = processedFields.map((f) => `\n  ${f.formattedValue} AS ${this.formatFieldName(f.fieldName)}`).join(",");
 
     // Format ON conditions for primary keys

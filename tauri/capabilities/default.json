@@ -11,8 +11,13 @@
     "updater:allow-install",
     "process:allow-restart",
     "process:default",
+    "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-html",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-read"
   ],
   "platforms": ["macOS"]
 }
