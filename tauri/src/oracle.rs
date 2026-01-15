@@ -7,7 +7,6 @@
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(feature = "oracle")]
 use std::sync::{Mutex, OnceLock};
 #[cfg(feature = "oracle")]
 use std::time::{Duration, Instant};
@@ -467,57 +466,119 @@ pub fn create_connection(_connect_string: &str, _username: &str, _password: &str
 }
 
 // ============================================================================
-// Credential Management (Keychain)
+// Credential Management (Keychain) - Single Entry JSON Storage
 // ============================================================================
+//
+// All Oracle credentials are stored in a SINGLE keychain entry as JSON.
+// This minimizes macOS keychain permission prompts - user only needs to
+// approve access once instead of once per environment.
+//
+// Structure: { "envName": { "username": "...", "password": "..." }, ... }
+
+const CREDENTIALS_ACCOUNT: &str = "oracle-credentials";
+
+/// In-memory cache of credentials to minimize keychain reads
+static CREDENTIALS_CACHE: OnceLock<Mutex<Option<HashMap<String, CredentialEntry>>>> = OnceLock::new();
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CredentialEntry {
+    username: String,
+    password: String,
+}
+
+fn get_cache() -> &'static Mutex<Option<HashMap<String, CredentialEntry>>> {
+    CREDENTIALS_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+/// Load all credentials from keychain into cache (single keychain read)
+fn load_credentials_from_keychain() -> Result<HashMap<String, CredentialEntry>, String> {
+    let entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, CREDENTIALS_ACCOUNT)
+        .map_err(|e| format!("Failed to access keychain: {}", e))?;
+
+    match entry.get_password() {
+        Ok(json_str) => {
+            serde_json::from_str(&json_str)
+                .map_err(|e| format!("Failed to parse credentials: {}", e))
+        }
+        Err(keyring::Error::NoEntry) => {
+            // No credentials stored yet - return empty map
+            Ok(HashMap::new())
+        }
+        Err(e) => Err(format!("Failed to read keychain: {}", e)),
+    }
+}
+
+/// Save all credentials to keychain (single keychain write)
+fn save_credentials_to_keychain(creds: &HashMap<String, CredentialEntry>) -> Result<(), String> {
+    let entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, CREDENTIALS_ACCOUNT)
+        .map_err(|e| format!("Failed to access keychain: {}", e))?;
+
+    let json_str = serde_json::to_string(creds)
+        .map_err(|e| format!("Failed to serialize credentials: {}", e))?;
+
+    entry.set_password(&json_str)
+        .map_err(|e| format!("Failed to save to keychain: {}", e))
+}
+
+/// Get credentials map, loading from keychain if not cached
+fn get_credentials_map() -> Result<HashMap<String, CredentialEntry>, String> {
+    let cache = get_cache();
+    let mut guard = cache.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    if guard.is_none() {
+        *guard = Some(load_credentials_from_keychain()?);
+    }
+
+    Ok(guard.as_ref().unwrap().clone())
+}
+
+/// Update credentials map and persist to keychain
+fn update_credentials_map<F>(updater: F) -> Result<(), String>
+where
+    F: FnOnce(&mut HashMap<String, CredentialEntry>),
+{
+    let cache = get_cache();
+    let mut guard = cache.lock().map_err(|e| format!("Lock error: {}", e))?;
+
+    // Load from keychain if not cached
+    if guard.is_none() {
+        *guard = Some(load_credentials_from_keychain()?);
+    }
+
+    // Apply the update
+    let creds = guard.as_mut().unwrap();
+    updater(creds);
+
+    // Persist to keychain
+    save_credentials_to_keychain(creds)
+}
 
 pub fn set_credentials(name: &str, username: &str, password: &str) -> Result<(), String> {
-    let user_account = format!("{}:user", name);
-    let pass_account = format!("{}:pass", name);
-
-    let user_entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, &user_account).map_err(|e| e.to_string())?;
-    user_entry.set_password(username).map_err(|e| e.to_string())?;
-
-    let pass_entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, &pass_account).map_err(|e| e.to_string())?;
-    pass_entry.set_password(password).map_err(|e| e.to_string())?;
-
-    Ok(())
+    update_credentials_map(|creds| {
+        creds.insert(name.to_string(), CredentialEntry {
+            username: username.to_string(),
+            password: password.to_string(),
+        });
+    })
 }
 
 pub fn get_credentials(name: &str) -> Result<(String, String), String> {
-    let user_account = format!("{}:user", name);
-    let pass_account = format!("{}:pass", name);
+    let creds = get_credentials_map()?;
 
-    let user_entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, &user_account).map_err(|e| e.to_string())?;
-    let username = user_entry.get_password().map_err(|e| format!("Username not found: {}", e))?;
-
-    let pass_entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, &pass_account).map_err(|e| e.to_string())?;
-    let password = pass_entry.get_password().map_err(|e| format!("Password not found: {}", e))?;
-
-    Ok((username, password))
+    creds.get(name)
+        .map(|entry| (entry.username.clone(), entry.password.clone()))
+        .ok_or_else(|| format!("Credentials not found for '{}'", name))
 }
 
 pub fn delete_credentials(name: &str) -> Result<(), String> {
-    let user_account = format!("{}:user", name);
-    let pass_account = format!("{}:pass", name);
-
-    // Ignore errors - credentials might not exist
-    if let Ok(user_entry) = Entry::new(ORACLE_KEYCHAIN_SERVICE, &user_account) {
-        let _ = user_entry.delete_password();
-    }
-    if let Ok(pass_entry) = Entry::new(ORACLE_KEYCHAIN_SERVICE, &pass_account) {
-        let _ = pass_entry.delete_password();
-    }
-
-    Ok(())
+    update_credentials_map(|creds| {
+        creds.remove(name);
+    })
 }
 
 pub fn has_credentials(name: &str) -> Result<bool, String> {
-    let user_account = format!("{}:user", name);
-    let user_entry = match Entry::new(ORACLE_KEYCHAIN_SERVICE, &user_account) {
-        Ok(e) => e,
-        Err(_) => return Ok(false),
-    };
-    Ok(user_entry.get_password().is_ok())
+    let creds = get_credentials_map()?;
+    Ok(creds.contains_key(name))
 }
 
 // ============================================================================
