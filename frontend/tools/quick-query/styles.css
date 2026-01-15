@@ -79,6 +79,12 @@
   overflow: visible;
 }
 
+/* Add left border to first column cells in schema table */
+#spreadsheet-schema .handsontable .htCore td:first-child,
+#spreadsheet-schema .handsontable .htCore th:first-child {
+  border-left: 1px solid hsl(var(--border));
+}
+
 /* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
   /* Keep the table within the visible viewport minus app header */
@@ -86,6 +92,25 @@
   overflow-x: auto;
   /* enable vertical and horizontal scroll inside container */
   /* overscroll-behavior: contain; */
+}
+
+/* Add left border to corner cell and first column in data table */
+#spreadsheet-data .handsontable .ht_clone_top_left_corner th,
+#spreadsheet-data .handsontable .ht_clone_left th,
+#spreadsheet-data .handsontable .htCore td:first-child {
+  border-left: 1px solid hsl(var(--border));
+}
+
+/* Remove rounded corners from data spreadsheet header cells */
+#spreadsheet-data .handsontable.ht-theme-main th,
+#spreadsheet-data .handsontable.ht-theme-main thead th,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner th,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner table,
+#spreadsheet-data .handsontable .ht_clone_top th,
+#spreadsheet-data .handsontable .ht_clone_left th,
+#spreadsheet-data .handsontable .wtSpreader,
+#spreadsheet-data .handsontable table {
+  border-radius: 0 !important;
 }
 
 /* Hide scrollbar in spreadsheet-data */
@@ -336,6 +361,15 @@
 .handsontable .wtBorder,
 .handsontable .wtHolder {
   border-radius: 4px;
+}
+
+/* Remove rounded corners from data spreadsheet holders */
+#spreadsheet-data .handsontable .wtBorder,
+#spreadsheet-data .handsontable .wtHolder,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner,
+#spreadsheet-data .handsontable .ht_clone_top_left_corner .wtHolder,
+#spreadsheet-data .handsontable .ht_clone_left .wtHolder {
+  border-radius: 0 !important;
 }
 
 #errorMessages {
