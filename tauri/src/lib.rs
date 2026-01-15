@@ -40,7 +40,21 @@ pub fn run() {
       has_confluence_pat,
       confluence_fetch_page,
       confluence_fetch_by_space_title,
-      confluence_search_pages
+      confluence_search_pages,
+      // Oracle commands
+      oracle::check_oracle_client_ready,
+      oracle::prime_oracle_client,
+      oracle::test_oracle_connection,
+      oracle::fetch_schemas,
+      oracle::fetch_tables,
+      oracle::fetch_table_metadata,
+      oracle::compare_configurations,
+      oracle::compare_raw_sql,
+      oracle::export_comparison_result,
+      oracle::set_oracle_credentials,
+      oracle::get_oracle_credentials,
+      oracle::delete_oracle_credentials,
+      oracle::has_oracle_credentials
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -178,6 +192,7 @@ fn apply_zoom(app: &tauri::AppHandle, level: f64) {
 }
 pub mod jenkins;
 pub mod confluence;
+pub mod oracle;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;

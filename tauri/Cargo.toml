@@ -36,5 +36,12 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2.5"
 tauri-plugin-fs = "2"
 
+# Oracle database connectivity
+oracle = { version = "0.6", optional = true }
+
+[features]
+default = []
+oracle = ["dep:oracle"]
+
 [dev-dependencies]
 httpmock = "0.6"
