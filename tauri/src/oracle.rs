@@ -40,6 +40,8 @@ impl OracleError {
             942 => Some("Table or view does not exist, or you lack permissions.".into()),
             1031 => Some("Insufficient privileges. Contact your DBA.".into()),
             1405 => Some("NULL value encountered where not allowed.".into()),
+            3136 => Some("Query exceeded timeout limit. Try a simpler query or increase timeout.".into()),
+            3114 => Some("Connection to database lost. Check network connectivity.".into()),
             _ => None,
         };
         Self { code, message, hint }
@@ -211,6 +213,10 @@ const MAX_CONNECTIONS: usize = 4;
 #[cfg(feature = "oracle")]
 const IDLE_TIMEOUT_SECS: u64 = 300;
 
+/// Query timeout to prevent hung connections (5 minutes)
+#[cfg(feature = "oracle")]
+const QUERY_TIMEOUT_SECS: u64 = 300;
+
 /// Tracks a pooled connection with metadata
 #[cfg(feature = "oracle")]
 struct PooledConnection {
@@ -273,8 +279,10 @@ impl ConnectionPool {
             }
         }
 
-        // Create new connection
+        // Create new connection with query timeout
         let conn = Connection::connect(username, password, connect_string)
+            .map_err(OracleError::from)?;
+        conn.set_call_timeout(Some(Duration::from_secs(QUERY_TIMEOUT_SECS)))
             .map_err(OracleError::from)?;
 
         self.connections.push(PooledConnection {
@@ -394,7 +402,11 @@ pub fn close_pool_connection(connect_string: &str, username: &str) -> bool {
 /// Create a one-off connection (for testing, not pooled)
 #[cfg(feature = "oracle")]
 pub fn create_connection(connect_string: &str, username: &str, password: &str) -> Result<Connection, OracleError> {
-    Connection::connect(username, password, connect_string).map_err(OracleError::from)
+    let conn = Connection::connect(username, password, connect_string)
+        .map_err(OracleError::from)?;
+    conn.set_call_timeout(Some(Duration::from_secs(QUERY_TIMEOUT_SECS)))
+        .map_err(OracleError::from)?;
+    Ok(conn)
 }
 
 #[cfg(not(feature = "oracle"))]
@@ -1134,5 +1146,270 @@ pub fn close_connection(connect_string: String, username: String) -> bool {
     #[cfg(not(feature = "oracle"))]
     {
         false
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // Timeout Configuration Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    #[cfg(feature = "oracle")]
+    fn test_query_timeout_constant_is_5_minutes() {
+        assert_eq!(QUERY_TIMEOUT_SECS, 300, "Query timeout should be 5 minutes (300 seconds)");
+    }
+
+    #[test]
+    #[cfg(feature = "oracle")]
+    fn test_idle_timeout_constant_is_5_minutes() {
+        assert_eq!(IDLE_TIMEOUT_SECS, 300, "Idle timeout should be 5 minutes (300 seconds)");
+    }
+
+    #[test]
+    #[cfg(feature = "oracle")]
+    fn test_max_connections_is_4() {
+        assert_eq!(MAX_CONNECTIONS, 4, "Max connections should be 4");
+    }
+
+    // -------------------------------------------------------------------------
+    // Error Hint Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_error_hint_for_timeout() {
+        let err = OracleError::new(3136, "Connection timed out");
+        assert!(err.hint.is_some(), "Timeout error should have a hint");
+        assert!(err.hint.unwrap().contains("timeout"), "Hint should mention timeout");
+    }
+
+    #[test]
+    fn test_error_hint_for_connection_lost() {
+        let err = OracleError::new(3114, "Connection lost");
+        assert!(err.hint.is_some(), "Connection lost error should have a hint");
+        assert!(err.hint.unwrap().contains("network"), "Hint should mention network");
+    }
+
+    #[test]
+    fn test_error_hint_for_invalid_credentials() {
+        let err = OracleError::new(1017, "Invalid username/password");
+        assert!(err.hint.is_some(), "Invalid credentials error should have a hint");
+        assert!(err.hint.unwrap().contains("username"), "Hint should mention username");
+    }
+
+    #[test]
+    fn test_error_hint_for_connection_timeout() {
+        let err = OracleError::new(12170, "Connection timed out");
+        assert!(err.hint.is_some(), "Connection timeout error should have a hint");
+        assert!(err.hint.unwrap().contains("timed out"), "Hint should mention timed out");
+    }
+
+    #[test]
+    fn test_error_hint_for_invalid_connect_string() {
+        let err = OracleError::new(12154, "TNS could not resolve");
+        assert!(err.hint.is_some(), "Invalid connect string error should have a hint");
+        assert!(err.hint.unwrap().contains("host:port"), "Hint should show format");
+    }
+
+    #[test]
+    fn test_error_hint_for_no_listener() {
+        let err = OracleError::new(12541, "No listener");
+        assert!(err.hint.is_some(), "No listener error should have a hint");
+        assert!(err.hint.unwrap().contains("listener"), "Hint should mention listener");
+    }
+
+    #[test]
+    fn test_error_hint_for_table_not_found() {
+        let err = OracleError::new(942, "Table or view does not exist");
+        assert!(err.hint.is_some(), "Table not found error should have a hint");
+        assert!(err.hint.unwrap().contains("Table"), "Hint should mention table");
+    }
+
+    #[test]
+    fn test_error_hint_for_insufficient_privileges() {
+        let err = OracleError::new(1031, "Insufficient privileges");
+        assert!(err.hint.is_some(), "Insufficient privileges error should have a hint");
+        assert!(err.hint.unwrap().contains("privileges"), "Hint should mention privileges");
+    }
+
+    #[test]
+    fn test_error_no_hint_for_unknown_code() {
+        let err = OracleError::new(99999, "Unknown error");
+        assert!(err.hint.is_none(), "Unknown error code should not have a hint");
+    }
+
+    #[test]
+    fn test_internal_error_has_no_hint() {
+        let err = OracleError::internal("Internal error message");
+        assert_eq!(err.code, 0, "Internal error should have code 0");
+        assert!(err.hint.is_none(), "Internal error should not have a hint");
+    }
+
+    #[test]
+    fn test_error_display_format() {
+        let err = OracleError::new(1017, "Invalid credentials");
+        let display = format!("{}", err);
+        assert!(display.contains("ORA-01017"), "Display should contain ORA-XXXXX format");
+        assert!(display.contains("Invalid credentials"), "Display should contain message");
+    }
+
+    // -------------------------------------------------------------------------
+    // Identifier Validation Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_validate_identifier_valid() {
+        assert!(validate_identifier("USERS").is_ok());
+        assert!(validate_identifier("user_table").is_ok());
+        assert!(validate_identifier("TABLE123").is_ok());
+        assert!(validate_identifier("MY$TABLE").is_ok());
+        assert!(validate_identifier("MY#TABLE").is_ok());
+    }
+
+    #[test]
+    fn test_validate_identifier_returns_uppercase() {
+        let result = validate_identifier("lowercase").unwrap();
+        assert_eq!(result, "LOWERCASE", "Identifier should be uppercased");
+    }
+
+    #[test]
+    fn test_validate_identifier_empty_rejected() {
+        let result = validate_identifier("");
+        assert!(result.is_err(), "Empty identifier should be rejected");
+    }
+
+    #[test]
+    fn test_validate_identifier_too_long_rejected() {
+        let long_name = "A".repeat(129);
+        let result = validate_identifier(&long_name);
+        assert!(result.is_err(), "Identifier over 128 chars should be rejected");
+    }
+
+    #[test]
+    fn test_validate_identifier_128_chars_accepted() {
+        let name = "A".repeat(128);
+        let result = validate_identifier(&name);
+        assert!(result.is_ok(), "Identifier of exactly 128 chars should be accepted");
+    }
+
+    #[test]
+    fn test_validate_identifier_starts_with_number_rejected() {
+        let result = validate_identifier("123TABLE");
+        assert!(result.is_err(), "Identifier starting with number should be rejected");
+    }
+
+    #[test]
+    fn test_validate_identifier_special_chars_rejected() {
+        assert!(validate_identifier("TABLE;DROP").is_err(), "Semicolon should be rejected");
+        assert!(validate_identifier("TABLE--").is_err(), "Dashes should be rejected");
+        assert!(validate_identifier("TABLE'").is_err(), "Single quote should be rejected");
+        assert!(validate_identifier("TABLE\"").is_err(), "Double quote should be rejected");
+        assert!(validate_identifier("TABLE ").is_err(), "Space should be rejected");
+    }
+
+    #[test]
+    fn test_validate_identifier_sql_injection_rejected() {
+        assert!(validate_identifier("'; DROP TABLE users; --").is_err());
+        assert!(validate_identifier("1=1 OR").is_err());
+        assert!(validate_identifier("UNION SELECT").is_err());
+    }
+
+    // -------------------------------------------------------------------------
+    // Export Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_export_to_json() {
+        let result = CompareResult {
+            env1_name: "DEV".to_string(),
+            env2_name: "UAT".to_string(),
+            table: "USERS".to_string(),
+            summary: CompareSummary {
+                total: 2,
+                matches: 1,
+                differs: 1,
+                only_in_env1: 0,
+                only_in_env2: 0,
+            },
+            rows: vec![],
+        };
+
+        let json = export_to_json(&result).unwrap();
+        assert!(json.contains("DEV"), "JSON should contain env1_name");
+        assert!(json.contains("UAT"), "JSON should contain env2_name");
+        assert!(json.contains("USERS"), "JSON should contain table name");
+    }
+
+    #[test]
+    fn test_export_to_csv() {
+        let result = CompareResult {
+            env1_name: "DEV".to_string(),
+            env2_name: "UAT".to_string(),
+            table: "USERS".to_string(),
+            summary: CompareSummary {
+                total: 0,
+                matches: 0,
+                differs: 0,
+                only_in_env1: 0,
+                only_in_env2: 0,
+            },
+            rows: vec![],
+        };
+
+        let csv = export_to_csv(&result).unwrap();
+        assert!(csv.contains("Status"), "CSV should contain header");
+    }
+
+    // -------------------------------------------------------------------------
+    // CSV Escape Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_csv_escape_plain_string() {
+        let value = serde_json::Value::String("hello".to_string());
+        let escaped = csv_escape(&value);
+        assert_eq!(escaped, "hello");
+    }
+
+    #[test]
+    fn test_csv_escape_string_with_comma() {
+        let value = serde_json::Value::String("hello,world".to_string());
+        let escaped = csv_escape(&value);
+        assert_eq!(escaped, "\"hello,world\"");
+    }
+
+    #[test]
+    fn test_csv_escape_string_with_quotes() {
+        let value = serde_json::Value::String("say \"hello\"".to_string());
+        let escaped = csv_escape(&value);
+        assert_eq!(escaped, "\"say \"\"hello\"\"\"");
+    }
+
+    #[test]
+    fn test_csv_escape_string_with_newline() {
+        let value = serde_json::Value::String("line1\nline2".to_string());
+        let escaped = csv_escape(&value);
+        assert!(escaped.starts_with('"'), "String with newline should be quoted");
+    }
+
+    #[test]
+    fn test_csv_escape_null() {
+        let value = serde_json::Value::Null;
+        let escaped = csv_escape(&value);
+        assert_eq!(escaped, "");
+    }
+
+    #[test]
+    fn test_csv_escape_number() {
+        let value = serde_json::Value::Number(42.into());
+        let escaped = csv_escape(&value);
+        assert_eq!(escaped, "42");
     }
 }
