@@ -107,10 +107,13 @@ export class VerticalCardView {
       `;
     }
 
-    // Status is 'differ' - show differences using env1_data and env2_data
-    const diffFields = comparison.differences || [];
+    // Status is 'differ' - show all fields, highlight differences
+    const diffFields = new Set(comparison.differences || []);
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
+
+    // Get all unique field names
+    const allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
 
     return `
       <div class="card-diff-section">
@@ -118,13 +121,17 @@ export class VerticalCardView {
           <div class="diff-column">
             <h4>${this.escapeHtml(env1Name)}</h4>
             <div class="diff-fields">
-              ${diffFields.map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName])).join("")}
+              ${allFields
+                .map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName], diffFields.has(fieldName), "removed"))
+                .join("")}
             </div>
           </div>
           <div class="diff-column">
             <h4>${this.escapeHtml(env2Name)}</h4>
             <div class="diff-fields">
-              ${diffFields.map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName])).join("")}
+              ${allFields
+                .map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName], diffFields.has(fieldName), "added"))
+                .join("")}
             </div>
           </div>
         </div>
@@ -135,10 +142,12 @@ export class VerticalCardView {
   /**
    * Renders a single field difference for a card
    */
-  renderCardDiffField(fieldName, value) {
+  renderCardDiffField(fieldName, value, isDifferent, type) {
     const displayValue = this.formatValue(value);
+    const highlightClass = isDifferent ? (type === "added" ? "diff-added" : "diff-removed") : "";
+
     return `
-      <div class="card-field">
+      <div class="card-field ${highlightClass} ${isDifferent ? "is-different" : ""}">
         <div class="card-field-name">${this.escapeHtml(fieldName)}</div>
         <div class="card-field-value">${this.escapeHtml(displayValue)}</div>
       </div>

@@ -713,6 +713,15 @@
   font-size: 0.8rem;
 }
 
+.field-diff-row.is-different .field-name {
+  color: hsl(var(--foreground));
+  font-weight: 700;
+}
+
+.field-diff-row.is-different {
+  background: hsl(var(--muted) / 0.3);
+}
+
 /* Diff highlighting */
 .diff-same {
   color: hsl(var(--foreground));

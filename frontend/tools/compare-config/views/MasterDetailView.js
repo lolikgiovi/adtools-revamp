@@ -194,10 +194,13 @@ export class MasterDetailView {
       `;
     }
 
-    // Status is 'differ' - show field-by-field comparison
-    const diffFields = comparison.differences || [];
+    // Status is 'differ' - show all fields, highlight differences
+    const diffFields = new Set(comparison.differences || []);
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
+
+    // Get all unique field names
+    const allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
 
     return `
       <div class="detail-body">
@@ -211,7 +214,11 @@ export class MasterDetailView {
               </tr>
             </thead>
             <tbody>
-              ${diffFields.map((fieldName) => this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName])).join("")}
+              ${allFields
+                .map((fieldName) =>
+                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName))
+                )
+                .join("")}
             </tbody>
           </table>
         </div>
@@ -222,15 +229,18 @@ export class MasterDetailView {
   /**
    * Renders a detail diff row
    */
-  renderDetailDiffRow(fieldName, env1Value, env2Value) {
+  renderDetailDiffRow(fieldName, env1Value, env2Value, isDifferent) {
     const env1Display = this.formatValue(env1Value);
     const env2Display = this.formatValue(env2Value);
 
+    const env1Class = isDifferent ? "field-value diff-removed" : "field-value";
+    const env2Class = isDifferent ? "field-value diff-added" : "field-value";
+
     return `
-      <tr class="field-diff-row">
+      <tr class="field-diff-row ${isDifferent ? "is-different" : ""}">
         <td class="field-name">${this.escapeHtml(fieldName)}</td>
-        <td class="field-value diff-removed">${this.escapeHtml(env1Display)}</td>
-        <td class="field-value diff-added">${this.escapeHtml(env2Display)}</td>
+        <td class="${env1Class}">${this.escapeHtml(env1Display)}</td>
+        <td class="${env2Class}">${this.escapeHtml(env2Display)}</td>
       </tr>
     `;
   }
