@@ -89,12 +89,15 @@ pub struct ConnectionConfig {
 pub struct ColumnInfo {
     pub column_id: i32,
     pub column_name: String,
+    #[serde(rename = "name")]
+    pub name: String, // Alias for column_name (for frontend compatibility)
     pub data_type: String,
     pub data_length: Option<i32>,
     pub data_precision: Option<i32>,
     pub data_scale: Option<i32>,
     pub nullable: bool,
     pub data_default: Option<String>,
+    pub is_pk: bool, // Indicates if this column is part of the primary key
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -331,32 +334,7 @@ fn query_table_metadata(conn: &Connection, owner: &str, table_name: &str) -> Res
     let owner = validate_identifier(owner)?;
     let table = validate_identifier(table_name)?;
 
-    // Fetch columns
-    let columns_sql = r#"
-        SELECT COLUMN_ID, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
-               DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT
-        FROM ALL_TAB_COLUMNS
-        WHERE OWNER = :1 AND TABLE_NAME = :2
-        ORDER BY COLUMN_ID
-    "#;
-
-    let mut columns = Vec::new();
-    let rows = conn.query(columns_sql, &[&owner, &table])?;
-    for row_result in rows {
-        let row = row_result?;
-        columns.push(ColumnInfo {
-            column_id: row.get::<_, Option<i32>>(0)?.unwrap_or(0),
-            column_name: row.get(1)?,
-            data_type: row.get(2)?,
-            data_length: row.get(3)?,
-            data_precision: row.get(4)?,
-            data_scale: row.get(5)?,
-            nullable: row.get::<_, String>(6)? == "Y",
-            data_default: row.get(7)?,
-        });
-    }
-
-    // Fetch primary key columns
+    // Fetch primary key columns FIRST (needed to populate is_pk field)
     let pk_sql = r#"
         SELECT cc.COLUMN_NAME
         FROM ALL_CONSTRAINTS cons
@@ -373,6 +351,35 @@ fn query_table_metadata(conn: &Connection, owner: &str, table_name: &str) -> Res
         let row = row_result?;
         let col_name: String = row.get(0)?;
         primary_key.push(col_name);
+    }
+
+    // Fetch columns
+    let columns_sql = r#"
+        SELECT COLUMN_ID, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
+               DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT
+        FROM ALL_TAB_COLUMNS
+        WHERE OWNER = :1 AND TABLE_NAME = :2
+        ORDER BY COLUMN_ID
+    "#;
+
+    let mut columns = Vec::new();
+    let rows = conn.query(columns_sql, &[&owner, &table])?;
+    for row_result in rows {
+        let row = row_result?;
+        let col_name: String = row.get(1)?;
+        let is_pk = primary_key.contains(&col_name);
+        columns.push(ColumnInfo {
+            column_id: row.get::<_, Option<i32>>(0)?.unwrap_or(0),
+            column_name: col_name.clone(),
+            name: col_name, // Frontend expects 'name' field
+            data_type: row.get(2)?,
+            data_length: row.get(3)?,
+            data_precision: row.get(4)?,
+            data_scale: row.get(5)?,
+            nullable: row.get::<_, String>(6)? == "Y",
+            data_default: row.get(7)?,
+            is_pk, // Indicates if column is part of primary key
+        });
     }
 
     Ok(TableMetadata { columns, primary_key })

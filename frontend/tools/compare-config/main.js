@@ -984,19 +984,18 @@ class CompareConfigTool extends BaseTool {
       // Show loading
       this.showLoading("Comparing configurations...");
 
-      // Build comparison request
+      // Build comparison request matching Rust CompareRequest struct
       const request = {
-        env1_name: this.env1.connection.name,
-        env1_connection: this.env1.connection,
-        env1_schema: this.schema,
-        env2_name: this.env2.connection.name,
-        env2_connection: this.env2.connection,
-        env2_schema: this.schema,
+        env1_connection_name: this.env1.connection.name,
+        env1_config: this.env1.connection,
+        env2_connection_name: this.env2.connection.name,
+        env2_config: this.env2.connection,
+        owner: this.schema,
         table_name: this.table,
+        primary_key: this.customPrimaryKey || [],
+        fields: this.selectedFields || [],
         where_clause: this.whereClause || null,
-        custom_primary_key: this.customPrimaryKey,
-        fields: this.selectedFields,
-        max_rows: this.maxRows,
+        max_rows: this.maxRows || 100,
       };
 
       // Execute comparison
