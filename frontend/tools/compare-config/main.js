@@ -1120,17 +1120,29 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Updates custom primary key selection
+   * Updates custom primary key selection.
+   * Also auto-includes primary key fields in field selection.
    */
   updateCustomPrimaryKey() {
-    const checkboxes = document.querySelectorAll('#pk-field-list input[type="checkbox"]');
+    const pkCheckboxes = document.querySelectorAll('#pk-field-list input[type="checkbox"]');
     this.customPrimaryKey = [];
 
-    checkboxes.forEach((checkbox) => {
+    pkCheckboxes.forEach((checkbox) => {
       if (checkbox.checked) {
         this.customPrimaryKey.push(checkbox.value);
       }
     });
+
+    // Auto-include primary key fields in field selection
+    this.customPrimaryKey.forEach((pkField) => {
+      const fieldCheckbox = document.querySelector(`#field-list input[value="${pkField}"]`);
+      if (fieldCheckbox && !fieldCheckbox.checked) {
+        fieldCheckbox.checked = true;
+      }
+    });
+
+    // Update selectedFields to reflect the change
+    this.updateSelectedFields();
   }
 
   /**
@@ -1179,15 +1191,40 @@ class CompareConfigTool extends BaseTool {
    * Executes the comparison
    */
   async executeComparison() {
-    // Clear previous results to avoid confusion
+    // Early validation BEFORE showing progress overlay
+    // Check connections first (prevents confusing progress state)
+    if (!this.env1.connection || !this.env2.connection) {
+      this.resetToEmptyState("Please select connections for both environments");
+      return;
+    }
+
+    // Check if same environment selected for both (warn user)
+    if (this.env1.connection.connect_string === this.env2.connection.connect_string) {
+      this.resetToEmptyState("Both environments are the same. Please select different environments to compare.");
+      return;
+    }
+
+    // Check schema and table
+    if (!this.schema || !this.table) {
+      this.resetToEmptyState("Please select a schema and table to compare");
+      return;
+    }
+
+    // Check fields selected
+    if (!this.selectedFields || this.selectedFields.length === 0) {
+      this.resetToEmptyState("Please select at least one field to compare");
+      return;
+    }
+
+    // Clear previous results
     this.resetToEmptyState();
 
-    // Show progress overlay with connection info
+    // NOW show progress overlay (validation passed basic checks)
     this.showProgress("Comparing Configurations");
-    this.updateProgressStep("env1", "active", this.env1.connection?.name || "Env 1");
-    this.updateProgressStep("env2", "pending", this.env2.connection?.name || "Env 2");
+    this.updateProgressStep("env1", "active", this.env1.connection.name);
+    this.updateProgressStep("env2", "pending", this.env2.connection.name);
 
-    // Validate
+    // Full validation (connection liveness, credentials, etc.)
     if (!(await this.validateComparisonRequest())) {
       console.log("[Compare] Validation failed");
       this.hideProgress();
@@ -1274,10 +1311,29 @@ class CompareConfigTool extends BaseTool {
    * Executes comparison using raw SQL queries
    */
   async executeRawSqlComparison() {
-    // Clear previous results to avoid confusion
+    // Early validation BEFORE showing loading
+    // Check connections first
+    if (!this.rawenv1.connection || !this.rawenv2.connection) {
+      this.resetToEmptyState("Please select connections for both environments");
+      return;
+    }
+
+    // Check if same environment selected for both
+    if (this.rawenv1.connection.connect_string === this.rawenv2.connection.connect_string) {
+      this.resetToEmptyState("Both environments are the same. Please select different environments to compare.");
+      return;
+    }
+
+    // Check SQL query
+    if (!this.rawSql || !this.rawSql.trim()) {
+      this.resetToEmptyState("Please enter a SQL query");
+      return;
+    }
+
+    // Clear previous results
     this.resetToEmptyState();
 
-    // Validate (now async for connection checks)
+    // Validate (SQL syntax and connection liveness)
     if (!(await this.validateRawSqlRequest())) {
       return;
     }
@@ -2317,10 +2373,10 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Resets the form for a new comparison
+   * Resets the form for a new comparison (complete clean slate)
    */
   resetForm() {
-    // Reset state
+    // Reset Schema/Table state
     this.env1 = {
       connection: null,
       schema: null,
@@ -2333,49 +2389,74 @@ class CompareConfigTool extends BaseTool {
       table: null,
       metadata: null,
     };
+    this.schema = null;
+    this.table = null;
+    this.customPrimaryKey = [];
     this.selectedFields = [];
     this.whereClause = "";
-    this.results[this.queryMode] = null;
+    this.maxRows = 100;
+    this.metadata = null;
+    this.env2SchemaExists = false;
+    this.env2TableExists = false;
 
-    // Reset UI
+    // Reset Raw SQL state
+    this.rawenv1 = { connection: null };
+    this.rawenv2 = { connection: null };
+    this.rawSql = "";
+    this.rawPrimaryKey = "";
+    this.rawMaxRows = 100;
+
+    // Clear results for BOTH modes
+    this.results["schema-table"] = null;
+    this.results["raw-sql"] = null;
+
+    // Reset Schema/Table UI
     const env1Connection = document.getElementById("env1-connection");
     const env2Connection = document.getElementById("env2-connection");
-    const env1Schema = document.getElementById("env1-schema");
-    const env2Schema = document.getElementById("env2-schema");
-    const env1Table = document.getElementById("env1-table");
-    const env2Table = document.getElementById("env2-table");
+    const schemaSelect = document.getElementById("schema-select");
+    const tableSelect = document.getElementById("table-select");
     const whereClauseInput = document.getElementById("where-clause");
+    const maxRowsInput = document.getElementById("max-rows");
+    const pkFieldList = document.getElementById("pk-field-list");
+    const fieldList = document.getElementById("field-list");
     const fieldSelection = document.getElementById("field-selection");
     const resultsSection = document.getElementById("results-section");
 
     if (env1Connection) env1Connection.value = "";
     if (env2Connection) env2Connection.value = "";
-
-    if (env1Schema) {
-      env1Schema.disabled = true;
-      env1Schema.innerHTML = '<option value="">Select connection first...</option>';
+    if (schemaSelect) {
+      schemaSelect.disabled = true;
+      schemaSelect.innerHTML = '<option value="">Select connection first...</option>';
     }
-
-    if (env2Schema) {
-      env2Schema.disabled = true;
-      env2Schema.innerHTML = '<option value="">Select connection first...</option>';
+    if (tableSelect) {
+      tableSelect.disabled = true;
+      tableSelect.innerHTML = '<option value="">Select schema first...</option>';
     }
-
-    if (env1Table) {
-      env1Table.disabled = true;
-      env1Table.innerHTML = '<option value="">Select schema first...</option>';
-    }
-
-    if (env2Table) {
-      env2Table.disabled = true;
-      env2Table.innerHTML = '<option value="">Select schema first...</option>';
-    }
-
     if (whereClauseInput) whereClauseInput.value = "";
+    if (maxRowsInput) maxRowsInput.value = "100";
+    if (pkFieldList) pkFieldList.innerHTML = "";
+    if (fieldList) fieldList.innerHTML = "";
     if (fieldSelection) fieldSelection.style.display = "none";
     if (resultsSection) resultsSection.style.display = "none";
 
-    // Scroll to top
+    // Reset Raw SQL UI
+    const rawEnv1Connection = document.getElementById("raw-env1-connection");
+    const rawEnv2Connection = document.getElementById("raw-env2-connection");
+    const rawSqlInput = document.getElementById("raw-sql");
+    const rawPrimaryKeyInput = document.getElementById("raw-primary-key");
+    const rawMaxRowsInput = document.getElementById("raw-max-rows");
+
+    if (rawEnv1Connection) rawEnv1Connection.value = "";
+    if (rawEnv2Connection) rawEnv2Connection.value = "";
+    if (rawSqlInput) rawSqlInput.value = "";
+    if (rawPrimaryKeyInput) rawPrimaryKeyInput.value = "";
+    if (rawMaxRowsInput) rawMaxRowsInput.value = "100";
+
+    // Reset results title
+    const titleEl = document.getElementById("results-title");
+    if (titleEl) titleEl.textContent = "Comparison Results";
+
+    // Scroll to top and save
     window.scrollTo({ top: 0, behavior: "smooth" });
     this.saveToolState();
   }
@@ -2455,12 +2536,37 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Closes a single connection by connect string and username
+   * Closes a single connection by connect string and username.
+   * Also syncs dropdown state when a connection is closed.
    */
   async closeSingleConnection(connectString, username) {
     try {
       await CompareConfigService.closeConnection(connectString, username);
+
+      // Sync dropdown state - clear env if it matches the closed connection
+      if (this.env1.connection?.connect_string === connectString) {
+        this.env1.connection = null;
+        const env1Select = document.getElementById("env1-connection");
+        if (env1Select) env1Select.value = "";
+      }
+      if (this.env2.connection?.connect_string === connectString) {
+        this.env2.connection = null;
+        const env2Select = document.getElementById("env2-connection");
+        if (env2Select) env2Select.value = "";
+      }
+      if (this.rawenv1.connection?.connect_string === connectString) {
+        this.rawenv1.connection = null;
+        const rawEnv1Select = document.getElementById("raw-env1-connection");
+        if (rawEnv1Select) rawEnv1Select.value = "";
+      }
+      if (this.rawenv2.connection?.connect_string === connectString) {
+        this.rawenv2.connection = null;
+        const rawEnv2Select = document.getElementById("raw-env2-connection");
+        if (rawEnv2Select) rawEnv2Select.value = "";
+      }
+
       this.updateConnectionStatus();
+      this.saveToolState();
 
       this.eventBus.emit("notification:show", {
         type: "info",
