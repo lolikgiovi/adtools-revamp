@@ -262,7 +262,7 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Results Section -->
         <div id="results-section" class="results-section" style="display: none;">
             <div class="results-header">
-                <h3>Comparison Results</h3>
+                <h3 id="results-title">Comparison Results</h3>
                 <div class="results-actions">
                     <button class="btn btn-secondary btn-sm" id="btn-export-json">Export JSON</button>
                     <button class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>

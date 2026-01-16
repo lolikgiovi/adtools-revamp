@@ -1798,6 +1798,18 @@ class CompareConfigTool extends BaseTool {
     const resultsSection = document.getElementById("results-section");
     if (!resultsSection) return;
 
+    // Update title with schema.table name
+    const titleEl = document.getElementById("results-title");
+    if (titleEl) {
+      if (this.queryMode === "schema-table" && this.schema && this.table) {
+        titleEl.textContent = `Comparison Results for ${this.schema}.${this.table}`;
+      } else if (this.queryMode === "raw-sql") {
+        titleEl.textContent = "Comparison Results (Raw SQL)";
+      } else {
+        titleEl.textContent = "Comparison Results";
+      }
+    }
+
     // Render summary
     this.renderSummary();
 
