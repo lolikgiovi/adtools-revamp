@@ -146,6 +146,10 @@ export class JenkinsRunner extends BaseTool {
     const splitModal = this.container.querySelector("#jr-split-modal");
     const splitModalOverlay = this.container.querySelector("#jr-split-modal-overlay");
     const splitModalCloseBtn = this.container.querySelector("#jr-split-modal-close");
+    const splitMinimizeBtn = this.container.querySelector("#jr-split-minimize");
+    const splitMinimizedEl = this.container.querySelector("#jr-split-minimized");
+    const splitMinimizedText = this.container.querySelector("#jr-split-minimized-text");
+    const splitMaximizeBtn = this.container.querySelector("#jr-split-maximize");
     const splitCancelBtn = this.container.querySelector("#jr-split-cancel");
     const splitExecuteAllBtn = this.container.querySelector("#jr-split-execute-all");
     const splitChunksList = this.container.querySelector("#jr-split-chunks-list");
@@ -797,7 +801,7 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal state & helpers =====
     this.splitEditor = null;
-    this.state.split = { chunks: [], sizes: [], index: 0, statuses: [], started: false, cancelRequested: false };
+    this.state.split = { chunks: [], sizes: [], index: 0, statuses: [], started: false, cancelRequested: false, minimized: false };
 
     const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
 
@@ -836,6 +840,10 @@ export class JenkinsRunner extends BaseTool {
         });
         splitChunksList.appendChild(li);
       });
+      // Also update the minimized indicator if visible
+      if (this.state.split.minimized) {
+        updateMinimizedText();
+      }
     };
 
     const updateSplitCurrentView = () => {
@@ -858,6 +866,9 @@ export class JenkinsRunner extends BaseTool {
       this.state.split.statuses = new Array(chunks.length).fill("");
       this.state.split.started = false;
       this.state.split.cancelRequested = false;
+      this.state.split.minimized = false;
+      // Hide minimized indicator if visible
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
       this._modalPrevFocusEl = document.activeElement;
       splitModalOverlay.style.display = "block";
       splitModal.style.display = "flex";
@@ -892,8 +903,56 @@ export class JenkinsRunner extends BaseTool {
       if (!splitModal || !splitModalOverlay) return;
       splitModalOverlay.style.display = "none";
       splitModal.style.display = "none";
+      this.state.split.minimized = false;
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
       deactivateFocusTrap(splitModal);
       if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
+    };
+
+    // Minimize split modal to floating indicator
+    const minimizeSplitModal = () => {
+      if (!splitModal || !splitModalOverlay || !splitMinimizedEl) return;
+      this.state.split.minimized = true;
+      splitModalOverlay.style.display = "none";
+      splitModal.style.display = "none";
+      splitMinimizedEl.style.display = "flex";
+      splitMinimizedEl.classList.remove("completed");
+      deactivateFocusTrap(splitModal);
+      // Update minimized text with current progress
+      updateMinimizedText();
+    };
+
+    // Restore full split modal from minimized state
+    const maximizeSplitModal = () => {
+      if (!splitModal || !splitModalOverlay || !splitMinimizedEl) return;
+      this.state.split.minimized = false;
+      splitMinimizedEl.style.display = "none";
+      splitModalOverlay.style.display = "block";
+      splitModal.style.display = "flex";
+      activateFocusTrap(splitModal, () => closeSplitModal());
+      if (this.splitEditor) {
+        try {
+          this.splitEditor.layout();
+        } catch (_) {}
+      }
+    };
+
+    // Update the minimized indicator text
+    const updateMinimizedText = () => {
+      if (!splitMinimizedText || !this.state.split) return;
+      const { chunks, statuses, started } = this.state.split;
+      const total = chunks.length;
+      const completed = statuses.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length;
+      const running = statuses.filter((s) => s === "running").length;
+      if (!started) {
+        splitMinimizedText.textContent = `${total} chunks ready`;
+      } else if (completed >= total) {
+        const successCount = statuses.filter((s) => s === "success").length;
+        splitMinimizedText.textContent = `✓ Complete: ${successCount}/${total} succeeded`;
+        if (splitMinimizedEl) splitMinimizedEl.classList.add("completed");
+      } else {
+        splitMinimizedText.textContent = `Running ${completed + 1}/${total} chunks...`;
+      }
     };
 
     const refreshTemplateEnvChoices = async (retry = 0) => {
@@ -1452,6 +1511,12 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal controls =====
     if (splitModalCloseBtn) splitModalCloseBtn.addEventListener("click", () => closeSplitModal());
+    if (splitMinimizeBtn) splitMinimizeBtn.addEventListener("click", () => minimizeSplitModal());
+    if (splitMaximizeBtn) splitMaximizeBtn.addEventListener("click", () => maximizeSplitModal());
+    // Also make the minimized indicator content clickable to maximize
+    if (splitMinimizedEl) {
+      splitMinimizedEl.querySelector(".jr-split-minimized-content")?.addEventListener("click", () => maximizeSplitModal());
+    }
     if (splitCancelBtn)
       splitCancelBtn.addEventListener("click", () => {
         // If execution hasn't started, just close the modal
