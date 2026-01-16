@@ -174,6 +174,8 @@ class CompareConfigTool extends BaseTool {
         selectedFields: this.selectedFields,
         whereClause: this.whereClause,
         maxRows: this.maxRows,
+        env2SchemaExists: this.env2SchemaExists,
+        env2TableExists: this.env2TableExists,
 
         rawenv1: this.rawenv1.connection ? this.rawenv1.connection.name : null,
         rawenv2: this.rawenv2.connection ? this.rawenv2.connection.name : null,
@@ -219,6 +221,8 @@ class CompareConfigTool extends BaseTool {
       this.selectedFields = state.selectedFields || [];
       this.whereClause = state.whereClause || "";
       this.maxRows = state.maxRows || 100;
+      this.env2SchemaExists = state.env2SchemaExists || false;
+      this.env2TableExists = state.env2TableExists || false;
 
       this.rawSql = state.rawSql || "";
       this.rawPrimaryKey = state.rawPrimaryKey || "";
@@ -1175,7 +1179,7 @@ class CompareConfigTool extends BaseTool {
    */
   async executeComparison() {
     // Validate
-    if (!this.validateComparisonRequest()) {
+    if (!(await this.validateComparisonRequest())) {
       console.log("[Compare] Validation failed");
       return;
     }
@@ -1324,81 +1328,150 @@ class CompareConfigTool extends BaseTool {
   /**
    * Validates comparison request
    */
-  validateComparisonRequest() {
-    console.log("[Validate] env1.connection:", this.env1.connection);
-    console.log("[Validate] env2.connection:", this.env2.connection);
-    console.log("[Validate] schema:", this.schema);
-    console.log("[Validate] table:", this.table);
-    console.log("[Validate] env2SchemaExists:", this.env2SchemaExists);
-    console.log("[Validate] env2TableExists:", this.env2TableExists);
-    console.log("[Validate] metadata:", this.metadata);
-    console.log("[Validate] selectedFields:", this.selectedFields);
+  async validateComparisonRequest() {
+    console.log("[Validate] Starting validation...");
+    console.log("[Validate] Current State:", {
+      env1: this.env1.connection?.name,
+      env2: this.env2.connection?.name,
+      schema: this.schema,
+      table: this.table,
+      env2SchemaExists: this.env2SchemaExists,
+      env2TableExists: this.env2TableExists,
+      metadataSet: !!this.metadata,
+      selectedFieldsCount: this.selectedFields?.length || 0,
+    });
 
-    if (!this.env1.connection || !this.env2.connection) {
-      console.log("[Validate] FAILED: Missing connections");
+    // Show verification message
+    this.showLoading("Verifying connections and configuration...");
+
+    try {
+      if (!this.env1.connection || !this.env2.connection) {
+        console.warn("[Validate] FAILED: Missing connections");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: "Please select connections for both environments",
+        });
+        return false;
+      }
+
+      // Check if connections are active
+      console.log("[Validate] Checking active connections...");
+      const activeConnections = await CompareConfigService.getActiveConnections();
+      console.log("[Validate] Active connections count:", activeConnections.length);
+
+      const isEnv1Active = activeConnections.some((c) => c.connect_string === this.env1.connection.connect_string && c.is_alive);
+      const isEnv2Active = activeConnections.some((c) => c.connect_string === this.env2.connection.connect_string && c.is_alive);
+      console.log("[Validate] Env1 Active:", isEnv1Active, "Env2 Active:", isEnv2Active);
+
+      // Check credentials
+      console.log("[Validate] Checking credentials...");
+      const hasEnv1Creds = await CompareConfigService.hasOracleCredentials(this.env1.connection.name);
+      const hasEnv2Creds = await CompareConfigService.hasOracleCredentials(this.env2.connection.name);
+      console.log("[Validate] Env1 Creds:", hasEnv1Creds, "Env2 Creds:", hasEnv2Creds);
+
+      if (!hasEnv1Creds) {
+        console.warn("[Validate] FAILED: Missing Env1 credentials");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Missing credentials for ${this.env1.connection.name}. Please set them in Settings.`,
+        });
+        return false;
+      }
+
+      if (!hasEnv2Creds) {
+        console.warn("[Validate] FAILED: Missing Env2 credentials");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Missing credentials for ${this.env2.connection.name}. Please set them in Settings.`,
+        });
+        return false;
+      }
+
+      if (!this.schema || !this.table) {
+        console.warn("[Validate] FAILED: Missing schema or table", { schema: this.schema, table: this.table });
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: "Please select a schema and table",
+        });
+        return false;
+      }
+
+      // Proactive Re-validation if flags are false
+      if (!this.env2SchemaExists) {
+        console.log("[Validate] Schema not verified in Env2, attempting re-validation...");
+        await this.validateSchemaInEnv2(this.schema);
+        console.log("[Validate] After validation, env2SchemaExists:", this.env2SchemaExists);
+      }
+
+      if (this.env2SchemaExists && !this.env2TableExists) {
+        console.log("[Validate] Table not verified in Env2, attempting re-validation...");
+        await this.validateTableInEnv2(this.table);
+        console.log("[Validate] After validation, env2TableExists:", this.env2TableExists);
+      }
+
+      // Final checks
+      if (!this.env2SchemaExists) {
+        console.warn("[Validate] FAILED: Schema not in Env2");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Schema "${this.schema}" not found or inaccessible in ${this.env2.connection.name}.`,
+        });
+        return false;
+      }
+
+      if (!this.env2TableExists) {
+        console.warn("[Validate] FAILED: Table not in Env2");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Table "${this.schema}.${this.table}" not found or inaccessible in ${this.env2.connection.name}.`,
+        });
+        return false;
+      }
+
+      if (!this.metadata) {
+        console.log("[Validate] Metadata missing, attempting to fetch...");
+        await this.fetchTableMetadata();
+        console.log("[Validate] After fetch, metadataSet:", !!this.metadata);
+      }
+
+      if (!this.metadata) {
+        console.warn("[Validate] FAILED: Failed to load metadata");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: "Failed to load table metadata.",
+        });
+        return false;
+      }
+
+      if (!this.selectedFields || this.selectedFields.length === 0) {
+        console.warn("[Validate] FAILED: No fields selected");
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: "Please select at least one field to compare",
+        });
+        return false;
+      }
+
+      console.log("[Validate] PASSED");
+      this.hideLoading();
+      return true;
+    } catch (error) {
+      console.error("[Validate] Error during validation:", error);
+      this.hideLoading();
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: "Please select connections for both environments",
+        message: `Validation failed: ${error.message || error}`,
       });
       return false;
     }
-
-    if (!this.schema) {
-      console.log("[Validate] FAILED: Missing schema");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "Please select a schema",
-      });
-      return false;
-    }
-
-    if (!this.table) {
-      console.log("[Validate] FAILED: Missing table");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "Please select a table",
-      });
-      return false;
-    }
-
-    if (!this.env2SchemaExists) {
-      console.log("[Validate] FAILED: Schema not in Env2");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Schema "${this.schema}" does not exist in Env 2`,
-      });
-      return false;
-    }
-
-    if (!this.env2TableExists) {
-      console.log("[Validate] FAILED: Table not in Env2");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Table "${this.schema}.${this.table}" does not exist in Env 2`,
-      });
-      return false;
-    }
-
-    if (!this.metadata) {
-      console.log("[Validate] FAILED: No metadata");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "Table metadata not loaded",
-      });
-      return false;
-    }
-
-    if (this.selectedFields.length === 0) {
-      console.log("[Validate] FAILED: No fields selected");
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "Please select at least one field to compare",
-      });
-      return false;
-    }
-
-    console.log("[Validate] PASSED");
-    return true;
   }
 
   /**
@@ -2038,9 +2111,7 @@ class CompareConfigTool extends BaseTool {
         listEl.innerHTML = activeConnections
           .map((conn) => {
             // Look up the saved connection name (saved as connect_string with underscore)
-            const savedConn = this.savedConnections.find(
-              (sc) => sc.connect_string === conn.connect_string
-            );
+            const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
             const displayName = savedConn?.name || conn.connect_string;
             return `<span class="connection-chip" title="${conn.connect_string}">${displayName}</span>`;
           })
