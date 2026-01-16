@@ -650,10 +650,37 @@
 
 /* Summary Stats */
 .results-summary {
+  margin-bottom: 2rem;
+}
+
+/* No PK Warning Banner */
+.no-pk-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 1rem;
+  background: hsl(45 100% 50% / 0.1);
+  border: 1px solid hsl(45 100% 50% / 0.3);
+  border-left: 4px solid hsl(45 100% 50%);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.no-pk-warning .warning-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.no-pk-warning .warning-text {
+  color: hsl(var(--foreground));
+}
+
+/* Summary Cards Container */
+.summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1.25rem;
-  margin-bottom: 2rem;
 }
 
 .summary-stat {

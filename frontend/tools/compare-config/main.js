@@ -1872,6 +1872,13 @@ class CompareConfigTool extends BaseTool {
     // Render results content based on current view
     this.renderResults();
 
+    // Enable/disable export buttons based on results
+    const exportJsonBtn = document.getElementById("btn-export-json");
+    const exportCsvBtn = document.getElementById("btn-export-csv");
+    const hasResults = this.results[this.queryMode]?.rows?.length > 0;
+    if (exportJsonBtn) exportJsonBtn.disabled = !hasResults;
+    if (exportCsvBtn) exportCsvBtn.disabled = !hasResults;
+
     // Show results section
     resultsSection.style.display = "block";
 
@@ -1928,29 +1935,48 @@ class CompareConfigTool extends BaseTool {
 
     const { summary } = this.results[this.queryMode];
 
+    // Check if primary key was selected (for warning)
+    const hasPrimaryKey =
+      this.queryMode === "schema-table"
+        ? this.customPrimaryKey && this.customPrimaryKey.length > 0
+        : this.rawPrimaryKey && this.rawPrimaryKey.trim().length > 0;
+
+    // Warning banner for no PK
+    const noPkWarning = !hasPrimaryKey
+      ? `
+      <div class="no-pk-warning">
+        <span class="warning-icon">⚠️</span>
+        <span class="warning-text">No primary key selected. Results are matched using the first column which may not be unique.</span>
+      </div>
+    `
+      : "";
+
     // Render summary cards as clickable filter buttons
     // Note: Rust CompareSummary uses 'total', 'matches', 'differs'
     summaryContainer.innerHTML = `
-      <button class="summary-stat ${this.statusFilter === null ? "selected" : ""}" data-filter="all">
-        <div class="stat-value">${summary.total}</div>
-        <div class="stat-label">Total Records</div>
-      </button>
-      <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match">
-        <div class="stat-value">${summary.matches}</div>
-        <div class="stat-label">Matching</div>
-      </button>
-      <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ">
-        <div class="stat-value">${summary.differs}</div>
-        <div class="stat-label">Differing</div>
-      </button>
-      <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
-        <div class="stat-value">${summary.only_in_env1}</div>
-        <div class="stat-label">Only in ${this.results[this.queryMode].env1_name}</div>
-      </button>
-      <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
-        <div class="stat-value">${summary.only_in_env2}</div>
-        <div class="stat-label">Only in ${this.results[this.queryMode].env2_name}</div>
-      </button>
+      ${noPkWarning}
+      <div class="summary-cards">
+        <button class="summary-stat ${this.statusFilter === null ? "selected" : ""}" data-filter="all">
+          <div class="stat-value">${summary.total}</div>
+          <div class="stat-label">Total Records</div>
+        </button>
+        <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match">
+          <div class="stat-value">${summary.matches}</div>
+          <div class="stat-label">Matching</div>
+        </button>
+        <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ">
+          <div class="stat-value">${summary.differs}</div>
+          <div class="stat-label">Differing</div>
+        </button>
+        <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
+          <div class="stat-value">${summary.only_in_env1}</div>
+          <div class="stat-label">Only in ${this.results[this.queryMode].env1_name}</div>
+        </button>
+        <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
+          <div class="stat-value">${summary.only_in_env2}</div>
+          <div class="stat-label">Only in ${this.results[this.queryMode].env2_name}</div>
+        </button>
+      </div>
     `;
 
     // Add click event listeners to filter buttons
