@@ -1182,17 +1182,24 @@ class CompareConfigTool extends BaseTool {
     // Clear previous results to avoid confusion
     this.resetToEmptyState();
 
+    // Show progress overlay with connection info
+    this.showProgress("Comparing Configurations");
+    this.updateProgressStep("env1", "active", this.env1.connection?.name || "Env 1");
+    this.updateProgressStep("env2", "pending", this.env2.connection?.name || "Env 2");
+
     // Validate
     if (!(await this.validateComparisonRequest())) {
       console.log("[Compare] Validation failed");
-      // Results already cleared by resetToEmptyState
+      this.hideProgress();
       return;
     }
 
-    try {
-      // Show loading
-      this.showLoading("Comparing configurations...");
+    // Update progress - connections verified
+    this.updateProgressStep("env1", "done", this.env1.connection.name);
+    this.updateProgressStep("env2", "done", this.env2.connection.name);
+    this.updateProgressStep("fetch", "active", `${this.schema}.${this.table}`);
 
+    try {
       // Build comparison request matching Rust CompareRequest struct
       const request = {
         env1_connection_name: this.env1.connection.name,
@@ -1209,16 +1216,26 @@ class CompareConfigTool extends BaseTool {
 
       console.log("[Compare] Sending request:", JSON.stringify(request, null, 2));
 
+      // Update to compare step
+      this.updateProgressStep("fetch", "done", `${this.schema}.${this.table}`);
+      this.updateProgressStep("compare", "active", "Processing...");
+
       // Execute comparison
       const result = await CompareConfigService.compareConfigurations(request);
 
       console.log("[Compare] Result received:", result);
       console.log("[Compare] Result rows:", result?.rows?.length || 0);
 
+      // Update compare step done
+      this.updateProgressStep("compare", "done", `${result?.rows?.length || 0} records compared`);
+
       this.results[this.queryMode] = result;
 
+      // Small delay to show completed state
+      await new Promise((r) => setTimeout(r, 300));
+
       // Hide loading
-      this.hideLoading();
+      this.hideProgress();
 
       // Show results
       this.showResults();
@@ -1555,16 +1572,20 @@ class CompareConfigTool extends BaseTool {
       const env1Result = await this.ensureConnectionAlive("env1");
       if (!env1Result.success) {
         console.warn("[Validate] FAILED: Env1 connection issue -", env1Result.message);
-        this.hideLoading();
+        this.updateProgressStep("env1", "error", env1Result.message);
+        this.hideProgress();
         // Show inline error in results area
         this.resetToEmptyState(env1Result.message);
         return false;
       }
+      this.updateProgressStep("env1", "done", this.env1.connection.name);
+      this.updateProgressStep("env2", "active", this.env2.connection?.name || "Env 2");
 
       const env2Result = await this.ensureConnectionAlive("env2");
       if (!env2Result.success) {
         console.warn("[Validate] FAILED: Env2 connection issue -", env2Result.message);
-        this.hideLoading();
+        this.updateProgressStep("env2", "error", env2Result.message);
+        this.hideProgress();
         this.resetToEmptyState(env2Result.message);
         return false;
       }
@@ -1681,7 +1702,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Shows loading state
+   * Shows loading state (legacy - for simple operations)
    */
   showLoading(message = "Loading...") {
     const loadingState = document.getElementById("loading-state");
@@ -1692,11 +1713,82 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Hides loading state
+   * Hides loading state (legacy)
    */
   hideLoading() {
     const loadingState = document.getElementById("loading-state");
     if (loadingState) loadingState.style.display = "none";
+    // Also hide progress overlay
+    this.hideProgress();
+  }
+
+  /**
+   * Shows the progress overlay with connection details
+   */
+  showProgress(title = "Comparing Configurations") {
+    const overlay = document.getElementById("progress-overlay");
+    const titleEl = document.getElementById("progress-title");
+
+    if (titleEl) titleEl.textContent = title;
+    if (overlay) overlay.style.display = "flex";
+
+    // Reset all steps to pending
+    this.resetProgressSteps();
+  }
+
+  /**
+   * Hides the progress overlay
+   */
+  hideProgress() {
+    const overlay = document.getElementById("progress-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+
+  /**
+   * Updates a progress step's state and detail
+   * @param {string} stepId - One of: env1, env2, fetch, compare
+   * @param {string} state - One of: pending, active, done, error
+   * @param {string} detail - Detail text to show
+   */
+  updateProgressStep(stepId, state, detail = "") {
+    const stepEl = document.getElementById(`step-${stepId}`);
+    if (!stepEl) return;
+
+    const iconEl = stepEl.querySelector(".step-icon");
+    const detailEl = document.getElementById(`step-${stepId}-detail`);
+
+    // Update icon based on state
+    if (iconEl) {
+      iconEl.className = `step-icon ${state}`;
+      switch (state) {
+        case "pending":
+          iconEl.textContent = "○";
+          break;
+        case "active":
+          iconEl.textContent = "◉";
+          break;
+        case "done":
+          iconEl.textContent = "✓";
+          break;
+        case "error":
+          iconEl.textContent = "✕";
+          break;
+      }
+    }
+
+    // Update detail text
+    if (detailEl && detail) {
+      detailEl.textContent = detail;
+    }
+  }
+
+  /**
+   * Resets all progress steps to pending state
+   */
+  resetProgressSteps() {
+    ["env1", "env2", "fetch", "compare"].forEach((stepId) => {
+      this.updateProgressStep(stepId, "pending", "—");
+    });
   }
 
   /**

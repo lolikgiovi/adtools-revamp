@@ -219,10 +219,44 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
 
-        <!-- Loading State -->
-        <div id="loading-state" class="loading-state" style="display: none;">
-            <div class="spinner"></div>
-            <p id="loading-message">Loading...</p>
+        <!-- Progress Overlay -->
+        <div id="progress-overlay" class="progress-overlay" style="display: none;">
+            <div class="progress-card">
+                <div class="progress-header">
+                    <div class="progress-spinner"></div>
+                    <h3 id="progress-title">Comparing Configurations</h3>
+                </div>
+                <div class="progress-steps">
+                    <div class="progress-step" id="step-env1">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Connecting to Env 1</div>
+                            <div class="step-detail" id="step-env1-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="step-env2">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Connecting to Env 2</div>
+                            <div class="step-detail" id="step-env2-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="step-fetch">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Fetching data</div>
+                            <div class="step-detail" id="step-fetch-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="step-compare">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Comparing records</div>
+                            <div class="step-detail" id="step-compare-detail">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Results Section -->
