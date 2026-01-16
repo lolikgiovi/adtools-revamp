@@ -1094,6 +1094,20 @@ export class JenkinsRunner extends BaseTool {
       renderSplitChunksList();
       updateSplitCurrentView();
 
+      // Restore button states based on execution state
+      const { started, completed } = this.state.split;
+      if (splitExecuteAllBtn) {
+        if (completed) {
+          splitExecuteAllBtn.textContent = "✓ Execution Complete";
+          splitExecuteAllBtn.disabled = true;
+        } else if (started) {
+          splitExecuteAllBtn.disabled = true;
+        }
+      }
+      if (splitCancelBtn && completed) {
+        splitCancelBtn.textContent = "Dismiss";
+      }
+
       if (this.splitEditor) {
         try {
           this.splitEditor.layout();
@@ -1116,7 +1130,7 @@ export class JenkinsRunner extends BaseTool {
         text = `✓ Complete: ${ok}/${total}`;
         done = true;
       } else {
-        text = `Running ${doneCount + 1}/${total}...`;
+        text = `Running Query Chunk: ${doneCount + 1}/${total}...`;
       }
       // Update local
       if (splitMinimizedText) splitMinimizedText.textContent = text;
@@ -2757,8 +2771,12 @@ export class JenkinsRunner extends BaseTool {
     // so the async execution loop can continue in the background
     const splitRunning = this.state?.split?.started && !this.state?.split?.completed;
 
-    // Auto-minimize split modal if execution is running or completed
-    if (splitRunning || this.state?.split?.completed) {
+    // Auto-minimize split modal if execution is running (or completed) AND modal is visible
+    // Check if the modal is currently visible or already minimized
+    const splitModal = document.getElementById("jr-split-modal");
+    const isModalVisible = splitModal && splitModal.style.display !== "none";
+    const isMinimized = this.state?.split?.minimized;
+    if ((splitRunning || this.state?.split?.completed) && (isModalVisible || isMinimized)) {
       this.state.split.minimized = true;
       // Create/show global indicator so user can navigate back
       let globalEl = document.getElementById("jr-global-split-indicator");
@@ -2787,7 +2805,7 @@ export class JenkinsRunner extends BaseTool {
           textEl.textContent = `✓ Complete: ${ok}/${total}`;
           globalEl.classList.add("completed");
         } else {
-          textEl.textContent = `Running ${doneCount + 1}/${total}...`;
+          textEl.textContent = `Running Query Chunk: ${doneCount + 1}/${total}...`;
           globalEl.classList.remove("completed");
         }
       }
