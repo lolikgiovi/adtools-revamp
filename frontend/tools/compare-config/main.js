@@ -1235,8 +1235,8 @@ class CompareConfigTool extends BaseTool {
    * Executes comparison using raw SQL queries
    */
   async executeRawSqlComparison() {
-    // Validate
-    if (!this.validateRawSqlRequest()) {
+    // Validate (now async for connection checks)
+    if (!(await this.validateRawSqlRequest())) {
       return;
     }
 
@@ -1292,9 +1292,9 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Validates raw SQL comparison request
+   * Validates raw SQL comparison request (async for connection checks)
    */
-  validateRawSqlRequest() {
+  async validateRawSqlRequest() {
     if (!this.rawenv1.connection || !this.rawenv2.connection) {
       this.eventBus.emit("notification:show", {
         type: "error",
@@ -1322,7 +1322,122 @@ class CompareConfigTool extends BaseTool {
       return false;
     }
 
+    // Check connection liveness for raw SQL mode (uses rawenv1/rawenv2)
+    const env1Result = await this.ensureRawConnectionAlive("rawenv1");
+    if (!env1Result.success) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: env1Result.message,
+      });
+      return false;
+    }
+
+    const env2Result = await this.ensureRawConnectionAlive("rawenv2");
+    if (!env2Result.success) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: env2Result.message,
+      });
+      return false;
+    }
+
     return true;
+  }
+
+  /**
+   * Ensures raw SQL mode connection is alive
+   * @param {string} envKey - 'rawenv1' or 'rawenv2'
+   */
+  async ensureRawConnectionAlive(envKey) {
+    const env = this[envKey];
+    if (!env?.connection) {
+      return { success: false, message: `No connection configured for ${envKey}` };
+    }
+
+    const envLabel = envKey === "rawenv1" ? "Env 1" : "Env 2";
+
+    try {
+      const activeConnections = await CompareConfigService.getActiveConnections();
+      const existingConn = activeConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
+
+      if (existingConn) {
+        return { success: true, message: "Connection active" };
+      }
+
+      // Attempt reconnection
+      this.eventBus.emit("notification:show", {
+        type: "info",
+        message: `Reconnecting to ${env.connection.name}...`,
+      });
+
+      await CompareConfigService.fetchSchemas(env.connection.name, env.connection);
+
+      const updatedConnections = await CompareConfigService.getActiveConnections();
+      const reconnected = updatedConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
+
+      if (reconnected) {
+        this.updateConnectionStatus();
+        return { success: true, message: "Reconnected successfully" };
+      }
+
+      return { success: false, message: `Failed to reconnect to ${env.connection.name}` };
+    } catch (error) {
+      return { success: false, message: `Connection failed: ${error.message || error}` };
+    }
+  }
+
+  /**
+   * Ensures a connection is alive, attempting reconnection if needed.
+   * Uses lazy reconnection strategy - only reconnects when actually needed.
+   * @param {string} envKey - 'env1' or 'env2'
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async ensureConnectionAlive(envKey) {
+    const env = this[envKey];
+    if (!env?.connection) {
+      return { success: false, message: `No connection configured for ${envKey}` };
+    }
+
+    const envLabel = envKey === "env1" ? "Env 1" : "Env 2";
+
+    try {
+      // Check if connection is currently alive
+      const activeConnections = await CompareConfigService.getActiveConnections();
+      const existingConn = activeConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
+
+      if (existingConn) {
+        console.log(`[Connection] ${envLabel} connection is alive`);
+        return { success: true, message: "Connection active" };
+      }
+
+      // Connection is not alive - attempt reconnection
+      console.log(`[Connection] ${envLabel} connection lost, attempting reconnect...`);
+
+      // Show user-friendly feedback
+      this.eventBus.emit("notification:show", {
+        type: "info",
+        message: `Reconnecting to ${env.connection.name}...`,
+      });
+
+      // Trigger a simple operation to re-establish connection
+      // This will create a new connection if needed (pool reuses by connect_string)
+      await CompareConfigService.fetchSchemas(env.connection.name, env.connection);
+
+      // Verify connection is now alive
+      const updatedConnections = await CompareConfigService.getActiveConnections();
+      const reconnected = updatedConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
+
+      if (reconnected) {
+        this.updateConnectionStatus();
+        console.log(`[Connection] ${envLabel} reconnected successfully`);
+        return { success: true, message: "Reconnected successfully" };
+      }
+
+      return { success: false, message: `Failed to reconnect to ${env.connection.name}` };
+    } catch (error) {
+      console.error(`[Connection] ${envLabel} reconnection failed:`, error);
+      return { success: false, message: `Connection failed: ${error.message || error}` };
+    }
   }
 
   /**
@@ -1355,14 +1470,30 @@ class CompareConfigTool extends BaseTool {
         return false;
       }
 
-      // Check if connections are active
-      console.log("[Validate] Checking active connections...");
-      const activeConnections = await CompareConfigService.getActiveConnections();
-      console.log("[Validate] Active connections count:", activeConnections.length);
+      // Check if connections are active - attempt reconnection if needed
+      console.log("[Validate] Ensuring connections are alive...");
+      const env1Result = await this.ensureConnectionAlive("env1");
+      if (!env1Result.success) {
+        console.warn("[Validate] FAILED: Env1 connection issue -", env1Result.message);
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: env1Result.message,
+        });
+        return false;
+      }
 
-      const isEnv1Active = activeConnections.some((c) => c.connect_string === this.env1.connection.connect_string && c.is_alive);
-      const isEnv2Active = activeConnections.some((c) => c.connect_string === this.env2.connection.connect_string && c.is_alive);
-      console.log("[Validate] Env1 Active:", isEnv1Active, "Env2 Active:", isEnv2Active);
+      const env2Result = await this.ensureConnectionAlive("env2");
+      if (!env2Result.success) {
+        console.warn("[Validate] FAILED: Env2 connection issue -", env2Result.message);
+        this.hideLoading();
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: env2Result.message,
+        });
+        return false;
+      }
+      console.log("[Validate] Both connections verified alive");
 
       // Check credentials
       console.log("[Validate] Checking credentials...");
@@ -2110,18 +2241,54 @@ class CompareConfigTool extends BaseTool {
         statusEl.style.display = "flex";
         listEl.innerHTML = activeConnections
           .map((conn) => {
-            // Look up the saved connection name (saved as connect_string with underscore)
+            // Look up the saved connection name
             const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
             const displayName = savedConn?.name || conn.connect_string;
-            return `<span class="connection-chip" title="${conn.connect_string}">${displayName}</span>`;
+            return `
+              <span class="connection-chip" title="${conn.connect_string}">
+                <span class="chip-name">${displayName}</span>
+                <button class="chip-close" data-connect-string="${conn.connect_string}" data-username="${conn.username}" title="Close connection">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </span>`;
           })
           .join("");
+
+        // Attach click handlers to individual close buttons
+        listEl.querySelectorAll(".chip-close").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const connectString = btn.dataset.connectString;
+            const username = btn.dataset.username;
+            this.closeSingleConnection(connectString, username);
+          });
+        });
       } else {
         statusEl.style.display = "none";
         listEl.innerHTML = "";
       }
     } catch (error) {
       console.error("Failed to update connection status:", error);
+    }
+  }
+
+  /**
+   * Closes a single connection by connect string and username
+   */
+  async closeSingleConnection(connectString, username) {
+    try {
+      await CompareConfigService.closeConnection(connectString, username);
+      this.updateConnectionStatus();
+
+      this.eventBus.emit("notification:show", {
+        type: "info",
+        message: "Connection closed",
+      });
+    } catch (error) {
+      console.error("Failed to close connection:", error);
     }
   }
 

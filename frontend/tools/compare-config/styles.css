@@ -1594,16 +1594,43 @@
 .connection-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
   background: hsl(var(--success) / 0.15);
   border-radius: 12px;
   font-size: 0.7rem;
   font-weight: 500;
   color: hsl(var(--success));
-  max-width: 120px;
+  max-width: 150px;
+}
+
+.connection-chip .chip-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100px;
+}
+
+.connection-chip .chip-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: hsl(var(--success) / 0.6);
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.connection-chip .chip-close:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.15);
 }
 
 .btn-close-connections {
