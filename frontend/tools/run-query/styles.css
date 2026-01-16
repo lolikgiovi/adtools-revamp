@@ -1163,18 +1163,22 @@
   gap: 4px;
 }
 
-/* Split overlay - position to not cover sidebar */
+/* Split overlay - position based on sidebar state */
 .jr-split-overlay {
-  /* Only cover the main content area, not the sidebar */
+  /* Default: no offset, cover full viewport */
+  left: 0;
+}
+
+/* When sidebar is expanded, offset to not cover it */
+.sidebar-provider:has(.sidebar[data-state="expanded"]) .jr-split-overlay,
+.sidebar-provider:has(.sidebar:not([data-state="collapsed"])) ~ .jr-split-overlay {
   left: var(--sidebar-width, 12rem);
 }
 
-/* Split modal positioning - also offset from sidebar */
+/* Split modal - cover full viewport (modal centers itself) */
 #jr-split-modal {
-  left: var(--sidebar-width, 12rem);
-  right: 0;
-  /* Override inset */
-  inset: 0 0 0 var(--sidebar-width, 12rem);
+  /* Full viewport coverage */
+  inset: 0;
 }
 
 /* Minimized floating progress indicator */
