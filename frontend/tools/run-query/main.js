@@ -806,6 +806,8 @@ export class JenkinsRunner extends BaseTool {
     this.splitEditor = null;
     // Preserve split state if execution is running OR completed (navigated away and back)
     const shouldPreserveState = this.state.split?.started || this.state.split?.completed;
+    // Track if we need to restore modal after mount
+    const shouldRestoreModal = shouldPreserveState && this.state.split?.minimized;
     if (!shouldPreserveState) {
       this.state.split = {
         chunks: [],
@@ -1692,6 +1694,14 @@ export class JenkinsRunner extends BaseTool {
     // Also make the minimized indicator content clickable to maximize
     if (splitMinimizedEl) {
       splitMinimizedEl.querySelector(".jr-split-minimized-content")?.addEventListener("click", () => maximizeSplitModal());
+    }
+    // Auto-restore modal if returning from navigation while minimized
+    if (shouldRestoreModal) {
+      setTimeout(() => {
+        maximizeSplitModal();
+        // Hide global indicator since we're restoring the modal
+        if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
+      }, 100);
     }
     if (splitCancelBtn)
       splitCancelBtn.addEventListener("click", () => {
@@ -2746,6 +2756,49 @@ export class JenkinsRunner extends BaseTool {
     // If split execution is running (started but not completed), preserve log listeners
     // so the async execution loop can continue in the background
     const splitRunning = this.state?.split?.started && !this.state?.split?.completed;
+
+    // Auto-minimize split modal if execution is running or completed
+    if (splitRunning || this.state?.split?.completed) {
+      this.state.split.minimized = true;
+      // Create/show global indicator so user can navigate back
+      let globalEl = document.getElementById("jr-global-split-indicator");
+      if (!globalEl) {
+        globalEl = document.createElement("div");
+        globalEl.id = "jr-global-split-indicator";
+        globalEl.className = "jr-split-minimized";
+        globalEl.setAttribute("role", "status");
+        globalEl.innerHTML = `
+          <div class="jr-split-minimized-content" style="cursor:pointer;">
+            <span class="jr-split-minimized-icon">⏳</span>
+            <span class="jr-global-split-text">Running...</span>
+          </div>
+          <button class="btn btn-sm-xs">Show</button>
+        `;
+        document.body.appendChild(globalEl);
+      }
+      // Update text based on state
+      const { chunks, statuses, completed } = this.state.split;
+      const total = chunks?.length || 0;
+      const doneCount = statuses?.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length || 0;
+      const textEl = globalEl.querySelector(".jr-global-split-text");
+      if (textEl) {
+        if (completed) {
+          const ok = statuses?.filter((s) => s === "success").length || 0;
+          textEl.textContent = `✓ Complete: ${ok}/${total}`;
+          globalEl.classList.add("completed");
+        } else {
+          textEl.textContent = `Running ${doneCount + 1}/${total}...`;
+          globalEl.classList.remove("completed");
+        }
+      }
+      globalEl.style.display = "flex";
+      this._globalSplitIndicator = globalEl;
+      // Bind click handler
+      const self = this;
+      globalEl.onclick = () => {
+        window.location.hash = "run-query";
+      };
+    }
 
     // Cleanup listeners only if split is not running
     if (!splitRunning) {
