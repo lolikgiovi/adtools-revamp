@@ -1673,3 +1673,47 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================
+   CONNECTION ERROR BANNER
+   ============================================ */
+
+.connection-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  margin: 20px 0;
+  background: hsl(var(--destructive) / 0.08);
+  border: 1px solid hsl(var(--destructive) / 0.3);
+  border-radius: var(--radius);
+  border-left: 4px solid hsl(var(--destructive));
+}
+
+.connection-error-banner .error-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.connection-error-banner .error-content {
+  flex: 1;
+}
+
+.connection-error-banner .error-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: hsl(var(--destructive));
+  margin-bottom: 8px;
+}
+
+.connection-error-banner .error-message {
+  font-size: 0.95rem;
+  color: hsl(var(--foreground));
+  margin-bottom: 8px;
+  font-family: var(--font-mono, monospace);
+}
+
+.connection-error-banner .error-hint {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+}

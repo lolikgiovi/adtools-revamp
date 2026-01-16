@@ -755,11 +755,12 @@ class CompareConfigTool extends BaseTool {
       schemaSelect.disabled = false;
     } catch (error) {
       console.error("Failed to fetch schemas:", error);
-      schemaSelect.innerHTML = '<option value="">Error loading schemas</option>';
+      schemaSelect.innerHTML = '<option value="">Connection error - retry</option>';
 
+      const friendlyError = this.parseOracleError(error, this.env1.connection.name);
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: `Failed to fetch schemas from Env 1: ${error.message || error}`,
+        message: friendlyError,
       });
     }
   }
@@ -1178,9 +1179,13 @@ class CompareConfigTool extends BaseTool {
    * Executes the comparison
    */
   async executeComparison() {
+    // Clear previous results to avoid confusion
+    this.resetToEmptyState();
+
     // Validate
     if (!(await this.validateComparisonRequest())) {
       console.log("[Compare] Validation failed");
+      // Results already cleared by resetToEmptyState
       return;
     }
 
@@ -1224,10 +1229,27 @@ class CompareConfigTool extends BaseTool {
       console.error("[Compare] Comparison failed:", error);
       this.hideLoading();
 
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Comparison failed: ${error.message || error}`,
-      });
+      // Check if this is a connection error
+      const errorStr = String(error.message || error);
+      const isConnectionError =
+        errorStr.includes("OCI Error") || errorStr.includes("ORA-") || errorStr.includes("connection") || errorStr.includes("timeout");
+
+      if (isConnectionError) {
+        // Parse to friendly message
+        const friendlyError = this.parseOracleError(error, "Database");
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `${friendlyError}. Please check your connections and try again.`,
+        });
+
+        // Update connection status to reflect potential disconnection
+        this.updateConnectionStatus();
+      } else {
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Comparison failed: ${error.message || error}`,
+        });
+      }
     }
   }
 
@@ -1235,6 +1257,9 @@ class CompareConfigTool extends BaseTool {
    * Executes comparison using raw SQL queries
    */
   async executeRawSqlComparison() {
+    // Clear previous results to avoid confusion
+    this.resetToEmptyState();
+
     // Validate (now async for connection checks)
     if (!(await this.validateRawSqlRequest())) {
       return;
@@ -1284,10 +1309,24 @@ class CompareConfigTool extends BaseTool {
       console.error("Raw SQL comparison failed:", error);
       this.hideLoading();
 
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Comparison failed: ${error.message || error}`,
-      });
+      // Check if this is a connection error
+      const errorStr = String(error.message || error);
+      const isConnectionError =
+        errorStr.includes("OCI Error") || errorStr.includes("ORA-") || errorStr.includes("connection") || errorStr.includes("timeout");
+
+      if (isConnectionError) {
+        const friendlyError = this.parseOracleError(error, "Database");
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `${friendlyError}. Please check your connections and try again.`,
+        });
+        this.updateConnectionStatus();
+      } else {
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Comparison failed: ${error.message || error}`,
+        });
+      }
     }
   }
 
@@ -1382,7 +1421,8 @@ class CompareConfigTool extends BaseTool {
 
       return { success: false, message: `Failed to reconnect to ${env.connection.name}` };
     } catch (error) {
-      return { success: false, message: `Connection failed: ${error.message || error}` };
+      const friendlyError = this.parseOracleError(error, env.connection.name);
+      return { success: false, message: friendlyError };
     }
   }
 
@@ -1436,8 +1476,48 @@ class CompareConfigTool extends BaseTool {
       return { success: false, message: `Failed to reconnect to ${env.connection.name}` };
     } catch (error) {
       console.error(`[Connection] ${envLabel} reconnection failed:`, error);
-      return { success: false, message: `Connection failed: ${error.message || error}` };
+      const friendlyError = this.parseOracleError(error, env.connection.name);
+      return { success: false, message: friendlyError };
     }
+  }
+
+  /**
+   * Parses Oracle OCI errors into user-friendly messages
+   */
+  parseOracleError(error, connectionName) {
+    const errorStr = String(error.message || error);
+
+    // Extract ORA code if present
+    const oraMatch = errorStr.match(/ORA-(\d+)/);
+    const oraCode = oraMatch ? oraMatch[0] : null;
+
+    // Common Oracle errors with friendly messages
+    const errorMessages = {
+      "ORA-12170": "Connection timeout - database server not reachable",
+      "ORA-12541": "No listener - database service not running",
+      "ORA-12514": "Service name not found",
+      "ORA-01017": "Invalid username or password",
+      "ORA-28000": "Account is locked",
+      "ORA-28001": "Password has expired",
+      "ORA-12154": "TNS name could not be resolved",
+      "ORA-03114": "Connection lost - not connected to Oracle",
+      "ORA-03113": "End-of-file on communication channel",
+    };
+
+    if (oraCode && errorMessages[oraCode]) {
+      return `${connectionName}: ${errorMessages[oraCode]}`;
+    }
+
+    // For unknown errors, show a shortened version
+    if (errorStr.includes("OCI Error:")) {
+      // Extract just the main part before "Help:"
+      const mainPart = errorStr.split("Help:")[0].replace("OCI Error:", "").trim();
+      // Limit length
+      const shortMsg = mainPart.length > 80 ? mainPart.substring(0, 80) + "..." : mainPart;
+      return `${connectionName}: ${shortMsg}`;
+    }
+
+    return `${connectionName}: Connection failed`;
   }
 
   /**
@@ -1476,10 +1556,8 @@ class CompareConfigTool extends BaseTool {
       if (!env1Result.success) {
         console.warn("[Validate] FAILED: Env1 connection issue -", env1Result.message);
         this.hideLoading();
-        this.eventBus.emit("notification:show", {
-          type: "error",
-          message: env1Result.message,
-        });
+        // Show inline error in results area
+        this.resetToEmptyState(env1Result.message);
         return false;
       }
 
@@ -1487,10 +1565,7 @@ class CompareConfigTool extends BaseTool {
       if (!env2Result.success) {
         console.warn("[Validate] FAILED: Env2 connection issue -", env2Result.message);
         this.hideLoading();
-        this.eventBus.emit("notification:show", {
-          type: "error",
-          message: env2Result.message,
-        });
+        this.resetToEmptyState(env2Result.message);
         return false;
       }
       console.log("[Validate] Both connections verified alive");
@@ -2310,24 +2385,39 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Resets the UI to empty state (no results)
+   * Resets the UI to empty state (no results), optionally showing an error
+   * @param {string} errorMessage - Optional error message to display
    */
-  resetToEmptyState() {
+  resetToEmptyState(errorMessage = null) {
     const resultsSection = document.getElementById("results-section");
-    if (resultsSection) {
-      resultsSection.style.display = "none";
-    }
-
-    // Clear results content
     const resultsContent = document.getElementById("results-content");
-    if (resultsContent) {
-      resultsContent.innerHTML = "";
-    }
-
-    // Clear summary
     const resultsSummary = document.getElementById("results-summary");
-    if (resultsSummary) {
-      resultsSummary.innerHTML = "";
+
+    // Show error in results section if provided
+    if (errorMessage) {
+      // Clear results from state so they don't reappear on reload
+      this.results[this.queryMode] = null;
+      this.saveToolState();
+
+      if (resultsSection) resultsSection.style.display = "block";
+      if (resultsSummary) resultsSummary.innerHTML = "";
+      if (resultsContent) {
+        resultsContent.innerHTML = `
+          <div class="connection-error-banner">
+            <div class="error-icon">⚠️</div>
+            <div class="error-content">
+              <div class="error-title">Connection Failed</div>
+              <div class="error-message">${errorMessage}</div>
+              <div class="error-hint">Check your VPN connection or verify the database is reachable.</div>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      // Normal empty state
+      if (resultsSection) resultsSection.style.display = "none";
+      if (resultsContent) resultsContent.innerHTML = "";
+      if (resultsSummary) resultsSummary.innerHTML = "";
     }
   }
 
