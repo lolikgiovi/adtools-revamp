@@ -1,8 +1,8 @@
 // Import only the canonical AD Tools schema format (new_data_model_schema.json)
 // Shape: { schemaName: { tables: { tableName: { columns, pk?, unique? } } } }
-export function importSchemasPayload(payload, localStorageService) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('Unsupported KV schema format');
+export async function importSchemasPayload(payload, storageService) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Unsupported KV schema format");
   }
 
   const convertJsonSchemaToRows = (schemaJson) => {
@@ -11,10 +11,10 @@ export function importSchemasPayload(payload, localStorageService) {
       const columns = schemaJson?.columns || {};
       const pkSet = new Set(Array.isArray(schemaJson?.pk) ? schemaJson.pk : []);
       Object.entries(columns).forEach(([fieldName, def]) => {
-        const dataType = def?.type || '';
-        const nullable = def?.nullable || 'Yes';
-        const defVal = typeof def?.default !== 'undefined' ? def.default : null;
-        const pkFlag = pkSet.has(fieldName) ? 'Yes' : 'No';
+        const dataType = def?.type || "";
+        const nullable = def?.nullable || "Yes";
+        const defVal = typeof def?.default !== "undefined" ? def.default : null;
+        const pkFlag = pkSet.has(fieldName) ? "Yes" : "No";
         rows.push([fieldName, dataType, nullable, defVal, null, pkFlag]);
       });
       return rows;
@@ -24,15 +24,15 @@ export function importSchemasPayload(payload, localStorageService) {
   };
 
   let importCount = 0;
-  Object.entries(payload).forEach(([schemaName, schemaObj]) => {
+  for (const [schemaName, schemaObj] of Object.entries(payload)) {
     const tables = schemaObj?.tables || {};
-    Object.entries(tables).forEach(([tableName, tableSchema]) => {
+    for (const [tableName, tableSchema] of Object.entries(tables)) {
       const rows = convertJsonSchemaToRows(tableSchema);
-      if (rows && localStorageService.saveSchema(`${schemaName}.${tableName}`, rows)) {
+      if (rows && (await storageService.saveSchema(`${schemaName}.${tableName}`, rows))) {
         importCount += 1;
       }
-    });
-  });
+    }
+  }
 
   return importCount;
 }

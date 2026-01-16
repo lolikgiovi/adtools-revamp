@@ -1,4 +1,4 @@
-import { LocalStorageService } from "./services/LocalStorageService.js";
+import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
@@ -57,7 +57,8 @@ export class QuickQueryUI {
     this.schemaTable = null;
     this.dataTable = null;
     this.elements = {};
-    this.localStorageService = new LocalStorageService();
+    this.storageService = new IndexedDBStorageService();
+    this._storageReady = false;
     this.schemaValidationService = new SchemaValidationService();
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
@@ -119,7 +120,12 @@ export class QuickQueryUI {
       await this.initializeComponents();
       this.setupEventListeners();
       this.setupTableNameSearch();
-      this.loadMostRecentSchema();
+
+      // Initialize IndexedDB storage service before loading schemas
+      await this.storageService.init();
+      this._storageReady = true;
+
+      await this.loadMostRecentSchema();
     } catch (error) {
       console.error("Failed to initialize Quick Query:", error);
       this.container.innerHTML = `<div class="error-message">Failed to load: ${error.message}</div>`;
@@ -345,16 +351,16 @@ export class QuickQueryUI {
         click: () => this.handleRemoveLastSchemaRow(),
       },
       showSavedSchemasButton: {
-        click: () => {
+        click: async () => {
           this.elements.schemaOverlay.classList.remove("hidden");
           if (this.elements.savedSchemasSearch) {
             this.elements.savedSchemasSearch.value = "";
           }
           // Ensure latest abbreviations are indexed (e.g., 'svc' for 'service')
-          if (this.localStorageService && typeof this.localStorageService.rebuildIndex === "function") {
-            this.localStorageService.rebuildIndex();
+          if (this.storageService && typeof this.storageService.rebuildIndex === "function") {
+            await this.storageService.rebuildIndex();
           }
-          this.updateSavedSchemasList();
+          await this.updateSavedSchemasList();
         },
       },
       closeSchemaOverlayButton: {
@@ -456,7 +462,10 @@ export class QuickQueryUI {
 
         if (changes.length > 0) {
           const currentData = this.dataTable.getData();
-          this.localStorageService.updateTableData(tableName, currentData);
+          // Fire-and-forget async storage update (don't block UI)
+          this.storageService.updateTableData(tableName, currentData).catch((err) => {
+            console.error("Failed to persist table data:", err);
+          });
         }
       },
       // No height recalculation hooks
@@ -545,7 +554,7 @@ export class QuickQueryUI {
   }
 
   // Event Handlers
-  handleGenerateQuery() {
+  async handleGenerateQuery() {
     // Prevent duplicate generation
     if (this.isGenerating) return;
 
@@ -583,10 +592,10 @@ export class QuickQueryUI {
 
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
       if (!hasExcelData) {
-        this.localStorageService.saveSchema(tableName, schemaData, inputData);
+        await this.storageService.saveSchema(tableName, schemaData, inputData);
       } else {
         // Just save schema without data for large Excel imports
-        this.localStorageService.saveSchema(tableName, schemaData, null);
+        await this.storageService.saveSchema(tableName, schemaData, null);
       }
 
       // Check if we should use the worker (1000+ rows)
@@ -1422,8 +1431,8 @@ export class QuickQueryUI {
     }
   }
 
-  handleClearAllSchemas() {
-    const allTables = this.localStorageService.getAllTables();
+  async handleClearAllSchemas() {
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length === 0) {
       this.showError("No schemas to clear");
       return;
@@ -1433,7 +1442,7 @@ export class QuickQueryUI {
       return;
     }
 
-    const schemaCleared = this.localStorageService.clearAllSchemas();
+    const schemaCleared = await this.storageService.clearAllSchemas();
     if (schemaCleared) {
       this.showSuccess("All saved schemas have been cleared");
       this.elements.schemaOverlay.classList.add("hidden");
@@ -1443,8 +1452,8 @@ export class QuickQueryUI {
   }
 
   // Schema management methods
-  updateSavedSchemasList(filteredTables) {
-    const allTables = this.localStorageService.getAllTables();
+  async updateSavedSchemasList(filteredTables) {
+    const allTables = await this.storageService.getAllTables();
     const tablesToRender = Array.isArray(filteredTables) ? filteredTables : allTables;
 
     if (tablesToRender.length === 0) {
@@ -1516,33 +1525,33 @@ export class QuickQueryUI {
     });
   }
 
-  handleSavedSchemasSearchInput(event) {
+  async handleSavedSchemasSearchInput(event) {
     const input = event.target.value.trim();
 
     // Empty search: show all saved schemas
     if (!input) {
-      this.updateSavedSchemasList();
+      await this.updateSavedSchemasList();
       return;
     }
 
     // Table-only search when input starts with '.'
     if (input.startsWith(".")) {
       const tableTerm = input.slice(1).trim();
-      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+      if (!this.storageService.validateOracleName(tableTerm, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(tableTerm);
-      this.updateSavedSchemasList(results);
+      const results = await this.storageService.searchSavedSchemas(tableTerm);
+      await this.updateSavedSchemasList(results);
       return;
     }
 
     // Table-only search when no '.' present
     if (!input.includes(".")) {
-      if (!this.localStorageService.validateOracleName(input, "table")) {
+      if (!this.storageService.validateOracleName(input, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(input);
-      this.updateSavedSchemasList(results);
+      const results = await this.storageService.searchSavedSchemas(input);
+      await this.updateSavedSchemasList(results);
       return;
     }
 
@@ -1550,20 +1559,20 @@ export class QuickQueryUI {
     const parts = input.split(".");
     const schemaPart = parts[0];
     const tablePart = parts[1];
-    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+    if (!this.storageService.validateOracleName(schemaPart, "schema")) {
       return;
     }
     const tableValidation = tablePart === "" ? undefined : tablePart;
-    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
+    if (!this.storageService.validateOracleName(tableValidation, "table")) {
       return;
     }
 
-    const results = this.localStorageService.searchSavedSchemas(input);
-    this.updateSavedSchemasList(results);
+    const results = await this.storageService.searchSavedSchemas(input);
+    await this.updateSavedSchemasList(results);
   }
 
-  handleLoadSchema(fullName) {
-    const result = this.localStorageService.loadSchema(fullName, true);
+  async handleLoadSchema(fullName) {
+    const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
       this.elements.tableNameInput.value = fullName;
       this.schemaTable.loadData(result.schema);
@@ -1584,11 +1593,11 @@ export class QuickQueryUI {
     }
   }
 
-  handleDeleteSchema(fullName) {
+  async handleDeleteSchema(fullName) {
     if (confirm(`Delete schema for ${fullName}?`)) {
-      const deleted = this.localStorageService.deleteSchema(fullName);
+      const deleted = await this.storageService.deleteSchema(fullName);
       if (deleted) {
-        this.updateSavedSchemasList();
+        await this.updateSavedSchemasList();
 
         const currentTable = this.elements.tableNameInput.value;
         if (currentTable === fullName) {
@@ -1600,23 +1609,23 @@ export class QuickQueryUI {
     }
   }
 
-  handleExportSchemas() {
-    const allTables = this.localStorageService.getAllTables();
+  async handleExportSchemas() {
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length === 0) {
       this.showError("No schemas to export");
       return;
     }
 
     const exportData = {};
-    allTables.forEach((table) => {
-      const schema = this.localStorageService.loadSchema(table.fullName);
+    for (const table of allTables) {
+      const schema = await this.storageService.loadSchema(table.fullName);
       if (schema) {
         if (!exportData[table.schemaName]) {
           exportData[table.schemaName] = {};
         }
         exportData[table.schemaName][table.tableName] = schema;
       }
-    });
+    }
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: "application/json",
@@ -1698,8 +1707,8 @@ export class QuickQueryUI {
       }
       if (!value) throw new Error("No default schema found in KV");
 
-      const count = importSchemasPayload(value, this.localStorageService);
-      this.updateSavedSchemasList();
+      const count = await importSchemasPayload(value, this.storageService);
+      await this.updateSavedSchemasList();
       if (!count) {
         throw new Error("No default table schemas imported. Verify KV format.");
       }
@@ -1771,11 +1780,13 @@ export class QuickQueryUI {
     return v;
   }
 
-  handleSearchInput(event) {
-    const el = this.elements.tableNameInput;
-    const raw = el.value;
-    const sanitized = this.sanitizeTableInputValue(raw);
-    if (sanitized !== raw) {
+  async handleSearchInput(event) {
+    const el = event.target;
+    let rawValue = el.value;
+
+    // Sanitize input: only keep valid Oracle characters [A-Za-z0-9_.]
+    const sanitized = rawValue.replace(/[^a-zA-Z0-9_.]/g, "");
+    if (sanitized !== rawValue) {
       // Replace the value with sanitized content; caret is moved to end for simplicity
       el.value = sanitized;
     }
@@ -1783,8 +1794,8 @@ export class QuickQueryUI {
     this.elements.tableNameInput.style.borderColor = "";
 
     if (!input) {
-      const results = this.localStorageService.searchSavedSchemas("").slice(0, 7);
-      this.showSearchDropdown(results);
+      const results = await this.storageService.searchSavedSchemas("");
+      this.showSearchDropdown(results.slice(0, 7));
       return;
     }
 
@@ -1793,19 +1804,19 @@ export class QuickQueryUI {
     // - If input has no '.', also treat as table-only
     if (input.startsWith(".")) {
       const tableTerm = input.slice(1).trim();
-      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+      if (!this.storageService.validateOracleName(tableTerm, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(tableTerm);
+      const results = await this.storageService.searchSavedSchemas(tableTerm);
       this.showSearchDropdown(results);
       return;
     }
 
     if (!input.includes(".")) {
-      if (!this.localStorageService.validateOracleName(input, "table")) {
+      if (!this.storageService.validateOracleName(input, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(input);
+      const results = await this.storageService.searchSavedSchemas(input);
       this.showSearchDropdown(results);
       return;
     }
@@ -1813,22 +1824,22 @@ export class QuickQueryUI {
     const parts = input.split(".");
     const schemaPart = parts[0];
     const tablePart = parts[1];
-    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+    if (!this.storageService.validateOracleName(schemaPart, "schema")) {
       return;
     }
     const tableValidation = tablePart === "" ? undefined : tablePart; // allow empty table part when dot present
-    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
+    if (!this.storageService.validateOracleName(tableValidation, "table")) {
       return;
     }
 
-    const results = this.localStorageService.searchSavedSchemas(input);
+    const results = await this.storageService.searchSavedSchemas(input);
     this.showSearchDropdown(results);
   }
 
-  handleSearchKeyDown(event) {
+  async handleSearchKeyDown(event) {
     if (this.elements.dropdownContainer.style.display === "none" && event.key === "ArrowDown") {
-      const results = this.localStorageService.searchSavedSchemas("").slice(0, 7);
-      this.showSearchDropdown(results);
+      const results = await this.storageService.searchSavedSchemas("");
+      this.showSearchDropdown(results.slice(0, 7));
       this.searchState.selectedIndex = -1;
       return;
     }
@@ -1937,16 +1948,16 @@ export class QuickQueryUI {
     });
   }
 
-  loadMostRecentSchema() {
+  async loadMostRecentSchema() {
     // Prefer last activity from data store to restore the most recent working table
-    const recentFromData = this.localStorageService.getMostRecentDataTable();
+    const recentFromData = await this.storageService.getMostRecentDataTable();
     if (recentFromData && recentFromData.fullName) {
-      this.handleLoadSchema(recentFromData.fullName);
+      await this.handleLoadSchema(recentFromData.fullName);
       return;
     }
 
     // Fallback: choose the most recent by timestamp across all tables
-    const allTables = this.localStorageService.getAllTables();
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length > 0) {
       const mostRecent = allTables.reduce((best, t) => {
         const ts = t.lastUpdated ? new Date(t.lastUpdated).getTime() : -1;
@@ -1954,7 +1965,7 @@ export class QuickQueryUI {
         return best;
       }, null);
       if (mostRecent?.t?.fullName) {
-        this.handleLoadSchema(mostRecent.t.fullName);
+        await this.handleLoadSchema(mostRecent.t.fullName);
       }
     }
   }
@@ -1972,16 +1983,16 @@ export class QuickQueryUI {
       }
 
       let importCount = 0;
-      Object.entries(jsonData).forEach(([schemaName, tables]) => {
-        Object.entries(tables).forEach(([tableName, schema]) => {
+      for (const [schemaName, tables] of Object.entries(jsonData)) {
+        for (const [tableName, schema] of Object.entries(tables)) {
           const fullTableName = `${schemaName}.${tableName}`;
-          if (this.localStorageService.saveSchema(fullTableName, schema)) {
+          if (await this.storageService.saveSchema(fullTableName, schema)) {
             importCount++;
           }
-        });
-      });
+        }
+      }
 
-      this.updateSavedSchemasList();
+      await this.updateSavedSchemasList();
       this.showSuccess(`Successfully imported ${importCount} table schemas`);
       setTimeout(() => this.clearError(), 3000);
     } catch (error) {
