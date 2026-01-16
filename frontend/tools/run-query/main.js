@@ -395,11 +395,14 @@ export class JenkinsRunner extends BaseTool {
       const safe = sanitizeLog(text);
       logsEl.textContent += safe;
       logsEl.scrollTop = logsEl.scrollHeight;
-      // Mirror logs to split modal mini log when active
+      // Mirror logs to split modal mini log when active (use fresh DOM lookup)
       try {
-        if (splitMiniLogsEl && this.state && this.state.split && this.state.split.started) {
-          splitMiniLogsEl.textContent += safe;
-          splitMiniLogsEl.scrollTop = splitMiniLogsEl.scrollHeight;
+        if (this.state && this.state.split && this.state.split.started) {
+          const miniLog = document.getElementById("jr-split-mini-log");
+          if (miniLog) {
+            miniLog.textContent += safe;
+            miniLog.scrollTop = miniLog.scrollHeight;
+          }
         }
       } catch (_) {}
     };
@@ -801,7 +804,20 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal state & helpers =====
     this.splitEditor = null;
-    this.state.split = { chunks: [], sizes: [], index: 0, statuses: [], started: false, cancelRequested: false, minimized: false };
+    // Preserve split state if execution is running OR completed (navigated away and back)
+    const shouldPreserveState = this.state.split?.started || this.state.split?.completed;
+    if (!shouldPreserveState) {
+      this.state.split = {
+        chunks: [],
+        sizes: [],
+        index: 0,
+        statuses: [],
+        started: false,
+        cancelRequested: false,
+        minimized: false,
+        completed: false,
+      };
+    }
 
     const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
 
@@ -867,8 +883,11 @@ export class JenkinsRunner extends BaseTool {
       this.state.split.started = false;
       this.state.split.cancelRequested = false;
       this.state.split.minimized = false;
+      this.state.split.completed = false;
       // Hide minimized indicator if visible
       if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      // Reset cancel button text
+      if (splitCancelBtn) splitCancelBtn.textContent = "Cancel";
       this._modalPrevFocusEl = document.activeElement;
       splitModalOverlay.style.display = "block";
       splitModal.style.display = "flex";
@@ -905,31 +924,174 @@ export class JenkinsRunner extends BaseTool {
       splitModal.style.display = "none";
       this.state.split.minimized = false;
       if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      // Hide global indicator too
+      if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
       deactivateFocusTrap(splitModal);
       if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
     };
 
+    // Create or get global minimized indicator that persists across navigation
+    const getOrCreateGlobalIndicator = () => {
+      let el = document.getElementById("jr-global-split-indicator");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "jr-global-split-indicator";
+        el.className = "jr-split-minimized";
+        el.setAttribute("role", "status");
+        el.innerHTML = `
+          <div class="jr-split-minimized-content" style="cursor:pointer;">
+            <span class="jr-split-minimized-icon">⏳</span>
+            <span class="jr-global-split-text">Running...</span>
+          </div>
+          <button class="btn btn-sm-xs">Show</button>
+        `;
+        el.style.display = "none";
+        document.body.appendChild(el);
+      }
+      return el;
+    };
+
     // Minimize split modal to floating indicator
     const minimizeSplitModal = () => {
-      if (!splitModal || !splitModalOverlay || !splitMinimizedEl) return;
+      if (!splitModal || !splitModalOverlay) return;
       this.state.split.minimized = true;
       splitModalOverlay.style.display = "none";
       splitModal.style.display = "none";
-      splitMinimizedEl.style.display = "flex";
-      splitMinimizedEl.classList.remove("completed");
       deactivateFocusTrap(splitModal);
-      // Update minimized text with current progress
+      // Show global indicator
+      const globalEl = getOrCreateGlobalIndicator();
+      globalEl.style.display = "flex";
+      globalEl.classList.remove("completed");
+      this._globalSplitIndicator = globalEl;
+      // Bind click to restore
+      const self = this;
+      globalEl.onclick = () => {
+        // Navigate using hash (same as Router.navigate)
+        window.location.hash = "run-query";
+        // Wait for navigation and DOM to be ready, then restore modal
+        setTimeout(() => {
+          self.state.split.minimized = false;
+          if (self._globalSplitIndicator) self._globalSplitIndicator.style.display = "none";
+          // Get fresh DOM references after navigation
+          const modal = document.getElementById("jr-split-modal");
+          const overlay = document.getElementById("jr-split-modal-overlay");
+          const editorContainer = document.getElementById("jr-split-editor");
+          const chunksList = document.getElementById("jr-split-chunks-list");
+          const chunkLabel = document.getElementById("jr-split-chunk-label");
+          if (modal && overlay) {
+            overlay.style.display = "block";
+            modal.style.display = "flex";
+
+            // Recreate editor if needed
+            const { chunks, index, statuses } = self.state.split;
+            if (!self.splitEditor && editorContainer && chunks.length > 0) {
+              self.splitEditor = createOracleEditor(editorContainer, {
+                value: chunks[index] || "",
+                automaticLayout: true,
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                fontSize: 11,
+              });
+            } else if (self.splitEditor && chunks[index]) {
+              self.splitEditor.setValue(chunks[index]);
+            }
+
+            // Helper to update view when clicking a chunk
+            const updateChunkView = (newIndex) => {
+              self.state.split.index = newIndex;
+              if (chunkLabel) chunkLabel.textContent = `Chunk ${newIndex + 1} of ${chunks.length}`;
+              if (self.splitEditor && chunks[newIndex]) {
+                self.splitEditor.setValue(chunks[newIndex]);
+              }
+              // Update active states
+              chunksList?.querySelectorAll("li").forEach((li, i) => {
+                li.className = i === newIndex ? "active" : "";
+              });
+            };
+
+            // Re-render chunks list with click handlers
+            if (chunksList) {
+              chunksList.innerHTML = "";
+              chunks.forEach((chunk, i) => {
+                const li = document.createElement("li");
+                li.setAttribute("role", "button");
+                li.setAttribute("tabindex", "0");
+                li.className = i === index ? "active" : "";
+                const name = document.createElement("span");
+                name.textContent = `Chunk ${i + 1}`;
+                const size = document.createElement("span");
+                size.className = "jr-chunk-size";
+                size.textContent = statuses[i] ? ` · ${statuses[i]}` : "";
+                li.appendChild(name);
+                li.appendChild(size);
+                // Add click handler
+                li.addEventListener("click", () => updateChunkView(i));
+                li.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    updateChunkView(i);
+                  }
+                });
+                chunksList.appendChild(li);
+              });
+            }
+            if (chunkLabel) chunkLabel.textContent = `Chunk ${index + 1} of ${chunks.length}`;
+
+            // Restore button states based on execution state
+            const execBtn = document.getElementById("jr-split-execute-all");
+            const cancelBtn = document.getElementById("jr-split-cancel");
+            const { started, completed } = self.state.split;
+            if (execBtn) {
+              if (completed) {
+                execBtn.textContent = "✓ Execution Complete";
+                execBtn.disabled = true;
+              } else if (started) {
+                execBtn.disabled = true;
+              }
+            }
+            if (cancelBtn && completed) {
+              cancelBtn.textContent = "Dismiss";
+            }
+          }
+        }, 200);
+      };
       updateMinimizedText();
     };
 
     // Restore full split modal from minimized state
     const maximizeSplitModal = () => {
-      if (!splitModal || !splitModalOverlay || !splitMinimizedEl) return;
+      if (!splitModal || !splitModalOverlay) return;
       this.state.split.minimized = false;
-      splitMinimizedEl.style.display = "none";
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
       splitModalOverlay.style.display = "block";
       splitModal.style.display = "flex";
       activateFocusTrap(splitModal, () => closeSplitModal());
+
+      // Recreate split editor if it was disposed (happens when navigating away)
+      const { chunks, index } = this.state.split;
+      if (!this.splitEditor && splitEditorContainer && chunks.length > 0) {
+        this.splitEditor = createOracleEditor(splitEditorContainer, {
+          value: chunks[index] || "",
+          automaticLayout: true,
+          readOnly: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          fontSize: 11,
+          tabSize: 2,
+          insertSpaces: true,
+          quickSuggestions: false,
+          suggestOnTriggerCharacters: false,
+        });
+      }
+
+      // Re-render chunks list and current view
+      renderSplitChunksList();
+      updateSplitCurrentView();
+
       if (this.splitEditor) {
         try {
           this.splitEditor.layout();
@@ -937,21 +1099,35 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
-    // Update the minimized indicator text
+    // Update the minimized indicator text (both local and global)
     const updateMinimizedText = () => {
-      if (!splitMinimizedText || !this.state.split) return;
+      if (!this.state.split) return;
       const { chunks, statuses, started } = this.state.split;
       const total = chunks.length;
-      const completed = statuses.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length;
-      const running = statuses.filter((s) => s === "running").length;
+      const doneCount = statuses.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length;
+      let text = "";
+      let done = false;
       if (!started) {
-        splitMinimizedText.textContent = `${total} chunks ready`;
-      } else if (completed >= total) {
-        const successCount = statuses.filter((s) => s === "success").length;
-        splitMinimizedText.textContent = `✓ Complete: ${successCount}/${total} succeeded`;
-        if (splitMinimizedEl) splitMinimizedEl.classList.add("completed");
+        text = `${total} chunks ready`;
+      } else if (doneCount >= total) {
+        const ok = statuses.filter((s) => s === "success").length;
+        text = `✓ Complete: ${ok}/${total}`;
+        done = true;
       } else {
-        splitMinimizedText.textContent = `Running ${completed + 1}/${total} chunks...`;
+        text = `Running ${doneCount + 1}/${total}...`;
+      }
+      // Update local
+      if (splitMinimizedText) splitMinimizedText.textContent = text;
+      if (splitMinimizedEl) {
+        if (done) splitMinimizedEl.classList.add("completed");
+        else splitMinimizedEl.classList.remove("completed");
+      }
+      // Update global
+      if (this._globalSplitIndicator) {
+        const gtxt = this._globalSplitIndicator.querySelector(".jr-global-split-text");
+        if (gtxt) gtxt.textContent = text;
+        if (done) this._globalSplitIndicator.classList.add("completed");
+        else this._globalSplitIndicator.classList.remove("completed");
       }
     };
 
@@ -1519,8 +1695,8 @@ export class JenkinsRunner extends BaseTool {
     }
     if (splitCancelBtn)
       splitCancelBtn.addEventListener("click", () => {
-        // If execution hasn't started, just close the modal
-        if (!this.state.split.started) {
+        // If execution hasn't started or is already complete, just close the modal
+        if (!this.state.split.started || this.state.split.completed) {
           closeSplitModal();
           return;
         }
@@ -2132,7 +2308,8 @@ export class JenkinsRunner extends BaseTool {
                   this.state.split.started = true;
                   // Initialize logs for split execution
                   logsEl.textContent = "";
-                  if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                  const miniL = document.getElementById("jr-split-mini-log");
+                  if (miniL) miniL.textContent = "";
                   let lastBuildUrl = null;
                   for (let idx = 0; idx < chunks.length; idx++) {
                     // Check if user requested cancellation
@@ -2248,6 +2425,9 @@ export class JenkinsRunner extends BaseTool {
                   // Update button to indicate completion and prevent accidental re-run
                   splitExecuteAllBtn.textContent = "✓ Execution Complete";
                   splitExecuteAllBtn.disabled = true;
+                  // Mark as completed and update cancel to dismiss
+                  this.state.split.completed = true;
+                  if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
                   appendLog(
                     `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
                   );
@@ -2380,7 +2560,8 @@ export class JenkinsRunner extends BaseTool {
                     this.state.split.started = true;
                     // Initialize logs for split execution
                     logsEl.textContent = "";
-                    if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                    const miniL2 = document.getElementById("jr-split-mini-log");
+                    if (miniL2) miniL2.textContent = "";
                     let lastBuildUrl = null;
                     for (let idx = 0; idx < chunks.length; idx++) {
                       // Check if user requested cancellation
@@ -2496,6 +2677,9 @@ export class JenkinsRunner extends BaseTool {
                     // Update button to indicate completion and prevent accidental re-run
                     splitExecuteAllBtn.textContent = "✓ Execution Complete";
                     splitExecuteAllBtn.disabled = true;
+                    // Mark as completed and update cancel to dismiss
+                    this.state.split.completed = true;
+                    if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
                     appendLog(
                       `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
                     );
@@ -2559,13 +2743,21 @@ export class JenkinsRunner extends BaseTool {
   }
 
   onDeactivate() {
-    // Cleanup listeners
-    try {
-      for (const un of this._logUnsubscribes) {
-        un();
-      }
-    } catch (_) {}
-    this._logUnsubscribes = [];
+    // If split execution is running (started but not completed), preserve log listeners
+    // so the async execution loop can continue in the background
+    const splitRunning = this.state?.split?.started && !this.state?.split?.completed;
+
+    // Cleanup listeners only if split is not running
+    if (!splitRunning) {
+      try {
+        for (const un of this._logUnsubscribes) {
+          un();
+        }
+      } catch (_) {}
+      this._logUnsubscribes = [];
+    }
+
+    // Dispose editors to save memory regardless
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -2573,6 +2765,10 @@ export class JenkinsRunner extends BaseTool {
     if (this.templateEditor) {
       this.templateEditor.dispose();
       this.templateEditor = null;
+    }
+    if (this.splitEditor) {
+      this.splitEditor.dispose();
+      this.splitEditor = null;
     }
   }
 }

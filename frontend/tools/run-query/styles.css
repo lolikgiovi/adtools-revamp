@@ -903,6 +903,11 @@
   z-index: 1001;
 }
 
+/* Confirm modal must appear above split modal */
+#jr-confirm-modal {
+  z-index: 1100;
+}
+
 .jr-modal-content {
   background: hsl(var(--card));
   border: 1px solid var(--jr-border);
@@ -1162,6 +1167,14 @@
 .jr-split-overlay {
   /* Only cover the main content area, not the sidebar */
   left: var(--sidebar-width, 12rem);
+}
+
+/* Split modal positioning - also offset from sidebar */
+#jr-split-modal {
+  left: var(--sidebar-width, 12rem);
+  right: 0;
+  /* Override inset */
+  inset: 0 0 0 var(--sidebar-width, 12rem);
 }
 
 /* Minimized floating progress indicator */
