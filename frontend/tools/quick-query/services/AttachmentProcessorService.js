@@ -11,7 +11,7 @@ export class AttachmentProcessorService {
   // 1. original value (for txt, html, json)
   // 2. base64 encoded value (for images, pdf)
 
-  async processAttachments(files) {
+  async processAttachments(files, tableName) {
     console.log("Processing attachments");
     const processedFiles = [];
 
@@ -56,6 +56,7 @@ export class AttachmentProcessorService {
           type: "processing",
           file: sanitizedFileName,
           message: error.message,
+          table_name: tableName,
         });
       }
     }
@@ -70,7 +71,7 @@ export class AttachmentProcessorService {
     processedFile.processedFormats.sizes.base64 = base64Data.length;
   }
 
-  async handleTextFile(file, processedFile) {
+  async handleTextFile(file, processedFile, tableName) {
     const textContent = await this.readFileAs(file, "text");
     processedFile.processedFormats.original = textContent;
     processedFile.processedFormats.contentType = "text/plain";
@@ -94,7 +95,11 @@ export class AttachmentProcessorService {
         processedFile.processedFormats.sizes.original = decoded.length;
         processedFile.processedFormats.sizes.base64 = cleaned.length;
       } catch (e) {
-        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "base64_decode_failed", file: processedFile.name });
+        UsageTracker.trackEvent("quick-query", "attachment_error", {
+          type: "base64_decode_failed",
+          file: processedFile.name,
+          table_name: tableName,
+        });
         processedFile.processedFormats.sizes.original = new TextEncoder().encode(textContent).length;
       }
     } else {
@@ -102,13 +107,13 @@ export class AttachmentProcessorService {
     }
   }
 
-  readFileAs(file, readAs) {
+  readFileAs(file, readAs, tableName) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onload = () => resolve(reader.result);
       reader.onerror = () => {
-        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "read_error", file: file.name, readAs });
+        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "read_error", file: file.name, readAs, table_name: tableName });
         reject(new Error("Error reading file"));
       };
 
@@ -126,14 +131,17 @@ export class AttachmentProcessorService {
     });
   }
 
-  async minifyContent(file) {
+  async minifyContent(file, tableName) {
     try {
       const original = (file.processedFormats && file.processedFormats.original) || "";
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const t = (file.type || "").toLowerCase();
 
       // Only attempt minify for text-like and specific known types
-      if (!original || (!t.includes("text") && !t.includes("json") && !t.includes("html") && !["txt","html","htm","json"].includes(ext))) {
+      if (
+        !original ||
+        (!t.includes("text") && !t.includes("json") && !t.includes("html") && !["txt", "html", "htm", "json"].includes(ext))
+      ) {
         return file;
       }
 
@@ -141,10 +149,15 @@ export class AttachmentProcessorService {
 
       if (ext === "html" || ext === "htm" || t.includes("html")) {
         try {
-          minified = await this.#minifyHtmlWithWorker(original);
+          minified = await this.#minifyHtmlWithWorker(original, tableName);
         } catch (err) {
           console.error("HTML Minify Worker failed, falling back to basic minify:", err);
-          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_fallback", file: file.name, message: err.message });
+          UsageTracker.trackEvent("quick-query", "attachment_error", {
+            type: "minify_worker_fallback",
+            file: file.name,
+            message: err.message,
+            table_name: tableName,
+          });
           // Fallback to previous simple minifier
           minified = original
             .replace(/<!--[\s\S]*?-->/g, "")
@@ -159,7 +172,11 @@ export class AttachmentProcessorService {
         } catch (e) {
           // Keep original if JSON parse fails
           console.warn("JSON minify failed, keeping original:", e);
-          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "json_minify_failed", file: file.name });
+          UsageTracker.trackEvent("quick-query", "attachment_error", {
+            type: "json_minify_failed",
+            file: file.name,
+            table_name: tableName,
+          });
           minified = original;
         }
       } else {
@@ -181,16 +198,23 @@ export class AttachmentProcessorService {
       };
     } catch (e) {
       console.error("Unexpected error during minify:", e);
-      UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_unexpected", file: file.name, message: e.message });
+      UsageTracker.trackEvent("quick-query", "attachment_error", {
+        type: "minify_unexpected",
+        file: file.name,
+        message: e.message,
+        table_name: tableName,
+      });
       return file;
     }
   }
 
-  async #minifyHtmlWithWorker(html) {
+  async #minifyHtmlWithWorker(html, tableName) {
     return new Promise((resolve, reject) => {
       const worker = new MinifyWorker();
       const cleanup = () => {
-        try { worker.terminate(); } catch (_) {}
+        try {
+          worker.terminate();
+        } catch (_) {}
       };
       worker.onmessage = (event) => {
         const data = event.data || {};
@@ -199,13 +223,21 @@ export class AttachmentProcessorService {
         if (success) {
           resolve(typeof result === "string" ? result : "");
         } else {
-          UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_failed", message: error || "HTML minify failed" });
+          UsageTracker.trackEvent("quick-query", "attachment_error", {
+            type: "minify_worker_failed",
+            message: error || "HTML minify failed",
+            table_name: tableName,
+          });
           reject(new Error(error || "HTML minify failed"));
         }
       };
       worker.onerror = (err) => {
         cleanup();
-        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "minify_worker_error", message: (err && err.message) || "Worker error" });
+        UsageTracker.trackEvent("quick-query", "attachment_error", {
+          type: "minify_worker_error",
+          message: (err && err.message) || "Worker error",
+          table_name: tableName,
+        });
         reject(err instanceof Error ? err : new Error("Worker error"));
       };
       worker.postMessage({ type: "minify", html });

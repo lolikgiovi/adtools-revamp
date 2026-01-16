@@ -32,7 +32,7 @@ export class ValueProcessorService {
       }
       // For other operations, validate nullable constraint
       if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType });
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType, table_name: tableName });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -42,7 +42,7 @@ export class ValueProcessorService {
     if (isExplicitNull) {
       // Always validate nullable constraint for explicit NULL values
       if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType });
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType, table_name: tableName });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -111,13 +111,13 @@ export class ValueProcessorService {
         const num = parseFloat(normalizedValue);
 
         if (isNaN(num)) {
-          UsageTracker.trackEvent("quick-query", "value_error", { type: "invalid_number", fieldName, value });
+          UsageTracker.trackEvent("quick-query", "value_error", { type: "invalid_number", fieldName, value, table_name: tableName });
           throw new Error(`Invalid numeric value "${value}" for field "${fieldName}"`);
         }
 
         // Validate precision and scale if specified
         if (fieldDataType.precision) {
-          this.validateNumberPrecision(num, fieldDataType.precision, fieldDataType.scale, fieldName);
+          this.validateNumberPrecision(num, fieldDataType.precision, fieldDataType.scale, fieldName, tableName);
         }
 
         return normalizedValue;
@@ -133,6 +133,7 @@ export class ValueProcessorService {
               type: "uuid_length_too_small",
               fieldName,
               maxLength: fieldDataType.maxLength,
+              table_name: tableName,
             });
             throw new Error(
               `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. Minimum required length is ${UUID_V4_MAXLENGTH}.`
@@ -151,6 +152,7 @@ export class ValueProcessorService {
               maxLength: fieldDataType.maxLength,
               length,
               unit: fieldDataType.unit,
+              table_name: tableName,
             });
             throw new Error(`Value exceeds maximum length of ${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`);
           }
@@ -205,7 +207,7 @@ export class ValueProcessorService {
     return { type: upperType };
   }
 
-  validateNumberPrecision(num, precision, scale, fieldName) {
+  validateNumberPrecision(num, precision, scale, fieldName, tableName) {
     const numStr = Math.abs(num).toString();
     const parts = numStr.split(".");
 
@@ -213,17 +215,37 @@ export class ValueProcessorService {
     const decimalDigits = parts[1]?.length || 0;
 
     if (integerDigits + decimalDigits > precision) {
-      UsageTracker.trackEvent("quick-query", "value_error", { type: "precision_exceeded", fieldName, precision, value: num });
+      UsageTracker.trackEvent("quick-query", "value_error", {
+        type: "precision_exceeded",
+        fieldName,
+        precision,
+        value: num,
+        table_name: tableName,
+      });
       throw new Error(`Value ${num} exceeds maximum precision of ${precision} for field "${fieldName}"`);
     }
 
     if (scale !== undefined && decimalDigits > scale) {
-      UsageTracker.trackEvent("quick-query", "value_error", { type: "scale_exceeded", fieldName, scale, precision, value: num });
+      UsageTracker.trackEvent("quick-query", "value_error", {
+        type: "scale_exceeded",
+        fieldName,
+        scale,
+        precision,
+        value: num,
+        table_name: tableName,
+      });
       throw new Error(`Value ${num} exceeds maximum scale of ${scale} (${precision},${scale}) for field "${fieldName}"`);
     }
 
     if (scale !== undefined && integerDigits > precision - scale) {
-      UsageTracker.trackEvent("quick-query", "value_error", { type: "integer_digits_exceeded", fieldName, precision, scale, value: num });
+      UsageTracker.trackEvent("quick-query", "value_error", {
+        type: "integer_digits_exceeded",
+        fieldName,
+        precision,
+        scale,
+        value: num,
+        table_name: tableName,
+      });
       throw new Error(`Integer part of ${num} exceeds maximum allowed digits for field "${fieldName}"`);
     }
   }

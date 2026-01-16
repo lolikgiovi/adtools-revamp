@@ -40,7 +40,7 @@ export class QueryGenerationService {
     const pkIndices = primaryKeys.map((pk) => {
       const index = fieldNames.indexOf(pk);
       if (index === -1) {
-        UsageTracker.trackEvent("quick-query", "generation_error", { type: "pk_field_missing", pk });
+        UsageTracker.trackEvent("quick-query", "generation_error", { type: "pk_field_missing", pk, table_name: tableName });
         throw new Error(`Primary key field '${pk}' not found in data columns`);
       }
       return { field: pk, index };
@@ -176,7 +176,8 @@ export class QueryGenerationService {
               value,
               dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
               this.getMaxLength(dataType),
-              attachments
+              attachments,
+              tableName
             );
 
             // Use attachment value if found, otherwise use original value
@@ -290,13 +291,13 @@ export class QueryGenerationService {
     // Validate that we have primary key values
     const hasValidPkValues = Array.from(pkValueMap.values()).some((valueSet) => valueSet.size > 0);
     if (!hasValidPkValues) {
-      UsageTracker.trackEvent("quick-query", "generation_error", { type: "missing_pk_for_update" });
+      UsageTracker.trackEvent("quick-query", "generation_error", { type: "missing_pk_for_update", table_name: tableName });
       throw new Error("Primary key values are required for UPDATE operation.");
     }
 
     // Validate that we have fields to update
     if (allUpdatedFields.size === 0) {
-      UsageTracker.trackEvent("quick-query", "generation_error", { type: "no_fields_to_update" });
+      UsageTracker.trackEvent("quick-query", "generation_error", { type: "no_fields_to_update", table_name: tableName });
       throw new Error("No fields to update. Please provide at least one non-primary-key field with a value.");
     }
 
@@ -330,6 +331,7 @@ export class QueryGenerationService {
                 row: rowIndex + 2,
                 column: columnLetter,
                 pk,
+                table_name: tableName,
               });
               throw new Error(
                 `Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`

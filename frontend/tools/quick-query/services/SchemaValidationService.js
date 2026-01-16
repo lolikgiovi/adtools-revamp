@@ -2,7 +2,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 export class SchemaValidationService {
   constructor() {}
 
-  validateSchema(schemaData) {
+  validateSchema(schemaData, tableName) {
     console.log(schemaData.length);
     // Check for empty schema
     if (schemaData.length === 0) {
@@ -63,6 +63,7 @@ export class SchemaValidationService {
         invalidDataTypesCount: invalidDataTypes.length,
         invalidNullableValuesCount: invalidNullableValues.length,
         invalidPkValuesCount: invalidPkValues.length,
+        table_name: tableName,
       });
       throw new Error(`Schema Validation Error:<br>${errors.join("<br>")}`);
     }
@@ -103,7 +104,6 @@ export class SchemaValidationService {
       const columnLetter = this.columnIndexToLetter(emptyColumnIndex);
       throw new Error(`Field Name Error:<br>Empty field name found in data input at column ${columnLetter}`);
     }
-
 
     // Find mismatches in both directions
     const missingInSchema = inputFieldNames.filter((field) => !schemaFieldNames.includes(field));

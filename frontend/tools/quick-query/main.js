@@ -578,7 +578,7 @@ export class QuickQueryUI {
       }
 
       // Validate before processing (same for both sync and async)
-      this.schemaValidationService.validateSchema(schemaData);
+      this.schemaValidationService.validateSchema(schemaData, tableName);
       this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
@@ -727,6 +727,7 @@ export class QuickQueryUI {
       rowCount,
       hasAttachments: this.processedFiles.length > 0,
       usedWorker,
+      table_name: tableName,
     });
   }
 
@@ -1707,7 +1708,12 @@ export class QuickQueryUI {
     } catch (e) {
       if (String(e?.message || e) !== "Closed") {
         this.showError(`Failed to import default schema: ${String(e?.message || e)}`);
-        UsageTracker.trackEvent("quick-query", "ui_error", { type: "kv_import_failed", message: String(e?.message || e) });
+        const tableName = this.elements.tableNameInput.value.trim();
+        UsageTracker.trackEvent("quick-query", "ui_error", {
+          type: "kv_import_failed",
+          message: String(e?.message || e),
+          table_name: tableName,
+        });
       }
     }
   }
@@ -1981,7 +1987,13 @@ export class QuickQueryUI {
     } catch (error) {
       this.showError(`Failed to import schemas: ${error.message}`);
       const file = event?.target?.files?.[0];
-      UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_import_failed", message: error.message, filename: file?.name });
+      const tableName = this.elements.tableNameInput.value.trim();
+      UsageTracker.trackEvent("quick-query", "ui_error", {
+        type: "schema_import_failed",
+        message: error.message,
+        filename: file?.name,
+        table_name: tableName,
+      });
     } finally {
       event.target.value = ""; // Reset file input
     }
@@ -2053,7 +2065,8 @@ export class QuickQueryUI {
         this.updateDataSpreadsheet();
       } catch (error) {
         console.error("Error updating schema table:", error);
-        UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_update_failed", message: error.message });
+        const tableName = this.elements.tableNameInput.value.trim();
+        UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_update_failed", message: error.message, table_name: tableName });
       }
     }
   }
@@ -2156,7 +2169,8 @@ export class QuickQueryUI {
 
     // Process the files using existing attachment processor
     try {
-      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess);
+      const tableName = this.elements.tableNameInput.value.trim();
+      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess, tableName);
       this.processedFiles = [...this.processedFiles, ...addedFiles];
 
       // Clear current file items and re-render full list
@@ -2246,7 +2260,8 @@ export class QuickQueryUI {
     if (files.length === 0) return;
 
     try {
-      const addedFiles = await this.attachmentProcessorService.processAttachments(files);
+      const tableName = this.elements.tableNameInput.value.trim();
+      const addedFiles = await this.attachmentProcessorService.processAttachments(files, tableName);
       // Merge with existing files while preserving previously added ones
       this.processedFiles = [...this.processedFiles, ...addedFiles];
 
@@ -2306,7 +2321,8 @@ export class QuickQueryUI {
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         const t = (file.type || "").toLowerCase();
         if (["txt", "html", "htm", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
-          return await this.attachmentProcessorService.minifyContent(file);
+          const tableName = this.elements.tableNameInput.value.trim();
+          return await this.attachmentProcessorService.minifyContent(file, tableName);
         }
         return file;
       })
