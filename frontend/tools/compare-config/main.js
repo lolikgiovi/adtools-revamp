@@ -15,6 +15,7 @@ import { enhanceWithDetailedDiff } from "./lib/diff-adapter.js";
 import { isTauri } from "../../core/Runtime.js";
 import * as FileParser from "./lib/file-parser.js";
 import * as FileMatcher from "./lib/file-matcher.js";
+import { ExcelComparator } from "./lib/excel-comparator.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -1418,6 +1419,59 @@ class CompareConfigTool extends BaseTool {
           : ""
       }
     `;
+  }
+
+  /**
+   * Execute Excel/CSV comparison
+   */
+  async executeExcelComparison() {
+    if (this.excelCompare.matches.length === 0) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "No matching files to compare. Please add files to both sides.",
+      });
+      return;
+    }
+
+    // Show progress
+    this.showProgress("Comparing Excel/CSV Files");
+    this.updateProgressStep("fetch", "active", "Parsing files...");
+
+    try {
+      const results = await ExcelComparator.compareFileSets(this.excelCompare.matches, {
+        rowMatching: this.excelCompare.rowMatching,
+        pkColumns: this.excelCompare.pkColumns,
+        normalize: true,
+        onProgress: (p) => {
+          if (p.phase === "parsing") {
+            this.updateProgressStep("fetch", "active", `Parsing (${p.fileIndex + 1}/${p.totalFiles}): ${p.fileName}`);
+          } else if (p.phase.startsWith("Comparing")) {
+            this.updateProgressStep("compare", "active", p.phase);
+          }
+        },
+      });
+
+      this.updateProgressStep("fetch", "done", `${this.excelCompare.matches.length} files parsed`);
+      this.updateProgressStep("compare", "done", `${results.rows.length} total records compared`);
+
+      // Store results
+      this.results["excel-compare"] = results;
+
+      // Small delay to show completion
+      await new Promise((r) => setTimeout(r, 400));
+
+      this.hideProgress();
+      this.showResults();
+
+      this.eventBus.emit("comparison:complete", results);
+    } catch (error) {
+      console.error("[ExcelCompare] Comparison failed:", error);
+      this.hideProgress();
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Excel comparison failed: ${error.message || error}`,
+      });
+    }
   }
 
   /**

@@ -53,19 +53,23 @@ export class GridView {
       }
     }
 
+    // Check if any row has a source file (for multi-file Excel compare)
+    const hasSourceFile = comparisons.some((c) => c._sourceFile);
+
     return `
       <div class="excel-table-container">
         <div class="table-scroll-area">
           <table class="excel-table">
             <thead>
               <tr class="h-row-1">
+                ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
                 <th rowspan="2" class="sticky-col pk-header">${this.escapeHtml(pkHeaderName)}</th>
                 <th rowspan="2" class="sticky-col status-header">STATUS</th>
                 ${fieldsToDisplay
                   .map(
                     (f) => `
                   <th colspan="2" class="field-header-main">${this.escapeHtml(f)}</th>
-                `
+                `,
                   )
                   .join("")}
               </tr>
@@ -79,13 +83,13 @@ export class GridView {
                   <th class="env-header-sub env-2 field-boundary">
                     <div class="h-label-clip">${this.escapeHtml(env2Name)}</div>
                   </th>
-                `
+                `,
                   )
                   .join("")}
               </tr>
             </thead>
             <tbody>
-              ${comparisons.map((comp) => this.renderRow(comp, fieldsToDisplay)).join("")}
+              ${comparisons.map((comp) => this.renderRow(comp, fieldsToDisplay, hasSourceFile)).join("")}
             </tbody>
           </table>
         </div>
@@ -100,8 +104,8 @@ export class GridView {
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
             <span>Smart Filter: Showing only ${activeFields.length} columns with differences (hiding ${
-                allFieldNames.size - activeFields.length
-              } identical columns).</span>
+              allFieldNames.size - activeFields.length
+            } identical columns).</span>
           </div>
         `
             : ""
@@ -113,15 +117,22 @@ export class GridView {
   /**
    * Renders a single row
    */
-  renderRow(comparison, fields) {
+  renderRow(comparison, fields, hasSourceFile = false) {
     const statusClass = comparison.status.toLowerCase().replace("_", "-");
-    const statusLabel = this.getStatusLabel(comparison.status);
+    const statusLabel = this.getStatusLabel(comparison.status, hasSourceFile);
     const pkValue = this.formatPrimaryKey(comparison.key);
     const diffFields = new Set(comparison.differences || []);
     const diffDetails = comparison._diffDetails || {};
 
     return `
       <tr class="data-row status-${statusClass}">
+        ${
+          hasSourceFile
+            ? `<td class="sticky-col source-cell" title="${this.escapeHtml(comparison._sourceFile)}">${this.escapeHtml(
+                comparison._sourceFile,
+              )}</td>`
+            : ""
+        }
         <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${this.escapeHtml(pkValue)}</td>
         <td class="sticky-col status-cell">
           <span class="status-badge status-${statusClass}">${statusLabel}</span>
@@ -168,7 +179,7 @@ export class GridView {
     }
 
     // Check if we have character-level diff details
-    if (isDifferent && diffInfo && diffInfo.type === 'char-diff' && diffInfo.segments) {
+    if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
       // Render with character-level highlighting
       const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
       return `
@@ -190,22 +201,22 @@ export class GridView {
    * @returns {Object} { env1Html, env2Html }
    */
   renderCharDiff(segments) {
-    let env1Html = '';
-    let env2Html = '';
+    let env1Html = "";
+    let env2Html = "";
 
     for (const seg of segments) {
       const escaped = this.escapeHtml(seg.value);
 
       switch (seg.type) {
-        case 'equal':
+        case "equal":
           env1Html += escaped;
           env2Html += escaped;
           break;
-        case 'delete':
+        case "delete":
           // Deleted from env1 (shown in env1 only)
           env1Html += `<span class="diff-delete">${escaped}</span>`;
           break;
-        case 'insert':
+        case "insert":
           // Inserted in env2 (shown in env2 only)
           env2Html += `<span class="diff-insert">${escaped}</span>`;
           break;
@@ -240,16 +251,16 @@ export class GridView {
   /**
    * Gets a human-readable status label
    */
-  getStatusLabel(status) {
+  getStatusLabel(status, isExcel = false) {
     switch (status) {
       case "match":
         return "Match";
       case "differ":
         return "Differ";
       case "only_in_env1":
-        return "Only in Env 1";
+        return isExcel ? "Only in Reference" : "Only in Env 1";
       case "only_in_env2":
-        return "Only in Env 2";
+        return isExcel ? "Only in Comparator" : "Only in Env 2";
       default:
         return status;
     }

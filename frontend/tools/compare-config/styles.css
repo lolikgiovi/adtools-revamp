@@ -1910,7 +1910,7 @@
   justify-content: center;
   gap: 1rem;
   cursor: pointer;
-  background: hsl(var(--muted) / 0.1);
+  background: hsl(var(--bg-secondary) / 0.5); /* More robust than --muted/0.1 */
   transition: all 0.2s ease;
   text-align: center;
 }
@@ -1918,7 +1918,7 @@
 .dropzone:hover,
 .dropzone.drag-over {
   border-color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.05);
+  background: hsl(var(--primary) / 0.08); /* Slightly more prominent */
 }
 
 .dropzone svg {
@@ -1934,6 +1934,7 @@
   margin: 0;
   font-size: 0.9rem;
   font-weight: 500;
+  color: hsl(var(--foreground));
 }
 
 .dropzone .help-text {
@@ -1960,6 +1961,15 @@
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(var(--shadow, 0 0% 0%) / 0.05);
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  border-color: hsl(var(--primary) / 0.3);
+  box-shadow: 0 2px 5px hsl(var(--shadow, 0 0% 0%) / 0.1);
+  transform: translateY(-1px);
 }
 
 .file-item .file-icon {
@@ -1972,12 +1982,19 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .file-item .btn-remove-file {
   color: hsl(var(--muted-foreground));
   padding: 2px;
   border-radius: 4px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.file-item:hover .btn-remove-file {
+  opacity: 1;
 }
 
 .file-item .btn-remove-file:hover {
@@ -1986,18 +2003,24 @@
 }
 
 .excel-match-info {
-  background: hsl(var(--info) / 0.1);
-  border: 1px solid hsl(var(--info) / 0.3);
+  background: hsl(var(--info) / 0.12);
+  border: 1px solid hsl(var(--info) / 0.25);
   border-radius: var(--radius);
-  padding: 0.75rem 1rem;
+  padding: 0.875rem 1.25rem;
   font-size: 0.875rem;
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  color: hsl(var(--foreground));
+}
+
+.match-stat strong {
+  color: hsl(var(--primary));
+  font-weight: 600;
 }
 
 .excel-settings {
-  background: hsl(var(--card));
+  background: hsl(var(--bg-secondary) / 0.4);
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1.5rem;
@@ -2021,6 +2044,7 @@
 .setting-group label {
   font-size: 0.875rem;
   font-weight: 500;
+  color: hsl(var(--foreground));
 }
 
 .radio-group {
@@ -2034,6 +2058,7 @@
   gap: 0.5rem;
   cursor: pointer;
   font-size: 0.875rem;
+  color: hsl(var(--foreground));
 }
 
 .radio-label input[type="radio"] {
@@ -2051,9 +2076,6 @@
    ============================================ */
 /* Default (web): hide tauri-only elements. 
    main.js will handle showing them if isTauri() is true. */
-/* We don't hide by default in CSS to avoid flicker if JS is slow, 
-   instead we'll let main.js handle the initial toggle. 
-   But if we want a safe default for web: */
 /* .tauri-only { display: none !important; } */
 
 /* ============================================
@@ -2062,26 +2084,32 @@
 
 .diff-insert {
   background-color: hsl(var(--success) / 0.25);
-  color: hsl(142 60% 30%);
+  color: hsl(var(--success));
   padding: 1px 2px;
   border-radius: 2px;
 }
 
 .diff-delete {
   background-color: hsl(var(--destructive) / 0.25);
-  color: hsl(0 70% 40%);
+  color: hsl(var(--destructive));
   text-decoration: line-through;
   padding: 1px 2px;
   border-radius: 2px;
 }
 
-/* Dark mode adjustments */
-:root[data-theme="dark"] .diff-insert {
-  background-color: hsl(142 50% 20%);
-  color: hsl(142 70% 65%);
+/* Source File Column Styles */
+.source-header,
+.source-cell {
+  min-width: 150px;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-:root[data-theme="dark"] .diff-delete {
-  background-color: hsl(0 50% 20%);
-  color: hsl(0 80% 70%);
+.source-cell {
+  background: hsl(var(--bg-secondary) / 0.3);
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
 }
