@@ -253,25 +253,46 @@ class CompareConfigTool extends BaseTool {
 
       const state = JSON.parse(saved);
 
-      // Restore basic state
+      // Restore results first to inform clean slate logic
+      this.results = state.results || { "schema-table": null, "raw-sql": null, "excel-compare": null };
+
+      // Restore basic state with clean-slate check
       this.queryMode = state.queryMode || "schema-table";
-      this.schema = state.schema;
-      this.table = state.table;
-      this.metadata = state.metadata;
-      this.customPrimaryKey = state.customPrimaryKey || [];
-      this.selectedFields = state.selectedFields || [];
+
+      // If no results for schema-table, clear its selection state
+      if (this.results["schema-table"]) {
+        this.schema = state.schema;
+        this.table = state.table;
+        this.metadata = state.metadata;
+        this.customPrimaryKey = state.customPrimaryKey || [];
+        this.selectedFields = state.selectedFields || [];
+        this.env2SchemaExists = state.env2SchemaExists || false;
+        this.env2TableExists = state.env2TableExists || false;
+      } else {
+        this.schema = null;
+        this.table = null;
+        this.metadata = null;
+        this.customPrimaryKey = [];
+        this.selectedFields = [];
+        this.env2SchemaExists = false;
+        this.env2TableExists = false;
+      }
+
+      // If no results for raw-sql, clear its selection state
+      if (this.results["raw-sql"]) {
+        this.rawSql = state.rawSql || "";
+        this.rawPrimaryKey = state.rawPrimaryKey || "";
+      } else {
+        this.rawSql = "";
+        this.rawPrimaryKey = "";
+      }
+
       this.whereClause = state.whereClause || "";
       this.maxRows = state.maxRows || 100;
-      this.env2SchemaExists = state.env2SchemaExists || false;
-      this.env2TableExists = state.env2TableExists || false;
-
-      this.rawSql = state.rawSql || "";
-      this.rawPrimaryKey = state.rawPrimaryKey || "";
       this.rawMaxRows = state.rawMaxRows || 100;
 
       this.currentView = state.currentView || "expandable";
       this.statusFilter = state.statusFilter;
-      this.results = state.results || { "schema-table": null, "raw-sql": null };
 
       // Restore connections
       if (state.env1) {
@@ -313,8 +334,12 @@ class CompareConfigTool extends BaseTool {
     if (env2Select && this.env2.connection) env2Select.value = this.env2.connection.name;
 
     // If we have metadata, we can show fields and set schema/table
+    // If we have metadata, we can show fields and set schema/table
     if (this.metadata && this.schema && this.table) {
-      this.showFieldSelection();
+      // Only show field selection UI if we are in schema-table mode
+      if (this.queryMode === "schema-table") {
+        this.showFieldSelection();
+      }
       if (schemaSelect) {
         schemaSelect.innerHTML = `<option value="${this.schema}">${this.schema}</option>`;
         schemaSelect.value = this.schema;
@@ -1236,8 +1261,12 @@ class CompareConfigTool extends BaseTool {
       this.selectedFields = this.metadata.columns.map((c) => c.name);
     }
 
-    // Show field selection section
-    fieldSelection.style.display = "block";
+    // Show field selection section ONLY if we are in schema-table mode
+    if (this.queryMode === "schema-table") {
+      fieldSelection.style.display = "block";
+    } else {
+      fieldSelection.style.display = "none";
+    }
   }
 
   /**
