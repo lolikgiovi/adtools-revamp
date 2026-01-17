@@ -827,22 +827,32 @@
   border-radius: var(--radius);
 }
 
-.field-comparison-table {
+/* Shared table styles in detail views */
+.field-comparison-table,
+.data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
+  margin-top: 0.5rem;
 }
 
 .field-comparison-table th,
-.field-comparison-table td {
+.field-comparison-table td,
+.data-table th,
+.data-table td {
   padding: 0.625rem;
   text-align: left;
   border-bottom: 1px solid hsl(var(--border));
 }
 
-.field-comparison-table th {
+.field-comparison-table th,
+.data-table th {
   background: hsl(var(--muted));
   font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: hsl(var(--muted-foreground));
 }
 
 .field-diff-row .field-name {
@@ -851,7 +861,7 @@
 }
 
 .field-diff-row .field-value {
-  font-family: "SF Mono", Monaco, monospace;
+  font-family: var(--font-mono, monospace);
   font-size: 0.8rem;
 }
 
@@ -901,11 +911,6 @@
   color: hsl(var(--muted-foreground));
 }
 
-.data-table {
-  width: 100%;
-  font-size: 0.8rem;
-}
-
 .data-table .data-key {
   font-weight: 500;
   color: hsl(var(--foreground));
@@ -913,8 +918,8 @@
 }
 
 .data-table .data-value {
-  font-family: "SF Mono", Monaco, monospace;
-  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono, monospace);
+  color: hsl(var(--foreground));
 }
 
 .detail-message {

@@ -254,8 +254,13 @@ export class MasterDetailView {
     const entries = Object.entries(data);
     return `
       <div class="detail-data">
-        <h4>${title}</h4>
         <table class="data-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>${this.escapeHtml(title)}</th>
+            </tr>
+          </thead>
           <tbody>
             ${entries
               .map(
