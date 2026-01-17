@@ -57,12 +57,13 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Query Mode Tabs -->
         <div class="tabs-container">
             <div class="tabs-left">
-                <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
-                <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
+                <button class="tab-button tauri-only active" data-tab="schema-table">Schema/Table</button>
+                <button class="tab-button tauri-only" data-tab="raw-sql">Raw SQL</button>
+                <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
             </div>
             <div class="tabs-right">
-                <!-- Connection Status Indicator -->
-                <div id="connection-status" class="connection-status" style="display: none;">
+                <!-- Connection Status Indicator (Tauri modes only) -->
+                <div id="connection-status" class="connection-status tauri-only" style="display: none;">
                     <span class="connection-indicator"></span>
                     <div class="connection-list">
                         <!-- Connection chips will be populated here -->
@@ -168,6 +169,111 @@ export const CompareConfigTemplate = /* html */ `
                         <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                     Compare Query Result from Both Environments
+                </button>
+            </div>
+        </div>
+
+        <!-- Excel Compare Mode (shown when Excel Compare tab is active) -->
+        <div id="excel-compare-mode" class="excel-compare-mode" style="display: none;">
+            <div class="excel-file-selection">
+                <div class="grid-row">
+                    <!-- Reference Files -->
+                    <div class="file-upload-zone" id="ref-upload-zone">
+                        <div class="upload-zone-header">
+                            <h4>Reference Files</h4>
+                        </div>
+                        <div class="dropzone" id="ref-dropzone">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                            </svg>
+                            <p>Drop files here or click to browse</p>
+                            <p class="help-text">Supports .xlsx, .xls, .csv</p>
+                            <input type="file" id="ref-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                        </div>
+                        <div class="file-list" id="ref-file-list">
+                            <!-- Reference files will be listed here -->
+                        </div>
+                    </div>
+
+                    <!-- Comparator Files -->
+                    <div class="file-upload-zone" id="comp-upload-zone">
+                        <div class="upload-zone-header">
+                            <h4>Comparator Files</h4>
+                        </div>
+                        <div class="dropzone" id="comp-dropzone">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                            </svg>
+                            <p>Drop files here or click to browse</p>
+                            <p class="help-text">Supports .xlsx, .xls, .csv</p>
+                            <input type="file" id="comp-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                        </div>
+                        <div class="file-list" id="comp-file-list">
+                            <!-- Comparator files will be listed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Matching Info -->
+            <div id="excel-match-info" class="excel-match-info" style="display: none;">
+                <!-- Will show matched/unmatched file counts -->
+            </div>
+
+            <!-- Comparison Settings -->
+            <div class="excel-settings">
+                <div class="settings-row">
+                    <div class="setting-group">
+                        <label>Row Matching:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="row-matching" value="key" checked>
+                                <span>By Primary Key</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="row-matching" value="position">
+                                <span>By Row Position</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-group" id="pk-column-setting">
+                        <label for="excel-pk-columns">Primary Key Column(s):</label>
+                        <input type="text" id="excel-pk-columns" class="form-input" placeholder="e.g., ID or SCHEMA,TABLE_NAME">
+                        <p class="help-text">Comma-separated column names. Auto-detected from first column if empty.</p>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <div class="setting-group">
+                        <label>Data Comparison:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="data-comparison" value="strict" checked>
+                                <span>Strict (as-is)</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="data-comparison" value="normalized">
+                                <span>Normalized (match dates/numbers)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compare Button -->
+            <div class="excel-compare-actions">
+                <button class="btn btn-primary" id="btn-compare-excel" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Compare Files
                 </button>
             </div>
         </div>

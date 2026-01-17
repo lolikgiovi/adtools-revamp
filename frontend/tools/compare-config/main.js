@@ -12,6 +12,9 @@ import { MasterDetailView } from "./views/MasterDetailView.js";
 import { GridView } from "./views/GridView.js";
 import { getFeatureFlag, FLAGS } from "./lib/feature-flags.js";
 import { enhanceWithDetailedDiff } from "./lib/diff-adapter.js";
+import { isTauri } from "../../core/Runtime.js";
+import * as FileParser from "./lib/file-parser.js";
+import * as FileMatcher from "./lib/file-matcher.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -63,6 +66,19 @@ class CompareConfigTool extends BaseTool {
     this.results = {
       "schema-table": null,
       "raw-sql": null,
+      "excel-compare": null,
+    };
+
+    // Excel Compare state
+    this.excelCompare = {
+      refFiles: [],
+      compFiles: [],
+      matches: [],
+      unmatchedRef: [],
+      unmatchedComp: [],
+      rowMatching: "key", // "key" or "position"
+      pkColumns: "", // Comma-separated
+      dataComparison: "strict", // "strict" or "normalized"
     };
 
     // View instances
@@ -85,6 +101,9 @@ class CompareConfigTool extends BaseTool {
   async onMount() {
     // Check if Oracle client is installed
     await this.checkOracleClient();
+
+    // Initialize environment-based visibility (Tauri vs Web)
+    this.initEnvironmentVisibility();
 
     // Always bind UI events so the installation guide actions work
     this.bindEvents();
@@ -139,6 +158,25 @@ class CompareConfigTool extends BaseTool {
 
     if (guide) guide.style.display = "none";
     if (main) main.style.display = "block";
+  }
+
+  /**
+   * Initializes environment-based visibility (Tauri vs Web)
+   */
+  initEnvironmentVisibility() {
+    const tauri = isTauri();
+
+    // Elements that only work in Tauri (database modes)
+    const tauriOnlyElements = document.querySelectorAll(".tauri-only");
+    tauriOnlyElements.forEach((el) => {
+      el.style.display = tauri ? "" : "none";
+    });
+
+    // If in web mode, we must use Excel Compare
+    if (!tauri) {
+      this.queryMode = "excel-compare";
+      this.switchTab("excel-compare");
+    }
   }
 
   /**
@@ -549,6 +587,78 @@ class CompareConfigTool extends BaseTool {
       rawEnv2Connection.addEventListener("change", (e) => this.onRawConnectionSelected("env2", e.target.value));
     }
 
+    // Excel Compare mode events
+    const refDropzone = document.getElementById("ref-dropzone");
+    const compDropzone = document.getElementById("comp-dropzone");
+    const refFileInput = document.getElementById("ref-file-input");
+    const compFileInput = document.getElementById("comp-file-input");
+    const compareExcelBtn = document.getElementById("btn-compare-excel");
+    const rowMatchingRadios = document.querySelectorAll('input[name="row-matching"]');
+    const dataComparisonRadios = document.querySelectorAll('input[name="data-comparison"]');
+    const excelPkColumnsInput = document.getElementById("excel-pk-columns");
+
+    if (refDropzone) {
+      refDropzone.addEventListener("click", () => refFileInput.click());
+      refDropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        refDropzone.classList.add("drag-over");
+      });
+      refDropzone.addEventListener("dragleave", () => refDropzone.classList.remove("drag-over"));
+      refDropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        refDropzone.classList.remove("drag-over");
+        this.handleExcelFileSelection("ref", e.dataTransfer.files);
+      });
+    }
+
+    if (compDropzone) {
+      compDropzone.addEventListener("click", () => compFileInput.click());
+      compDropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        compDropzone.classList.add("drag-over");
+      });
+      compDropzone.addEventListener("dragleave", () => compDropzone.classList.remove("drag-over"));
+      compDropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        compDropzone.classList.remove("drag-over");
+        this.handleExcelFileSelection("comp", e.dataTransfer.files);
+      });
+    }
+
+    if (refFileInput) {
+      refFileInput.addEventListener("change", (e) => this.handleExcelFileSelection("ref", e.target.files));
+    }
+
+    if (compFileInput) {
+      compFileInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
+    }
+
+    if (compareExcelBtn) {
+      compareExcelBtn.addEventListener("click", () => this.executeExcelComparison());
+    }
+
+    rowMatchingRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        this.excelCompare.rowMatching = e.target.value;
+        const pkSetting = document.getElementById("pk-column-setting");
+        if (pkSetting) {
+          pkSetting.style.display = e.target.value === "key" ? "block" : "none";
+        }
+      });
+    });
+
+    dataComparisonRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        this.excelCompare.dataComparison = e.target.value;
+      });
+    });
+
+    if (excelPkColumnsInput) {
+      excelPkColumnsInput.addEventListener("input", (e) => {
+        this.excelCompare.pkColumns = e.target.value.trim();
+      });
+    }
+
     // Results events
     const exportJsonBtn = document.getElementById("btn-export-json");
     const exportCsvBtn = document.getElementById("btn-export-csv");
@@ -592,16 +702,24 @@ class CompareConfigTool extends BaseTool {
     const envSelection = document.querySelector(".environment-selection");
     const fieldSelection = document.getElementById("field-selection");
     const rawSqlMode = document.getElementById("raw-sql-mode");
+    const excelCompareMode = document.getElementById("excel-compare-mode");
     const resultsSection = document.getElementById("results-section");
 
     if (tab === "schema-table") {
       if (envSelection) envSelection.style.display = "block";
       if (fieldSelection) fieldSelection.style.display = this.metadata ? "block" : "none";
       if (rawSqlMode) rawSqlMode.style.display = "none";
-    } else {
+      if (excelCompareMode) excelCompareMode.style.display = "none";
+    } else if (tab === "raw-sql") {
       if (envSelection) envSelection.style.display = "none";
       if (fieldSelection) fieldSelection.style.display = "none";
       if (rawSqlMode) rawSqlMode.style.display = "block";
+      if (excelCompareMode) excelCompareMode.style.display = "none";
+    } else if (tab === "excel-compare") {
+      if (envSelection) envSelection.style.display = "none";
+      if (fieldSelection) fieldSelection.style.display = "none";
+      if (rawSqlMode) rawSqlMode.style.display = "none";
+      if (excelCompareMode) excelCompareMode.style.display = "block";
     }
 
     // Toggle results visibility based on current tab's results
@@ -852,7 +970,7 @@ class CompareConfigTool extends BaseTool {
       if (!this.env2SchemaExists) {
         this.showValidationMessage(
           `error`,
-          `Schema "${schema}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different schema.`
+          `Schema "${schema}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different schema.`,
         );
 
         // Disable table selection
@@ -950,7 +1068,7 @@ class CompareConfigTool extends BaseTool {
       if (!this.env2TableExists) {
         this.showValidationMessage(
           `error`,
-          `⚠️ Table "${this.schema}.${tableName}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different table.`
+          `⚠️ Table "${this.schema}.${tableName}" does not exist in Env 2 (${this.env2.connection.name}). Please select a different table.`,
         );
 
         // Hide field selection
@@ -979,7 +1097,7 @@ class CompareConfigTool extends BaseTool {
         this.env1.connection.name,
         this.env1.connection,
         this.schema,
-        this.table
+        this.table,
       );
 
       // Store metadata
@@ -1187,6 +1305,119 @@ class CompareConfigTool extends BaseTool {
 
     this.updateSelectedFields();
     this.saveToolState();
+  }
+
+  /**
+   * Handle Excel file selection (drop or input)
+   */
+  async handleExcelFileSelection(side, files) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const newFiles = FileParser.filterSupportedFiles(files);
+
+    if (newFiles.length === 0) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "No supported files (.xlsx, .xls, .csv) were selected.",
+      });
+      return;
+    }
+
+    // Add to existing list
+    this.excelCompare[listKey] = [...this.excelCompare[listKey], ...newFiles];
+
+    // Update UI
+    this.updateExcelFileList(side);
+    this.updateExcelMatchInfo();
+    this.saveToolState();
+  }
+
+  /**
+   * Remove a file from Excel comparison
+   */
+  removeExcelFile(side, index) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    this.excelCompare[listKey].splice(index, 1);
+
+    // Update UI
+    this.updateExcelFileList(side);
+    this.updateExcelMatchInfo();
+    this.saveToolState();
+  }
+
+  /**
+   * Update file list UI for a side
+   */
+  updateExcelFileList(side) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const listEl = document.getElementById(`${side}-file-list`);
+    if (!listEl) return;
+
+    listEl.innerHTML = "";
+
+    this.excelCompare[listKey].forEach((file, index) => {
+      const item = document.createElement("div");
+      item.className = "file-item";
+      item.innerHTML = `
+        <div class="file-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+        </div>
+        <div class="file-name" title="${file.name}">${file.name}</div>
+        <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      `;
+
+      item.querySelector(".btn-remove-file").addEventListener("click", () => this.removeExcelFile(side, index));
+      listEl.appendChild(item);
+    });
+
+    // Enable/disable compare button
+    const compareBtn = document.getElementById("btn-compare-excel");
+    if (compareBtn) {
+      compareBtn.disabled = this.excelCompare.refFiles.length === 0 || this.excelCompare.compFiles.length === 0;
+    }
+  }
+
+  /**
+   * Update match info summary
+   */
+  updateExcelMatchInfo() {
+    const infoEl = document.getElementById("excel-match-info");
+    if (!infoEl) return;
+
+    if (this.excelCompare.refFiles.length === 0 && this.excelCompare.compFiles.length === 0) {
+      infoEl.style.display = "none";
+      return;
+    }
+
+    const { refFiles, compFiles } = this.excelCompare;
+    const result = FileMatcher.autoMatch(refFiles, compFiles);
+    this.excelCompare.matches = result.matches;
+    this.excelCompare.unmatchedRef = result.unmatchedRef;
+    this.excelCompare.unmatchedComp = result.unmatchedComp;
+
+    const stats = FileMatcher.getMatchStats(result);
+
+    infoEl.style.display = "flex";
+    infoEl.innerHTML = `
+      <div class="match-stat"><strong>${stats.matched}</strong> files matched</div>
+      ${
+        stats.unmatchedRef > 0
+          ? `<div class="match-stat" style="color: hsl(var(--warning))"><strong>${stats.unmatchedRef}</strong> unmatched reference</div>`
+          : ""
+      }
+      ${
+        stats.unmatchedComp > 0
+          ? `<div class="match-stat" style="color: hsl(var(--warning))"><strong>${stats.unmatchedComp}</strong> unmatched comparator</div>`
+          : ""
+      }
+    `;
   }
 
   /**
@@ -1877,6 +2108,8 @@ class CompareConfigTool extends BaseTool {
         titleEl.textContent = `Comparison Results for ${this.schema}.${this.table}`;
       } else if (this.queryMode === "raw-sql") {
         titleEl.textContent = "Comparison Results (Raw SQL)";
+      } else if (this.queryMode === "excel-compare") {
+        titleEl.textContent = "Comparison Results (Excel/CSV)";
       } else {
         titleEl.textContent = "Comparison Results";
       }
@@ -1952,20 +2185,40 @@ class CompareConfigTool extends BaseTool {
     const { summary } = this.results[this.queryMode];
 
     // Check if primary key was selected (for warning)
-    const hasPrimaryKey =
-      this.queryMode === "schema-table"
-        ? this.customPrimaryKey && this.customPrimaryKey.length > 0
-        : this.rawPrimaryKey && this.rawPrimaryKey.trim().length > 0;
+    let hasPrimaryKey = true;
+    if (this.queryMode === "schema-table") {
+      hasPrimaryKey = this.customPrimaryKey && this.customPrimaryKey.length > 0;
+    } else if (this.queryMode === "raw-sql") {
+      hasPrimaryKey = this.rawPrimaryKey && this.rawPrimaryKey.trim().length > 0;
+    } else if (this.queryMode === "excel-compare" && this.excelCompare.rowMatching === "key") {
+      hasPrimaryKey = this.excelCompare.pkColumns && this.excelCompare.pkColumns.trim().length > 0;
+    }
 
     // Warning banner for no PK
-    const noPkWarning = !hasPrimaryKey
-      ? `
+    const noPkWarning =
+      !hasPrimaryKey && this.queryMode !== "excel-compare"
+        ? `
       <div class="no-pk-warning">
         <span class="warning-icon">⚠️</span>
         <span class="warning-text">No primary key selected. Results are matched using the first column which may not be unique.</span>
       </div>
     `
-      : "";
+        : "";
+
+    // Set environment names for summary
+    let env1Name = "Env 1";
+    let env2Name = "Env 2";
+
+    if (this.queryMode === "schema-table") {
+      env1Name = this.env1.connection?.name || "Env 1";
+      env2Name = this.env2.connection?.name || "Env 2";
+    } else if (this.queryMode === "raw-sql") {
+      env1Name = this.rawenv1.connection?.name || "Env 1";
+      env2Name = this.rawenv2.connection?.name || "Env 2";
+    } else if (this.queryMode === "excel-compare") {
+      env1Name = "Reference";
+      env2Name = "Comparator";
+    }
 
     // Render summary cards as clickable filter buttons
     // Note: Rust CompareSummary uses 'total', 'matches', 'differs'
@@ -1986,11 +2239,11 @@ class CompareConfigTool extends BaseTool {
         </button>
         <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
           <div class="stat-value">${summary.only_in_env1}</div>
-          <div class="stat-label">Only in ${this.results[this.queryMode].env1_name}</div>
+          <div class="stat-label">Only in ${env1Name}</div>
         </button>
         <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
           <div class="stat-value">${summary.only_in_env2}</div>
-          <div class="stat-label">Only in ${this.results[this.queryMode].env2_name}</div>
+          <div class="stat-label">Only in ${env2Name}</div>
         </button>
       </div>
     `;
@@ -2118,7 +2371,7 @@ class CompareConfigTool extends BaseTool {
         <td>${statusBadge}</td>
         <td>
           <button class="btn btn-outline btn-xs btn-copy-pk" data-pk="${this.escapeHtml(
-            pkDisplay
+            pkDisplay,
           )}" title="Copy Primary Key">Copy PK</button>
         </td>
       </tr>
@@ -2182,7 +2435,7 @@ class CompareConfigTool extends BaseTool {
           <tbody>
             ${allFields
               .map((fieldName) =>
-                this.renderFieldDifferenceSimple(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName))
+                this.renderFieldDifferenceSimple(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName)),
               )
               .join("")}
           </tbody>
@@ -2296,7 +2549,7 @@ class CompareConfigTool extends BaseTool {
                 <td class="data-key">${this.escapeHtml(key)}</td>
                 <td class="data-value">${this.escapeHtml(JSON.stringify(value))}</td>
               </tr>
-            `
+            `,
               )
               .join("")}
           </tbody>

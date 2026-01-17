@@ -221,49 +221,50 @@ When files don't auto-match, show pairing interface:
 
 ### 4.1 Tab Structure
 
-**Integrate with existing `tabs-left` structure** - Add "Database" and "Excel Compare" as top-level tabs alongside "Schema/Table" and "Raw SQL":
+**Environment-Based Tab Visibility:**
+
+- **Schema/Table** and **Raw SQL**: Tauri-only (requires Oracle client)
+- **Excel Compare**: Available everywhere (web + Tauri)
 
 ```html
-<!-- Updated tabs-container with mode tabs -->
+<!-- tabs-left with conditional visibility -->
 <div class="tabs-container">
   <div class="tabs-left">
-    <!-- Primary mode selection (new) -->
-    <button class="tab-button active" data-tab="database">Database</button>
+    <!-- Tauri-only tabs (hidden in web) -->
+    <button class="tab-button tauri-only active" data-tab="schema-table">Schema/Table</button>
+    <button class="tab-button tauri-only" data-tab="raw-sql">Raw SQL</button>
+
+    <!-- Excel Compare - shown everywhere -->
     <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
-
-    <!-- Divider -->
-    <span class="tab-divider">|</span>
-
-    <!-- Database sub-tabs (shown when Database is active) -->
-    <button class="tab-button sub-tab active" data-tab="schema-table">Schema/Table</button>
-    <button class="tab-button sub-tab" data-tab="raw-sql">Raw SQL</button>
   </div>
   <div class="tabs-right">
-    <!-- Connection Status Indicator (Database mode only) -->
+    <!-- Connection Status Indicator (Tauri modes only) -->
     <div id="connection-status" class="connection-status" style="display: none;">...</div>
   </div>
 </div>
 ```
 
-**Alternative simpler structure** (recommended):
+**Tauri v2 Detection (using existing Runtime.js pattern):**
 
-```html
-<div class="tabs-container">
-  <div class="tabs-left">
-    <!-- All tabs at same level, Database sub-modes handled by JS -->
-    <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
-    <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
-    <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
-  </div>
-  ...
-</div>
+```javascript
+// Detect Tauri v2 environment
+const isTauri = !!(window.__TAURI__ || window.__TAURI_IPC__ || window.__TAURI_METADATA__ || window.__TAURI_INTERNALS__);
+
+// Hide Tauri-only tabs in web mode
+if (!isTauri) {
+  document.querySelectorAll(".tab-button.tauri-only").forEach((tab) => {
+    tab.style.display = "none";
+  });
+  // Auto-select Excel Compare tab in web mode
+  selectTab("excel-compare");
+}
 ```
 
 **Key Points:**
 
-- Reuse existing `tabs-left` styling and behavior
-- No new CSS class required for tab differentiation
-- Tab switching logic in `main.js` handles showing/hiding appropriate content sections
+- Reuse existing `tabs-left` styling - no new CSS classes needed except `.tauri-only`
+- In web mode: only "Excel Compare" tab visible, auto-selected
+- In Tauri mode: all three tabs visible, "Schema/Table" is default
 - Connection status indicator hidden when Excel Compare tab is active
 
 ### 4.2 Excel Compare Layout

@@ -126,7 +126,9 @@
   border-radius: calc(var(--radius) - 2px);
   color: hsl(var(--card-foreground));
   font-size: 0.875rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .form-select:disabled,
@@ -328,7 +330,9 @@
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--background));
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
   cursor: pointer;
 }
 
@@ -1864,6 +1868,193 @@
   font-size: 0.85rem;
   color: hsl(var(--muted-foreground));
 }
+
+/* ============================================
+   EXCEL COMPARE MODE
+   ============================================ */
+
+.excel-compare-mode {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.excel-file-selection .grid-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.file-upload-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.upload-zone-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.dropzone {
+  border: 2px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 2.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  cursor: pointer;
+  background: hsl(var(--muted) / 0.1);
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.dropzone:hover,
+.dropzone.drag-over {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+}
+
+.dropzone svg {
+  color: hsl(var(--muted-foreground));
+}
+
+.dropzone:hover svg,
+.dropzone.drag-over svg {
+  color: hsl(var(--primary));
+}
+
+.dropzone p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.dropzone .help-text {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+}
+
+.file-item .file-icon {
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.file-item .file-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-item .btn-remove-file {
+  color: hsl(var(--muted-foreground));
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.file-item .btn-remove-file:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+}
+
+.excel-match-info {
+  background: hsl(var(--info) / 0.1);
+  border: 1px solid hsl(var(--info) / 0.3);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.excel-settings {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-row {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setting-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: hsl(var(--primary));
+}
+
+.excel-compare-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* ============================================
+   TAURI-ONLY VISIBILITY
+   ============================================ */
+/* Default (web): hide tauri-only elements. 
+   main.js will handle showing them if isTauri() is true. */
+/* We don't hide by default in CSS to avoid flicker if JS is slow, 
+   instead we'll let main.js handle the initial toggle. 
+   But if we want a safe default for web: */
+/* .tauri-only { display: none !important; } */
 
 /* ============================================
    CHARACTER-LEVEL DIFF HIGHLIGHTING
