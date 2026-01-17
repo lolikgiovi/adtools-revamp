@@ -1684,7 +1684,7 @@ class CompareConfigTool extends BaseTool {
           </svg>
           <span class="option-text">${f.file.name}</span>
         </div>
-      `
+      `,
         )
         .join("");
 
@@ -1807,7 +1807,10 @@ class CompareConfigTool extends BaseTool {
 
     try {
       // Parse both files to get headers
-      const [refData, compData] = await Promise.all([FileParser.parseFile(selectedRefFile.file), FileParser.parseFile(selectedCompFile.file)]);
+      const [refData, compData] = await Promise.all([
+        FileParser.parseFile(selectedRefFile.file),
+        FileParser.parseFile(selectedCompFile.file),
+      ]);
 
       // Merge headers (union of both)
       const allHeaders = new Set([...refData.headers, ...compData.headers]);
@@ -1874,7 +1877,7 @@ class CompareConfigTool extends BaseTool {
                  ${selectedPkFields.includes(header) ? "checked" : ""}>
           <span class="field-name">${header}</span>
         </label>
-      `
+      `,
         )
         .join("");
     }
@@ -1890,7 +1893,7 @@ class CompareConfigTool extends BaseTool {
                  ${selectedFields.includes(header) ? "checked" : ""}>
           <span class="field-name">${header}</span>
         </label>
-      `
+      `,
         )
         .join("");
     }
@@ -2021,8 +2024,16 @@ class CompareConfigTool extends BaseTool {
    * Execute Excel comparison - NEW SINGLE-PAIR FLOW
    */
   async executeExcelComparisonNewFlow() {
-    const { selectedRefFile, selectedCompFile, refParsedData, compParsedData, selectedPkFields, selectedFields, rowMatching, dataComparison } =
-      this.excelCompare;
+    const {
+      selectedRefFile,
+      selectedCompFile,
+      refParsedData,
+      compParsedData,
+      selectedPkFields,
+      selectedFields,
+      rowMatching,
+      dataComparison,
+    } = this.excelCompare;
 
     if (!selectedRefFile || !selectedCompFile) {
       this.eventBus.emit("notification:show", {
@@ -2368,7 +2379,7 @@ class CompareConfigTool extends BaseTool {
 
       item.innerHTML = `
         <div class="file-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>

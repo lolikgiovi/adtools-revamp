@@ -1,5 +1,13 @@
 # Excel Compare Flow Refactor Plan
 
+> **Status: ✅ IMPLEMENTED** (Commit: `9d26af7`)
+>
+> Implementation Date: 2026-01-17
+>
+> **Summary:** Core refactor completed. Single-pair UX flow is working. Unit tests pending.
+
+---
+
 ## Problem Statement
 
 The current Excel Compare flow has significant UX ambiguity:
@@ -693,48 +701,48 @@ async executeExcelComparison() {
 
 ## Implementation Tasks
 
-### Phase 1: Template & UI Updates
+### Phase 1: Template & UI Updates ✅ COMPLETED
 
-- [ ] **1.1** Add "Clear All" buttons to file upload zones
-- [ ] **1.2** Add new File Pairing section with searchable dropdowns
-- [ ] **1.3** Add Excel Field Selection section (mirror Schema/Table UI)
-- [ ] **1.4** Move Row Matching and Data Comparison options into Field Selection section
-- [ ] **1.5** Hide global settings section (currently always visible)
-- [ ] **1.6** Update CSS for new components (searchable dropdowns, file badges)
+- [x] **1.1** Add "Clear All" buttons to file upload zones
+- [x] **1.2** Add new File Pairing section with searchable dropdowns
+- [x] **1.3** Add Excel Field Selection section (mirror Schema/Table UI)
+- [x] **1.4** Move Row Matching and Data Comparison options into Field Selection section
+- [x] **1.5** Hide global settings section (removed from template)
+- [x] **1.6** Update CSS for new components (searchable dropdowns, file badges)
 
-### Phase 2: State Management
+### Phase 2: State Management ✅ COMPLETED
 
-- [ ] **2.1** Update `excelCompare` state structure
-- [ ] **2.2** Add step tracking (`currentStep`)
-- [ ] **2.3** Add header and parsed data caching
+- [x] **2.1** Update `excelCompare` state structure
+- [x] **2.2** Add step tracking (`currentStep`)
+- [x] **2.3** Add header and parsed data caching
 
-### Phase 3: File Matching Logic
+### Phase 3: File Matching Logic ⚠️ PARTIALLY COMPLETED
 
-- [ ] **3.1** Implement `extractBaseName()` in `file-matcher.js`
-- [ ] **3.2** Implement `filenamesMatch()` with exact and base name matching
+- [x] **3.1** Implement `extractBaseName()` in `file-matcher.js`
+- [x] **3.2** Implement `filenamesMatch()` with exact and base name matching
 - [ ] **3.3** Add unit tests for new matching logic
 
-### Phase 4: Flow Control
+### Phase 4: Flow Control ✅ COMPLETED
 
-- [ ] **4.1** Implement `checkAndShowPairingUI()`
-- [ ] **4.2** Implement searchable dropdown component
-- [ ] **4.3** Implement `handleRefFileSelection()` with auto-match
-- [ ] **4.4** Implement `loadFileHeadersAndShowFieldSelection()`
-- [ ] **4.5** Implement `renderExcelFieldSelection()`
-- [ ] **4.6** Update `executeExcelComparison()` for single-pair flow
+- [x] **4.1** Implement `checkAndShowPairingUI()`
+- [x] **4.2** Implement searchable dropdown component (`setupSearchableDropdown()`)
+- [x] **4.3** Implement `handleRefFileSelection()` with auto-match
+- [x] **4.4** Implement `loadFileHeadersAndShowFieldSelection()`
+- [x] **4.5** Implement `renderExcelFieldSelection()`
+- [x] **4.6** Update `executeExcelComparisonNewFlow()` for single-pair flow
 
-### Phase 5: Event Binding
+### Phase 5: Event Binding ✅ COMPLETED
 
-- [ ] **5.1** Bind "Clear All" button events
-- [ ] **5.2** Bind searchable dropdown events
-- [ ] **5.3** Bind PK and field checkbox events
-- [ ] **5.4** Bind Row Matching and Data Comparison radio events
-- [ ] **5.5** Bind Compare button event
+- [x] **5.1** Bind "Clear All" button events
+- [x] **5.2** Bind searchable dropdown events
+- [x] **5.3** Bind PK and field checkbox events (`bindExcelFieldCheckboxEvents()`)
+- [x] **5.4** Bind Row Matching and Data Comparison radio events
+- [x] **5.5** Bind Compare button event
 
-### Phase 6: Results Flow
+### Phase 6: Results Flow ⚠️ PARTIALLY COMPLETED
 
-- [ ] **6.1** Update "New Comparison" to go back to pairing step (not upload)
-- [ ] **6.2** Remove multi-file result selector (single file at a time)
+- [x] **6.1** Update "New Comparison" to go back to pairing step (via `resetForm()`)
+- [ ] **6.2** Remove multi-file result selector code (legacy code still exists but unused)
 
 ---
 
@@ -847,29 +855,54 @@ async executeExcelComparison() {
 
 ## Testing Plan
 
-1. **Unit Tests**
-   - `extractBaseName()` function
-   - `filenamesMatch()` function with various patterns
-   - Header merging logic
+1. **Unit Tests** ❌ NOT IMPLEMENTED
+   - [ ] `extractBaseName()` function
+   - [ ] `filenamesMatch()` function with various patterns
+   - [ ] `findMatchingFile()` function
+   - [ ] Header merging logic
 
-2. **Integration Tests**
-   - File upload → Clear All → Re-upload flow
-   - Auto-match detection
-   - Header loading and field selection
-   - Comparison execution
+2. **Integration Tests** ❌ NOT IMPLEMENTED
+   - [ ] File upload → Clear All → Re-upload flow
+   - [ ] Auto-match detection
+   - [ ] Header loading and field selection
+   - [ ] Comparison execution
 
-3. **E2E Tests**
-   - Full flow: Upload → Pair → Configure → Compare → Results
-   - Error handling: mismatched columns, empty files
+3. **E2E Tests** ❌ NOT IMPLEMENTED
+   - [ ] Full flow: Upload → Pair → Configure → Compare → Results
+   - [ ] Error handling: mismatched columns, empty files
 
 ---
 
 ## Success Criteria
 
-- [ ] Users can upload files and clear them with a single click
-- [ ] Row Matching / Data Comparison settings are hidden until a file pair is selected
-- [ ] Searchable dropdowns work for file selection
-- [ ] Auto-matching works for common naming patterns (BEFORE/AFTER, etc.)
-- [ ] Primary Key and Field selection mirrors Schema/Table mode
-- [ ] Single file pair comparison completes successfully
-- [ ] Results display correctly with selected fields only
+- [x] Users can upload files and clear them with a single click
+- [x] Row Matching / Data Comparison settings are hidden until a file pair is selected
+- [x] Searchable dropdowns work for file selection
+- [x] Auto-matching works for common naming patterns (BEFORE/AFTER, etc.)
+- [x] Primary Key and Field selection mirrors Schema/Table mode
+- [x] Single file pair comparison completes successfully
+- [x] Results display correctly with selected fields only
+
+---
+
+## Remaining Work
+
+### High Priority
+1. **Unit Tests for File Matcher** - Add tests for `extractBaseName()`, `filenamesMatch()`, and `findMatchingFile()` functions
+
+### Low Priority (Cleanup)
+2. **Remove Legacy Code** - Clean up old multi-file comparison code that is no longer used:
+   - `autoPairFiles()` method
+   - `pairFiles()` method
+   - `unpairFile()` method
+   - `showPairingDialog()` method
+   - `showPairConfig()` method
+   - `updateExcelMatchInfo()` - now just hides the element
+   - `executeExcelComparison()` - replaced by `executeExcelComparisonNewFlow()`
+   - Old `removeExcelFile()` - replaced by `removeExcelFileSingle()`
+   - Multi-file result selector rendering in `renderExcelResultSelector()`
+
+### Optional Enhancements
+3. **Keyboard Navigation** - Add keyboard support for searchable dropdowns (arrow keys, enter to select)
+4. **Remember Last Selection** - Persist selected file pair across page refreshes
+5. **Batch Comparison** - Future feature to compare multiple pairs sequentially

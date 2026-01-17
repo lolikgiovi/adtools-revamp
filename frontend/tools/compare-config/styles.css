@@ -1890,7 +1890,7 @@
 .file-upload-zone {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .upload-zone-header h4 {
@@ -1994,15 +1994,14 @@
   background: hsl(var(--bg-secondary) / 0.35);
   border: 1px solid hsl(var(--border) / 0.6);
   border-radius: var(--radius);
-  padding: 0.75rem 0.5rem; /* Adjusted horizontal padding */
-  margin-top: 1rem;
+  padding: 0.5rem 0.5rem; /* Adjusted horizontal padding */
 }
 
 .file-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
+  padding: 0.725rem 0.875rem;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
@@ -2021,12 +2020,13 @@
 
 .file-item:hover {
   border-color: hsl(var(--border-hover));
-  transform: translateY(-1px);
 }
 
 .file-item .file-icon {
   color: hsl(var(--primary));
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .file-item .file-name {
@@ -2405,7 +2405,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1.5rem;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
 .pairing-header {
@@ -2585,7 +2585,7 @@
 
 /* Excel Field Selection (extends base field-selection) */
 .excel-field-selection {
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
 /* Excel Comparison Options (inside field selection) */
