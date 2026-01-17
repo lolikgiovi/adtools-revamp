@@ -16,6 +16,7 @@ import { isTauri } from "../../core/Runtime.js";
 import * as FileParser from "./lib/file-parser.js";
 import * as FileMatcher from "./lib/file-matcher.js";
 import { ExcelComparator } from "./lib/excel-comparator.js";
+import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -125,6 +126,11 @@ class CompareConfigTool extends BaseTool {
 
     // Always bind UI events so the installation guide actions work
     this.bindEvents();
+
+    // Load Excel Compare state from IndexedDB (works in both Tauri and Web)
+    await this.loadExcelCompareStateFromIndexedDB();
+    // Restore Excel Compare UI if files were loaded
+    this.restoreExcelCompareUI();
 
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
@@ -607,6 +613,12 @@ class CompareConfigTool extends BaseTool {
       rawSqlInput.addEventListener("input", (e) => {
         this.rawSql = e.target.value.trim();
       });
+      // Load saved preferences when SQL query input loses focus
+      rawSqlInput.addEventListener("blur", () => {
+        if (this.rawSql) {
+          this.loadRawSqlPrefsFromIndexedDB();
+        }
+      });
     }
 
     if (rawPrimaryKeyInput) {
@@ -759,12 +771,14 @@ class CompareConfigTool extends BaseTool {
     rowMatchingRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.rowMatching = e.target.value;
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
 
     dataComparisonRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.dataComparison = e.target.value;
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
 
@@ -1175,6 +1189,9 @@ class CompareConfigTool extends BaseTool {
     // Fetch table metadata from Env 1
     await this.fetchTableMetadata();
 
+    // Load saved preferences from IndexedDB before showing field selection
+    await this.loadSchemaTablePrefsFromIndexedDB();
+
     // Show field selection
     this.showFieldSelection();
     this.saveToolState();
@@ -1407,6 +1424,9 @@ class CompareConfigTool extends BaseTool {
         this.selectedFields.push(checkbox.value);
       }
     });
+
+    // Save preferences to IndexedDB
+    this.saveSchemaTablePrefsToIndexedDB();
   }
 
   /**
@@ -1544,6 +1564,7 @@ class CompareConfigTool extends BaseTool {
    */
   async handleExcelFileSelection(side, files) {
     const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const fileType = side === "ref" ? "ref" : "comp";
     // Convert FileList to Array if needed
     const fileArray = Array.from(files);
     const newFiles = FileParser.filterSupportedFiles(fileArray);
@@ -1568,6 +1589,25 @@ class CompareConfigTool extends BaseTool {
     // Add to existing list
     this.excelCompare[listKey] = [...this.excelCompare[listKey], ...filesWithIds];
 
+    // Save files to IndexedDB for persistence
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      for (const fileWrapper of filesWithIds) {
+        try {
+          const arrayBuffer = await fileWrapper.file.arrayBuffer();
+          await IndexedDBManager.saveExcelFile({
+            id: fileWrapper.id,
+            name: fileWrapper.file.name,
+            content: arrayBuffer,
+            type: fileType,
+          });
+        } catch (error) {
+          console.warn("Failed to cache file to IndexedDB:", error);
+        }
+      }
+      // Save current state to IndexedDB
+      this.saveExcelCompareStateToIndexedDB();
+    }
+
     // Update UI
     this.updateExcelFileList(side);
     this.updateClearAllButtonVisibility(side);
@@ -1578,8 +1618,21 @@ class CompareConfigTool extends BaseTool {
   /**
    * Clear all files from a side - NEW FLOW
    */
-  clearAllExcelFiles(side) {
+  async clearAllExcelFiles(side) {
     const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const fileType = side === "ref" ? "ref" : "comp";
+
+    // Clear files from IndexedDB
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      for (const fileWrapper of this.excelCompare[listKey]) {
+        try {
+          await IndexedDBManager.deleteExcelFile(fileWrapper.id);
+        } catch (error) {
+          console.warn("Failed to delete file from IndexedDB:", error);
+        }
+      }
+    }
+
     this.excelCompare[listKey] = [];
 
     // Reset dependent state
@@ -1596,6 +1649,11 @@ class CompareConfigTool extends BaseTool {
     this.excelCompare.selectedFields = [];
     this.excelCompare.refParsedData = null;
     this.excelCompare.compParsedData = null;
+
+    // Save state to IndexedDB
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      this.saveExcelCompareStateToIndexedDB();
+    }
 
     // Update UI
     this.updateExcelFileList(side);
@@ -1838,6 +1896,9 @@ class CompareConfigTool extends BaseTool {
       const fieldSection = document.getElementById("excel-field-selection");
       if (fieldSection) fieldSection.style.display = "none";
     }
+
+    // Save state to IndexedDB
+    this.saveExcelCompareStateToIndexedDB();
   }
 
   /**
@@ -1859,6 +1920,9 @@ class CompareConfigTool extends BaseTool {
     // If both files selected, load headers
     if (this.excelCompare.selectedRefFile && this.excelCompare.selectedCompFile) {
       this.loadFileHeadersAndShowFieldSelection();
+    } else {
+      // Save state even if only one file selected
+      this.saveExcelCompareStateToIndexedDB();
     }
   }
 
@@ -1907,6 +1971,9 @@ class CompareConfigTool extends BaseTool {
       if (refOnlyHeaders.length > 0 || compOnlyHeaders.length > 0) {
         this.showColumnMismatchWarning(refOnlyHeaders, compOnlyHeaders);
       }
+
+      // Save state to IndexedDB after loading headers
+      this.saveExcelCompareStateToIndexedDB();
     } catch (error) {
       console.error("Failed to parse files:", error);
       this.eventBus.emit("notification:show", {
@@ -2008,6 +2075,7 @@ class CompareConfigTool extends BaseTool {
     rowMatchingRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.rowMatching = e.target.value;
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
 
@@ -2016,6 +2084,7 @@ class CompareConfigTool extends BaseTool {
     dataComparisonRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.dataComparison = e.target.value;
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
 
@@ -2072,6 +2141,8 @@ class CompareConfigTool extends BaseTool {
       cb.addEventListener("change", () => {
         const checked = Array.from(document.querySelectorAll('input[name="excel-pk-field"]:checked')).map((c) => c.value);
         this.excelCompare.selectedPkFields = checked;
+        // Save state to IndexedDB
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
 
@@ -2081,6 +2152,8 @@ class CompareConfigTool extends BaseTool {
       cb.addEventListener("change", () => {
         const checked = Array.from(document.querySelectorAll('input[name="excel-compare-field"]:checked')).map((c) => c.value);
         this.excelCompare.selectedFields = checked;
+        // Save state to IndexedDB
+        this.saveExcelCompareStateToIndexedDB();
       });
     });
   }
@@ -2781,6 +2854,9 @@ class CompareConfigTool extends BaseTool {
 
       // Show results
       this.showResults();
+
+      // Save preferences to IndexedDB after successful comparison
+      this.saveRawSqlPrefsToIndexedDB();
 
       // Emit event
       this.eventBus.emit("comparison:complete", result);
@@ -3952,6 +4028,9 @@ class CompareConfigTool extends BaseTool {
       this.excelCompare.compParsedData = null;
       this.excelCompare.currentStep = 1;
 
+      // Save reset state to IndexedDB (keeps files, clears selections)
+      this.saveExcelCompareStateToIndexedDB();
+
       // Reset Excel UI
       const excelFieldSelection = document.getElementById("excel-field-selection");
       const excelColumnWarning = document.getElementById("excel-column-warning");
@@ -4196,6 +4275,304 @@ class CompareConfigTool extends BaseTool {
   onUnmount() {
     // Stop connection status polling
     this.stopConnectionStatusPolling();
+  }
+
+  // =============================================================================
+  // IndexedDB State Management
+  // =============================================================================
+
+  /**
+   * Saves Excel Compare state to IndexedDB (excluding large parsed data and File objects)
+   */
+  async saveExcelCompareStateToIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+
+    try {
+      const state = {
+        currentStep: this.excelCompare.currentStep,
+        // Store file IDs only (actual files are stored separately)
+        refFileIds: this.excelCompare.refFiles.map((f) => f.id),
+        compFileIds: this.excelCompare.compFiles.map((f) => f.id),
+        // Selected file IDs
+        selectedRefFileId: this.excelCompare.selectedRefFile?.id || null,
+        selectedCompFileId: this.excelCompare.selectedCompFile?.id || null,
+        // Field configuration
+        headers: this.excelCompare.headers,
+        commonHeaders: this.excelCompare.commonHeaders,
+        refOnlyHeaders: this.excelCompare.refOnlyHeaders,
+        compOnlyHeaders: this.excelCompare.compOnlyHeaders,
+        selectedPkFields: this.excelCompare.selectedPkFields,
+        selectedFields: this.excelCompare.selectedFields,
+        rowMatching: this.excelCompare.rowMatching,
+        dataComparison: this.excelCompare.dataComparison,
+        // Note: refParsedData and compParsedData are NOT saved (can be re-parsed from files)
+      };
+
+      await IndexedDBManager.saveExcelCompareState(state);
+    } catch (error) {
+      console.warn("Failed to save Excel Compare state to IndexedDB:", error);
+    }
+  }
+
+  /**
+   * Loads Excel Compare state from IndexedDB
+   */
+  async loadExcelCompareStateFromIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+
+    try {
+      // Load cached files
+      const cachedFiles = await IndexedDBManager.getAllExcelFiles();
+      if (cachedFiles && cachedFiles.length > 0) {
+        // Reconstruct file objects from cached data
+        const refFiles = [];
+        const compFiles = [];
+
+        for (const cached of cachedFiles) {
+          // Create a File object from the cached ArrayBuffer
+          const blob = new Blob([cached.content], { type: this.getMimeType(cached.name) });
+          const file = new File([blob], cached.name, {
+            type: this.getMimeType(cached.name),
+            lastModified: cached.uploadedAt ? new Date(cached.uploadedAt).getTime() : Date.now(),
+          });
+
+          const fileWrapper = { id: cached.id, file };
+
+          if (cached.type === "ref") {
+            refFiles.push(fileWrapper);
+          } else {
+            compFiles.push(fileWrapper);
+          }
+        }
+
+        this.excelCompare.refFiles = refFiles;
+        this.excelCompare.compFiles = compFiles;
+      }
+
+      // Load state
+      const state = await IndexedDBManager.getExcelCompareState();
+      if (state) {
+        this.excelCompare.currentStep = state.currentStep || 1;
+        this.excelCompare.headers = state.headers || [];
+        this.excelCompare.commonHeaders = state.commonHeaders || [];
+        this.excelCompare.refOnlyHeaders = state.refOnlyHeaders || [];
+        this.excelCompare.compOnlyHeaders = state.compOnlyHeaders || [];
+        this.excelCompare.selectedPkFields = state.selectedPkFields || [];
+        this.excelCompare.selectedFields = state.selectedFields || [];
+        this.excelCompare.rowMatching = state.rowMatching || "key";
+        this.excelCompare.dataComparison = state.dataComparison || "strict";
+
+        // Restore selected file references
+        if (state.selectedRefFileId) {
+          this.excelCompare.selectedRefFile = this.excelCompare.refFiles.find((f) => f.id === state.selectedRefFileId) || null;
+        }
+        if (state.selectedCompFileId) {
+          this.excelCompare.selectedCompFile = this.excelCompare.compFiles.find((f) => f.id === state.selectedCompFileId) || null;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.warn("Failed to load Excel Compare state from IndexedDB:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Clears all Excel Compare data from IndexedDB
+   */
+  async clearExcelCompareFromIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+
+    try {
+      await IndexedDBManager.clearAllExcelCompareData();
+    } catch (error) {
+      console.warn("Failed to clear Excel Compare data from IndexedDB:", error);
+    }
+  }
+
+  /**
+   * Restores Excel Compare UI from cached state
+   */
+  restoreExcelCompareUI() {
+    const hasRefFiles = this.excelCompare.refFiles.length > 0;
+    const hasCompFiles = this.excelCompare.compFiles.length > 0;
+
+    if (!hasRefFiles && !hasCompFiles) {
+      return; // Nothing to restore
+    }
+
+    // Update file lists UI
+    this.updateExcelFileList("ref");
+    this.updateExcelFileList("comp");
+    this.updateClearAllButtonVisibility("ref");
+    this.updateClearAllButtonVisibility("comp");
+
+    // Show pairing UI if both sides have files
+    this.checkAndShowPairingUI();
+
+    // If files were selected, restore the pairing dropdowns
+    if (this.excelCompare.selectedRefFile || this.excelCompare.selectedCompFile) {
+      // Re-populate dropdowns with selections
+      this.populateFilePairingDropdowns();
+
+      // Update search inputs to show selected file names
+      const refSearchInput = document.getElementById("excel-ref-file-search");
+      const compSearchInput = document.getElementById("excel-comp-file-search");
+
+      if (refSearchInput && this.excelCompare.selectedRefFile) {
+        refSearchInput.value = this.excelCompare.selectedRefFile.file.name;
+      }
+      if (compSearchInput && this.excelCompare.selectedCompFile) {
+        compSearchInput.value = this.excelCompare.selectedCompFile.file.name;
+      }
+
+      // If both files are selected and we have field configuration, show field selection
+      if (this.excelCompare.selectedRefFile && this.excelCompare.selectedCompFile) {
+        if (this.excelCompare.headers.length > 0) {
+          // Restore field selection UI
+          this.showExcelFieldSelection();
+        }
+      }
+    }
+  }
+
+  /**
+   * Gets MIME type from filename extension
+   */
+  getMimeType(filename) {
+    const ext = filename.toLowerCase().split(".").pop();
+    const mimeTypes = {
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      xls: "application/vnd.ms-excel",
+      csv: "text/csv",
+    };
+    return mimeTypes[ext] || "application/octet-stream";
+  }
+
+  // =============================================================================
+  // Schema/Table Preferences (IndexedDB)
+  // =============================================================================
+
+  /**
+   * Loads saved preferences for the current schema/table from IndexedDB
+   */
+  async loadSchemaTablePrefsFromIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+    if (!this.env1.connection || !this.schema || !this.table) return;
+
+    try {
+      const prefs = await IndexedDBManager.getSchemaTablePrefs(
+        this.env1.connection.name,
+        this.schema,
+        this.table
+      );
+
+      if (prefs) {
+        // Only apply saved preferences if they are compatible with current metadata
+        const currentColumns = this.metadata?.columns?.map((c) => c.name) || [];
+
+        // Filter saved PK fields to only include columns that exist in current metadata
+        const validPkFields = prefs.selectedPkFields.filter((f) => currentColumns.includes(f));
+        if (validPkFields.length > 0) {
+          this.customPrimaryKey = validPkFields;
+        }
+
+        // Filter saved fields to only include columns that exist in current metadata
+        const validFields = prefs.selectedFields.filter((f) => currentColumns.includes(f));
+        if (validFields.length > 0) {
+          this.selectedFields = validFields;
+        }
+
+        console.log(`Loaded preferences for ${this.schema}.${this.table}:`, {
+          pkFields: this.customPrimaryKey.length,
+          selectedFields: this.selectedFields.length,
+        });
+      }
+    } catch (error) {
+      console.warn("Failed to load schema/table preferences from IndexedDB:", error);
+    }
+  }
+
+  /**
+   * Saves current preferences for the schema/table to IndexedDB
+   */
+  async saveSchemaTablePrefsToIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+    if (!this.env1.connection || !this.schema || !this.table) return;
+
+    try {
+      await IndexedDBManager.saveSchemaTablePrefs({
+        connectionId: this.env1.connection.name,
+        schema: this.schema,
+        table: this.table,
+        selectedPkFields: this.customPrimaryKey || [],
+        selectedFields: this.selectedFields || [],
+      });
+    } catch (error) {
+      console.warn("Failed to save schema/table preferences to IndexedDB:", error);
+    }
+  }
+
+  // =============================================================================
+  // Raw SQL Preferences (IndexedDB)
+  // =============================================================================
+
+  /**
+   * Loads saved preferences for the current raw SQL query from IndexedDB
+   */
+  async loadRawSqlPrefsFromIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+    if (!this.rawSql) return;
+
+    try {
+      const prefs = await IndexedDBManager.getRawSqlPrefs(this.rawSql);
+
+      if (prefs) {
+        // Only auto-fill if primary key is not already set by user
+        if (!this.rawPrimaryKey && prefs.selectedPkFields.length > 0) {
+          this.rawPrimaryKey = prefs.selectedPkFields.join(", ");
+
+          // Update the UI input
+          const rawPrimaryKeyInput = document.getElementById("raw-primary-key");
+          if (rawPrimaryKeyInput) {
+            rawPrimaryKeyInput.value = this.rawPrimaryKey;
+          }
+
+          console.log(`Loaded Raw SQL preferences: PK = ${this.rawPrimaryKey}`);
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load raw SQL preferences from IndexedDB:", error);
+    }
+  }
+
+  /**
+   * Saves current preferences for the raw SQL query to IndexedDB
+   */
+  async saveRawSqlPrefsToIndexedDB() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+    if (!this.rawSql) return;
+
+    try {
+      // Parse primary key fields from the comma-separated string
+      const pkFields = this.rawPrimaryKey
+        ? this.rawPrimaryKey
+            .split(",")
+            .map((f) => f.trim())
+            .filter((f) => f.length > 0)
+        : [];
+
+      await IndexedDBManager.saveRawSqlPrefs({
+        query: this.rawSql,
+        selectedPkFields: pkFields,
+        selectedFields: [], // Raw SQL mode doesn't have field selection
+      });
+
+      console.log(`Saved Raw SQL preferences for query hash`);
+    } catch (error) {
+      console.warn("Failed to save raw SQL preferences to IndexedDB:", error);
+    }
   }
 }
 

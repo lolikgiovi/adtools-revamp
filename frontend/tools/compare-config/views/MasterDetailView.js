@@ -134,9 +134,9 @@ export class MasterDetailView {
       <div class="detail-header">
         <div>
           <h3>${this.escapeHtml(pkDisplay)}</h3>
-          <span class="status-badge status-${statusClass}">${statusLabel}</span>
         </div>
         <div class="detail-nav">
+          <span class="status-badge status-${statusClass}">${statusLabel}</span>
           <button class="btn btn-outline btn-sm" id="btn-prev-detail" ${this.selectedIndex === 0 ? "disabled" : ""}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"></polyline>
@@ -216,7 +216,7 @@ export class MasterDetailView {
             <tbody>
               ${allFields
                 .map((fieldName) =>
-                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName))
+                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName)),
                 )
                 .join("")}
             </tbody>
@@ -264,7 +264,7 @@ export class MasterDetailView {
                 <td class="data-key">${this.escapeHtml(key)}</td>
                 <td class="data-value">${this.escapeHtml(this.formatValue(value))}</td>
               </tr>
-            `
+            `,
               )
               .join("")}
           </tbody>
