@@ -2050,7 +2050,7 @@
   padding: 2px;
   border-radius: 4px;
   opacity: 0.6;
-  transition: all 0.2s ease;
+  /* transition: all 0.2s ease; */
 }
 
 .file-item:hover .btn-remove-file {
@@ -2059,7 +2059,7 @@
 
 .file-item .btn-remove-file:hover {
   color: hsl(var(--destructive));
-  background: hsl(var(--destructive) / 0.1);
+  /* background: hsl(var(--destructive) / 0.1); */
 }
 
 .excel-match-info {
@@ -2520,7 +2520,7 @@
   border-radius: calc(var(--radius) - 2px);
   font-size: 0.875rem;
   font-weight: 500;
-  max-width: 300px;
+  max-width: 500px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2550,7 +2550,7 @@
 .column-warning {
   background: hsl(var(--warning) / 0.1);
   border: 1px solid hsl(var(--warning) / 0.3);
-  border-left: 4px solid hsl(var(--warning));
+  /* border-left: 4px solid hsl(var(--warning)); */
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
