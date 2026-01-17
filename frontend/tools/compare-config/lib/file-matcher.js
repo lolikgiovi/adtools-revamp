@@ -1,10 +1,96 @@
 /**
  * FileMatcher - Match files between reference and comparator sets
  * Supports filename-based and folder-relative-path matching
+ *
+ * Enhanced with base name matching for common naming patterns:
+ * - Exact match: CONFIG.APP_CONFIG == CONFIG.APP_CONFIG
+ * - Suffix match: CONFIG.APP_CONFIG == CONFIG.APP_CONFIG (AFTER)
+ * - Prefix match: CONFIG.APP_CONFIG (BEFORE) == CONFIG.APP_CONFIG (AFTER)
+ * - Prefix match: CONFIG.APP_CONFIG (BEFORE) == CONFIG.APP_CONFIG
  */
 
 /**
+ * Common suffixes to strip when matching base names
+ * Matches patterns like (BEFORE), (AFTER), (OLD), (NEW), (PROD), (DEV), (1), (2), etc.
+ */
+const SUFFIX_PATTERN = /\s*\((?:BEFORE|AFTER|OLD|NEW|PROD|DEV|UAT|SIT|QA|STAGING|TEST|LIVE|BACKUP|\d+)\)\s*$/i;
+
+/**
+ * Extract base filename without common suffixes and extension
+ * @param {string} filename - e.g., "CONFIG.APP_CONFIG (BEFORE).xlsx"
+ * @returns {string} - e.g., "config.app_config"
+ */
+export function extractBaseName(filename) {
+  // Remove extension
+  const withoutExt = filename.replace(/\.(xlsx|xls|csv)$/i, '');
+
+  // Remove common suffixes
+  const withoutSuffix = withoutExt.replace(SUFFIX_PATTERN, '').trim();
+
+  return withoutSuffix.toLowerCase();
+}
+
+/**
+ * Check if two filenames match (exact or base name)
+ * @param {string} name1 - First filename
+ * @param {string} name2 - Second filename
+ * @returns {{ match: boolean, type: 'exact' | 'base' | null }}
+ */
+export function filenamesMatch(name1, name2) {
+  const n1 = name1.toLowerCase();
+  const n2 = name2.toLowerCase();
+
+  // Exact match (with extension)
+  if (n1 === n2) {
+    return { match: true, type: 'exact' };
+  }
+
+  // Exact match without extension
+  const base1NoExt = n1.replace(/\.(xlsx|xls|csv)$/i, '');
+  const base2NoExt = n2.replace(/\.(xlsx|xls|csv)$/i, '');
+  if (base1NoExt === base2NoExt) {
+    return { match: true, type: 'exact' };
+  }
+
+  // Base name match (removing suffixes like BEFORE/AFTER)
+  const base1 = extractBaseName(n1);
+  const base2 = extractBaseName(n2);
+  if (base1 === base2 && base1.length > 0) {
+    return { match: true, type: 'base' };
+  }
+
+  return { match: false, type: null };
+}
+
+/**
+ * Find matching comparator file for a reference file
+ * @param {string} refFileName - Reference filename
+ * @param {{ id: string, file: File }[]} comparatorFiles - Array of comparator files with IDs
+ * @returns {{ id: string, file: File, matchType: 'exact' | 'base' } | null}
+ */
+export function findMatchingFile(refFileName, comparatorFiles) {
+  // First pass: look for exact matches
+  for (const compFile of comparatorFiles) {
+    const result = filenamesMatch(refFileName, compFile.file.name);
+    if (result.match && result.type === 'exact') {
+      return { ...compFile, matchType: 'exact' };
+    }
+  }
+
+  // Second pass: look for base name matches
+  for (const compFile of comparatorFiles) {
+    const result = filenamesMatch(refFileName, compFile.file.name);
+    if (result.match && result.type === 'base') {
+      return { ...compFile, matchType: 'base' };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Auto-match files by filename (case-insensitive)
+ * Uses enhanced matching with base name support
  * @param {File[]} referenceFiles - Files from reference source
  * @param {File[]} comparatorFiles - Files from comparator source
  * @returns {MatchResult}

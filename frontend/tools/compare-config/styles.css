@@ -2371,3 +2371,281 @@
   background: white;
   color: hsl(var(--destructive));
 }
+
+/* ============================================
+   EXCEL COMPARE - NEW FLOW COMPONENTS
+   ============================================ */
+
+/* Upload Zone Header with Clear All */
+.upload-zone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.btn-clear-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-files:hover {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+}
+
+/* File Pairing Section */
+.excel-file-pairing {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.pairing-header {
+  margin-bottom: 1.25rem;
+}
+
+.pairing-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.pairing-dropdowns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+/* Searchable Select Dropdown */
+.searchable-select {
+  position: relative;
+}
+
+.searchable-input {
+  width: 100%;
+  cursor: pointer;
+}
+
+.searchable-input:focus {
+  cursor: text;
+}
+
+.searchable-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: 0 8px 24px hsl(0 0% 0% / 0.15);
+  z-index: 200;
+  display: none;
+}
+
+.searchable-dropdown.open {
+  display: block;
+}
+
+.searchable-option {
+  padding: 0.625rem 0.875rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.15s ease;
+}
+
+.searchable-option:hover,
+.searchable-option.highlighted {
+  background: hsl(var(--muted));
+}
+
+.searchable-option.selected {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+
+.searchable-option .option-icon {
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.searchable-option .option-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchable-no-results {
+  padding: 1rem;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+/* File Pair Info Badges */
+.file-pair-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: hsl(var(--muted) / 0.3);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  margin-bottom: 1.5rem;
+}
+
+.file-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-badge.ref {
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.3);
+}
+
+.file-badge.comp {
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success) / 0.3);
+}
+
+.vs-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Column Mismatch Warning */
+.column-warning {
+  background: hsl(var(--warning) / 0.1);
+  border: 1px solid hsl(var(--warning) / 0.3);
+  border-left: 4px solid hsl(var(--warning));
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.column-warning .warning-title {
+  font-weight: 600;
+  color: hsl(var(--warning));
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.column-warning .warning-details {
+  color: hsl(var(--foreground));
+  line-height: 1.5;
+}
+
+.column-warning .column-list {
+  margin-top: 0.5rem;
+  padding-left: 1.25rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.column-warning .column-list li {
+  margin: 0.25rem 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+}
+
+/* Excel Field Selection (extends base field-selection) */
+.excel-field-selection {
+  margin-top: 0.5rem;
+}
+
+/* Excel Comparison Options (inside field selection) */
+.excel-comparison-options {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.excel-comparison-options .settings-row {
+  display: flex;
+  gap: 3rem;
+  flex-wrap: wrap;
+}
+
+.excel-comparison-options .setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.excel-comparison-options .setting-group > label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+/* Match hint text */
+#comp-match-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+#comp-match-hint.auto-matched {
+  color: hsl(var(--success));
+}
+
+#comp-match-hint.no-match {
+  color: hsl(var(--warning));
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pairing-dropdowns {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .file-pair-info {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .file-badge {
+    max-width: 100%;
+  }
+
+  .excel-comparison-options .settings-row {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+}

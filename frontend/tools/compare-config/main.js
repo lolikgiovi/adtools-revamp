@@ -70,15 +70,33 @@ class CompareConfigTool extends BaseTool {
       "excel-compare": null,
     };
 
-    // Excel Compare state
+    // Excel Compare state (new single-pair flow)
     this.excelCompare = {
-      refFiles: [], // Array of { id, file, pairedId }
-      compFiles: [], // Array of { id, file, pairedId }
-      pairs: [], // Array of { id, refId, compId, settings: { mode, pkColumns } }
-      rowMatching: "key", // Default global mode
-      pkColumns: "", // Default global PKs
-      dataComparison: "strict", // Global data comparison mode
-      selectedFileResult: "all", // "all" or specific filename
+      // Step 1: File upload
+      refFiles: [], // Array of { id, file }
+      compFiles: [], // Array of { id, file }
+
+      // Step 2: File pairing
+      selectedRefFile: null, // Selected reference file { id, file }
+      selectedCompFile: null, // Selected comparator file { id, file }
+      autoMatchedComp: null, // Auto-matched comparator (for UI hint)
+
+      // Step 3: Field configuration
+      headers: [], // All detected headers (union)
+      commonHeaders: [], // Headers in both files
+      refOnlyHeaders: [], // Headers only in reference
+      compOnlyHeaders: [], // Headers only in comparator
+      selectedPkFields: [], // Selected primary key fields
+      selectedFields: [], // Selected comparison fields
+      rowMatching: "key", // "key" or "position"
+      dataComparison: "strict", // "strict" or "normalized"
+
+      // Cached parsed data
+      refParsedData: null,
+      compParsedData: null,
+
+      // UI state
+      currentStep: 1, // 1=upload, 2=pairing, 3=config, 4=results
     };
 
     // View instances
@@ -617,7 +635,29 @@ class CompareConfigTool extends BaseTool {
     const compDropzone = document.getElementById("comp-dropzone");
     const refFileInput = document.getElementById("ref-file-input");
     const compFileInput = document.getElementById("comp-file-input");
-    const compareExcelBtn = document.getElementById("btn-compare-excel");
+
+    // New flow: Clear All buttons
+    const refClearAllBtn = document.getElementById("ref-clear-all");
+    const compClearAllBtn = document.getElementById("comp-clear-all");
+
+    if (refClearAllBtn) {
+      refClearAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.clearAllExcelFiles("ref");
+      });
+    }
+
+    if (compClearAllBtn) {
+      compClearAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.clearAllExcelFiles("comp");
+      });
+    }
+
+    // New flow: Excel field selection events
+    this.bindExcelFieldSelectionEvents();
+
+    // Legacy elements (kept for backward compatibility but may be unused)
     const rowMatchingRadios = document.querySelectorAll('input[name="row-matching"]');
     const dataComparisonRadios = document.querySelectorAll('input[name="data-comparison"]');
     const excelPkColumnsInput = document.getElementById("excel-pk-columns");
@@ -715,17 +755,10 @@ class CompareConfigTool extends BaseTool {
       compFolderInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
     }
 
-    if (compareExcelBtn) {
-      compareExcelBtn.addEventListener("click", () => this.executeExcelComparison());
-    }
-
+    // Legacy radio listeners (kept for backward compatibility)
     rowMatchingRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.rowMatching = e.target.value;
-        const pkSetting = document.getElementById("pk-column-setting");
-        if (pkSetting) {
-          pkSetting.style.display = e.target.value === "key" ? "block" : "none";
-        }
       });
     });
 
@@ -734,12 +767,6 @@ class CompareConfigTool extends BaseTool {
         this.excelCompare.dataComparison = e.target.value;
       });
     });
-
-    if (excelPkColumnsInput) {
-      excelPkColumnsInput.addEventListener("input", (e) => {
-        this.excelCompare.pkColumns = e.target.value.trim();
-      });
-    }
 
     // Modal events
     const modalOverlay = document.getElementById("excel-modal-overlay");
@@ -1511,7 +1538,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Handle Excel file selection (drop or input)
+   * Handle Excel file selection (drop or input) - NEW FLOW
    */
   async handleExcelFileSelection(side, files) {
     const listKey = side === "ref" ? "refFiles" : "compFiles";
@@ -1530,23 +1557,542 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    // Wrap files with IDs
+    // Wrap files with IDs (simplified - no pairedId in new flow)
     const filesWithIds = newFiles.map((file) => ({
       id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
       file,
-      pairedId: null,
     }));
 
     // Add to existing list
     this.excelCompare[listKey] = [...this.excelCompare[listKey], ...filesWithIds];
 
-    // Attempt auto-pairing for new files
-    this.autoPairFiles();
+    // Update UI
+    this.updateExcelFileList(side);
+    this.updateClearAllButtonVisibility(side);
+    this.checkAndShowPairingUI();
+    this.saveToolState();
+  }
+
+  /**
+   * Clear all files from a side - NEW FLOW
+   */
+  clearAllExcelFiles(side) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    this.excelCompare[listKey] = [];
+
+    // Reset dependent state
+    if (side === "ref") {
+      this.excelCompare.selectedRefFile = null;
+    } else {
+      this.excelCompare.selectedCompFile = null;
+    }
+
+    // Reset field selection state
+    this.excelCompare.headers = [];
+    this.excelCompare.commonHeaders = [];
+    this.excelCompare.selectedPkFields = [];
+    this.excelCompare.selectedFields = [];
+    this.excelCompare.refParsedData = null;
+    this.excelCompare.compParsedData = null;
 
     // Update UI
     this.updateExcelFileList(side);
-    this.updateExcelMatchInfo();
+    this.updateClearAllButtonVisibility(side);
+    this.checkAndShowPairingUI();
     this.saveToolState();
+  }
+
+  /**
+   * Show/hide Clear All button based on file count - NEW FLOW
+   */
+  updateClearAllButtonVisibility(side) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const btnId = side === "ref" ? "ref-clear-all" : "comp-clear-all";
+    const btn = document.getElementById(btnId);
+
+    if (btn) {
+      btn.style.display = this.excelCompare[listKey].length > 0 ? "" : "none";
+    }
+  }
+
+  /**
+   * Check conditions and show/hide pairing UI - NEW FLOW
+   */
+  checkAndShowPairingUI() {
+    const hasRefFiles = this.excelCompare.refFiles.length > 0;
+    const hasCompFiles = this.excelCompare.compFiles.length > 0;
+
+    const pairingSection = document.getElementById("excel-file-pairing");
+    const fieldSection = document.getElementById("excel-field-selection");
+
+    // Hide field selection until file pair is selected
+    if (fieldSection) fieldSection.style.display = "none";
+
+    if (hasRefFiles && hasCompFiles) {
+      // Show pairing UI
+      if (pairingSection) pairingSection.style.display = "block";
+      this.populateFilePairingDropdowns();
+    } else {
+      // Hide pairing UI
+      if (pairingSection) pairingSection.style.display = "none";
+      // Reset selections
+      this.excelCompare.selectedRefFile = null;
+      this.excelCompare.selectedCompFile = null;
+      this.excelCompare.autoMatchedComp = null;
+    }
+  }
+
+  /**
+   * Populate file pairing dropdowns - NEW FLOW
+   */
+  populateFilePairingDropdowns() {
+    this.setupSearchableDropdown("excel-ref-file", this.excelCompare.refFiles, this.excelCompare.selectedRefFile?.id, (fileId) => {
+      this.handleRefFileSelection(fileId);
+    });
+
+    this.setupSearchableDropdown("excel-comp-file", this.excelCompare.compFiles, this.excelCompare.selectedCompFile?.id, (fileId) => {
+      this.handleCompFileSelection(fileId);
+    });
+  }
+
+  /**
+   * Setup a searchable dropdown - NEW FLOW
+   */
+  setupSearchableDropdown(prefix, files, selectedId, onSelect) {
+    const input = document.getElementById(`${prefix}-search`);
+    const dropdown = document.getElementById(`${prefix}-dropdown`);
+
+    if (!input || !dropdown) return;
+
+    // Build options
+    const renderOptions = (filter = "") => {
+      const filterLower = filter.toLowerCase();
+      const filtered = files.filter((f) => f.file.name.toLowerCase().includes(filterLower));
+
+      if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-no-results">No matching files</div>';
+        return;
+      }
+
+      dropdown.innerHTML = filtered
+        .map(
+          (f) => `
+        <div class="searchable-option ${f.id === selectedId ? "selected" : ""}" data-id="${f.id}">
+          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="option-text">${f.file.name}</span>
+        </div>
+      `
+        )
+        .join("");
+
+      // Add click handlers
+      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const fileId = opt.dataset.id;
+          const file = files.find((f) => f.id === fileId);
+          if (file) {
+            input.value = file.file.name;
+            dropdown.classList.remove("open");
+            onSelect(fileId);
+          }
+        });
+      });
+    };
+
+    // Set initial value
+    const selectedFile = files.find((f) => f.id === selectedId);
+    input.value = selectedFile ? selectedFile.file.name : "";
+
+    // Event handlers
+    input.addEventListener("focus", () => {
+      renderOptions(input.value);
+      dropdown.classList.add("open");
+    });
+
+    input.addEventListener("input", () => {
+      renderOptions(input.value);
+      dropdown.classList.add("open");
+    });
+
+    input.addEventListener("blur", () => {
+      // Delay to allow click on option
+      setTimeout(() => dropdown.classList.remove("open"), 200);
+    });
+
+    // Initial render
+    renderOptions();
+  }
+
+  /**
+   * Handle reference file selection - NEW FLOW
+   */
+  handleRefFileSelection(fileId) {
+    const refFile = this.excelCompare.refFiles.find((f) => f.id === fileId);
+    if (!refFile) return;
+
+    this.excelCompare.selectedRefFile = refFile;
+
+    // Try to auto-match comparator using enhanced matching
+    const autoMatch = FileMatcher.findMatchingFile(refFile.file.name, this.excelCompare.compFiles);
+    const matchHint = document.getElementById("comp-match-hint");
+
+    if (autoMatch) {
+      this.excelCompare.selectedCompFile = autoMatch;
+      this.excelCompare.autoMatchedComp = autoMatch;
+
+      // Update comparator dropdown
+      const compInput = document.getElementById("excel-comp-file-search");
+      if (compInput) compInput.value = autoMatch.file.name;
+
+      // Show match hint
+      if (matchHint) {
+        matchHint.textContent = autoMatch.matchType === "exact" ? "Auto-matched (exact match)" : "Auto-matched (base name match)";
+        matchHint.className = "help-text auto-matched";
+      }
+
+      // Load headers and show field selection
+      this.loadFileHeadersAndShowFieldSelection();
+    } else {
+      this.excelCompare.selectedCompFile = null;
+      this.excelCompare.autoMatchedComp = null;
+
+      // Clear comparator dropdown
+      const compInput = document.getElementById("excel-comp-file-search");
+      if (compInput) compInput.value = "";
+
+      // Show no-match hint
+      if (matchHint) {
+        matchHint.textContent = "No matching file found. Please select manually.";
+        matchHint.className = "help-text no-match";
+      }
+
+      // Hide field selection
+      const fieldSection = document.getElementById("excel-field-selection");
+      if (fieldSection) fieldSection.style.display = "none";
+    }
+  }
+
+  /**
+   * Handle comparator file selection (manual) - NEW FLOW
+   */
+  handleCompFileSelection(fileId) {
+    const compFile = this.excelCompare.compFiles.find((f) => f.id === fileId);
+    if (!compFile) return;
+
+    this.excelCompare.selectedCompFile = compFile;
+
+    // Clear auto-match hint if manually selected
+    const matchHint = document.getElementById("comp-match-hint");
+    if (matchHint) {
+      matchHint.textContent = "";
+      matchHint.className = "help-text";
+    }
+
+    // If both files selected, load headers
+    if (this.excelCompare.selectedRefFile && this.excelCompare.selectedCompFile) {
+      this.loadFileHeadersAndShowFieldSelection();
+    }
+  }
+
+  /**
+   * Load headers from selected files and show field selection UI - NEW FLOW
+   */
+  async loadFileHeadersAndShowFieldSelection() {
+    const { selectedRefFile, selectedCompFile } = this.excelCompare;
+
+    if (!selectedRefFile || !selectedCompFile) return;
+
+    try {
+      // Parse both files to get headers
+      const [refData, compData] = await Promise.all([FileParser.parseFile(selectedRefFile.file), FileParser.parseFile(selectedCompFile.file)]);
+
+      // Merge headers (union of both)
+      const allHeaders = new Set([...refData.headers, ...compData.headers]);
+      const commonHeaders = refData.headers.filter((h) => compData.headers.includes(h));
+      const refOnlyHeaders = refData.headers.filter((h) => !compData.headers.includes(h));
+      const compOnlyHeaders = compData.headers.filter((h) => !refData.headers.includes(h));
+
+      this.excelCompare.headers = Array.from(allHeaders);
+      this.excelCompare.commonHeaders = commonHeaders;
+      this.excelCompare.refOnlyHeaders = refOnlyHeaders;
+      this.excelCompare.compOnlyHeaders = compOnlyHeaders;
+
+      // Default: select all common headers for comparison
+      this.excelCompare.selectedFields = [...commonHeaders];
+
+      // Default: first column as PK
+      if (commonHeaders.length > 0) {
+        this.excelCompare.selectedPkFields = [commonHeaders[0]];
+      }
+
+      // Cache parsed data for comparison
+      this.excelCompare.refParsedData = refData;
+      this.excelCompare.compParsedData = compData;
+
+      // Show field selection UI
+      this.renderExcelFieldSelection();
+
+      // Show column mismatch warning if applicable
+      if (refOnlyHeaders.length > 0 || compOnlyHeaders.length > 0) {
+        this.showColumnMismatchWarning(refOnlyHeaders, compOnlyHeaders);
+      }
+    } catch (error) {
+      console.error("Failed to parse files:", error);
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Failed to read file headers: ${error.message}`,
+      });
+    }
+  }
+
+  /**
+   * Render field selection UI for Excel - NEW FLOW
+   */
+  renderExcelFieldSelection() {
+    const fieldSection = document.getElementById("excel-field-selection");
+    if (!fieldSection) return;
+
+    const { selectedRefFile, selectedCompFile, commonHeaders, selectedPkFields, selectedFields } = this.excelCompare;
+
+    // Update file pair info
+    const refBadge = document.getElementById("excel-ref-file-badge");
+    const compBadge = document.getElementById("excel-comp-file-badge");
+    if (refBadge) refBadge.textContent = `📄 ${selectedRefFile.file.name}`;
+    if (compBadge) compBadge.textContent = `📄 ${selectedCompFile.file.name}`;
+
+    // Render PK field checkboxes
+    const pkListEl = document.getElementById("excel-pk-field-list");
+    if (pkListEl) {
+      pkListEl.innerHTML = commonHeaders
+        .map(
+          (header) => `
+        <label class="field-checkbox">
+          <input type="checkbox" name="excel-pk-field" value="${header}"
+                 ${selectedPkFields.includes(header) ? "checked" : ""}>
+          <span class="field-name">${header}</span>
+        </label>
+      `
+        )
+        .join("");
+    }
+
+    // Render comparison field checkboxes
+    const fieldListEl = document.getElementById("excel-field-list");
+    if (fieldListEl) {
+      fieldListEl.innerHTML = commonHeaders
+        .map(
+          (header) => `
+        <label class="field-checkbox">
+          <input type="checkbox" name="excel-compare-field" value="${header}"
+                 ${selectedFields.includes(header) ? "checked" : ""}>
+          <span class="field-name">${header}</span>
+        </label>
+      `
+        )
+        .join("");
+    }
+
+    // Show the section
+    fieldSection.style.display = "block";
+
+    // Rebind events for checkboxes
+    this.bindExcelFieldCheckboxEvents();
+  }
+
+  /**
+   * Show column mismatch warning - NEW FLOW
+   */
+  showColumnMismatchWarning(refOnlyHeaders, compOnlyHeaders) {
+    const warningEl = document.getElementById("excel-column-warning");
+    if (!warningEl) return;
+
+    let html = '<div class="warning-title">⚠️ Column Mismatch Detected</div>';
+    html += '<div class="warning-details">';
+
+    if (refOnlyHeaders.length > 0) {
+      html += `<p>Columns only in Reference file:</p><ul class="column-list">`;
+      refOnlyHeaders.forEach((h) => (html += `<li>${h}</li>`));
+      html += "</ul>";
+    }
+
+    if (compOnlyHeaders.length > 0) {
+      html += `<p>Columns only in Comparator file:</p><ul class="column-list">`;
+      compOnlyHeaders.forEach((h) => (html += `<li>${h}</li>`));
+      html += "</ul>";
+    }
+
+    html += "<p>Only common columns will be available for comparison.</p>";
+    html += "</div>";
+
+    warningEl.innerHTML = html;
+    warningEl.style.display = "block";
+  }
+
+  /**
+   * Bind events for Excel field selection - NEW FLOW
+   */
+  bindExcelFieldSelectionEvents() {
+    // New row matching radios
+    const rowMatchingRadios = document.querySelectorAll('input[name="excel-row-matching"]');
+    rowMatchingRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        this.excelCompare.rowMatching = e.target.value;
+      });
+    });
+
+    // New data comparison radios
+    const dataComparisonRadios = document.querySelectorAll('input[name="excel-data-comparison"]');
+    dataComparisonRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        this.excelCompare.dataComparison = e.target.value;
+      });
+    });
+
+    // New compare button
+    const compareBtn = document.getElementById("btn-excel-compare");
+    if (compareBtn) {
+      compareBtn.addEventListener("click", () => this.executeExcelComparisonNewFlow());
+    }
+
+    // Select All / Clear buttons for PK
+    const selectAllPkBtn = document.getElementById("btn-excel-select-all-pk");
+    const deselectAllPkBtn = document.getElementById("btn-excel-deselect-all-pk");
+
+    if (selectAllPkBtn) {
+      selectAllPkBtn.addEventListener("click", () => {
+        this.excelCompare.selectedPkFields = [...this.excelCompare.commonHeaders];
+        this.renderExcelFieldSelection();
+      });
+    }
+
+    if (deselectAllPkBtn) {
+      deselectAllPkBtn.addEventListener("click", () => {
+        this.excelCompare.selectedPkFields = [];
+        this.renderExcelFieldSelection();
+      });
+    }
+
+    // Select All / Clear buttons for fields
+    const selectAllFieldsBtn = document.getElementById("btn-excel-select-all-fields");
+    const deselectAllFieldsBtn = document.getElementById("btn-excel-deselect-all-fields");
+
+    if (selectAllFieldsBtn) {
+      selectAllFieldsBtn.addEventListener("click", () => {
+        this.excelCompare.selectedFields = [...this.excelCompare.commonHeaders];
+        this.renderExcelFieldSelection();
+      });
+    }
+
+    if (deselectAllFieldsBtn) {
+      deselectAllFieldsBtn.addEventListener("click", () => {
+        this.excelCompare.selectedFields = [];
+        this.renderExcelFieldSelection();
+      });
+    }
+  }
+
+  /**
+   * Bind events for field checkboxes after render - NEW FLOW
+   */
+  bindExcelFieldCheckboxEvents() {
+    // PK checkboxes
+    const pkCheckboxes = document.querySelectorAll('input[name="excel-pk-field"]');
+    pkCheckboxes.forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const checked = Array.from(document.querySelectorAll('input[name="excel-pk-field"]:checked')).map((c) => c.value);
+        this.excelCompare.selectedPkFields = checked;
+      });
+    });
+
+    // Field checkboxes
+    const fieldCheckboxes = document.querySelectorAll('input[name="excel-compare-field"]');
+    fieldCheckboxes.forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const checked = Array.from(document.querySelectorAll('input[name="excel-compare-field"]:checked')).map((c) => c.value);
+        this.excelCompare.selectedFields = checked;
+      });
+    });
+  }
+
+  /**
+   * Execute Excel comparison - NEW SINGLE-PAIR FLOW
+   */
+  async executeExcelComparisonNewFlow() {
+    const { selectedRefFile, selectedCompFile, refParsedData, compParsedData, selectedPkFields, selectedFields, rowMatching, dataComparison } =
+      this.excelCompare;
+
+    if (!selectedRefFile || !selectedCompFile) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "Please select both Reference and Comparator files.",
+      });
+      return;
+    }
+
+    if (rowMatching === "key" && selectedPkFields.length === 0) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "Please select at least one primary key field.",
+      });
+      return;
+    }
+
+    if (selectedFields.length === 0) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "Please select at least one field to compare.",
+      });
+      return;
+    }
+
+    // Show progress
+    this.showProgress("Comparing Files");
+    this.updateProgressStep("fetch", "done", "Files parsed");
+    this.updateProgressStep("compare", "active", "Comparing records...");
+
+    try {
+      // Import diff engine
+      const { compareDatasets } = await import("./lib/diff-engine.js");
+      const { convertToViewFormat } = await import("./lib/diff-adapter.js");
+
+      const jsResult = compareDatasets(refParsedData.rows, compParsedData.rows, {
+        keyColumns: selectedPkFields,
+        fields: selectedFields,
+        normalize: dataComparison === "normalized",
+        matchMode: rowMatching,
+      });
+
+      const viewResult = convertToViewFormat(jsResult, {
+        env1Name: selectedRefFile.file.name,
+        env2Name: selectedCompFile.file.name,
+        tableName: `${selectedRefFile.file.name} vs ${selectedCompFile.file.name}`,
+        keyColumns: selectedPkFields,
+      });
+
+      this.updateProgressStep("compare", "done", `${viewResult.rows.length} records compared`);
+
+      // Store results
+      this.results["excel-compare"] = viewResult;
+      this.excelCompare.currentStep = 4;
+
+      // Small delay to show completion
+      await new Promise((r) => setTimeout(r, 400));
+
+      this.hideProgress();
+      this.showResults();
+
+      this.eventBus.emit("comparison:complete", viewResult);
+    } catch (error) {
+      console.error("[ExcelCompare] Comparison failed:", error);
+      this.hideProgress();
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Comparison failed: ${error.message || error}`,
+      });
+    }
   }
 
   /**
@@ -1803,7 +2349,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Update file list UI for a side
+   * Update file list UI for a side - SIMPLIFIED FOR NEW FLOW
    */
   updateExcelFileList(side) {
     const listKey = side === "ref" ? "refFiles" : "compFiles";
@@ -1812,50 +2358,16 @@ class CompareConfigTool extends BaseTool {
 
     listEl.innerHTML = "";
 
-    // Sort: Paired Files (ASC), then Unpaired Files (ASC)
-    const sortedFiles = [...this.excelCompare[listKey]].sort((a, b) => {
-      if (a.pairedId && !b.pairedId) return -1;
-      if (!a.pairedId && b.pairedId) return 1;
-      return a.file.name.localeCompare(b.file.name);
-    });
+    // Sort alphabetically
+    const sortedFiles = [...this.excelCompare[listKey]].sort((a, b) => a.file.name.localeCompare(b.file.name));
 
     sortedFiles.forEach((fileWrapper) => {
       const file = fileWrapper.file;
-      const isPaired = !!fileWrapper.pairedId;
       const item = document.createElement("div");
-      item.className = `file-item ${isPaired ? "paired" : "unpaired"}`;
-
-      let actionButtons = "";
-      if (isPaired) {
-        actionButtons = `
-          <button class="btn btn-ghost btn-xs btn-config-pair" title="Configure individual settings">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
-          <button class="btn btn-ghost btn-xs btn-unpair-file" title="Unlink this pair">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-              <line x1="15" y1="9" x2="9" y2="15"></line>
-            </svg>
-          </button>
-        `;
-      } else {
-        actionButtons = `
-          <button class="btn btn-primary btn-xs btn-pair-manual" title="Link to a file on the other side">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-            </svg>
-            Link
-          </button>
-        `;
-      }
+      item.className = "file-item";
 
       item.innerHTML = `
-        <div class="file-icon ${isPaired ? "text-primary" : "text-muted"}">
+        <div class="file-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -1863,8 +2375,7 @@ class CompareConfigTool extends BaseTool {
         </div>
         <div class="file-name" title="${file.name}">${file.name}</div>
         <div class="file-actions">
-          ${actionButtons}
-          <button class="btn btn-ghost btn-xs btn-remove-file text-destructive" title="Remove from list">
+          <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove from list">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1875,24 +2386,8 @@ class CompareConfigTool extends BaseTool {
 
       item.querySelector(".btn-remove-file").addEventListener("click", (e) => {
         e.stopPropagation();
-        this.removeExcelFile(side, fileWrapper.id);
+        this.removeExcelFileSingle(side, fileWrapper.id);
       });
-
-      if (isPaired) {
-        item.querySelector(".btn-unpair-file").addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.unpairFile(side, fileWrapper.id);
-        });
-        item.querySelector(".btn-config-pair").addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.showPairConfig(fileWrapper.pairedId);
-        });
-      } else {
-        item.querySelector(".btn-pair-manual").addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.showPairingDialog(side, fileWrapper.id);
-        });
-      }
 
       listEl.appendChild(item);
     });
@@ -1906,48 +2401,44 @@ class CompareConfigTool extends BaseTool {
         dropzone.classList.remove("compact");
       }
     }
-
-    // Enable/disable compare button - only if at least one pair exists
-    const compareBtn = document.getElementById("btn-compare-excel");
-    if (compareBtn) {
-      compareBtn.disabled = this.excelCompare.pairs.length === 0;
-    }
   }
 
   /**
-   * Update match info summary
+   * Remove a single file - NEW FLOW
+   */
+  removeExcelFileSingle(side, fileId) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const index = this.excelCompare[listKey].findIndex((f) => f.id === fileId);
+    if (index === -1) return;
+
+    this.excelCompare[listKey].splice(index, 1);
+
+    // If this was the selected file, clear selection
+    if (side === "ref" && this.excelCompare.selectedRefFile?.id === fileId) {
+      this.excelCompare.selectedRefFile = null;
+      this.excelCompare.selectedCompFile = null;
+      this.excelCompare.autoMatchedComp = null;
+    } else if (side === "comp" && this.excelCompare.selectedCompFile?.id === fileId) {
+      this.excelCompare.selectedCompFile = null;
+      this.excelCompare.autoMatchedComp = null;
+    }
+
+    // Update UI
+    this.updateExcelFileList(side);
+    this.updateClearAllButtonVisibility(side);
+    this.checkAndShowPairingUI();
+    this.saveToolState();
+  }
+
+  /**
+   * Update match info summary - HIDDEN IN NEW FLOW (using pairing dropdowns instead)
    */
   updateExcelMatchInfo() {
     const infoEl = document.getElementById("excel-match-info");
-    if (!infoEl) return;
-
-    if (this.excelCompare.refFiles.length === 0 && this.excelCompare.compFiles.length === 0) {
+    if (infoEl) {
+      // Hide in new flow - we use pairing dropdowns instead
       infoEl.style.display = "none";
-      return;
     }
-
-    const { refFiles, compFiles } = this.excelCompare;
-    const result = FileMatcher.autoMatch(refFiles, compFiles);
-    this.excelCompare.matches = result.matches;
-    this.excelCompare.unmatchedRef = result.unmatchedRef;
-    this.excelCompare.unmatchedComp = result.unmatchedComp;
-
-    const stats = FileMatcher.getMatchStats(result);
-
-    infoEl.style.display = "flex";
-    infoEl.innerHTML = `
-      <div class="match-stat"><strong>${stats.matched}</strong> files matched</div>
-      ${
-        stats.unmatchedRef > 0
-          ? `<div class="match-stat" style="color: hsl(var(--warning))"><strong>${stats.unmatchedRef}</strong> unmatched reference</div>`
-          : ""
-      }
-      ${
-        stats.unmatchedComp > 0
-          ? `<div class="match-stat" style="color: hsl(var(--warning))"><strong>${stats.unmatchedComp}</strong> unmatched comparator</div>`
-          : ""
-      }
-    `;
   }
 
   /**
@@ -3364,9 +3855,46 @@ class CompareConfigTool extends BaseTool {
     this.rawPrimaryKey = "";
     this.rawMaxRows = 100;
 
-    // Clear results for BOTH modes
+    // Clear results for ALL modes
     this.results["schema-table"] = null;
     this.results["raw-sql"] = null;
+    this.results["excel-compare"] = null;
+
+    // Reset Excel Compare state (NEW FLOW)
+    if (this.queryMode === "excel-compare") {
+      // For Excel mode, go back to file pairing step (not clear files)
+      this.excelCompare.selectedRefFile = null;
+      this.excelCompare.selectedCompFile = null;
+      this.excelCompare.autoMatchedComp = null;
+      this.excelCompare.headers = [];
+      this.excelCompare.commonHeaders = [];
+      this.excelCompare.refOnlyHeaders = [];
+      this.excelCompare.compOnlyHeaders = [];
+      this.excelCompare.selectedPkFields = [];
+      this.excelCompare.selectedFields = [];
+      this.excelCompare.refParsedData = null;
+      this.excelCompare.compParsedData = null;
+      this.excelCompare.currentStep = 1;
+
+      // Reset Excel UI
+      const excelFieldSelection = document.getElementById("excel-field-selection");
+      const excelColumnWarning = document.getElementById("excel-column-warning");
+      const compMatchHint = document.getElementById("comp-match-hint");
+      const refFileSearch = document.getElementById("excel-ref-file-search");
+      const compFileSearch = document.getElementById("excel-comp-file-search");
+
+      if (excelFieldSelection) excelFieldSelection.style.display = "none";
+      if (excelColumnWarning) excelColumnWarning.style.display = "none";
+      if (compMatchHint) {
+        compMatchHint.textContent = "";
+        compMatchHint.className = "help-text";
+      }
+      if (refFileSearch) refFileSearch.value = "";
+      if (compFileSearch) compFileSearch.value = "";
+
+      // Reinitialize pairing dropdowns if files exist
+      this.checkAndShowPairingUI();
+    }
 
     // Reset Schema/Table UI
     const env1Connection = document.getElementById("env1-connection");

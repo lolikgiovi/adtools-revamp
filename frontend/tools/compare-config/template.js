@@ -175,12 +175,20 @@ export const CompareConfigTemplate = /* html */ `
 
         <!-- Excel Compare Mode (shown when Excel Compare tab is active) -->
         <div id="excel-compare-mode" class="excel-compare-mode" style="display: none;">
+            <!-- Step 1: File Upload -->
             <div class="excel-file-selection">
                 <div class="grid-row">
                     <!-- Reference Files -->
                     <div class="file-upload-zone" id="ref-upload-zone">
                         <div class="upload-zone-header">
                             <h4>Reference Files</h4>
+                            <button class="btn btn-ghost btn-xs btn-clear-files" id="ref-clear-all" style="display: none;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                Clear All
+                            </button>
                         </div>
                         <div class="dropzone" id="ref-dropzone">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -201,6 +209,13 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="file-upload-zone" id="comp-upload-zone">
                         <div class="upload-zone-header">
                             <h4>Comparator Files</h4>
+                            <button class="btn btn-ghost btn-xs btn-clear-files" id="comp-clear-all" style="display: none;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                Clear All
+                            </button>
                         </div>
                         <div class="dropzone" id="comp-dropzone">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -219,60 +234,106 @@ export const CompareConfigTemplate = /* html */ `
                 </div>
             </div>
 
-            <!-- File Matching Info -->
-            <div id="excel-match-info" class="excel-match-info" style="display: none;">
-                <!-- Will show matched/unmatched file counts -->
-            </div>
-
-            <!-- Comparison Settings -->
-            <div class="excel-settings">
-                <div class="settings-row">
-                    <div class="setting-group">
-                        <label>Row Matching:</label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="row-matching" value="key" checked>
-                                <span>By Primary Key</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="row-matching" value="position">
-                                <span>By Row Position</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="setting-group" id="pk-column-setting">
-                        <label for="excel-pk-columns">Primary Key Column(s):</label>
-                        <input type="text" id="excel-pk-columns" class="form-input" placeholder="e.g., ID or SCHEMA,TABLE_NAME">
-                        <p class="help-text">Comma-separated column names. Auto-detected from first column if empty.</p>
-                    </div>
+            <!-- Step 2: File Pairing Selection (shown after files uploaded) -->
+            <div id="excel-file-pairing" class="excel-file-pairing" style="display: none;">
+                <div class="pairing-header">
+                    <h4>Select File to Compare</h4>
                 </div>
 
-                <div class="settings-row">
-                    <div class="setting-group">
-                        <label>Data Comparison:</label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="data-comparison" value="strict" checked>
-                                <span>Strict (as-is)</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="data-comparison" value="normalized">
-                                <span>Normalized (match dates/numbers)</span>
-                            </label>
+                <div class="pairing-dropdowns">
+                    <div class="form-group">
+                        <label for="excel-ref-file-search">Reference File</label>
+                        <div class="searchable-select" id="excel-ref-file-wrapper">
+                            <input type="text" class="form-input searchable-input"
+                                   id="excel-ref-file-search" placeholder="Search or select file..." autocomplete="off">
+                            <div class="searchable-dropdown" id="excel-ref-file-dropdown"></div>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="excel-comp-file-search">Comparator File</label>
+                        <div class="searchable-select" id="excel-comp-file-wrapper">
+                            <input type="text" class="form-input searchable-input"
+                                   id="excel-comp-file-search" placeholder="Auto-matched or search..." autocomplete="off">
+                            <div class="searchable-dropdown" id="excel-comp-file-dropdown"></div>
+                        </div>
+                        <p class="help-text" id="comp-match-hint"></p>
                     </div>
                 </div>
             </div>
 
-            <!-- Compare Button -->
-            <div class="excel-compare-actions">
-                <button class="btn btn-primary" id="btn-compare-excel" disabled>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                    Compare Files
-                </button>
+            <!-- Step 3: Field Selection (shown after file pair selected) -->
+            <div id="excel-field-selection" class="field-selection excel-field-selection" style="display: none;">
+                <div class="file-pair-info">
+                    <span class="file-badge ref" id="excel-ref-file-badge"></span>
+                    <span class="vs-label">vs</span>
+                    <span class="file-badge comp" id="excel-comp-file-badge"></span>
+                </div>
+
+                <!-- Column Mismatch Warning -->
+                <div id="excel-column-warning" class="column-warning" style="display: none;"></div>
+
+                <div class="field-header">
+                    <h4 class="field-title">Primary Key Selection</h4>
+                    <div class="field-actions">
+                        <button class="btn btn-ghost btn-sm" id="btn-excel-select-all-pk">Select All</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-excel-deselect-all-pk">Clear</button>
+                    </div>
+                </div>
+                <p class="field-help">Select fields to use as primary key for comparison</p>
+                <div id="excel-pk-field-list" class="field-list"></div>
+
+                <div class="field-header" style="margin-top: 24px;">
+                    <h4 class="field-title">Fields to Compare</h4>
+                    <div class="field-actions">
+                        <button class="btn btn-ghost btn-sm" id="btn-excel-select-all-fields">Select All</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-excel-deselect-all-fields">Clear</button>
+                    </div>
+                </div>
+                <p class="field-help">Select fields to include in comparison</p>
+                <div id="excel-field-list" class="field-list"></div>
+
+                <!-- Comparison Options -->
+                <div class="excel-comparison-options">
+                    <div class="settings-row">
+                        <div class="setting-group">
+                            <label>Row Matching:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="excel-row-matching" value="key" checked>
+                                    <span>By Primary Key</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="excel-row-matching" value="position">
+                                    <span>By Row Position</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Data Comparison:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="excel-data-comparison" value="strict" checked>
+                                    <span>Strict (as-is)</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="excel-data-comparison" value="normalized">
+                                    <span>Normalized</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="comparison-actions">
+                    <button class="btn btn-primary" id="btn-excel-compare">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Compare
+                    </button>
+                </div>
             </div>
         </div>
 
