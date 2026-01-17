@@ -39,6 +39,7 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-process": "^2.3.0",
     "@tauri-apps/plugin-updater": "^2.9.0",
+    "diff": "^8.0.3",
     "handsontable": "^16.2.0",
     "html-minifier": "^4.0.0",
     "jszip": "^3.10.1",
