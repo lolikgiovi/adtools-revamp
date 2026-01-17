@@ -1276,7 +1276,9 @@ class CompareConfigTool extends BaseTool {
     fieldList.innerHTML = "";
 
     // Render PK field checkboxes
-    this.metadata.columns.forEach((column) => {
+    const sortedColumns = [...this.metadata.columns].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedColumns.forEach((column) => {
       const fieldDiv = document.createElement("div");
       fieldDiv.className = "field-checkbox";
 
@@ -1319,7 +1321,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Render field checkboxes
-    this.metadata.columns.forEach((column) => {
+    sortedColumns.forEach((column) => {
       const fieldDiv = document.createElement("div");
       fieldDiv.className = "field-checkbox";
 
@@ -1664,20 +1666,25 @@ class CompareConfigTool extends BaseTool {
 
     if (!input || !dropdown) return;
 
+    let highlightedIndex = -1;
+    let filteredFiles = [];
+
     // Build options
     const renderOptions = (filter = "") => {
       const filterLower = filter.toLowerCase();
-      const filtered = files.filter((f) => f.file.name.toLowerCase().includes(filterLower));
+      filteredFiles = files.filter((f) => f.file.name.toLowerCase().includes(filterLower));
 
-      if (filtered.length === 0) {
+      if (filteredFiles.length === 0) {
         dropdown.innerHTML = '<div class="searchable-no-results">No matching files</div>';
+        highlightedIndex = -1;
         return;
       }
 
-      dropdown.innerHTML = filtered
+      dropdown.innerHTML = filteredFiles
         .map(
-          (f) => `
-        <div class="searchable-option ${f.id === selectedId ? "selected" : ""}" data-id="${f.id}">
+          (f, index) => `
+        <div class="searchable-option ${f.id === selectedId ? "selected" : ""} ${index === highlightedIndex ? "highlighted" : ""}"
+             data-id="${f.id}" data-index="${index}">
           <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -1702,24 +1709,82 @@ class CompareConfigTool extends BaseTool {
       });
     };
 
+    const updateHighlighting = () => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt, index) => {
+        if (index === highlightedIndex) {
+          opt.classList.add("highlighted");
+          opt.scrollIntoView({ block: "nearest" });
+        } else {
+          opt.classList.remove("highlighted");
+        }
+      });
+    };
+
     // Set initial value
     const selectedFile = files.find((f) => f.id === selectedId);
     input.value = selectedFile ? selectedFile.file.name : "";
 
     // Event handlers
     input.addEventListener("focus", () => {
+      highlightedIndex = -1;
       renderOptions(input.value);
       dropdown.classList.add("open");
     });
 
     input.addEventListener("input", () => {
+      highlightedIndex = -1;
       renderOptions(input.value);
       dropdown.classList.add("open");
     });
 
+    input.addEventListener("keydown", (e) => {
+      if (!dropdown.classList.contains("open")) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          dropdown.classList.add("open");
+          renderOptions(input.value);
+          e.preventDefault();
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          highlightedIndex = Math.min(highlightedIndex + 1, filteredFiles.length - 1);
+          updateHighlighting();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          highlightedIndex = Math.max(highlightedIndex - 1, 0);
+          updateHighlighting();
+          break;
+        case "Enter":
+          if (highlightedIndex >= 0 && highlightedIndex < filteredFiles.length) {
+            e.preventDefault();
+            const file = filteredFiles[highlightedIndex];
+            input.value = file.file.name;
+            dropdown.classList.remove("open");
+            onSelect(file.id);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+        case "Tab":
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+      }
+    });
+
     input.addEventListener("blur", () => {
       // Delay to allow click on option
-      setTimeout(() => dropdown.classList.remove("open"), 200);
+      setTimeout(() => {
+        dropdown.classList.remove("open");
+        highlightedIndex = -1;
+      }, 200);
     });
 
     // Initial render
@@ -1818,10 +1883,10 @@ class CompareConfigTool extends BaseTool {
       const refOnlyHeaders = refData.headers.filter((h) => !compData.headers.includes(h));
       const compOnlyHeaders = compData.headers.filter((h) => !refData.headers.includes(h));
 
-      this.excelCompare.headers = Array.from(allHeaders);
-      this.excelCompare.commonHeaders = commonHeaders;
-      this.excelCompare.refOnlyHeaders = refOnlyHeaders;
-      this.excelCompare.compOnlyHeaders = compOnlyHeaders;
+      this.excelCompare.headers = Array.from(allHeaders).sort((a, b) => a.localeCompare(b));
+      this.excelCompare.commonHeaders = commonHeaders.sort((a, b) => a.localeCompare(b));
+      this.excelCompare.refOnlyHeaders = refOnlyHeaders.sort((a, b) => a.localeCompare(b));
+      this.excelCompare.compOnlyHeaders = compOnlyHeaders.sort((a, b) => a.localeCompare(b));
 
       // Default: select all common headers for comparison
       this.excelCompare.selectedFields = [...commonHeaders];
