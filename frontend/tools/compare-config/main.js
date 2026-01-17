@@ -624,7 +624,30 @@ class CompareConfigTool extends BaseTool {
     const excelPkColumnsInput = document.getElementById("excel-pk-columns");
 
     if (refDropzone) {
-      refDropzone.addEventListener("click", () => refFileInput.click());
+      // Handle "browse" click
+      const refBrowse = document.getElementById("ref-browse");
+      if (refBrowse) {
+        refBrowse.addEventListener("click", (e) => {
+          e.stopPropagation();
+          refFileInput.click();
+        });
+      }
+
+      // Handle "select folder" click
+      const refFolderBrowse = document.getElementById("ref-folder-browse");
+      if (refFolderBrowse) {
+        refFolderBrowse.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.handleFolderSelection("ref");
+        });
+      }
+
+      refDropzone.addEventListener("click", (e) => {
+        // Only trigger generic browse if clicking background, not links
+        if (e.target.classList.contains("browse-link")) return;
+        refFileInput.click();
+      });
+
       refDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         refDropzone.classList.add("drag-over");
@@ -638,7 +661,30 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (compDropzone) {
-      compDropzone.addEventListener("click", () => compFileInput.click());
+      // Handle "browse" click
+      const compBrowse = document.getElementById("comp-browse");
+      if (compBrowse) {
+        compBrowse.addEventListener("click", (e) => {
+          e.stopPropagation();
+          compFileInput.click();
+        });
+      }
+
+      // Handle "select folder" click
+      const compFolderBrowse = document.getElementById("comp-folder-browse");
+      if (compFolderBrowse) {
+        compFolderBrowse.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.handleFolderSelection("comp");
+        });
+      }
+
+      compDropzone.addEventListener("click", (e) => {
+        // Only trigger generic browse if clicking background, not links
+        if (e.target.classList.contains("browse-link")) return;
+        compFileInput.click();
+      });
+
       compDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
         compDropzone.classList.add("drag-over");
@@ -657,6 +703,17 @@ class CompareConfigTool extends BaseTool {
 
     if (compFileInput) {
       compFileInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
+    }
+
+    const refFolderInput = document.getElementById("ref-folder-input");
+    const compFolderInput = document.getElementById("comp-folder-input");
+
+    if (refFolderInput) {
+      refFolderInput.addEventListener("change", (e) => this.handleExcelFileSelection("ref", e.target.files));
+    }
+
+    if (compFolderInput) {
+      compFolderInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
     }
 
     if (compareExcelBtn) {
@@ -1338,17 +1395,124 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Handle Folder Selection
+   */
+  async handleFolderSelection(side) {
+    if (isTauri()) {
+      await this._handleFolderUploadTauri(side);
+    } else {
+      // Web: trigger the hidden folder input
+      const folderInput = document.getElementById(`${side}-folder-input`);
+      if (folderInput) {
+        folderInput.click();
+      }
+    }
+  }
+
+  /**
+   * Handle folder selection for Tauri (desktop)
+   */
+  async _handleFolderUploadTauri(side) {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const { readDir, readFile } = await import("@tauri-apps/plugin-fs");
+
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: `Select ${side === "ref" ? "Reference" : "Comparator"} Folder`,
+      });
+
+      if (!selected) return;
+
+      this.showProgress(`Scanning folder...`);
+
+      const files = [];
+      await this._recursiveScanTauri(selected, readDir, readFile, files);
+
+      this.hideProgress();
+
+      if (files.length > 0) {
+        await this.handleExcelFileSelection(side, files);
+        this.eventBus.emit("notification:success", {
+          message: `Added ${files.length} supported files from folder`,
+        });
+      } else {
+        this.eventBus.emit("notification:warning", {
+          message: "No supported files (.xlsx, .xls, .csv) found in the selected folder.",
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to upload folder (Tauri, ${side}):`, error);
+      this.hideProgress();
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Failed to read folder: ${error.message}`,
+      });
+    }
+  }
+
+  /**
+   * Recursively scan directory for supported files in Tauri
+   */
+  async _recursiveScanTauri(dirPath, readDir, readFile, files) {
+    const entries = await readDir(dirPath);
+
+    for (const entry of entries) {
+      // Manually construct full path as entry.path might be undefined in some plugin versions
+      const fullPath = `${dirPath}/${entry.name}`;
+
+      if (entry.isDirectory) {
+        // It's a directory
+        await this._recursiveScanTauri(fullPath, readDir, readFile, files);
+      } else if (entry.isFile) {
+        // It's a file, check if supported
+        if (FileParser.isSupported(entry.name)) {
+          try {
+            const fileData = await readFile(fullPath);
+            const fileName = entry.name;
+            const ext = FileParser.getFileExtension(fileName);
+
+            const mimeTypes = {
+              xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              xls: "application/vnd.ms-excel",
+              csv: "text/csv",
+            };
+
+            const blob = new Blob([fileData], { type: mimeTypes[ext] || "application/octet-stream" });
+            const file = new File([blob], fileName, {
+              type: mimeTypes[ext] || "application/octet-stream",
+              lastModified: Date.now(),
+            });
+
+            // We store the path for reference
+            file.path = fullPath;
+            files.push(file);
+          } catch (e) {
+            console.error(`Failed to read file ${fullPath}:`, e);
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Handle Excel file selection (drop or input)
    */
   async handleExcelFileSelection(side, files) {
     const listKey = side === "ref" ? "refFiles" : "compFiles";
-    const newFiles = FileParser.filterSupportedFiles(files);
+    // Convert FileList to Array if needed
+    const fileArray = Array.from(files);
+    const newFiles = FileParser.filterSupportedFiles(fileArray);
 
     if (newFiles.length === 0) {
-      this.eventBus.emit("notification:show", {
-        type: "warning",
-        message: "No supported files (.xlsx, .xls, .csv) were selected.",
-      });
+      if (!isTauri()) {
+        // Only show warning for manual selection if no files found
+        this.eventBus.emit("notification:show", {
+          type: "warning",
+          message: "No supported files (.xlsx, .xls, .csv) were selected.",
+        });
+      }
       return;
     }
 

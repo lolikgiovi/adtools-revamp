@@ -189,9 +189,10 @@ export const CompareConfigTemplate = /* html */ `
                                 <line x1="12" y1="18" x2="12" y2="12"></line>
                                 <line x1="9" y1="15" x2="15" y2="15"></line>
                             </svg>
-                            <p>Drop files here or click to browse</p>
+                            <p>Drop files here or click to <span class="browse-link" id="ref-browse">browse</span> or <span class="browse-link" id="ref-folder-browse">select folder</span></p>
                             <p class="help-text">Supports .xlsx, .xls, .csv</p>
                             <input type="file" id="ref-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="ref-folder-input" webkitdirectory style="display: none;">
                         </div>
                         <div class="file-list" id="ref-file-list">
                             <!-- Reference files will be listed here -->
@@ -210,9 +211,10 @@ export const CompareConfigTemplate = /* html */ `
                                 <line x1="12" y1="18" x2="12" y2="12"></line>
                                 <line x1="9" y1="15" x2="15" y2="15"></line>
                             </svg>
-                            <p>Drop files here or click to browse</p>
+                            <p>Drop files here or click to <span class="browse-link" id="comp-browse">browse</span> or <span class="browse-link" id="comp-folder-browse">select folder</span></p>
                             <p class="help-text">Supports .xlsx, .xls, .csv</p>
                             <input type="file" id="comp-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="comp-folder-input" webkitdirectory style="display: none;">
                         </div>
                         <div class="file-list" id="comp-file-list">
                             <!-- Comparator files will be listed here -->

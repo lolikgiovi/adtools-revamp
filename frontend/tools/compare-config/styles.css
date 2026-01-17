@@ -1937,6 +1937,20 @@
   color: hsl(var(--foreground));
 }
 
+.dropzone .browse-link {
+  color: hsl(var(--primary));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.dropzone .browse-link:hover {
+  color: hsl(var(--primary-hover));
+}
+
 .dropzone .help-text {
   font-size: 0.75rem;
   color: hsl(var(--muted-foreground));
