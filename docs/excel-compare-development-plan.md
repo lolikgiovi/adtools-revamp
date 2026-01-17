@@ -8,20 +8,20 @@ This document outlines the development plan for adding Excel/CSV comparison capa
 
 ## Requirements Summary
 
-| Requirement | Decision |
-|-------------|----------|
-| **File Formats** | .xlsx, .xls, and .csv |
-| **Row Matching** | Both options: Primary key OR row position (user choice) |
-| **Diff Granularity** | Adaptive: 50% threshold (cell-level if >50% different, character-level otherwise) |
-| **UI Integration** | New separate tab within Compare Config |
-| **Folder Input** | Recursive scanning |
-| **File Matching** | Manual pairing UI for mismatched filenames |
-| **Diff Engine** | JavaScript with Web Workers (async/non-blocking) |
-| **Multi-version** | Two versions only (Reference vs Comparator) |
-| **Export** | View only (no export needed) |
-| **Large Files** | Virtual scrolling |
-| **DB Diff Upgrade** | Yes, upgrade both DB and Excel to Myers/Patience |
-| **Typical File Size** | Medium (1,000-10,000 rows) |
+| Requirement           | Decision                                                                          |
+| --------------------- | --------------------------------------------------------------------------------- |
+| **File Formats**      | .xlsx, .xls, and .csv                                                             |
+| **Row Matching**      | Both options: Primary key OR row position (user choice)                           |
+| **Diff Granularity**  | Adaptive: 50% threshold (cell-level if >50% different, character-level otherwise) |
+| **UI Integration**    | New separate tab within Compare Config                                            |
+| **Folder Input**      | Recursive scanning                                                                |
+| **File Matching**     | Manual pairing UI for mismatched filenames                                        |
+| **Diff Engine**       | JavaScript with Web Workers (async/non-blocking)                                  |
+| **Multi-version**     | Two versions only (Reference vs Comparator)                                       |
+| **Export**            | View only (no export needed)                                                      |
+| **Large Files**       | Virtual scrolling                                                                 |
+| **DB Diff Upgrade**   | Yes, upgrade both DB and Excel to Myers/Patience                                  |
+| **Typical File Size** | Medium (1,000-10,000 rows)                                                        |
 
 ---
 
@@ -63,84 +63,76 @@ This document outlines the development plan for adding Excel/CSV comparison capa
 
 ---
 
-## Phase 1: Diff Engine Migration & Enhancement
+## Phase 1: Diff Engine Migration & Enhancement ✅ COMPLETED
 
-### 1.1 Create JavaScript Diff Engine
+> **Completed:** 2026-01-17  
+> **Commit:** `a32256a` - feat(compare-config): Add JavaScript diff engine for Excel comparison
 
-**Files to create:**
-- `frontend/tools/compare-config/lib/diff-engine.js` - Main diff logic
-- `frontend/tools/compare-config/lib/diff-worker.js` - Web Worker wrapper
+### 1.1 Create JavaScript Diff Engine ✅
 
-**Diff Algorithm: Myers with Patience Enhancement**
+**Files created:**
 
-```javascript
-// Pseudocode structure
-class DiffEngine {
-  // Myers algorithm for optimal edit script
-  static myersDiff(oldText, newText) { ... }
+- `frontend/tools/compare-config/lib/diff-engine.js` - Main diff logic (662 lines)
+- `frontend/tools/compare-config/lib/diff-worker.js` - Web Worker (168 lines)
+- `frontend/tools/compare-config/lib/diff-worker-manager.js` - Manager (347 lines)
+- `frontend/tools/compare-config/tests/diff-engine.test.js` - Unit tests (447 lines)
 
-  // Patience diff for better semantic grouping
-  static patienceDiff(oldText, newText) { ... }
+**Implementation Details:**
 
-  // Adaptive threshold logic
-  static computeDiff(oldValue, newValue, options = {}) {
-    const changeRatio = calculateChangeRatio(oldValue, newValue);
+- Uses `diff` (jsdiff) npm package for Myers algorithm
+- Adaptive threshold logic (50% rule) implemented
+- Web Worker wrapper for non-blocking execution
+- Comprehensive test suite for diff engine
 
-    if (changeRatio > 0.5) {
-      // >50% different: cell-level only
-      return { type: 'cell-diff', changed: true };
-    } else {
-      // ≤50% different: character-level diff
-      return { type: 'char-diff', segments: myersDiff(oldValue, newValue) };
-    }
+### 1.2 Dependencies Added ✅
+
+```json
+{
+  "dependencies": {
+    "diff": "^7.x.x"
   }
 }
 ```
 
-**Web Worker Integration:**
+---
+
+## Phase 2: Integrate JS Diff with DB Compare ✅ COMPLETED
+
+> **Completed:** 2026-01-17  
+> **Commit:** `cb9c398` - feat(compare-config): Integrate JS diff engine with DB comparison
+
+### 2.1 Integration Components ✅
+
+**Files created/modified:**
+
+- `frontend/tools/compare-config/lib/diff-adapter.js` - Adapter layer (237 lines)
+- `frontend/tools/compare-config/lib/feature-flags.js` - Feature flag system (113 lines)
+- `frontend/tools/compare-config/main.js` - Modified (20 line changes)
+- `frontend/tools/compare-config/styles.css` - Added diff styles (30 lines)
+- `frontend/tools/compare-config/views/GridView.js` - Updated for new diff format (55 line changes)
+
+### 2.2 Feature Flag System ✅
 
 ```javascript
-// diff-worker.js - Runs in separate thread
-self.onmessage = async (event) => {
-  const { taskId, type, data } = event.data;
-
-  switch (type) {
-    case 'compare-rows':
-      const result = await compareRows(data.reference, data.comparator, data.options);
-      self.postMessage({ taskId, result });
-      break;
-    case 'compare-cells':
-      const diff = computeCellDiff(data.oldValue, data.newValue);
-      self.postMessage({ taskId, diff });
-      break;
-  }
+// Feature flags implemented
+const FEATURE_FLAGS = {
+  USE_JS_DIFF_ENGINE: true, // Toggle for JS vs Rust diff
+  JS_DIFF_DEBUG_MODE: false, // Run both engines and compare results
 };
 ```
 
-### 1.2 Integrate with Existing DB Compare
-
-**Modification to existing flow:**
-
-1. Keep Rust backend for data fetching (Oracle queries)
-2. Move diff computation to JS diff-engine
-3. Results returned to frontend, diffed in Web Worker
-4. Update existing views to use new diff format
-
-**Migration strategy:**
-- Add feature flag `USE_JS_DIFF_ENGINE`
-- Run both engines in parallel during testing
-- Validate results match before full migration
-
 ---
 
-## Phase 2: Excel File Handling
+## Phase 3: Excel File Handling
 
-### 2.1 File Parser Module
+### 3.1 File Parser Module
 
 **Files to create:**
+
 - `frontend/tools/compare-config/lib/file-parser.js`
 
 **Dependencies:**
+
 - `xlsx` (SheetJS) - For .xlsx and .xls parsing
 - Native `FileReader` API for CSV
 
@@ -170,6 +162,7 @@ class FileParser {
 ### 2.2 File/Folder Input Component
 
 **Features:**
+
 - Multi-file selection via `<input type="file" multiple>`
 - Folder selection via `<input type="file" webkitdirectory>` (recursive by default)
 - Drag-and-drop zone
@@ -186,7 +179,7 @@ class FileMatcher {
     const unmatchedComp = [];
 
     for (const ref of referenceFiles) {
-      const match = comparatorFiles.find(c => c.name === ref.name);
+      const match = comparatorFiles.find((c) => c.name === ref.name);
       if (match) {
         matches.push({ reference: ref, comparator: match });
       } else {
@@ -195,9 +188,7 @@ class FileMatcher {
     }
 
     // Remaining comparator files
-    unmatchedComp = comparatorFiles.filter(c =>
-      !matches.some(m => m.comparator.name === c.name)
-    );
+    unmatchedComp = comparatorFiles.filter((c) => !matches.some((m) => m.comparator.name === c.name));
 
     return { matches, unmatchedRef, unmatchedComp };
   }
@@ -226,28 +217,56 @@ When files don't auto-match, show pairing interface:
 
 ---
 
-## Phase 3: Excel Compare Tab UI
+## Phase 4: Excel Compare Tab UI
 
-### 3.1 Tab Structure
+### 4.1 Tab Structure
 
-Add new tab to existing Compare Config interface:
+**Integrate with existing `tabs-left` structure** - Add "Database" and "Excel Compare" as top-level tabs alongside "Schema/Table" and "Raw SQL":
 
 ```html
-<div class="tabs">
-  <button class="tab active" data-tab="db-compare">Database Compare</button>
-  <button class="tab" data-tab="excel-compare">Excel Compare</button>
-</div>
+<!-- Updated tabs-container with mode tabs -->
+<div class="tabs-container">
+  <div class="tabs-left">
+    <!-- Primary mode selection (new) -->
+    <button class="tab-button active" data-tab="database">Database</button>
+    <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
 
-<div class="tab-content" id="db-compare">
-  <!-- Existing DB compare UI -->
-</div>
+    <!-- Divider -->
+    <span class="tab-divider">|</span>
 
-<div class="tab-content hidden" id="excel-compare">
-  <!-- New Excel compare UI -->
+    <!-- Database sub-tabs (shown when Database is active) -->
+    <button class="tab-button sub-tab active" data-tab="schema-table">Schema/Table</button>
+    <button class="tab-button sub-tab" data-tab="raw-sql">Raw SQL</button>
+  </div>
+  <div class="tabs-right">
+    <!-- Connection Status Indicator (Database mode only) -->
+    <div id="connection-status" class="connection-status" style="display: none;">...</div>
+  </div>
 </div>
 ```
 
-### 3.2 Excel Compare Layout
+**Alternative simpler structure** (recommended):
+
+```html
+<div class="tabs-container">
+  <div class="tabs-left">
+    <!-- All tabs at same level, Database sub-modes handled by JS -->
+    <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
+    <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
+    <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
+  </div>
+  ...
+</div>
+```
+
+**Key Points:**
+
+- Reuse existing `tabs-left` styling and behavior
+- No new CSS class required for tab differentiation
+- Tab switching logic in `main.js` handles showing/hiding appropriate content sections
+- Connection status indicator hidden when Excel Compare tab is active
+
+### 4.2 Excel Compare Layout
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -316,6 +335,7 @@ Reuse existing view components with modifications:
 ### 4.1 Virtual List Component
 
 **File to create:**
+
 - `frontend/tools/compare-config/lib/virtual-list.js`
 
 ```javascript
@@ -323,7 +343,7 @@ class VirtualList {
   constructor(options) {
     this.container = options.container;
     this.rowHeight = options.rowHeight || 40;
-    this.buffer = options.buffer || 5;  // Extra rows above/below viewport
+    this.buffer = options.buffer || 5; // Extra rows above/below viewport
     this.data = [];
     this.visibleRange = { start: 0, end: 0 };
   }
@@ -339,10 +359,7 @@ class VirtualList {
     const viewportHeight = this.container.clientHeight;
 
     const start = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.buffer);
-    const end = Math.min(
-      this.data.length,
-      Math.ceil((scrollTop + viewportHeight) / this.rowHeight) + this.buffer
-    );
+    const end = Math.min(this.data.length, Math.ceil((scrollTop + viewportHeight) / this.rowHeight) + this.buffer);
 
     if (start !== this.visibleRange.start || end !== this.visibleRange.end) {
       this.visibleRange = { start, end };
@@ -380,16 +397,18 @@ render(results) {
 ```javascript
 // Render character-level diff with highlighting
 function renderCharDiff(segments) {
-  return segments.map(seg => {
-    switch (seg.type) {
-      case 'equal':
-        return `<span class="diff-equal">${escapeHtml(seg.text)}</span>`;
-      case 'insert':
-        return `<span class="diff-insert">${escapeHtml(seg.text)}</span>`;
-      case 'delete':
-        return `<span class="diff-delete">${escapeHtml(seg.text)}</span>`;
-    }
-  }).join('');
+  return segments
+    .map((seg) => {
+      switch (seg.type) {
+        case "equal":
+          return `<span class="diff-equal">${escapeHtml(seg.text)}</span>`;
+        case "insert":
+          return `<span class="diff-insert">${escapeHtml(seg.text)}</span>`;
+        case "delete":
+          return `<span class="diff-delete">${escapeHtml(seg.text)}</span>`;
+      }
+    })
+    .join("");
 }
 ```
 
@@ -428,35 +447,42 @@ function renderCharDiff(segments) {
 
 ## Implementation Phases & Order
 
-### Phase 1: Diff Engine (Foundation)
-1. Implement Myers diff algorithm in JS
-2. Add Patience enhancement for semantic grouping
-3. Create Web Worker wrapper
-4. Add adaptive threshold logic (50% rule)
-5. Unit tests for diff engine
+### Phase 1: Diff Engine (Foundation) ✅ COMPLETED
 
-### Phase 2: Integrate JS Diff with DB Compare
-1. Add feature flag for JS diff engine
-2. Modify comparison flow to use JS diff
-3. Update views for new diff format
-4. Validate results against Rust implementation
-5. Remove Rust diff code (keep data fetching)
+1. ~~Implement Myers diff algorithm in JS~~ ✅ Using `diff` (jsdiff) package
+2. ~~Add Patience enhancement for semantic grouping~~ ✅
+3. ~~Create Web Worker wrapper~~ ✅ `diff-worker.js` + `diff-worker-manager.js`
+4. ~~Add adaptive threshold logic (50% rule)~~ ✅
+5. ~~Unit tests for diff engine~~ ✅ `diff-engine.test.js`
 
-### Phase 3: File Handling Infrastructure
-1. Add xlsx library dependency
-2. Implement FileParser for xlsx/xls/csv
-3. Create file input components (multi-file, folder)
-4. Implement FileMatcher with auto-matching
-5. Build manual pairing UI
+### Phase 2: Integrate JS Diff with DB Compare ✅ COMPLETED
+
+1. ~~Add feature flag for JS diff engine~~ ✅ `feature-flags.js`
+2. ~~Modify comparison flow to use JS diff~~ ✅ `diff-adapter.js`
+3. ~~Update views for new diff format~~ ✅ `GridView.js`
+4. ~~Validate results against Rust implementation~~ ✅
+5. Remove Rust diff code (keep data fetching) — _Deferred to Phase 7_
+
+### Phase 3: File Handling Infrastructure ✅ COMPLETED
+
+> **Completed:** 2026-01-17
+
+1. ~~Add xlsx library dependency~~ ✅ Already in project (`xlsx@0.18.5`)
+2. ~~Implement FileParser for xlsx/xls/csv~~ ✅ `lib/file-parser.js`
+3. ~~Create file input components~~ ✅ Utility functions ready
+4. ~~Implement FileMatcher with auto-matching~~ ✅ `lib/file-matcher.js`
+5. ~~Build manual pairing UI~~ ✅ `suggestMatches()` + helpers ready
 
 ### Phase 4: Excel Compare Tab
-1. Add tab structure to template
+
+1. Add "Excel Compare" tab to existing `tabs-left` (same level as Schema/Table, Raw SQL)
 2. Create excel-compare.js controller
 3. Implement file upload workflow
 4. Add comparison settings (row matching mode)
 5. Wire up to diff engine
 
 ### Phase 5: Results & Virtual Scrolling
+
 1. Implement VirtualList component
 2. Adapt existing views for Excel data
 3. Add multi-file results navigation
@@ -464,11 +490,18 @@ function renderCharDiff(segments) {
 5. Performance testing with large files
 
 ### Phase 6: Polish & Testing
+
 1. Progress overlay for Excel comparison
 2. Error handling (malformed files, encoding issues)
 3. Edge cases (empty files, single row, huge cells)
 4. Cross-browser testing
 5. Documentation
+
+### Phase 7: Cleanup & Rust Removal
+
+1. Remove Rust diff code from `oracle.rs`
+2. Remove feature flags (set JS as only engine)
+3. Final performance validation
 
 ---
 
@@ -499,6 +532,7 @@ frontend/tools/compare-config/
 ## Dependencies
 
 **Already in project:**
+
 ```json
 {
   "dependencies": {
@@ -508,6 +542,7 @@ frontend/tools/compare-config/
 ```
 
 **Added for Phase 1:**
+
 ```json
 {
   "dependencies": {
@@ -517,6 +552,7 @@ frontend/tools/compare-config/
 ```
 
 **Note:**
+
 - SheetJS (xlsx) is ~500KB minified. Consider lazy-loading only when Excel tab is accessed.
 - `diff` (jsdiff) implements Myers algorithm and is battle-tested (~5M weekly downloads). We use it instead of implementing the algorithm from scratch.
 
@@ -524,24 +560,24 @@ frontend/tools/compare-config/
 
 ## Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| JS diff slower than Rust for large datasets | Medium | Medium | Web Workers + chunked processing |
-| xlsx library size impacts load time | Low | Low | Lazy load on tab activation |
-| Virtual scrolling complexity | Medium | Medium | Start with simple impl, iterate |
-| Browser memory with 10K+ rows | Low | High | Streaming parse, don't hold all data |
-| File encoding issues (non-UTF8) | Medium | Low | Detect encoding, provide fallback |
+| Risk                                        | Likelihood | Impact | Mitigation                           |
+| ------------------------------------------- | ---------- | ------ | ------------------------------------ |
+| JS diff slower than Rust for large datasets | Medium     | Medium | Web Workers + chunked processing     |
+| xlsx library size impacts load time         | Low        | Low    | Lazy load on tab activation          |
+| Virtual scrolling complexity                | Medium     | Medium | Start with simple impl, iterate      |
+| Browser memory with 10K+ rows               | Low        | High   | Streaming parse, don't hold all data |
+| File encoding issues (non-UTF8)             | Medium     | Low    | Detect encoding, provide fallback    |
 
 ---
 
 ## Design Decisions
 
-| Question | Decision |
-|----------|----------|
-| **Sheet Selection** | First sheet only (simplifies UX) |
-| **Header Row** | First row is always treated as column headers |
+| Question                 | Decision                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| **Sheet Selection**      | First sheet only (simplifies UX)                                                              |
+| **Header Row**           | First row is always treated as column headers                                                 |
 | **Data Format Handling** | User configurable - option for strict string compare OR normalized comparison (dates/numbers) |
-| **Empty Cell Handling** | Treat empty string and null as equivalent |
+| **Empty Cell Handling**  | Treat empty string and null as equivalent                                                     |
 
 ---
 
@@ -550,12 +586,13 @@ frontend/tools/compare-config/
 ### 1. Composite Primary Key Handling
 
 **Key Concatenation:**
+
 ```javascript
 // Composite keys are joined with a delimiter unlikely to appear in data
-const KEY_DELIMITER = '\x00|\x00';  // null-pipe-null
+const KEY_DELIMITER = "\x00|\x00"; // null-pipe-null
 
 function buildCompositeKey(row, keyColumns) {
-  return keyColumns.map(col => String(row[col] ?? '')).join(KEY_DELIMITER);
+  return keyColumns.map((col) => String(row[col] ?? "")).join(KEY_DELIMITER);
 }
 
 // Example: columns ['SCHEMA', 'TABLE_NAME'] with values ['HR', 'EMPLOYEES']
@@ -563,9 +600,10 @@ function buildCompositeKey(row, keyColumns) {
 ```
 
 **Duplicate Key Handling (Compare all with suffix):**
+
 ```javascript
 function buildKeyMaps(rows, keyColumns) {
-  const keyMap = new Map();  // key -> [{ row, occurrence }]
+  const keyMap = new Map(); // key -> [{ row, occurrence }]
 
   for (const row of rows) {
     const baseKey = buildCompositeKey(row, keyColumns);
@@ -597,11 +635,13 @@ function buildKeyMaps(rows, keyColumns) {
 ```
 
 **Null/Empty Values in Key Columns:**
+
 - Null and empty string are treated as equivalent (empty string)
 - Rows with all-null composite keys are grouped together
 - Warning shown in UI: "X rows have empty primary key values"
 
 **UI Indication:**
+
 ```
 ⚠ Duplicate keys detected:
   • "HR|EMPLOYEES" appears 3 times in Reference, 2 times in Comparator
@@ -625,7 +665,7 @@ class FileMatcher {
       // Get path relative to selected folder root
       const refRelativePath = this.getRelativePath(ref, refBaseDir);
 
-      const match = comparatorFiles.find(comp => {
+      const match = comparatorFiles.find((comp) => {
         const compRelativePath = this.getRelativePath(comp, compBaseDir);
         return this.pathsMatch(refRelativePath, compRelativePath);
       });
@@ -641,7 +681,7 @@ class FileMatcher {
     return {
       matches,
       unmatchedRef,
-      unmatchedComp: [...unmatchedComp]
+      unmatchedComp: [...unmatchedComp],
     };
   }
 
@@ -659,15 +699,18 @@ class FileMatcher {
 ```
 
 **Extension Handling:**
+
 - Files with same path but different extensions are NOT auto-matched
 - Example: `config.xlsx` and `config.csv` are considered different files
 - User can manually pair them in the pairing UI if desired
 
 **Case Sensitivity:**
+
 - All path comparisons are **case-insensitive**
 - Handles Windows (case-insensitive) vs macOS/Linux (case-sensitive) scenarios
 
 **UI Display:**
+
 ```
 Reference Folder: /Users/dev/before-deploy/
 ├── UAT/SCHEMA.USERS.xlsx
@@ -698,7 +741,7 @@ async function parseExcel(file) {
     fileName: file.name,
     sheetName: firstSheetName,
     totalSheets: workbook.SheetNames.length,
-    allSheetNames: workbook.SheetNames
+    allSheetNames: workbook.SheetNames,
   };
 
   // Parse sheet to JSON
@@ -709,13 +752,16 @@ async function parseExcel(file) {
 ```
 
 **Multi-Sheet Warning:**
+
 - If file has more than one sheet, show info banner (not blocking):
+
 ```
 ℹ This file has 3 sheets: ["Config", "Lookup", "Archive"]
   Only the first sheet "Config" will be compared.
 ```
 
 **Different Sheet Names Between Files:**
+
 - Sheet names don't need to match
 - Comparison is data-based, not name-based
 - Metadata shows which sheet was used from each file
@@ -728,28 +774,30 @@ async function parseExcel(file) {
 
 ```javascript
 function reconcileColumns(refHeaders, compHeaders) {
-  const refSet = new Set(refHeaders.map(h => h.toLowerCase()));
-  const compSet = new Set(compHeaders.map(h => h.toLowerCase()));
+  const refSet = new Set(refHeaders.map((h) => h.toLowerCase()));
+  const compSet = new Set(compHeaders.map((h) => h.toLowerCase()));
 
-  const common = refHeaders.filter(h => compSet.has(h.toLowerCase()));
-  const onlyInRef = refHeaders.filter(h => !compSet.has(h.toLowerCase()));
-  const onlyInComp = compHeaders.filter(h => !refSet.has(h.toLowerCase()));
+  const common = refHeaders.filter((h) => compSet.has(h.toLowerCase()));
+  const onlyInRef = refHeaders.filter((h) => !compSet.has(h.toLowerCase()));
+  const onlyInComp = compHeaders.filter((h) => !refSet.has(h.toLowerCase()));
 
   return {
-    common,           // Columns to compare
-    onlyInRef,        // Extra columns in Reference
-    onlyInComp,       // Extra columns in Comparator
-    isExactMatch: onlyInRef.length === 0 && onlyInComp.length === 0
+    common, // Columns to compare
+    onlyInRef, // Extra columns in Reference
+    onlyInComp, // Extra columns in Comparator
+    isExactMatch: onlyInRef.length === 0 && onlyInComp.length === 0,
   };
 }
 ```
 
 **Column Order:**
+
 - Column order differences are **ignored**
 - Matching is by column name (case-insensitive)
 - Original order preserved in output for each file
 
 **UI Display for Column Differences:**
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  ⚠ Column Structure Differences                              │
@@ -766,6 +814,7 @@ function reconcileColumns(refHeaders, compHeaders) {
 ```
 
 **Edge Cases:**
+
 - If **zero** common columns: Show error, cannot compare
 - If only primary key columns are common: Warning, but allow comparison
 - Empty column names: Assigned placeholder names (`Column_A`, `Column_B`, etc.)
@@ -781,12 +830,12 @@ function reconcileColumns(refHeaders, compHeaders) {
 class DiffWorkerManager {
   constructor() {
     this.worker = null;
-    this.pendingTasks = new Map();  // taskId -> { resolve, reject, timeout }
-    this.TIMEOUT_MS = 120000;       // 2 minutes
+    this.pendingTasks = new Map(); // taskId -> { resolve, reject, timeout }
+    this.TIMEOUT_MS = 120000; // 2 minutes
   }
 
   async initialize() {
-    this.worker = new Worker('./lib/diff-worker.js');
+    this.worker = new Worker("./lib/diff-worker.js");
 
     this.worker.onmessage = (event) => this.handleMessage(event);
     this.worker.onerror = (event) => this.handleError(event);
@@ -799,13 +848,13 @@ class DiffWorkerManager {
       // Set timeout
       const timeoutId = setTimeout(() => {
         this.pendingTasks.delete(taskId);
-        reject(new Error('Comparison timed out after 2 minutes'));
-        this.restartWorker();  // Recover by restarting worker
+        reject(new Error("Comparison timed out after 2 minutes"));
+        this.restartWorker(); // Recover by restarting worker
       }, this.TIMEOUT_MS);
 
       this.pendingTasks.set(taskId, { resolve, reject, timeoutId });
 
-      this.worker.postMessage({ taskId, type: 'compare', data, options });
+      this.worker.postMessage({ taskId, type: "compare", data, options });
     });
   }
 
@@ -833,11 +882,11 @@ class DiffWorkerManager {
 
   handleError(event) {
     // Worker crashed - reject all pending tasks and restart
-    console.error('Worker crashed:', event);
+    console.error("Worker crashed:", event);
 
     for (const [taskId, task] of this.pendingTasks) {
       clearTimeout(task.timeoutId);
-      task.reject(new Error('Worker crashed unexpectedly'));
+      task.reject(new Error("Worker crashed unexpectedly"));
     }
     this.pendingTasks.clear();
 
@@ -869,11 +918,11 @@ function compareWithProgress(refData, compData, options) {
     if (processed % reportInterval === 0) {
       self.postMessage({
         progress: {
-          phase: 'comparing',
+          phase: "comparing",
           processed,
           total: totalRows,
-          percent: Math.round((processed / totalRows) * 100)
-        }
+          percent: Math.round((processed / totalRows) * 100),
+        },
       });
     }
   }
@@ -881,6 +930,7 @@ function compareWithProgress(refData, compData, options) {
 ```
 
 **UI Progress Display:**
+
 ```
 ┌────────────────────────────────────────────────┐
 │  Comparing files...                            │
@@ -896,34 +946,36 @@ function compareWithProgress(refData, compData, options) {
 **Supported Formats:**
 
 **Date Recognition (parsed via Date.parse and patterns):**
+
 ```javascript
 const DATE_PATTERNS = [
   // ISO 8601
-  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/,        // 2024-01-15, 2024-01-15T10:30:00
+  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/, // 2024-01-15, 2024-01-15T10:30:00
   // US format
-  /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,                     // 01/15/2024, 1/15/24
+  /^\d{1,2}\/\d{1,2}\/\d{2,4}$/, // 01/15/2024, 1/15/24
   // European format
-  /^\d{1,2}-\d{1,2}-\d{2,4}$/,                       // 15-01-2024
+  /^\d{1,2}-\d{1,2}-\d{2,4}$/, // 15-01-2024
   // Text month
-  /^\d{1,2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2,4}$/i,  // 15-Jan-2024
+  /^\d{1,2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2,4}$/i, // 15-Jan-2024
   // Excel serial number (days since 1900-01-01)
-  /^\d{5}$/,                                         // 45306 = 2024-01-15
+  /^\d{5}$/, // 45306 = 2024-01-15
 ];
 
 function normalizeDate(value) {
   // Convert to ISO date string (YYYY-MM-DD) for comparison
   const date = parseDate(value);
   if (date && !isNaN(date.getTime())) {
-    return date.toISOString().split('T')[0];  // "2024-01-15"
+    return date.toISOString().split("T")[0]; // "2024-01-15"
   }
-  return null;  // Not a recognized date
+  return null; // Not a recognized date
 }
 ```
 
 **Number Normalization:**
+
 ```javascript
 function normalizeNumber(value) {
-  if (typeof value === 'number') return value;
+  if (typeof value === "number") return value;
 
   const str = String(value).trim();
 
@@ -932,16 +984,16 @@ function normalizeNumber(value) {
   // US: 1,234.56 -> 1234.56
 
   // Detect format by last separator
-  const lastComma = str.lastIndexOf(',');
-  const lastDot = str.lastIndexOf('.');
+  const lastComma = str.lastIndexOf(",");
+  const lastDot = str.lastIndexOf(".");
 
   let normalized;
   if (lastComma > lastDot) {
     // European format: comma is decimal separator
-    normalized = str.replace(/\./g, '').replace(',', '.');
+    normalized = str.replace(/\./g, "").replace(",", ".");
   } else {
     // US format: dot is decimal separator
-    normalized = str.replace(/,/g, '');
+    normalized = str.replace(/,/g, "");
   }
 
   const num = parseFloat(normalized);
@@ -952,11 +1004,12 @@ function normalizeNumber(value) {
 ```
 
 **Comparison Logic:**
+
 ```javascript
 function compareValues(val1, val2, normalize = false) {
   if (!normalize) {
     // Strict: compare as strings
-    return String(val1 ?? '') === String(val2 ?? '');
+    return String(val1 ?? "") === String(val2 ?? "");
   }
 
   // Normalized comparison
@@ -975,11 +1028,12 @@ function compareValues(val1, val2, normalize = false) {
   }
 
   // Fall back to string comparison
-  return String(val1 ?? '').trim() === String(val2 ?? '').trim();
+  return String(val1 ?? "").trim() === String(val2 ?? "").trim();
 }
 ```
 
 **Locale Handling:**
+
 - Detection is automatic based on separator positions
 - No explicit locale configuration required
 - If ambiguous (e.g., `1,234`), treated as thousand-separated integer
@@ -1025,18 +1079,18 @@ function compareValues(val1, val2, normalize = false) {
 
 ```javascript
 const FileStatus = {
-  QUEUED: 'queued',           // Waiting to be processed
-  PARSING: 'parsing',         // Reading Excel/CSV file
-  COMPARING: 'comparing',     // Running diff algorithm
-  COMPLETED: 'completed',     // Done, results available
-  ERROR: 'error'              // Failed with error
+  QUEUED: "queued", // Waiting to be processed
+  PARSING: "parsing", // Reading Excel/CSV file
+  COMPARING: "comparing", // Running diff algorithm
+  COMPLETED: "completed", // Done, results available
+  ERROR: "error", // Failed with error
 };
 
 class FileComparisonQueue extends EventTarget {
   constructor(workerManager) {
     super();
     this.workerManager = workerManager;
-    this.files = new Map();  // fileId -> { status, progress, result, error }
+    this.files = new Map(); // fileId -> { status, progress, result, error }
     this.processingOrder = [];
   }
 
@@ -1052,11 +1106,11 @@ class FileComparisonQueue extends EventTarget {
       result: null,
       error: null,
       startTime: null,
-      endTime: null
+      endTime: null,
     });
 
     this.processingOrder.push(fileId);
-    this.emit('file-added', { fileId });
+    this.emit("file-added", { fileId });
 
     return fileId;
   }
@@ -1075,10 +1129,7 @@ class FileComparisonQueue extends EventTarget {
     try {
       // Phase 1: Parsing
       this.updateStatus(fileId, FileStatus.PARSING, 0);
-      const [refData, compData] = await Promise.all([
-        this.parseFile(file.reference),
-        this.parseFile(file.comparator)
-      ]);
+      const [refData, compData] = await Promise.all([this.parseFile(file.reference), this.parseFile(file.comparator)]);
 
       // Phase 2: Comparing
       this.updateStatus(fileId, FileStatus.COMPARING, 0);
@@ -1086,14 +1137,13 @@ class FileComparisonQueue extends EventTarget {
       const result = await this.workerManager.compare(refData, compData, {
         onProgress: (progress) => {
           this.updateProgress(fileId, progress.percent);
-        }
+        },
       });
 
       // Phase 3: Complete - result immediately available!
       file.result = result;
       file.endTime = Date.now();
       this.updateStatus(fileId, FileStatus.COMPLETED, 100);
-
     } catch (error) {
       file.error = error.message;
       file.endTime = Date.now();
@@ -1107,11 +1157,11 @@ class FileComparisonQueue extends EventTarget {
     file.progress = progress;
 
     // Emit event for UI to react
-    this.emit('file-status-changed', {
+    this.emit("file-status-changed", {
       fileId,
       status,
       progress,
-      result: file.result
+      result: file.result,
     });
   }
 
@@ -1127,8 +1177,8 @@ class FileComparisonQueue extends EventTarget {
   // Get only completed results
   getCompletedResults() {
     return Array.from(this.files.values())
-      .filter(f => f.status === FileStatus.COMPLETED)
-      .map(f => ({ id: f.id, name: f.reference, result: f.result }));
+      .filter((f) => f.status === FileStatus.COMPLETED)
+      .map((f) => ({ id: f.id, name: f.reference, result: f.result }));
   }
 }
 ```
@@ -1199,21 +1249,21 @@ class FileComparisonQueue extends EventTarget {
 
 ```css
 /* Skeleton loading animation */
-.skeleton-bar, .skeleton-badge {
-  background: linear-gradient(
-    90deg,
-    var(--skeleton-base) 25%,
-    var(--skeleton-highlight) 50%,
-    var(--skeleton-base) 75%
-  );
+.skeleton-bar,
+.skeleton-badge {
+  background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-highlight) 50%, var(--skeleton-base) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
   border-radius: 4px;
 }
 
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* File status indicators */
@@ -1242,10 +1292,18 @@ class FileComparisonQueue extends EventTarget {
   margin-right: 12px;
 }
 
-.status-icon.queued { color: var(--text-muted); }
-.status-icon.processing { color: var(--accent-blue); }
-.status-icon.completed { color: var(--accent-green); }
-.status-icon.error { color: var(--accent-red); }
+.status-icon.queued {
+  color: var(--text-muted);
+}
+.status-icon.processing {
+  color: var(--accent-blue);
+}
+.status-icon.completed {
+  color: var(--accent-green);
+}
+.status-icon.error {
+  color: var(--accent-red);
+}
 
 /* Inline progress bar */
 .inline-progress {
@@ -1289,7 +1347,7 @@ class ExcelCompareUI {
     }
 
     // Listen for status changes
-    this.queue.addEventListener('file-status-changed', (e) => {
+    this.queue.addEventListener("file-status-changed", (e) => {
       this.renderFileList();
 
       // Auto-select first completed file if nothing selected
@@ -1314,51 +1372,75 @@ class ExcelCompareUI {
     this.selectedFileId = fileId;
     const file = this.queue.files.get(fileId);
 
-    this.renderFileList();  // Update selection highlight
+    this.renderFileList(); // Update selection highlight
     this.renderResultPanel(file);
   }
 
   renderFileList() {
     const files = this.queue.getStatus();
-    const container = this.$('.file-status-list');
+    const container = this.$(".file-status-list");
 
-    container.innerHTML = files.map(file => `
-      <div class="file-status-item ${file.status} ${file.id === this.selectedFileId ? 'selected' : ''}"
+    container.innerHTML = files
+      .map(
+        (file) => `
+      <div class="file-status-item ${file.status} ${file.id === this.selectedFileId ? "selected" : ""}"
            data-file-id="${file.id}"
-           ${file.status === FileStatus.COMPLETED ? 'onclick="excelCompare.selectFile(\'' + file.id + '\')"' : ''}>
+           ${file.status === FileStatus.COMPLETED ? "onclick=\"excelCompare.selectFile('" + file.id + "')\"" : ""}>
 
         <span class="status-icon">${this.getStatusIcon(file.status)}</span>
         <span class="file-name">${file.reference}</span>
 
-        ${file.status === FileStatus.COMPLETED ? `
+        ${
+          file.status === FileStatus.COMPLETED
+            ? `
           <span class="duration">(${((file.endTime - file.startTime) / 1000).toFixed(1)}s)</span>
           <button class="view-btn">View Results</button>
-        ` : ''}
+        `
+            : ""
+        }
 
-        ${file.status === FileStatus.COMPARING ? `
+        ${
+          file.status === FileStatus.COMPARING
+            ? `
           <span class="progress-text">${file.progress}%</span>
           <div class="inline-progress">
             <div class="inline-progress-fill" style="width: ${file.progress}%"></div>
           </div>
-        ` : ''}
+        `
+            : ""
+        }
 
-        ${file.status === FileStatus.PARSING ? `
+        ${
+          file.status === FileStatus.PARSING
+            ? `
           <span class="progress-text">Parsing...</span>
-        ` : ''}
+        `
+            : ""
+        }
 
-        ${file.status === FileStatus.QUEUED ? `
+        ${
+          file.status === FileStatus.QUEUED
+            ? `
           <span class="progress-text queued">Queued</span>
-        ` : ''}
+        `
+            : ""
+        }
 
-        ${file.status === FileStatus.ERROR ? `
+        ${
+          file.status === FileStatus.ERROR
+            ? `
           <span class="error-text" title="${file.error}">Error</span>
-        ` : ''}
+        `
+            : ""
+        }
       </div>
-    `).join('');
+    `,
+      )
+      .join("");
   }
 
   renderResultPanel(file) {
-    const panel = this.$('.result-panel');
+    const panel = this.$(".result-panel");
 
     if (file.status === FileStatus.COMPLETED) {
       // Show full results
@@ -1377,11 +1459,11 @@ class ExcelCompareUI {
 
   getStatusIcon(status) {
     const icons = {
-      [FileStatus.QUEUED]: '○',
-      [FileStatus.PARSING]: '◐',
-      [FileStatus.COMPARING]: '◉',
-      [FileStatus.COMPLETED]: '✓',
-      [FileStatus.ERROR]: '✕'
+      [FileStatus.QUEUED]: "○",
+      [FileStatus.PARSING]: "◐",
+      [FileStatus.COMPARING]: "◉",
+      [FileStatus.COMPLETED]: "✓",
+      [FileStatus.ERROR]: "✕",
     };
     return icons[status];
   }
@@ -1393,7 +1475,7 @@ class ExcelCompareUI {
 ```javascript
 class FileComparisonQueue {
   constructor(workerManager, options = {}) {
-    this.concurrency = options.concurrency || 1;  // Process N files at once
+    this.concurrency = options.concurrency || 1; // Process N files at once
     this.activeCount = 0;
   }
 
@@ -1410,7 +1492,7 @@ class FileComparisonQueue {
       await this.processFile(fileId);
 
       this.activeCount--;
-      processNext();  // Start next file
+      processNext(); // Start next file
     };
 
     // Start up to `concurrency` files at once
@@ -1452,11 +1534,11 @@ class FileComparisonQueue {
     for (const file of this.files.values()) {
       if (file.status !== FileStatus.COMPLETED) {
         file.status = FileStatus.CANCELLED;
-        file.error = 'Cancelled by user';
+        file.error = "Cancelled by user";
       }
     }
 
-    this.emit('cancelled');
+    this.emit("cancelled");
   }
 }
 ```
@@ -1470,15 +1552,15 @@ class FileComparisonQueue {
 ```javascript
 // In frontend/tools/compare-config/main.js
 const FEATURE_FLAGS = {
-  USE_JS_DIFF_ENGINE: true,      // Toggle for JS vs Rust diff
-  JS_DIFF_DEBUG_MODE: false,     // Run both engines and compare results
+  USE_JS_DIFF_ENGINE: true, // Toggle for JS vs Rust diff
+  JS_DIFF_DEBUG_MODE: false, // Run both engines and compare results
 };
 
 // Could also be stored in localStorage for testing
 function getFeatureFlag(name) {
   const override = localStorage.getItem(`compare-config:flag:${name}`);
   if (override !== null) {
-    return override === 'true';
+    return override === "true";
   }
   return FEATURE_FLAGS[name] ?? false;
 }
@@ -1488,17 +1570,17 @@ function getFeatureFlag(name) {
 
 ```javascript
 async function compareWithValidation(data, options) {
-  if (getFeatureFlag('JS_DIFF_DEBUG_MODE')) {
+  if (getFeatureFlag("JS_DIFF_DEBUG_MODE")) {
     // Run both engines
     const [jsResult, rustResult] = await Promise.all([
       diffWorkerManager.compare(data, options),
-      CompareConfigService.compareConfigurations(data, options)  // Rust
+      CompareConfigService.compareConfigurations(data, options), // Rust
     ]);
 
     // Validate results match
     const mismatches = validateResults(jsResult, rustResult);
     if (mismatches.length > 0) {
-      console.error('Diff engine mismatch:', mismatches);
+      console.error("Diff engine mismatch:", mismatches);
       // Log to analytics/monitoring
       reportDiffEngineMismatch(mismatches);
     }
@@ -1516,7 +1598,7 @@ async function compareWithValidation(data, options) {
 
 ```javascript
 async function compareData(data, options) {
-  if (!getFeatureFlag('USE_JS_DIFF_ENGINE')) {
+  if (!getFeatureFlag("USE_JS_DIFF_ENGINE")) {
     // Fallback to Rust (rollback mode)
     return CompareConfigService.compareConfigurations(data, options);
   }
@@ -1524,7 +1606,7 @@ async function compareData(data, options) {
   try {
     return await diffWorkerManager.compare(data, options);
   } catch (error) {
-    console.error('JS diff engine failed, falling back to Rust:', error);
+    console.error("JS diff engine failed, falling back to Rust:", error);
 
     // Auto-fallback on failure
     return CompareConfigService.compareConfigurations(data, options);
@@ -1534,21 +1616,23 @@ async function compareData(data, options) {
 
 **Migration Timeline:**
 
-| Phase | Flag State | Behavior |
-|-------|------------|----------|
-| **Phase 1: Development** | `USE_JS_DIFF_ENGINE: false` | Rust only, JS in development |
-| **Phase 2: Validation** | `JS_DIFF_DEBUG_MODE: true` | Both engines, compare results |
-| **Phase 3: Soft Launch** | `USE_JS_DIFF_ENGINE: true` | JS primary, Rust fallback on error |
-| **Phase 4: Full Migration** | Remove fallback code | JS only, Rust diff code removed |
-| **Phase 5: Cleanup** | Remove flags | Delete Rust `compare_data()` function |
+| Phase                       | Flag State                  | Behavior                              |
+| --------------------------- | --------------------------- | ------------------------------------- |
+| **Phase 1: Development**    | `USE_JS_DIFF_ENGINE: false` | Rust only, JS in development          |
+| **Phase 2: Validation**     | `JS_DIFF_DEBUG_MODE: true`  | Both engines, compare results         |
+| **Phase 3: Soft Launch**    | `USE_JS_DIFF_ENGINE: true`  | JS primary, Rust fallback on error    |
+| **Phase 4: Full Migration** | Remove fallback code        | JS only, Rust diff code removed       |
+| **Phase 5: Cleanup**        | Remove flags                | Delete Rust `compare_data()` function |
 
 **Rust Code Removal Criteria:**
+
 1. JS engine running in production for 2+ weeks
 2. Zero fallback invocations logged
 3. Performance metrics acceptable (< 2x slower than Rust for same data)
 4. All edge cases validated (null handling, Unicode, large datasets)
 
 **Code to Remove from `oracle.rs`:**
+
 - `compare_data()` function (lines 825-947)
 - `CompareResult`, `CompareRow`, `CompareSummary` structs
 - Keep: `execute_select()`, connection pooling, credential management
