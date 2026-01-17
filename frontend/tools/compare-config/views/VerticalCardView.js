@@ -109,6 +109,7 @@ export class VerticalCardView {
 
     // Status is 'differ' - show all fields, highlight differences
     const diffFields = new Set(comparison.differences || []);
+    const diffDetails = comparison._diffDetails || {};
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
 
@@ -122,7 +123,7 @@ export class VerticalCardView {
             <h4>${this.escapeHtml(env1Name)}</h4>
             <div class="diff-fields">
               ${allFields
-                .map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName], diffFields.has(fieldName), "removed"))
+                .map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName], diffFields.has(fieldName), "removed", diffDetails[fieldName]))
                 .join("")}
             </div>
           </div>
@@ -130,7 +131,7 @@ export class VerticalCardView {
             <h4>${this.escapeHtml(env2Name)}</h4>
             <div class="diff-fields">
               ${allFields
-                .map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName], diffFields.has(fieldName), "added"))
+                .map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName], diffFields.has(fieldName), "added", diffDetails[fieldName]))
                 .join("")}
             </div>
           </div>
@@ -141,10 +142,27 @@ export class VerticalCardView {
 
   /**
    * Renders a single field difference for a card
+   * @param {string} fieldName - Field name
+   * @param {*} value - Field value
+   * @param {boolean} isDifferent - Whether values differ
+   * @param {string} type - "added" for env2 or "removed" for env1
+   * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
-  renderCardDiffField(fieldName, value, isDifferent, type) {
+  renderCardDiffField(fieldName, value, isDifferent, type, diffInfo = null) {
     const displayValue = this.formatValue(value);
     const highlightClass = isDifferent ? (type === "added" ? "diff-added" : "diff-removed") : "";
+
+    // Check if we have character-level diff details
+    if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
+      const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
+      const charDiffHtml = type === "added" ? env2Html : env1Html;
+      return `
+        <div class="card-field ${highlightClass} is-different">
+          <div class="card-field-name">${this.escapeHtml(fieldName)}</div>
+          <div class="card-field-value">${charDiffHtml}</div>
+        </div>
+      `;
+    }
 
     return `
       <div class="card-field ${highlightClass} ${isDifferent ? "is-different" : ""}">
@@ -152,6 +170,37 @@ export class VerticalCardView {
         <div class="card-field-value">${this.escapeHtml(displayValue)}</div>
       </div>
     `;
+  }
+
+  /**
+   * Renders character-level diff with highlighting
+   * @param {Array} segments - Diff segments [{type: 'equal'|'insert'|'delete', value: string}]
+   * @returns {Object} { env1Html, env2Html }
+   */
+  renderCharDiff(segments) {
+    let env1Html = "";
+    let env2Html = "";
+
+    for (const seg of segments) {
+      const escaped = this.escapeHtml(seg.value);
+
+      switch (seg.type) {
+        case "equal":
+          env1Html += escaped;
+          env2Html += escaped;
+          break;
+        case "delete":
+          // Deleted from env1 (shown in env1 only)
+          env1Html += `<span class="diff-delete">${escaped}</span>`;
+          break;
+        case "insert":
+          // Inserted in env2 (shown in env2 only)
+          env2Html += `<span class="diff-insert">${escaped}</span>`;
+          break;
+      }
+    }
+
+    return { env1Html, env2Html };
   }
 
   /**

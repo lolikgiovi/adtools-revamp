@@ -196,6 +196,7 @@ export class MasterDetailView {
 
     // Status is 'differ' - show all fields, highlight differences
     const diffFields = new Set(comparison.differences || []);
+    const diffDetails = comparison._diffDetails || {};
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
 
@@ -216,7 +217,7 @@ export class MasterDetailView {
             <tbody>
               ${allFields
                 .map((fieldName) =>
-                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName)),
+                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName), diffDetails[fieldName]),
                 )
                 .join("")}
             </tbody>
@@ -228,13 +229,30 @@ export class MasterDetailView {
 
   /**
    * Renders a detail diff row
+   * @param {string} fieldName - Field name
+   * @param {*} env1Value - Value from env1
+   * @param {*} env2Value - Value from env2
+   * @param {boolean} isDifferent - Whether values differ
+   * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
-  renderDetailDiffRow(fieldName, env1Value, env2Value, isDifferent) {
+  renderDetailDiffRow(fieldName, env1Value, env2Value, isDifferent, diffInfo = null) {
     const env1Display = this.formatValue(env1Value);
     const env2Display = this.formatValue(env2Value);
 
     const env1Class = isDifferent ? "field-value diff-removed" : "field-value";
     const env2Class = isDifferent ? "field-value diff-added" : "field-value";
+
+    // Check if we have character-level diff details
+    if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
+      const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
+      return `
+        <tr class="field-diff-row is-different">
+          <td class="field-name">${this.escapeHtml(fieldName)}</td>
+          <td class="${env1Class}">${env1Html}</td>
+          <td class="${env2Class}">${env2Html}</td>
+        </tr>
+      `;
+    }
 
     return `
       <tr class="field-diff-row ${isDifferent ? "is-different" : ""}">
@@ -243,6 +261,37 @@ export class MasterDetailView {
         <td class="${env2Class}">${this.escapeHtml(env2Display)}</td>
       </tr>
     `;
+  }
+
+  /**
+   * Renders character-level diff with highlighting
+   * @param {Array} segments - Diff segments [{type: 'equal'|'insert'|'delete', value: string}]
+   * @returns {Object} { env1Html, env2Html }
+   */
+  renderCharDiff(segments) {
+    let env1Html = "";
+    let env2Html = "";
+
+    for (const seg of segments) {
+      const escaped = this.escapeHtml(seg.value);
+
+      switch (seg.type) {
+        case "equal":
+          env1Html += escaped;
+          env2Html += escaped;
+          break;
+        case "delete":
+          // Deleted from env1 (shown in env1 only)
+          env1Html += `<span class="diff-delete">${escaped}</span>`;
+          break;
+        case "insert":
+          // Inserted in env2 (shown in env2 only)
+          env2Html += `<span class="diff-insert">${escaped}</span>`;
+          break;
+      }
+    }
+
+    return { env1Html, env2Html };
   }
 
   /**

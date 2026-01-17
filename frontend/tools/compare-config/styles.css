@@ -2155,15 +2155,15 @@
 .diff-insert {
   background-color: hsl(var(--success) / 0.25);
   color: hsl(var(--success));
-  padding: 1px 2px;
+  padding: 1px 0px;
   border-radius: 2px;
 }
 
 .diff-delete {
   background-color: hsl(var(--destructive) / 0.25);
   color: hsl(var(--destructive));
-  text-decoration: line-through;
-  padding: 1px 2px;
+  /* text-decoration: line-through; */
+  padding: 1px 0px;
   border-radius: 2px;
 }
 
