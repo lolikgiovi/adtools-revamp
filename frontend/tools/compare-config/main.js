@@ -1571,6 +1571,16 @@ class CompareConfigTool extends BaseTool {
       listEl.appendChild(item);
     });
 
+    // Toggle compact class on dropzone if files are present
+    const dropzone = document.getElementById(`${side}-dropzone`);
+    if (dropzone) {
+      if (this.excelCompare[listKey].length > 0) {
+        dropzone.classList.add("compact");
+      } else {
+        dropzone.classList.remove("compact");
+      }
+    }
+
     // Enable/disable compare button
     const compareBtn = document.getElementById("btn-compare-excel");
     if (compareBtn) {
