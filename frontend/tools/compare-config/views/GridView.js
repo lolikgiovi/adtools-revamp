@@ -7,6 +7,7 @@
  * - Dynamic PK Head: Automatically uses the primary key field names (e.g., PARAMETER_KEY).
  * - Excel Parity: Neutral styling with clear borders and professional typography.
  * - Smart Filtering: Hides columns that are identical across all records.
+ * - Character-level diff: When _diffDetails available, shows character-level changes.
  */
 export class GridView {
   /**
@@ -117,6 +118,7 @@ export class GridView {
     const statusLabel = this.getStatusLabel(comparison.status);
     const pkValue = this.formatPrimaryKey(comparison.key);
     const diffFields = new Set(comparison.differences || []);
+    const diffDetails = comparison._diffDetails || {};
 
     return `
       <tr class="data-row status-${statusClass}">
@@ -132,8 +134,9 @@ export class GridView {
             const hasV1 = v1 !== undefined;
             const hasV2 = v2 !== undefined;
             const isDifferent = diffFields.has(fieldName);
+            const fieldDiff = diffDetails[fieldName];
 
-            return this.renderCellPair(v1, v2, hasV1, hasV2, isDifferent);
+            return this.renderCellPair(v1, v2, hasV1, hasV2, isDifferent, fieldDiff);
           })
           .join("")}
       </tr>
@@ -142,8 +145,14 @@ export class GridView {
 
   /**
    * Renders a pair of cells (Env 1 and Env 2) for a field
+   * @param {*} v1 - Value from env1
+   * @param {*} v2 - Value from env2
+   * @param {boolean} hasV1 - Whether v1 exists
+   * @param {boolean} hasV2 - Whether v2 exists
+   * @param {boolean} isDifferent - Whether values differ
+   * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
-  renderCellPair(v1, v2, hasV1, hasV2, isDifferent) {
+  renderCellPair(v1, v2, hasV1, hasV2, isDifferent, diffInfo = null) {
     const val1 = hasV1 ? this.formatValue(v1) : "";
     const val2 = hasV2 ? this.formatValue(v2) : "";
 
@@ -158,10 +167,52 @@ export class GridView {
       c2Class += " is-match";
     }
 
+    // Check if we have character-level diff details
+    if (isDifferent && diffInfo && diffInfo.type === 'char-diff' && diffInfo.segments) {
+      // Render with character-level highlighting
+      const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
+      return `
+        <td class="${c1Class}">${env1Html}</td>
+        <td class="${c2Class} field-boundary">${env2Html}</td>
+      `;
+    }
+
+    // Standard rendering (cell-level diff or no diff details)
     return `
       <td class="${c1Class}">${this.escapeHtml(val1)}</td>
       <td class="${c2Class} field-boundary">${this.escapeHtml(val2)}</td>
     `;
+  }
+
+  /**
+   * Renders character-level diff with highlighting
+   * @param {Array} segments - Diff segments [{type: 'equal'|'insert'|'delete', value: string}]
+   * @returns {Object} { env1Html, env2Html }
+   */
+  renderCharDiff(segments) {
+    let env1Html = '';
+    let env2Html = '';
+
+    for (const seg of segments) {
+      const escaped = this.escapeHtml(seg.value);
+
+      switch (seg.type) {
+        case 'equal':
+          env1Html += escaped;
+          env2Html += escaped;
+          break;
+        case 'delete':
+          // Deleted from env1 (shown in env1 only)
+          env1Html += `<span class="diff-delete">${escaped}</span>`;
+          break;
+        case 'insert':
+          // Inserted in env2 (shown in env2 only)
+          env2Html += `<span class="diff-insert">${escaped}</span>`;
+          break;
+      }
+    }
+
+    return { env1Html, env2Html };
   }
 
   /**

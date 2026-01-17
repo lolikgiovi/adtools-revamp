@@ -10,6 +10,8 @@ import { getIconSvg } from "./icon.js";
 import { VerticalCardView } from "./views/VerticalCardView.js";
 import { MasterDetailView } from "./views/MasterDetailView.js";
 import { GridView } from "./views/GridView.js";
+import { getFeatureFlag, FLAGS } from "./lib/feature-flags.js";
+import { enhanceWithDetailedDiff } from "./lib/diff-adapter.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -1258,10 +1260,17 @@ class CompareConfigTool extends BaseTool {
       this.updateProgressStep("compare", "active", "Processing...");
 
       // Execute comparison
-      const result = await CompareConfigService.compareConfigurations(request);
+      let result = await CompareConfigService.compareConfigurations(request);
 
       console.log("[Compare] Result received:", result);
       console.log("[Compare] Result rows:", result?.rows?.length || 0);
+
+      // Enhance with detailed character-level diff if feature flag enabled
+      if (getFeatureFlag(FLAGS.ENHANCE_DIFF_WITH_JS) && result?.rows?.length > 0) {
+        console.log("[Compare] Enhancing with JS diff engine...");
+        result = await enhanceWithDetailedDiff(result, { threshold: 0.5 });
+        console.log("[Compare] Enhancement complete");
+      }
 
       // Update compare step done
       this.updateProgressStep("compare", "done", `${result?.rows?.length || 0} records compared`);
@@ -1366,7 +1375,14 @@ class CompareConfigTool extends BaseTool {
       };
 
       // Execute comparison
-      const result = await CompareConfigService.compareRawSql(request);
+      let result = await CompareConfigService.compareRawSql(request);
+
+      // Enhance with detailed character-level diff if feature flag enabled
+      if (getFeatureFlag(FLAGS.ENHANCE_DIFF_WITH_JS) && result?.rows?.length > 0) {
+        console.log("[Compare] Enhancing raw SQL results with JS diff engine...");
+        result = await enhanceWithDetailedDiff(result, { threshold: 0.5 });
+        console.log("[Compare] Enhancement complete");
+      }
 
       this.results[this.queryMode] = result;
 
