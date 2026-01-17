@@ -72,14 +72,13 @@ class CompareConfigTool extends BaseTool {
 
     // Excel Compare state
     this.excelCompare = {
-      refFiles: [],
-      compFiles: [],
-      matches: [],
-      unmatchedRef: [],
-      unmatchedComp: [],
-      rowMatching: "key", // "key" or "position"
-      pkColumns: "", // Comma-separated
-      dataComparison: "strict", // "strict" or "normalized"
+      refFiles: [], // Array of { id, file, pairedId }
+      compFiles: [], // Array of { id, file, pairedId }
+      pairs: [], // Array of { id, refId, compId, settings: { mode, pkColumns } }
+      rowMatching: "key", // Default global mode
+      pkColumns: "", // Default global PKs
+      dataComparison: "strict", // Global data comparison mode
+      selectedFileResult: "all", // "all" or specific filename
     };
 
     // View instances
@@ -739,6 +738,21 @@ class CompareConfigTool extends BaseTool {
     if (excelPkColumnsInput) {
       excelPkColumnsInput.addEventListener("input", (e) => {
         this.excelCompare.pkColumns = e.target.value.trim();
+      });
+    }
+
+    // Modal events
+    const modalOverlay = document.getElementById("excel-modal-overlay");
+    const closeModalBtn = modalOverlay?.querySelector(".btn-close-modal");
+    const modalCancelBtn = document.getElementById("btn-modal-cancel");
+
+    if (closeModalBtn) closeModalBtn.addEventListener("click", () => this.closeExcelModal());
+    if (modalCancelBtn) modalCancelBtn.addEventListener("click", () => this.closeExcelModal());
+
+    // Click outside modal to close
+    if (modalOverlay) {
+      modalOverlay.addEventListener("click", (e) => {
+        if (e.target === modalOverlay) this.closeExcelModal();
       });
     }
 
@@ -1516,8 +1530,18 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
+    // Wrap files with IDs
+    const filesWithIds = newFiles.map((file) => ({
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
+      file,
+      pairedId: null,
+    }));
+
     // Add to existing list
-    this.excelCompare[listKey] = [...this.excelCompare[listKey], ...newFiles];
+    this.excelCompare[listKey] = [...this.excelCompare[listKey], ...filesWithIds];
+
+    // Attempt auto-pairing for new files
+    this.autoPairFiles();
 
     // Update UI
     this.updateExcelFileList(side);
@@ -1539,6 +1563,246 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Automatically pair files between Reference and Comparator
+   */
+  autoPairFiles() {
+    const { refFiles, compFiles, pairs } = this.excelCompare;
+
+    // Build lookup for unpaired files
+    const unpairedRef = refFiles.filter((f) => !f.pairedId);
+    const unpairedComp = compFiles.filter((f) => !f.pairedId);
+
+    if (unpairedRef.length === 0 || unpairedComp.length === 0) return;
+
+    for (const ref of unpairedRef) {
+      // Find matching comparator by name (case-insensitive)
+      const match = unpairedComp.find((c) => c.file.name.toLowerCase() === ref.file.name.toLowerCase() && !c.pairedId);
+
+      if (match) {
+        this.pairFiles(ref.id, match.id);
+      }
+    }
+  }
+
+  /**
+   * Pair two files manually or automatically
+   */
+  pairFiles(refId, compId) {
+    const ref = this.excelCompare.refFiles.find((f) => f.id === refId);
+    const comp = this.excelCompare.compFiles.find((f) => f.id === compId);
+
+    if (!ref || !comp) return;
+
+    // Create pair
+    const pairId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9);
+    const newPair = {
+      id: pairId,
+      refId: refId,
+      compId: compId,
+      settings: {
+        mode: this.excelCompare.rowMatching,
+        pkColumns: this.excelCompare.pkColumns,
+      },
+    };
+
+    this.excelCompare.pairs.push(newPair);
+    ref.pairedId = pairId;
+    comp.pairedId = pairId;
+
+    this.saveToolState();
+  }
+
+  /**
+   * Unpair a file
+   */
+  unpairFile(side, fileId) {
+    const list = side === "ref" ? this.excelCompare.refFiles : this.excelCompare.compFiles;
+    const file = list.find((f) => f.id === fileId);
+
+    if (!file || !file.pairedId) return;
+
+    const pairId = file.pairedId;
+
+    // Find the other file in the pair
+    const ref = this.excelCompare.refFiles.find((f) => f.pairedId === pairId);
+    const comp = this.excelCompare.compFiles.find((f) => f.pairedId === pairId);
+
+    if (ref) ref.pairedId = null;
+    if (comp) comp.pairedId = null;
+
+    // Remove pair from state
+    this.excelCompare.pairs = this.excelCompare.pairs.filter((p) => p.id !== pairId);
+
+    // After unpairing, update UI
+    this.updateExcelFileList("ref");
+    this.updateExcelFileList("comp");
+    this.updateExcelMatchInfo();
+    this.saveToolState();
+  }
+
+  /**
+   * Remove a file from Excel comparison
+   */
+  removeExcelFile(side, fileId) {
+    const listKey = side === "ref" ? "refFiles" : "compFiles";
+    const index = this.excelCompare[listKey].findIndex((f) => f.id === fileId);
+    if (index === -1) return;
+
+    const file = this.excelCompare[listKey][index];
+
+    // If paired, unpair first
+    if (file.pairedId) {
+      this.unpairFile(side, file.id);
+    }
+
+    this.excelCompare[listKey].splice(index, 1);
+
+    // Update UI
+    this.updateExcelFileList(side);
+    this.updateExcelMatchInfo();
+    this.saveToolState();
+  }
+
+  /**
+   * Show dialog to select a pair for an unpaired file
+   */
+  showPairingDialog(side, fileId) {
+    const isRef = side === "ref";
+    const sourceList = isRef ? this.excelCompare.refFiles : this.excelCompare.compFiles;
+    const targetList = isRef ? this.excelCompare.compFiles : this.excelCompare.refFiles;
+    const file = sourceList.find((f) => f.id === fileId);
+
+    if (!file) return;
+
+    const modalTitle = document.getElementById("excel-modal-title");
+    const modalBody = document.getElementById("excel-modal-body");
+    const modalSaveBtn = document.getElementById("btn-modal-save");
+
+    modalTitle.textContent = `Link "${file.file.name}" to...`;
+    modalSaveBtn.style.display = "none"; // Pairing happens on click
+
+    // Filter only unpaired targets
+    const candidates = targetList.filter((f) => !f.pairedId);
+
+    if (candidates.length === 0) {
+      modalBody.innerHTML = `
+        <div class="pairing-empty">
+          <p>No available files on the ${isRef ? "comparator" : "reference"} side to pair with.</p>
+          <p class="help-text">Add more files first.</p>
+        </div>
+      `;
+    } else {
+      let optionsHtml = '<div class="pairing-list">';
+      candidates.forEach((cand) => {
+        optionsHtml += `
+          <div class="pairing-option" data-id="${cand.id}">
+            <div class="file-info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <span>${cand.file.name}</span>
+            </div>
+            <button class="btn btn-ghost btn-xs">Select</button>
+          </div>
+        `;
+      });
+      optionsHtml += "</div>";
+      modalBody.innerHTML = optionsHtml;
+
+      // Add click listeners to options
+      modalBody.querySelectorAll(".pairing-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const targetId = opt.dataset.id;
+          if (isRef) {
+            this.pairFiles(fileId, targetId);
+          } else {
+            this.pairFiles(targetId, fileId);
+          }
+          this.closeExcelModal();
+          this.updateExcelFileList("ref");
+          this.updateExcelFileList("comp");
+          this.updateExcelMatchInfo();
+        });
+      });
+    }
+
+    document.getElementById("excel-modal-overlay").style.display = "flex";
+  }
+
+  /**
+   * Show configuration for a specific pair
+   */
+  showPairConfig(pairId) {
+    const pair = this.excelCompare.pairs.find((p) => p.id === pairId);
+    if (!pair) return;
+
+    const ref = this.excelCompare.refFiles.find((f) => f.id === pair.refId);
+
+    const modalTitle = document.getElementById("excel-modal-title");
+    const modalBody = document.getElementById("excel-modal-body");
+    const modalSaveBtn = document.getElementById("btn-modal-save");
+
+    modalTitle.textContent = `Settings: ${ref.file.name}`;
+    modalSaveBtn.style.display = "block";
+
+    modalBody.innerHTML = `
+      <div class="config-form">
+        <div class="config-item">
+          <label>Row Matching Mode</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="modal-row-matching" value="key" ${pair.settings.mode === "key" ? "checked" : ""}>
+              <span>By Primary Key</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="modal-row-matching" value="position" ${pair.settings.mode === "position" ? "checked" : ""}>
+              <span>By Row Position</span>
+            </label>
+          </div>
+        </div>
+        <div class="config-item" id="modal-pk-section" style="${pair.settings.mode === "key" ? "" : "display: none;"}">
+          <label for="modal-pk-columns">Primary Key Column(s)</label>
+          <input type="text" id="modal-pk-columns" class="form-input" value="${pair.settings.pkColumns || ""}" placeholder="e.g., ID or SCHEMA,TABLE_NAME">
+          <p class="help-text">Comma-separated. Auto-detected from first column if empty.</p>
+        </div>
+      </div>
+    `;
+
+    // Toggle PK section in modal
+    modalBody.querySelectorAll('input[name="modal-row-matching"]').forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        document.getElementById("modal-pk-section").style.display = e.target.value === "key" ? "block" : "none";
+      });
+    });
+
+    // Handle Save
+    const saveHandler = () => {
+      const mode = modalBody.querySelector('input[name="modal-row-matching"]:checked').value;
+      const pkColumns = document.getElementById("modal-pk-columns").value.trim();
+
+      pair.settings.mode = mode;
+      pair.settings.pkColumns = pkColumns;
+
+      this.closeExcelModal();
+      this.saveToolState();
+      this.eventBus.emit("notification:show", { message: "Settings saved for this pair" });
+      modalSaveBtn.removeEventListener("click", saveHandler);
+    };
+
+    modalSaveBtn.onclick = saveHandler;
+
+    document.getElementById("excel-modal-overlay").style.display = "flex";
+  }
+
+  /**
+   * Close the excel modal
+   */
+  closeExcelModal() {
+    document.getElementById("excel-modal-overlay").style.display = "none";
+  }
+
+  /**
    * Update file list UI for a side
    */
   updateExcelFileList(side) {
@@ -1548,26 +1812,88 @@ class CompareConfigTool extends BaseTool {
 
     listEl.innerHTML = "";
 
-    this.excelCompare[listKey].forEach((file, index) => {
+    // Sort: Paired Files (ASC), then Unpaired Files (ASC)
+    const sortedFiles = [...this.excelCompare[listKey]].sort((a, b) => {
+      if (a.pairedId && !b.pairedId) return -1;
+      if (!a.pairedId && b.pairedId) return 1;
+      return a.file.name.localeCompare(b.file.name);
+    });
+
+    sortedFiles.forEach((fileWrapper) => {
+      const file = fileWrapper.file;
+      const isPaired = !!fileWrapper.pairedId;
       const item = document.createElement("div");
-      item.className = "file-item";
+      item.className = `file-item ${isPaired ? "paired" : "unpaired"}`;
+
+      let actionButtons = "";
+      if (isPaired) {
+        actionButtons = `
+          <button class="btn btn-ghost btn-xs btn-config-pair" title="Configure individual settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <button class="btn btn-ghost btn-xs btn-unpair-file" title="Unlink this pair">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+            </svg>
+          </button>
+        `;
+      } else {
+        actionButtons = `
+          <button class="btn btn-primary btn-xs btn-pair-manual" title="Link to a file on the other side">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Link
+          </button>
+        `;
+      }
+
       item.innerHTML = `
-        <div class="file-icon">
+        <div class="file-icon ${isPaired ? "text-primary" : "text-muted"}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
         </div>
         <div class="file-name" title="${file.name}">${file.name}</div>
-        <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove file">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <div class="file-actions">
+          ${actionButtons}
+          <button class="btn btn-ghost btn-xs btn-remove-file text-destructive" title="Remove from list">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       `;
 
-      item.querySelector(".btn-remove-file").addEventListener("click", () => this.removeExcelFile(side, index));
+      item.querySelector(".btn-remove-file").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.removeExcelFile(side, fileWrapper.id);
+      });
+
+      if (isPaired) {
+        item.querySelector(".btn-unpair-file").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.unpairFile(side, fileWrapper.id);
+        });
+        item.querySelector(".btn-config-pair").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.showPairConfig(fileWrapper.pairedId);
+        });
+      } else {
+        item.querySelector(".btn-pair-manual").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.showPairingDialog(side, fileWrapper.id);
+        });
+      }
+
       listEl.appendChild(item);
     });
 
@@ -1581,10 +1907,10 @@ class CompareConfigTool extends BaseTool {
       }
     }
 
-    // Enable/disable compare button
+    // Enable/disable compare button - only if at least one pair exists
     const compareBtn = document.getElementById("btn-compare-excel");
     if (compareBtn) {
-      compareBtn.disabled = this.excelCompare.refFiles.length === 0 || this.excelCompare.compFiles.length === 0;
+      compareBtn.disabled = this.excelCompare.pairs.length === 0;
     }
   }
 
@@ -1628,23 +1954,32 @@ class CompareConfigTool extends BaseTool {
    * Execute Excel/CSV comparison
    */
   async executeExcelComparison() {
-    if (this.excelCompare.matches.length === 0) {
+    if (this.excelCompare.pairs.length === 0) {
       this.eventBus.emit("notification:show", {
         type: "warning",
-        message: "No matching files to compare. Please add files to both sides.",
+        message: "No pairs linked. Please link at least one reference file to a comparator file.",
       });
       return;
     }
+
+    // Resolve pairs into file objects for comparator
+    const preparedPairs = this.excelCompare.pairs.map((p) => {
+      const ref = this.excelCompare.refFiles.find((f) => f.id === p.refId);
+      const comp = this.excelCompare.compFiles.find((f) => f.id === p.compId);
+      return {
+        reference: ref.file,
+        comparator: comp.file,
+        settings: p.settings,
+      };
+    });
 
     // Show progress
     this.showProgress("Comparing Excel/CSV Files");
     this.updateProgressStep("fetch", "active", "Parsing files...");
 
     try {
-      const results = await ExcelComparator.compareFileSets(this.excelCompare.matches, {
-        rowMatching: this.excelCompare.rowMatching,
-        pkColumns: this.excelCompare.pkColumns,
-        normalize: true,
+      const results = await ExcelComparator.compareFileSets(preparedPairs, {
+        normalize: this.excelCompare.dataComparison === "normalized",
         onProgress: (p) => {
           if (p.phase === "parsing") {
             this.updateProgressStep("fetch", "active", `Parsing (${p.fileIndex + 1}/${p.totalFiles}): ${p.fileName}`);
@@ -1654,7 +1989,7 @@ class CompareConfigTool extends BaseTool {
         },
       });
 
-      this.updateProgressStep("fetch", "done", `${this.excelCompare.matches.length} files parsed`);
+      this.updateProgressStep("fetch", "done", `${preparedPairs.length} pairs parsed`);
       this.updateProgressStep("compare", "done", `${results.rows.length} total records compared`);
 
       // Store results
@@ -2375,6 +2710,9 @@ class CompareConfigTool extends BaseTool {
     // Render summary
     this.renderSummary();
 
+    // Render multi-file results selector if in Excel mode
+    this.renderResultSelector();
+
     // Render results content based on current view
     this.renderResults();
 
@@ -2391,6 +2729,58 @@ class CompareConfigTool extends BaseTool {
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
     this.saveToolState();
+  }
+
+  /**
+   * Render selector for multi-file Excel results
+   */
+  renderResultSelector() {
+    const summaryEl = document.getElementById("results-summary");
+    if (!summaryEl || this.queryMode !== "excel-compare") return;
+
+    // Remove existing selector if any
+    const existing = document.querySelector(".result-file-selector");
+    if (existing) existing.remove();
+
+    const results = this.results["excel-compare"];
+    if (!results || results.rows.length === 0) return;
+
+    // Extract unique source files
+    const sourceFiles = [...new Set(results.rows.map((r) => r._sourceFile).filter(Boolean))];
+    if (sourceFiles.length <= 1) return;
+
+    const selectorContainer = document.createElement("div");
+    selectorContainer.className = "result-file-selector";
+
+    let html = `
+      <div class="result-tabs">
+        <button class="result-tab ${this.excelCompare.selectedFileResult === "all" ? "active" : ""}" data-file="all">All Files (${sourceFiles.length})</button>
+    `;
+
+    sourceFiles.forEach((file) => {
+      const fileRows = results.rows.filter((r) => r._sourceFile === file);
+      const diffCount = fileRows.filter((r) => r.status === "differ").length;
+      html += `
+        <button class="result-tab ${this.excelCompare.selectedFileResult === file ? "active" : ""}" data-file="${file}">
+          ${file}
+          ${diffCount > 0 ? `<span class="tab-badge badge-destructive">${diffCount}</span>` : ""}
+        </button>
+      `;
+    });
+
+    html += "</div>";
+    selectorContainer.innerHTML = html;
+
+    // Prepend to summary
+    summaryEl.parentElement.insertBefore(selectorContainer, summaryEl);
+
+    // Add click listeners
+    selectorContainer.querySelectorAll(".result-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        this.excelCompare.selectedFileResult = tab.dataset.file;
+        this.showResults(); // Re-render everything
+      });
+    });
   }
 
   /**
@@ -2439,7 +2829,19 @@ class CompareConfigTool extends BaseTool {
     const summaryContainer = document.getElementById("results-summary");
     if (!summaryContainer || !this.results[this.queryMode]) return;
 
-    const { summary } = this.results[this.queryMode];
+    let { summary } = this.results[this.queryMode];
+
+    // Recalculate summary if filtered by specific file in Excel mode
+    if (this.queryMode === "excel-compare" && this.excelCompare.selectedFileResult !== "all") {
+      const filteredRows = this.results[this.queryMode].rows.filter((r) => r._sourceFile === this.excelCompare.selectedFileResult);
+      summary = {
+        total: filteredRows.length,
+        matches: filteredRows.filter((r) => r.status === "match").length,
+        differs: filteredRows.filter((r) => r.status === "differ").length,
+        only_in_env1: filteredRows.filter((r) => r.status === "only_in_env1").length,
+        only_in_env2: filteredRows.filter((r) => r.status === "only_in_env2").length,
+      };
+    }
 
     // Check if primary key was selected (for warning)
     let hasPrimaryKey = true;
@@ -2533,8 +2935,12 @@ class CompareConfigTool extends BaseTool {
   getFilteredComparisons() {
     if (!this.results[this.queryMode]) return [];
 
-    // Backend returns 'rows' in CompareResult struct
-    const rows = this.results[this.queryMode].rows || [];
+    let rows = this.results[this.queryMode].rows || [];
+
+    // Filter by file if in Excel mode
+    if (this.queryMode === "excel-compare" && this.excelCompare.selectedFileResult !== "all") {
+      rows = rows.filter((r) => r._sourceFile === this.excelCompare.selectedFileResult);
+    }
 
     // If no filter, return all rows
     if (!this.statusFilter) {

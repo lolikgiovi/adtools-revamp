@@ -9,19 +9,12 @@ import { convertToViewFormat } from "./diff-adapter.js";
 export class ExcelComparator {
   /**
    * Compare multiple matched pairs of files
-   * @param {Array} matches - Array of { reference: File, comparator: File }
-   * @param {Object} options - Comparison options
+   * @param {Array} pairs - Array of { reference: File, comparator: File, settings: { mode, pkColumns } }
+   * @param {Object} options - Global comparison options (e.g., normalize)
    * @returns {Object} Consolidated results
    */
-  static async compareFileSets(matches, options = {}) {
-    const { rowMatching = "key", pkColumns = "", normalize = true, onProgress = null } = options;
-
-    const keyColumns = pkColumns
-      ? pkColumns
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+  static async compareFileSets(pairs, options = {}) {
+    const { normalize = true, onProgress = null } = options;
 
     const consolidatedResults = {
       env1_name: "Reference",
@@ -37,42 +30,49 @@ export class ExcelComparator {
       rows: [],
     };
 
-    const totalFiles = matches.length;
+    const totalFiles = pairs.length;
 
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i];
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i];
       if (onProgress) {
         onProgress({
           phase: "parsing",
           fileIndex: i,
           totalFiles,
-          fileName: match.reference.name,
+          fileName: pair.reference.name,
           percent: Math.round((i / totalFiles) * 100),
         });
       }
 
       try {
         // Parse files
-        const refData = await FileParser.parseFile(match.reference);
-        const compData = await FileParser.parseFile(match.comparator);
+        const refData = await FileParser.parseFile(pair.reference);
+        const compData = await FileParser.parseFile(pair.comparator);
 
-        // Identify common fields (or use all fields if needed)
+        // Identify common fields
         const fields = Array.from(new Set([...refData.headers, ...compData.headers]));
 
-        // Calculate actual PK columns if none provided
-        const actualPk = keyColumns.length > 0 ? keyColumns : [fields[0]];
+        // Get per-pair settings or fall back to defaults
+        const pairMode = pair.settings?.mode || "key";
+        const pairPkString = pair.settings?.pkColumns || "";
+        const pairPkColumns = pairPkString
+          ? pairPkString
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [fields[0]]; // Default to first column if empty
 
         // Run comparison
         const jsResult = compareDatasets(refData.rows, compData.rows, {
-          keyColumns: actualPk,
+          keyColumns: pairPkColumns,
           fields,
           normalize,
-          matchMode: rowMatching,
+          matchMode: pairMode,
           onProgress: (p) => {
             if (onProgress) {
               onProgress({
                 ...p,
-                phase: `Comparing ${match.reference.name}`,
+                phase: `Comparing ${pair.reference.name}`,
                 fileIndex: i,
                 totalFiles,
               });
@@ -84,16 +84,14 @@ export class ExcelComparator {
         const viewResult = convertToViewFormat(jsResult, {
           env1Name: "Reference",
           env2Name: "Comparator",
-          tableName: match.reference.name,
-          keyColumns: actualPk,
+          tableName: pair.reference.name,
+          keyColumns: pairPkColumns,
         });
 
-        // Add file source info to rows if multi-file
-        if (totalFiles > 1) {
-          viewResult.rows.forEach((row) => {
-            row._sourceFile = match.reference.name;
-          });
-        }
+        // Add file source info to rows (required for result selection UI)
+        viewResult.rows.forEach((row) => {
+          row._sourceFile = pair.reference.name;
+        });
 
         // Merge into consolidated results
         consolidatedResults.summary.total += viewResult.summary.total;
@@ -104,7 +102,7 @@ export class ExcelComparator {
 
         consolidatedResults.rows.push(...viewResult.rows);
       } catch (error) {
-        console.error(`Failed to compare ${match.reference.name}:`, error);
+        console.error(`Failed to compare ${pair.reference.name}:`, error);
         // Continue with other files
       }
     }
@@ -112,7 +110,14 @@ export class ExcelComparator {
     // Sort consolidated results: prefers differs first across all files
     consolidatedResults.rows.sort((a, b) => {
       const order = { differ: 0, only_in_env1: 1, only_in_env2: 2, match: 3 };
-      return order[a.status] - order[b.status];
+      if (order[a.status] !== order[b.status]) {
+        return order[a.status] - order[b.status];
+      }
+      // Within same status, sort by filename then original order
+      if (a._sourceFile !== b._sourceFile) {
+        return (a._sourceFile || "").localeCompare(b._sourceFile || "");
+      }
+      return 0; // Keep relative order
     });
 
     return consolidatedResults;

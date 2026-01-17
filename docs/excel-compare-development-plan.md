@@ -498,7 +498,16 @@ function renderCharDiff(segments) {
 4. Cross-browser testing
 5. Documentation
 
-### Phase 7: Cleanup & Rust Removal
+### Phase 7: Advanced Pairing & Per-File Settings
+
+1. Refactor state to support individual file pairing and per-pair matching settings
+2. Implement Pairing UI: Link reference files to comparator files
+3. Implement Sorting: Paired (ASC) -> Unpaired (ASC) in file lists
+4. Add per-pair Configuration: Inline settings (Match by Key/Position, PK Columns)
+5. Update `ExcelComparator` to process pairs with individual settings
+6. Implement Result Selection: Allow user to choose which file comparison to view first
+
+### Phase 8: Cleanup & Rust Removal
 
 1. Remove Rust diff code from `oracle.rs`
 2. Remove feature flags (set JS as only engine)

@@ -194,9 +194,7 @@ export const CompareConfigTemplate = /* html */ `
                             <input type="file" id="ref-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="ref-folder-input" webkitdirectory style="display: none;">
                         </div>
-                        <div class="file-list" id="ref-file-list">
-                            <!-- Reference files will be listed here -->
-                        </div>
+                        <div class="file-list" id="ref-file-list"></div>
                     </div>
 
                     <!-- Comparator Files -->
@@ -216,9 +214,7 @@ export const CompareConfigTemplate = /* html */ `
                             <input type="file" id="comp-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="comp-folder-input" webkitdirectory style="display: none;">
                         </div>
-                        <div class="file-list" id="comp-file-list">
-                            <!-- Comparator files will be listed here -->
-                        </div>
+                        <div class="file-list" id="comp-file-list"></div>
                     </div>
                 </div>
             </div>
@@ -397,6 +393,28 @@ export const CompareConfigTemplate = /* html */ `
             <!-- Results Content -->
             <div id="results-content" class="results-content">
                 <!-- Results will be populated here based on selected view -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Modal for Pairing & Config -->
+    <div id="excel-modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="excel-modal-title">Config</h3>
+                <button class="btn btn-ghost btn-sm btn-close-modal">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div id="excel-modal-body" class="modal-body">
+                <!-- Content injected via JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="btn-modal-save">Save</button>
             </div>
         </div>
     </div>
