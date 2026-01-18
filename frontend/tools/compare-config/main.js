@@ -127,10 +127,9 @@ class CompareConfigTool extends BaseTool {
     // Always bind UI events so the installation guide actions work
     this.bindEvents();
 
-    // Load Excel Compare state from IndexedDB (works in both Tauri and Web)
-    await this.loadExcelCompareStateFromIndexedDB();
-    // Restore Excel Compare UI if files were loaded
-    this.restoreExcelCompareUI();
+    // Load Excel Compare cached files from IndexedDB (works in both Tauri and Web)
+    // Note: We load files but reset selection state to avoid confusing UI on navigation
+    await this.loadExcelCompareFilesOnly();
 
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
@@ -314,7 +313,9 @@ class CompareConfigTool extends BaseTool {
       this.maxRows = state.maxRows || 100;
       this.rawMaxRows = state.rawMaxRows || 100;
 
-      this.currentView = state.currentView || "grid";
+      // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
+      const savedView = state.currentView || "grid";
+      this.currentView = savedView === "expandable" ? "grid" : savedView;
       this.statusFilter = state.statusFilter;
 
       // Restore connections
@@ -1292,10 +1293,8 @@ class CompareConfigTool extends BaseTool {
     pkFieldList.innerHTML = "";
     fieldList.innerHTML = "";
 
-    // Render PK field checkboxes
-    const sortedColumns = [...this.metadata.columns].sort((a, b) => a.name.localeCompare(b.name));
-
-    sortedColumns.forEach((column) => {
+    // Render PK field checkboxes - keep natural order from database metadata
+    this.metadata.columns.forEach((column) => {
       const fieldDiv = document.createElement("div");
       fieldDiv.className = "field-checkbox";
 
@@ -1941,16 +1940,17 @@ class CompareConfigTool extends BaseTool {
         FileParser.parseFile(selectedCompFile.file),
       ]);
 
-      // Merge headers (union of both)
+      // Merge headers (union of both) - keep natural order from reference file
       const allHeaders = new Set([...refData.headers, ...compData.headers]);
       const commonHeaders = refData.headers.filter((h) => compData.headers.includes(h));
       const refOnlyHeaders = refData.headers.filter((h) => !compData.headers.includes(h));
       const compOnlyHeaders = compData.headers.filter((h) => !refData.headers.includes(h));
 
-      this.excelCompare.headers = Array.from(allHeaders).sort((a, b) => a.localeCompare(b));
-      this.excelCompare.commonHeaders = commonHeaders.sort((a, b) => a.localeCompare(b));
-      this.excelCompare.refOnlyHeaders = refOnlyHeaders.sort((a, b) => a.localeCompare(b));
-      this.excelCompare.compOnlyHeaders = compOnlyHeaders.sort((a, b) => a.localeCompare(b));
+      // Keep natural order (as they appear in reference file), no alphabetical sorting
+      this.excelCompare.headers = Array.from(allHeaders);
+      this.excelCompare.commonHeaders = commonHeaders;
+      this.excelCompare.refOnlyHeaders = refOnlyHeaders;
+      this.excelCompare.compOnlyHeaders = compOnlyHeaders;
 
       // Default: select all common headers for comparison
       this.excelCompare.selectedFields = [...commonHeaders];
@@ -4181,9 +4181,15 @@ class CompareConfigTool extends BaseTool {
 
       const activeConnections = connections.filter((c) => c.is_alive);
 
-      if (activeConnections.length > 0) {
+      // Filter to only connections with valid display info
+      const validConnections = activeConnections.filter((conn) => {
+        const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
+        return savedConn?.name || conn.connect_string;
+      });
+
+      if (validConnections.length > 0) {
         statusEl.style.display = "flex";
-        listEl.innerHTML = activeConnections
+        listEl.innerHTML = validConnections
           .map((conn) => {
             // Look up the saved connection name
             const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
@@ -4358,7 +4364,61 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Loads Excel Compare state from IndexedDB
+   * Loads only Excel Compare cached files from IndexedDB (not selection state)
+   * This is used on initial navigation to avoid confusing pre-filled UI
+   */
+  async loadExcelCompareFilesOnly() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+
+    try {
+      // Load cached files only
+      const cachedFiles = await IndexedDBManager.getAllExcelFiles();
+      if (cachedFiles && cachedFiles.length > 0) {
+        // Reconstruct file objects from cached data
+        const refFiles = [];
+        const compFiles = [];
+
+        for (const cached of cachedFiles) {
+          // Create a File object from the cached ArrayBuffer
+          const blob = new Blob([cached.content], { type: this.getMimeType(cached.name) });
+          const file = new File([blob], cached.name, {
+            type: this.getMimeType(cached.name),
+            lastModified: cached.uploadedAt ? new Date(cached.uploadedAt).getTime() : Date.now(),
+          });
+
+          const fileWrapper = { id: cached.id, file };
+
+          if (cached.type === "ref") {
+            refFiles.push(fileWrapper);
+          } else {
+            compFiles.push(fileWrapper);
+          }
+        }
+
+        this.excelCompare.refFiles = refFiles;
+        this.excelCompare.compFiles = compFiles;
+
+        // Update file list UI but don't restore selection
+        this.updateExcelFileList("ref");
+        this.updateExcelFileList("comp");
+        this.updateClearAllButtonVisibility("ref");
+        this.updateClearAllButtonVisibility("comp");
+      }
+
+      // Don't restore selection state - user needs to select files fresh
+      // Clear any previous session state from IndexedDB
+      await IndexedDBManager.clearExcelCompareState();
+
+      return true;
+    } catch (error) {
+      console.warn("Failed to load Excel Compare files from IndexedDB:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Loads Excel Compare state from IndexedDB (full state including selection)
+   * @deprecated Use loadExcelCompareFilesOnly for initial navigation
    */
   async loadExcelCompareStateFromIndexedDB() {
     if (!IndexedDBManager.isIndexedDBAvailable()) return;

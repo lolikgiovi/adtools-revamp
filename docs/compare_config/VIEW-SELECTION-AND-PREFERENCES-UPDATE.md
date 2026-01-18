@@ -121,5 +121,33 @@ clearAllExcelFilePrefs()       // Clear all Excel preferences
 - Existing schemaTablePrefs data may need to be re-saved with new table-name-only keys
 - Old Excel file preferences (if any) are separate from the new system
 
+## Additional Fixes (Follow-up)
+
+### 1. View Migration for Saved State
+- **Issue**: Users with saved `currentView: "expandable"` would see the deprecated view
+- **Fix**: Added migration in `loadToolState()` to convert "expandable" to "grid"
+- **Code**: `this.currentView = savedView === "expandable" ? "grid" : savedView;`
+
+### 2. Connection Status Indicator Validation
+- **Issue**: Green indicator could appear empty if connections lacked valid display names
+- **Fix**: Added filter to only show connections with valid display info
+- **Code**: Filter `validConnections` before displaying
+
+### 3. Excel Compare State Reset on Navigation
+- **Issue**: When navigating to Excel Compare with cached files, UI showed pre-filled selections without action buttons
+- **Fix**: Created new `loadExcelCompareFilesOnly()` function that:
+  - Loads cached files from IndexedDB
+  - Updates file lists in UI
+  - Does NOT restore selection state
+  - Clears previous session state
+- **Behavior**: Files are available in list, but user must select them fresh
+
+### 4. Natural Order for Fields (No Alphabetical Sorting)
+- **Issue**: Primary Key and Fields to Compare were sorted alphabetically
+- **Fix**: Removed `.sort()` calls for:
+  - Excel Compare headers (`commonHeaders`, `refOnlyHeaders`, `compOnlyHeaders`)
+  - Schema/Table metadata columns
+- **Behavior**: Fields now appear in natural order as they exist in the Excel file or database table
+
 ## Date
 2026-01-18
