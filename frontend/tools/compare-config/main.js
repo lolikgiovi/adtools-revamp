@@ -314,7 +314,7 @@ class CompareConfigTool extends BaseTool {
       this.maxRows = state.maxRows || 100;
       this.rawMaxRows = state.rawMaxRows || 100;
 
-      this.currentView = state.currentView || "expandable";
+      this.currentView = state.currentView || "grid";
       this.statusFilter = state.statusFilter;
 
       // Restore connections
@@ -1960,6 +1960,34 @@ class CompareConfigTool extends BaseTool {
         this.excelCompare.selectedPkFields = [commonHeaders[0]];
       }
 
+      // Load saved preferences for this reference file if available
+      try {
+        const savedPrefs = await IndexedDBManager.getExcelFilePrefs(selectedRefFile.file.name);
+        if (savedPrefs) {
+          // Apply saved preferences, filtering to only include headers that exist
+          if (savedPrefs.selectedPkFields && savedPrefs.selectedPkFields.length > 0) {
+            const validPkFields = savedPrefs.selectedPkFields.filter((f) => commonHeaders.includes(f));
+            if (validPkFields.length > 0) {
+              this.excelCompare.selectedPkFields = validPkFields;
+            }
+          }
+          if (savedPrefs.selectedFields && savedPrefs.selectedFields.length > 0) {
+            const validFields = savedPrefs.selectedFields.filter((f) => commonHeaders.includes(f));
+            if (validFields.length > 0) {
+              this.excelCompare.selectedFields = validFields;
+            }
+          }
+          if (savedPrefs.rowMatching) {
+            this.excelCompare.rowMatching = savedPrefs.rowMatching;
+          }
+          if (savedPrefs.dataComparison) {
+            this.excelCompare.dataComparison = savedPrefs.dataComparison;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load Excel file preferences:", e);
+      }
+
       // Cache parsed data for comparison
       this.excelCompare.refParsedData = refData;
       this.excelCompare.compParsedData = compData;
@@ -2195,6 +2223,19 @@ class CompareConfigTool extends BaseTool {
         message: "Please select at least one field to compare.",
       });
       return;
+    }
+
+    // Save preferences for this reference file
+    try {
+      await IndexedDBManager.saveExcelFilePrefs({
+        refFilename: selectedRefFile.file.name,
+        selectedPkFields,
+        selectedFields,
+        rowMatching,
+        dataComparison,
+      });
+    } catch (e) {
+      console.warn("Failed to save Excel file preferences:", e);
     }
 
     // Show progress
@@ -3458,6 +3499,8 @@ class CompareConfigTool extends BaseTool {
       case "grid":
         html = this.gridView.render(comparisons, env1_name, env2_name);
         resultsContent.innerHTML = html;
+        // Attach event listeners for lazy loading
+        this.gridView.attachEventListeners(resultsContent);
         break;
 
       default:

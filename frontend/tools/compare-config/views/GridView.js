@@ -8,8 +8,21 @@
  * - Excel Parity: Neutral styling with clear borders and professional typography.
  * - Smart Filtering: Hides columns that are identical across all records.
  * - Character-level diff: When _diffDetails available, shows character-level changes.
+ * - Lazy Loading: Renders rows in batches for better performance with large datasets.
  */
 export class GridView {
+  constructor() {
+    // Lazy loading configuration
+    this.BATCH_SIZE = 100;
+    this.renderedCount = 0;
+    this.observer = null;
+
+    // Cached state for lazy loading
+    this.comparisons = [];
+    this.fieldsToDisplay = [];
+    this.hasSourceFile = false;
+  }
+
   /**
    * Renders the grid view
    * @param {Array} comparisons - Array of comparison objects
@@ -17,6 +30,10 @@ export class GridView {
    * @param {string} env2Name - Environment 2 name
    */
   render(comparisons, env1Name, env2Name) {
+    // Reset lazy loading state
+    this.renderedCount = 0;
+    this.comparisons = comparisons || [];
+    this.cleanupObserver();
     if (!comparisons || comparisons.length === 0) {
       return `
         <div class="placeholder-message">
@@ -44,6 +61,10 @@ export class GridView {
 
     const fieldsToDisplay = activeFields.length > 0 ? activeFields : Array.from(allFieldNames).sort();
 
+    // Cache for lazy loading
+    this.fieldsToDisplay = fieldsToDisplay;
+    this.hasSourceFile = comparisons.some((c) => c._sourceFile);
+
     // 3. Determine PK Header name from actual metadata
     let pkHeaderName = "PRIMARY KEY";
     if (comparisons.length > 0 && comparisons[0].key) {
@@ -55,6 +76,14 @@ export class GridView {
 
     // Check if any row has a source file (for multi-file Excel compare)
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
+
+    // When env names are identical (e.g., same filename in Excel compare), use Reference/Comparator labels
+    let displayEnv1Name = env1Name;
+    let displayEnv2Name = env2Name;
+    if (env1Name === env2Name) {
+      displayEnv1Name = "Reference";
+      displayEnv2Name = "Comparator";
+    }
 
     return `
       <div class="excel-table-container">
@@ -78,40 +107,154 @@ export class GridView {
                   .map(
                     (f) => `
                   <th class="env-header-sub env-1">
-                    <div class="h-label-clip">${this.escapeHtml(env1Name)}</div>
+                    <div class="h-label-clip">${this.escapeHtml(displayEnv1Name)}</div>
                   </th>
                   <th class="env-header-sub env-2 field-boundary">
-                    <div class="h-label-clip">${this.escapeHtml(env2Name)}</div>
+                    <div class="h-label-clip">${this.escapeHtml(displayEnv2Name)}</div>
                   </th>
                 `,
                   )
                   .join("")}
               </tr>
             </thead>
-            <tbody>
-              ${comparisons.map((comp) => this.renderRow(comp, fieldsToDisplay, hasSourceFile)).join("")}
+            <tbody id="grid-tbody">
+              ${this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile)}
             </tbody>
           </table>
         </div>
-        
-        ${
-          activeFields.length > 0 && activeFields.length < allFieldNames.size
-            ? `
-          <div class="grid-info-footer">
+
+        ${comparisons.length > this.BATCH_SIZE ? `<div id="grid-load-more-sentinel" class="grid-load-sentinel"></div>` : ""}
+
+        <div class="grid-info-footer">
+          ${
+            activeFields.length > 0 && activeFields.length < allFieldNames.size
+              ? `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
             <span>Smart Filter: Showing only ${activeFields.length} columns with differences (hiding ${
-              allFieldNames.size - activeFields.length
-            } identical columns).</span>
-          </div>
-        `
-            : ""
-        }
+                allFieldNames.size - activeFields.length
+              } identical columns).</span>
+          `
+              : ""
+          }
+          ${
+            comparisons.length > this.BATCH_SIZE
+              ? `<span id="grid-row-count" class="row-count-info">Showing ${Math.min(this.BATCH_SIZE, comparisons.length)} of ${comparisons.length} rows</span>`
+              : ""
+          }
+        </div>
       </div>
     `;
+  }
+
+  /**
+   * Renders the initial batch of rows
+   * @param {Array} comparisons - All comparison objects
+   * @param {Array} fields - Fields to display
+   * @param {boolean} hasSourceFile - Whether to show source file column
+   * @returns {string} HTML for initial batch
+   */
+  renderInitialBatch(comparisons, fields, hasSourceFile) {
+    const initialBatch = comparisons.slice(0, this.BATCH_SIZE);
+    this.renderedCount = initialBatch.length;
+    return initialBatch.map((comp) => this.renderRow(comp, fields, hasSourceFile)).join("");
+  }
+
+  /**
+   * Attaches event listeners for lazy loading
+   * @param {HTMLElement} container - The container element
+   */
+  attachEventListeners(container) {
+    // Clean up any existing observer
+    this.cleanupObserver();
+
+    // Only set up observer if there are more rows to load
+    if (this.renderedCount >= this.comparisons.length) {
+      return;
+    }
+
+    const sentinel = container.querySelector("#grid-load-more-sentinel");
+    if (!sentinel) return;
+
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            this.loadMoreRows(container);
+          }
+        });
+      },
+      {
+        root: container.querySelector(".table-scroll-area"),
+        rootMargin: "200px",
+        threshold: 0,
+      }
+    );
+
+    this.observer.observe(sentinel);
+  }
+
+  /**
+   * Loads and renders more rows
+   * @param {HTMLElement} container - The container element
+   */
+  loadMoreRows(container) {
+    if (this.renderedCount >= this.comparisons.length) {
+      // All rows loaded, remove sentinel and observer
+      this.cleanupObserver();
+      const sentinel = container.querySelector("#grid-load-more-sentinel");
+      if (sentinel) sentinel.remove();
+
+      const rowCount = container.querySelector("#grid-row-count");
+      if (rowCount) rowCount.textContent = `Showing all ${this.comparisons.length} rows`;
+      return;
+    }
+
+    const tbody = container.querySelector("#grid-tbody");
+    if (!tbody) return;
+
+    // Get next batch
+    const nextBatch = this.comparisons.slice(
+      this.renderedCount,
+      this.renderedCount + this.BATCH_SIZE
+    );
+
+    // Render and append rows
+    const fragment = document.createDocumentFragment();
+    const tempDiv = document.createElement("tbody");
+    tempDiv.innerHTML = nextBatch
+      .map((comp) => this.renderRow(comp, this.fieldsToDisplay, this.hasSourceFile))
+      .join("");
+
+    while (tempDiv.firstChild) {
+      fragment.appendChild(tempDiv.firstChild);
+    }
+    tbody.appendChild(fragment);
+
+    this.renderedCount += nextBatch.length;
+
+    // Update row count display
+    const rowCount = container.querySelector("#grid-row-count");
+    if (rowCount) {
+      if (this.renderedCount >= this.comparisons.length) {
+        rowCount.textContent = `Showing all ${this.comparisons.length} rows`;
+      } else {
+        rowCount.textContent = `Showing ${this.renderedCount} of ${this.comparisons.length} rows`;
+      }
+    }
+  }
+
+  /**
+   * Cleans up the IntersectionObserver
+   */
+  cleanupObserver() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
   }
 
   /**

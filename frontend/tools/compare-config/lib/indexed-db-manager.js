@@ -12,7 +12,7 @@
  * Database configuration
  */
 const DB_NAME = 'CompareConfigDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /**
  * Object store names
@@ -20,6 +20,7 @@ const DB_VERSION = 1;
 export const STORES = {
   EXCEL_FILES: 'excelFiles',
   EXCEL_COMPARE_STATE: 'excelCompareState',
+  EXCEL_FILE_PREFS: 'excelFilePrefs',
   SCHEMA_TABLE_PREFS: 'schemaTablePrefs',
   RAW_SQL_PREFS: 'rawSqlPrefs',
   COMPARISON_HISTORY: 'comparisonHistory',
@@ -72,6 +73,12 @@ function openDatabase() {
       // Create excelCompareState store
       if (!db.objectStoreNames.contains(STORES.EXCEL_COMPARE_STATE)) {
         db.createObjectStore(STORES.EXCEL_COMPARE_STATE, { keyPath: 'id' });
+      }
+
+      // Create excelFilePrefs store (preferences per reference filename)
+      if (!db.objectStoreNames.contains(STORES.EXCEL_FILE_PREFS)) {
+        const excelFilePrefsStore = db.createObjectStore(STORES.EXCEL_FILE_PREFS, { keyPath: 'refFilename' });
+        excelFilePrefsStore.createIndex('lastUsed', 'lastUsed', { unique: false });
       }
 
       // Create schemaTablePrefs store
@@ -248,18 +255,81 @@ export async function clearExcelCompareState() {
 }
 
 // =============================================================================
+// Excel File Preferences Operations
+// =============================================================================
+
+/**
+ * Saves preferences for an Excel file (by reference filename)
+ * @param {Object} prefs - Preferences object
+ * @param {string} prefs.refFilename - Reference filename (used as key)
+ * @param {string[]} prefs.selectedPkFields - Selected primary key fields
+ * @param {string[]} prefs.selectedFields - Selected comparison fields
+ * @param {string} [prefs.rowMatching] - Row matching mode ('key' or 'position')
+ * @param {string} [prefs.dataComparison] - Data comparison mode ('strict' or 'normalized')
+ * @returns {Promise<string>} The reference filename
+ */
+export async function saveExcelFilePrefs(prefs) {
+  const record = {
+    refFilename: prefs.refFilename,
+    selectedPkFields: prefs.selectedPkFields || [],
+    selectedFields: prefs.selectedFields || [],
+    rowMatching: prefs.rowMatching || 'key',
+    dataComparison: prefs.dataComparison || 'strict',
+    lastUsed: new Date(),
+  };
+
+  await withStore(STORES.EXCEL_FILE_PREFS, 'readwrite', (store) => store.put(record));
+  return record.refFilename;
+}
+
+/**
+ * Gets preferences for an Excel file by reference filename
+ * @param {string} refFilename - Reference filename
+ * @returns {Promise<Object|null>} Preferences or null if not found
+ */
+export async function getExcelFilePrefs(refFilename) {
+  return withStore(STORES.EXCEL_FILE_PREFS, 'readonly', (store) => store.get(refFilename));
+}
+
+/**
+ * Gets all Excel file preferences
+ * @returns {Promise<Array>} Array of all Excel file preference records
+ */
+export async function getAllExcelFilePrefs() {
+  return withStore(STORES.EXCEL_FILE_PREFS, 'readonly', (store) => store.getAll());
+}
+
+/**
+ * Deletes preferences for an Excel file
+ * @param {string} refFilename - Reference filename
+ * @returns {Promise<void>}
+ */
+export async function deleteExcelFilePrefs(refFilename) {
+  return withStore(STORES.EXCEL_FILE_PREFS, 'readwrite', (store) => store.delete(refFilename));
+}
+
+/**
+ * Clears all Excel file preferences
+ * @returns {Promise<void>}
+ */
+export async function clearAllExcelFilePrefs() {
+  return withStore(STORES.EXCEL_FILE_PREFS, 'readwrite', (store) => store.clear());
+}
+
+// =============================================================================
 // Schema/Table Preferences Operations
 // =============================================================================
 
 /**
- * Generates a composite key for schema/table preferences
- * @param {string} connectionId - Connection identifier
- * @param {string} schema - Schema name
- * @param {string} table - Table name
- * @returns {string} Composite key
+ * Generates a key for schema/table preferences (based on table name only for portability)
+ * @param {string} connectionId - Connection identifier (kept for compatibility, not used in key)
+ * @param {string} schema - Schema name (kept for compatibility, not used in key)
+ * @param {string} table - Table name (used as the key)
+ * @returns {string} Key based on table name
  */
 export function generateSchemaTableKey(connectionId, schema, table) {
-  return `${connectionId}_${schema}_${table}`;
+  // Use only table name as key for portability across connections/schemas
+  return `table_${table}`;
 }
 
 /**
@@ -555,6 +625,7 @@ export async function clearAllData() {
     const storeNames = [
       STORES.EXCEL_FILES,
       STORES.EXCEL_COMPARE_STATE,
+      STORES.EXCEL_FILE_PREFS,
       STORES.SCHEMA_TABLE_PREFS,
       STORES.RAW_SQL_PREFS,
       STORES.COMPARISON_HISTORY,
@@ -581,6 +652,7 @@ export async function getStorageStats() {
   const storeNames = [
     STORES.EXCEL_FILES,
     STORES.EXCEL_COMPARE_STATE,
+    STORES.EXCEL_FILE_PREFS,
     STORES.SCHEMA_TABLE_PREFS,
     STORES.RAW_SQL_PREFS,
     STORES.COMPARISON_HISTORY,
@@ -639,6 +711,13 @@ export default {
   getExcelCompareState,
   clearExcelCompareState,
   clearAllExcelCompareData,
+
+  // Excel file preferences
+  saveExcelFilePrefs,
+  getExcelFilePrefs,
+  getAllExcelFilePrefs,
+  deleteExcelFilePrefs,
+  clearAllExcelFilePrefs,
 
   // Schema/table preferences
   generateSchemaTableKey,

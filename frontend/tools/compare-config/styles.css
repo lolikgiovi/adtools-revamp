@@ -1723,6 +1723,17 @@
   color: hsl(var(--primary));
 }
 
+.grid-info-footer .row-count-info {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+/* Lazy loading sentinel */
+.grid-load-sentinel {
+  height: 1px;
+  width: 100%;
+}
+
 /* Placeholder message */
 .placeholder-message {
   text-align: center;

@@ -432,10 +432,9 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="view-selector">
                         <label>View:</label>
                         <select id="view-type" class="form-select">
-                            <option value="expandable">Expandable Rows</option>
                             <option value="grid">Summary Grid</option>
                             <option value="vertical">Cards</option>
-                            <option value="master-detail">Master-Detail</option>
+                            <option value="master-detail">Detail View</option>
                         </select>
                     </div>
                 </div>
