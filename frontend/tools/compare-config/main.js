@@ -62,7 +62,8 @@ class CompareConfigTool extends BaseTool {
     this.rawPrimaryKey = ""; // Optional primary key field(s) for raw SQL mode
     this.rawMaxRows = 100; // Max rows for raw SQL mode (default: 100)
 
-    this.statusFilter = null; // null = show all, or "match", "differ", "only_in_env1", "only_in_env2"
+    this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
+    this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
 
     // Multi-tab results support
     this.results = {
@@ -334,7 +335,8 @@ class CompareConfigTool extends BaseTool {
       // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
       const savedView = state.currentView || "grid";
       this.currentView = savedView === "expandable" ? "grid" : savedView;
-      this.statusFilter = state.statusFilter;
+      // Default to "differ" filter if not set (null means "all")
+      this.statusFilter = state.statusFilter !== undefined ? state.statusFilter : "differ";
 
       // Restore connections
       if (state.env1) {
@@ -4445,11 +4447,17 @@ class CompareConfigTool extends BaseTool {
         this.updateExcelFileList("comp");
         this.updateClearAllButtonVisibility("ref");
         this.updateClearAllButtonVisibility("comp");
+
+        // Show file pairing UI if files exist (so user can select files to compare)
+        this.checkAndShowPairingUI();
       }
 
       // Don't restore selection state - user needs to select files fresh
       // Clear any previous session state from IndexedDB
       await IndexedDBManager.clearExcelCompareState();
+
+      // Clear any stale Excel Compare results (user must run comparison fresh)
+      this.results["excel-compare"] = null;
 
       return true;
     } catch (error) {
