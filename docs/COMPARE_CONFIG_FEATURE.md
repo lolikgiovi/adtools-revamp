@@ -281,6 +281,10 @@ The **Compare Config Tool** is a sophisticated data comparison utility within AD
 | `get_active_connections()`    | List connection pool                     |
 | `close_connection()`          | Terminate specific connection            |
 | `close_all_connections()`     | Terminate all connections                |
+| `set_oracle_credentials()`    | Store credentials in keychain            |
+| `get_oracle_credentials()`    | Retrieve credentials from keychain       |
+| `delete_oracle_credentials()` | Remove credentials from keychain         |
+| `has_oracle_credentials()`    | Check if credentials exist               |
 
 ### 6.2 Connection Pool
 
@@ -312,7 +316,7 @@ The **Compare Config Tool** is a sophisticated data comparison utility within AD
 | `main.js`     | ~4,700 | Main controller, state management |
 | `service.js`  | ~230   | Tauri API wrapper                 |
 | `template.js` | ~480   | HTML structure                    |
-| `styles.css`  | ~1,800 | Styling                           |
+| `styles.css`  | ~2,700 | Styling                           |
 
 ### 7.2 Libraries
 
