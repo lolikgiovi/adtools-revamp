@@ -135,14 +135,14 @@
   gap: 15px;
 }
 
-.results-summary {
+.image-checker-results-summary {
   padding: 10px;
   background-color: var(--bg-light, hsl(var(--card)));
   border-radius: 4px;
   margin-bottom: 10px;
 }
 
-.results-summary h4 {
+.image-checker-results-summary h4 {
   margin-top: 0;
   margin-bottom: 5px;
 }
@@ -375,7 +375,9 @@
   background-color: var(--bg-light, hsl(var(--card)));
   color: var(--text-color, hsl(var(--foreground)));
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
 }
 
 .retry-button:hover {
