@@ -57,8 +57,8 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Query Mode Tabs -->
         <div class="tabs-container">
             <div class="tabs-left">
-                <button class="tab-button tauri-only active" data-tab="schema-table">Schema/Table</button>
-                <button class="tab-button tauri-only" data-tab="raw-sql">Raw SQL</button>
+                <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
+                <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
                 <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
             </div>
             <div class="tabs-right">
@@ -75,6 +75,27 @@ export const CompareConfigTemplate = /* html */ `
                         </svg>
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Desktop-Only Feature Notice (shown in Web mode for Schema/Table and Raw SQL) -->
+        <div id="desktop-only-notice" class="desktop-only-notice" style="display: none;">
+            <div class="notice-card">
+                <div class="notice-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                </div>
+                <h3>Desktop App Required</h3>
+                <p>The <strong id="desktop-feature-name">Schema/Table</strong> comparison mode requires the AD Tools desktop application to connect to Oracle databases.</p>
+                <div class="notice-actions">
+                    <button class="btn btn-primary" id="btn-switch-to-excel">
+                        Use Excel Compare Instead
+                    </button>
+                </div>
+                <p class="notice-hint">Excel Compare works in both desktop and web versions.</p>
             </div>
         </div>
 

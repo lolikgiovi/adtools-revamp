@@ -142,9 +142,19 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Checks if Oracle Instant Client is installed
+   * Checks if Oracle Instant Client is installed (Tauri/Desktop only)
+   * In Web mode, this check is skipped as Oracle features are not available
    */
   async checkOracleClient() {
+    // In Web mode, skip Oracle client check - just show the main interface
+    // Web users can only use Excel Compare which doesn't require Oracle
+    if (!isTauri()) {
+      this.oracleClientReady = false;
+      this.showMainInterface();
+      return;
+    }
+
+    // Tauri/Desktop mode - check for Oracle client
     try {
       this.oracleClientReady = await CompareConfigService.checkOracleClientReady();
 
@@ -189,13 +199,21 @@ class CompareConfigTool extends BaseTool {
   initEnvironmentVisibility() {
     const tauri = isTauri();
 
-    // Elements that only work in Tauri (database modes)
+    // Elements that only work in Tauri (e.g., connection status indicator)
     const tauriOnlyElements = document.querySelectorAll(".tauri-only");
     tauriOnlyElements.forEach((el) => {
       el.style.display = tauri ? "" : "none";
     });
 
-    // If in web mode, we must use Excel Compare
+    // Bind the "Use Excel Compare Instead" button
+    const switchToExcelBtn = document.getElementById("btn-switch-to-excel");
+    if (switchToExcelBtn) {
+      switchToExcelBtn.addEventListener("click", () => {
+        this.switchTab("excel-compare");
+      });
+    }
+
+    // In web mode, default to Excel Compare (but allow viewing other tabs)
     if (!tauri) {
       this.queryMode = "excel-compare";
       this.switchTab("excel-compare");
@@ -822,10 +840,12 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Switches between tabs (schema-table vs raw-sql)
+   * Switches between tabs (schema-table, raw-sql, excel-compare)
    */
   switchTab(tab) {
     this.queryMode = tab;
+    const tauri = isTauri();
+    const isDesktopOnlyTab = tab === "schema-table" || tab === "raw-sql";
 
     // Update tab button states
     const tabButtons = document.querySelectorAll(".tab-button");
@@ -837,13 +857,35 @@ class CompareConfigTool extends BaseTool {
       }
     });
 
-    // Show/hide appropriate UI sections
+    // Get UI sections
     const envSelection = document.querySelector(".environment-selection");
     const fieldSelection = document.getElementById("field-selection");
     const rawSqlMode = document.getElementById("raw-sql-mode");
     const excelCompareMode = document.getElementById("excel-compare-mode");
     const resultsSection = document.getElementById("results-section");
+    const desktopOnlyNotice = document.getElementById("desktop-only-notice");
+    const desktopFeatureName = document.getElementById("desktop-feature-name");
 
+    // In Web mode, show desktop-only notice for Schema/Table and Raw SQL
+    if (!tauri && isDesktopOnlyTab) {
+      // Update the feature name in the notice
+      if (desktopFeatureName) {
+        desktopFeatureName.textContent = tab === "schema-table" ? "Schema/Table" : "Raw SQL";
+      }
+      // Show notice, hide all other sections
+      if (desktopOnlyNotice) desktopOnlyNotice.style.display = "block";
+      if (envSelection) envSelection.style.display = "none";
+      if (fieldSelection) fieldSelection.style.display = "none";
+      if (rawSqlMode) rawSqlMode.style.display = "none";
+      if (excelCompareMode) excelCompareMode.style.display = "none";
+      if (resultsSection) resultsSection.style.display = "none";
+      return;
+    }
+
+    // Hide desktop-only notice for Tauri mode or Excel Compare tab
+    if (desktopOnlyNotice) desktopOnlyNotice.style.display = "none";
+
+    // Show/hide appropriate UI sections
     if (tab === "schema-table") {
       if (envSelection) envSelection.style.display = "block";
       if (fieldSelection) fieldSelection.style.display = this.metadata ? "block" : "none";

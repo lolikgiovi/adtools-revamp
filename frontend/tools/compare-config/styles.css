@@ -480,6 +480,62 @@
 }
 
 /* ============================================
+   DESKTOP-ONLY NOTICE (Web mode)
+   ============================================ */
+
+.desktop-only-notice {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
+  padding: 2rem;
+}
+
+.notice-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 2px 8px hsl(var(--shadow, 0 0% 0%) / 0.1);
+  animation: fadeIn 0.3s ease-in;
+}
+
+.notice-icon {
+  margin-bottom: 1.5rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.notice-card h3 {
+  margin: 0 0 1rem 0;
+  color: hsl(var(--foreground));
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.notice-card p {
+  margin: 0 0 1.5rem 0;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.notice-card strong {
+  color: hsl(var(--foreground));
+}
+
+.notice-actions {
+  margin: 1.5rem 0;
+}
+
+.notice-hint {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin: 1rem 0 0 0 !important;
+}
+
+/* ============================================
    LOADING STATE
    ============================================ */
 
