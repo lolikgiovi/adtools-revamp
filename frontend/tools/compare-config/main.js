@@ -3367,7 +3367,7 @@ class CompareConfigTool extends BaseTool {
     if (exportCsvBtn) exportCsvBtn.disabled = !hasResults;
 
     // Show results section
-    resultsSection.style.display = "block";
+    resultsSection.style.display = "flex";
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
@@ -4250,7 +4250,7 @@ class CompareConfigTool extends BaseTool {
       this.results[this.queryMode] = null;
       this.saveToolState();
 
-      if (resultsSection) resultsSection.style.display = "block";
+      if (resultsSection) resultsSection.style.display = "flex";
       if (resultsSummary) resultsSummary.innerHTML = "";
       if (resultsContent) {
         resultsContent.innerHTML = `
@@ -4462,11 +4462,7 @@ class CompareConfigTool extends BaseTool {
     if (!this.env1.connection || !this.schema || !this.table) return;
 
     try {
-      const prefs = await IndexedDBManager.getSchemaTablePrefs(
-        this.env1.connection.name,
-        this.schema,
-        this.table
-      );
+      const prefs = await IndexedDBManager.getSchemaTablePrefs(this.env1.connection.name, this.schema, this.table);
 
       if (prefs) {
         // Only apply saved preferences if they are compatible with current metadata

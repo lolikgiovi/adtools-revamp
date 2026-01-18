@@ -427,7 +427,18 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Results Section -->
         <div id="results-section" class="results-section" style="display: none;">
             <div class="results-header">
-                <h3 id="results-title">Comparison Results</h3>
+                <div class="header-left">
+                    <h3 id="results-title">Comparison Results</h3>
+                    <div class="view-selector">
+                        <label>View:</label>
+                        <select id="view-type" class="form-select">
+                            <option value="expandable">Expandable Rows</option>
+                            <option value="grid">Summary Grid</option>
+                            <option value="vertical">Cards</option>
+                            <option value="master-detail">Master-Detail</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="results-actions">
                     <button class="btn btn-secondary btn-sm" id="btn-export-json">Export JSON</button>
                     <button class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
@@ -438,17 +449,6 @@ export const CompareConfigTemplate = /* html */ `
             <!-- Summary -->
             <div id="results-summary" class="results-summary">
                 <!-- Summary will be populated here -->
-            </div>
-
-            <!-- View Selector -->
-            <div class="view-selector">
-                <label>View:</label>
-                <select id="view-type" class="form-select">
-                    <option value="expandable">Expandable Rows</option>
-                    <option value="grid">Summary Grid</option>
-                    <option value="vertical">Cards</option>
-                    <option value="master-detail">Master-Detail</option>
-                </select>
             </div>
 
             <!-- Results Content -->

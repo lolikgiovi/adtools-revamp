@@ -631,20 +631,35 @@
   border-radius: var(--radius);
   padding: 1.5rem;
   border-left: 4px solid hsl(var(--primary) / 0.4);
-  margin-top: 1.5rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+  gap: 1.25rem;
+  overflow: hidden; /* Prevent section itself from scrolling */
+}
+
+.results-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-shrink: 0;
 }
 
 .results-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .results-header h3 {
   margin: 0;
   color: hsl(var(--foreground));
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .results-actions {
@@ -654,7 +669,15 @@
 
 /* Summary Stats */
 .results-summary {
-  margin-bottom: 2rem;
+  flex-shrink: 0;
+}
+
+.results-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  padding-right: 0.25rem;
 }
 
 /* No PK Warning Banner */
@@ -684,12 +707,12 @@
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1.25rem;
+  gap: 0.5rem;
 }
 
 .summary-stat {
   text-align: center;
-  padding: 1.25rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
   background: hsl(var(--muted) / 0.3);
   border: 1px solid hsl(var(--border));
@@ -732,13 +755,13 @@
 }
 
 .summary-stat .stat-value {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: hsl(var(--foreground));
 }
 
 .summary-stat .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: hsl(var(--muted-foreground));
   margin-top: 0.25rem;
 }
@@ -748,7 +771,6 @@
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  margin-bottom: 1rem;
 }
 
 .view-selector label {
@@ -909,6 +931,11 @@
   font-size: 0.8rem;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
+}
+
+/* Zebra striping for data-table */
+.data-table tbody tr:nth-child(even) {
+  background: hsl(var(--muted) / 0.1);
 }
 
 .data-table .data-key {
@@ -1112,7 +1139,8 @@
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: 1rem;
-  min-height: 400px;
+  height: 100%;
+  min-height: 0;
 }
 
 .master-pane {
@@ -1271,7 +1299,7 @@
 
 .excel-table-container {
   width: 100%;
-  margin: 1.5rem 0;
+  /* margin: 1.5rem 0; */
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--card));
@@ -1894,6 +1922,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
+  margin-top: 1rem;
 }
 
 .file-upload-zone {
