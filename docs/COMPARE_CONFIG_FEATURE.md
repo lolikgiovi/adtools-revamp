@@ -440,20 +440,6 @@ src-tauri/src/
 ├── oracle.rs                        # Oracle operations (1,450 lines)
 ├── lib.rs                           # Rust command exports
 └── main.rs                          # Tauri app entry
-
-docs/compare_config/
-├── README.md                        # Documentation index
-├── COMPARE-CONFIG-FEATURE.md        # Original specification
-├── IMPLEMENTATION-PROGRESS.md       # Phase progress tracker
-├── PHASE-1-TEST-RESULTS.md          # Phase 1 test results
-├── PHASE-2-IMPLEMENTATION.md        # Phase 2 details
-├── PHASE-3-IMPLEMENTATION.md        # Phase 3 details
-├── PHASE-4-IMPLEMENTATION.md        # Phase 4 details
-├── backend_gap.md                   # Backend gap analysis
-├── excel-compare-development-plan.md
-├── excel-compare-flow-refactor-plan.md
-├── oracle-instant-client-integration-plan.md
-└── VIEW-SELECTION-AND-PREFERENCES-UPDATE.md
 ```
 
 ---
