@@ -2294,6 +2294,11 @@ export class JenkinsRunner extends BaseTool {
 
       // If the SQL is oversize, allow the user to preview and split first
       if (totalBytes > MAX_SQL_BYTES) {
+        // Prevent starting a new split while one is already in progress
+        if (this.state.split?.started && !this.state.split?.completed) {
+          this.showError("A split query execution is already in progress. Complete or cancel it first.");
+          return;
+        }
         openSplitSizeWarning(async () => {
           try {
             const stmts = splitSqlStatementsSafely(sql);
