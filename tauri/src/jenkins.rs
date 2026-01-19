@@ -1,4 +1,4 @@
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde::Deserialize;
 use chrono::{Datelike, Local};
 
@@ -90,7 +90,8 @@ pub async fn trigger_job(client: &Client, base_url: &str, job: &str, env: &str, 
   }
 
   let res = req.send().await.map_err(|e| e.to_string())?;
-  if res.status() != StatusCode::CREATED { return Err(format!("Trigger failed: HTTP {}", res.status())); }
+  // Accept both 200 OK and 201 Created as success (Jenkins may return either)
+  if !res.status().is_success() { return Err(format!("Trigger failed: HTTP {}", res.status())); }
   let loc = res
     .headers()
     .get(reqwest::header::LOCATION)
@@ -176,7 +177,8 @@ pub async fn trigger_batch_job(client: &Client, base_url: &str, env: &str, batch
   }
 
   let res = req.send().await.map_err(|e| e.to_string())?;
-  if res.status() != StatusCode::CREATED { return Err(format!("Trigger failed: HTTP {}", res.status())); }
+  // Accept both 200 OK and 201 Created as success (Jenkins may return either)
+  if !res.status().is_success() { return Err(format!("Trigger failed: HTTP {}", res.status())); }
   let loc = res
     .headers()
     .get(reqwest::header::LOCATION)
