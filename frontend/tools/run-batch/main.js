@@ -7,6 +7,7 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
+import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 
 export class RunBatch extends BaseTool {
   constructor(eventBus) {
@@ -38,6 +39,9 @@ export class RunBatch extends BaseTool {
   }
 
   async onMount() {
+    // Migrate to unified keychain (reduces password prompts after app updates)
+    await ensureUnifiedKeychain();
+
     const envSelect = this.container.querySelector("#rb-env");
     const batchNameInput = this.container.querySelector("#rb-batch-name");
     const jobNameInput = this.container.querySelector("#rb-job-name");

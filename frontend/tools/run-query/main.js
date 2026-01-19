@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
+import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
@@ -98,6 +99,9 @@ export class JenkinsRunner extends BaseTool {
   async onMount() {
     // Migrate Jenkins username from keychain to localStorage (one-time)
     await this.#migrateJenkinsUsername();
+
+    // Migrate to unified keychain (reduces password prompts after app updates)
+    await ensureUnifiedKeychain();
 
     const baseUrlInput = this.container.querySelector("#jenkins-baseurl");
     const jobInput = this.container.querySelector("#jenkins-job");
