@@ -2328,11 +2328,17 @@ export class JenkinsRunner extends BaseTool {
                 return `Chunk ${index + 1}`;
               }
             };
-            // Bind Execute All once
+            // Bind Execute All once - reads current state at click time to avoid stale closures
             if (splitExecuteAllBtn && !splitExecuteAllBtn.dataset.bound) {
               splitExecuteAllBtn.dataset.bound = "true";
               splitExecuteAllBtn.addEventListener("click", async () => {
-                if (!this.state.jenkinsUrl || !envSelect.value) {
+                // Read current state at click time (not from closure)
+                const currentChunks = this.state.split.chunks;
+                const currentEnv = envSelect.value;
+                const currentBaseUrl = this.state.jenkinsUrl;
+                const currentJob = jobInput.value.trim();
+
+                if (!currentBaseUrl || !currentEnv) {
                   this.showError("Select Jenkins URL and ENV in the toolbar to execute.");
                   return;
                 }
@@ -2344,24 +2350,24 @@ export class JenkinsRunner extends BaseTool {
                   const miniL = document.getElementById("jr-split-mini-log");
                   if (miniL) miniL.textContent = "";
                   let lastBuildUrl = null;
-                  for (let idx = 0; idx < chunks.length; idx++) {
+                  for (let idx = 0; idx < currentChunks.length; idx++) {
                     // Check if user requested cancellation
                     if (this.state.split.cancelRequested) {
                       statusEl.textContent = "Execution cancelled by user.";
-                      if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
+                      if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${currentChunks.length} chunks.`;
                       appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
                       splitExecuteAllBtn.disabled = false;
                       return;
                     }
 
-                    const chunkSql = chunks[idx];
+                    const chunkSql = currentChunks[idx];
                     // Seed a history entry per chunk with table-derived title
                     const arrSeed = loadHistory();
                     const chunkTitle = deriveChunkTitle(chunkSql, idx);
                     arrSeed.push({
                       timestamp: new Date().toISOString(),
-                      job,
-                      env,
+                      job: currentJob,
+                      env: currentEnv,
                       sql: chunkSql,
                       title: chunkTitle,
                       buildNumber: null,
@@ -2372,11 +2378,11 @@ export class JenkinsRunner extends BaseTool {
                     renderHistory();
                     this.state.split.statuses[idx] = "running";
                     renderSplitChunksList();
-                    appendLog(`\n=== Running chunk ${idx + 1}/${chunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                    appendLog(`\n=== Running chunk ${idx + 1}/${currentChunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
                     this.state.lastRunArgListTooLong = false;
-                    const queueUrl = await this.service.triggerJob(baseUrl, job, env, chunkSql);
+                    const queueUrl = await this.service.triggerJob(currentBaseUrl, currentJob, currentEnv, chunkSql);
                     this.state.queueUrl = queueUrl;
-                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} queued. Polling…`;
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} queued. Polling…`;
                     // Poll until build starts
                     let attempts = 0;
                     let buildNumber = null;
@@ -2384,7 +2390,7 @@ export class JenkinsRunner extends BaseTool {
                     while (!buildNumber && attempts <= 30) {
                       attempts++;
                       try {
-                        const res = await this.service.pollQueue(baseUrl, queueUrl);
+                        const res = await this.service.pollQueue(currentBaseUrl, queueUrl);
                         buildNumber = res.buildNumber || null;
                         executableUrl = res.executableUrl || null;
                         if (!buildNumber) await new Promise((r) => setTimeout(r, 2000));
@@ -2425,9 +2431,9 @@ export class JenkinsRunner extends BaseTool {
                         renderHistory();
                       }
                     } catch (_) {}
-                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} streaming…`;
                     await subscribeToLogs();
-                    await this.service.streamLogs(baseUrl, job, buildNumber);
+                    await this.service.streamLogs(currentBaseUrl, currentJob, buildNumber);
                     await waitForBuildCompletion(buildNumber);
                     if (this.state.lastRunArgListTooLong) {
                       if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
@@ -2441,19 +2447,19 @@ export class JenkinsRunner extends BaseTool {
                     }
                     this.state.split.statuses[idx] = "success";
                     renderSplitChunksList();
-                    appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
+                    appendLog(`\n=== Chunk ${idx + 1}/${currentChunks.length} complete ===\n`);
                   }
                   renderHistory();
                   // Calculate success report
                   const successCount = this.state.split.statuses.filter((s) => s === "success").length;
                   const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
                   const completionMessage =
-                    `✓ Execution Complete: ${successCount}/${chunks.length} chunks succeeded` +
+                    `✓ Execution Complete: ${successCount}/${currentChunks.length} chunks succeeded` +
                     (failedCount > 0 ? ` (${failedCount} failed)` : "") +
-                    ` on ${env}`;
+                    ` on ${currentEnv}`;
                   statusEl.textContent = completionMessage;
                   if (splitProgressEl) {
-                    splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${chunks.length} chunks executed successfully on ${env}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
+                    splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${currentChunks.length} chunks executed successfully on ${currentEnv}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
                   }
                   // Update button to indicate completion and prevent accidental re-run
                   splitExecuteAllBtn.textContent = "✓ Execution Complete";
@@ -2462,7 +2468,7 @@ export class JenkinsRunner extends BaseTool {
                   this.state.split.completed = true;
                   if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
                   appendLog(
-                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
+                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${currentEnv}\n  Total Chunks: ${currentChunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
                   );
                 } catch (err) {
                   splitExecuteAllBtn.disabled = false;
