@@ -1994,9 +1994,12 @@ class CompareConfigTool extends BaseTool {
       // Show field selection UI
       this.renderExcelFieldSelection();
 
-      // Show column mismatch warning if applicable
+      // Show or hide column mismatch warning based on header differences
+      const warningEl = document.getElementById("excel-column-warning");
       if (refOnlyHeaders.length > 0 || compOnlyHeaders.length > 0) {
         this.showColumnMismatchWarning(refOnlyHeaders, compOnlyHeaders);
+      } else if (warningEl) {
+        warningEl.style.display = "none";
       }
 
       // Save state to IndexedDB after loading headers
@@ -2034,7 +2037,7 @@ class CompareConfigTool extends BaseTool {
         <label class="field-checkbox">
           <input type="checkbox" name="excel-pk-field" value="${header}"
                  ${selectedPkFields.includes(header) ? "checked" : ""}>
-          <span class="field-name">${header}</span>
+          <span class="field-name" title="${header}">${header}</span>
         </label>
       `,
         )
@@ -2050,7 +2053,7 @@ class CompareConfigTool extends BaseTool {
         <label class="field-checkbox">
           <input type="checkbox" name="excel-compare-field" value="${header}"
                  ${selectedFields.includes(header) ? "checked" : ""}>
-          <span class="field-name">${header}</span>
+          <span class="field-name" title="${header}">${header}</span>
         </label>
       `,
         )

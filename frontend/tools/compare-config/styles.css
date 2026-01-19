@@ -356,6 +356,11 @@
   color: hsl(var(--foreground));
 }
 
+.field-checkbox .field-name {
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
 .comparison-actions {
   display: flex;
   justify-content: center;
@@ -496,27 +501,40 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 2.5rem;
-  max-width: 500px;
+  max-width: 850px;
   width: 100%;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
   box-shadow: 0 2px 8px hsl(var(--shadow, 0 0% 0%) / 0.1);
   animation: fadeIn 0.3s ease-in;
 }
 
 .notice-icon {
-  margin-bottom: 1.5rem;
+  flex-shrink: 0;
   color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 0.3);
+  padding: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notice-content {
+  flex: 1;
+  text-align: left;
 }
 
 .notice-card h3 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.5rem 0;
   color: hsl(var(--foreground));
   font-size: 1.5rem;
   font-weight: 600;
 }
 
 .notice-card p {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 1.25rem 0;
   color: hsl(var(--muted-foreground));
   line-height: 1.6;
 }
@@ -526,13 +544,32 @@
 }
 
 .notice-actions {
-  margin: 1.5rem 0;
+  margin: 1.25rem 0;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .notice-hint {
   font-size: 0.875rem;
   color: hsl(var(--muted-foreground));
-  margin: 1rem 0 0 0 !important;
+  margin: 0.75rem 0 0 0 !important;
+}
+
+@media (max-width: 640px) {
+  .notice-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem;
+    gap: 1.5rem;
+  }
+
+  .notice-content {
+    text-align: center;
+  }
+
+  .notice-actions {
+    justify-content: center;
+  }
 }
 
 /* ============================================

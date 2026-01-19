@@ -88,14 +88,16 @@ export const CompareConfigTemplate = /* html */ `
                         <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
                 </div>
-                <h3>Desktop App Required</h3>
-                <p>The <strong id="desktop-feature-name">Schema/Table</strong> comparison mode requires the AD Tools desktop application to connect to Oracle databases.</p>
-                <div class="notice-actions">
-                    <button class="btn btn-primary" id="btn-switch-to-excel">
-                        Use Excel Compare Instead
-                    </button>
+                <div class="notice-content">
+                    <h3>Desktop App Required</h3>
+                    <p>The <strong id="desktop-feature-name">Schema/Table</strong> comparison mode requires the AD Tools desktop application to connect to Oracle databases.</p>
+                    <div class="notice-actions">
+                        <button class="btn btn-primary" id="btn-switch-to-excel">
+                            Use Excel Compare Instead
+                        </button>
+                    </div>
+                    <p class="notice-hint">Excel Compare works in both desktop and web versions.</p>
                 </div>
-                <p class="notice-hint">Excel Compare works in both desktop and web versions.</p>
             </div>
         </div>
 
