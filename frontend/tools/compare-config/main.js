@@ -135,10 +135,13 @@ class CompareConfigTool extends BaseTool {
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
       this.loadSavedConnections();
-      // Load last tool state
+      // Load last tool state (includes view preferences, results for all modes)
       this.loadToolState();
       // Start connection status polling
       this.startConnectionStatusPolling();
+    } else {
+      // Web mode: Still load tool state for view preferences and Excel compare results
+      this.loadToolState();
     }
   }
 
@@ -276,7 +279,7 @@ class CompareConfigTool extends BaseTool {
       } catch (e) {
         // If quota exceeded, try saving without large results
         console.warn("Could not save full state to localStorage (likely quota exceeded). Saving without results.");
-        state.results = { "schema-table": null, "raw-sql": null };
+        state.results = { "schema-table": null, "raw-sql": null, "excel-compare": null };
         localStorage.setItem("compare-config.last-state", JSON.stringify(state));
       }
     } catch (error) {
@@ -3387,6 +3390,24 @@ class CompareConfigTool extends BaseTool {
       }
     }
 
+    // Update comparison context (Excel Compare only)
+    const contextEl = document.getElementById("comparison-context");
+    const contextRefEl = document.getElementById("context-ref-file");
+    const contextCompEl = document.getElementById("context-comp-file");
+
+    if (this.queryMode === "excel-compare" && this.results["excel-compare"]) {
+      const result = this.results["excel-compare"];
+      if (contextEl && contextRefEl && contextCompEl && result.env1Name && result.env2Name) {
+        contextRefEl.textContent = result.env1Name;
+        contextRefEl.title = result.env1Name;
+        contextCompEl.textContent = result.env2Name;
+        contextCompEl.title = result.env2Name;
+        contextEl.style.display = "flex";
+      }
+    } else if (contextEl) {
+      contextEl.style.display = "none";
+    }
+
     // Render summary
     this.renderSummary();
 
@@ -4366,6 +4387,10 @@ class CompareConfigTool extends BaseTool {
   async loadExcelCompareFilesOnly() {
     if (!IndexedDBManager.isIndexedDBAvailable()) return;
 
+    // Show loading indicator
+    const loadingIndicator = document.getElementById("excel-loading-cache");
+    if (loadingIndicator) loadingIndicator.style.display = "flex";
+
     try {
       // Load cached files only
       const cachedFiles = await IndexedDBManager.getAllExcelFiles();
@@ -4415,6 +4440,10 @@ class CompareConfigTool extends BaseTool {
     } catch (error) {
       console.warn("Failed to load Excel Compare files from IndexedDB:", error);
       return false;
+    } finally {
+      // Hide loading indicator
+      const loadingIndicator = document.getElementById("excel-loading-cache");
+      if (loadingIndicator) loadingIndicator.style.display = "none";
     }
   }
 

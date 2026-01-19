@@ -567,6 +567,28 @@
   }
 }
 
+/* Loading Cache Indicator */
+.loading-cache-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--muted) / 0.5);
+  border-radius: var(--radius);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.loading-spinner-small {
+  border: 2px solid hsl(var(--border));
+  border-top: 2px solid hsl(var(--primary));
+  border-radius: 50%;
+  width: 1rem;
+  height: 1rem;
+  animation: spin 1s linear infinite;
+}
+
 /* ============================================
    PROGRESS OVERLAY
    ============================================ */
@@ -721,6 +743,44 @@
 .results-actions {
   display: flex;
   gap: 0.625rem;
+}
+
+/* Comparison Context (Excel Compare) */
+.comparison-context {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--muted) / 0.5);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.comparison-context .context-label {
+  color: hsl(var(--muted-foreground));
+}
+
+.comparison-context .context-file {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-context .context-file.ref {
+  color: hsl(var(--primary));
+}
+
+.comparison-context .context-file.comp {
+  color: hsl(var(--chart-2, 160 60% 45%));
+}
+
+.comparison-context .context-vs {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
 }
 
 /* Summary Stats */

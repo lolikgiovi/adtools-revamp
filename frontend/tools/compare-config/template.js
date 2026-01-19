@@ -196,6 +196,12 @@ export const CompareConfigTemplate = /* html */ `
 
         <!-- Excel Compare Mode (shown when Excel Compare tab is active) -->
         <div id="excel-compare-mode" class="excel-compare-mode" style="display: none;">
+            <!-- Loading Cached Files Indicator -->
+            <div id="excel-loading-cache" class="loading-cache-indicator" style="display: none;">
+                <div class="loading-spinner-small"></div>
+                <span>Loading cached files...</span>
+            </div>
+
             <!-- Step 1: File Upload -->
             <div class="excel-file-selection">
                 <div class="grid-row">
@@ -446,6 +452,14 @@ export const CompareConfigTemplate = /* html */ `
                     <button class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
                     <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
                 </div>
+            </div>
+
+            <!-- Comparison Context (Excel Compare only) -->
+            <div id="comparison-context" class="comparison-context" style="display: none;">
+                <span class="context-label">Comparing:</span>
+                <span class="context-file ref" id="context-ref-file"></span>
+                <span class="context-vs">vs</span>
+                <span class="context-file comp" id="context-comp-file"></span>
             </div>
 
             <!-- Summary -->
