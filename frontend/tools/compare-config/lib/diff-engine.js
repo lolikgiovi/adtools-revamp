@@ -10,10 +10,39 @@
  */
 
 import * as Diff from 'diff';
+import { getFeatureFlag, FLAGS } from './feature-flags.js';
 
 // Constants
 const KEY_DELIMITER = '\x00|\x00';  // Null-pipe-null for composite key joining
 const CHANGE_THRESHOLD = 0.5;       // 50% threshold for adaptive diff
+
+/**
+ * Debug helper: convert string to hex char codes for inspection
+ * @param {string} str - Input string
+ * @returns {string} Hex representation
+ */
+function toHexCodes(str) {
+  if (str == null) return 'null';
+  return [...String(str)].map(c => {
+    const code = c.charCodeAt(0);
+    return code < 32 || code > 126
+      ? `[U+${code.toString(16).toUpperCase().padStart(4, '0')}]`
+      : c;
+  }).join('');
+}
+
+/**
+ * Debug log for diff operations (only when DIFF_DEBUG_MODE is enabled)
+ */
+function debugLog(...args) {
+  try {
+    if (getFeatureFlag(FLAGS.DIFF_DEBUG_MODE)) {
+      console.log('[DiffEngine]', ...args);
+    }
+  } catch (e) {
+    // Ignore - feature flags may not be available in tests
+  }
+}
 
 /**
  * Diff segment types for rendering
@@ -213,10 +242,38 @@ export function buildKeyMaps(rows, keyColumns) {
 }
 
 /**
+ * Normalize whitespace in a string:
+ * - Convert all newline variants (CRLF, CR) to LF
+ * - Convert Unicode whitespace characters to regular space
+ * - Collapse multiple consecutive whitespace into single space
+ * - Trim leading/trailing whitespace
+ * @param {string} str - Input string
+ * @returns {string} Normalized string
+ */
+export function normalizeWhitespace(str) {
+  if (str == null) return '';
+
+  let result = String(str);
+
+  // Normalize newlines: CRLF -> LF, CR -> LF
+  result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Normalize Unicode whitespace to regular space
+  // Includes: NBSP, narrow NBSP, thin space, hair space, em/en space, etc.
+  result = result.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
+
+  // Collapse multiple whitespace (spaces, tabs, newlines) into single space
+  result = result.replace(/\s+/g, ' ');
+
+  // Trim
+  return result.trim();
+}
+
+/**
  * Compare two values with optional normalization
  * @param {*} val1
  * @param {*} val2
- * @param {boolean} normalize - Whether to normalize dates/numbers
+ * @param {boolean} normalize - Whether to normalize dates/numbers/whitespace
  * @returns {boolean} True if values are equal
  */
 export function compareValues(val1, val2, normalize = false) {
@@ -242,8 +299,8 @@ export function compareValues(val1, val2, normalize = false) {
     return num1 === num2;
   }
 
-  // Fall back to trimmed string comparison
-  return str1.trim() === str2.trim();
+  // Fall back to whitespace-normalized string comparison
+  return normalizeWhitespace(str1) === normalizeWhitespace(str2);
 }
 
 /**
@@ -384,6 +441,23 @@ export function compareRow(refRow, compRow, fields, options = {}) {
     if (!isEqual) {
       hasDifference = true;
       fieldDiffs[field] = computeAdaptiveDiff(refVal, compVal, { threshold });
+
+      // Debug logging for differences
+      debugLog('=== DIFF DETECTED ===');
+      debugLog('Field:', field);
+      debugLog('Normalize mode:', normalize);
+      debugLog('Ref value (raw):', JSON.stringify(refVal));
+      debugLog('Comp value (raw):', JSON.stringify(compVal));
+      debugLog('Ref value (hex):', toHexCodes(refVal));
+      debugLog('Comp value (hex):', toHexCodes(compVal));
+      debugLog('Ref length:', String(refVal ?? '').length);
+      debugLog('Comp length:', String(compVal ?? '').length);
+      if (normalize) {
+        debugLog('Ref normalized:', JSON.stringify(normalizeWhitespace(String(refVal ?? ''))));
+        debugLog('Comp normalized:', JSON.stringify(normalizeWhitespace(String(compVal ?? ''))));
+      }
+      debugLog('Diff result:', fieldDiffs[field]);
+      debugLog('=====================');
     }
   }
 

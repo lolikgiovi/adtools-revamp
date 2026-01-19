@@ -14,6 +14,7 @@ import {
   compareValues,
   normalizeDate,
   normalizeNumber,
+  normalizeWhitespace,
   compareRow,
   compareDatasets,
   reconcileColumns
@@ -254,6 +255,63 @@ describe('DiffEngine', () => {
     });
   });
 
+  describe('normalizeWhitespace', () => {
+    it('returns empty string for null/undefined', () => {
+      expect(normalizeWhitespace(null)).toBe('');
+      expect(normalizeWhitespace(undefined)).toBe('');
+    });
+
+    it('normalizes CRLF to space', () => {
+      expect(normalizeWhitespace('hello\r\nworld')).toBe('hello world');
+    });
+
+    it('normalizes CR to space', () => {
+      expect(normalizeWhitespace('hello\rworld')).toBe('hello world');
+    });
+
+    it('normalizes LF to space', () => {
+      expect(normalizeWhitespace('hello\nworld')).toBe('hello world');
+    });
+
+    it('normalizes non-breaking space (NBSP)', () => {
+      expect(normalizeWhitespace('hello\u00A0world')).toBe('hello world');
+    });
+
+    it('normalizes narrow no-break space', () => {
+      expect(normalizeWhitespace('hello\u202Fworld')).toBe('hello world');
+    });
+
+    it('normalizes various Unicode spaces', () => {
+      // Em space, en space, thin space
+      expect(normalizeWhitespace('hello\u2003world')).toBe('hello world');
+      expect(normalizeWhitespace('hello\u2002world')).toBe('hello world');
+      expect(normalizeWhitespace('hello\u2009world')).toBe('hello world');
+    });
+
+    it('collapses multiple whitespace into single space', () => {
+      expect(normalizeWhitespace('hello   world')).toBe('hello world');
+      expect(normalizeWhitespace('hello\t\tworld')).toBe('hello world');
+      expect(normalizeWhitespace('hello \n \t world')).toBe('hello world');
+    });
+
+    it('trims leading and trailing whitespace', () => {
+      expect(normalizeWhitespace('  hello world  ')).toBe('hello world');
+      expect(normalizeWhitespace('\n\nhello\n\n')).toBe('hello');
+    });
+
+    it('handles mixed whitespace scenarios', () => {
+      // Real-world case: Excel cell with CRLF and NBSP
+      const input = 'Yeay, Anda sudah terdaftar\r\ndi Bank\u00A0Mandiri!';
+      expect(normalizeWhitespace(input)).toBe('Yeay, Anda sudah terdaftar di Bank Mandiri!');
+    });
+
+    it('handles empty and whitespace-only strings', () => {
+      expect(normalizeWhitespace('')).toBe('');
+      expect(normalizeWhitespace('   ')).toBe('');
+      expect(normalizeWhitespace('\n\t\r')).toBe('');
+    });
+  });
+
   describe('compareValues', () => {
     it('compares strings strictly by default', () => {
       expect(compareValues('hello', 'hello')).toBe(true);
@@ -274,6 +332,27 @@ describe('DiffEngine', () => {
       expect(compareValues(null, null)).toBe(true);
       expect(compareValues(null, '')).toBe(true);  // Both convert to empty string
       expect(compareValues(null, 'test')).toBe(false);
+    });
+
+    it('normalizes whitespace when enabled', () => {
+      // Different newlines
+      expect(compareValues('hello\nworld', 'hello\r\nworld', true)).toBe(true);
+      // NBSP vs regular space
+      expect(compareValues('hello world', 'hello\u00A0world', true)).toBe(true);
+      // Multiple spaces collapsed
+      expect(compareValues('hello  world', 'hello world', true)).toBe(true);
+    });
+
+    it('does not normalize whitespace in strict mode', () => {
+      expect(compareValues('hello\nworld', 'hello\r\nworld', false)).toBe(false);
+      expect(compareValues('hello world', 'hello\u00A0world', false)).toBe(false);
+    });
+
+    it('normalizes real-world Excel cell content', () => {
+      const cell1 = 'Yeay, Anda sudah terdaftar\ndi Bank Mandiri!';
+      const cell2 = 'Yeay, Anda sudah terdaftar\r\ndi Bank Mandiri!';
+      expect(compareValues(cell1, cell2, true)).toBe(true);
+      expect(compareValues(cell1, cell2, false)).toBe(false);
     });
   });
 

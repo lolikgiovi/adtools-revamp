@@ -2005,6 +2005,46 @@
   color: hsl(var(--foreground));
 }
 
+.upload-area {
+  border: 2px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: hsl(var(--card));
+}
+
+.upload-area svg {
+  color: hsl(var(--muted-foreground));
+}
+
+.upload-area p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.upload-area .browse-link {
+  color: hsl(var(--primary));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.upload-area .browse-link:hover {
+  color: hsl(var(--primary-hover, var(--primary)));
+}
+
+.upload-area .help-text {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
 .dropzone {
   border: 2px dashed hsl(var(--border));
   border-radius: var(--radius);
@@ -2509,19 +2549,8 @@
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
   margin-top: 1rem;
-}
-
-.pairing-header {
-  margin-bottom: 1.25rem;
-}
-
-.pairing-header h4 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: hsl(var(--foreground));
 }
 
 .pairing-dropdowns {

@@ -211,15 +211,8 @@ export const CompareConfigTemplate = /* html */ `
                                 Clear All
                             </button>
                         </div>
-                        <div class="dropzone" id="ref-dropzone">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="12" y1="18" x2="12" y2="12"></line>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
-                            </svg>
-                            <p>Drop files here or click to <span class="browse-link" id="ref-browse">browse</span> or <span class="browse-link" id="ref-folder-browse">select folder</span></p>
-                            <p class="help-text">Supports .xlsx, .xls, .csv</p>
+                        <div class="upload-area">
+                            <p>Click to <a href="#" class="browse-link" id="ref-browse">browse files</a> or <a href="#" class="browse-link" id="ref-folder-browse">select folder</a>, supports .xlsx, .xls</p>
                             <input type="file" id="ref-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="ref-folder-input" webkitdirectory style="display: none;">
                         </div>
@@ -238,15 +231,8 @@ export const CompareConfigTemplate = /* html */ `
                                 Clear All
                             </button>
                         </div>
-                        <div class="dropzone" id="comp-dropzone">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="12" y1="18" x2="12" y2="12"></line>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
-                            </svg>
-                            <p>Drop files here or click to <span class="browse-link" id="comp-browse">browse</span> or <span class="browse-link" id="comp-folder-browse">select folder</span></p>
-                            <p class="help-text">Supports .xlsx, .xls, .csv</p>
+                        <div class="upload-area">
+                            <p>Click to <a href="#" class="browse-link" id="comp-browse">browse files</a> or <a href="#" class="browse-link" id="comp-folder-browse">select folder</a>, supports .xlsx, .xls</p>
                             <input type="file" id="comp-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="comp-folder-input" webkitdirectory style="display: none;">
                         </div>
@@ -257,10 +243,6 @@ export const CompareConfigTemplate = /* html */ `
 
             <!-- Step 2: File Pairing Selection (shown after files uploaded) -->
             <div id="excel-file-pairing" class="excel-file-pairing" style="display: none;">
-                <div class="pairing-header">
-                    <h4>Select File to Compare</h4>
-                </div>
-
                 <div class="pairing-dropdowns">
                     <div class="form-group">
                         <label for="excel-ref-file-search">Reference File</label>

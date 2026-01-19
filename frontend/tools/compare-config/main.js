@@ -664,111 +664,60 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Excel Compare mode events
-    const refDropzone = document.getElementById("ref-dropzone");
-    const compDropzone = document.getElementById("comp-dropzone");
     const refFileInput = document.getElementById("ref-file-input");
     const compFileInput = document.getElementById("comp-file-input");
+    const refFolderInput = document.getElementById("ref-folder-input");
+    const compFolderInput = document.getElementById("comp-folder-input");
 
-    // New flow: Clear All buttons
+    // Clear All buttons
     const refClearAllBtn = document.getElementById("ref-clear-all");
     const compClearAllBtn = document.getElementById("comp-clear-all");
 
     if (refClearAllBtn) {
-      refClearAllBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.clearAllExcelFiles("ref");
-      });
+      refClearAllBtn.addEventListener("click", () => this.clearAllExcelFiles("ref"));
     }
 
     if (compClearAllBtn) {
-      compClearAllBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.clearAllExcelFiles("comp");
-      });
+      compClearAllBtn.addEventListener("click", () => this.clearAllExcelFiles("comp"));
     }
 
-    // New flow: Excel field selection events
-    this.bindExcelFieldSelectionEvents();
+    // Browse files links
+    const refBrowse = document.getElementById("ref-browse");
+    const compBrowse = document.getElementById("comp-browse");
 
-    // Legacy elements (kept for backward compatibility but may be unused)
-    const rowMatchingRadios = document.querySelectorAll('input[name="row-matching"]');
-    const dataComparisonRadios = document.querySelectorAll('input[name="data-comparison"]');
-    const excelPkColumnsInput = document.getElementById("excel-pk-columns");
-
-    if (refDropzone) {
-      // Handle "browse" click
-      const refBrowse = document.getElementById("ref-browse");
-      if (refBrowse) {
-        refBrowse.addEventListener("click", (e) => {
-          e.stopPropagation();
-          refFileInput.click();
-        });
-      }
-
-      // Handle "select folder" click
-      const refFolderBrowse = document.getElementById("ref-folder-browse");
-      if (refFolderBrowse) {
-        refFolderBrowse.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.handleFolderSelection("ref");
-        });
-      }
-
-      refDropzone.addEventListener("click", (e) => {
-        // Only trigger generic browse if clicking background, not links
-        if (e.target.classList.contains("browse-link")) return;
+    if (refBrowse && refFileInput) {
+      refBrowse.addEventListener("click", (e) => {
+        e.preventDefault();
         refFileInput.click();
       });
-
-      refDropzone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        refDropzone.classList.add("drag-over");
-      });
-      refDropzone.addEventListener("dragleave", () => refDropzone.classList.remove("drag-over"));
-      refDropzone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        refDropzone.classList.remove("drag-over");
-        this.handleExcelFileSelection("ref", e.dataTransfer.files);
-      });
     }
 
-    if (compDropzone) {
-      // Handle "browse" click
-      const compBrowse = document.getElementById("comp-browse");
-      if (compBrowse) {
-        compBrowse.addEventListener("click", (e) => {
-          e.stopPropagation();
-          compFileInput.click();
-        });
-      }
-
-      // Handle "select folder" click
-      const compFolderBrowse = document.getElementById("comp-folder-browse");
-      if (compFolderBrowse) {
-        compFolderBrowse.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.handleFolderSelection("comp");
-        });
-      }
-
-      compDropzone.addEventListener("click", (e) => {
-        // Only trigger generic browse if clicking background, not links
-        if (e.target.classList.contains("browse-link")) return;
+    if (compBrowse && compFileInput) {
+      compBrowse.addEventListener("click", (e) => {
+        e.preventDefault();
         compFileInput.click();
       });
+    }
 
-      compDropzone.addEventListener("dragover", (e) => {
+    // Select folder links
+    const refFolderBrowse = document.getElementById("ref-folder-browse");
+    const compFolderBrowse = document.getElementById("comp-folder-browse");
+
+    if (refFolderBrowse) {
+      refFolderBrowse.addEventListener("click", (e) => {
         e.preventDefault();
-        compDropzone.classList.add("drag-over");
-      });
-      compDropzone.addEventListener("dragleave", () => compDropzone.classList.remove("drag-over"));
-      compDropzone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        compDropzone.classList.remove("drag-over");
-        this.handleExcelFileSelection("comp", e.dataTransfer.files);
+        this.handleFolderSelection("ref");
       });
     }
 
+    if (compFolderBrowse) {
+      compFolderBrowse.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.handleFolderSelection("comp");
+      });
+    }
+
+    // File input change handlers
     if (refFileInput) {
       refFileInput.addEventListener("change", (e) => this.handleExcelFileSelection("ref", e.target.files));
     }
@@ -776,9 +725,6 @@ class CompareConfigTool extends BaseTool {
     if (compFileInput) {
       compFileInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
     }
-
-    const refFolderInput = document.getElementById("ref-folder-input");
-    const compFolderInput = document.getElementById("comp-folder-input");
 
     if (refFolderInput) {
       refFolderInput.addEventListener("change", (e) => this.handleExcelFileSelection("ref", e.target.files));
@@ -788,7 +734,13 @@ class CompareConfigTool extends BaseTool {
       compFolderInput.addEventListener("change", (e) => this.handleExcelFileSelection("comp", e.target.files));
     }
 
-    // Legacy radio listeners (kept for backward compatibility)
+    // Excel field selection events
+    this.bindExcelFieldSelectionEvents();
+
+    // Excel comparison option radio listeners
+    const rowMatchingRadios = document.querySelectorAll('input[name="excel-row-matching"]');
+    const dataComparisonRadios = document.querySelectorAll('input[name="excel-data-comparison"]');
+
     rowMatchingRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.excelCompare.rowMatching = e.target.value;
