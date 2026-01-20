@@ -5,6 +5,15 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 export class ValueProcessorService {
   constructor() {}
 
+  /**
+   * Safely convert value to string for string operations.
+   * Handles numbers, booleans, and other non-string types from spreadsheet cells.
+   */
+  _toString(value) {
+    if (value === null || value === undefined) return "";
+    return String(value);
+  }
+
   processValue(value, dataType, nullable, fieldName, tableName, queryType = null) {
     // Constants
     const AUDIT_FIELDS = {
@@ -18,12 +27,14 @@ export class ValueProcessorService {
     }
 
     if (AUDIT_FIELDS.by.includes(fieldName.toLowerCase())) {
-      return value?.trim() ? `'${value.replace(/'/g, "''").toUpperCase()}'` : "'SYSTEM'";
+      const strValue = this._toString(value).trim();
+      return strValue ? `'${strValue.replace(/'/g, "''").toUpperCase()}'` : "'SYSTEM'";
     }
 
     // Handle NULL values
     const isEmptyValue = value === null || value === undefined || value === "";
-    const isExplicitNull = value?.toLowerCase() === "null";
+    const strValue = this._toString(value);
+    const isExplicitNull = strValue.toLowerCase() === "null";
 
     if (isEmptyValue) {
       // For UPDATE operations, skip empty values (don't update these fields)
@@ -50,25 +61,26 @@ export class ValueProcessorService {
 
     // Handle special ID fields
     const upperDataType = dataType.toUpperCase();
+    const lowerStrValue = strValue.toLowerCase();
 
     // Increment value (max + 1)
     if (
       (fieldName === "config_id" && upperDataType === "NUMBER") || // specific for config_id
-      (upperDataType.startsWith("NUMBER") && value.toLowerCase().includes("max")) // any number fields containing "max" phrase
+      (upperDataType.startsWith("NUMBER") && lowerStrValue.includes("max")) // any number fields containing "max" phrase
     ) {
       return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
     }
 
     // Varchar containing UUID
-    if (upperDataType.startsWith("VARCHAR") && value.toLowerCase() === "uuid") {
-      if (!this.isValidUUID(value)) {
+    if (upperDataType.startsWith("VARCHAR") && lowerStrValue === "uuid") {
+      if (!this.isValidUUID(strValue)) {
         return `'${crypto.randomUUID()}'`;
       }
-      return `'${value}'`;
+      return `'${strValue}'`;
     }
 
     // System config ID
-    if (fieldName === "system_config_id" && value.toLowerCase() === "max") {
+    if (fieldName === "system_config_id" && lowerStrValue === "max") {
       return `(SELECT MAX(CAST(${fieldName} AS INT))+1 FROM ${tableName})`;
     }
 
@@ -77,7 +89,7 @@ export class ValueProcessorService {
 
     switch (fieldDataType.type) {
       case "NUMBER":
-        let normalizedValue = value.toString().trim();
+        let normalizedValue = strValue.trim();
 
         // 1. Handle multiple commas (e.g. 10,000,000) -> Remove all commas
         if ((normalizedValue.match(/,/g) || []).length > 1) {
@@ -127,7 +139,7 @@ export class ValueProcessorService {
       case "CHAR":
         const UUID_V4_MAXLENGTH = 36;
 
-        if (value.toLowerCase() === "uuid") {
+        if (lowerStrValue === "uuid") {
           if (fieldDataType.maxLength && fieldDataType.maxLength < UUID_V4_MAXLENGTH) {
             UsageTracker.trackEvent("quick-query", "value_error", {
               type: "uuid_length_too_small",
@@ -143,7 +155,7 @@ export class ValueProcessorService {
         }
 
         if (fieldDataType.maxLength) {
-          const length = fieldDataType.unit === "BYTE" ? new TextEncoder().encode(value).length : value.length;
+          const length = fieldDataType.unit === "BYTE" ? new TextEncoder().encode(strValue).length : strValue.length;
 
           if (length > fieldDataType.maxLength) {
             UsageTracker.trackEvent("quick-query", "value_error", {
@@ -157,20 +169,20 @@ export class ValueProcessorService {
             throw new Error(`Value exceeds maximum length of ${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`);
           }
         }
-        return `'${value.replace(/'/g, "''")}'`;
+        return `'${strValue.replace(/'/g, "''")}'`;
 
       case "DATE":
       case "TIMESTAMP":
-        return this.formatTimestamp(value, fieldName);
+        return this.formatTimestamp(strValue, fieldName);
 
       case "CLOB":
-        return this.formatCLOB(value);
+        return this.formatCLOB(strValue);
 
       case "BLOB":
-        return this.formatBLOB(value);
+        return this.formatBLOB(strValue);
 
       default:
-        return `'${value.replace(/'/g, "''")}'`;
+        return `'${strValue.replace(/'/g, "''")}'`;
     }
   }
 

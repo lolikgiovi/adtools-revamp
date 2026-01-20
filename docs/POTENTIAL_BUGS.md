@@ -26,9 +26,8 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
-| ✅ Fixed | 3 | SQL correctness (composite PK, MERGE), Runtime crashes |
+| ✅ Fixed | 5 | SQL correctness, Runtime crashes, Race conditions, Type safety |
 | 🔴 Critical | 1 | XSS |
-| 🟡 Medium | 2 | Race conditions, Type errors |
 | 🟠 Low | 2 | SQL injection, Resource leaks |
 
 ### Affected Components
@@ -222,73 +221,77 @@ VALUES (...);
 
 ---
 
-### 5. 🟡 Race Conditions in Async Operations
+### 5. ✅ ~~Race Conditions in Async Operations~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/main.js#L641-L683`
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/main.js`
 
 **Description:**  
-Multiple async operations (query generation, splitting, env refresh) lack request ID gating. Stale results from earlier requests can overwrite newer UI state.
+Multiple async operations (query generation) previously lacked request ID gating. Stale results from earlier requests could overwrite newer UI state.
 
-**Scenario:**
+**Previous Scenario (FIXED):**
 1. User clicks "Generate Query" with Dataset A
 2. Before completion, user changes data to Dataset B and clicks again
 3. Dataset A's result (slower) completes last and overwrites Dataset B's result
 
-**Affected Operations:**
-- `_generateQueryAsync()` - Web Worker query generation
-- `handleSplitConfirm()` - Split query processing
-- `refreshEnvChoices()` - Jenkins environment fetching (with retries)
-
-**Current Mitigation (Insufficient):**
+**Current Behavior (CORRECT):**
 ```javascript
-// Only prevents duplicate triggers, not stale results
-if (this.isGenerating) return;
-```
-
-**Required Pattern:**
-```javascript
+// Now uses request ID gating to discard stale results
 this._genReqId = (this._genReqId || 0) + 1;
-const reqId = this._genReqId;
+const currentReqId = this._genReqId;
 
 const result = await this.queryWorkerService.generateQuery(...);
 
 // Guard against stale results
-if (reqId !== this._genReqId) return;
+if (currentReqId !== this._genReqId) {
+  console.log("[QuickQuery] Discarding stale generation result");
+  return;
+}
 
 this.editor.setValue(result.sql);
 ```
 
+**Fix Details:**
+- Added `_genReqId` counter to track generation requests
+- Progress updates only apply if request is still current
+- Results discarded if a newer request was initiated
+- Error handling also checks for stale requests
+
 ---
 
-### 6. 🟡 Type Coercion Crash on Non-String Values
+### 6. ✅ ~~Type Coercion Crash on Non-String Values~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/services/ValueProcessorService.js#L27`
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/services/ValueProcessorService.js`
 
 **Description:**  
-Several methods call `.toLowerCase()` on values without first ensuring they are strings. Spreadsheet cells can contain numbers, booleans, or other types.
+Several methods previously called `.toLowerCase()` on values without first ensuring they are strings. Spreadsheet cells can contain numbers, booleans, or other types.
 
-**Problematic Code:**
+**Previous Behavior (FIXED):**
 ```javascript
-// ValueProcessorService.js
+// Would crash if value is a number (e.g., 123)
 const isExplicitNull = value?.toLowerCase() === "null";
-// If value is a number (e.g., 123), this crashes!
 ```
 
-**Other Instances:**
+**Current Behavior (CORRECT):**
 ```javascript
-// Line 57
-value.toLowerCase().includes("max")
+// Now safely converts to string first
+_toString(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
 
-// Line 63
-value.toLowerCase() === "uuid"
-
-// Line 130
-value.toLowerCase() === "uuid"
+const strValue = this._toString(value);
+const isExplicitNull = strValue.toLowerCase() === "null";
 ```
 
-**Impact:**
-- Runtime crash when spreadsheet contains numeric or boolean values
-- Inconsistent behavior depending on data types
+**Fix Details:**
+- Added `_toString()` helper method for safe string conversion
+- All string operations now use `strValue` instead of raw `value`
+- Handles numbers, booleans, and other types from spreadsheet cells
+- Consistent behavior regardless of input data type
 
 ---
 

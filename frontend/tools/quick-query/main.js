@@ -641,6 +641,10 @@ export class QuickQueryUI {
   async _generateQueryAsync(tableName, queryType, schemaData, inputData) {
     const rowCount = inputData.length - 1; // Exclude header
 
+    // Increment request ID to track this specific generation request
+    this._genReqId = (this._genReqId || 0) + 1;
+    const currentReqId = this._genReqId;
+
     try {
       this.isGenerating = true;
       this._showProgress(`Processing ${rowCount.toLocaleString()} rows...`, 0);
@@ -652,9 +656,18 @@ export class QuickQueryUI {
         inputData,
         this.processedFiles,
         (percent, message) => {
-          this._updateProgress(message, percent);
+          // Only update progress if this is still the current request
+          if (currentReqId === this._genReqId) {
+            this._updateProgress(message, percent);
+          }
         }
       );
+
+      // Guard against stale results - discard if a newer request was initiated
+      if (currentReqId !== this._genReqId) {
+        console.log("[QuickQuery] Discarding stale generation result");
+        return;
+      }
 
       this._hideProgress();
       this.isGenerating = false;
@@ -669,6 +682,11 @@ export class QuickQueryUI {
 
       this._trackQueryGenerated(queryType, tableName, rowCount, true);
     } catch (error) {
+      // Only handle error if this is still the current request
+      if (currentReqId !== this._genReqId) {
+        return;
+      }
+
       this._hideProgress();
       this.isGenerating = false;
 
