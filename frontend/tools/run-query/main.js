@@ -31,6 +31,41 @@ export class JenkinsRunner extends BaseTool {
     this._logUnsubscribes = [];
     this.editor = null;
     this.templateEditor = null;
+    this._beforeUnloadHandler = null;
+  }
+
+  /**
+   * Centralized cleanup for split execution resources.
+   * Called when split execution ends (success, error, cancel, timeout).
+   * Does NOT interrupt active execution - only cleans up after it ends.
+   *
+   * @param {Object} options - Cleanup options
+   * @param {boolean} options.hideIndicator - If true, also hide the global split indicator.
+   *                                          Default false to preserve completed state visibility.
+   */
+  _cleanupSplitResources({ hideIndicator = false } = {}) {
+    // Clear log listeners
+    try {
+      for (const un of this._logUnsubscribes) {
+        if (typeof un === "function") un();
+      }
+    } catch (_) {}
+    this._logUnsubscribes = [];
+
+    // Remove beforeunload handler
+    if (this._beforeUnloadHandler) {
+      window.removeEventListener("beforeunload", this._beforeUnloadHandler);
+      this._beforeUnloadHandler = null;
+    }
+
+    // Only hide global indicator if explicitly requested (e.g., on unmount or orphan cleanup)
+    // Do NOT hide after completion - user should see "✓ Complete" until they dismiss
+    if (hideIndicator) {
+      const globalEl = document.getElementById("jr-global-split-indicator");
+      if (globalEl) {
+        globalEl.style.display = "none";
+      }
+    }
   }
 
   getIconSvg() {
@@ -97,6 +132,15 @@ export class JenkinsRunner extends BaseTool {
   }
 
   async onMount() {
+    // Clean up any orphaned global split indicator from previous sessions
+    // (only if no split execution is currently in progress)
+    if (!this.state?.split?.started || this.state?.split?.completed) {
+      const orphanedIndicator = document.getElementById("jr-global-split-indicator");
+      if (orphanedIndicator && orphanedIndicator.parentNode) {
+        orphanedIndicator.parentNode.removeChild(orphanedIndicator);
+      }
+    }
+
     // Migrate Jenkins username from keychain to localStorage (one-time)
     await this.#migrateJenkinsUsername();
 
@@ -2345,6 +2389,17 @@ export class JenkinsRunner extends BaseTool {
                 try {
                   splitExecuteAllBtn.disabled = true;
                   this.state.split.started = true;
+                  // Register beforeunload handler to warn user and cleanup on app close
+                  if (!this._beforeUnloadHandler) {
+                    this._beforeUnloadHandler = (e) => {
+                      if (this.state?.split?.started && !this.state?.split?.completed) {
+                        e.preventDefault();
+                        e.returnValue = "Split query execution is in progress. Are you sure you want to leave?";
+                        return e.returnValue;
+                      }
+                    };
+                    window.addEventListener("beforeunload", this._beforeUnloadHandler);
+                  }
                   // Initialize logs for split execution
                   logsEl.textContent = "";
                   const miniL = document.getElementById("jr-split-mini-log");
@@ -2357,6 +2412,7 @@ export class JenkinsRunner extends BaseTool {
                       if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${currentChunks.length} chunks.`;
                       appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
 
@@ -2400,6 +2456,7 @@ export class JenkinsRunner extends BaseTool {
                         renderSplitChunksList();
                         this.showError(String(err));
                         splitExecuteAllBtn.disabled = false;
+                        this._cleanupSplitResources();
                         return;
                       }
                     }
@@ -2408,6 +2465,7 @@ export class JenkinsRunner extends BaseTool {
                       this.state.split.statuses[idx] = "timeout";
                       renderSplitChunksList();
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
                     this.state.buildNumber = buildNumber;
@@ -2443,6 +2501,7 @@ export class JenkinsRunner extends BaseTool {
                         "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
                       );
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
                     this.state.split.statuses[idx] = "success";
@@ -2470,9 +2529,12 @@ export class JenkinsRunner extends BaseTool {
                   appendLog(
                     `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${currentEnv}\n  Total Chunks: ${currentChunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
                   );
+                  // Cleanup resources after successful completion
+                  this._cleanupSplitResources();
                 } catch (err) {
                   splitExecuteAllBtn.disabled = false;
                   this.showError(errorMapping(err));
+                  this._cleanupSplitResources();
                 }
               });
             }
@@ -2750,6 +2812,10 @@ export class JenkinsRunner extends BaseTool {
 
   onUnmount() {
     try {
+      // Clean up split execution resources (log listeners, beforeunload handler, indicator)
+      // On unmount, we fully clean up including the indicator since the component is being destroyed
+      this._cleanupSplitResources({ hideIndicator: true });
+
       if (this._sidebarUnsubs && Array.isArray(this._sidebarUnsubs)) {
         this._sidebarUnsubs.forEach((off) => {
           try {
@@ -2777,6 +2843,12 @@ export class JenkinsRunner extends BaseTool {
           this.templateEditor.dispose();
         } catch (_) {}
         this.templateEditor = null;
+      }
+
+      // Remove orphaned global split indicator element from DOM
+      const globalIndicator = document.getElementById("jr-global-split-indicator");
+      if (globalIndicator && globalIndicator.parentNode) {
+        globalIndicator.parentNode.removeChild(globalIndicator);
       }
     } catch (_) {}
   }
@@ -2833,14 +2905,11 @@ export class JenkinsRunner extends BaseTool {
       };
     }
 
-    // Cleanup listeners only if split is not running
+    // Cleanup listeners and beforeunload handler only if split is not running
+    // When split IS running, we intentionally preserve listeners so the background
+    // async loop can continue receiving log events
     if (!splitRunning) {
-      try {
-        for (const un of this._logUnsubscribes) {
-          un();
-        }
-      } catch (_) {}
-      this._logUnsubscribes = [];
+      this._cleanupSplitResources();
     }
 
     // Dispose editors to save memory regardless
