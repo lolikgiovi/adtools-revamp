@@ -26,8 +26,8 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
-| ✅ Fixed | 1 | SQL correctness (composite PK) |
-| 🔴 Critical | 2 | XSS, Runtime crashes |
+| ✅ Fixed | 2 | SQL correctness (composite PK), Runtime crashes |
+| 🔴 Critical | 1 | XSS |
 | 🟡 Medium | 3 | Invalid SQL, Race conditions, Type errors |
 | 🟠 Low | 2 | SQL injection, Resource leaks |
 
@@ -135,14 +135,16 @@ If `envChoices` contains: `<img src=x onerror=alert(1)>`
 
 ---
 
-### 3. 🔴 Crash on Missing Schema Field
+### 3. ✅ ~~Crash on Missing Schema Field~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js#L167-L170`
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js`
 
 **Description:**  
-When a column exists in the data sheet but not in the schema definition, the code attempts to destructure `undefined`, causing an unhandled exception.
+When a column exists in the data sheet but not in the schema definition, the code previously attempted to destructure `undefined`, causing an unhandled exception.
 
-**Problematic Code:**
+**Previous Behavior (FIXED):**
 ```javascript
 // QueryGenerationService.js - generateQuery()
 return fieldNames.map((fieldName, colIndex) => {
@@ -153,16 +155,26 @@ return fieldNames.map((fieldName, colIndex) => {
 });
 ```
 
-**Reproduction Steps:**
-1. Load a schema with fields: `ID`, `NAME`, `STATUS`
-2. Add data with an extra column: `ID`, `NAME`, `STATUS`, `EXTRA_FIELD`
-3. Click "Generate Query"
-4. Application crashes with: `Cannot read properties of undefined`
+**Current Behavior (CORRECT):**
+```javascript
+// Now validates schema row exists before destructuring
+const schemaRow = schemaMap.get(fieldName);
 
-**Impact:**
-- Complete feature failure
-- User loses unsaved work
-- Poor user experience with no actionable error message
+if (!schemaRow) {
+  const columnLetter = this.columnIndexToLetter(colIndex);
+  throw new Error(
+    `Column "${fieldName}" (column ${columnLetter}) exists in data but not in schema definition. ` +
+    `Please add this field to the schema or remove it from the data.`
+  );
+}
+
+const [, dataType, nullable] = schemaRow;
+```
+
+**Fix Details:**
+- Added null check before destructuring `schemaRow`
+- Provides clear, actionable error message with column letter reference
+- User can now understand exactly which field is missing from schema
 
 ---
 

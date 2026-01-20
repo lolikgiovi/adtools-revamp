@@ -166,6 +166,15 @@ export class QueryGenerationService {
             // Get the schema definition for this field
             const schemaRow = schemaMap.get(fieldName);
 
+            // Validate schema row exists for this field
+            if (!schemaRow) {
+              const columnLetter = this.columnIndexToLetter(colIndex);
+              throw new Error(
+                `Column "${fieldName}" (column ${columnLetter}) exists in data but not in schema definition. ` +
+                  `Please add this field to the schema or remove it from the data.`
+              );
+            }
+
             // Extract dataType and nullable from schema
             const [, dataType, nullable] = schemaRow;
             // Get the actual value from the data
