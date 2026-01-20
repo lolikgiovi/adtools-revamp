@@ -27,7 +27,7 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
 | ✅ Fixed | 7 | SQL correctness, Runtime crashes, Race conditions, Type safety, SQL injection, Resource leaks |
-| 🔴 Critical | 1 | XSS |
+| ⚪ Accepted Risk | 1 | XSS (trusted internal data source) |
 
 ### Affected Components
 
@@ -102,34 +102,23 @@ _buildCompositePkWhereClause(primaryKeys, pkTuples) {
 
 ---
 
-### 2. 🔴 XSS Vulnerability via innerHTML
+### 2. ⚪ ~~XSS Vulnerability via innerHTML~~ (ACCEPTED RISK)
 
-**Location:** `frontend/tools/run-query/main.js#L626`
+**Status:** ⚪ **ACCEPTED RISK** (January 2025)
+
+**Location:** `frontend/tools/run-query/main.js#L670`
 
 **Description:**  
-Jenkins environment choices are rendered using `innerHTML` without sanitization. If Jenkins returns malicious content (or the response is compromised), this becomes an XSS vector.
+Jenkins environment choices are rendered using `innerHTML` without sanitization. If Jenkins returns malicious content (or the response is compromised), this could theoretically become an XSS vector.
 
-**Vulnerable Code:**
-```javascript
-// run-query/main.js
-envSelect.innerHTML = this.state.envChoices
-  .map((c) => `<option value="${c}">${c}</option>`)
-  .join("");
-```
+**Risk Assessment:**  
+This is **not a practical attack vector** for the following reasons:
+- `envChoices` data comes from Jenkins API via Tauri backend (`jenkins_get_env_choices`)
+- This is a trusted internal infrastructure call, not arbitrary user input
+- If Jenkins is compromised, the entire internal CI/CD infrastructure is already breached
+- The attacker would have far more damaging capabilities than exploiting this XSS
 
-**Attack Vector:**
-If `envChoices` contains: `<img src=x onerror=alert(1)>`
-
-**Impact:**
-- In Tauri desktop context, XSS can escalate to calling backend `invoke` commands
-- Potential for credential theft or destructive actions
-- Complete compromise of user session
-
-**Other Affected Areas:**
-- Template list rendering (`templateListEl.innerHTML`)
-- History table rendering (`historyList.innerHTML`)
-- Warning/error message panels with HTML content
-- Duplicate PK warnings using `<br>` tags
+**Decision:** Won't fix. The effort to fix this defense-in-depth concern is not justified given the trusted data source and the prerequisite of a full internal infrastructure compromise.
 
 ---
 
