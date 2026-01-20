@@ -182,10 +182,13 @@ export class IndexedDBStorageService {
   _putRecord(storeName, record) {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
+      // Resolve on transaction complete, not request success, to ensure data is persisted
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
+
       const store = tx.objectStore(storeName);
       const request = store.put(record);
-
-      request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   }
@@ -204,10 +207,13 @@ export class IndexedDBStorageService {
   _deleteRecord(storeName, key) {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
+      // Resolve on transaction complete, not request success, to ensure deletion is persisted
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
+
       const store = tx.objectStore(storeName);
       const request = store.delete(key);
-
-      request.onsuccess = () => resolve(true);
       request.onerror = () => reject(request.error);
     });
   }
@@ -226,10 +232,13 @@ export class IndexedDBStorageService {
   _clearStore(storeName) {
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(storeName, "readwrite");
+      // Resolve on transaction complete, not request success, to ensure clear is persisted
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
+
       const store = tx.objectStore(storeName);
       const request = store.clear();
-
-      request.onsuccess = () => resolve(true);
       request.onerror = () => reject(request.error);
     });
   }

@@ -287,8 +287,13 @@ if (result.migrated_jenkins || result.migrated_confluence || result.already_unif
 **File**: `frontend/tools/quick-query/services/IndexedDBStorageService.js`  
 **Lines**: ~184-194 (`_putRecord`)
 
+**Status**: ✅ FIXED
+
 **Description**:  
 The `_putRecord()` method resolves the promise on `request.onsuccess`, but IndexedDB transactions can still abort after the request succeeds. The proper pattern is to resolve on `tx.oncomplete`.
+
+**Fix Applied**:  
+Updated `_putRecord()`, `_deleteRecord()`, and `_clearStore()` to resolve on `tx.oncomplete` and handle `tx.onabort` for proper transaction lifecycle management.
 
 **Code**:
 ```javascript
