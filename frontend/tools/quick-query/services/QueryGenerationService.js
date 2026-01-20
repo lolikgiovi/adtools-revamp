@@ -10,6 +10,80 @@ export class QueryGenerationService {
   }
 
   /**
+   * Validate an Oracle identifier (table name, column name, schema name).
+   * Oracle identifiers must:
+   * - Start with a letter
+   * - Contain only letters, digits, underscore (_), dollar ($), or hash (#)
+   * - Be at most 128 characters
+   * - Not contain semicolons, quotes, or whitespace (SQL injection prevention)
+   *
+   * @param {string} name - The identifier to validate
+   * @param {string} type - Type of identifier for error messages ('table name', 'column name', etc.)
+   * @returns {boolean} True if valid
+   * @throws {Error} If invalid with descriptive message
+   */
+  validateOracleIdentifier(name, type = "identifier") {
+    if (!name || typeof name !== "string") {
+      throw new Error(`Invalid ${type}: must be a non-empty string`);
+    }
+
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`Invalid ${type}: cannot be empty`);
+    }
+
+    if (trimmed.length > 128) {
+      throw new Error(`Invalid ${type}: "${trimmed}" exceeds maximum length of 128 characters`);
+    }
+
+    // Check for dangerous characters (SQL injection prevention)
+    if (/[;'"\\`\r\n\t]/.test(trimmed)) {
+      UsageTracker.trackEvent("quick-query", "validation_error", {
+        type: "dangerous_chars_in_identifier",
+        identifier_type: type,
+        table_name: trimmed,
+      });
+      throw new Error(`Invalid ${type}: "${trimmed}" contains forbidden characters (semicolons, quotes, or escape characters)`);
+    }
+
+    // For qualified names (schema.table), validate each part separately
+    if (trimmed.includes(".")) {
+      const parts = trimmed.split(".");
+      if (parts.length !== 2) {
+        throw new Error(`Invalid ${type}: "${trimmed}" must be in format SCHEMA.TABLE (only one dot allowed)`);
+      }
+      // Validate each part individually
+      this._validateIdentifierPart(parts[0], `schema name in ${type}`);
+      this._validateIdentifierPart(parts[1], `table name in ${type}`);
+      return true;
+    }
+
+    // Validate single identifier
+    this._validateIdentifierPart(trimmed, type);
+    return true;
+  }
+
+  /**
+   * Validate a single identifier part (no dots).
+   * @private
+   */
+  _validateIdentifierPart(part, type) {
+    if (!part || part.length === 0) {
+      throw new Error(`Invalid ${type}: cannot be empty`);
+    }
+
+    // Oracle identifier pattern: starts with letter, followed by letters, digits, _, $, #
+    const identifierPattern = /^[A-Za-z][A-Za-z0-9_$#]*$/;
+    if (!identifierPattern.test(part)) {
+      throw new Error(
+        `Invalid ${type}: "${part}" must start with a letter and contain only letters, digits, underscore (_), dollar ($), or hash (#)`
+      );
+    }
+
+    return true;
+  }
+
+  /**
    * Convert column index to Excel-style column letter (A, B, ..., Z, AA, AB, ...)
    * @param {number} index - Zero-based column index
    * @returns {string} Excel-style column letter
@@ -148,8 +222,23 @@ export class QueryGenerationService {
   }
 
   generateQuery(tableName, queryType, schemaData, inputData, attachments) {
+    // 0. Validate table name to prevent SQL injection
+    this.validateOracleIdentifier(tableName, "table name");
+
     // 1. Get field names from first row of input data
-    const fieldNames = inputData[0].map((name) => name);
+    const fieldNames = inputData[0].map((name) => String(name || "").trim());
+
+    // Validate all field names
+    fieldNames.forEach((fieldName, index) => {
+      if (fieldName) {
+        try {
+          this.validateOracleIdentifier(fieldName, "column name");
+        } catch (error) {
+          const columnLetter = this.columnIndexToLetter(index);
+          throw new Error(`Column ${columnLetter}: ${error.message}`);
+        }
+      }
+    });
 
     // 2. Get data rows (excluding header row)
     const dataRows = inputData.slice(1).filter((row) => row.some((cell) => cell !== null && cell !== ""));

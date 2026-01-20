@@ -26,9 +26,9 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
-| ✅ Fixed | 5 | SQL correctness, Runtime crashes, Race conditions, Type safety |
+| ✅ Fixed | 6 | SQL correctness, Runtime crashes, Race conditions, Type safety, SQL injection |
 | 🔴 Critical | 1 | XSS |
-| 🟠 Low | 2 | SQL injection, Resource leaks |
+| 🟠 Low | 1 | Resource leaks |
 
 ### Affected Components
 
@@ -297,37 +297,52 @@ const isExplicitNull = strValue.toLowerCase() === "null";
 
 ## Low Priority Issues
 
-### 7. 🟠 SQL Injection via Identifier Names
+### 7. ✅ ~~SQL Injection via Identifier Names~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js` (multiple methods)
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js`
 
 **Description:**  
-Table names and column names are interpolated directly into SQL without validation. While value escaping is implemented, identifier injection remains possible.
+Table names and column names were previously interpolated directly into SQL without validation. While value escaping was implemented, identifier injection was possible.
 
-**Current Code:**
+**Previous Behavior (FIXED):**
 ```javascript
-// Table name used directly
+// Table name used directly without validation - UNSAFE
 return `INSERT INTO ${tableName} (${fields.join(", ")}) ...`;
-
-// formatFieldName only handles reserved words, not injection
-formatFieldName(fieldName) {
-  if (fieldName === fieldName.toLowerCase()) {
-    return oracleReservedWords.has(fieldName.toLowerCase()) 
-      ? `"${fieldName.toLowerCase()}"` 
-      : fieldName;
-  }
-  return fieldName.toLowerCase();
-}
 ```
 
-**Attack Vector:**
-If table name contains: `SCHEMA.TABLE; DROP TABLE USERS; --`
+**Current Behavior (CORRECT):**
+```javascript
+// Now validates identifiers before use
+validateOracleIdentifier(name, type = "identifier") {
+  // Check for dangerous characters (SQL injection prevention)
+  if (/[;'"\\`\r\n\t]/.test(trimmed)) {
+    throw new Error(`Invalid ${type}: contains forbidden characters`);
+  }
+  
+  // Oracle identifier pattern: starts with letter, alphanumeric + _ $ #
+  const identifierPattern = /^[A-Za-z][A-Za-z0-9_$#]*$/;
+  if (!identifierPattern.test(part)) {
+    throw new Error(`Invalid ${type}: must start with a letter...`);
+  }
+}
 
-**Mitigation:**
-Validate identifiers against Oracle naming rules:
-- Characters: `[A-Za-z][A-Za-z0-9_$#]*`
-- Maximum length: 128 characters
-- No semicolons, quotes, or whitespace
+// Called at start of generateQuery()
+this.validateOracleIdentifier(tableName, "table name");
+fieldNames.forEach((fieldName) => {
+  this.validateOracleIdentifier(fieldName, "column name");
+});
+```
+
+**Fix Details:**
+- Added `validateOracleIdentifier()` method with Oracle naming rules
+- Added `_validateIdentifierPart()` for schema.table format validation
+- Validates table name before any SQL generation
+- Validates all column names from data headers
+- Rejects semicolons, quotes, escape characters, and invalid patterns
+- Maximum length check (128 characters)
+- Tracks validation errors for analytics
 
 ---
 
