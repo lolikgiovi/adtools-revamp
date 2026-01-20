@@ -147,15 +147,24 @@ export class IndexedDBStorageService {
         }
       }
 
-      // Clear localStorage after successful migration
-      localStorage.removeItem(LEGACY_SCHEMA_KEY);
-      localStorage.removeItem(LEGACY_DATA_KEY);
-
-      console.log(`[IndexedDB Migration] Successfully migrated ${migratedCount} tables.`);
-      UsageTracker.trackEvent("quick-query", "storage_migration", {
-        count: migratedCount,
-        success: true,
-      });
+      // Only clear localStorage if migration actually moved data
+      // This prevents data loss if legacy format differs from expected shape
+      if (migratedCount > 0) {
+        localStorage.removeItem(LEGACY_SCHEMA_KEY);
+        localStorage.removeItem(LEGACY_DATA_KEY);
+        console.log(`[IndexedDB Migration] Successfully migrated ${migratedCount} tables.`);
+        UsageTracker.trackEvent("quick-query", "storage_migration", {
+          count: migratedCount,
+          success: true,
+        });
+      } else {
+        console.warn("[IndexedDB Migration] Legacy data found but 0 tables migrated. Keeping localStorage as backup.");
+        UsageTracker.trackEvent("quick-query", "storage_migration", {
+          count: 0,
+          success: false,
+          reason: "no_tables_found",
+        });
+      }
 
       this._index.dirty = true;
     } catch (error) {

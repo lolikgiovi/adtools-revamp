@@ -117,13 +117,15 @@ export class QuickQueryUI {
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
       setupMonacoOracle();
+
+      // Initialize IndexedDB storage service BEFORE setting up UI components
+      // to prevent race conditions where early user interactions trigger storage calls
+      await this.storageService.init();
+      this._storageReady = true;
+
       await this.initializeComponents();
       this.setupEventListeners();
       this.setupTableNameSearch();
-
-      // Initialize IndexedDB storage service before loading schemas
-      await this.storageService.init();
-      this._storageReady = true;
 
       await this.loadMostRecentSchema();
     } catch (error) {

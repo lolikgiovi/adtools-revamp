@@ -81,8 +81,13 @@ Or clone the button to remove previous listeners before rebinding (pattern used 
 **File**: `frontend/tools/quick-query/main.js`  
 **Lines**: ~119-128
 
+**Status**: ✅ FIXED
+
 **Description**:  
 The `init()` method sets up event listeners and initializes Handsontable **before** awaiting `storageService.init()`. This means user interactions (typing in data grid, searching schemas) can trigger storage operations while `this.db` is still `null`.
+
+**Fix Applied**:  
+Moved `await this.storageService.init()` to run BEFORE `initializeComponents()`, `setupEventListeners()`, and `setupTableNameSearch()`.
 
 **Code**:
 ```javascript
@@ -138,8 +143,13 @@ if (!this._storageReady) return;
 **File**: `frontend/tools/quick-query/services/IndexedDBStorageService.js`  
 **Lines**: ~107-167
 
+**Status**: ✅ FIXED
+
 **Description**:  
 The migration logic parses legacy localStorage data and iterates over it. If the data has an unexpected shape (corrupted, different version, or empty `tables` object), the loop migrates 0 records but still removes the localStorage keys afterward.
+
+**Fix Applied**:  
+Added check `if (migratedCount > 0)` before clearing localStorage. If 0 tables migrated but legacy data exists, a warning is logged and localStorage is preserved as backup.
 
 **Code**:
 ```javascript
@@ -194,8 +204,14 @@ if (migratedCount > 0) {
 **File**: `tauri/src/lib.rs`  
 **Lines**: ~206-220 (`load_unified_secrets`) and ~230-282 (`migrate_to_unified_keychain`)
 
+**Status**: ✅ FIXED
+
 **Description**:  
 The `load_unified_secrets()` function treats **all** keyring errors as "entry not found" and returns empty secrets. This includes user cancellation of the macOS keychain prompt. When migration runs, it may incorrectly determine `no_credentials = true` and the JavaScript side will permanently set the migration flag, preventing future retry.
+
+**Fix Applied**:  
+1. Rust: `load_unified_secrets()` now distinguishes between `keyring::Error::NoEntry` (returns default) and `keyring::Error::NoStorageAccess` (propagates error for user cancellation/permission denied).
+2. JavaScript: Removed `no_credentials` from the condition that sets the migration flag. New users will have migration retried after they save credentials.
 
 **Code**:
 ```rust

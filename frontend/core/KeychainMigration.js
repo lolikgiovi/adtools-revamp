@@ -60,10 +60,11 @@ export async function migrateToUnifiedKeychain() {
 
     // Mark as migrated if:
     // 1. Something was actually migrated, OR
-    // 2. Unified secrets already existed (already_unified = true), OR
-    // 3. No credentials exist anywhere (new user - nothing to migrate)
-    // This ensures we don't mark as migrated if user cancelled the keychain prompt
-    if (result.migrated_jenkins || result.migrated_confluence || result.already_unified || result.no_credentials) {
+    // 2. Unified secrets already existed (already_unified = true)
+    // Note: We do NOT mark as migrated for no_credentials - new users will have migration
+    // triggered again after they save credentials for the first time, which is fine.
+    // This ensures we don't incorrectly mark as migrated if user cancelled the keychain prompt.
+    if (result.migrated_jenkins || result.migrated_confluence || result.already_unified) {
       setMigrated();
     }
 

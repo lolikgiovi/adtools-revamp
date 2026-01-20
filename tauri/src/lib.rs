@@ -200,7 +200,12 @@ fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
     let entry = Entry::new(UNIFIED_KEYCHAIN_SERVICE, UNIFIED_KEYCHAIN_KEY).map_err(|e| e.to_string())?;
     match entry.get_password() {
         Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse secrets: {}", e)),
-        Err(_) => Ok(UnifiedSecrets::default()),
+        // NoEntry means no credential exists yet - return empty defaults
+        Err(keyring::Error::NoEntry) => Ok(UnifiedSecrets::default()),
+        // NoStorageAccess means user cancelled prompt or permission denied - propagate error
+        Err(keyring::Error::NoStorageAccess(e)) => Err(format!("Keychain access denied: {}", e)),
+        // Other errors (PlatformFailure, etc.) - propagate for debugging
+        Err(e) => Err(format!("Keychain error: {}", e)),
     }
 }
 
