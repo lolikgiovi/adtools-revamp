@@ -61,17 +61,20 @@ class UsageTracker {
         } catch (_) {}
       });
 
-      // Opportunistic batch flush when tab is hidden or connection resumes
-      try {
-        document.addEventListener("visibilitychange", () => {
-          if (document.hidden) {
+      // Opportunistic batch flush when tab is hidden or connection resumes (skip in dev)
+      const isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
+      if (!isDev) {
+        try {
+          document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+              this._flushBatch().catch(() => {});
+            }
+          });
+          window.addEventListener("online", () => {
             this._flushBatch().catch(() => {});
-          }
-        });
-        window.addEventListener("online", () => {
-          this._flushBatch().catch(() => {});
-        });
-      } catch (_) {}
+          });
+        } catch (_) {}
+      }
     }
   }
 

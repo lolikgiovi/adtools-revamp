@@ -483,8 +483,6 @@ export class QuickQueryUI {
 
     const columnHeaders = Array.from({ length: columnCount }, (_, i) => this.queryGenerationService.columnIndexToLetter(i));
 
-    console.log("Column headers:", columnHeaders);
-
     this.dataTable.updateSettings({
       colHeaders: columnHeaders,
       columns: Array(columnCount).fill({ type: "text" }),
@@ -660,7 +658,7 @@ export class QuickQueryUI {
           if (currentReqId === this._genReqId) {
             this._updateProgress(message, percent);
           }
-        }
+        },
       );
 
       // Guard against stale results - discard if a newer request was initiated
@@ -1672,7 +1670,7 @@ export class QuickQueryUI {
         Array.isArray(schema) &&
         schema.every(
           (row) =>
-            Array.isArray(row) && row.length >= 3 && typeof row[0] === "string" && typeof row[1] === "string" && typeof row[2] === "string"
+            Array.isArray(row) && row.length >= 3 && typeof row[0] === "string" && typeof row[1] === "string" && typeof row[2] === "string",
         )
       );
     };
@@ -2045,7 +2043,7 @@ export class QuickQueryUI {
               row.length >= 3 && // At least name, type, and nullable
               typeof row[0] === "string" &&
               typeof row[1] === "string" &&
-              typeof row[2] === "string"
+              typeof row[2] === "string",
           )
         );
       });
@@ -2361,7 +2359,7 @@ export class QuickQueryUI {
           return result.file;
         }
         return file;
-      })
+      }),
     );
 
     // Show notification for minification results
@@ -2472,7 +2470,7 @@ export class QuickQueryUI {
           metadataElements.dimensions.textContent = `Dimensions: ${img.naturalWidth} × ${img.naturalHeight}`;
 
           [metadataElements.fileSize, metadataElements.base64Size, metadataElements.dimensions].forEach((el) =>
-            el.classList.remove("hidden")
+            el.classList.remove("hidden"),
           );
         };
       } else {
