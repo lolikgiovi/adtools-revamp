@@ -265,19 +265,25 @@ export class QueryGenerationService {
   generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = []) {
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
-    const pkValueMap = new Map(primaryKeys.map((pk) => [pk, new Set()]));
+    // Collect PK tuples for composite key WHERE clause (instead of separate IN clauses)
+    const pkTuples = [];
 
-    // Process each row to collect updated fields and primary key values
+    // Process each row to collect updated fields and primary key tuples
     processedRows.forEach((row) => {
+      // Collect PK tuple for this row
+      const rowPkValues = primaryKeys.map((pk) => {
+        const field = row.find((f) => f.fieldName === pk);
+        return field?.formattedValue || null;
+      });
+      // Only add tuple if all PKs have valid values
+      const allPksValid = rowPkValues.every((v) => v && v !== "NULL" && v !== null);
+      if (allPksValid) {
+        pkTuples.push(rowPkValues);
+      }
+
       row.forEach((field) => {
-        // Collect primary key values for WHERE clause
-        if (primaryKeys.includes(field.fieldName)) {
-          if (field.formattedValue && field.formattedValue !== "NULL" && field.formattedValue !== null) {
-            pkValueMap.get(field.fieldName).add(field.formattedValue);
-          }
-        }
         // Collect non-primary key fields that are being updated (excluding audit fields)
-        else if (
+        if (
           !primaryKeys.includes(field.fieldName) &&
           !["created_time", "created_by", "updated_time", "updated_by"].includes(String(field.fieldName).toLowerCase()) &&
           field.formattedValue !== null &&
@@ -289,8 +295,7 @@ export class QueryGenerationService {
     });
 
     // Validate that we have primary key values
-    const hasValidPkValues = Array.from(pkValueMap.values()).some((valueSet) => valueSet.size > 0);
-    if (!hasValidPkValues) {
+    if (pkTuples.length === 0) {
       UsageTracker.trackEvent("quick-query", "generation_error", { type: "missing_pk_for_update", table_name: tableName });
       throw new Error("Primary key values are required for UPDATE operation.");
     }
@@ -348,14 +353,8 @@ export class QueryGenerationService {
     // Create field list for SELECT statements (table scope)
     const selectFieldNames = Array.from(allUpdatedFields).map((f) => this.formatFieldName(f));
 
-    // Build WHERE clause for SELECT statements using IN clauses like generateSelectStatement
-    const whereConditions = [];
-    pkValueMap.forEach((values, pkName) => {
-      if (values.size > 0) {
-        whereConditions.push(`${this.formatFieldName(pkName)} IN (${Array.from(values).join(", ")})`);
-      }
-    });
-    const allPkConditions = whereConditions.join(" AND ");
+    // Build WHERE clause for SELECT statements using tuple-based composite key matching
+    const allPkConditions = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
 
     // Generate the 3-part UPDATE statement
     let updateStatement = "-- Selected fields before update\n";
@@ -369,29 +368,58 @@ export class QueryGenerationService {
     return updateStatement;
   }
 
+  /**
+   * Build a WHERE clause for composite primary keys using tuple-IN syntax.
+   * For single PK: pk IN (v1, v2, v3)
+   * For composite PK: (pk1, pk2) IN ((v1a, v1b), (v2a, v2b))
+   * @param {string[]} primaryKeys - Array of primary key field names
+   * @param {Array<Array<string>>} pkTuples - Array of PK value tuples, each tuple matching primaryKeys order
+   * @returns {string} WHERE clause condition
+   */
+  _buildCompositePkWhereClause(primaryKeys, pkTuples) {
+    if (pkTuples.length === 0) return "1=0"; // No valid tuples
+
+    const formattedPkNames = primaryKeys.map((pk) => this.formatFieldName(pk));
+
+    if (primaryKeys.length === 1) {
+      // Single PK: use simple IN clause
+      const values = pkTuples.map((tuple) => tuple[0]);
+      return `${formattedPkNames[0]} IN (${values.join(", ")})`;
+    }
+
+    // Composite PK: use tuple-IN syntax (Oracle row value constructor)
+    // WHERE (pk1, pk2) IN ((v1, v2), (v3, v4))
+    const tupleStrings = pkTuples.map((tuple) => `(${tuple.join(", ")})`);
+    return `(${formattedPkNames.join(", ")}) IN (${tupleStrings.join(", ")})`;
+  }
+
   generateSelectStatement(tableName, primaryKeys, processedRows) {
     if (primaryKeys.length === 0) return null;
     if (processedRows.length === 0) return null;
 
-    // Collect formatted values for each primary key
-    const pkValueMap = new Map(primaryKeys.map((pk) => [pk, new Set()]));
+    // Collect PK tuples for composite key WHERE clause
+    const pkTuples = [];
     let hasRunningNumberPK = false;
 
-    // Go through each processed row to collect PK values
+    // Go through each processed row to collect PK value tuples
     processedRows.forEach((row) => {
-      row.forEach((field) => {
-        if (pkValueMap.has(field.fieldName)) {
-          // Only add non-null values
-          if (field.formattedValue !== "NULL") {
-            // Check if this is a running number (subquery like SELECT MAX...)
-            if (field.formattedValue.startsWith("(SELECT")) {
-              hasRunningNumberPK = true;
-            } else {
-              pkValueMap.get(field.fieldName).add(field.formattedValue);
-            }
-          }
-        }
+      const rowPkValues = primaryKeys.map((pk) => {
+        const field = row.find((f) => f.fieldName === pk);
+        return field?.formattedValue || null;
       });
+
+      // Check for running number PKs (subquery like SELECT MAX...)
+      const hasRunningNumber = rowPkValues.some((v) => v && v.startsWith("(SELECT"));
+      if (hasRunningNumber) {
+        hasRunningNumberPK = true;
+        return;
+      }
+
+      // Only add tuple if all PKs have valid non-NULL values
+      const allPksValid = rowPkValues.every((v) => v && v !== "NULL" && v !== null);
+      if (allPksValid) {
+        pkTuples.push(rowPkValues);
+      }
     });
 
     const rowCount = processedRows.length;
@@ -405,20 +433,14 @@ export class QueryGenerationService {
       return selectStatement;
     }
 
-    // Build WHERE conditions (existing logic for non-running-number PKs)
-    const whereConditions = [];
+    // If no valid PK tuples found, return null
+    if (pkTuples.length === 0) return null;
 
-    pkValueMap.forEach((values, pkName) => {
-      if (values.size > 0) {
-        whereConditions.push(`${this.formatFieldName(pkName)} IN (${Array.from(values).join(", ")})`);
-      }
-    });
-
-    // If no valid PK values found, return null
-    if (whereConditions.length === 0) return null;
+    // Build WHERE clause using tuple-based composite key matching
+    const whereClause = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
 
     const orderByClause = processedRows.length > 1 ? " ORDER BY updated_time ASC" : "";
-    let selectStatement = `\nSELECT * FROM ${tableName} WHERE ${whereConditions.join(" AND ")}${orderByClause};`;
+    let selectStatement = `\nSELECT * FROM ${tableName} WHERE ${whereClause}${orderByClause};`;
     selectStatement += `\nSELECT ${primaryKeys
       .map((pk) => pk.toLowerCase())
       .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;

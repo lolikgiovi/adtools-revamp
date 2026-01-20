@@ -1,8 +1,9 @@
 # Potential Bugs Analysis: Quick Query & Run Query
 
 > **Analysis Date:** January 2025  
+> **Last Updated:** January 2025  
 > **Scope:** Quick Query and Run Query (Jenkins Query Runner) - the most used features of AD Tools  
-> **Severity Scale:** 🔴 Critical | 🟡 Medium | 🟠 Low
+> **Severity Scale:** 🔴 Critical | 🟡 Medium | 🟠 Low | ✅ Fixed
 
 ---
 
@@ -25,7 +26,8 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
-| 🔴 Critical | 3 | SQL correctness, XSS, Runtime crashes |
+| ✅ Fixed | 1 | SQL correctness (composite PK) |
+| 🔴 Critical | 2 | XSS, Runtime crashes |
 | 🟡 Medium | 3 | Invalid SQL, Race conditions, Type errors |
 | 🟠 Low | 2 | SQL injection, Resource leaks |
 
@@ -44,51 +46,60 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 ## Critical Issues
 
-### 1. 🔴 Composite Primary Key WHERE Clause Bug
+### 1. ✅ ~~Composite Primary Key WHERE Clause Bug~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js#L352-L358`
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js`
 
 **Description:**  
-When generating SELECT or UPDATE statements with composite primary keys, the current implementation produces incorrect SQL that matches unintended row combinations.
+When generating SELECT or UPDATE statements with composite primary keys, the previous implementation produced incorrect SQL that matched unintended row combinations.
 
-**Current Behavior:**
+**Previous Behavior (FIXED):**
 ```sql
--- Generated SQL (INCORRECT)
+-- Previously generated SQL (INCORRECT)
 SELECT * FROM SCHEMA.TABLE 
 WHERE pk1 IN ('A', 'B') AND pk2 IN ('1', '2');
+-- Matched 4 combinations: (A,1), (A,2), (B,1), (B,2)
 ```
 
-This query matches 4 combinations: (A,1), (A,2), (B,1), (B,2) — even if the data only contains (A,1) and (B,2).
-
-**Expected Behavior:**
+**Current Behavior (CORRECT):**
 ```sql
--- Correct SQL using tuple-IN
+-- Now generates correct tuple-IN syntax
 SELECT * FROM SCHEMA.TABLE 
 WHERE (pk1, pk2) IN (('A', '1'), ('B', '2'));
-
--- OR using OR-of-ANDs
-SELECT * FROM SCHEMA.TABLE 
-WHERE (pk1 = 'A' AND pk2 = '1') OR (pk1 = 'B' AND pk2 = '2');
+-- Matches exactly 2 rows: (A,1), (B,2)
 ```
 
-**Impact:**
-- Users may verify wrong rows after INSERT/MERGE operations
-- UPDATE operations may affect unintended rows
-- Data integrity issues in production databases
+**Fix Details:**
+- Added `_buildCompositePkWhereClause()` helper method
+- Modified `generateSelectStatement()` to collect PK tuples per row
+- Modified `generateUpdateStatement()` to collect PK tuples per row
+- Single PK still uses simple `IN (...)` syntax for efficiency
+- Composite PKs now use Oracle tuple-IN syntax `(pk1, pk2) IN ((v1, v2), ...)`
 
-**Affected Methods:**
+**Affected Methods (Updated):**
 - `generateSelectStatement()`
 - `generateUpdateStatement()`
+- `_buildCompositePkWhereClause()` (new)
 
-**Code Reference:**
+**Code Reference (Fixed Implementation):**
 ```javascript
-// Current problematic code (QueryGenerationService.js)
-pkValueMap.forEach((values, pkName) => {
-  if (values.size > 0) {
-    whereConditions.push(`${this.formatFieldName(pkName)} IN (${Array.from(values).join(", ")})`);
+// New helper method (QueryGenerationService.js)
+_buildCompositePkWhereClause(primaryKeys, pkTuples) {
+  if (pkTuples.length === 0) return "1=0";
+  const formattedPkNames = primaryKeys.map((pk) => this.formatFieldName(pk));
+
+  if (primaryKeys.length === 1) {
+    // Single PK: use simple IN clause
+    const values = pkTuples.map((tuple) => tuple[0]);
+    return `${formattedPkNames[0]} IN (${values.join(", ")})`;
   }
-});
-const allPkConditions = whereConditions.join(" AND ");
+
+  // Composite PK: use tuple-IN syntax
+  const tupleStrings = pkTuples.map((tuple) => `(${tuple.join(", ")})`);
+  return `(${formattedPkNames.join(", ")}) IN (${tupleStrings.join(", ")})`;
+}
 ```
 
 ---
