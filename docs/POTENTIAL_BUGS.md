@@ -26,9 +26,9 @@ This document outlines potential bugs discovered in the Quick Query and Run Quer
 
 | Severity | Count | Primary Risk Areas |
 |----------|-------|-------------------|
-| ✅ Fixed | 2 | SQL correctness (composite PK), Runtime crashes |
+| ✅ Fixed | 3 | SQL correctness (composite PK, MERGE), Runtime crashes |
 | 🔴 Critical | 1 | XSS |
-| 🟡 Medium | 3 | Invalid SQL, Race conditions, Type errors |
+| 🟡 Medium | 2 | Race conditions, Type errors |
 | 🟠 Low | 2 | SQL injection, Resource leaks |
 
 ### Affected Components
@@ -180,18 +180,16 @@ const [, dataType, nullable] = schemaRow;
 
 ## Medium Priority Issues
 
-### 4. 🟡 Invalid MERGE SQL with Empty UPDATE Fields
+### 4. ✅ ~~Invalid MERGE SQL with Empty UPDATE Fields~~ (FIXED)
 
-**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js#L246-L260`
+**Status:** ✅ **FIXED** (January 2025)
+
+**Location:** `frontend/tools/quick-query/services/QueryGenerationService.js`
 
 **Description:**  
-When all non-PK fields are either `created_time`, `created_by`, or primary keys, the MERGE statement generates an invalid `UPDATE SET` clause with no fields.
+When all non-PK fields are either `created_time`, `created_by`, or primary keys, the MERGE statement previously generated an invalid `UPDATE SET` clause with no fields.
 
-**Scenario:**
-- Table has only: `ID` (PK), `CREATED_TIME`, `CREATED_BY`
-- No updateable fields remain after filtering
-
-**Generated Invalid SQL:**
+**Previous Behavior (FIXED):**
 ```sql
 MERGE INTO SCHEMA.TABLE tgt
 USING (SELECT ... FROM DUAL) src
@@ -202,9 +200,25 @@ WHEN NOT MATCHED THEN INSERT (...)
 VALUES (...);
 ```
 
-**Impact:**
-- SQL syntax error when executed
-- User confusion about why valid-looking data produces broken SQL
+**Current Behavior (CORRECT):**
+```sql
+-- Now omits WHEN MATCHED clause entirely if no updateable fields
+MERGE INTO SCHEMA.TABLE tgt
+USING (SELECT ... FROM DUAL) src
+ON (tgt.ID = src.ID)
+WHEN NOT MATCHED THEN INSERT (...)
+VALUES (...);
+```
+
+**Additional Fix - updated_time Assumption:**
+- Previously assumed all tables have `updated_time` field
+- Now checks if `updated_time`/`updated_by` exist in schema before referencing
+- SELECT statements no longer include ORDER BY or time-based queries for tables without these fields
+
+**Fix Details:**
+- `generateMergeStatement()`: Only includes `WHEN MATCHED` clause if updateable fields exist
+- `generateUpdateStatement()`: Only adds audit fields to SELECT if they exist in schema
+- `generateSelectStatement()`: Conditionally includes `updated_time` in ORDER BY and verification queries
 
 ---
 

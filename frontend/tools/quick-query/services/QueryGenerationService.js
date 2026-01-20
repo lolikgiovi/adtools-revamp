@@ -220,7 +220,7 @@ export class QueryGenerationService {
         queryParts.push(this.generateInsertStatement(tableName, processedFields));
       }
     } else if (queryType === "update") {
-      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames));
+      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames, schemaData));
     } else {
       for (const processedFields of processedRows) {
         queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys));
@@ -228,7 +228,7 @@ export class QueryGenerationService {
     }
 
     // 8. Add select query to verify results
-    const selectQuery = this.generateSelectStatement(tableName, primaryKeys, processedRows);
+    const selectQuery = this.generateSelectStatement(tableName, primaryKeys, processedRows, schemaData);
 
     if (selectQuery) {
       queryParts.push(selectQuery);
@@ -252,11 +252,9 @@ export class QueryGenerationService {
     const pkConditions = primaryKeys.map((pk) => `tgt.${this.formatFieldName(pk)} = src.${this.formatFieldName(pk)}`).join(" AND ");
 
     // Format UPDATE SET clause (excluding PKs and creation fields)
-    const updateFields = processedFields
+    const updateFieldsList = processedFields
       // lowercase comparison is mandatory, we want to exclude created field ignoring case
-      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(String(f.fieldName).toLowerCase()))
-      .map((f) => `  tgt.${this.formatFieldName(f.fieldName)} = src.${this.formatFieldName(f.fieldName)}`)
-      .join(",\n");
+      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(String(f.fieldName).toLowerCase()));
 
     // Format INSERT fields and values (excluding primary keys as per Oracle SQL conventions)
     const insertFields = processedFields.map((f) => this.formatFieldName(f.fieldName)).join(", ");
@@ -265,17 +263,30 @@ export class QueryGenerationService {
     let mergeStatement = `MERGE INTO ${tableName} tgt`;
     mergeStatement += `\nUSING (SELECT${selectFields}\n  FROM DUAL) src`;
     mergeStatement += `\nON (${pkConditions})`;
-    mergeStatement += `\nWHEN MATCHED THEN UPDATE SET\n${updateFields}`;
+
+    // Only include WHEN MATCHED clause if there are fields to update
+    if (updateFieldsList.length > 0) {
+      const updateFields = updateFieldsList
+        .map((f) => `  tgt.${this.formatFieldName(f.fieldName)} = src.${this.formatFieldName(f.fieldName)}`)
+        .join(",\n");
+      mergeStatement += `\nWHEN MATCHED THEN UPDATE SET\n${updateFields}`;
+    }
+
     mergeStatement += `\nWHEN NOT MATCHED THEN INSERT (${insertFields})\nVALUES (${insertValues});`;
 
     return mergeStatement;
   }
 
-  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = []) {
+  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = [], schemaData = []) {
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
     // Collect PK tuples for composite key WHERE clause (instead of separate IN clauses)
     const pkTuples = [];
+
+    // Check if updated_time/updated_by exist in schema
+    const schemaFieldNames = new Set(schemaData.map((row) => String(row[0]).toLowerCase()));
+    const hasUpdatedTime = schemaFieldNames.has("updated_time");
+    const hasUpdatedBy = schemaFieldNames.has("updated_by");
 
     // Process each row to collect updated fields and primary key tuples
     processedRows.forEach((row) => {
@@ -315,9 +326,9 @@ export class QueryGenerationService {
       throw new Error("No fields to update. Please provide at least one non-primary-key field with a value.");
     }
 
-    // Add audit fields separately after processing all rows
-    allUpdatedFields.add("updated_time");
-    allUpdatedFields.add("updated_by");
+    // Add audit fields only if they exist in schema
+    if (hasUpdatedTime) allUpdatedFields.add("updated_time");
+    if (hasUpdatedBy) allUpdatedFields.add("updated_by");
 
     // Build UPDATE SET clause for each row
     const updateStatements = [];
@@ -402,9 +413,13 @@ export class QueryGenerationService {
     return `(${formattedPkNames.join(", ")}) IN (${tupleStrings.join(", ")})`;
   }
 
-  generateSelectStatement(tableName, primaryKeys, processedRows) {
+  generateSelectStatement(tableName, primaryKeys, processedRows, schemaData = []) {
     if (primaryKeys.length === 0) return null;
     if (processedRows.length === 0) return null;
+
+    // Check if updated_time exists in schema
+    const schemaFieldNames = new Set(schemaData.map((row) => String(row[0]).toLowerCase()));
+    const hasUpdatedTime = schemaFieldNames.has("updated_time");
 
     // Collect PK tuples for composite key WHERE clause
     const pkTuples = [];
@@ -435,10 +450,14 @@ export class QueryGenerationService {
 
     // If any PK is a running number, use FETCH FIRST approach instead of WHERE IN
     if (hasRunningNumberPK) {
-      let selectStatement = `\nSELECT * FROM ${tableName} ORDER BY updated_time DESC FETCH FIRST ${rowCount} ROWS ONLY;`;
-      selectStatement += `\nSELECT ${primaryKeys
-        .map((pk) => pk.toLowerCase())
-        .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+      // Use updated_time for ordering only if it exists in schema
+      const orderByField = hasUpdatedTime ? "updated_time" : primaryKeys[0].toLowerCase();
+      let selectStatement = `\nSELECT * FROM ${tableName} ORDER BY ${orderByField} DESC FETCH FIRST ${rowCount} ROWS ONLY;`;
+      if (hasUpdatedTime) {
+        selectStatement += `\nSELECT ${primaryKeys
+          .map((pk) => pk.toLowerCase())
+          .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+      }
       return selectStatement;
     }
 
@@ -448,11 +467,14 @@ export class QueryGenerationService {
     // Build WHERE clause using tuple-based composite key matching
     const whereClause = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
 
-    const orderByClause = processedRows.length > 1 ? " ORDER BY updated_time ASC" : "";
+    // Use updated_time for ordering only if it exists in schema
+    const orderByClause = processedRows.length > 1 && hasUpdatedTime ? " ORDER BY updated_time ASC" : "";
     let selectStatement = `\nSELECT * FROM ${tableName} WHERE ${whereClause}${orderByClause};`;
-    selectStatement += `\nSELECT ${primaryKeys
-      .map((pk) => pk.toLowerCase())
-      .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+    if (hasUpdatedTime) {
+      selectStatement += `\nSELECT ${primaryKeys
+        .map((pk) => pk.toLowerCase())
+        .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+    }
     return selectStatement;
   }
 
