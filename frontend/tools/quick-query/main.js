@@ -2347,17 +2347,35 @@ export class QuickQueryUI {
       btn.setAttribute("aria-disabled", "true");
     }
 
+    const failedFiles = [];
     this.processedFiles = await Promise.all(
       this.processedFiles.map(async (file) => {
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         const t = (file.type || "").toLowerCase();
         if (["txt", "html", "htm", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
           const tableName = this.elements.tableNameInput.value.trim();
-          return await this.attachmentProcessorService.minifyContent(file, tableName);
+          const result = await this.attachmentProcessorService.minifyContent(file, tableName);
+          if (result.minifyFailed) {
+            failedFiles.push(file.name);
+          }
+          return result.file;
         }
         return file;
       })
     );
+
+    // Show notification for minification results
+    if (this.eventBus) {
+      if (failedFiles.length > 0) {
+        const message =
+          failedFiles.length === 1
+            ? `Minification failed for ${failedFiles[0]}, original content kept`
+            : `Minification failed for ${failedFiles.length} files, original content kept`;
+        this.eventBus.emit("notification:error", { message, duration: 4000 });
+      } else {
+        this.eventBus.emit("notification:success", { message: "Minification completed", duration: 2500 });
+      }
+    }
 
     // Refresh viewer if it's open
     const fileViewer = document.getElementById("fileViewerOverlay");

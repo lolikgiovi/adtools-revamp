@@ -151,20 +151,14 @@ export class AttachmentProcessorService {
         try {
           minified = await this.#minifyHtmlWithWorker(original, tableName);
         } catch (err) {
-          console.error("HTML Minify Worker failed, falling back to basic minify:", err);
+          console.error("HTML Minify Worker failed, keeping original:", err);
           UsageTracker.trackEvent("quick-query", "attachment_error", {
             type: "minify_worker_fallback",
             file: file.name,
             message: err.message,
             table_name: tableName,
           });
-          // Fallback to previous simple minifier
-          minified = original
-            .replace(/<!--[\s\S]*?-->/g, "")
-            .replace(/>\s+</g, "><")
-            .replace(/[\r\n\t]+/g, "")
-            .replace(/\s{2,}/g, " ")
-            .trim();
+          return { file, minifyFailed: true };
         }
       } else if (ext === "json" || t.includes("json")) {
         try {
@@ -190,11 +184,14 @@ export class AttachmentProcessorService {
       }
 
       return {
-        ...file,
-        processedFormats: {
-          ...(file.processedFormats || {}),
-          original: minified,
+        file: {
+          ...file,
+          processedFormats: {
+            ...(file.processedFormats || {}),
+            original: minified,
+          },
         },
+        minifyFailed: false,
       };
     } catch (e) {
       console.error("Unexpected error during minify:", e);
@@ -204,7 +201,7 @@ export class AttachmentProcessorService {
         message: e.message,
         table_name: tableName,
       });
-      return file;
+      return { file, minifyFailed: true };
     }
   }
 
