@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Disable App Nap to prevent macOS from suspending background tasks -->
+  <!-- This ensures split query execution continues when the app is in the background -->
+  <key>NSAppSleepDisabled</key>
+  <true/>
+  
+  <!-- Prevent automatic termination when app appears idle -->
+  <key>NSSupportsAutomaticTermination</key>
+  <false/>
+</dict>
+</plist>

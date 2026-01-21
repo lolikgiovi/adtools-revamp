@@ -208,6 +208,8 @@ export class JenkinsRunner extends BaseTool {
     const splitPrevBtn = this.container.querySelector("#jr-split-prev");
     const splitNextBtn = this.container.querySelector("#jr-split-next");
     const splitEditorContainer = this.container.querySelector("#jr-split-editor");
+    const splitConcurrencySlider = this.container.querySelector("#jr-split-concurrency-slider");
+    const splitConcurrencyValue = this.container.querySelector("#jr-split-concurrency-value");
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
@@ -875,7 +877,17 @@ export class JenkinsRunner extends BaseTool {
         cancelRequested: false,
         minimized: false,
         completed: false,
+        concurrency: 1,
       };
+    }
+
+    // Wire up concurrency slider
+    if (splitConcurrencySlider) {
+      splitConcurrencySlider.addEventListener("input", () => {
+        const val = parseInt(splitConcurrencySlider.value, 10) || 1;
+        this.state.split.concurrency = val;
+        if (splitConcurrencyValue) splitConcurrencyValue.textContent = val;
+      });
     }
 
     const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
@@ -974,6 +986,10 @@ export class JenkinsRunner extends BaseTool {
         splitExecuteAllBtn.textContent = "Execute All";
         splitExecuteAllBtn.disabled = false;
       }
+      // Reset concurrency slider
+      this.state.split.concurrency = 1;
+      if (splitConcurrencySlider) splitConcurrencySlider.value = "1";
+      if (splitConcurrencyValue) splitConcurrencyValue.textContent = "1";
       updateSplitCurrentView();
     };
 
@@ -2417,6 +2433,159 @@ export class JenkinsRunner extends BaseTool {
                   const miniL = document.getElementById("jr-split-mini-log");
                   if (miniL) miniL.textContent = "";
                   let lastBuildUrl = null;
+
+                  const concurrency = this.state.split.concurrency || 1;
+
+                  // ========== PARALLEL EXECUTION MODE (concurrency > 1) ==========
+                  if (concurrency > 1) {
+                    appendLog(`\n=== PARALLEL EXECUTION MODE (${concurrency} concurrent jobs) ===\n`);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Starting ${currentChunks.length} chunks with concurrency ${concurrency}\n`);
+                    appendLog(`Note: Log streaming disabled in parallel mode. Polling for build status.\n\n`);
+
+                    // Track active jobs: { idx, buildNumber, histIndex, startTime }
+                    const activeJobs = new Map();
+                    let nextChunkIdx = 0;
+                    let completedCount = 0;
+
+                    // Helper: trigger a single chunk and return its tracking info
+                    const triggerChunk = async (idx) => {
+                      const chunkSql = currentChunks[idx];
+                      const chunkTitle = deriveChunkTitle(chunkSql, idx);
+
+                      // Seed history entry
+                      const arrSeed = loadHistory();
+                      arrSeed.push({
+                        timestamp: new Date().toISOString(),
+                        job: currentJob,
+                        env: currentEnv,
+                        sql: chunkSql,
+                        title: chunkTitle,
+                        buildNumber: null,
+                        buildUrl: null,
+                      });
+                      const histIndex = arrSeed.length - 1;
+                      saveHistory(arrSeed);
+
+                      this.state.split.statuses[idx] = "queued";
+                      renderSplitChunksList();
+                      appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Triggering...\n`);
+
+                      const queueUrl = await this.service.triggerJob(currentBaseUrl, currentJob, currentEnv, chunkSql);
+
+                      // Poll for build number
+                      let buildNumber = null;
+                      let executableUrl = null;
+                      let attempts = 0;
+                      while (!buildNumber && attempts <= 30) {
+                        attempts++;
+                        const res = await this.service.pollQueue(currentBaseUrl, queueUrl);
+                        buildNumber = res.buildNumber || null;
+                        executableUrl = res.executableUrl || null;
+                        if (!buildNumber) await new Promise((r) => setTimeout(r, 1000));
+                      }
+
+                      if (!buildNumber) {
+                        this.state.split.statuses[idx] = "timeout";
+                        renderSplitChunksList();
+                        appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Queue timeout\n`);
+                        return null;
+                      }
+
+                      // Update history with build info
+                      try {
+                        const arrUpdate = loadHistory();
+                        if (arrUpdate[histIndex]) {
+                          arrUpdate[histIndex].buildNumber = buildNumber;
+                          arrUpdate[histIndex].buildUrl = executableUrl;
+                          saveHistory(arrUpdate);
+                        }
+                      } catch (_) {}
+
+                      this.state.split.statuses[idx] = "running";
+                      renderSplitChunksList();
+                      appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Build #${buildNumber} started\n`);
+
+                      return { idx, buildNumber, histIndex, startTime: Date.now(), executableUrl };
+                    };
+
+                    // Helper: check if a build is complete
+                    const checkBuildComplete = async (job) => {
+                      try {
+                        const { isBuilding, result } = await this.service.getBuildStatus(currentBaseUrl, currentJob, job.buildNumber);
+                        if (!isBuilding) {
+                          const duration = ((Date.now() - job.startTime) / 1000).toFixed(1);
+                          if (result === "SUCCESS") {
+                            this.state.split.statuses[job.idx] = "success";
+                            appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: ✓ SUCCESS (${duration}s)\n`);
+                          } else {
+                            this.state.split.statuses[job.idx] = "failed";
+                            appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: ✗ ${result || "FAILED"} (${duration}s)\n`);
+                          }
+                          renderSplitChunksList();
+                          return true;
+                        }
+                        return false;
+                      } catch (err) {
+                        appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: Status check error: ${err}\n`);
+                        return false;
+                      }
+                    };
+
+                    // Main parallel execution loop
+                    while (completedCount < currentChunks.length) {
+                      if (this.state.split.cancelRequested) {
+                        statusEl.textContent = "Execution cancelled by user.";
+                        if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${completedCount} of ${currentChunks.length} chunks.`;
+                        appendLog(`\n=== Execution cancelled. ===\n`);
+                        splitExecuteAllBtn.disabled = false;
+                        this._cleanupSplitResources();
+                        return;
+                      }
+
+                      // Start new jobs up to concurrency limit
+                      while (activeJobs.size < concurrency && nextChunkIdx < currentChunks.length) {
+                        if (this.state.split.cancelRequested) break;
+                        const idx = nextChunkIdx++;
+                        try {
+                          const job = await triggerChunk(idx);
+                          if (job) {
+                            activeJobs.set(idx, job);
+                            lastBuildUrl = job.executableUrl;
+                          } else {
+                            completedCount++;
+                          }
+                        } catch (err) {
+                          this.state.split.statuses[idx] = "failed";
+                          renderSplitChunksList();
+                          appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Trigger error: ${err}\n`);
+                          completedCount++;
+                        }
+                      }
+
+                      // Check active jobs for completion
+                      for (const [idx, job] of activeJobs) {
+                        const done = await checkBuildComplete(job);
+                        if (done) {
+                          activeJobs.delete(idx);
+                          completedCount++;
+                        }
+                      }
+
+                      // Update progress
+                      const runningCount = activeJobs.size;
+                      const queuedCount = currentChunks.length - nextChunkIdx;
+                      if (splitProgressEl) {
+                        splitProgressEl.textContent = `Progress: ${completedCount}/${currentChunks.length} complete, ${runningCount} running, ${queuedCount} queued`;
+                      }
+
+                      // Wait before next poll cycle
+                      if (activeJobs.size > 0) {
+                        await new Promise((r) => setTimeout(r, 2000));
+                      }
+                    }
+                  }
+                  // ========== SEQUENTIAL EXECUTION MODE (concurrency = 1) ==========
+                  else {
                   for (let idx = 0; idx < currentChunks.length; idx++) {
                     // Check if user requested cancellation
                     if (this.state.split.cancelRequested) {
@@ -2530,6 +2699,7 @@ export class JenkinsRunner extends BaseTool {
                     renderSplitChunksList();
                     appendLog(`\n=== Chunk ${idx + 1}/${currentChunks.length} complete ===\n`);
                   }
+                  } // end else (sequential mode)
                   renderHistory();
                   // Calculate success report
                   const successCount = this.state.split.statuses.filter((s) => s === "success").length;

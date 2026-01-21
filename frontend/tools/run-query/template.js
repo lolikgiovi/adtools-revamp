@@ -212,6 +212,11 @@ export const JenkinsRunnerTemplate = /*html*/ `
         </section>
       </div>
         <div class="jr-modal-footer jr-split-footer">
+          <div class="jr-split-concurrency">
+            <label for="jr-split-concurrency-slider">Parallel jobs:</label>
+            <input type="range" id="jr-split-concurrency-slider" min="1" max="10" value="1" />
+            <span id="jr-split-concurrency-value">1</span>
+          </div>
           <button id="jr-split-execute-all" class="btn btn-primary btn-sm-xs">Execute All</button>
           <button id="jr-split-cancel" class="btn btn-sm-xs">Cancel</button>
         </div>

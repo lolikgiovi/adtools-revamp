@@ -63,4 +63,11 @@ export class JenkinsRunnerService {
     const username = this.loadUsername();
     await invoke("jenkins_stream_logs", { baseUrl, job, buildNumber, username });
   }
+
+  async getBuildStatus(baseUrl, job, buildNumber) {
+    if (!isTauri()) throw new Error("Build status is only available in the desktop app.");
+    const username = this.loadUsername();
+    const [isBuilding, result] = await invoke("jenkins_get_build_status", { baseUrl, job, buildNumber, username });
+    return { isBuilding, result };
+  }
 }

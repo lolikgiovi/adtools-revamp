@@ -30,6 +30,7 @@ pub fn run() {
       jenkins_trigger_batch_job,
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
+      jenkins_get_build_status,
       open_url,
       get_arch,
       fetch_lockey_json,
@@ -391,6 +392,13 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
   });
 
   Ok(())
+}
+
+#[tauri::command]
+async fn jenkins_get_build_status(base_url: String, job: String, build_number: u64, username: String) -> Result<(bool, Option<String>), String> {
+  let creds = load_credentials(username).await?;
+  let client = http_client();
+  jenkins::get_build_status(&client, &base_url, &job, build_number, &creds).await
 }
 
 #[tauri::command]
