@@ -19,6 +19,7 @@ import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import JSZip from "jszip";
+import MinifyWorker from "../html-editor/minify.worker.js?worker";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -227,6 +228,13 @@ export class QuickQueryUI {
       closeExcelImportButton: document.getElementById("closeExcelImport"),
       confirmExcelImportButton: document.getElementById("confirmExcelImport"),
       cancelExcelImportButton: document.getElementById("cancelExcelImport"),
+
+      // HTML Minify overlay elements
+      htmlMinifyOverlay: document.getElementById("htmlMinifyOverlay"),
+      htmlMinifyFieldList: document.getElementById("htmlMinifyFieldList"),
+      htmlMinifyConfirmButton: document.getElementById("htmlMinifyConfirm"),
+      htmlMinifySkipButton: document.getElementById("htmlMinifySkip"),
+      closeHtmlMinifyOverlayButton: document.getElementById("closeHtmlMinifyOverlay"),
     };
   }
 
@@ -382,6 +390,17 @@ export class QuickQueryUI {
       },
       cancelGenerationButton: {
         click: () => this.handleCancelGeneration(),
+      },
+      // HTML Minify overlay buttons
+      closeHtmlMinifyOverlayButton: {
+        click: () => this._closeHtmlMinifyOverlay(false),
+      },
+      htmlMinifyOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.htmlMinifyOverlay) {
+            this._closeHtmlMinifyOverlay(false);
+          }
+        },
       },
     };
 
@@ -598,6 +617,19 @@ export class QuickQueryUI {
         await this.storageService.saveSchema(tableName, schemaData, null);
       }
 
+      // Check for HTML content in data and prompt for minification
+      const htmlDetection = this._detectHtmlInData(inputData);
+      if (htmlDetection.hasHtml) {
+        const shouldMinify = await this._showHtmlMinifyOverlay(htmlDetection.fields);
+        if (shouldMinify) {
+          await this._minifyHtmlCells(inputData, htmlDetection.fieldIndices);
+          // Update Handsontable if not using Excel data
+          if (!hasExcelData) {
+            this.dataTable.loadData(inputData);
+          }
+        }
+      }
+
       // Check if we should use the worker (1000+ rows)
       if (this.queryWorkerService.shouldUseWorker(inputData)) {
         this._generateQueryAsync(tableName, queryType, schemaData, inputData);
@@ -741,6 +773,173 @@ export class QuickQueryUI {
     if (this.elements.progressBar) {
       this.elements.progressBar.style.width = "0%";
     }
+  }
+
+  /**
+   * Detect HTML content in data cells
+   * @returns {{ hasHtml: boolean, fields: string[], fieldIndices: number[] }}
+   */
+  _detectHtmlInData(inputData) {
+    if (!inputData || inputData.length < 2) {
+      return { hasHtml: false, fields: [], fieldIndices: [] };
+    }
+
+    const headers = inputData[0] || [];
+    const fieldsWithHtml = new Set();
+    const fieldIndices = new Set();
+
+    const htmlPattern = /<[a-z][\s\S]*>/i;
+
+    for (let rowIdx = 1; rowIdx < inputData.length; rowIdx++) {
+      const row = inputData[rowIdx];
+      if (!row) continue;
+
+      for (let colIdx = 0; colIdx < row.length; colIdx++) {
+        const cellValue = row[colIdx];
+        if (typeof cellValue === "string" && cellValue.trim().length > 0 && htmlPattern.test(cellValue)) {
+          const fieldName = headers[colIdx] || `Column ${colIdx + 1}`;
+          fieldsWithHtml.add(fieldName);
+          fieldIndices.add(colIdx);
+        }
+      }
+    }
+
+    return {
+      hasHtml: fieldsWithHtml.size > 0,
+      fields: Array.from(fieldsWithHtml),
+      fieldIndices: Array.from(fieldIndices),
+    };
+  }
+
+  /**
+   * Show HTML minify confirmation overlay
+   * @returns {Promise<boolean>} true if user wants to minify
+   */
+  _showHtmlMinifyOverlay(fields) {
+    return new Promise((resolve) => {
+      this._htmlMinifyResolve = resolve;
+
+      // Populate field list
+      const fieldList = this.elements.htmlMinifyFieldList;
+      fieldList.innerHTML = fields.map((f) => `<li>${f}</li>`).join("");
+
+      // Show overlay
+      this.elements.htmlMinifyOverlay.classList.remove("hidden");
+
+      // Bind button handlers
+      const confirmHandler = () => {
+        cleanup();
+        this._closeHtmlMinifyOverlay(true);
+      };
+      const skipHandler = () => {
+        cleanup();
+        this._closeHtmlMinifyOverlay(false);
+      };
+
+      const cleanup = () => {
+        this.elements.htmlMinifyConfirmButton.removeEventListener("click", confirmHandler);
+        this.elements.htmlMinifySkipButton.removeEventListener("click", skipHandler);
+      };
+
+      this.elements.htmlMinifyConfirmButton.addEventListener("click", confirmHandler);
+      this.elements.htmlMinifySkipButton.addEventListener("click", skipHandler);
+    });
+  }
+
+  /**
+   * Close HTML minify overlay and resolve promise
+   */
+  _closeHtmlMinifyOverlay(shouldMinify) {
+    this.elements.htmlMinifyOverlay.classList.add("hidden");
+    if (this._htmlMinifyResolve) {
+      this._htmlMinifyResolve(shouldMinify);
+      this._htmlMinifyResolve = null;
+    }
+  }
+
+  /**
+   * Minify HTML content in specified columns using the minify worker
+   * @returns {{ success: number, failures: Array<{ field: string, row: number, reason: string }> }}
+   */
+  async _minifyHtmlCells(inputData, fieldIndices) {
+    const htmlPattern = /<[a-z][\s\S]*>/i;
+    const headers = inputData[0] || [];
+    const failures = [];
+    let successCount = 0;
+
+    for (let rowIdx = 1; rowIdx < inputData.length; rowIdx++) {
+      const row = inputData[rowIdx];
+      if (!row) continue;
+
+      for (const colIdx of fieldIndices) {
+        const cellValue = row[colIdx];
+        if (typeof cellValue === "string" && cellValue.trim().length > 0 && htmlPattern.test(cellValue)) {
+          try {
+            const minified = await this._minifyHtmlWithWorker(cellValue);
+            row[colIdx] = minified;
+            successCount++;
+          } catch (err) {
+            const fieldName = headers[colIdx] || `Column ${colIdx + 1}`;
+            failures.push({ field: fieldName, row: rowIdx, reason: err.message });
+          }
+        }
+      }
+    }
+
+    if (failures.length > 0) {
+      this._showMinifyFailureWarning(failures);
+    }
+
+    return { success: successCount, failures };
+  }
+
+  /**
+   * Show warning for minification failures
+   */
+  _showMinifyFailureWarning(failures) {
+    const uniqueFields = [...new Set(failures.map((f) => f.field))];
+    const summary = `⚠️ HTML minification failed for ${failures.length} cell(s) in field(s): ${uniqueFields.join(", ")}`;
+    const details = failures
+      .slice(0, 10)
+      .map((f) => `Row ${f.row}, ${f.field}: ${f.reason}`)
+      .join("<br>");
+    const note = failures.length > 10 ? `... and ${failures.length - 10} more failures` : "These cells were left unchanged.";
+
+    this.showWarning({ summary, details, note });
+  }
+
+  /**
+   * Minify HTML using the minify worker (rejects if fallback engine is used)
+   */
+  _minifyHtmlWithWorker(html) {
+    return new Promise((resolve, reject) => {
+      const worker = new MinifyWorker();
+      const cleanup = () => {
+        try {
+          worker.terminate();
+        } catch (_) {}
+      };
+      worker.onmessage = (event) => {
+        const data = event.data || {};
+        const { success, result, error, engine } = data;
+        cleanup();
+        if (!success) {
+          reject(new Error(error || "HTML minify failed"));
+          return;
+        }
+        // Reject fallback engine - regex minification can destroy embedded JS
+        if (engine === "fallback") {
+          reject(new Error("Minifier engine unavailable (fallback rejected)"));
+          return;
+        }
+        resolve(typeof result === "string" ? result : "");
+      };
+      worker.onerror = (err) => {
+        cleanup();
+        reject(err instanceof Error ? err : new Error("Worker error"));
+      };
+      worker.postMessage({ type: "minify", html });
+    });
   }
 
   /**

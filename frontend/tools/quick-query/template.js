@@ -99,6 +99,25 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
+<div id="htmlMinifyOverlay" class="html-minify-overlay hidden">
+    <div class="html-minify-modal">
+        <div class="html-minify-modal-header">
+            <h3>HTML Content Detected</h3>
+            <button id="closeHtmlMinifyOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="html-minify-modal-content">
+            <p>We detected HTML content in the following fields:</p>
+            <ul id="htmlMinifyFieldList" class="html-minify-field-list"></ul>
+            <p class="html-minify-question">Would you like to minify the HTML before generating the query?</p>
+            <p class="html-minify-note">Powered by <a href="https://www.npmjs.com/package/html-minifier" target="_blank" rel="noopener noreferrer">html-minifier</a></p>
+        </div>
+        <div class="html-minify-modal-actions">
+            <button id="htmlMinifyConfirm" class="btn btn-primary btn-sm">Yes, Minify</button>
+            <button id="htmlMinifySkip" class="btn btn-outline btn-sm">No, Skip</button>
+        </div>
+    </div>
+</div>
+
 <div id="fileViewerOverlay" class="file-viewer-overlay hidden">
     <div class="file-viewer-modal">
         <div class="file-viewer-header">
