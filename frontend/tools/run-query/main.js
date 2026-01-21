@@ -2272,54 +2272,69 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
-    const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
-      console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs/1000}s)`);
-      return new Promise((resolve, reject) => {
-        let unlisten = null;
-        const startWait = Date.now();
-        
-        // Periodic heartbeat to show we're still waiting
-        const heartbeat = setInterval(() => {
-          const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
-          console.log(`[waitForBuildCompletion] Still waiting for build #${buildNumber}... (${elapsed}s elapsed)`);
-        }, 10000);
-        
-        let timer = setTimeout(() => {
-          clearInterval(heartbeat);
-          const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
-          console.error(`[waitForBuildCompletion] TIMEOUT for build #${buildNumber} after ${elapsed}s`);
-          try {
-            if (typeof unlisten === "function") unlisten();
-          } catch (_) {}
-          reject(new Error(`Log streaming timeout after ${elapsed}s waiting for build #${buildNumber}`));
-        }, timeoutMs);
-        
-        listen("jenkins:log-complete", (ev) => {
-          const payload = ev?.payload || {};
-          const bn = typeof payload === "object" ? payload.build_number : null;
-          console.log(`[waitForBuildCompletion] Received log-complete for build #${bn}, expecting #${buildNumber}`);
-          if (Number(bn) === Number(buildNumber)) {
-            clearInterval(heartbeat);
-            clearTimeout(timer);
-            const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
-            console.log(`[waitForBuildCompletion] Build #${buildNumber} completed after ${elapsed}s`);
-            try {
-              if (typeof unlisten === "function") unlisten();
-            } catch (_) {}
-            resolve();
-          }
-        })
-          .then((un) => {
-            unlisten = un;
-            console.log(`[waitForBuildCompletion] Listener registered for build #${buildNumber}`);
-          })
-          .catch((err) => {
-            clearInterval(heartbeat);
-            clearTimeout(timer);
-            console.error(`[waitForBuildCompletion] Listener registration failed for build #${buildNumber}:`, err);
-            reject(err);
-          });
+    // Creates a completion waiter that sets up the listener IMMEDIATELY
+    // Call this BEFORE streamLogs to avoid race conditions
+    const createBuildCompletionWaiter = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+      console.log(`[createBuildCompletionWaiter] Setting up listener for build #${buildNumber}`);
+      const startWait = Date.now();
+      let resolved = false;
+      let unlisten = null;
+      
+      // Set up listener immediately
+      const listenerPromise = listen("jenkins:log-complete", (ev) => {
+        const payload = ev?.payload || {};
+        const bn = typeof payload === "object" ? payload.build_number : null;
+        console.log(`[createBuildCompletionWaiter] Received log-complete for build #${bn}, expecting #${buildNumber}`);
+        if (Number(bn) === Number(buildNumber)) {
+          resolved = true;
+        }
       });
+      
+      unlisten = await listenerPromise;
+      console.log(`[createBuildCompletionWaiter] Listener registered for build #${buildNumber}`);
+      
+      // Return the wait function
+      return async () => {
+        console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs/1000}s)`);
+        
+        // Check if already resolved (race condition case)
+        if (resolved) {
+          console.log(`[waitForBuildCompletion] Build #${buildNumber} already completed!`);
+          if (unlisten) unlisten();
+          return;
+        }
+        
+        return new Promise((resolve, reject) => {
+          // Periodic heartbeat to show we're still waiting
+          const heartbeat = setInterval(() => {
+            if (resolved) {
+              clearInterval(heartbeat);
+              clearTimeout(timer);
+              const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
+              console.log(`[waitForBuildCompletion] Build #${buildNumber} completed after ${elapsed}s`);
+              if (unlisten) unlisten();
+              resolve();
+              return;
+            }
+            const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+            console.log(`[waitForBuildCompletion] Still waiting for build #${buildNumber}... (${elapsed}s elapsed)`);
+          }, 1000); // Check every second
+          
+          let timer = setTimeout(() => {
+            clearInterval(heartbeat);
+            const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+            console.error(`[waitForBuildCompletion] TIMEOUT for build #${buildNumber} after ${elapsed}s`);
+            if (unlisten) unlisten();
+            reject(new Error(`Log streaming timeout after ${elapsed}s waiting for build #${buildNumber}`));
+          }, timeoutMs);
+        });
+      };
+    };
+    
+    // Legacy wrapper for compatibility
+    const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+      const waiter = await createBuildCompletionWaiter(buildNumber, timeoutMs);
+      return waiter();
     };
 
     // Clear button - empties the SQL editor
@@ -2712,10 +2727,12 @@ export class JenkinsRunner extends BaseTool {
                     if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} streaming…`;
                     appendLog(`[${new Date().toLocaleTimeString()}] Subscribing to log stream...\n`);
                     await subscribeToLogs();
+                    // Set up completion waiter BEFORE starting stream to avoid race condition
+                    const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
                     appendLog(`[${new Date().toLocaleTimeString()}] Starting log stream for build #${buildNumber}...\n`);
                     await this.service.streamLogs(currentBaseUrl, currentJob, buildNumber);
                     appendLog(`[${new Date().toLocaleTimeString()}] Waiting for build completion...\n`);
-                    await waitForBuildCompletion(buildNumber);
+                    await waitForCompletion();
                     const chunkDuration = ((Date.now() - chunkStartTime) / 1000).toFixed(1);
                     appendLog(`[${new Date().toLocaleTimeString()}] Build #${buildNumber} completed (${chunkDuration}s)\n`);
                     if (this.state.lastRunArgListTooLong) {
@@ -2829,8 +2846,10 @@ export class JenkinsRunner extends BaseTool {
                 }
                 statusEl.textContent = `Build #${buildNumber} started. Streaming logs…`;
                 await subscribeToLogs();
+                // Set up completion waiter BEFORE starting stream to avoid race condition
+                const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
                 await this.service.streamLogs(baseUrl, job, buildNumber);
-                await waitForBuildCompletion(buildNumber);
+                await waitForCompletion();
                 runBtn.disabled = false;
                 renderHistory();
                 return;
@@ -2973,8 +2992,10 @@ export class JenkinsRunner extends BaseTool {
                       } catch (_) {}
                       if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
                       await subscribeToLogs();
+                      // Set up completion waiter BEFORE starting stream to avoid race condition
+                      const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
                       await this.service.streamLogs(baseUrl, job, buildNumber);
-                      await waitForBuildCompletion(buildNumber);
+                      await waitForCompletion();
                       if (this.state.lastRunArgListTooLong) {
                         if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
                         this.state.split.statuses[idx] = "error";
