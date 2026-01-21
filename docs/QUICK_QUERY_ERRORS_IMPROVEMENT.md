@@ -1,6 +1,7 @@
 # Quick Query Error Analysis & Improvement Plan
 
 > **Analysis Date:** January 20, 2026  
+> **Last Updated:** January 21, 2026  
 > **Data Source:** Production error telemetry from `trackEvent` calls  
 > **Period:** November 12, 2025 - January 20, 2026
 
@@ -12,14 +13,14 @@ Analysis of 545 total error events across 21 error types reveals that **validati
 
 ### Priority Matrix
 
-| Priority | Error Type | Impact | Effort | Action |
+| Priority | Error Type | Impact | Effort | Status |
 |----------|-----------|--------|--------|--------|
-| 🔴 P0 | `null_not_allowed` | 14 users, 91 errors | Medium | Better defaults & UX |
-| 🔴 P0 | `header_fields_missing` | 10 users, 63 errors | Low | Improved messaging |
-| 🟡 P1 | `quota_exceeded` | 4 users, 68 errors | Medium | Warning + IndexedDB migration |
-| 🟡 P1 | `minify_worker_failed/fallback` | 1 user, 96+96 errors | Medium | Graceful degradation |
-| 🟢 P2 | `generate_failed` | 10 users, 44 errors | Low | Already resolved? |
-| 🟢 P2 | `max_length_exceeded` | 6 users, 8 errors | Low | Pre-validation |
+| 🔴 P0 | `null_not_allowed` | 14 users, 91 errors | Medium | ✅ Partially Solved (B, C) |
+| 🔴 P0 | `header_fields_missing` | 10 users, 63 errors | Low | ⚠️ Pending |
+| 🟡 P1 | `quota_exceeded` | 4 users, 68 errors | Medium | ✅ Solved (IndexedDB migration) |
+| 🟡 P1 | `minify_worker_failed/fallback` | 1 user, 96+96 errors | Medium | ✅ Solved (fallback removed) |
+| 🟢 P2 | `generate_failed` | 10 users, 44 errors | Low | ✅ Resolved (inactive since Dec 2025) |
+| 🟢 P2 | `max_length_exceeded` | 6 users, 8 errors | Low | ⚠️ Pending |
 
 ---
 
@@ -61,36 +62,10 @@ if (isEmptyValue) {
 
 #### Proposed Improvements
 
-##### A. Pre-validation with Cell Highlighting (Medium Effort) — ❌ NOT IMPLEMENTED
-```javascript
-// Before generation, scan all cells and highlight problematic ones
-validateDataBeforeGeneration(schemaData, inputData) {
-  const errors = [];
-  const schemaMap = new Map(schemaData.map(row => [row[0], row]));
-  const fieldNames = inputData[0];
-  
-  inputData.slice(1).forEach((row, rowIndex) => {
-    fieldNames.forEach((fieldName, colIndex) => {
-      const schema = schemaMap.get(fieldName);
-      const nullable = schema?.[2];
-      const value = row[colIndex];
-      
-      if ((value === null || value === '' || value === undefined) && 
-          nullable?.toLowerCase() !== 'yes') {
-        errors.push({
-          row: rowIndex + 2, // 1-indexed, skip header
-          col: colIndex,
-          columnLetter: this.columnIndexToLetter(colIndex),
-          fieldName,
-          message: `Required field "${fieldName}" cannot be empty`
-        });
-      }
-    });
-  });
-  
-  return errors;
-}
-```
+##### A. Pre-validation with Cell Highlighting (Medium Effort) — ⚠️ FUTURE CONSIDERATION
+**Status:** Not implemented. Low performance impact (~50ms for 10K cells). Would validate all cells before generation and show ALL errors at once.
+
+**User clarification:** This runs before clicking Generate, catching errors proactively. Minimal performance impact since data is already in memory.
 
 ##### B. Smart Defaults for Common Fields — ✅ IMPLEMENTED
 **Location:** [`ValueProcessorService.js#L19-L32`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/ValueProcessorService.js#L19-L32)
@@ -110,10 +85,10 @@ throw new Error(`Error in Cell ${columnLetter}${rowIndex + 2}, Field "${fieldNam
 
 Example output: `Error in Cell G2, Field "PARAMETER_TYPE": NULL value not allowed for non-nullable field "PARAMETER_TYPE"`
 
-##### D. Visual Indicator in Data Table (Medium Effort) — ❌ NOT IMPLEMENTED
+##### D. Visual Indicator in Data Table (Medium Effort) — ⚠️ FUTURE CONSIDERATION
+**Status:** Not implemented. Would highlight cells AFTER clicking Generate (differs from A which is pre-validation).
 - Add red border to cells with validation errors
 - Show tooltip on hover explaining the issue
-- Add "Fix All" button to auto-fill with defaults
 
 ---
 
@@ -148,250 +123,110 @@ if (missing.length > 0) {
 
 #### Proposed Improvements
 
-##### A. Case-Insensitive Matching with Warning (Low Effort)
-```javascript
-const columnsLower = columns.map(c => c.toLowerCase());
-const missingExact = header.filter(h => !columns.includes(h));
-const missingCaseInsensitive = header.filter(h => !columnsLower.includes(h.toLowerCase()));
+##### A. Case-Insensitive Matching with Warning (Low Effort) — ⚠️ PENDING
+**Status:** Not implemented. Current code uses exact matching only.
 
-if (missingCaseInsensitive.length > 0) {
-  throw new Error(`Data columns missing in schema: ${missingCaseInsensitive.join(", ")}`);
-}
+**Important consideration:** Oracle reserved keywords (e.g., `sequence`, `type`) must be quoted in SQL as `"sequence"`, `"type"`. Implementation should:
+1. Use case-insensitive matching for validation only
+2. Preserve original schema case when generating SQL
+3. Wrap reserved keywords in double quotes regardless of case
 
-if (missingExact.length > 0) {
-  // Warn but auto-correct
-  console.warn(`Case mismatch in columns: ${missingExact.join(", ")}. Auto-correcting...`);
-  // Auto-correct header row to match schema case
-}
-```
+##### B. Trim Whitespace Before Comparison (Low Effort) — ⚠️ PENDING
+**Status:** Not implemented. Oracle doesn't allow whitespace in unquoted identifiers, so trimming is safe and fixes Excel copy-paste issues.
 
-##### B. Trim Whitespace Before Comparison (Low Effort)
-```javascript
-const header = Array.isArray(tableData[0]) 
-  ? tableData[0].map(h => String(h || '').trim()) 
-  : [];
-```
-
-##### C. Show Diff Dialog (Medium Effort)
-When mismatch is detected, show a dialog:
-```
-Column Mismatch Detected:
-
-In Schema        | In Data
------------------|------------------
-CUSTOMER_ID      | customer_id (case mismatch)
-NAME             | name (case mismatch)
-STATUS           | status (case mismatch)
-EMAIL            | (missing in data)
-                 | extra_col (not in schema)
-
-[Auto-Fix] [Cancel] [Ignore Case Differences]
-```
+##### C. Show Diff Dialog (Medium Effort) — ⚠️ FUTURE CONSIDERATION
+**Status:** Not implemented. Good idea for UX improvement.
+When mismatch is detected, show a dialog comparing schema columns vs data columns with auto-fix option.
 
 ---
 
-### 3. `quota_exceeded` — **PRIORITY 1**
+### 3. `quota_exceeded` — **PRIORITY 1** ✅ SOLVED
 
 **Volume:** 68 errors | **Users:** 4 | **Devices:** 4  
-**Status:** ⚠️ Active (last seen: 2026-01-20)
+**Status:** ✅ Solved via IndexedDB migration
 
 #### Root Cause Analysis
 
-**Source:** [`LocalStorageService.js#L77-L88`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/LocalStorageService.js#L77-L88) and [`LocalStorageService.js#L96-L107`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/LocalStorageService.js#L96-L107)
+**Source:** [`LocalStorageService.js#L77-L88`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/LocalStorageService.js#L77-L88)
 
-```javascript
-saveSchemaStore(store) {
-  try {
-    const payload = JSON.stringify(store);
-    localStorage.setItem(this.SCHEMA_STORAGE_KEY, payload);
-    // ...
-  } catch (error) {
-    const type = error?.name?.toLowerCase().includes("quota") ? "quota_exceeded" : "schema_write_failed";
-    UsageTracker.trackEvent("quick-query", "storage_error", { type, message: error.message });
-  }
-}
-```
-
-**Why it happens:**
+**Why it happened:**
 1. localStorage limit is ~5-10MB per origin
 2. Users store many large schemas with lots of columns
 3. Cached data rows (up to 300 per table) accumulate
-4. No storage management or cleanup mechanism
 
-**Affected Users Profile:**
-- Power users with 50+ saved schemas
-- Users who work with tables having 100+ columns
-- Long-term users with accumulated cache
+#### Resolution — ✅ IMPLEMENTED
 
-#### Proposed Improvements
+##### A. Complete IndexedDB Migration
+**Location:** [`IndexedDBStorageService.js#L99-L171`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/IndexedDBStorageService.js#L99-L171)
 
-##### A. Complete IndexedDB Migration (Already in Progress)
-The `IndexedDBStorageService` exists but migration may not be complete. Verify:
-1. All users are migrated from localStorage to IndexedDB
-2. localStorage fallback still tracks quota errors
-3. Consider removing localStorage fallback entirely
+IndexedDB migration is fully implemented:
+- `_migrateFromLocalStorage()` handles automatic migration on init
+- All users are automatically migrated from localStorage to IndexedDB
+- IndexedDB has much higher storage limits (~50MB+ depending on browser)
 
-##### B. Storage Usage Indicator (Medium Effort)
+**Evidence:**
 ```javascript
-// Add to UI: Show storage usage bar
-getStorageUsage() {
-  const schemaSize = localStorage.getItem(SCHEMA_STORAGE_KEY)?.length || 0;
-  const dataSize = localStorage.getItem(DATA_STORAGE_KEY)?.length || 0;
-  const totalUsed = schemaSize + dataSize;
-  const estimatedLimit = 5 * 1024 * 1024; // 5MB conservative estimate
-  
-  return {
-    used: totalUsed,
-    limit: estimatedLimit,
-    percentage: (totalUsed / estimatedLimit) * 100,
-    warning: totalUsed > estimatedLimit * 0.8
-  };
-}
-```
+// IndexedDBStorageService.js#L49
+.then(() => this._migrateFromLocalStorage())
 
-##### C. Proactive Warning at 80% Capacity (Low Effort)
-Before save operations, check capacity:
-```javascript
-async saveSchema(fullTableName, schemaData, tableData = null) {
-  const usage = this.getStorageUsage();
-  if (usage.percentage > 80) {
-    console.warn(`Storage at ${usage.percentage.toFixed(1)}% capacity`);
-    // Show UI warning
-  }
-  // ... rest of save logic
-}
+// IndexedDBStorageService.js#L110-L155
+console.log("[IndexedDB Migration] Starting migration from localStorage...");
+// ... migration logic
+console.log(`[IndexedDB Migration] Successfully migrated ${migratedCount} tables.`);
 ```
-
-##### D. Data Cleanup Options (Medium Effort)
-- Add "Manage Storage" dialog in settings
-- Show tables sorted by size
-- Allow bulk delete of old/unused schemas
-- Add "Export & Delete" for archival
 
 ---
 
-### 4. `minify_worker_failed` / `minify_worker_fallback` — **PRIORITY 1**
+### 4. `minify_worker_failed` / `minify_worker_fallback` — **PRIORITY 1** ✅ SOLVED
 
 **Volume:** 96 + 96 errors | **Users:** 1 | **Devices:** 1  
-**Status:** Isolated issue (2026-01-09 to 2026-01-15)
+**Status:** ✅ Solved — regex fallback removed
 
 #### Root Cause Analysis
 
-**Source:** [`AttachmentProcessorService.js#L151-L168`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/AttachmentProcessorService.js#L151-L168)
+**Why it was a problem:**
+The regex-based fallback (`#minifyHtmlFallback`) could destroy HTML containing `<script>` tags.
 
+#### Resolution — ✅ IMPLEMENTED
+
+**Location:** [`AttachmentProcessorService.js#L150-L162`](file:///Users/mcomacbook/ad-tools-revamp-workspace/patch/frontend/tools/quick-query/services/AttachmentProcessorService.js#L150-L162)
+
+The regex fallback has been removed. When the worker fails, the original HTML is kept intact:
+
+**Evidence:**
 ```javascript
+// AttachmentProcessorService.js#L150-L162
 try {
   minified = await this.#minifyHtmlWithWorker(original, tableName);
 } catch (err) {
-  console.error("HTML Minify Worker failed, falling back to basic minify:", err);
+  console.error("HTML Minify Worker failed, keeping original:", err);
   UsageTracker.trackEvent("quick-query", "attachment_error", {
     type: "minify_worker_fallback",
-    // ...
+    file: file.name,
+    message: err.message,
+    table_name: tableName,
   });
-  // Fallback to simple regex-based minification
-  minified = original.replace(/<!--[\s\S]*?-->/g, "")...
+  return { file, minifyFailed: true }; // Keep original, no regex fallback
 }
 ```
 
-**Why it happens:**
-1. Web Worker may fail to spawn in certain browser configurations
-2. Browser extensions blocking workers
-3. CSP (Content Security Policy) restrictions
-4. Memory issues with very large HTML files
-
-**Why isolated to one user:**
-- Likely a specific browser/device configuration
-- Could be corporate proxy or security software
-- Possibly an older browser version
-
-#### Proposed Improvements
-
-##### A. Better Diagnostics (Low Effort)
-```javascript
-async #minifyHtmlWithWorker(html, tableName) {
-  // Check Worker availability first
-  if (typeof Worker === 'undefined') {
-    console.warn('Web Workers not supported, using fallback');
-    return this.#minifyHtmlFallback(html);
-  }
-  
-  return new Promise((resolve, reject) => {
-    let worker;
-    try {
-      worker = new MinifyWorker();
-    } catch (e) {
-      UsageTracker.trackEvent("quick-query", "attachment_error", {
-        type: "minify_worker_create_failed",
-        message: e.message,
-        userAgent: navigator.userAgent,
-        table_name: tableName,
-      });
-      return resolve(this.#minifyHtmlFallback(html));
-    }
-    // ... rest of worker logic
-  });
-}
-```
-
-##### B. Skip Worker for Small Files (Low Effort)
-```javascript
-async minifyContent(file, tableName) {
-  const original = file.processedFormats?.original || "";
-  
-  // For small files, skip worker overhead
-  const WORKER_THRESHOLD = 50 * 1024; // 50KB
-  if (original.length < WORKER_THRESHOLD) {
-    return this.#minifyHtmlFallback(original);
-  }
-  
-  // Try worker for larger files
-  // ...
-}
-```
-
-##### C. Timeout Handling (Medium Effort)
-```javascript
-async #minifyHtmlWithWorker(html, tableName) {
-  return new Promise((resolve, reject) => {
-    const worker = new MinifyWorker();
-    
-    const timeout = setTimeout(() => {
-      worker.terminate();
-      UsageTracker.trackEvent("quick-query", "attachment_error", {
-        type: "minify_worker_timeout",
-        table_name: tableName,
-      });
-      resolve(this.#minifyHtmlFallback(html));
-    }, 10000); // 10 second timeout
-    
-    worker.onmessage = (event) => {
-      clearTimeout(timeout);
-      // ... handle result
-    };
-    
-    worker.postMessage({ type: "minify", html });
-  });
-}
-```
+**Verification:** No `#minifyHtmlFallback` method exists in the codebase (confirmed via grep).
 
 ---
 
-### 5. `generate_failed` — **PRIORITY 2 (Possibly Resolved)**
+### 5. `generate_failed` — **PRIORITY 2** ✅ RESOLVED
 
 **Volume:** 44 errors | **Users:** 10 | **Devices:** 11  
 **Status:** ✅ Inactive since 2025-12-17
 
-#### Root Cause Analysis
+#### Resolution
 
-This error type doesn't appear in current code, suggesting it was:
-1. Renamed to more specific error types (e.g., `generation_error`)
+This error type no longer appears in the current codebase. Verified via grep search — no `generate_failed` error type exists in any Quick Query service files.
+
+**Likely resolution:**
+1. Error was renamed to more specific error types (e.g., `generation_error`)
 2. The underlying issue was fixed
-3. Error was from legacy code path
-
-**Recommendation:** 
-- Verify this error type no longer occurs
-- If it resurfaces, search git history for removed code
-- Consider this resolved unless errors reappear
+3. Error was from legacy code path that was refactored
 
 ---
 
@@ -431,21 +266,15 @@ if (fieldDataType.maxLength) {
 
 #### Proposed Improvements
 
-##### A. Real-time Length Indicator in Data Table (Medium Effort)
+##### A. Real-time Length Indicator in Data Table (Medium Effort) — ⚠️ FUTURE CONSIDERATION
+**Status:** Not implemented. Good UX improvement.
 When editing a cell, show: `42/50 chars` or `⚠️ 65/50 chars (exceeds limit)`
 
-##### B. Pre-validation with Character Count (Low Effort)
-```javascript
-// Show in error which value is too long
-const preview = strValue.substring(0, 20) + (strValue.length > 20 ? '...' : '');
-throw new Error(
-  `Value "${preview}" (${length} ${fieldDataType.unit}) exceeds maximum length of ` +
-  `${fieldDataType.maxLength} ${fieldDataType.unit} for field "${fieldName}"`
-);
-```
+##### B. Pre-validation with Character Count (Low Effort) — ⚠️ PENDING
+**Status:** Not implemented. Would improve error message clarity.
 
-##### C. Auto-truncate Option (Low Effort)
-Add checkbox: "Auto-truncate values that exceed field length"
+~~##### C. Auto-truncate Option~~ — ❌ REJECTED
+**Reason:** User decision — auto-truncate could cause data loss without user awareness.
 
 ---
 
@@ -515,41 +344,39 @@ throw new Error(
 
 ## Implementation Roadmap
 
-### Phase 1: Quick Wins (1-2 weeks)
-- [ ] Better error messages with cell locations for `null_not_allowed`
-- [ ] Case-insensitive header matching for `header_fields_missing`
+### ✅ Completed
+- [x] Better error messages with cell locations for `null_not_allowed` (QueryGenerationService.js)
+- [x] Smart defaults for audit fields (created_time, updated_time, created_by, updated_by)
+- [x] IndexedDB migration to solve `quota_exceeded`
+- [x] Remove regex fallback for minify worker (keeps original on failure)
+- [x] `generate_failed` error type removed/refactored
+
+### Phase 1: Quick Wins (Pending)
+- [ ] Case-insensitive header matching for `header_fields_missing` (with Oracle keyword handling)
 - [ ] Trim whitespace from headers before comparison
-- [ ] Add storage usage warning at 80% capacity
 
-### Phase 2: Validation Improvements (2-3 weeks)
+### Phase 2: UX Enhancements (Future)
 - [ ] Pre-generation validation with cell highlighting
-- [ ] Smart defaults for audit fields (created_time, updated_time, etc.)
 - [ ] Real-time length indicator for VARCHAR fields
-- [ ] Worker fallback improvements with timeout
-
-### Phase 3: UX Enhancements (3-4 weeks)
 - [ ] Column mismatch dialog with auto-fix option
-- [ ] Storage management dialog for power users
 - [ ] Visual indicators (red borders) for validation errors
-- [ ] "Fix All" button for common issues
 
-### Phase 4: Monitoring & Prevention (Ongoing)
+### Phase 3: Monitoring & Prevention (Ongoing)
 - [ ] Add more specific error types for better debugging
 - [ ] Include browser/device info in error tracking
 - [ ] Create dashboard for error trends
-- [ ] Set up alerts for new error spikes
 
 ---
 
 ## Metrics for Success
 
-| Metric | Current | Target | Timeline |
-|--------|---------|--------|----------|
-| `null_not_allowed` errors/week | ~10 | < 2 | 4 weeks |
-| `header_fields_missing` errors/week | ~7 | < 1 | 2 weeks |
-| `quota_exceeded` errors/week | ~8 | 0 | 6 weeks |
-| Users affected by errors | 14+ | < 5 | 8 weeks |
-| Error-to-success ratio | Unknown | < 5% | 8 weeks |
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| `null_not_allowed` errors/week | ~10 | < 2 | ⚠️ Partially mitigated |
+| `header_fields_missing` errors/week | ~7 | < 1 | ⚠️ Pending |
+| `quota_exceeded` errors/week | ~8 | 0 | ✅ Solved |
+| `minify_worker_*` errors/week | ~12 | 0 | ✅ Solved |
+| `generate_failed` errors/week | ~3 | 0 | ✅ Resolved |
 
 ---
 

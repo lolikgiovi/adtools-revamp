@@ -492,6 +492,7 @@ export class JenkinsRunner extends BaseTool {
       this._logUnsubscribes.push(
         await listen("jenkins:log-error", (ev) => {
           const msg = String(ev?.payload || "Log stream error");
+          logsEl.textContent += `\n[${new Date().toLocaleTimeString()}] LOG STREAM ERROR: ${msg}\n`;
           this.showError(msg);
           statusEl.textContent = "Log stream error";
         })
@@ -1794,6 +1795,7 @@ export class JenkinsRunner extends BaseTool {
           "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
           () => {
             this.state.split.cancelRequested = true;
+            this.state.split.started = false;
             closeConfirmModal();
             closeSplitModal();
           }
@@ -2241,11 +2243,13 @@ export class JenkinsRunner extends BaseTool {
     const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
       return new Promise((resolve, reject) => {
         let unlisten = null;
+        const startWait = Date.now();
         let timer = setTimeout(() => {
+          const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
           try {
             if (typeof unlisten === "function") unlisten();
           } catch (_) {}
-          reject(new Error("Log streaming timeout"));
+          reject(new Error(`Log streaming timeout after ${elapsed}s waiting for build #${buildNumber}`));
         }, timeoutMs);
         listen("jenkins:log-complete", (ev) => {
           const payload = ev?.payload || {};
@@ -2442,9 +2446,12 @@ export class JenkinsRunner extends BaseTool {
                     renderHistory();
                     this.state.split.statuses[idx] = "running";
                     renderSplitChunksList();
+                    const chunkStartTime = Date.now();
                     appendLog(`\n=== Running chunk ${idx + 1}/${currentChunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Triggering job...\n`);
                     this.state.lastRunArgListTooLong = false;
                     const queueUrl = await this.service.triggerJob(currentBaseUrl, currentJob, currentEnv, chunkSql);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Job queued. Polling for build number...\n`);
                     this.state.queueUrl = queueUrl;
                     if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} queued. Polling…`;
                     // Poll until build starts
@@ -2469,6 +2476,7 @@ export class JenkinsRunner extends BaseTool {
                       }
                     }
                     if (!buildNumber) {
+                      appendLog(`[${new Date().toLocaleTimeString()}] ERROR: Polling timeout after ${attempts} attempts\n`);
                       if (splitProgressEl) splitProgressEl.textContent = `Polling timeout on chunk ${idx + 1}`;
                       this.state.split.statuses[idx] = "timeout";
                       renderSplitChunksList();
@@ -2476,6 +2484,7 @@ export class JenkinsRunner extends BaseTool {
                       this._cleanupSplitResources();
                       return;
                     }
+                    appendLog(`[${new Date().toLocaleTimeString()}] Build #${buildNumber} started (poll attempts: ${attempts})\n`);
                     this.state.buildNumber = buildNumber;
                     this.state.executableUrl = executableUrl;
                     if (buildNumEl) {
@@ -2498,9 +2507,14 @@ export class JenkinsRunner extends BaseTool {
                       }
                     } catch (_) {}
                     if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} streaming…`;
+                    appendLog(`[${new Date().toLocaleTimeString()}] Subscribing to log stream...\n`);
                     await subscribeToLogs();
+                    appendLog(`[${new Date().toLocaleTimeString()}] Starting log stream for build #${buildNumber}...\n`);
                     await this.service.streamLogs(currentBaseUrl, currentJob, buildNumber);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Waiting for build completion...\n`);
                     await waitForBuildCompletion(buildNumber);
+                    const chunkDuration = ((Date.now() - chunkStartTime) / 1000).toFixed(1);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Build #${buildNumber} completed (${chunkDuration}s)\n`);
                     if (this.state.lastRunArgListTooLong) {
                       if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
                       this.state.split.statuses[idx] = "error";
