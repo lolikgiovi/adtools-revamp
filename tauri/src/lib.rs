@@ -373,10 +373,17 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
   println!("[jenkins_stream_logs] Starting stream for build #{}", build_number);
   let _ = app.emit("jenkins:log-debug", serde_json::json!({ "message": format!("Starting stream for build #{}", build_number) }));
 
+  let base_url_clone = base_url.clone();
+  let job_clone = job.clone();
+  let creds_clone = jenkins::Credentials { username: creds.username.clone(), token: creds.token.clone() };
+
   tauri::async_runtime::spawn(async move {
     let mut start: u64 = 0;
     let mut iteration: u64 = 0;
+    let mut stale_count: u64 = 0; // Count iterations with no new data
+    let mut last_offset: u64 = 0;
     let stream_start = std::time::Instant::now();
+    
     loop {
       iteration += 1;
       let iter_start = std::time::Instant::now();
@@ -398,10 +405,41 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
           
           if !more {
             let total_elapsed = stream_start.elapsed().as_secs();
-            println!("[jenkins_stream_logs] Build #{} COMPLETE after {} iterations, {}s total", build_number, iteration, total_elapsed);
+            println!("[jenkins_stream_logs] Build #{} COMPLETE (more=false) after {} iterations, {}s total", build_number, iteration, total_elapsed);
             let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number }));
             break;
           }
+          
+          // Track if we're getting new data
+          if next == last_offset {
+            stale_count += 1;
+            println!("[jenkins_stream_logs] Build #{} stale data (count: {})", build_number, stale_count);
+          } else {
+            stale_count = 0;
+            last_offset = next;
+          }
+          
+          // If stale for too long, check build status directly
+          if stale_count >= 10 {
+            println!("[jenkins_stream_logs] Build #{} checking build status due to stale data", build_number);
+            match jenkins::get_build_status(&client, &base_url_clone, &job_clone, build_number, &creds_clone).await {
+              Ok((is_building, result)) => {
+                println!("[jenkins_stream_logs] Build #{} status: is_building={}, result={:?}", build_number, is_building, result);
+                if !is_building {
+                  // Build is done but X-More-Data was true - force complete
+                  let total_elapsed = stream_start.elapsed().as_secs();
+                  println!("[jenkins_stream_logs] Build #{} COMPLETE (forced via status check) after {} iterations, {}s total", build_number, iteration, total_elapsed);
+                  let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number }));
+                  break;
+                }
+              }
+              Err(e) => {
+                println!("[jenkins_stream_logs] Build #{} status check failed: {}", build_number, e);
+              }
+            }
+            stale_count = 0; // Reset and continue trying
+          }
+          
           start = next;
         }
         Err(e) => {
