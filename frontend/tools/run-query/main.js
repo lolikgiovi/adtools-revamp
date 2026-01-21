@@ -208,8 +208,7 @@ export class JenkinsRunner extends BaseTool {
     const splitPrevBtn = this.container.querySelector("#jr-split-prev");
     const splitNextBtn = this.container.querySelector("#jr-split-next");
     const splitEditorContainer = this.container.querySelector("#jr-split-editor");
-    const splitConcurrencySlider = this.container.querySelector("#jr-split-concurrency-slider");
-    const splitConcurrencyValue = this.container.querySelector("#jr-split-concurrency-value");
+
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
@@ -361,10 +360,10 @@ export class JenkinsRunner extends BaseTool {
             `<span class="jr-tag" title="${escHtml(tg)}"><span>${escHtml(tg)}</span>${
               removable
                 ? ` <button type="button" class="jr-tag-remove" data-tag="${escHtml(tg)}" aria-label="Remove tag ${escHtml(
-                    tg
+                    tg,
                   )}" title="Remove">×</button>`
                 : ""
-            }</span>`
+            }</span>`,
         )
         .join("");
     };
@@ -381,7 +380,7 @@ export class JenkinsRunner extends BaseTool {
           (s, i) =>
             `<div class="jr-suggestion" role="option" data-value="${escHtml(s)}" aria-selected="${
               i === activeIndex ? "true" : "false"
-            }" tabindex="-1">${escHtml(s)}</div>`
+            }" tabindex="-1">${escHtml(s)}</div>`,
         )
         .join("");
       suggestionsEl.style.display = "block";
@@ -493,7 +492,7 @@ export class JenkinsRunner extends BaseTool {
               statusEl.textContent = "Query too long. Detected 'Argument list too long'.";
             }
           } catch (_) {}
-        })
+        }),
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-error", (ev) => {
@@ -503,7 +502,7 @@ export class JenkinsRunner extends BaseTool {
           logsEl.textContent += `\n[${new Date().toLocaleTimeString()}] LOG STREAM ERROR: ${msg}\n`;
           this.showError(msg);
           statusEl.textContent = "Log stream error";
-        })
+        }),
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-complete", (ev) => {
@@ -513,14 +512,14 @@ export class JenkinsRunner extends BaseTool {
           try {
             UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
           } catch (_) {}
-        })
+        }),
       );
       // Debug listener for troubleshooting
       this._logUnsubscribes.push(
         await listen("jenkins:log-debug", (ev) => {
           const msg = ev?.payload?.message || JSON.stringify(ev?.payload);
           console.log(`[jenkins:log-debug] ${msg}`);
-        })
+        }),
       );
       console.log("[subscribeToLogs] All listeners registered");
     };
@@ -893,17 +892,7 @@ export class JenkinsRunner extends BaseTool {
         cancelRequested: false,
         minimized: false,
         completed: false,
-        concurrency: 1,
       };
-    }
-
-    // Wire up concurrency slider
-    if (splitConcurrencySlider) {
-      splitConcurrencySlider.addEventListener("input", () => {
-        const val = parseInt(splitConcurrencySlider.value, 10) || 1;
-        this.state.split.concurrency = val;
-        if (splitConcurrencyValue) splitConcurrencyValue.textContent = val;
-      });
     }
 
     const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
@@ -1002,10 +991,6 @@ export class JenkinsRunner extends BaseTool {
         splitExecuteAllBtn.textContent = "Execute All";
         splitExecuteAllBtn.disabled = false;
       }
-      // Reset concurrency slider
-      this.state.split.concurrency = 1;
-      if (splitConcurrencySlider) splitConcurrencySlider.value = "1";
-      if (splitConcurrencyValue) splitConcurrencyValue.textContent = "1";
       updateSplitCurrentView();
     };
 
@@ -1352,11 +1337,11 @@ export class JenkinsRunner extends BaseTool {
             [t.name, t.job, t.env].some((v) =>
               String(v || "")
                 .toLowerCase()
-                .includes(q)
+                .includes(q),
             ) ||
             String(t.sql || "")
               .toLowerCase()
-              .includes(q)
+              .includes(q),
         );
       }
       // Populate env filter based on available templates
@@ -1419,8 +1404,8 @@ export class JenkinsRunner extends BaseTool {
                 <span class="jr-card-updated">${updated}</span>
               </div>
               <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span><pre class="jr-card-snippet">${escHtml(
-            sqlSnippet
-          )}</pre></div>
+                sqlSnippet,
+              )}</pre></div>
               <div class="jr-card-actions">
                 <button class="btn btn-sm-xs jr-template-pin" data-name="${escHtml(t.name)}">${pinned ? "Unpin" : "Pin"}</button>
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
@@ -1830,7 +1815,7 @@ export class JenkinsRunner extends BaseTool {
             this.state.split.started = false;
             closeConfirmModal();
             closeSplitModal();
-          }
+          },
         );
       });
     if (splitModalOverlay)
@@ -1927,7 +1912,7 @@ export class JenkinsRunner extends BaseTool {
               templateTagsContainer,
               templateTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              templateTagsActiveIndex
+              templateTagsActiveIndex,
             );
           }
         } else if (e.key === "ArrowUp") {
@@ -1939,7 +1924,7 @@ export class JenkinsRunner extends BaseTool {
               templateTagsContainer,
               templateTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              templateTagsActiveIndex
+              templateTagsActiveIndex,
             );
           }
         } else if (e.key === "Escape") {
@@ -2037,7 +2022,7 @@ export class JenkinsRunner extends BaseTool {
               filterTagsContainer,
               filterTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              filterTagsActiveIndex
+              filterTagsActiveIndex,
             );
           }
         } else if (e.key === "ArrowUp") {
@@ -2049,7 +2034,7 @@ export class JenkinsRunner extends BaseTool {
               filterTagsContainer,
               filterTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              filterTagsActiveIndex
+              filterTagsActiveIndex,
             );
           }
         } else if (e.key === "Escape") {
@@ -2279,7 +2264,7 @@ export class JenkinsRunner extends BaseTool {
       const startWait = Date.now();
       let resolved = false;
       let unlisten = null;
-      
+
       // Set up listener immediately
       const listenerPromise = listen("jenkins:log-complete", (ev) => {
         const payload = ev?.payload || {};
@@ -2289,21 +2274,21 @@ export class JenkinsRunner extends BaseTool {
           resolved = true;
         }
       });
-      
+
       unlisten = await listenerPromise;
       console.log(`[createBuildCompletionWaiter] Listener registered for build #${buildNumber}`);
-      
+
       // Return the wait function
       return async () => {
-        console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs/1000}s)`);
-        
+        console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs / 1000}s)`);
+
         // Check if already resolved (race condition case)
         if (resolved) {
           console.log(`[waitForBuildCompletion] Build #${buildNumber} already completed!`);
           if (unlisten) unlisten();
           return;
         }
-        
+
         return new Promise((resolve, reject) => {
           // Periodic heartbeat to show we're still waiting
           const heartbeat = setInterval(() => {
@@ -2319,7 +2304,7 @@ export class JenkinsRunner extends BaseTool {
             const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
             console.log(`[waitForBuildCompletion] Still waiting for build #${buildNumber}... (${elapsed}s elapsed)`);
           }, 1000); // Check every second
-          
+
           let timer = setTimeout(() => {
             clearInterval(heartbeat);
             const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
@@ -2330,7 +2315,7 @@ export class JenkinsRunner extends BaseTool {
         });
       };
     };
-    
+
     // Legacy wrapper for compatibility
     const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
       const waiter = await createBuildCompletionWaiter(buildNumber, timeoutMs);
@@ -2483,158 +2468,6 @@ export class JenkinsRunner extends BaseTool {
                   if (miniL) miniL.textContent = "";
                   let lastBuildUrl = null;
 
-                  const concurrency = this.state.split.concurrency || 1;
-
-                  // ========== PARALLEL EXECUTION MODE (concurrency > 1) ==========
-                  if (concurrency > 1) {
-                    appendLog(`\n=== PARALLEL EXECUTION MODE (${concurrency} concurrent jobs) ===\n`);
-                    appendLog(`[${new Date().toLocaleTimeString()}] Starting ${currentChunks.length} chunks with concurrency ${concurrency}\n`);
-                    appendLog(`Note: Log streaming disabled in parallel mode. Polling for build status.\n\n`);
-
-                    // Track active jobs: { idx, buildNumber, histIndex, startTime }
-                    const activeJobs = new Map();
-                    let nextChunkIdx = 0;
-                    let completedCount = 0;
-
-                    // Helper: trigger a single chunk and return its tracking info
-                    const triggerChunk = async (idx) => {
-                      const chunkSql = currentChunks[idx];
-                      const chunkTitle = deriveChunkTitle(chunkSql, idx);
-
-                      // Seed history entry
-                      const arrSeed = loadHistory();
-                      arrSeed.push({
-                        timestamp: new Date().toISOString(),
-                        job: currentJob,
-                        env: currentEnv,
-                        sql: chunkSql,
-                        title: chunkTitle,
-                        buildNumber: null,
-                        buildUrl: null,
-                      });
-                      const histIndex = arrSeed.length - 1;
-                      saveHistory(arrSeed);
-
-                      this.state.split.statuses[idx] = "queued";
-                      renderSplitChunksList();
-                      appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Triggering...\n`);
-
-                      const queueUrl = await this.service.triggerJob(currentBaseUrl, currentJob, currentEnv, chunkSql);
-
-                      // Poll for build number
-                      let buildNumber = null;
-                      let executableUrl = null;
-                      let attempts = 0;
-                      while (!buildNumber && attempts <= 30) {
-                        attempts++;
-                        const res = await this.service.pollQueue(currentBaseUrl, queueUrl);
-                        buildNumber = res.buildNumber || null;
-                        executableUrl = res.executableUrl || null;
-                        if (!buildNumber) await new Promise((r) => setTimeout(r, 1000));
-                      }
-
-                      if (!buildNumber) {
-                        this.state.split.statuses[idx] = "timeout";
-                        renderSplitChunksList();
-                        appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Queue timeout\n`);
-                        return null;
-                      }
-
-                      // Update history with build info
-                      try {
-                        const arrUpdate = loadHistory();
-                        if (arrUpdate[histIndex]) {
-                          arrUpdate[histIndex].buildNumber = buildNumber;
-                          arrUpdate[histIndex].buildUrl = executableUrl;
-                          saveHistory(arrUpdate);
-                        }
-                      } catch (_) {}
-
-                      this.state.split.statuses[idx] = "running";
-                      renderSplitChunksList();
-                      appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Build #${buildNumber} started\n`);
-
-                      return { idx, buildNumber, histIndex, startTime: Date.now(), executableUrl };
-                    };
-
-                    // Helper: check if a build is complete
-                    const checkBuildComplete = async (job) => {
-                      try {
-                        const { isBuilding, result } = await this.service.getBuildStatus(currentBaseUrl, currentJob, job.buildNumber);
-                        if (!isBuilding) {
-                          const duration = ((Date.now() - job.startTime) / 1000).toFixed(1);
-                          if (result === "SUCCESS") {
-                            this.state.split.statuses[job.idx] = "success";
-                            appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: ✓ SUCCESS (${duration}s)\n`);
-                          } else {
-                            this.state.split.statuses[job.idx] = "failed";
-                            appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: ✗ ${result || "FAILED"} (${duration}s)\n`);
-                          }
-                          renderSplitChunksList();
-                          return true;
-                        }
-                        return false;
-                      } catch (err) {
-                        appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${job.idx + 1}: Status check error: ${err}\n`);
-                        return false;
-                      }
-                    };
-
-                    // Main parallel execution loop
-                    while (completedCount < currentChunks.length) {
-                      if (this.state.split.cancelRequested) {
-                        statusEl.textContent = "Execution cancelled by user.";
-                        if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${completedCount} of ${currentChunks.length} chunks.`;
-                        appendLog(`\n=== Execution cancelled. ===\n`);
-                        splitExecuteAllBtn.disabled = false;
-                        this._cleanupSplitResources();
-                        return;
-                      }
-
-                      // Start new jobs up to concurrency limit
-                      while (activeJobs.size < concurrency && nextChunkIdx < currentChunks.length) {
-                        if (this.state.split.cancelRequested) break;
-                        const idx = nextChunkIdx++;
-                        try {
-                          const job = await triggerChunk(idx);
-                          if (job) {
-                            activeJobs.set(idx, job);
-                            lastBuildUrl = job.executableUrl;
-                          } else {
-                            completedCount++;
-                          }
-                        } catch (err) {
-                          this.state.split.statuses[idx] = "failed";
-                          renderSplitChunksList();
-                          appendLog(`[${new Date().toLocaleTimeString()}] Chunk ${idx + 1}: Trigger error: ${err}\n`);
-                          completedCount++;
-                        }
-                      }
-
-                      // Check active jobs for completion
-                      for (const [idx, job] of activeJobs) {
-                        const done = await checkBuildComplete(job);
-                        if (done) {
-                          activeJobs.delete(idx);
-                          completedCount++;
-                        }
-                      }
-
-                      // Update progress
-                      const runningCount = activeJobs.size;
-                      const queuedCount = currentChunks.length - nextChunkIdx;
-                      if (splitProgressEl) {
-                        splitProgressEl.textContent = `Progress: ${completedCount}/${currentChunks.length} complete, ${runningCount} running, ${queuedCount} queued`;
-                      }
-
-                      // Wait before next poll cycle
-                      if (activeJobs.size > 0) {
-                        await new Promise((r) => setTimeout(r, 2000));
-                      }
-                    }
-                  }
-                  // ========== SEQUENTIAL EXECUTION MODE (concurrency = 1) ==========
-                  else {
                   for (let idx = 0; idx < currentChunks.length; idx++) {
                     // Check if user requested cancellation
                     if (this.state.split.cancelRequested) {
@@ -2740,7 +2573,7 @@ export class JenkinsRunner extends BaseTool {
                       this.state.split.statuses[idx] = "error";
                       renderSplitChunksList();
                       this.showError(
-                        "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                        "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates.",
                       );
                       splitExecuteAllBtn.disabled = false;
                       this._cleanupSplitResources();
@@ -2750,7 +2583,6 @@ export class JenkinsRunner extends BaseTool {
                     renderSplitChunksList();
                     appendLog(`\n=== Chunk ${idx + 1}/${currentChunks.length} complete ===\n`);
                   }
-                  } // end else (sequential mode)
                   renderHistory();
                   // Calculate success report
                   const successCount = this.state.split.statuses.filter((s) => s === "success").length;
@@ -2770,7 +2602,7 @@ export class JenkinsRunner extends BaseTool {
                   this.state.split.completed = true;
                   if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
                   appendLog(
-                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${currentEnv}\n  Total Chunks: ${currentChunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
+                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${currentEnv}\n  Total Chunks: ${currentChunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`,
                   );
                   // Cleanup resources after successful completion
                   this._cleanupSplitResources();
@@ -2881,7 +2713,7 @@ export class JenkinsRunner extends BaseTool {
               if (oversizeStatement) {
                 statusEl.textContent = "Cannot run: a single SQL statement exceeds 90KB.";
                 this.showError(
-                  "One statement is too large to send safely. Please reduce the statement size or run via an alternate method."
+                  "One statement is too large to send safely. Please reduce the statement size or run via an alternate method.",
                 );
                 runBtn.disabled = false;
                 return;
@@ -3001,7 +2833,7 @@ export class JenkinsRunner extends BaseTool {
                         this.state.split.statuses[idx] = "error";
                         renderSplitChunksList();
                         this.showError(
-                          "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                          "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates.",
                         );
                         splitExecuteAllBtn.disabled = false;
                         return;
@@ -3029,7 +2861,7 @@ export class JenkinsRunner extends BaseTool {
                     this.state.split.completed = true;
                     if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
                     appendLog(
-                      `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`
+                      `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`,
                     );
                   } catch (err) {
                     splitExecuteAllBtn.disabled = false;

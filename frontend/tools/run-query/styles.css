@@ -65,7 +65,10 @@
   /* match other input/select controls */
   box-sizing: border-box;
   /* ensure height includes border like .jr-input */
-  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
 }
 
 .jr-tags-input:hover {
@@ -243,7 +246,10 @@
   color: var(--jr-text);
   border-radius: 6px;
   padding: 8px 10px;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
   box-sizing: border-box;
   /* normalize sizing across engines */
   font-size: 0.9rem;
@@ -409,7 +415,10 @@
   padding: 10px 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    opacity 120ms ease;
 }
 
 .jr-actions .btn:hover {
@@ -851,7 +860,12 @@
   width: 100%;
   /* make input track its flex item width */
   box-sizing: border-box;
-  transition: width 240ms ease, flex-basis 240ms ease, padding 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    width 240ms ease,
+    flex-basis 240ms ease,
+    padding 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 @media (max-width: 700px) {
@@ -1048,31 +1062,6 @@
   justify-content: flex-end;
   gap: 8px;
   border-top: 1px solid var(--jr-border);
-}
-
-.jr-split-concurrency {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: auto;
-  font-size: 12px;
-  color: var(--jr-muted);
-}
-
-.jr-split-concurrency label {
-  white-space: nowrap;
-}
-
-.jr-split-concurrency input[type="range"] {
-  width: 80px;
-  cursor: pointer;
-}
-
-.jr-split-concurrency span {
-  min-width: 20px;
-  text-align: center;
-  font-weight: 600;
-  color: var(--jr-text);
 }
 
 .jr-split-results {
