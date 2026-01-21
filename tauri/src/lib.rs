@@ -370,25 +370,54 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
   let creds = load_credentials(username).await?;
   let client = http_client();
 
+  println!("[jenkins_stream_logs] Starting stream for build #{}", build_number);
+  let _ = app.emit("jenkins:log-debug", serde_json::json!({ "message": format!("Starting stream for build #{}", build_number) }));
+
   tauri::async_runtime::spawn(async move {
     let mut start: u64 = 0;
+    let mut iteration: u64 = 0;
+    let stream_start = std::time::Instant::now();
     loop {
+      iteration += 1;
+      let iter_start = std::time::Instant::now();
+      println!("[jenkins_stream_logs] Build #{} iteration {} (offset {})", build_number, iteration, start);
+      
       match jenkins::progressive_log_once(&client, &base_url, &job, build_number, start, &creds).await {
         Ok((text, next, more)) => {
-          let _ = app.emit("jenkins:log", serde_json::json!({ "chunk": text, "next_offset": next, "more": more }));
+          let elapsed_ms = iter_start.elapsed().as_millis();
+          println!("[jenkins_stream_logs] Build #{} iteration {} OK: next={}, more={}, text_len={}, took {}ms", 
+                   build_number, iteration, next, more, text.len(), elapsed_ms);
+          
+          let _ = app.emit("jenkins:log", serde_json::json!({ 
+            "chunk": text, 
+            "next_offset": next, 
+            "more": more,
+            "build_number": build_number,
+            "iteration": iteration
+          }));
+          
           if !more {
+            let total_elapsed = stream_start.elapsed().as_secs();
+            println!("[jenkins_stream_logs] Build #{} COMPLETE after {} iterations, {}s total", build_number, iteration, total_elapsed);
             let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number }));
             break;
           }
           start = next;
         }
         Err(e) => {
-          let _ = app.emit("jenkins:log-error", e);
+          let elapsed_ms = iter_start.elapsed().as_millis();
+          println!("[jenkins_stream_logs] Build #{} iteration {} ERROR after {}ms: {}", build_number, iteration, elapsed_ms, e);
+          let _ = app.emit("jenkins:log-error", serde_json::json!({ 
+            "error": e.clone(), 
+            "build_number": build_number,
+            "iteration": iteration 
+          }));
           break;
         }
       }
       tokio::time::sleep(Duration::from_millis(800)).await;
     }
+    println!("[jenkins_stream_logs] Build #{} stream task exiting", build_number);
   });
 
   Ok(())

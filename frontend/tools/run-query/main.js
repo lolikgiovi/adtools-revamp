@@ -475,11 +475,15 @@ export class JenkinsRunner extends BaseTool {
     };
 
     const subscribeToLogs = async () => {
+      console.log("[subscribeToLogs] Setting up log listeners");
       clearLogListeners();
       this._logUnsubscribes.push(
         await listen("jenkins:log", (ev) => {
           const data = ev?.payload || {};
           const chunk = typeof data === "string" ? data : data.chunk || "";
+          const buildNum = data.build_number;
+          const iteration = data.iteration;
+          console.log(`[jenkins:log] Build #${buildNum} iter ${iteration}, chunk length: ${chunk.length}`);
           appendLog(chunk);
           // Detect oversize error surfaced by Jenkins job
           try {
@@ -493,20 +497,32 @@ export class JenkinsRunner extends BaseTool {
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-error", (ev) => {
-          const msg = String(ev?.payload || "Log stream error");
+          const payload = ev?.payload || {};
+          const msg = typeof payload === "string" ? payload : JSON.stringify(payload);
+          console.error(`[jenkins:log-error] ${msg}`);
           logsEl.textContent += `\n[${new Date().toLocaleTimeString()}] LOG STREAM ERROR: ${msg}\n`;
           this.showError(msg);
           statusEl.textContent = "Log stream error";
         })
       );
       this._logUnsubscribes.push(
-        await listen("jenkins:log-complete", () => {
+        await listen("jenkins:log-complete", (ev) => {
+          const payload = ev?.payload || {};
+          console.log(`[jenkins:log-complete] Build #${payload.build_number} complete`);
           statusEl.textContent = "Complete";
           try {
             UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
           } catch (_) {}
         })
       );
+      // Debug listener for troubleshooting
+      this._logUnsubscribes.push(
+        await listen("jenkins:log-debug", (ev) => {
+          const msg = ev?.payload?.message || JSON.stringify(ev?.payload);
+          console.log(`[jenkins:log-debug] ${msg}`);
+        })
+      );
+      console.log("[subscribeToLogs] All listeners registered");
     };
 
     const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new"]);
@@ -2257,21 +2273,36 @@ export class JenkinsRunner extends BaseTool {
     };
 
     const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+      console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs/1000}s)`);
       return new Promise((resolve, reject) => {
         let unlisten = null;
         const startWait = Date.now();
-        let timer = setTimeout(() => {
+        
+        // Periodic heartbeat to show we're still waiting
+        const heartbeat = setInterval(() => {
           const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+          console.log(`[waitForBuildCompletion] Still waiting for build #${buildNumber}... (${elapsed}s elapsed)`);
+        }, 10000);
+        
+        let timer = setTimeout(() => {
+          clearInterval(heartbeat);
+          const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+          console.error(`[waitForBuildCompletion] TIMEOUT for build #${buildNumber} after ${elapsed}s`);
           try {
             if (typeof unlisten === "function") unlisten();
           } catch (_) {}
           reject(new Error(`Log streaming timeout after ${elapsed}s waiting for build #${buildNumber}`));
         }, timeoutMs);
+        
         listen("jenkins:log-complete", (ev) => {
           const payload = ev?.payload || {};
           const bn = typeof payload === "object" ? payload.build_number : null;
+          console.log(`[waitForBuildCompletion] Received log-complete for build #${bn}, expecting #${buildNumber}`);
           if (Number(bn) === Number(buildNumber)) {
+            clearInterval(heartbeat);
             clearTimeout(timer);
+            const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
+            console.log(`[waitForBuildCompletion] Build #${buildNumber} completed after ${elapsed}s`);
             try {
               if (typeof unlisten === "function") unlisten();
             } catch (_) {}
@@ -2280,9 +2311,12 @@ export class JenkinsRunner extends BaseTool {
         })
           .then((un) => {
             unlisten = un;
+            console.log(`[waitForBuildCompletion] Listener registered for build #${buildNumber}`);
           })
           .catch((err) => {
+            clearInterval(heartbeat);
             clearTimeout(timer);
+            console.error(`[waitForBuildCompletion] Listener registration failed for build #${buildNumber}:`, err);
             reject(err);
           });
       });
