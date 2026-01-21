@@ -277,13 +277,21 @@ export class JenkinsRunner extends BaseTool {
             continue;
           }
         }
-        // Toggle quotes
-        if (!inDouble && ch === "'" && src[i - 1] !== "\\") {
-          inSingle = !inSingle;
+        // Toggle quotes (Oracle uses '' to escape, not \')
+        if (!inDouble && ch === "'") {
+          if (inSingle && next === "'") {
+            i++; // skip escaped quote ''
+          } else {
+            inSingle = !inSingle;
+          }
           continue;
         }
-        if (!inSingle && ch === '"' && src[i - 1] !== "\\") {
-          inDouble = !inDouble;
+        if (!inSingle && ch === '"') {
+          if (inDouble && next === '"') {
+            i++; // skip escaped quote ""
+          } else {
+            inDouble = !inDouble;
+          }
           continue;
         }
         // Only evaluate statement/content outside quotes/comments
