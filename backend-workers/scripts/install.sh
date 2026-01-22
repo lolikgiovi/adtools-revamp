@@ -49,8 +49,46 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 cd ~
-DOCS_DIR="$HOME/Documents"
-mkdir -p "$DOCS_DIR"
+
+# Prompt user for installation location
+DEFAULT_DIR="$HOME/Documents"
+printf "%b\n" "${YELLOW}Where would you like to install AD Tools?${NC}"
+printf "%b\n" "  Default location: ${GREEN}$DEFAULT_DIR${NC}"
+printf "%b"   "  Press Enter to use default, or type a custom path (e.g., /Users/yourname/Apps): "
+read -r CUSTOM_DIR
+
+if [[ -z "$CUSTOM_DIR" ]]; then
+  INSTALL_DIR="$DEFAULT_DIR"
+  log "Using default location: $INSTALL_DIR"
+else
+  # Expand tilde if user types ~/something
+  CUSTOM_DIR="${CUSTOM_DIR/#\~/$HOME}"
+  
+  # Validate the path is absolute
+  if [[ "$CUSTOM_DIR" != /* ]]; then
+    err "Please provide an absolute path starting with / (e.g., /Users/yourname/Apps)"
+    exit 1
+  fi
+  
+  INSTALL_DIR="$CUSTOM_DIR"
+  log "Using custom location: $INSTALL_DIR"
+fi
+
+# Create the installation directory if it doesn't exist
+if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+  err "Cannot create directory: $INSTALL_DIR"
+  err "Please check permissions or choose a different location."
+  exit 1
+fi
+
+# Verify the directory is writable
+if [[ ! -w "$INSTALL_DIR" ]]; then
+  err "Directory is not writable: $INSTALL_DIR"
+  err "Please check permissions or choose a different location."
+  exit 1
+fi
+
+DOCS_DIR="$INSTALL_DIR"
 
 ARCH_NATIVE="$(uname -m)"
 case "$ARCH_NATIVE" in
