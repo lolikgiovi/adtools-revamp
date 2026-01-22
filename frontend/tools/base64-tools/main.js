@@ -336,6 +336,15 @@ class Base64Tools extends BaseTool {
         this.selectedFiles.set(fileId, { file, mode });
         this.displayFileCard(file, fileId, mode);
       });
+
+      // Track file upload for behavior analysis
+      const totalSize = filesToAdd.reduce((sum, f) => sum + f.size, 0);
+      UsageTracker.trackEvent("base64-tools", "file_upload", {
+        mode,
+        file_count: filesToAdd.length,
+        total_size: totalSize,
+        file_types: [...new Set(filesToAdd.map((f) => f.type || "unknown"))],
+      });
     }
     this.showInputFileContainer(mode);
   }
@@ -363,7 +372,7 @@ class Base64Tools extends BaseTool {
           },
           {
             remove: () => this.removeFileCard(fileId, mode),
-          }
+          },
         );
         card.dataset.fileId = fileId;
         filesContainer.appendChild(card);
@@ -379,7 +388,7 @@ class Base64Tools extends BaseTool {
         },
         {
           remove: () => this.removeFileCard(fileId, mode),
-        }
+        },
       );
       card.dataset.fileId = fileId;
       filesContainer.appendChild(card);
@@ -815,7 +824,7 @@ class Base64Tools extends BaseTool {
         UsageTracker.trackEvent(
           "base64-tools",
           mode === "encode" ? "encode_error" : "decode_error",
-          UsageTracker.enrichErrorMeta(error, { type: "multi_file", file: file.name })
+          UsageTracker.enrichErrorMeta(error, { type: "multi_file", file: file.name }),
         );
         this.showError(`Failed to process ${file.name}: ${error.message}`);
       }
@@ -889,7 +898,7 @@ class Base64Tools extends BaseTool {
             previewUrl: imageData.url,
             dimensions: { width: imageData.width, height: imageData.height },
           },
-          actions
+          actions,
         );
       } else if (fileData.isFile) {
         const fileInfo = fileData.content;
@@ -912,7 +921,7 @@ class Base64Tools extends BaseTool {
             size: fileInfo.size,
             type: fileInfo.type,
           },
-          actions
+          actions,
         );
       } else {
         // Text file (encoded result)
@@ -932,7 +941,7 @@ class Base64Tools extends BaseTool {
             size: fileData.size,
             type: "text/plain",
           },
-          actions
+          actions,
         );
       }
       card.dataset.fileIndex = index;
@@ -1163,6 +1172,14 @@ class Base64Tools extends BaseTool {
         const dateStr = this.getFormattedDate();
         this.downloadBlob(zipBlob, `encoded_b64_${dateStr}.zip`);
         this.showSuccess("Downloaded all files as ZIP");
+
+        // Track download for output preference insights
+        UsageTracker.trackEvent("base64-tools", "download_result", {
+          mode,
+          format: "zip",
+          file_count: selectedFilesForMode.length,
+          output_size: zipBlob.size,
+        });
       } catch (error) {
         console.error("Failed to create ZIP:", error);
         this.showError("Failed to create ZIP file");

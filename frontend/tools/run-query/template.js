@@ -177,13 +177,16 @@ export const JenkinsRunnerTemplate = /*html*/ `
     </div>
 
     <!-- Split Query Modal Overlay -->
-    <div id="jr-split-modal-overlay" class="jr-modal-overlay" style="display:none" aria-hidden="true"></div>
+    <div id="jr-split-modal-overlay" class="jr-modal-overlay jr-split-overlay" style="display:none" aria-hidden="true"></div>
     <!-- Split Query Modal -->
     <div id="jr-split-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-split-modal-title" style="display:none">
       <div class="jr-modal-content jr-split-modal-content">
         <div class="jr-modal-header">
           <h3 id="jr-split-modal-title" class="jr-modal-title">Split Query</h3>
-          <button id="jr-split-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+          <div class="jr-modal-header-actions">
+            <button id="jr-split-minimize" class="btn btn-icon btn-sm-xs" aria-label="Minimize to background" title="Run in background">−</button>
+            <button id="jr-split-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+          </div>
         </div>
         <div class="jr-modal-body jr-split-body" aria-live="polite">
           <aside class="jr-split-sidebar" aria-label="Chunk navigation">
@@ -213,6 +216,15 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <button id="jr-split-cancel" class="btn btn-sm-xs">Cancel</button>
         </div>
       </div>
+    </div>
+
+    <!-- Minimized Split Progress Indicator (floating) -->
+    <div id="jr-split-minimized" class="jr-split-minimized" style="display:none" role="status" aria-live="polite">
+      <div class="jr-split-minimized-content">
+        <span class="jr-split-minimized-icon">⏳</span>
+        <span id="jr-split-minimized-text">Running splits...</span>
+      </div>
+      <button id="jr-split-maximize" class="btn btn-sm-xs" aria-label="Show split modal">Show</button>
     </div>
   </div>
 `;

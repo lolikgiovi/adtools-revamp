@@ -1,4 +1,4 @@
-import { LocalStorageService } from "./services/LocalStorageService.js";
+import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
@@ -19,6 +19,7 @@ import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import JSZip from "jszip";
+import MinifyWorker from "../html-editor/minify.worker.js?worker";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -57,7 +58,8 @@ export class QuickQueryUI {
     this.schemaTable = null;
     this.dataTable = null;
     this.elements = {};
-    this.localStorageService = new LocalStorageService();
+    this.storageService = new IndexedDBStorageService();
+    this._storageReady = false;
     this.schemaValidationService = new SchemaValidationService();
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
@@ -116,10 +118,17 @@ export class QuickQueryUI {
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
       setupMonacoOracle();
+
+      // Initialize IndexedDB storage service BEFORE setting up UI components
+      // to prevent race conditions where early user interactions trigger storage calls
+      await this.storageService.init();
+      this._storageReady = true;
+
       await this.initializeComponents();
       this.setupEventListeners();
       this.setupTableNameSearch();
-      this.loadMostRecentSchema();
+
+      await this.loadMostRecentSchema();
     } catch (error) {
       console.error("Failed to initialize Quick Query:", error);
       this.container.innerHTML = `<div class="error-message">Failed to load: ${error.message}</div>`;
@@ -219,6 +228,13 @@ export class QuickQueryUI {
       closeExcelImportButton: document.getElementById("closeExcelImport"),
       confirmExcelImportButton: document.getElementById("confirmExcelImport"),
       cancelExcelImportButton: document.getElementById("cancelExcelImport"),
+
+      // HTML Minify overlay elements
+      htmlMinifyOverlay: document.getElementById("htmlMinifyOverlay"),
+      htmlMinifyFieldList: document.getElementById("htmlMinifyFieldList"),
+      htmlMinifyConfirmButton: document.getElementById("htmlMinifyConfirm"),
+      htmlMinifySkipButton: document.getElementById("htmlMinifySkip"),
+      closeHtmlMinifyOverlayButton: document.getElementById("closeHtmlMinifyOverlay"),
     };
   }
 
@@ -345,16 +361,16 @@ export class QuickQueryUI {
         click: () => this.handleRemoveLastSchemaRow(),
       },
       showSavedSchemasButton: {
-        click: () => {
+        click: async () => {
           this.elements.schemaOverlay.classList.remove("hidden");
           if (this.elements.savedSchemasSearch) {
             this.elements.savedSchemasSearch.value = "";
           }
           // Ensure latest abbreviations are indexed (e.g., 'svc' for 'service')
-          if (this.localStorageService && typeof this.localStorageService.rebuildIndex === "function") {
-            this.localStorageService.rebuildIndex();
+          if (this.storageService && typeof this.storageService.rebuildIndex === "function") {
+            await this.storageService.rebuildIndex();
           }
-          this.updateSavedSchemasList();
+          await this.updateSavedSchemasList();
         },
       },
       closeSchemaOverlayButton: {
@@ -374,6 +390,17 @@ export class QuickQueryUI {
       },
       cancelGenerationButton: {
         click: () => this.handleCancelGeneration(),
+      },
+      // HTML Minify overlay buttons
+      closeHtmlMinifyOverlayButton: {
+        click: () => this._closeHtmlMinifyOverlay(false),
+      },
+      htmlMinifyOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.htmlMinifyOverlay) {
+            this._closeHtmlMinifyOverlay(false);
+          }
+        },
       },
     };
 
@@ -456,7 +483,10 @@ export class QuickQueryUI {
 
         if (changes.length > 0) {
           const currentData = this.dataTable.getData();
-          this.localStorageService.updateTableData(tableName, currentData);
+          // Fire-and-forget async storage update (don't block UI)
+          this.storageService.updateTableData(tableName, currentData).catch((err) => {
+            console.error("Failed to persist table data:", err);
+          });
         }
       },
       // No height recalculation hooks
@@ -471,8 +501,6 @@ export class QuickQueryUI {
     const currentData = this.dataTable.getData();
 
     const columnHeaders = Array.from({ length: columnCount }, (_, i) => this.queryGenerationService.columnIndexToLetter(i));
-
-    console.log("Column headers:", columnHeaders);
 
     this.dataTable.updateSettings({
       colHeaders: columnHeaders,
@@ -545,7 +573,7 @@ export class QuickQueryUI {
   }
 
   // Event Handlers
-  handleGenerateQuery() {
+  async handleGenerateQuery() {
     // Prevent duplicate generation
     if (this.isGenerating) return;
 
@@ -578,15 +606,28 @@ export class QuickQueryUI {
       }
 
       // Validate before processing (same for both sync and async)
-      this.schemaValidationService.validateSchema(schemaData);
+      this.schemaValidationService.validateSchema(schemaData, tableName);
       this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
       if (!hasExcelData) {
-        this.localStorageService.saveSchema(tableName, schemaData, inputData);
+        await this.storageService.saveSchema(tableName, schemaData, inputData);
       } else {
         // Just save schema without data for large Excel imports
-        this.localStorageService.saveSchema(tableName, schemaData, null);
+        await this.storageService.saveSchema(tableName, schemaData, null);
+      }
+
+      // Check for HTML content in data and prompt for minification
+      const htmlDetection = this._detectHtmlInData(inputData);
+      if (htmlDetection.hasHtml) {
+        const shouldMinify = await this._showHtmlMinifyOverlay(htmlDetection.fields);
+        if (shouldMinify) {
+          await this._minifyHtmlCells(inputData, htmlDetection.fieldIndices);
+          // Update Handsontable if not using Excel data
+          if (!hasExcelData) {
+            this.dataTable.loadData(inputData);
+          }
+        }
       }
 
       // Check if we should use the worker (1000+ rows)
@@ -630,6 +671,10 @@ export class QuickQueryUI {
   async _generateQueryAsync(tableName, queryType, schemaData, inputData) {
     const rowCount = inputData.length - 1; // Exclude header
 
+    // Increment request ID to track this specific generation request
+    this._genReqId = (this._genReqId || 0) + 1;
+    const currentReqId = this._genReqId;
+
     try {
       this.isGenerating = true;
       this._showProgress(`Processing ${rowCount.toLocaleString()} rows...`, 0);
@@ -641,9 +686,18 @@ export class QuickQueryUI {
         inputData,
         this.processedFiles,
         (percent, message) => {
-          this._updateProgress(message, percent);
-        }
+          // Only update progress if this is still the current request
+          if (currentReqId === this._genReqId) {
+            this._updateProgress(message, percent);
+          }
+        },
       );
+
+      // Guard against stale results - discard if a newer request was initiated
+      if (currentReqId !== this._genReqId) {
+        console.log("[QuickQuery] Discarding stale generation result");
+        return;
+      }
 
       this._hideProgress();
       this.isGenerating = false;
@@ -658,6 +712,11 @@ export class QuickQueryUI {
 
       this._trackQueryGenerated(queryType, tableName, rowCount, true);
     } catch (error) {
+      // Only handle error if this is still the current request
+      if (currentReqId !== this._genReqId) {
+        return;
+      }
+
       this._hideProgress();
       this.isGenerating = false;
 
@@ -717,6 +776,173 @@ export class QuickQueryUI {
   }
 
   /**
+   * Detect HTML content in data cells
+   * @returns {{ hasHtml: boolean, fields: string[], fieldIndices: number[] }}
+   */
+  _detectHtmlInData(inputData) {
+    if (!inputData || inputData.length < 2) {
+      return { hasHtml: false, fields: [], fieldIndices: [] };
+    }
+
+    const headers = inputData[0] || [];
+    const fieldsWithHtml = new Set();
+    const fieldIndices = new Set();
+
+    const htmlPattern = /<[a-z][\s\S]*>/i;
+
+    for (let rowIdx = 1; rowIdx < inputData.length; rowIdx++) {
+      const row = inputData[rowIdx];
+      if (!row) continue;
+
+      for (let colIdx = 0; colIdx < row.length; colIdx++) {
+        const cellValue = row[colIdx];
+        if (typeof cellValue === "string" && cellValue.trim().length > 0 && htmlPattern.test(cellValue)) {
+          const fieldName = headers[colIdx] || `Column ${colIdx + 1}`;
+          fieldsWithHtml.add(fieldName);
+          fieldIndices.add(colIdx);
+        }
+      }
+    }
+
+    return {
+      hasHtml: fieldsWithHtml.size > 0,
+      fields: Array.from(fieldsWithHtml),
+      fieldIndices: Array.from(fieldIndices),
+    };
+  }
+
+  /**
+   * Show HTML minify confirmation overlay
+   * @returns {Promise<boolean>} true if user wants to minify
+   */
+  _showHtmlMinifyOverlay(fields) {
+    return new Promise((resolve) => {
+      this._htmlMinifyResolve = resolve;
+
+      // Populate field list
+      const fieldList = this.elements.htmlMinifyFieldList;
+      fieldList.innerHTML = fields.map((f) => `<li>${f}</li>`).join("");
+
+      // Show overlay
+      this.elements.htmlMinifyOverlay.classList.remove("hidden");
+
+      // Bind button handlers
+      const confirmHandler = () => {
+        cleanup();
+        this._closeHtmlMinifyOverlay(true);
+      };
+      const skipHandler = () => {
+        cleanup();
+        this._closeHtmlMinifyOverlay(false);
+      };
+
+      const cleanup = () => {
+        this.elements.htmlMinifyConfirmButton.removeEventListener("click", confirmHandler);
+        this.elements.htmlMinifySkipButton.removeEventListener("click", skipHandler);
+      };
+
+      this.elements.htmlMinifyConfirmButton.addEventListener("click", confirmHandler);
+      this.elements.htmlMinifySkipButton.addEventListener("click", skipHandler);
+    });
+  }
+
+  /**
+   * Close HTML minify overlay and resolve promise
+   */
+  _closeHtmlMinifyOverlay(shouldMinify) {
+    this.elements.htmlMinifyOverlay.classList.add("hidden");
+    if (this._htmlMinifyResolve) {
+      this._htmlMinifyResolve(shouldMinify);
+      this._htmlMinifyResolve = null;
+    }
+  }
+
+  /**
+   * Minify HTML content in specified columns using the minify worker
+   * @returns {{ success: number, failures: Array<{ field: string, row: number, reason: string }> }}
+   */
+  async _minifyHtmlCells(inputData, fieldIndices) {
+    const htmlPattern = /<[a-z][\s\S]*>/i;
+    const headers = inputData[0] || [];
+    const failures = [];
+    let successCount = 0;
+
+    for (let rowIdx = 1; rowIdx < inputData.length; rowIdx++) {
+      const row = inputData[rowIdx];
+      if (!row) continue;
+
+      for (const colIdx of fieldIndices) {
+        const cellValue = row[colIdx];
+        if (typeof cellValue === "string" && cellValue.trim().length > 0 && htmlPattern.test(cellValue)) {
+          try {
+            const minified = await this._minifyHtmlWithWorker(cellValue);
+            row[colIdx] = minified;
+            successCount++;
+          } catch (err) {
+            const fieldName = headers[colIdx] || `Column ${colIdx + 1}`;
+            failures.push({ field: fieldName, row: rowIdx, reason: err.message });
+          }
+        }
+      }
+    }
+
+    if (failures.length > 0) {
+      this._showMinifyFailureWarning(failures);
+    }
+
+    return { success: successCount, failures };
+  }
+
+  /**
+   * Show warning for minification failures
+   */
+  _showMinifyFailureWarning(failures) {
+    const uniqueFields = [...new Set(failures.map((f) => f.field))];
+    const summary = `⚠️ HTML minification failed for ${failures.length} cell(s) in field(s): ${uniqueFields.join(", ")}`;
+    const details = failures
+      .slice(0, 10)
+      .map((f) => `Row ${f.row}, ${f.field}: ${f.reason}`)
+      .join("<br>");
+    const note = failures.length > 10 ? `... and ${failures.length - 10} more failures` : "These cells were left unchanged.";
+
+    this.showWarning({ summary, details, note });
+  }
+
+  /**
+   * Minify HTML using the minify worker (rejects if fallback engine is used)
+   */
+  _minifyHtmlWithWorker(html) {
+    return new Promise((resolve, reject) => {
+      const worker = new MinifyWorker();
+      const cleanup = () => {
+        try {
+          worker.terminate();
+        } catch (_) {}
+      };
+      worker.onmessage = (event) => {
+        const data = event.data || {};
+        const { success, result, error, engine } = data;
+        cleanup();
+        if (!success) {
+          reject(new Error(error || "HTML minify failed"));
+          return;
+        }
+        // Reject fallback engine - regex minification can destroy embedded JS
+        if (engine === "fallback") {
+          reject(new Error("Minifier engine unavailable (fallback rejected)"));
+          return;
+        }
+        resolve(typeof result === "string" ? result : "");
+      };
+      worker.onerror = (err) => {
+        cleanup();
+        reject(err instanceof Error ? err : new Error("Worker error"));
+      };
+      worker.postMessage({ type: "minify", html });
+    });
+  }
+
+  /**
    * Track query generation analytics
    */
   _trackQueryGenerated(queryType, tableName, rowCount, usedWorker) {
@@ -727,6 +953,7 @@ export class QuickQueryUI {
       rowCount,
       hasAttachments: this.processedFiles.length > 0,
       usedWorker,
+      table_name: tableName,
     });
   }
 
@@ -779,6 +1006,13 @@ export class QuickQueryUI {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    // Track download for output preference insights
+    UsageTracker.trackEvent("quick-query", "download_sql", {
+      table_name: tableName,
+      file_size: blob.size,
+      query_type: this.elements.queryTypeSelect?.value || "unknown",
+    });
 
     const displayName = tableName || sanitizedTableName;
     if (this.eventBus) {
@@ -1004,6 +1238,17 @@ export class QuickQueryUI {
       currentIndex: 0,
       tableName: this.elements.tableNameInput?.value?.trim() || "QUERY",
     };
+
+    // Track split completion for workflow analysis
+    const totalSize = metadata.reduce((sum, m) => sum + m.size, 0);
+    UsageTracker.trackEvent("quick-query", "split_complete", {
+      mode,
+      split_value: value,
+      chunk_count: chunks.length,
+      total_size: totalSize,
+      table_name: this._splitState.tableName,
+      has_oversized: metadata.some((m) => m.isOversized),
+    });
 
     this._openSplitResultsModal();
   }
@@ -1421,8 +1666,8 @@ export class QuickQueryUI {
     }
   }
 
-  handleClearAllSchemas() {
-    const allTables = this.localStorageService.getAllTables();
+  async handleClearAllSchemas() {
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length === 0) {
       this.showError("No schemas to clear");
       return;
@@ -1432,7 +1677,7 @@ export class QuickQueryUI {
       return;
     }
 
-    const schemaCleared = this.localStorageService.clearAllSchemas();
+    const schemaCleared = await this.storageService.clearAllSchemas();
     if (schemaCleared) {
       this.showSuccess("All saved schemas have been cleared");
       this.elements.schemaOverlay.classList.add("hidden");
@@ -1442,8 +1687,8 @@ export class QuickQueryUI {
   }
 
   // Schema management methods
-  updateSavedSchemasList(filteredTables) {
-    const allTables = this.localStorageService.getAllTables();
+  async updateSavedSchemasList(filteredTables) {
+    const allTables = await this.storageService.getAllTables();
     const tablesToRender = Array.isArray(filteredTables) ? filteredTables : allTables;
 
     if (tablesToRender.length === 0) {
@@ -1515,33 +1760,33 @@ export class QuickQueryUI {
     });
   }
 
-  handleSavedSchemasSearchInput(event) {
+  async handleSavedSchemasSearchInput(event) {
     const input = event.target.value.trim();
 
     // Empty search: show all saved schemas
     if (!input) {
-      this.updateSavedSchemasList();
+      await this.updateSavedSchemasList();
       return;
     }
 
     // Table-only search when input starts with '.'
     if (input.startsWith(".")) {
       const tableTerm = input.slice(1).trim();
-      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+      if (!this.storageService.validateOracleName(tableTerm, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(tableTerm);
-      this.updateSavedSchemasList(results);
+      const results = await this.storageService.searchSavedSchemas(tableTerm);
+      await this.updateSavedSchemasList(results);
       return;
     }
 
     // Table-only search when no '.' present
     if (!input.includes(".")) {
-      if (!this.localStorageService.validateOracleName(input, "table")) {
+      if (!this.storageService.validateOracleName(input, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(input);
-      this.updateSavedSchemasList(results);
+      const results = await this.storageService.searchSavedSchemas(input);
+      await this.updateSavedSchemasList(results);
       return;
     }
 
@@ -1549,20 +1794,20 @@ export class QuickQueryUI {
     const parts = input.split(".");
     const schemaPart = parts[0];
     const tablePart = parts[1];
-    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+    if (!this.storageService.validateOracleName(schemaPart, "schema")) {
       return;
     }
     const tableValidation = tablePart === "" ? undefined : tablePart;
-    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
+    if (!this.storageService.validateOracleName(tableValidation, "table")) {
       return;
     }
 
-    const results = this.localStorageService.searchSavedSchemas(input);
-    this.updateSavedSchemasList(results);
+    const results = await this.storageService.searchSavedSchemas(input);
+    await this.updateSavedSchemasList(results);
   }
 
-  handleLoadSchema(fullName) {
-    const result = this.localStorageService.loadSchema(fullName, true);
+  async handleLoadSchema(fullName) {
+    const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
       this.elements.tableNameInput.value = fullName;
       this.schemaTable.loadData(result.schema);
@@ -1578,16 +1823,25 @@ export class QuickQueryUI {
 
       this.elements.schemaOverlay.classList.add("hidden");
       this.clearError();
+
+      // Track schema load for usage insights
+      UsageTracker.trackEvent("quick-query", "schema_load", {
+        source: "cache",
+        table_name: fullName,
+        has_cached_data: Boolean(result.data),
+        row_count: result.data ? result.data.length : 0,
+        column_count: result.schema ? result.schema.length : 0,
+      });
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
     }
   }
 
-  handleDeleteSchema(fullName) {
+  async handleDeleteSchema(fullName) {
     if (confirm(`Delete schema for ${fullName}?`)) {
-      const deleted = this.localStorageService.deleteSchema(fullName);
+      const deleted = await this.storageService.deleteSchema(fullName);
       if (deleted) {
-        this.updateSavedSchemasList();
+        await this.updateSavedSchemasList();
 
         const currentTable = this.elements.tableNameInput.value;
         if (currentTable === fullName) {
@@ -1599,23 +1853,23 @@ export class QuickQueryUI {
     }
   }
 
-  handleExportSchemas() {
-    const allTables = this.localStorageService.getAllTables();
+  async handleExportSchemas() {
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length === 0) {
       this.showError("No schemas to export");
       return;
     }
 
     const exportData = {};
-    allTables.forEach((table) => {
-      const schema = this.localStorageService.loadSchema(table.fullName);
+    for (const table of allTables) {
+      const schema = await this.storageService.loadSchema(table.fullName);
       if (schema) {
         if (!exportData[table.schemaName]) {
           exportData[table.schemaName] = {};
         }
         exportData[table.schemaName][table.tableName] = schema;
       }
-    });
+    }
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: "application/json",
@@ -1642,7 +1896,7 @@ export class QuickQueryUI {
         Array.isArray(schema) &&
         schema.every(
           (row) =>
-            Array.isArray(row) && row.length >= 3 && typeof row[0] === "string" && typeof row[1] === "string" && typeof row[2] === "string"
+            Array.isArray(row) && row.length >= 3 && typeof row[0] === "string" && typeof row[1] === "string" && typeof row[2] === "string",
         )
       );
     };
@@ -1697,8 +1951,8 @@ export class QuickQueryUI {
       }
       if (!value) throw new Error("No default schema found in KV");
 
-      const count = importSchemasPayload(value, this.localStorageService);
-      this.updateSavedSchemasList();
+      const count = await importSchemasPayload(value, this.storageService);
+      await this.updateSavedSchemasList();
       if (!count) {
         throw new Error("No default table schemas imported. Verify KV format.");
       }
@@ -1707,7 +1961,12 @@ export class QuickQueryUI {
     } catch (e) {
       if (String(e?.message || e) !== "Closed") {
         this.showError(`Failed to import default schema: ${String(e?.message || e)}`);
-        UsageTracker.trackEvent("quick-query", "ui_error", { type: "kv_import_failed", message: String(e?.message || e) });
+        const tableName = this.elements.tableNameInput.value.trim();
+        UsageTracker.trackEvent("quick-query", "ui_error", {
+          type: "kv_import_failed",
+          message: String(e?.message || e),
+          table_name: tableName,
+        });
       }
     }
   }
@@ -1765,11 +2024,13 @@ export class QuickQueryUI {
     return v;
   }
 
-  handleSearchInput(event) {
-    const el = this.elements.tableNameInput;
-    const raw = el.value;
-    const sanitized = this.sanitizeTableInputValue(raw);
-    if (sanitized !== raw) {
+  async handleSearchInput(event) {
+    const el = event.target;
+    let rawValue = el.value;
+
+    // Sanitize input: only keep valid Oracle characters [A-Za-z0-9_.]
+    const sanitized = rawValue.replace(/[^a-zA-Z0-9_.]/g, "");
+    if (sanitized !== rawValue) {
       // Replace the value with sanitized content; caret is moved to end for simplicity
       el.value = sanitized;
     }
@@ -1777,8 +2038,8 @@ export class QuickQueryUI {
     this.elements.tableNameInput.style.borderColor = "";
 
     if (!input) {
-      const results = this.localStorageService.searchSavedSchemas("").slice(0, 7);
-      this.showSearchDropdown(results);
+      const results = await this.storageService.searchSavedSchemas("");
+      this.showSearchDropdown(results.slice(0, 7));
       return;
     }
 
@@ -1787,19 +2048,19 @@ export class QuickQueryUI {
     // - If input has no '.', also treat as table-only
     if (input.startsWith(".")) {
       const tableTerm = input.slice(1).trim();
-      if (!this.localStorageService.validateOracleName(tableTerm, "table")) {
+      if (!this.storageService.validateOracleName(tableTerm, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(tableTerm);
+      const results = await this.storageService.searchSavedSchemas(tableTerm);
       this.showSearchDropdown(results);
       return;
     }
 
     if (!input.includes(".")) {
-      if (!this.localStorageService.validateOracleName(input, "table")) {
+      if (!this.storageService.validateOracleName(input, "table")) {
         return;
       }
-      const results = this.localStorageService.searchSavedSchemas(input);
+      const results = await this.storageService.searchSavedSchemas(input);
       this.showSearchDropdown(results);
       return;
     }
@@ -1807,22 +2068,22 @@ export class QuickQueryUI {
     const parts = input.split(".");
     const schemaPart = parts[0];
     const tablePart = parts[1];
-    if (!this.localStorageService.validateOracleName(schemaPart, "schema")) {
+    if (!this.storageService.validateOracleName(schemaPart, "schema")) {
       return;
     }
     const tableValidation = tablePart === "" ? undefined : tablePart; // allow empty table part when dot present
-    if (!this.localStorageService.validateOracleName(tableValidation, "table")) {
+    if (!this.storageService.validateOracleName(tableValidation, "table")) {
       return;
     }
 
-    const results = this.localStorageService.searchSavedSchemas(input);
+    const results = await this.storageService.searchSavedSchemas(input);
     this.showSearchDropdown(results);
   }
 
-  handleSearchKeyDown(event) {
+  async handleSearchKeyDown(event) {
     if (this.elements.dropdownContainer.style.display === "none" && event.key === "ArrowDown") {
-      const results = this.localStorageService.searchSavedSchemas("").slice(0, 7);
-      this.showSearchDropdown(results);
+      const results = await this.storageService.searchSavedSchemas("");
+      this.showSearchDropdown(results.slice(0, 7));
       this.searchState.selectedIndex = -1;
       return;
     }
@@ -1931,16 +2192,16 @@ export class QuickQueryUI {
     });
   }
 
-  loadMostRecentSchema() {
+  async loadMostRecentSchema() {
     // Prefer last activity from data store to restore the most recent working table
-    const recentFromData = this.localStorageService.getMostRecentDataTable();
+    const recentFromData = await this.storageService.getMostRecentDataTable();
     if (recentFromData && recentFromData.fullName) {
-      this.handleLoadSchema(recentFromData.fullName);
+      await this.handleLoadSchema(recentFromData.fullName);
       return;
     }
 
     // Fallback: choose the most recent by timestamp across all tables
-    const allTables = this.localStorageService.getAllTables();
+    const allTables = await this.storageService.getAllTables();
     if (allTables.length > 0) {
       const mostRecent = allTables.reduce((best, t) => {
         const ts = t.lastUpdated ? new Date(t.lastUpdated).getTime() : -1;
@@ -1948,7 +2209,7 @@ export class QuickQueryUI {
         return best;
       }, null);
       if (mostRecent?.t?.fullName) {
-        this.handleLoadSchema(mostRecent.t.fullName);
+        await this.handleLoadSchema(mostRecent.t.fullName);
       }
     }
   }
@@ -1966,22 +2227,28 @@ export class QuickQueryUI {
       }
 
       let importCount = 0;
-      Object.entries(jsonData).forEach(([schemaName, tables]) => {
-        Object.entries(tables).forEach(([tableName, schema]) => {
+      for (const [schemaName, tables] of Object.entries(jsonData)) {
+        for (const [tableName, schema] of Object.entries(tables)) {
           const fullTableName = `${schemaName}.${tableName}`;
-          if (this.localStorageService.saveSchema(fullTableName, schema)) {
+          if (await this.storageService.saveSchema(fullTableName, schema)) {
             importCount++;
           }
-        });
-      });
+        }
+      }
 
-      this.updateSavedSchemasList();
+      await this.updateSavedSchemasList();
       this.showSuccess(`Successfully imported ${importCount} table schemas`);
       setTimeout(() => this.clearError(), 3000);
     } catch (error) {
       this.showError(`Failed to import schemas: ${error.message}`);
       const file = event?.target?.files?.[0];
-      UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_import_failed", message: error.message, filename: file?.name });
+      const tableName = this.elements.tableNameInput.value.trim();
+      UsageTracker.trackEvent("quick-query", "ui_error", {
+        type: "schema_import_failed",
+        message: error.message,
+        filename: file?.name,
+        table_name: tableName,
+      });
     } finally {
       event.target.value = ""; // Reset file input
     }
@@ -2002,7 +2269,7 @@ export class QuickQueryUI {
               row.length >= 3 && // At least name, type, and nullable
               typeof row[0] === "string" &&
               typeof row[1] === "string" &&
-              typeof row[2] === "string"
+              typeof row[2] === "string",
           )
         );
       });
@@ -2053,7 +2320,8 @@ export class QuickQueryUI {
         this.updateDataSpreadsheet();
       } catch (error) {
         console.error("Error updating schema table:", error);
-        UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_update_failed", message: error.message });
+        const tableName = this.elements.tableNameInput.value.trim();
+        UsageTracker.trackEvent("quick-query", "ui_error", { type: "schema_update_failed", message: error.message, table_name: tableName });
       }
     }
   }
@@ -2156,7 +2424,8 @@ export class QuickQueryUI {
 
     // Process the files using existing attachment processor
     try {
-      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess);
+      const tableName = this.elements.tableNameInput.value.trim();
+      const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess, tableName);
       this.processedFiles = [...this.processedFiles, ...addedFiles];
 
       // Clear current file items and re-render full list
@@ -2246,7 +2515,8 @@ export class QuickQueryUI {
     if (files.length === 0) return;
 
     try {
-      const addedFiles = await this.attachmentProcessorService.processAttachments(files);
+      const tableName = this.elements.tableNameInput.value.trim();
+      const addedFiles = await this.attachmentProcessorService.processAttachments(files, tableName);
       // Merge with existing files while preserving previously added ones
       this.processedFiles = [...this.processedFiles, ...addedFiles];
 
@@ -2301,16 +2571,35 @@ export class QuickQueryUI {
       btn.setAttribute("aria-disabled", "true");
     }
 
+    const failedFiles = [];
     this.processedFiles = await Promise.all(
       this.processedFiles.map(async (file) => {
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         const t = (file.type || "").toLowerCase();
         if (["txt", "html", "htm", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
-          return await this.attachmentProcessorService.minifyContent(file);
+          const tableName = this.elements.tableNameInput.value.trim();
+          const result = await this.attachmentProcessorService.minifyContent(file, tableName);
+          if (result.minifyFailed) {
+            failedFiles.push(file.name);
+          }
+          return result.file;
         }
         return file;
-      })
+      }),
     );
+
+    // Show notification for minification results
+    if (this.eventBus) {
+      if (failedFiles.length > 0) {
+        const message =
+          failedFiles.length === 1
+            ? `Minification failed for ${failedFiles[0]}, original content kept`
+            : `Minification failed for ${failedFiles.length} files, original content kept`;
+        this.eventBus.emit("notification:error", { message, duration: 4000 });
+      } else {
+        this.eventBus.emit("notification:success", { message: "Minification completed", duration: 2500 });
+      }
+    }
 
     // Refresh viewer if it's open
     const fileViewer = document.getElementById("fileViewerOverlay");
@@ -2407,7 +2696,7 @@ export class QuickQueryUI {
           metadataElements.dimensions.textContent = `Dimensions: ${img.naturalWidth} × ${img.naturalHeight}`;
 
           [metadataElements.fileSize, metadataElements.base64Size, metadataElements.dimensions].forEach((el) =>
-            el.classList.remove("hidden")
+            el.classList.remove("hidden"),
           );
         };
       } else {

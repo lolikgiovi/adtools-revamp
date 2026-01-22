@@ -3,6 +3,7 @@ import "./styles.css";
 import { SettingsService } from "./service.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
+import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -93,6 +94,9 @@ class SettingsPage {
 
     // Migrate Jenkins username from keychain to localStorage (one-time)
     await this.#migrateJenkinsUsername();
+
+    // Migrate to unified keychain (reduces password prompts after app updates)
+    await ensureUnifiedKeychain();
 
     await this.reloadConfig();
   }

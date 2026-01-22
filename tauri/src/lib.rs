@@ -24,11 +24,13 @@ pub fn run() {
       set_jenkins_username,
       set_jenkins_token,
       has_jenkins_token,
+      migrate_to_unified_keychain,
       jenkins_get_env_choices,
       jenkins_trigger_job,
       jenkins_trigger_batch_job,
       jenkins_poll_queue_for_build,
       jenkins_stream_logs,
+      jenkins_get_build_status,
       open_url,
       get_arch,
       fetch_lockey_json,
@@ -186,6 +188,102 @@ use jenkins::Credentials;
 
 const KEYCHAIN_SERVICE: &str = "ad-tools:jenkins";
 const CONFLUENCE_KEYCHAIN_SERVICE: &str = "ad-tools:confluence";
+const UNIFIED_KEYCHAIN_SERVICE: &str = "ad-tools:credentials";
+const UNIFIED_KEYCHAIN_KEY: &str = "secrets";
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct UnifiedSecrets {
+    jenkins_token: Option<String>,
+    confluence_pat: Option<String>,
+}
+
+fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
+    let entry = Entry::new(UNIFIED_KEYCHAIN_SERVICE, UNIFIED_KEYCHAIN_KEY).map_err(|e| e.to_string())?;
+    match entry.get_password() {
+        Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse secrets: {}", e)),
+        // NoEntry means no credential exists yet - return empty defaults
+        Err(keyring::Error::NoEntry) => Ok(UnifiedSecrets::default()),
+        // NoStorageAccess means user cancelled prompt or permission denied - propagate error
+        Err(keyring::Error::NoStorageAccess(e)) => Err(format!("Keychain access denied: {}", e)),
+        // Other errors (PlatformFailure, etc.) - propagate for debugging
+        Err(e) => Err(format!("Keychain error: {}", e)),
+    }
+}
+
+fn save_unified_secrets(secrets: &UnifiedSecrets) -> Result<(), String> {
+    let entry = Entry::new(UNIFIED_KEYCHAIN_SERVICE, UNIFIED_KEYCHAIN_KEY).map_err(|e| e.to_string())?;
+    let json_str = serde_json::to_string(secrets).map_err(|e| format!("Failed to serialize secrets: {}", e))?;
+    entry.set_password(&json_str).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+struct MigrationResult {
+    migrated_jenkins: bool,
+    migrated_confluence: bool,
+    already_unified: bool,
+    no_credentials: bool,
+}
+
+#[tauri::command]
+fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, String> {
+    let mut secrets = load_unified_secrets()?;
+    let had_jenkins = secrets.jenkins_token.is_some();
+    let had_confluence = secrets.confluence_pat.is_some();
+    
+    let mut migrated_jenkins = false;
+    let mut migrated_confluence = false;
+    let mut found_old_jenkins = false;
+    let mut found_old_confluence = false;
+    
+    // Try migrating Jenkins token if not already in unified
+    if secrets.jenkins_token.is_none() && !username.is_empty() {
+        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
+            if let Ok(token) = entry.get_password() {
+                secrets.jenkins_token = Some(token);
+                migrated_jenkins = true;
+                found_old_jenkins = true;
+            }
+        }
+    }
+    
+    // Try migrating Confluence PAT if not already in unified
+    if secrets.confluence_pat.is_none() {
+        if let Ok(entry) = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
+            if let Ok(pat) = entry.get_password() {
+                secrets.confluence_pat = Some(pat);
+                migrated_confluence = true;
+                found_old_confluence = true;
+            }
+        }
+    }
+    
+    // Save if anything changed
+    if migrated_jenkins || migrated_confluence {
+        save_unified_secrets(&secrets)?;
+        
+        // Delete old entries after successful migration
+        if migrated_jenkins {
+            if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
+                let _ = entry.delete_password();
+            }
+        }
+        if migrated_confluence {
+            if let Ok(entry) = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
+                let _ = entry.delete_password();
+            }
+        }
+    }
+    
+    // no_credentials = true if there's nothing in unified AND nothing was found in old locations
+    let no_credentials = !had_jenkins && !had_confluence && !found_old_jenkins && !found_old_confluence;
+    
+    Ok(MigrationResult {
+        migrated_jenkins,
+        migrated_confluence,
+        already_unified: had_jenkins || had_confluence,
+        no_credentials,
+    })
+}
 
 fn http_client() -> Client {
   Client::builder()
@@ -205,8 +303,8 @@ fn confluence_http_client() -> Client {
 }
 
 pub async fn load_credentials(username: String) -> Result<Credentials, String> {
-  let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
-  let token = token_entry.get_password().map_err(|e| e.to_string())?;
+  let secrets = load_unified_secrets()?;
+  let token = secrets.jenkins_token.ok_or("Jenkins token not found in keychain")?;
   Ok(Credentials { username, token })
 }
 
@@ -230,9 +328,10 @@ fn set_jenkins_username(username: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_jenkins_token(username: String, token: String) -> Result<(), String> {
-  let token_entry = Entry::new(KEYCHAIN_SERVICE, &username).map_err(|e| e.to_string())?;
-  token_entry.set_password(&token).map_err(|e| e.to_string())
+fn set_jenkins_token(_username: String, token: String) -> Result<(), String> {
+  let mut secrets = load_unified_secrets()?;
+  secrets.jenkins_token = Some(token);
+  save_unified_secrets(&secrets)
 }
 
 #[tauri::command]
@@ -240,8 +339,8 @@ fn has_jenkins_token(username: String) -> Result<bool, String> {
   if username.is_empty() {
     return Ok(false);
   }
-  let token_entry = match Entry::new(KEYCHAIN_SERVICE, &username) { Ok(e) => e, Err(_) => return Ok(false) };
-  match token_entry.get_password() { Ok(_) => Ok(true), Err(_) => Ok(false) }
+  let secrets = load_unified_secrets()?;
+  Ok(secrets.jenkins_token.is_some())
 }
 
 
@@ -271,28 +370,102 @@ async fn jenkins_stream_logs(app: AppHandle, base_url: String, job: String, buil
   let creds = load_credentials(username).await?;
   let client = http_client();
 
+  println!("[jenkins_stream_logs] Starting stream for build #{}", build_number);
+  let _ = app.emit("jenkins:log-debug", serde_json::json!({ "message": format!("Starting stream for build #{}", build_number) }));
+
+  let base_url_clone = base_url.clone();
+  let job_clone = job.clone();
+  let creds_clone = jenkins::Credentials { username: creds.username.clone(), token: creds.token.clone() };
+
   tauri::async_runtime::spawn(async move {
     let mut start: u64 = 0;
+    let mut iteration: u64 = 0;
+    let mut stale_count: u64 = 0; // Count iterations with no new data
+    let mut last_offset: u64 = 0;
+    let stream_start = std::time::Instant::now();
+    
     loop {
+      iteration += 1;
+      let iter_start = std::time::Instant::now();
+      println!("[jenkins_stream_logs] Build #{} iteration {} (offset {})", build_number, iteration, start);
+      
       match jenkins::progressive_log_once(&client, &base_url, &job, build_number, start, &creds).await {
         Ok((text, next, more)) => {
-          let _ = app.emit("jenkins:log", serde_json::json!({ "chunk": text, "next_offset": next, "more": more }));
+          let elapsed_ms = iter_start.elapsed().as_millis();
+          println!("[jenkins_stream_logs] Build #{} iteration {} OK: next={}, more={}, text_len={}, took {}ms", 
+                   build_number, iteration, next, more, text.len(), elapsed_ms);
+          
+          let _ = app.emit("jenkins:log", serde_json::json!({ 
+            "chunk": text, 
+            "next_offset": next, 
+            "more": more,
+            "build_number": build_number,
+            "iteration": iteration
+          }));
+          
           if !more {
+            let total_elapsed = stream_start.elapsed().as_secs();
+            println!("[jenkins_stream_logs] Build #{} COMPLETE (more=false) after {} iterations, {}s total", build_number, iteration, total_elapsed);
             let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number }));
             break;
           }
+          
+          // Track if we're getting new data
+          if next == last_offset {
+            stale_count += 1;
+            println!("[jenkins_stream_logs] Build #{} stale data (count: {})", build_number, stale_count);
+          } else {
+            stale_count = 0;
+            last_offset = next;
+          }
+          
+          // If stale for too long, check build status directly
+          if stale_count >= 10 {
+            println!("[jenkins_stream_logs] Build #{} checking build status due to stale data", build_number);
+            match jenkins::get_build_status(&client, &base_url_clone, &job_clone, build_number, &creds_clone).await {
+              Ok((is_building, result)) => {
+                println!("[jenkins_stream_logs] Build #{} status: is_building={}, result={:?}", build_number, is_building, result);
+                if !is_building {
+                  // Build is done but X-More-Data was true - force complete
+                  let total_elapsed = stream_start.elapsed().as_secs();
+                  println!("[jenkins_stream_logs] Build #{} COMPLETE (forced via status check) after {} iterations, {}s total", build_number, iteration, total_elapsed);
+                  let _ = app.emit("jenkins:log-complete", serde_json::json!({ "build_number": build_number }));
+                  break;
+                }
+              }
+              Err(e) => {
+                println!("[jenkins_stream_logs] Build #{} status check failed: {}", build_number, e);
+              }
+            }
+            stale_count = 0; // Reset and continue trying
+          }
+          
           start = next;
         }
         Err(e) => {
-          let _ = app.emit("jenkins:log-error", e);
+          let elapsed_ms = iter_start.elapsed().as_millis();
+          println!("[jenkins_stream_logs] Build #{} iteration {} ERROR after {}ms: {}", build_number, iteration, elapsed_ms, e);
+          let _ = app.emit("jenkins:log-error", serde_json::json!({ 
+            "error": e.clone(), 
+            "build_number": build_number,
+            "iteration": iteration 
+          }));
           break;
         }
       }
       tokio::time::sleep(Duration::from_millis(800)).await;
     }
+    println!("[jenkins_stream_logs] Build #{} stream task exiting", build_number);
   });
 
   Ok(())
+}
+
+#[tauri::command]
+async fn jenkins_get_build_status(base_url: String, job: String, build_number: u64, username: String) -> Result<(bool, Option<String>), String> {
+  let creds = load_credentials(username).await?;
+  let client = http_client();
+  jenkins::get_build_status(&client, &base_url, &job, build_number, &creds).await
 }
 
 #[tauri::command]
@@ -463,25 +636,20 @@ async fn clear_lockey_cache(
 
 #[tauri::command]
 fn set_confluence_pat(pat: String) -> Result<(), String> {
-  let entry = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat").map_err(|e| e.to_string())?;
-  entry.set_password(&pat).map_err(|e| e.to_string())
+  let mut secrets = load_unified_secrets()?;
+  secrets.confluence_pat = Some(pat);
+  save_unified_secrets(&secrets)
 }
 
 #[tauri::command]
 fn has_confluence_pat() -> Result<bool, String> {
-  let entry = match Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
-    Ok(e) => e,
-    Err(_) => return Ok(false),
-  };
-  match entry.get_password() {
-    Ok(_) => Ok(true),
-    Err(_) => Ok(false),
-  }
+  let secrets = load_unified_secrets().unwrap_or_default();
+  Ok(secrets.confluence_pat.is_some())
 }
 
 async fn load_confluence_pat() -> Result<String, String> {
-  let entry = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat").map_err(|e| e.to_string())?;
-  entry.get_password().map_err(|e| format!("PAT not found in keychain: {}", e))
+  let secrets = load_unified_secrets()?;
+  secrets.confluence_pat.ok_or_else(|| "Confluence PAT not found in keychain".to_string())
 }
 
 #[tauri::command]

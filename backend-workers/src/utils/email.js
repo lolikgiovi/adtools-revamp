@@ -2,7 +2,7 @@
  * Email utilities for domain validation and OTP sending
  */
 
-import { tsGmt7 } from './timestamps.js';
+import { tsGmt7 } from "./timestamps.js";
 
 /**
  * Parses allowed email domains from environment
@@ -17,7 +17,7 @@ export function allowedEmailDomains(env) {
     .map((d) =>
       String(d || "")
         .trim()
-        .toLowerCase()
+        .toLowerCase(),
     )
     .filter(Boolean);
 }
@@ -39,7 +39,7 @@ export function isEmailDomainAllowed(email, env) {
 }
 
 /**
- * Sends OTP verification email via MailChannels
+ * Sends OTP verification email via Resend
  * @param {object} env - Environment bindings
  * @param {string} to - Recipient email address
  * @param {string} code - OTP code to send
@@ -48,28 +48,24 @@ export function isEmailDomainAllowed(email, env) {
 export async function sendOtpEmail(env, to, code) {
   try {
     const subjectPrefix = String(env.MAIL_SUBJECT_PREFIX || "[AD Tools]");
-    const subject = `${subjectPrefix} Verify your email`;
+    const subject = `${subjectPrefix} OTP for AD Tools`;
     const fromEmail = String(env.MAIL_FROM || "no-reply@adtools.local");
-    const body = JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: fromEmail },
-      subject,
-      content: [
-        {
-          type: "text/plain",
-          value: `Your verification code is ${code}. It expires in 10 minutes.`,
-        },
-      ],
-    });
-    const headers = { "Content-Type": "application/json" };
-    const apiKey = env.MAILCHANNELS_API_KEY || env.MAILCHANNELS_TOKEN || "";
-    if (apiKey) headers["X-Api-Key"] = apiKey;
+    const fromName = String(env.MAIL_FROM_NAME || "AD Tools");
 
-    const res = await fetch("https://api.mailchannels.net/tx/v1/send", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers,
-      body,
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${fromName} <${fromEmail}>`,
+        to: [to],
+        subject,
+        text: `Your verification code is ${code}. It expires in 10 minutes. Email sent via Resend service.`,
+      }),
     });
+
     let text = "";
     try {
       text = await res.text();

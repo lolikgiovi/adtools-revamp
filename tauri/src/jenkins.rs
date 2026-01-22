@@ -1,4 +1,4 @@
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde::Deserialize;
 use chrono::{Datelike, Local};
 
@@ -90,7 +90,8 @@ pub async fn trigger_job(client: &Client, base_url: &str, job: &str, env: &str, 
   }
 
   let res = req.send().await.map_err(|e| e.to_string())?;
-  if res.status() != StatusCode::CREATED { return Err(format!("Trigger failed: HTTP {}", res.status())); }
+  // Accept both 200 OK and 201 Created as success (Jenkins may return either)
+  if !res.status().is_success() { return Err(format!("Trigger failed: HTTP {}", res.status())); }
   let loc = res
     .headers()
     .get(reqwest::header::LOCATION)
@@ -137,6 +138,24 @@ pub async fn progressive_log_once(client: &Client, base_url: &str, job: &str, bu
   Ok((text, next, more))
 }
 
+/// Get build status (result and whether it's still building)
+/// Returns (is_building, result) where result is None if still building, or Some("SUCCESS"|"FAILURE"|"ABORTED"|etc)
+pub async fn get_build_status(client: &Client, base_url: &str, job: &str, build_number: u64, creds: &Credentials) -> Result<(bool, Option<String>), String> {
+  let base = base_url.trim_end_matches('/');
+  let url = format!("{}/job/{}/{}/api/json?tree=building,result", base, job, build_number);
+  let res = client
+    .get(&url)
+    .basic_auth(&creds.username, Some(&creds.token))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?;
+  if !res.status().is_success() { return Err(format!("HTTP {}", res.status())); }
+  let v: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+  let building = v.get("building").and_then(|b| b.as_bool()).unwrap_or(true);
+  let result = v.get("result").and_then(|r| r.as_str()).map(|s| s.to_string());
+  Ok((building, result))
+}
+
 /// Trigger tester-batch-manual-trigger job with ENVIRONMENT, BATCH_NAME, and JOB_NAME parameters
 pub async fn trigger_batch_job(client: &Client, base_url: &str, env: &str, batch_name: &str, job_name: &str, creds: &Credentials) -> Result<String, String> {
   let base = base_url.trim_end_matches('/');
@@ -176,7 +195,8 @@ pub async fn trigger_batch_job(client: &Client, base_url: &str, env: &str, batch
   }
 
   let res = req.send().await.map_err(|e| e.to_string())?;
-  if res.status() != StatusCode::CREATED { return Err(format!("Trigger failed: HTTP {}", res.status())); }
+  // Accept both 200 OK and 201 Created as success (Jenkins may return either)
+  if !res.status().is_success() { return Err(format!("Trigger failed: HTTP {}", res.status())); }
   let loc = res
     .headers()
     .get(reqwest::header::LOCATION)

@@ -8,6 +8,7 @@ import { MasterLockeyTemplate } from "./template.js";
 import { MasterLockeyService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import "./styles.css";
 
 class MasterLockey extends BaseTool {
@@ -72,7 +73,10 @@ class MasterLockey extends BaseTool {
     return MasterLockeyTemplate;
   }
 
-  onMount() {
+  async onMount() {
+    // Migrate to unified keychain (reduces password prompts after app updates)
+    await ensureUnifiedKeychain();
+
     this.bindElements();
     this.loadDomainConfig();
     this.setupEventListeners();

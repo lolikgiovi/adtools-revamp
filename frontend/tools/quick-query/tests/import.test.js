@@ -15,11 +15,11 @@ describe('SchemaImportService (KV nested tables payload)', () => {
     svc = new LocalStorageService();
   });
 
-  it('imports new_data_model_schema.json and persists tables', () => {
+  it('imports new_data_model_schema.json and persists tables', async () => {
     const jsonPath = path.resolve(__dirname, '../new_data_model_schema.json');
     const payload = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
-    const count = importSchemasPayload(payload, svc);
+    const count = await importSchemasPayload(payload, svc);
     expect(count).toBeGreaterThanOrEqual(2); // two tables in the JSON
 
     const store = JSON.parse(localStorage.getItem(SCHEMA_KEY));

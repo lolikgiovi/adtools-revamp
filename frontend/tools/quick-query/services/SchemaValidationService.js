@@ -2,8 +2,7 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 export class SchemaValidationService {
   constructor() {}
 
-  validateSchema(schemaData) {
-    console.log(schemaData.length);
+  validateSchema(schemaData, tableName) {
     // Check for empty schema
     if (schemaData.length === 0) {
       throw new Error("Schema Validation Error:<br>Please fill in the schema (see the left panel).");
@@ -21,7 +20,7 @@ export class SchemaValidationService {
       // Check if any required field is empty
       if (!fieldName || !dataType || !nullable) {
         throw new Error(
-          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`
+          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`,
         );
       }
 
@@ -63,6 +62,7 @@ export class SchemaValidationService {
         invalidDataTypesCount: invalidDataTypes.length,
         invalidNullableValuesCount: invalidNullableValues.length,
         invalidPkValuesCount: invalidPkValues.length,
+        table_name: tableName,
       });
       throw new Error(`Schema Validation Error:<br>${errors.join("<br>")}`);
     }
@@ -103,7 +103,6 @@ export class SchemaValidationService {
       const columnLetter = this.columnIndexToLetter(emptyColumnIndex);
       throw new Error(`Field Name Error:<br>Empty field name found in data input at column ${columnLetter}`);
     }
-
 
     // Find mismatches in both directions
     const missingInSchema = inputFieldNames.filter((field) => !schemaFieldNames.includes(field));
