@@ -14,7 +14,7 @@ const LEGACY_DATA_KEY = "tool:quick-query:data";
 const ORACLE_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_$#]*$/;
 const MAX_SCHEMA_LENGTH = 30;
 const MAX_TABLE_LENGTH = 128;
-const MAX_CACHED_ROWS = 300;
+const MAX_CACHED_ROWS = 1000;
 
 /**
  * IndexedDB-based storage service for Quick Query tool.
