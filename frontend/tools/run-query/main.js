@@ -9,6 +9,7 @@ import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
+import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
@@ -21,6 +22,7 @@ export class JenkinsRunner extends BaseTool {
       eventBus,
     });
     this.service = new JenkinsRunnerService();
+    this.storageService = new IndexedDBStorageService();
     this.state = {
       jenkinsUrl: "",
       envChoices: [],
@@ -132,6 +134,9 @@ export class JenkinsRunner extends BaseTool {
   }
 
   async onMount() {
+    // Initialize IndexedDB storage service (handles migration from localStorage)
+    await this.storageService.init();
+
     // Clean up any orphaned global split indicator from previous sessions
     // (only if no split execution is currently in progress)
     if (!this.state?.split?.started || this.state?.split?.completed) {
@@ -340,9 +345,9 @@ export class JenkinsRunner extends BaseTool {
       const t = normalizeTag(s);
       return isValidTag(t) ? t : null;
     };
-    const collectAllTags = () => {
+    const collectAllTags = async () => {
       const set = new Set();
-      const arr = loadTemplates();
+      const arr = await loadTemplates();
       for (const t of arr) {
         const tags = Array.isArray(t?.tags) ? t.tags : [];
         for (const tg of tags) {
@@ -539,17 +544,9 @@ export class JenkinsRunner extends BaseTool {
       statusEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
-    const persistEnvKey = "tool:run-query:env";
-    const savedEnv = localStorage.getItem(persistEnvKey) || "";
-
-    // Persist last UI state (URL, job, env, SQL)
-    const persistStateKey = "tool:run-query:lastState";
-    let lastState = {};
-    try {
-      lastState = JSON.parse(localStorage.getItem(persistStateKey) || "{}");
-    } catch (_) {
-      lastState = {};
-    }
+    // Load saved env and last UI state from IndexedDB
+    const savedEnv = await this.storageService.getEnv();
+    let lastState = await this.storageService.getLastState();
     if (lastState.job && allowedJobs.has(lastState.job)) {
       jobInput.value = lastState.job;
     }
@@ -641,7 +638,7 @@ export class JenkinsRunner extends BaseTool {
     this._resizeListener = () => relayoutEditors();
     window.addEventListener("resize", this._resizeListener);
 
-    const saveLastState = (patch = {}) => {
+    const saveLastState = async (patch = {}) => {
       const base = {
         jenkinsUrl: this.state.jenkinsUrl,
         job: jobInput.value.trim(),
@@ -650,9 +647,7 @@ export class JenkinsRunner extends BaseTool {
       };
       const merged = { ...lastState, ...base, ...patch };
       lastState = merged;
-      try {
-        localStorage.setItem(persistStateKey, JSON.stringify(merged));
-      } catch (_) {}
+      await this.storageService.saveLastState(merged);
     };
     saveLastState();
 
@@ -717,25 +712,18 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
-    // Templates: storage and rendering
-    const persistTemplatesKey = "tool:run-query:templates";
-    const loadTemplates = () => {
-      try {
-        const raw = localStorage.getItem(persistTemplatesKey) || "[]";
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-      } catch (_) {
-        return [];
-      }
+    // Templates: storage and rendering (using IndexedDB)
+    const loadTemplates = async () => {
+      return await this.storageService.loadTemplates();
     };
-    const saveTemplates = (arr) => {
-      try {
-        localStorage.setItem(persistTemplatesKey, JSON.stringify(arr));
-      } catch (_) {}
+    const saveTemplate = async (template) => {
+      await this.storageService.saveTemplate(template);
     };
-    const findTemplateByName = (name) => {
-      const arr = loadTemplates();
-      return arr.find((t) => (t?.name || "") === name) || null;
+    const deleteTemplate = async (name) => {
+      await this.storageService.deleteTemplate(name);
+    };
+    const findTemplateByName = async (name) => {
+      return await this.storageService.findTemplateByName(name);
     };
 
     // Modal state
@@ -1252,7 +1240,7 @@ export class JenkinsRunner extends BaseTool {
 
     this.state.editingTemplateName = null;
 
-    const validateTemplateForm = () => {
+    const validateTemplateForm = async () => {
       let ok = true;
       const name = (templateNameInput?.value || "").trim();
       const env = (templateEnvSelect?.value || "").trim();
@@ -1282,7 +1270,7 @@ export class JenkinsRunner extends BaseTool {
       }
 
       // uniqueness check if creating new or renaming
-      const existing = findTemplateByName(name);
+      const existing = await findTemplateByName(name);
       if (!this.state.editingTemplateName && existing) {
         ok = false;
         if (templateNameErrorEl) {
@@ -1300,11 +1288,11 @@ export class JenkinsRunner extends BaseTool {
       return ok;
     };
 
-    const renderTemplates = () => {
+    const renderTemplates = async () => {
       if (!templateListEl) return;
       const q = (templateSearchInput?.value || "").toLowerCase();
       const sort = templateSortSelect?.value || "updated_desc";
-      let arr = loadTemplates();
+      let arr = await loadTemplates();
       // Apply filters
       const envFilter = filterEnvSelect?.value || "all";
       if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
@@ -1432,7 +1420,7 @@ export class JenkinsRunner extends BaseTool {
     });
 
     envSelect.addEventListener("change", () => {
-      localStorage.setItem(persistEnvKey, envSelect.value || "");
+      this.storageService.setEnv(envSelect.value || "");
       saveLastState({ env: envSelect.value });
       toggleSubmitEnabled();
     });
@@ -1447,24 +1435,15 @@ export class JenkinsRunner extends BaseTool {
       }, 200);
     });
 
-    // History persistence and rendering
-    const persistHistoryKey = "tool:run-query:history";
-    const loadHistory = () => {
-      try {
-        const raw = localStorage.getItem(persistHistoryKey) || "[]";
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-      } catch (_) {
-        return [];
-      }
+    // History persistence and rendering (using IndexedDB)
+    const loadHistory = async () => {
+      return await this.storageService.loadHistory();
     };
-    const saveHistory = (arr) => {
-      try {
-        localStorage.setItem(persistHistoryKey, JSON.stringify(arr));
-      } catch (_) {}
+    const addHistoryEntry = async (entry) => {
+      await this.storageService.addHistoryEntry(entry);
     };
-    const renderHistory = () => {
-      const arr = loadHistory();
+    const renderHistory = async () => {
+      const arr = await loadHistory();
       // Helper: build preview from SQL per rules
       const makePreview = (sqlRaw) => {
         try {
@@ -1486,16 +1465,14 @@ export class JenkinsRunner extends BaseTool {
           return "";
         }
       };
-      // Sort by time DESC while preserving original indices for actions
-      const sorted = arr
-        .map((it, i) => ({ it, i }))
-        .sort((a, b) => {
-          const ta = new Date(a.it.timestamp || 0).getTime();
-          const tb = new Date(b.it.timestamp || 0).getTime();
-          return tb - ta;
-        });
+      // Sort by time DESC
+      const sorted = [...arr].sort((a, b) => {
+        const ta = new Date(a.timestamp || 0).getTime();
+        const tb = new Date(b.timestamp || 0).getTime();
+        return tb - ta;
+      });
       const rows = sorted
-        .map(({ it, i }) => {
+        .map((it) => {
           const preview = makePreview(it.sql || "");
           const ts = formatTimestamp(it.timestamp);
           const build = it.buildNumber ? `#${it.buildNumber}` : "";
@@ -1505,8 +1482,8 @@ export class JenkinsRunner extends BaseTool {
             it.env || ""
           }</td><td title="${escTitle}">${preview}</td><td>${build} ${buildLinkHtml}</td><td>
             <div class="jr-col-center">
-              <button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button>
-              <button class="btn btn-sm-xs jr-history-save-template" data-index="${i}">Save as Template</button>
+              <button class="btn btn-sm-xs jr-history-load" data-id="${it._id}">Load</button>
+              <button class="btn btn-sm-xs jr-history-save-template" data-id="${it._id}">Save as Template</button>
             </div>
           </td></tr>`;
         })
@@ -1568,7 +1545,7 @@ export class JenkinsRunner extends BaseTool {
     if (templatesTabBtn) templatesTabBtn.addEventListener("click", switchToTemplates);
 
     if (historyList)
-      historyList.addEventListener("click", (e) => {
+      historyList.addEventListener("click", async (e) => {
         const t = e.target;
         // Handle clicks on history "Open" links to ensure external opening in Tauri/web
         const link = t && (t.closest ? t.closest("a") : null);
@@ -1580,10 +1557,9 @@ export class JenkinsRunner extends BaseTool {
 
         // Handle loading a past entry back into the Run tab
         if (t && t.classList && t.classList.contains("jr-history-load")) {
-          const idx = Number(t.getAttribute("data-index"));
-
-          const arr = loadHistory();
-          const it = arr[idx];
+          const id = t.getAttribute("data-id");
+          const arr = await loadHistory();
+          const it = arr.find((h) => String(h._id) === id);
           if (!it) return;
           if (it.job && allowedJobs.has(it.job)) {
             jobInput.value = it.job;
@@ -1612,10 +1588,9 @@ export class JenkinsRunner extends BaseTool {
 
         // Handle saving a past entry as a template
         if (t && t.classList && t.classList.contains("jr-history-save-template")) {
-          const idx = Number(t.getAttribute("data-index"));
-
-          const arr = loadHistory();
-          const it = arr[idx];
+          const id = t.getAttribute("data-id");
+          const arr = await loadHistory();
+          const it = arr.find((h) => String(h._id) === id);
           if (!it) return;
 
           // Switch to Templates tab and open create modal
@@ -1659,24 +1634,19 @@ export class JenkinsRunner extends BaseTool {
 
     // Templates: list interactions
     if (templateListEl)
-      templateListEl.addEventListener("click", (e) => {
+      templateListEl.addEventListener("click", async (e) => {
         const t = e.target;
         if (!t || !t.classList) return;
         const name = t.getAttribute("data-name");
         if (!name) return;
-        const tpl = findTemplateByName(name);
+        const tpl = await findTemplateByName(name);
         if (!tpl) return;
         if (t.classList.contains("jr-template-pin")) {
           // Toggle pinned state and persist
-          const arr = loadTemplates();
-          const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
-          if (idx >= 0) {
-            const prev = arr[idx] || {};
-            arr[idx] = { ...prev, pinned: !prev.pinned, updatedAt: prev.updatedAt || prev.createdAt || new Date().toISOString() };
-            saveTemplates(arr);
-            renderTemplates();
-            this.showSuccess(arr[idx].pinned ? "Template pinned." : "Template unpinned.");
-          }
+          const updatedTpl = { ...tpl, pinned: !tpl.pinned, updatedAt: tpl.updatedAt || tpl.createdAt || new Date().toISOString() };
+          await saveTemplate(updatedTpl);
+          await renderTemplates();
+          this.showSuccess(updatedTpl.pinned ? "Template pinned." : "Template unpinned.");
           return;
         }
         if (t.classList.contains("jr-template-run")) {
@@ -1722,45 +1692,38 @@ export class JenkinsRunner extends BaseTool {
           openTemplateModal("edit", tpl);
         } else if (t.classList.contains("jr-template-delete")) {
           // Open custom confirmation modal before deleting
-          openConfirmModal(`Delete template "${tpl.name}"? This action cannot be undone.`, () => {
-            const arr = loadTemplates();
-            const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
-            if (idx >= 0) {
-              arr.splice(idx, 1);
-              saveTemplates(arr);
-              renderTemplates();
-              this.showSuccess("Template deleted.");
-            }
+          openConfirmModal(`Delete template "${tpl.name}"? This action cannot be undone.`, async () => {
+            await deleteTemplate(tpl.name);
+            await renderTemplates();
+            this.showSuccess("Template deleted.");
           });
         }
       });
 
     // Templates: modal handlers
     if (templateModalSaveBtn)
-      templateModalSaveBtn.addEventListener("click", () => {
-        if (!validateTemplateForm()) return;
+      templateModalSaveBtn.addEventListener("click", async () => {
+        if (!(await validateTemplateForm())) return;
         const name = (templateNameInput?.value || "").trim();
         const env = (templateEnvSelect?.value || "").trim();
         const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
         // Validate and normalize tags before saving
         const tags = Array.from(new Set(modalTags.map((x) => normalizeTag(x)).filter(isValidTag)));
-        let arr = loadTemplates();
         const now = new Date().toISOString();
-        const existingIdx = arr.findIndex((t) => (t?.name || "") === (this.state.editingTemplateName || name));
-        if (existingIdx >= 0) {
-          const prev = arr[existingIdx];
-          const job = prev?.job || DEFAULT_JOB; // preserve existing job if present
-          arr[existingIdx] = {
-            ...prev,
+        const existing = await findTemplateByName(this.state.editingTemplateName || name);
+        if (existing) {
+          const job = existing?.job || DEFAULT_JOB; // preserve existing job if present
+          const updatedTpl = {
+            ...existing,
             name,
             job,
             env,
             sql,
             tags,
-            version: Number(prev.version || 1) + 1,
+            version: Number(existing.version || 1) + 1,
             updatedAt: now,
           };
-          saveTemplates(arr);
+          await saveTemplate(updatedTpl);
           this.showSuccess("Template updated.");
 
           // Track template update
@@ -1769,13 +1732,13 @@ export class JenkinsRunner extends BaseTool {
               template_name: name,
               env,
               has_tags: tags.length > 0,
-              version: arr[existingIdx].version,
+              version: updatedTpl.version,
             });
           } catch (_) {}
         } else {
           const job = DEFAULT_JOB;
-          arr.push({ name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false });
-          saveTemplates(arr);
+          const newTpl = { name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false };
+          await saveTemplate(newTpl);
           this.showSuccess("Template saved.");
 
           // Track template creation
@@ -1789,7 +1752,7 @@ export class JenkinsRunner extends BaseTool {
           } catch (_) {}
         }
         this.state.editingTemplateName = name;
-        renderTemplates();
+        await renderTemplates();
         closeTemplateModal(true);
       });
 
@@ -1882,8 +1845,8 @@ export class JenkinsRunner extends BaseTool {
           templateTagsInput?.focus();
         }
       });
-      const updateSuggestions = debounce(() => {
-        const all = collectAllTags();
+      const updateSuggestions = debounce(async () => {
+        const all = await collectAllTags();
         const q = normalizeTag(templateTagsInput.value);
         templateTagsContainer.classList.add("jr-loading");
         templateTagsContainer.setAttribute("aria-busy", "true");
@@ -2513,10 +2476,10 @@ export class JenkinsRunner extends BaseTool {
 
                     const chunkSql = currentChunks[idx];
                     // Seed a history entry per chunk with table-derived title
-                    const arrSeed = loadHistory();
                     const chunkTitle = deriveChunkTitle(chunkSql, idx);
-                    arrSeed.push({
-                      timestamp: new Date().toISOString(),
+                    const chunkTimestamp = new Date().toISOString();
+                    await addHistoryEntry({
+                      timestamp: chunkTimestamp,
                       job: currentJob,
                       env: currentEnv,
                       sql: chunkSql,
@@ -2524,9 +2487,7 @@ export class JenkinsRunner extends BaseTool {
                       buildNumber: null,
                       buildUrl: null,
                     });
-                    const histIndex = arrSeed.length - 1;
-                    saveHistory(arrSeed);
-                    renderHistory();
+                    await renderHistory();
                     this.state.split.statuses[idx] = "running";
                     renderSplitChunksList();
                     const chunkStartTime = Date.now();
@@ -2581,12 +2542,13 @@ export class JenkinsRunner extends BaseTool {
                     }
                     // Update this chunk’s history entry with build info
                     try {
-                      const arrUpdate = loadHistory();
-                      if (arrUpdate[histIndex]) {
-                        arrUpdate[histIndex].buildNumber = buildNumber || null;
-                        arrUpdate[histIndex].buildUrl = executableUrl || arrUpdate[histIndex].buildUrl;
-                        saveHistory(arrUpdate);
-                        renderHistory();
+                      const arrUpdate = await loadHistory();
+                      const histEntryToUpdate = arrUpdate.find((h) => h.timestamp === chunkTimestamp);
+                      if (histEntryToUpdate) {
+                        histEntryToUpdate.buildNumber = buildNumber || null;
+                        histEntryToUpdate.buildUrl = executableUrl || histEntryToUpdate.buildUrl;
+                        await addHistoryEntry(histEntryToUpdate);
+                        await renderHistory();
                       }
                     } catch (_) {}
                     if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} streaming…`;
@@ -2615,7 +2577,7 @@ export class JenkinsRunner extends BaseTool {
                     renderSplitChunksList();
                     appendLog(`\n=== Chunk ${idx + 1}/${currentChunks.length} complete ===\n`);
                   }
-                  renderHistory();
+                  await renderHistory();
                   // Calculate success report
                   const successCount = this.state.split.statuses.filter((s) => s === "success").length;
                   const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
@@ -2676,10 +2638,9 @@ export class JenkinsRunner extends BaseTool {
 
         if (totalBytes <= MAX_SQL_BYTES) {
           // Seed history for single-run (non-split)
-          const histEntry = { timestamp: new Date().toISOString(), job, env, sql, buildNumber: null, buildUrl: null };
-          const hist = loadHistory();
-          hist.push(histEntry);
-          saveHistory(hist);
+          const histTimestamp = new Date().toISOString();
+          const histEntry = { timestamp: histTimestamp, job, env, sql, buildNumber: null, buildUrl: null };
+          await addHistoryEntry(histEntry);
           statusEl.textContent = "Triggering job…";
           const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
           this.state.queueUrl = queueUrl;
@@ -2700,13 +2661,13 @@ export class JenkinsRunner extends BaseTool {
                   buildLink.href = executableUrl;
                   buildLink.style.display = "inline-block";
                 }
-                // Update history with build
-                const arr = loadHistory();
-                if (arr.length) {
-                  const last = arr[arr.length - 1];
-                  last.buildNumber = buildNumber;
-                  last.buildUrl = executableUrl || last.buildUrl;
-                  saveHistory(arr);
+                // Update history with build info by finding entry with matching timestamp
+                const arr = await loadHistory();
+                const histEntryToUpdate = arr.find((h) => h.timestamp === histTimestamp);
+                if (histEntryToUpdate) {
+                  histEntryToUpdate.buildNumber = buildNumber;
+                  histEntryToUpdate.buildUrl = executableUrl || histEntryToUpdate.buildUrl;
+                  await addHistoryEntry(histEntryToUpdate);
                 }
                 statusEl.textContent = `Build #${buildNumber} started. Streaming logs…`;
                 await subscribeToLogs();
@@ -2715,7 +2676,7 @@ export class JenkinsRunner extends BaseTool {
                 await this.service.streamLogs(baseUrl, job, buildNumber);
                 await waitForCompletion();
                 runBtn.disabled = false;
-                renderHistory();
+                await renderHistory();
                 return;
               }
               if (attempts > 30) {
