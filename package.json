@@ -7,7 +7,7 @@
     "dev": "vite --port 1234",
     "build": "vite build",
     "build:tauri": "vite build --mode tauri",
-    "prebuild": "npm run test:ci && node backend-workers/scripts/update-build-version.js",
+    "prebuild": "npm run test:ci && node backend-workers/scripts/update-build-version.cjs",
     "prebuild:tauri": "npm run test:ci",
     "postbuild": "cp -R frontend dist/frontend",
     "preview": "vite preview",
