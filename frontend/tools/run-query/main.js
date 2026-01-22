@@ -2259,7 +2259,8 @@ export class JenkinsRunner extends BaseTool {
 
     // Creates a completion waiter that sets up the listener IMMEDIATELY
     // Call this BEFORE streamLogs to avoid race conditions
-    const createBuildCompletionWaiter = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+    const BUILD_COMPLETION_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    const createBuildCompletionWaiter = async (buildNumber, timeoutMs = BUILD_COMPLETION_TIMEOUT_MS) => {
       console.log(`[createBuildCompletionWaiter] Setting up listener for build #${buildNumber}`);
       const startWait = Date.now();
       let resolved = false;
@@ -2317,7 +2318,7 @@ export class JenkinsRunner extends BaseTool {
     };
 
     // Legacy wrapper for compatibility
-    const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
+    const waitForBuildCompletion = async (buildNumber, timeoutMs = BUILD_COMPLETION_TIMEOUT_MS) => {
       const waiter = await createBuildCompletionWaiter(buildNumber, timeoutMs);
       return waiter();
     };
