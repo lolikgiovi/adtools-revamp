@@ -1007,6 +1007,13 @@ export class QuickQueryUI {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
+    // Track download for output preference insights
+    UsageTracker.trackEvent("quick-query", "download_sql", {
+      table_name: tableName,
+      file_size: blob.size,
+      query_type: this.elements.queryTypeSelect?.value || "unknown",
+    });
+
     const displayName = tableName || sanitizedTableName;
     if (this.eventBus) {
       this.eventBus.emit("notification:success", {
@@ -1231,6 +1238,17 @@ export class QuickQueryUI {
       currentIndex: 0,
       tableName: this.elements.tableNameInput?.value?.trim() || "QUERY",
     };
+
+    // Track split completion for workflow analysis
+    const totalSize = metadata.reduce((sum, m) => sum + m.size, 0);
+    UsageTracker.trackEvent("quick-query", "split_complete", {
+      mode,
+      split_value: value,
+      chunk_count: chunks.length,
+      total_size: totalSize,
+      table_name: this._splitState.tableName,
+      has_oversized: metadata.some((m) => m.isOversized),
+    });
 
     this._openSplitResultsModal();
   }
@@ -1805,6 +1823,15 @@ export class QuickQueryUI {
 
       this.elements.schemaOverlay.classList.add("hidden");
       this.clearError();
+
+      // Track schema load for usage insights
+      UsageTracker.trackEvent("quick-query", "schema_load", {
+        source: "cache",
+        table_name: fullName,
+        has_cached_data: Boolean(result.data),
+        row_count: result.data ? result.data.length : 0,
+        column_count: result.schema ? result.schema.length : 0,
+      });
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
     }

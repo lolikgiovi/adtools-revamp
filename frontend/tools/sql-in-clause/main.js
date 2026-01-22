@@ -101,6 +101,11 @@ class SQLInClauseTool extends BaseTool {
         this.format = e.target.value;
         this.toggleSelectDetails();
         this.updateOutput();
+
+        // Track format change for usage patterns
+        UsageTracker.trackEvent("sql-in-clause", "convert", {
+          format: this.format,
+        });
       });
     }
 
@@ -127,6 +132,12 @@ class SQLInClauseTool extends BaseTool {
             this.editor?.setValue(text);
             this.updateOutput();
             this.showSuccess("Pasted from clipboard");
+
+            // Track paste for input behavior
+            UsageTracker.trackEvent("sql-in-clause", "paste_input", {
+              length: text.length,
+              line_count: text.split("\n").length,
+            });
           } else {
             this.showError("Clipboard is empty");
           }

@@ -269,6 +269,7 @@ class CheckImageTool extends BaseTool {
    */
   async fetchAllCellsProgressively(imagePaths, baseUrls) {
     const fetchPromises = [];
+    const startTime = Date.now();
 
     imagePaths.forEach((path, rowIndex) => {
       const normalized = this.imageCheckerService.normalizeInput(path);
@@ -282,6 +283,22 @@ class CheckImageTool extends BaseTool {
     // Wait for all to complete (for analytics)
     try {
       await Promise.all(fetchPromises);
+
+      // Track check completion for performance insights
+      const durationMs = Date.now() - startTime;
+      const timeoutCount = this.timeoutCells.size;
+      const totalCells = imagePaths.length * baseUrls.length;
+      const successCells = document.querySelectorAll(".status-cell.success").length;
+      const failedCells = totalCells - successCells - timeoutCount;
+
+      UsageTracker.trackEvent("check-image", "check_complete", {
+        image_count: imagePaths.length,
+        env_count: baseUrls.length,
+        success_count: successCells,
+        failed_count: failedCells,
+        timeout_count: timeoutCount,
+        duration_ms: durationMs,
+      });
     } catch (error) {
       console.error("Error during progressive fetch:", error);
     }
@@ -389,6 +406,9 @@ class CheckImageTool extends BaseTool {
   async retryAllTimeouts() {
     if (this.timeoutCells.size === 0) return;
 
+    // Track retry action
+    const retryCount = this.timeoutCells.size;
+
     // Get all timeout cells and clear the map (they'll be re-added if they timeout again)
     const cellsToRetry = Array.from(this.timeoutCells.values());
     this.timeoutCells.clear();
@@ -396,10 +416,16 @@ class CheckImageTool extends BaseTool {
 
     // Retry all timeout cells in parallel
     const retryPromises = cellsToRetry.map(({ originalPath, env, rowIndex, colIndex }) =>
-      this.retryCell(originalPath, env, rowIndex, colIndex)
+      this.retryCell(originalPath, env, rowIndex, colIndex),
     );
 
     await Promise.all(retryPromises);
+
+    // Track retry completion for UX analysis
+    UsageTracker.trackEvent("check-image", "retry_all", {
+      retry_count: retryCount,
+      still_timeout: this.timeoutCells.size,
+    });
   }
 
   /**

@@ -1597,6 +1597,17 @@ export class JenkinsRunner extends BaseTool {
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           switchToRun();
           toggleSubmitEnabled();
+
+          // Track history load for workflow analysis
+          try {
+            const entryAgeMs = it.timestamp ? Date.now() - new Date(it.timestamp).getTime() : 0;
+            const entryAgeDays = Math.floor(entryAgeMs / (1000 * 60 * 60 * 24));
+            UsageTracker.trackEvent("run-query", "history_load", {
+              env: it.env,
+              sql_length: (it.sql || "").length,
+              age_days: entryAgeDays,
+            });
+          } catch (_) {}
         }
 
         // Handle saving a past entry as a template
@@ -1751,11 +1762,31 @@ export class JenkinsRunner extends BaseTool {
           };
           saveTemplates(arr);
           this.showSuccess("Template updated.");
+
+          // Track template update
+          try {
+            UsageTracker.trackEvent("run-query", "template_update", {
+              template_name: name,
+              env,
+              has_tags: tags.length > 0,
+              version: arr[existingIdx].version,
+            });
+          } catch (_) {}
         } else {
           const job = DEFAULT_JOB;
           arr.push({ name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false });
           saveTemplates(arr);
           this.showSuccess("Template saved.");
+
+          // Track template creation
+          try {
+            UsageTracker.trackEvent("run-query", "template_create", {
+              template_name: name,
+              env,
+              has_tags: tags.length > 0,
+              sql_length: sql.length,
+            });
+          } catch (_) {}
         }
         this.state.editingTemplateName = name;
         renderTemplates();

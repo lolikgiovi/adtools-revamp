@@ -3,7 +3,6 @@ export class SchemaValidationService {
   constructor() {}
 
   validateSchema(schemaData, tableName) {
-    console.log(schemaData.length);
     // Check for empty schema
     if (schemaData.length === 0) {
       throw new Error("Schema Validation Error:<br>Please fill in the schema (see the left panel).");
@@ -21,7 +20,7 @@ export class SchemaValidationService {
       // Check if any required field is empty
       if (!fieldName || !dataType || !nullable) {
         throw new Error(
-          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`
+          `Schema Validation Error:<br>Row ${index + 1} of schema is not defined. Field Name, Data Type, and Null are required.`,
         );
       }
 

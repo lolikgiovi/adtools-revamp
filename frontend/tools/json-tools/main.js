@@ -271,6 +271,7 @@ class JSONTools extends BaseTool {
   }
 
   switchTab(tabName) {
+    const previousTab = this.currentTab;
     document.querySelectorAll(".json-tools-tabs .tab-button").forEach((btn) => {
       btn.classList.remove("active");
     });
@@ -279,6 +280,14 @@ class JSONTools extends BaseTool {
     // Update current tab and save to localStorage
     this.currentTab = tabName;
     localStorage.setItem("json-tools-tab", tabName);
+
+    // Track tab switch for workflow analysis
+    if (previousTab !== tabName) {
+      UsageTracker.trackEvent("json-tools", "tab_switch", {
+        from_tab: previousTab,
+        to_tab: tabName,
+      });
+    }
 
     // Update action button text
     const actionButton = document.querySelector(".btn-action-primary");
@@ -629,6 +638,17 @@ class JSONTools extends BaseTool {
         matchCountEl.textContent = "0 matches";
       }
     }
+
+    // Track search for effectiveness analysis
+    UsageTracker.trackEvent(
+      "json-tools",
+      "table_search",
+      {
+        query_length: query.length,
+        match_count: this.searchMatches.length,
+      },
+      2000,
+    ); // Debounce 2 seconds
   }
 
   navigateSearch(direction) {
