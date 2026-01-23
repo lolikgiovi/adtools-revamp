@@ -4882,13 +4882,13 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
-    // Query mode selection
-    const queryModeRadios = document.querySelectorAll(`input[name="${prefix}-query-mode"]`);
-    queryModeRadios.forEach((radio) => {
-      radio.addEventListener("change", (e) => {
+    // Query mode selection (now a dropdown)
+    const queryModeSelect = document.getElementById(`${prefix}-query-mode`);
+    if (queryModeSelect) {
+      queryModeSelect.addEventListener("change", (e) => {
         this.onUnifiedQueryModeChange(source, e.target.value);
       });
-    });
+    }
 
     // Schema select
     const schemaSelect = document.getElementById(`${prefix}-schema`);

@@ -344,6 +344,10 @@
 .field-checkbox input[type="checkbox"] {
   cursor: pointer;
   accent-color: hsl(var(--primary));
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
 }
 
 .field-checkbox label {
@@ -359,6 +363,41 @@
 .field-checkbox .field-name {
   font-size: 0.8rem;
   word-break: break-word;
+}
+
+/* Field Chip - Unified Mode Field Selection */
+.field-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background));
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.field-chip:hover {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--ring));
+}
+
+.field-chip input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: hsl(var(--primary));
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.field-chip span {
+  font-size: 0.8rem;
+  color: hsl(var(--foreground));
+  line-height: 1;
 }
 
 .comparison-actions {
@@ -2967,14 +3006,6 @@
   gap: 1rem;
 }
 
-.source-panel.source-a {
-  border-left: 3px solid hsl(var(--primary));
-}
-
-.source-panel.source-b {
-  border-left: 3px solid hsl(var(--accent-foreground));
-}
-
 .source-panel-header {
   display: flex;
   justify-content: space-between;
@@ -3071,27 +3102,33 @@
   gap: 1rem;
 }
 
-.query-mode-selector {
-  display: flex;
+/* Oracle Config Row - Connection & Query Mode Side-by-Side */
+.oracle-config-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 1rem;
-  padding: 0.5rem 0;
+  align-items: end;
 }
 
-.query-mode-option {
+.oracle-config-row .connection-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.oracle-config-row .query-mode-group {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+/* Table Mode Config - proper spacing between form groups */
+.table-mode-config {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.query-mode-option:has(input:checked) {
-  color: hsl(var(--foreground));
-}
-
-.query-mode-option input {
-  accent-color: hsl(var(--primary));
+.table-mode-config .form-group {
+  margin-bottom: 0;
 }
 
 /* SQL Input Textarea */

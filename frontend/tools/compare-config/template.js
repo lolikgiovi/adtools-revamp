@@ -166,24 +166,21 @@ export const CompareConfigTemplate = /* html */ `
 
                     <!-- Oracle Config (shown when Oracle selected) -->
                     <div class="oracle-config" id="source-a-oracle-config" style="display: none;">
-                        <!-- Connection Selection -->
-                        <div class="form-group">
-                            <label>Connection</label>
-                            <select id="source-a-connection" class="form-select">
-                                <option value="">Select connection...</option>
-                            </select>
-                        </div>
-
-                        <!-- Query Mode Selection -->
-                        <div class="query-mode-selector">
-                            <label class="query-mode-option">
-                                <input type="radio" name="source-a-query-mode" value="table" checked id="source-a-query-mode-table">
-                                <span>Select Table</span>
-                            </label>
-                            <label class="query-mode-option">
-                                <input type="radio" name="source-a-query-mode" value="sql" id="source-a-query-mode-sql">
-                                <span>Raw SQL</span>
-                            </label>
+                        <!-- Connection & Query Mode Row -->
+                        <div class="oracle-config-row">
+                            <div class="form-group connection-group">
+                                <label>Connection</label>
+                                <select id="source-a-connection" class="form-select">
+                                    <option value="">Select connection...</option>
+                                </select>
+                            </div>
+                            <div class="form-group query-mode-group">
+                                <label>Query Mode</label>
+                                <select id="source-a-query-mode" class="form-select">
+                                    <option value="table">Select Table</option>
+                                    <option value="sql">Raw SQL</option>
+                                </select>
+                            </div>
                         </div>
 
                         <!-- Table Mode Config -->
@@ -287,22 +284,21 @@ export const CompareConfigTemplate = /* html */ `
 
                     <!-- Oracle Config -->
                     <div class="oracle-config" id="source-b-oracle-config" style="display: none;">
-                        <div class="form-group">
-                            <label>Connection</label>
-                            <select id="source-b-connection" class="form-select">
-                                <option value="">Select connection...</option>
-                            </select>
-                        </div>
-
-                        <div class="query-mode-selector">
-                            <label class="query-mode-option">
-                                <input type="radio" name="source-b-query-mode" value="table" checked id="source-b-query-mode-table">
-                                <span>Select Table</span>
-                            </label>
-                            <label class="query-mode-option">
-                                <input type="radio" name="source-b-query-mode" value="sql" id="source-b-query-mode-sql">
-                                <span>Raw SQL</span>
-                            </label>
+                        <!-- Connection & Query Mode Row -->
+                        <div class="oracle-config-row">
+                            <div class="form-group connection-group">
+                                <label>Connection</label>
+                                <select id="source-b-connection" class="form-select">
+                                    <option value="">Select connection...</option>
+                                </select>
+                            </div>
+                            <div class="form-group query-mode-group">
+                                <label>Query Mode</label>
+                                <select id="source-b-query-mode" class="form-select">
+                                    <option value="table">Select Table</option>
+                                    <option value="sql">Raw SQL</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="table-mode-config" id="source-b-table-config">
