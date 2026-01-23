@@ -74,7 +74,27 @@ const DEFAULT_TABS = [
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
-      WHERE e.feature_id = 'quick-query' AND e.action != 'query_generated'
+      WHERE e.feature_id = 'quick-query' 
+        AND e.action NOT IN ('query_generated', 'schema_load', 'download_sql', 'split_complete')
+      ORDER BY e.created_time DESC
+      LIMIT 100`,
+  },
+  {
+    id: "qq-insights",
+    name: "QQ Insights",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      e.action,
+      json_extract(e.properties, '$.source') AS source,
+      json_extract(e.properties, '$.table_name') AS table_name,
+      json_extract(e.properties, '$.row_count') AS rows,
+      json_extract(e.properties, '$.file_size') AS file_size,
+      json_extract(e.properties, '$.query_type') AS query_type
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'quick-query' 
+        AND e.action IN ('schema_load', 'download_sql')
       ORDER BY e.created_time DESC
       LIMIT 100`,
   },
