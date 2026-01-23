@@ -5,16 +5,27 @@
 INSERT OR IGNORE INTO users (id, email, created_time, last_seen) VALUES
   (1, 'john.doe@bankmandiri.co.id', '2026-01-01 09:00:00', '2026-01-05 16:00:00'),
   (2, 'jane.smith@bankmandiri.co.id', '2026-01-02 10:00:00', '2026-01-05 15:30:00'),
-  (3, 'alex.wong@bankmandiri.co.id', '2026-01-03 08:30:00', '2026-01-05 14:00:00');
+  (3, 'alex.wong@bankmandiri.co.id', '2026-01-03 08:30:00', '2026-01-05 14:00:00'),
+  (4, 'sarah.kim@bankmandiri.co.id', '2026-01-04 11:00:00', '2026-01-06 10:00:00'),
+  (5, 'michael.chen@bankmandiri.co.id', '2026-01-05 08:00:00', '2026-01-06 17:00:00'),
+  (6, 'lisa.nguyen@bankmandiri.co.id', '2026-01-06 09:30:00', '2026-01-07 12:00:00'),
+  (7, 'david.park@bankmandiri.co.id', '2026-01-07 14:00:00', '2026-01-08 09:00:00'),
+  (8, 'emily.zhang@bankmandiri.co.id', '2026-01-08 10:30:00', '2026-01-09 16:00:00');
 
 -- Insert test devices
 INSERT OR IGNORE INTO device (device_id, user_id, platform, created_time, last_seen) VALUES
   ('device-001', 1, 'macos', '2026-01-01 09:00:00', '2026-01-05 16:00:00'),
   ('device-002', 1, 'web', '2026-01-01 09:30:00', '2026-01-05 15:00:00'),
   ('device-003', 2, 'macos', '2026-01-02 10:00:00', '2026-01-05 15:30:00'),
-  ('device-004', 3, 'windows', '2026-01-03 08:30:00', '2026-01-05 14:00:00');
+  ('device-004', 3, 'windows', '2026-01-03 08:30:00', '2026-01-05 14:00:00'),
+  ('device-005', 4, 'macos', '2026-01-04 11:00:00', '2026-01-06 10:00:00'),
+  ('device-006', 4, 'web', '2026-01-04 11:30:00', '2026-01-06 09:00:00'),
+  ('device-007', 5, 'windows', '2026-01-05 08:00:00', '2026-01-06 17:00:00'),
+  ('device-008', 6, 'macos', '2026-01-06 09:30:00', '2026-01-07 12:00:00'),
+  ('device-009', 7, 'web', '2026-01-07 14:00:00', '2026-01-08 09:00:00'),
+  ('device-010', 8, 'macos', '2026-01-08 10:30:00', '2026-01-09 16:00:00');
 
--- Insert device_usage stats
+-- Insert device_usage stats (many more rows for scroll testing)
 INSERT OR REPLACE INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES
   ('device-001', 'john.doe@bankmandiri.co.id', 'json-tools', 'minify', 42, '2026-01-05 16:00:00'),
   ('device-001', 'john.doe@bankmandiri.co.id', 'json-tools', 'beautify', 35, '2026-01-05 15:30:00'),
@@ -23,14 +34,73 @@ INSERT OR REPLACE INTO device_usage (device_id, user_email, tool_id, action, cou
   ('device-003', 'jane.smith@bankmandiri.co.id', 'sql-in-clause', 'convert', 55, '2026-01-05 15:30:00'),
   ('device-003', 'jane.smith@bankmandiri.co.id', 'json-tools', 'minify', 30, '2026-01-05 14:30:00'),
   ('device-004', 'alex.wong@bankmandiri.co.id', 'uuid-generator', 'generate', 100, '2026-01-05 14:00:00'),
-  ('device-004', 'alex.wong@bankmandiri.co.id', 'qr-tools', 'generate', 15, '2026-01-05 13:00:00');
+  ('device-004', 'alex.wong@bankmandiri.co.id', 'qr-tools', 'generate', 15, '2026-01-05 13:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'quick-query', 'merge', 1391, '2026-01-06 10:00:00'),
+  ('device-002', 'john.doe@bankmandiri.co.id', 'jenkins-runner', 'run_click', 1105, '2026-01-06 11:00:00'),
+  ('device-003', 'jane.smith@bankmandiri.co.id', 'run-query', 'run_click', 778, '2026-01-06 12:00:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'html-template', 'mount', 396, '2026-01-06 09:00:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'quick-query', 'update', 249, '2026-01-06 10:30:00'),
+  ('device-006', 'sarah.kim@bankmandiri.co.id', 'sql-in-clause', 'mount', 218, '2026-01-06 08:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'check-image', 'check', 118, '2026-01-06 15:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'base64-tools', 'decode', 114, '2026-01-06 16:00:00'),
+  ('device-008', 'lisa.nguyen@bankmandiri.co.id', 'uuid-generator', 'single', 103, '2026-01-07 11:00:00'),
+  ('device-008', 'lisa.nguyen@bankmandiri.co.id', 'splunk-template', 'mount', 85, '2026-01-07 12:00:00'),
+  ('device-009', 'david.park@bankmandiri.co.id', 'quick-query', 'insert', 83, '2026-01-08 08:00:00'),
+  ('device-009', 'david.park@bankmandiri.co.id', 'uuid-generator', 'multiple', 75, '2026-01-08 09:00:00'),
+  ('device-010', 'emily.zhang@bankmandiri.co.id', 'base64-tools', 'encode', 55, '2026-01-09 14:00:00'),
+  ('device-010', 'emily.zhang@bankmandiri.co.id', 'check-image', 'check_start', 53, '2026-01-09 15:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'master_lockey', 'mount', 36, '2026-01-06 14:00:00'),
+  ('device-002', 'john.doe@bankmandiri.co.id', 'json-tools', 'prettify', 30, '2026-01-06 13:00:00'),
+  ('device-003', 'jane.smith@bankmandiri.co.id', 'json-tools', 'validate', 26, '2026-01-06 15:00:00'),
+  ('device-004', 'alex.wong@bankmandiri.co.id', 'qr-tools', 'mount', 25, '2026-01-06 14:30:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'json-tools', 'extract_keys', 10, '2026-01-06 11:00:00'),
+  ('device-006', 'sarah.kim@bankmandiri.co.id', 'json-tools', 'json_to_table', 10, '2026-01-06 12:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'run-query', 'template_run_click', 8, '2026-01-06 17:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'compare-config', 'compare', 67, '2026-01-07 10:00:00'),
+  ('device-002', 'john.doe@bankmandiri.co.id', 'compare-config', 'export_excel', 45, '2026-01-07 11:00:00'),
+  ('device-003', 'jane.smith@bankmandiri.co.id', 'compare-config', 'compare', 89, '2026-01-07 09:00:00'),
+  ('device-004', 'alex.wong@bankmandiri.co.id', 'compare-config', 'raw_sql', 23, '2026-01-07 13:00:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'run-query', 'split_execute', 156, '2026-01-07 14:00:00'),
+  ('device-006', 'sarah.kim@bankmandiri.co.id', 'run-query', 'template_click', 78, '2026-01-07 15:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'quick-query', 'schema_import', 34, '2026-01-07 16:00:00'),
+  ('device-008', 'lisa.nguyen@bankmandiri.co.id', 'quick-query', 'batch_generate', 92, '2026-01-07 10:00:00'),
+  ('device-009', 'david.park@bankmandiri.co.id', 'json-tools', 'format', 112, '2026-01-08 10:00:00'),
+  ('device-010', 'emily.zhang@bankmandiri.co.id', 'json-tools', 'compress', 88, '2026-01-09 13:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'html-template', 'preview', 43, '2026-01-08 09:00:00'),
+  ('device-002', 'john.doe@bankmandiri.co.id', 'html-template', 'copy', 21, '2026-01-08 10:00:00'),
+  ('device-003', 'jane.smith@bankmandiri.co.id', 'splunk-template', 'generate', 65, '2026-01-08 11:00:00'),
+  ('device-004', 'alex.wong@bankmandiri.co.id', 'splunk-template', 'copy', 38, '2026-01-08 12:00:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'base64-tools', 'file_encode', 27, '2026-01-08 13:00:00'),
+  ('device-006', 'sarah.kim@bankmandiri.co.id', 'base64-tools', 'file_decode', 19, '2026-01-08 14:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'uuid-generator', 'bulk', 145, '2026-01-08 15:00:00'),
+  ('device-008', 'lisa.nguyen@bankmandiri.co.id', 'qr-tools', 'scan', 56, '2026-01-08 09:00:00'),
+  ('device-009', 'david.park@bankmandiri.co.id', 'qr-tools', 'download', 41, '2026-01-08 11:00:00'),
+  ('device-010', 'emily.zhang@bankmandiri.co.id', 'check-image', 'batch_check', 73, '2026-01-09 10:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'sql-formatter', 'format', 234, '2026-01-09 08:00:00'),
+  ('device-002', 'john.doe@bankmandiri.co.id', 'sql-formatter', 'validate', 187, '2026-01-09 09:00:00'),
+  ('device-003', 'jane.smith@bankmandiri.co.id', 'sql-formatter', 'minify', 98, '2026-01-09 10:00:00'),
+  ('device-004', 'alex.wong@bankmandiri.co.id', 'regex-tools', 'test', 156, '2026-01-09 11:00:00'),
+  ('device-005', 'sarah.kim@bankmandiri.co.id', 'regex-tools', 'generate', 89, '2026-01-09 12:00:00'),
+  ('device-006', 'sarah.kim@bankmandiri.co.id', 'timestamp-tools', 'convert', 267, '2026-01-09 13:00:00'),
+  ('device-007', 'michael.chen@bankmandiri.co.id', 'timestamp-tools', 'diff', 134, '2026-01-09 14:00:00'),
+  ('device-008', 'lisa.nguyen@bankmandiri.co.id', 'hash-tools', 'md5', 445, '2026-01-09 15:00:00'),
+  ('device-009', 'david.park@bankmandiri.co.id', 'hash-tools', 'sha256', 312, '2026-01-09 16:00:00'),
+  ('device-010', 'emily.zhang@bankmandiri.co.id', 'hash-tools', 'bcrypt', 78, '2026-01-09 17:00:00');
 
 -- Insert usage_log (today's activity)
 INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES
   ('john.doe@bankmandiri.co.id', 'device-001', 'json-tools', 'minify', datetime('now', '-2 hours')),
   ('john.doe@bankmandiri.co.id', 'device-001', 'json-tools', 'beautify', datetime('now', '-1 hours')),
   ('jane.smith@bankmandiri.co.id', 'device-003', 'sql-in-clause', 'convert', datetime('now', '-30 minutes')),
-  ('alex.wong@bankmandiri.co.id', 'device-004', 'uuid-generator', 'generate', datetime('now', '-15 minutes'));
+  ('alex.wong@bankmandiri.co.id', 'device-004', 'uuid-generator', 'generate', datetime('now', '-15 minutes')),
+  ('sarah.kim@bankmandiri.co.id', 'device-005', 'quick-query', 'merge', datetime('now', '-45 minutes')),
+  ('michael.chen@bankmandiri.co.id', 'device-007', 'run-query', 'run_click', datetime('now', '-20 minutes')),
+  ('lisa.nguyen@bankmandiri.co.id', 'device-008', 'compare-config', 'compare', datetime('now', '-10 minutes')),
+  ('david.park@bankmandiri.co.id', 'device-009', 'base64-tools', 'encode', datetime('now', '-5 minutes')),
+  ('emily.zhang@bankmandiri.co.id', 'device-010', 'json-tools', 'format', datetime('now', '-3 minutes')),
+  ('john.doe@bankmandiri.co.id', 'device-002', 'html-template', 'mount', datetime('now', '-55 minutes')),
+  ('jane.smith@bankmandiri.co.id', 'device-003', 'splunk-template', 'generate', datetime('now', '-40 minutes')),
+  ('alex.wong@bankmandiri.co.id', 'device-004', 'qr-tools', 'scan', datetime('now', '-35 minutes'));
 
 -- Insert events with various feature_ids
 INSERT INTO events (device_id, feature_id, action, properties, created_time) VALUES
@@ -42,4 +112,14 @@ INSERT INTO events (device_id, feature_id, action, properties, created_time) VAL
   ('device-001', 'quick-query', 'validation_error', '{"tableName": "users", "fieldName": "email", "type": "invalid_format"}', datetime('now', '-50 minutes')),
   ('device-002', 'quick-query', 'parsing_error', '{"tableName": "transactions", "fieldName": "amount", "type": "type_mismatch"}', datetime('now', '-40 minutes')),
   ('device-004', 'uuid-generator', 'generate', '{"version": 4, "count": 10}', datetime('now', '-15 minutes')),
-  ('device-003', 'sql-in-clause', 'convert', '{"itemCount": 50}', datetime('now', '-25 minutes'));
+  ('device-003', 'sql-in-clause', 'convert', '{"itemCount": 50}', datetime('now', '-25 minutes')),
+  ('device-005', 'compare-config', 'compare', '{"env1": "DEV", "env2": "PROD", "differences": 12}', datetime('now', '-35 minutes')),
+  ('device-006', 'compare-config', 'export_excel', '{"rowCount": 156, "format": "xlsx"}', datetime('now', '-32 minutes')),
+  ('device-007', 'run-query', 'split_execute', '{"totalRows": 5000, "splitCount": 10, "parallel": false}', datetime('now', '-28 minutes')),
+  ('device-008', 'run-query', 'template_click', '{"templateName": "daily_report", "params": 3}', datetime('now', '-22 minutes')),
+  ('device-009', 'quick-query', 'query_generated', '{"queryType": "DELETE", "tableName": "temp_logs", "rowCount": 1000, "hasAttachment": false}', datetime('now', '-18 minutes')),
+  ('device-010', 'quick-query', 'query_generated', '{"queryType": "MERGE", "tableName": "accounts", "rowCount": 500, "hasAttachment": true}', datetime('now', '-12 minutes')),
+  ('device-001', 'json-tools', 'validate', '{"valid": true, "errors": 0}', datetime('now', '-8 minutes')),
+  ('device-002', 'base64-tools', 'encode', '{"inputSize": 2048, "type": "text"}', datetime('now', '-6 minutes')),
+  ('device-003', 'hash-tools', 'sha256', '{"inputSize": 1536}', datetime('now', '-4 minutes')),
+  ('device-004', 'timestamp-tools', 'convert', '{"from": "unix", "to": "iso8601"}', datetime('now', '-2 minutes'));
