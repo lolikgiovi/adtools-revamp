@@ -11,11 +11,29 @@ const DEFAULT_TABS = [
   {
     id: "tools",
     name: "Tool Usage",
-    query: `SELECT tool_id, action, SUM(count) AS total_count
-      FROM device_usage
-      WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
-      GROUP BY tool_id, action
-      ORDER BY total_count DESC`,
+    query: `WITH n AS (
+  SELECT
+    CASE WHEN tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE tool_id END AS tool_id,
+    action,
+    SUM(count) AS action_count
+  FROM device_usage
+  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+  GROUP BY 1,2
+),
+t AS (
+  SELECT tool_id, SUM(action_count) AS tool_total
+  FROM n
+  GROUP BY 1
+)
+SELECT tool_id, action, total_count
+FROM (
+  SELECT t.tool_id, 'TOTAL' AS action, t.tool_total AS total_count, t.tool_total AS tool_total, 0 AS row_type
+  FROM t
+  UNION ALL
+  SELECT n.tool_id, n.action, n.action_count, t.tool_total, 1
+  FROM n JOIN t USING (tool_id)
+)
+ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
   },
   {
     id: "daily",
@@ -29,20 +47,24 @@ const DEFAULT_TABS = [
   {
     id: "devices",
     name: "Devices",
-    query: `SELECT u.email, d.platform
+    query: `SELECT d.platform,
+      COUNT(DISTINCT u.email) AS user_count
       FROM device d
       JOIN users u ON u.id = d.user_id
-      ORDER BY u.email, d.platform`,
+      WHERE d.platform != 'Unknown'
+      AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      GROUP BY d.platform
+      ORDER BY user_count DESC, d.platform`,
   },
   {
     id: "events",
     name: "Events",
-    query: `SELECT u.email, d.platform, e.feature_id, e.action, e.properties
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time, 
+      u.email, d.platform, e.feature_id, e.action, e.properties
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
-      ORDER BY e.created_time DESC
-      LIMIT 100`,
+      ORDER BY e.created_time DESC`,
   },
   {
     id: "quick-query",
