@@ -102,6 +102,11 @@ class UUIDGenerator extends BaseTool {
     if (copyBtn) {
       copyBtn.disabled = false;
     }
+
+    // Track bulk generation for usage insights
+    UsageTracker.trackEvent("uuid-generator", "bulk_generate", {
+      quantity: Math.min(quantity, 10000),
+    });
   }
 
   async copySingleUUID() {
@@ -116,6 +121,10 @@ class UUIDGenerator extends BaseTool {
     const resultTextarea = document.getElementById("multipleUuidResult");
     if (resultTextarea && resultTextarea.value) {
       UsageTracker.trackFeature("uuid-generator", "multiple");
+      UsageTracker.trackEvent("uuid-generator", "copy_action", {
+        type: "multiple",
+        count: resultTextarea.value.split("\n").length,
+      });
       await this.copyToClipboard(resultTextarea.value);
     }
   }

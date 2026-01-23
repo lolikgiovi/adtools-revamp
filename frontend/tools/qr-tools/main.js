@@ -1,8 +1,8 @@
-import { QRToolsService } from './service.js';
-import { QRToolsTemplate } from './template.js';
-import { BaseTool } from '../../core/BaseTool.js';
-import { getIconSvg } from './icon.js';
-import { UsageTracker } from '../../core/UsageTracker.js';
+import { QRToolsService } from "./service.js";
+import { QRToolsTemplate } from "./template.js";
+import { BaseTool } from "../../core/BaseTool.js";
+import { getIconSvg } from "./icon.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
 
 class QRTools extends BaseTool {
   constructor(eventBus) {
@@ -27,7 +27,9 @@ class QRTools extends BaseTool {
     this._debounceTimer = null;
   }
 
-  getIconSvg() { return getIconSvg(); }
+  getIconSvg() {
+    return getIconSvg();
+  }
 
   render() {
     return QRToolsTemplate;
@@ -126,8 +128,19 @@ class QRTools extends BaseTool {
     if (contrastEl) {
       if (ratio < 3.0) {
         contrastEl.textContent = `Low contrast detected (~${ratio.toFixed(
-          2
+          2,
         )}:1). Darken foreground or lighten background for better scanability.`;
+        // Track low contrast warning for UX insights
+        UsageTracker.trackEvent(
+          "qr-tools",
+          "low_contrast_warning",
+          {
+            ratio: parseFloat(ratio.toFixed(2)),
+            foreground: this.state.foreground,
+            background: this.state.background,
+          },
+          5000,
+        ); // Debounce 5 seconds
       } else {
         contrastEl.textContent = "";
       }
@@ -148,13 +161,27 @@ class QRTools extends BaseTool {
       return;
     }
 
+    // Track QR preview generation for behavior analysis
+    UsageTracker.trackEvent(
+      "qr-tools",
+      "qr_preview",
+      {
+        mode: this.state.mode,
+        content_length: content.length,
+        size: this.state.size,
+      },
+      2000,
+    ); // Debounce 2 seconds
+
     this.service.renderCanvas(canvas, content, this.getConfig()).catch(() => {
       this.showError("Failed to render QR code.");
     });
   }
 
   async downloadPng() {
-    try { UsageTracker.trackEvent("qr-tools", "download_png", { size: this.state.size, margin: this.state.margin, mode: this.state.mode }); } catch (_) {}
+    try {
+      UsageTracker.trackEvent("qr-tools", "download_png", { size: this.state.size, margin: this.state.margin, mode: this.state.mode });
+    } catch (_) {}
     const canvas = document.getElementById("qrCanvas");
     if (!canvas || !this.state.isValid) return;
     const link = document.createElement("a");
@@ -181,7 +208,9 @@ class QRTools extends BaseTool {
   }
 
   async downloadSvg() {
-    try { UsageTracker.trackEvent("qr-tools", "download_svg", { size: this.state.size, margin: this.state.margin, mode: this.state.mode }); } catch (_) {}
+    try {
+      UsageTracker.trackEvent("qr-tools", "download_svg", { size: this.state.size, margin: this.state.margin, mode: this.state.mode });
+    } catch (_) {}
     const content = (this.state.content || "").trim();
     if (!content || !this.state.isValid) return;
     try {

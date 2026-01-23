@@ -132,6 +132,10 @@
   height: 0.875rem;
 }
 
+.btn-icon:hover:not(:disabled) {
+  color: hsl(var(--accent));
+}
+
 /* ============================================
    INPUT COMPONENTS
    ============================================ */

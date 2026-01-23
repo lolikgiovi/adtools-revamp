@@ -838,7 +838,7 @@
   margin-bottom: 12px;
 }
 
-.btn-icon {
+/* .btn-icon {
   flex-shrink: 0;
   padding: 6px 10px;
   background: hsl(var(--muted));
@@ -861,7 +861,7 @@
 .btn-icon.btn-danger:hover:not(:disabled) {
   background: hsl(var(--destructive) / 0.1);
   border-color: hsl(var(--destructive));
-}
+} */
 
 /* Page Title in Results */
 .results-info {

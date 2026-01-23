@@ -8,6 +8,8 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor } from "../../core/MonacoOracle.js";
+import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
+import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
@@ -20,6 +22,7 @@ export class JenkinsRunner extends BaseTool {
       eventBus,
     });
     this.service = new JenkinsRunnerService();
+    this.storageService = new IndexedDBStorageService();
     this.state = {
       jenkinsUrl: "",
       envChoices: [],
@@ -30,6 +33,41 @@ export class JenkinsRunner extends BaseTool {
     this._logUnsubscribes = [];
     this.editor = null;
     this.templateEditor = null;
+    this._beforeUnloadHandler = null;
+  }
+
+  /**
+   * Centralized cleanup for split execution resources.
+   * Called when split execution ends (success, error, cancel, timeout).
+   * Does NOT interrupt active execution - only cleans up after it ends.
+   *
+   * @param {Object} options - Cleanup options
+   * @param {boolean} options.hideIndicator - If true, also hide the global split indicator.
+   *                                          Default false to preserve completed state visibility.
+   */
+  _cleanupSplitResources({ hideIndicator = false } = {}) {
+    // Clear log listeners
+    try {
+      for (const un of this._logUnsubscribes) {
+        if (typeof un === "function") un();
+      }
+    } catch (_) {}
+    this._logUnsubscribes = [];
+
+    // Remove beforeunload handler
+    if (this._beforeUnloadHandler) {
+      window.removeEventListener("beforeunload", this._beforeUnloadHandler);
+      this._beforeUnloadHandler = null;
+    }
+
+    // Only hide global indicator if explicitly requested (e.g., on unmount or orphan cleanup)
+    // Do NOT hide after completion - user should see "✓ Complete" until they dismiss
+    if (hideIndicator) {
+      const globalEl = document.getElementById("jr-global-split-indicator");
+      if (globalEl) {
+        globalEl.style.display = "none";
+      }
+    }
   }
 
   getIconSvg() {
@@ -96,8 +134,23 @@ export class JenkinsRunner extends BaseTool {
   }
 
   async onMount() {
+    // Initialize IndexedDB storage service (handles migration from localStorage)
+    await this.storageService.init();
+
+    // Clean up any orphaned global split indicator from previous sessions
+    // (only if no split execution is currently in progress)
+    if (!this.state?.split?.started || this.state?.split?.completed) {
+      const orphanedIndicator = document.getElementById("jr-global-split-indicator");
+      if (orphanedIndicator && orphanedIndicator.parentNode) {
+        orphanedIndicator.parentNode.removeChild(orphanedIndicator);
+      }
+    }
+
     // Migrate Jenkins username from keychain to localStorage (one-time)
     await this.#migrateJenkinsUsername();
+
+    // Migrate to unified keychain (reduces password prompts after app updates)
+    await ensureUnifiedKeychain();
 
     const baseUrlInput = this.container.querySelector("#jenkins-baseurl");
     const jobInput = this.container.querySelector("#jenkins-job");
@@ -146,6 +199,10 @@ export class JenkinsRunner extends BaseTool {
     const splitModal = this.container.querySelector("#jr-split-modal");
     const splitModalOverlay = this.container.querySelector("#jr-split-modal-overlay");
     const splitModalCloseBtn = this.container.querySelector("#jr-split-modal-close");
+    const splitMinimizeBtn = this.container.querySelector("#jr-split-minimize");
+    const splitMinimizedEl = this.container.querySelector("#jr-split-minimized");
+    const splitMinimizedText = this.container.querySelector("#jr-split-minimized-text");
+    const splitMaximizeBtn = this.container.querySelector("#jr-split-maximize");
     const splitCancelBtn = this.container.querySelector("#jr-split-cancel");
     const splitExecuteAllBtn = this.container.querySelector("#jr-split-execute-all");
     const splitChunksList = this.container.querySelector("#jr-split-chunks-list");
@@ -156,6 +213,7 @@ export class JenkinsRunner extends BaseTool {
     const splitPrevBtn = this.container.querySelector("#jr-split-prev");
     const splitNextBtn = this.container.querySelector("#jr-split-next");
     const splitEditorContainer = this.container.querySelector("#jr-split-editor");
+
     const templateModalTitle = this.container.querySelector("#jr-template-modal-title");
     const templateModalCloseBtn = this.container.querySelector("#jr-template-modal-close");
     const templateModalSaveBtn = this.container.querySelector("#jr-template-modal-save");
@@ -225,13 +283,21 @@ export class JenkinsRunner extends BaseTool {
             continue;
           }
         }
-        // Toggle quotes
-        if (!inDouble && ch === "'" && src[i - 1] !== "\\") {
-          inSingle = !inSingle;
+        // Toggle quotes (Oracle uses '' to escape, not \')
+        if (!inDouble && ch === "'") {
+          if (inSingle && next === "'") {
+            i++; // skip escaped quote ''
+          } else {
+            inSingle = !inSingle;
+          }
           continue;
         }
-        if (!inSingle && ch === '"' && src[i - 1] !== "\\") {
-          inDouble = !inDouble;
+        if (!inSingle && ch === '"') {
+          if (inDouble && next === '"') {
+            i++; // skip escaped quote ""
+          } else {
+            inDouble = !inDouble;
+          }
           continue;
         }
         // Only evaluate statement/content outside quotes/comments
@@ -279,9 +345,9 @@ export class JenkinsRunner extends BaseTool {
       const t = normalizeTag(s);
       return isValidTag(t) ? t : null;
     };
-    const collectAllTags = () => {
+    const collectAllTags = async () => {
       const set = new Set();
-      const arr = loadTemplates();
+      const arr = await loadTemplates();
       for (const t of arr) {
         const tags = Array.isArray(t?.tags) ? t.tags : [];
         for (const tg of tags) {
@@ -299,10 +365,10 @@ export class JenkinsRunner extends BaseTool {
             `<span class="jr-tag" title="${escHtml(tg)}"><span>${escHtml(tg)}</span>${
               removable
                 ? ` <button type="button" class="jr-tag-remove" data-tag="${escHtml(tg)}" aria-label="Remove tag ${escHtml(
-                    tg
+                    tg,
                   )}" title="Remove">×</button>`
                 : ""
-            }</span>`
+            }</span>`,
         )
         .join("");
     };
@@ -319,7 +385,7 @@ export class JenkinsRunner extends BaseTool {
           (s, i) =>
             `<div class="jr-suggestion" role="option" data-value="${escHtml(s)}" aria-selected="${
               i === activeIndex ? "true" : "false"
-            }" tabindex="-1">${escHtml(s)}</div>`
+            }" tabindex="-1">${escHtml(s)}</div>`,
         )
         .join("");
       suggestionsEl.style.display = "block";
@@ -391,11 +457,14 @@ export class JenkinsRunner extends BaseTool {
       const safe = sanitizeLog(text);
       logsEl.textContent += safe;
       logsEl.scrollTop = logsEl.scrollHeight;
-      // Mirror logs to split modal mini log when active
+      // Mirror logs to split modal mini log when active (use fresh DOM lookup)
       try {
-        if (splitMiniLogsEl && this.state && this.state.split && this.state.split.started) {
-          splitMiniLogsEl.textContent += safe;
-          splitMiniLogsEl.scrollTop = splitMiniLogsEl.scrollHeight;
+        if (this.state && this.state.split && this.state.split.started) {
+          const miniLog = document.getElementById("jr-split-mini-log");
+          if (miniLog) {
+            miniLog.textContent += safe;
+            miniLog.scrollTop = miniLog.scrollHeight;
+          }
         }
       } catch (_) {}
     };
@@ -410,11 +479,15 @@ export class JenkinsRunner extends BaseTool {
     };
 
     const subscribeToLogs = async () => {
+      console.log("[subscribeToLogs] Setting up log listeners");
       clearLogListeners();
       this._logUnsubscribes.push(
         await listen("jenkins:log", (ev) => {
           const data = ev?.payload || {};
           const chunk = typeof data === "string" ? data : data.chunk || "";
+          const buildNum = data.build_number;
+          const iteration = data.iteration;
+          console.log(`[jenkins:log] Build #${buildNum} iter ${iteration}, chunk length: ${chunk.length}`);
           appendLog(chunk);
           // Detect oversize error surfaced by Jenkins job
           try {
@@ -424,23 +497,36 @@ export class JenkinsRunner extends BaseTool {
               statusEl.textContent = "Query too long. Detected 'Argument list too long'.";
             }
           } catch (_) {}
-        })
+        }),
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-error", (ev) => {
-          const msg = String(ev?.payload || "Log stream error");
+          const payload = ev?.payload || {};
+          const msg = typeof payload === "string" ? payload : JSON.stringify(payload);
+          console.error(`[jenkins:log-error] ${msg}`);
+          logsEl.textContent += `\n[${new Date().toLocaleTimeString()}] LOG STREAM ERROR: ${msg}\n`;
           this.showError(msg);
           statusEl.textContent = "Log stream error";
-        })
+        }),
       );
       this._logUnsubscribes.push(
-        await listen("jenkins:log-complete", () => {
+        await listen("jenkins:log-complete", (ev) => {
+          const payload = ev?.payload || {};
+          console.log(`[jenkins:log-complete] Build #${payload.build_number} complete`);
           statusEl.textContent = "Complete";
           try {
             UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
           } catch (_) {}
-        })
+        }),
       );
+      // Debug listener for troubleshooting
+      this._logUnsubscribes.push(
+        await listen("jenkins:log-debug", (ev) => {
+          const msg = ev?.payload?.message || JSON.stringify(ev?.payload);
+          console.log(`[jenkins:log-debug] ${msg}`);
+        }),
+      );
+      console.log("[subscribeToLogs] All listeners registered");
     };
 
     const allowedJobs = new Set(["tester-execute-query", "tester-execute-query-new"]);
@@ -458,17 +544,9 @@ export class JenkinsRunner extends BaseTool {
       statusEl.textContent = "No Jenkins token found. Add it in Settings → Credential Management.";
     }
 
-    const persistEnvKey = "tool:run-query:env";
-    const savedEnv = localStorage.getItem(persistEnvKey) || "";
-
-    // Persist last UI state (URL, job, env, SQL)
-    const persistStateKey = "tool:run-query:lastState";
-    let lastState = {};
-    try {
-      lastState = JSON.parse(localStorage.getItem(persistStateKey) || "{}");
-    } catch (_) {
-      lastState = {};
-    }
+    // Load saved env and last UI state from IndexedDB
+    const savedEnv = await this.storageService.getEnv();
+    let lastState = await this.storageService.getLastState();
     if (lastState.job && allowedJobs.has(lastState.job)) {
       jobInput.value = lastState.job;
     }
@@ -560,7 +638,7 @@ export class JenkinsRunner extends BaseTool {
     this._resizeListener = () => relayoutEditors();
     window.addEventListener("resize", this._resizeListener);
 
-    const saveLastState = (patch = {}) => {
+    const saveLastState = async (patch = {}) => {
       const base = {
         jenkinsUrl: this.state.jenkinsUrl,
         job: jobInput.value.trim(),
@@ -569,9 +647,7 @@ export class JenkinsRunner extends BaseTool {
       };
       const merged = { ...lastState, ...base, ...patch };
       lastState = merged;
-      try {
-        localStorage.setItem(persistStateKey, JSON.stringify(merged));
-      } catch (_) {}
+      await this.storageService.saveLastState(merged);
     };
     saveLastState();
 
@@ -636,25 +712,18 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
-    // Templates: storage and rendering
-    const persistTemplatesKey = "tool:run-query:templates";
-    const loadTemplates = () => {
-      try {
-        const raw = localStorage.getItem(persistTemplatesKey) || "[]";
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-      } catch (_) {
-        return [];
-      }
+    // Templates: storage and rendering (using IndexedDB)
+    const loadTemplates = async () => {
+      return await this.storageService.loadTemplates();
     };
-    const saveTemplates = (arr) => {
-      try {
-        localStorage.setItem(persistTemplatesKey, JSON.stringify(arr));
-      } catch (_) {}
+    const saveTemplate = async (template) => {
+      await this.storageService.saveTemplate(template);
     };
-    const findTemplateByName = (name) => {
-      const arr = loadTemplates();
-      return arr.find((t) => (t?.name || "") === name) || null;
+    const deleteTemplate = async (name) => {
+      await this.storageService.deleteTemplate(name);
+    };
+    const findTemplateByName = async (name) => {
+      return await this.storageService.findTemplateByName(name);
     };
 
     // Modal state
@@ -797,7 +866,22 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal state & helpers =====
     this.splitEditor = null;
-    this.state.split = { chunks: [], sizes: [], index: 0, statuses: [], started: false, cancelRequested: false };
+    // Preserve split state if execution is running OR completed (navigated away and back)
+    const shouldPreserveState = this.state.split?.started || this.state.split?.completed;
+    // Track if we need to restore modal after mount
+    const shouldRestoreModal = shouldPreserveState && this.state.split?.minimized;
+    if (!shouldPreserveState) {
+      this.state.split = {
+        chunks: [],
+        sizes: [],
+        index: 0,
+        statuses: [],
+        started: false,
+        cancelRequested: false,
+        minimized: false,
+        completed: false,
+      };
+    }
 
     const bytesToKB = (n) => `${Math.round((Number(n || 0) / 1024) * 10) / 10} KB`;
 
@@ -836,6 +920,10 @@ export class JenkinsRunner extends BaseTool {
         });
         splitChunksList.appendChild(li);
       });
+      // Also update the minimized indicator if visible
+      if (this.state.split.minimized) {
+        updateMinimizedText();
+      }
     };
 
     const updateSplitCurrentView = () => {
@@ -858,6 +946,12 @@ export class JenkinsRunner extends BaseTool {
       this.state.split.statuses = new Array(chunks.length).fill("");
       this.state.split.started = false;
       this.state.split.cancelRequested = false;
+      this.state.split.minimized = false;
+      this.state.split.completed = false;
+      // Hide minimized indicator if visible
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      // Reset cancel button text
+      if (splitCancelBtn) splitCancelBtn.textContent = "Cancel";
       this._modalPrevFocusEl = document.activeElement;
       splitModalOverlay.style.display = "block";
       splitModal.style.display = "flex";
@@ -880,6 +974,11 @@ export class JenkinsRunner extends BaseTool {
       if (splitMiniLogsEl) {
         splitMiniLogsEl.textContent = "";
       }
+      // Reset Execute All button for new split session
+      if (splitExecuteAllBtn) {
+        splitExecuteAllBtn.textContent = "Execute All";
+        splitExecuteAllBtn.disabled = false;
+      }
       updateSplitCurrentView();
     };
 
@@ -887,8 +986,227 @@ export class JenkinsRunner extends BaseTool {
       if (!splitModal || !splitModalOverlay) return;
       splitModalOverlay.style.display = "none";
       splitModal.style.display = "none";
+      this.state.split.minimized = false;
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      // Hide global indicator too
+      if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
       deactivateFocusTrap(splitModal);
       if (this._modalPrevFocusEl && typeof this._modalPrevFocusEl.focus === "function") this._modalPrevFocusEl.focus();
+    };
+
+    // Create or get global minimized indicator that persists across navigation
+    const getOrCreateGlobalIndicator = () => {
+      let el = document.getElementById("jr-global-split-indicator");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "jr-global-split-indicator";
+        el.className = "jr-split-minimized";
+        el.setAttribute("role", "status");
+        el.innerHTML = `
+          <div class="jr-split-minimized-content" style="cursor:pointer;">
+            <span class="jr-split-minimized-icon">⏳</span>
+            <span class="jr-global-split-text">Running...</span>
+          </div>
+          <button class="btn btn-sm-xs">Show</button>
+        `;
+        el.style.display = "none";
+        document.body.appendChild(el);
+      }
+      return el;
+    };
+
+    // Minimize split modal to floating indicator
+    const minimizeSplitModal = () => {
+      if (!splitModal || !splitModalOverlay) return;
+      this.state.split.minimized = true;
+      splitModalOverlay.style.display = "none";
+      splitModal.style.display = "none";
+      deactivateFocusTrap(splitModal);
+      // Show global indicator
+      const globalEl = getOrCreateGlobalIndicator();
+      globalEl.style.display = "flex";
+      globalEl.classList.remove("completed");
+      this._globalSplitIndicator = globalEl;
+      // Bind click to restore
+      const self = this;
+      globalEl.onclick = () => {
+        // Navigate using hash (same as Router.navigate)
+        window.location.hash = "run-query";
+        // Wait for navigation and DOM to be ready, then restore modal
+        setTimeout(() => {
+          self.state.split.minimized = false;
+          if (self._globalSplitIndicator) self._globalSplitIndicator.style.display = "none";
+          // Get fresh DOM references after navigation
+          const modal = document.getElementById("jr-split-modal");
+          const overlay = document.getElementById("jr-split-modal-overlay");
+          const editorContainer = document.getElementById("jr-split-editor");
+          const chunksList = document.getElementById("jr-split-chunks-list");
+          const chunkLabel = document.getElementById("jr-split-chunk-label");
+          if (modal && overlay) {
+            overlay.style.display = "block";
+            modal.style.display = "flex";
+
+            // Recreate editor if needed
+            const { chunks, index, statuses } = self.state.split;
+            if (!self.splitEditor && editorContainer && chunks.length > 0) {
+              self.splitEditor = createOracleEditor(editorContainer, {
+                value: chunks[index] || "",
+                automaticLayout: true,
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: "on",
+                fontSize: 11,
+              });
+            } else if (self.splitEditor && chunks[index]) {
+              self.splitEditor.setValue(chunks[index]);
+            }
+
+            // Helper to update view when clicking a chunk
+            const updateChunkView = (newIndex) => {
+              self.state.split.index = newIndex;
+              if (chunkLabel) chunkLabel.textContent = `Chunk ${newIndex + 1} of ${chunks.length}`;
+              if (self.splitEditor && chunks[newIndex]) {
+                self.splitEditor.setValue(chunks[newIndex]);
+              }
+              // Update active states
+              chunksList?.querySelectorAll("li").forEach((li, i) => {
+                li.className = i === newIndex ? "active" : "";
+              });
+            };
+
+            // Re-render chunks list with click handlers
+            if (chunksList) {
+              chunksList.innerHTML = "";
+              chunks.forEach((chunk, i) => {
+                const li = document.createElement("li");
+                li.setAttribute("role", "button");
+                li.setAttribute("tabindex", "0");
+                li.className = i === index ? "active" : "";
+                const name = document.createElement("span");
+                name.textContent = `Chunk ${i + 1}`;
+                const size = document.createElement("span");
+                size.className = "jr-chunk-size";
+                size.textContent = statuses[i] ? ` · ${statuses[i]}` : "";
+                li.appendChild(name);
+                li.appendChild(size);
+                // Add click handler
+                li.addEventListener("click", () => updateChunkView(i));
+                li.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    updateChunkView(i);
+                  }
+                });
+                chunksList.appendChild(li);
+              });
+            }
+            if (chunkLabel) chunkLabel.textContent = `Chunk ${index + 1} of ${chunks.length}`;
+
+            // Restore button states based on execution state
+            const execBtn = document.getElementById("jr-split-execute-all");
+            const cancelBtn = document.getElementById("jr-split-cancel");
+            const { started, completed } = self.state.split;
+            if (execBtn) {
+              if (completed) {
+                execBtn.textContent = "✓ Execution Complete";
+                execBtn.disabled = true;
+              } else if (started) {
+                execBtn.disabled = true;
+              }
+            }
+            if (cancelBtn && completed) {
+              cancelBtn.textContent = "Dismiss";
+            }
+          }
+        }, 200);
+      };
+      updateMinimizedText();
+    };
+
+    // Restore full split modal from minimized state
+    const maximizeSplitModal = () => {
+      if (!splitModal || !splitModalOverlay) return;
+      this.state.split.minimized = false;
+      if (splitMinimizedEl) splitMinimizedEl.style.display = "none";
+      if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
+      splitModalOverlay.style.display = "block";
+      splitModal.style.display = "flex";
+      activateFocusTrap(splitModal, () => closeSplitModal());
+
+      // Recreate split editor if it was disposed (happens when navigating away)
+      const { chunks, index } = this.state.split;
+      if (!this.splitEditor && splitEditorContainer && chunks.length > 0) {
+        this.splitEditor = createOracleEditor(splitEditorContainer, {
+          value: chunks[index] || "",
+          automaticLayout: true,
+          readOnly: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          fontSize: 11,
+          tabSize: 2,
+          insertSpaces: true,
+          quickSuggestions: false,
+          suggestOnTriggerCharacters: false,
+        });
+      }
+
+      // Re-render chunks list and current view
+      renderSplitChunksList();
+      updateSplitCurrentView();
+
+      // Restore button states based on execution state
+      const { started, completed } = this.state.split;
+      if (splitExecuteAllBtn) {
+        if (completed) {
+          splitExecuteAllBtn.textContent = "✓ Execution Complete";
+          splitExecuteAllBtn.disabled = true;
+        } else if (started) {
+          splitExecuteAllBtn.disabled = true;
+        }
+      }
+      if (splitCancelBtn && completed) {
+        splitCancelBtn.textContent = "Dismiss";
+      }
+
+      if (this.splitEditor) {
+        try {
+          this.splitEditor.layout();
+        } catch (_) {}
+      }
+    };
+
+    // Update the minimized indicator text (both local and global)
+    const updateMinimizedText = () => {
+      if (!this.state.split) return;
+      const { chunks, statuses, started } = this.state.split;
+      const total = chunks.length;
+      const doneCount = statuses.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length;
+      let text = "";
+      let done = false;
+      if (!started) {
+        text = `${total} chunks ready`;
+      } else if (doneCount >= total) {
+        const ok = statuses.filter((s) => s === "success").length;
+        text = `✓ Complete: ${ok}/${total}`;
+        done = true;
+      } else {
+        text = `Running Query Chunk: ${doneCount + 1}/${total}...`;
+      }
+      // Update local
+      if (splitMinimizedText) splitMinimizedText.textContent = text;
+      if (splitMinimizedEl) {
+        if (done) splitMinimizedEl.classList.add("completed");
+        else splitMinimizedEl.classList.remove("completed");
+      }
+      // Update global
+      if (this._globalSplitIndicator) {
+        const gtxt = this._globalSplitIndicator.querySelector(".jr-global-split-text");
+        if (gtxt) gtxt.textContent = text;
+        if (done) this._globalSplitIndicator.classList.add("completed");
+        else this._globalSplitIndicator.classList.remove("completed");
+      }
     };
 
     const refreshTemplateEnvChoices = async (retry = 0) => {
@@ -922,7 +1240,7 @@ export class JenkinsRunner extends BaseTool {
 
     this.state.editingTemplateName = null;
 
-    const validateTemplateForm = () => {
+    const validateTemplateForm = async () => {
       let ok = true;
       const name = (templateNameInput?.value || "").trim();
       const env = (templateEnvSelect?.value || "").trim();
@@ -952,7 +1270,7 @@ export class JenkinsRunner extends BaseTool {
       }
 
       // uniqueness check if creating new or renaming
-      const existing = findTemplateByName(name);
+      const existing = await findTemplateByName(name);
       if (!this.state.editingTemplateName && existing) {
         ok = false;
         if (templateNameErrorEl) {
@@ -970,11 +1288,11 @@ export class JenkinsRunner extends BaseTool {
       return ok;
     };
 
-    const renderTemplates = () => {
+    const renderTemplates = async () => {
       if (!templateListEl) return;
       const q = (templateSearchInput?.value || "").toLowerCase();
       const sort = templateSortSelect?.value || "updated_desc";
-      let arr = loadTemplates();
+      let arr = await loadTemplates();
       // Apply filters
       const envFilter = filterEnvSelect?.value || "all";
       if (envFilter !== "all") arr = arr.filter((t) => t.env === envFilter);
@@ -1007,11 +1325,11 @@ export class JenkinsRunner extends BaseTool {
             [t.name, t.job, t.env].some((v) =>
               String(v || "")
                 .toLowerCase()
-                .includes(q)
+                .includes(q),
             ) ||
             String(t.sql || "")
               .toLowerCase()
-              .includes(q)
+              .includes(q),
         );
       }
       // Populate env filter based on available templates
@@ -1074,8 +1392,8 @@ export class JenkinsRunner extends BaseTool {
                 <span class="jr-card-updated">${updated}</span>
               </div>
               <div class="jr-card-preview" title="${sqlTitle}"><span class="jr-soft-label"></span><pre class="jr-card-snippet">${escHtml(
-            sqlSnippet
-          )}</pre></div>
+                sqlSnippet,
+              )}</pre></div>
               <div class="jr-card-actions">
                 <button class="btn btn-sm-xs jr-template-pin" data-name="${escHtml(t.name)}">${pinned ? "Unpin" : "Pin"}</button>
                 <button class="btn btn-sm-xs jr-template-run" data-name="${escHtml(t.name)}">Run</button>
@@ -1102,7 +1420,7 @@ export class JenkinsRunner extends BaseTool {
     });
 
     envSelect.addEventListener("change", () => {
-      localStorage.setItem(persistEnvKey, envSelect.value || "");
+      this.storageService.setEnv(envSelect.value || "");
       saveLastState({ env: envSelect.value });
       toggleSubmitEnabled();
     });
@@ -1117,24 +1435,15 @@ export class JenkinsRunner extends BaseTool {
       }, 200);
     });
 
-    // History persistence and rendering
-    const persistHistoryKey = "tool:run-query:history";
-    const loadHistory = () => {
-      try {
-        const raw = localStorage.getItem(persistHistoryKey) || "[]";
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-      } catch (_) {
-        return [];
-      }
+    // History persistence and rendering (using IndexedDB)
+    const loadHistory = async () => {
+      return await this.storageService.loadHistory();
     };
-    const saveHistory = (arr) => {
-      try {
-        localStorage.setItem(persistHistoryKey, JSON.stringify(arr));
-      } catch (_) {}
+    const addHistoryEntry = async (entry) => {
+      await this.storageService.addHistoryEntry(entry);
     };
-    const renderHistory = () => {
-      const arr = loadHistory();
+    const renderHistory = async () => {
+      const arr = await loadHistory();
       // Helper: build preview from SQL per rules
       const makePreview = (sqlRaw) => {
         try {
@@ -1156,16 +1465,14 @@ export class JenkinsRunner extends BaseTool {
           return "";
         }
       };
-      // Sort by time DESC while preserving original indices for actions
-      const sorted = arr
-        .map((it, i) => ({ it, i }))
-        .sort((a, b) => {
-          const ta = new Date(a.it.timestamp || 0).getTime();
-          const tb = new Date(b.it.timestamp || 0).getTime();
-          return tb - ta;
-        });
+      // Sort by time DESC
+      const sorted = [...arr].sort((a, b) => {
+        const ta = new Date(a.timestamp || 0).getTime();
+        const tb = new Date(b.timestamp || 0).getTime();
+        return tb - ta;
+      });
       const rows = sorted
-        .map(({ it, i }) => {
+        .map((it) => {
           const preview = makePreview(it.sql || "");
           const ts = formatTimestamp(it.timestamp);
           const build = it.buildNumber ? `#${it.buildNumber}` : "";
@@ -1175,8 +1482,8 @@ export class JenkinsRunner extends BaseTool {
             it.env || ""
           }</td><td title="${escTitle}">${preview}</td><td>${build} ${buildLinkHtml}</td><td>
             <div class="jr-col-center">
-              <button class="btn btn-sm-xs jr-history-load" data-index="${i}">Load</button>
-              <button class="btn btn-sm-xs jr-history-save-template" data-index="${i}">Save as Template</button>
+              <button class="btn btn-sm-xs jr-history-load" data-id="${it._id}">Load</button>
+              <button class="btn btn-sm-xs jr-history-save-template" data-id="${it._id}">Save as Template</button>
             </div>
           </td></tr>`;
         })
@@ -1238,7 +1545,7 @@ export class JenkinsRunner extends BaseTool {
     if (templatesTabBtn) templatesTabBtn.addEventListener("click", switchToTemplates);
 
     if (historyList)
-      historyList.addEventListener("click", (e) => {
+      historyList.addEventListener("click", async (e) => {
         const t = e.target;
         // Handle clicks on history "Open" links to ensure external opening in Tauri/web
         const link = t && (t.closest ? t.closest("a") : null);
@@ -1250,10 +1557,9 @@ export class JenkinsRunner extends BaseTool {
 
         // Handle loading a past entry back into the Run tab
         if (t && t.classList && t.classList.contains("jr-history-load")) {
-          const idx = Number(t.getAttribute("data-index"));
-
-          const arr = loadHistory();
-          const it = arr[idx];
+          const id = t.getAttribute("data-id");
+          const arr = await loadHistory();
+          const it = arr.find((h) => String(h._id) === id);
           if (!it) return;
           if (it.job && allowedJobs.has(it.job)) {
             jobInput.value = it.job;
@@ -1267,14 +1573,24 @@ export class JenkinsRunner extends BaseTool {
           saveLastState({ job: jobInput.value.trim(), env: envSelect.value, sql: this.editor ? this.editor.getValue() : "" });
           switchToRun();
           toggleSubmitEnabled();
+
+          // Track history load for workflow analysis
+          try {
+            const entryAgeMs = it.timestamp ? Date.now() - new Date(it.timestamp).getTime() : 0;
+            const entryAgeDays = Math.floor(entryAgeMs / (1000 * 60 * 60 * 24));
+            UsageTracker.trackEvent("run-query", "history_load", {
+              env: it.env,
+              sql_length: (it.sql || "").length,
+              age_days: entryAgeDays,
+            });
+          } catch (_) {}
         }
 
         // Handle saving a past entry as a template
         if (t && t.classList && t.classList.contains("jr-history-save-template")) {
-          const idx = Number(t.getAttribute("data-index"));
-
-          const arr = loadHistory();
-          const it = arr[idx];
+          const id = t.getAttribute("data-id");
+          const arr = await loadHistory();
+          const it = arr.find((h) => String(h._id) === id);
           if (!it) return;
 
           // Switch to Templates tab and open create modal
@@ -1318,24 +1634,19 @@ export class JenkinsRunner extends BaseTool {
 
     // Templates: list interactions
     if (templateListEl)
-      templateListEl.addEventListener("click", (e) => {
+      templateListEl.addEventListener("click", async (e) => {
         const t = e.target;
         if (!t || !t.classList) return;
         const name = t.getAttribute("data-name");
         if (!name) return;
-        const tpl = findTemplateByName(name);
+        const tpl = await findTemplateByName(name);
         if (!tpl) return;
         if (t.classList.contains("jr-template-pin")) {
           // Toggle pinned state and persist
-          const arr = loadTemplates();
-          const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
-          if (idx >= 0) {
-            const prev = arr[idx] || {};
-            arr[idx] = { ...prev, pinned: !prev.pinned, updatedAt: prev.updatedAt || prev.createdAt || new Date().toISOString() };
-            saveTemplates(arr);
-            renderTemplates();
-            this.showSuccess(arr[idx].pinned ? "Template pinned." : "Template unpinned.");
-          }
+          const updatedTpl = { ...tpl, pinned: !tpl.pinned, updatedAt: tpl.updatedAt || tpl.createdAt || new Date().toISOString() };
+          await saveTemplate(updatedTpl);
+          await renderTemplates();
+          this.showSuccess(updatedTpl.pinned ? "Template pinned." : "Template unpinned.");
           return;
         }
         if (t.classList.contains("jr-template-run")) {
@@ -1381,54 +1692,67 @@ export class JenkinsRunner extends BaseTool {
           openTemplateModal("edit", tpl);
         } else if (t.classList.contains("jr-template-delete")) {
           // Open custom confirmation modal before deleting
-          openConfirmModal(`Delete template "${tpl.name}"? This action cannot be undone.`, () => {
-            const arr = loadTemplates();
-            const idx = arr.findIndex((x) => (x?.name || "") === tpl.name);
-            if (idx >= 0) {
-              arr.splice(idx, 1);
-              saveTemplates(arr);
-              renderTemplates();
-              this.showSuccess("Template deleted.");
-            }
+          openConfirmModal(`Delete template "${tpl.name}"? This action cannot be undone.`, async () => {
+            await deleteTemplate(tpl.name);
+            await renderTemplates();
+            this.showSuccess("Template deleted.");
           });
         }
       });
 
     // Templates: modal handlers
     if (templateModalSaveBtn)
-      templateModalSaveBtn.addEventListener("click", () => {
-        if (!validateTemplateForm()) return;
+      templateModalSaveBtn.addEventListener("click", async () => {
+        if (!(await validateTemplateForm())) return;
         const name = (templateNameInput?.value || "").trim();
         const env = (templateEnvSelect?.value || "").trim();
         const sql = this.templateEditor ? this.templateEditor.getValue().trim() : "";
         // Validate and normalize tags before saving
         const tags = Array.from(new Set(modalTags.map((x) => normalizeTag(x)).filter(isValidTag)));
-        let arr = loadTemplates();
         const now = new Date().toISOString();
-        const existingIdx = arr.findIndex((t) => (t?.name || "") === (this.state.editingTemplateName || name));
-        if (existingIdx >= 0) {
-          const prev = arr[existingIdx];
-          const job = prev?.job || DEFAULT_JOB; // preserve existing job if present
-          arr[existingIdx] = {
-            ...prev,
+        const existing = await findTemplateByName(this.state.editingTemplateName || name);
+        if (existing) {
+          const job = existing?.job || DEFAULT_JOB; // preserve existing job if present
+          const updatedTpl = {
+            ...existing,
             name,
             job,
             env,
             sql,
             tags,
-            version: Number(prev.version || 1) + 1,
+            version: Number(existing.version || 1) + 1,
             updatedAt: now,
           };
-          saveTemplates(arr);
+          await saveTemplate(updatedTpl);
           this.showSuccess("Template updated.");
+
+          // Track template update
+          try {
+            UsageTracker.trackEvent("run-query", "template_update", {
+              template_name: name,
+              env,
+              has_tags: tags.length > 0,
+              version: updatedTpl.version,
+            });
+          } catch (_) {}
         } else {
           const job = DEFAULT_JOB;
-          arr.push({ name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false });
-          saveTemplates(arr);
+          const newTpl = { name, job, env, sql, tags, version: 1, createdAt: now, updatedAt: now, pinned: false };
+          await saveTemplate(newTpl);
           this.showSuccess("Template saved.");
+
+          // Track template creation
+          try {
+            UsageTracker.trackEvent("run-query", "template_create", {
+              template_name: name,
+              env,
+              has_tags: tags.length > 0,
+              sql_length: sql.length,
+            });
+          } catch (_) {}
         }
         this.state.editingTemplateName = name;
-        renderTemplates();
+        await renderTemplates();
         closeTemplateModal(true);
       });
 
@@ -1447,10 +1771,24 @@ export class JenkinsRunner extends BaseTool {
 
     // ===== Split modal controls =====
     if (splitModalCloseBtn) splitModalCloseBtn.addEventListener("click", () => closeSplitModal());
+    if (splitMinimizeBtn) splitMinimizeBtn.addEventListener("click", () => minimizeSplitModal());
+    if (splitMaximizeBtn) splitMaximizeBtn.addEventListener("click", () => maximizeSplitModal());
+    // Also make the minimized indicator content clickable to maximize
+    if (splitMinimizedEl) {
+      splitMinimizedEl.querySelector(".jr-split-minimized-content")?.addEventListener("click", () => maximizeSplitModal());
+    }
+    // Auto-restore modal if returning from navigation while minimized
+    if (shouldRestoreModal) {
+      setTimeout(() => {
+        maximizeSplitModal();
+        // Hide global indicator since we're restoring the modal
+        if (this._globalSplitIndicator) this._globalSplitIndicator.style.display = "none";
+      }, 100);
+    }
     if (splitCancelBtn)
       splitCancelBtn.addEventListener("click", () => {
-        // If execution hasn't started, just close the modal
-        if (!this.state.split.started) {
+        // If execution hasn't started or is already complete, just close the modal
+        if (!this.state.split.started || this.state.split.completed) {
           closeSplitModal();
           return;
         }
@@ -1468,9 +1806,10 @@ export class JenkinsRunner extends BaseTool {
           "This will stop queuing remaining chunks. The currently running chunk on Jenkins cannot be stopped and will complete.",
           () => {
             this.state.split.cancelRequested = true;
+            this.state.split.started = false;
             closeConfirmModal();
             closeSplitModal();
-          }
+          },
         );
       });
     if (splitModalOverlay)
@@ -1506,8 +1845,8 @@ export class JenkinsRunner extends BaseTool {
           templateTagsInput?.focus();
         }
       });
-      const updateSuggestions = debounce(() => {
-        const all = collectAllTags();
+      const updateSuggestions = debounce(async () => {
+        const all = await collectAllTags();
         const q = normalizeTag(templateTagsInput.value);
         templateTagsContainer.classList.add("jr-loading");
         templateTagsContainer.setAttribute("aria-busy", "true");
@@ -1567,7 +1906,7 @@ export class JenkinsRunner extends BaseTool {
               templateTagsContainer,
               templateTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              templateTagsActiveIndex
+              templateTagsActiveIndex,
             );
           }
         } else if (e.key === "ArrowUp") {
@@ -1579,7 +1918,7 @@ export class JenkinsRunner extends BaseTool {
               templateTagsContainer,
               templateTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              templateTagsActiveIndex
+              templateTagsActiveIndex,
             );
           }
         } else if (e.key === "Escape") {
@@ -1677,7 +2016,7 @@ export class JenkinsRunner extends BaseTool {
               filterTagsContainer,
               filterTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              filterTagsActiveIndex
+              filterTagsActiveIndex,
             );
           }
         } else if (e.key === "ArrowUp") {
@@ -1689,7 +2028,7 @@ export class JenkinsRunner extends BaseTool {
               filterTagsContainer,
               filterTagsSuggestionsEl,
               items.map((i) => i.getAttribute("data-value")),
-              filterTagsActiveIndex
+              filterTagsActiveIndex,
             );
           }
         } else if (e.key === "Escape") {
@@ -1912,34 +2251,70 @@ export class JenkinsRunner extends BaseTool {
       }
     };
 
-    const waitForBuildCompletion = async (buildNumber, timeoutMs = 15 * 60 * 1000) => {
-      return new Promise((resolve, reject) => {
-        let unlisten = null;
-        let timer = setTimeout(() => {
-          try {
-            if (typeof unlisten === "function") unlisten();
-          } catch (_) {}
-          reject(new Error("Log streaming timeout"));
-        }, timeoutMs);
-        listen("jenkins:log-complete", (ev) => {
-          const payload = ev?.payload || {};
-          const bn = typeof payload === "object" ? payload.build_number : null;
-          if (Number(bn) === Number(buildNumber)) {
-            clearTimeout(timer);
-            try {
-              if (typeof unlisten === "function") unlisten();
-            } catch (_) {}
-            resolve();
-          }
-        })
-          .then((un) => {
-            unlisten = un;
-          })
-          .catch((err) => {
-            clearTimeout(timer);
-            reject(err);
-          });
+    // Creates a completion waiter that sets up the listener IMMEDIATELY
+    // Call this BEFORE streamLogs to avoid race conditions
+    const BUILD_COMPLETION_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    const createBuildCompletionWaiter = async (buildNumber, timeoutMs = BUILD_COMPLETION_TIMEOUT_MS) => {
+      console.log(`[createBuildCompletionWaiter] Setting up listener for build #${buildNumber}`);
+      const startWait = Date.now();
+      let resolved = false;
+      let unlisten = null;
+
+      // Set up listener immediately
+      const listenerPromise = listen("jenkins:log-complete", (ev) => {
+        const payload = ev?.payload || {};
+        const bn = typeof payload === "object" ? payload.build_number : null;
+        console.log(`[createBuildCompletionWaiter] Received log-complete for build #${bn}, expecting #${buildNumber}`);
+        if (Number(bn) === Number(buildNumber)) {
+          resolved = true;
+        }
       });
+
+      unlisten = await listenerPromise;
+      console.log(`[createBuildCompletionWaiter] Listener registered for build #${buildNumber}`);
+
+      // Return the wait function
+      return async () => {
+        console.log(`[waitForBuildCompletion] Waiting for build #${buildNumber} (timeout: ${timeoutMs / 1000}s)`);
+
+        // Check if already resolved (race condition case)
+        if (resolved) {
+          console.log(`[waitForBuildCompletion] Build #${buildNumber} already completed!`);
+          if (unlisten) unlisten();
+          return;
+        }
+
+        return new Promise((resolve, reject) => {
+          // Periodic heartbeat to show we're still waiting
+          const heartbeat = setInterval(() => {
+            if (resolved) {
+              clearInterval(heartbeat);
+              clearTimeout(timer);
+              const elapsed = ((Date.now() - startWait) / 1000).toFixed(1);
+              console.log(`[waitForBuildCompletion] Build #${buildNumber} completed after ${elapsed}s`);
+              if (unlisten) unlisten();
+              resolve();
+              return;
+            }
+            const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+            console.log(`[waitForBuildCompletion] Still waiting for build #${buildNumber}... (${elapsed}s elapsed)`);
+          }, 1000); // Check every second
+
+          let timer = setTimeout(() => {
+            clearInterval(heartbeat);
+            const elapsed = ((Date.now() - startWait) / 1000).toFixed(0);
+            console.error(`[waitForBuildCompletion] TIMEOUT for build #${buildNumber} after ${elapsed}s`);
+            if (unlisten) unlisten();
+            reject(new Error(`Log streaming timeout after ${elapsed}s waiting for build #${buildNumber}`));
+          }, timeoutMs);
+        });
+      };
+    };
+
+    // Legacy wrapper for compatibility
+    const waitForBuildCompletion = async (buildNumber, timeoutMs = BUILD_COMPLETION_TIMEOUT_MS) => {
+      const waiter = await createBuildCompletionWaiter(buildNumber, timeoutMs);
+      return waiter();
     };
 
     // Clear button - empties the SQL editor
@@ -2020,6 +2395,11 @@ export class JenkinsRunner extends BaseTool {
 
       // If the SQL is oversize, allow the user to preview and split first
       if (totalBytes > MAX_SQL_BYTES) {
+        // Prevent starting a new split while one is already in progress
+        if (this.state.split?.started && !this.state.split?.completed) {
+          this.showError("A split query execution is already in progress. Complete or cancel it first.");
+          return;
+        }
         openSplitSizeWarning(async () => {
           try {
             const stmts = splitSqlStatementsSafely(sql);
@@ -2049,54 +2429,75 @@ export class JenkinsRunner extends BaseTool {
                 return `Chunk ${index + 1}`;
               }
             };
-            // Bind Execute All once
+            // Bind Execute All once - reads current state at click time to avoid stale closures
             if (splitExecuteAllBtn && !splitExecuteAllBtn.dataset.bound) {
               splitExecuteAllBtn.dataset.bound = "true";
               splitExecuteAllBtn.addEventListener("click", async () => {
-                if (!this.state.jenkinsUrl || !envSelect.value) {
+                // Read current state at click time (not from closure)
+                const currentChunks = this.state.split.chunks;
+                const currentEnv = envSelect.value;
+                const currentBaseUrl = this.state.jenkinsUrl;
+                const currentJob = jobInput.value.trim();
+
+                if (!currentBaseUrl || !currentEnv) {
                   this.showError("Select Jenkins URL and ENV in the toolbar to execute.");
                   return;
                 }
                 try {
                   splitExecuteAllBtn.disabled = true;
                   this.state.split.started = true;
+                  // Register beforeunload handler to warn user and cleanup on app close
+                  if (!this._beforeUnloadHandler) {
+                    this._beforeUnloadHandler = (e) => {
+                      if (this.state?.split?.started && !this.state?.split?.completed) {
+                        e.preventDefault();
+                        e.returnValue = "Split query execution is in progress. Are you sure you want to leave?";
+                        return e.returnValue;
+                      }
+                    };
+                    window.addEventListener("beforeunload", this._beforeUnloadHandler);
+                  }
                   // Initialize logs for split execution
                   logsEl.textContent = "";
-                  if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                  const miniL = document.getElementById("jr-split-mini-log");
+                  if (miniL) miniL.textContent = "";
                   let lastBuildUrl = null;
-                  for (let idx = 0; idx < chunks.length; idx++) {
+
+                  for (let idx = 0; idx < currentChunks.length; idx++) {
                     // Check if user requested cancellation
                     if (this.state.split.cancelRequested) {
                       statusEl.textContent = "Execution cancelled by user.";
-                      if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${chunks.length} chunks.`;
+                      if (splitProgressEl) splitProgressEl.textContent = `Cancelled. Completed ${idx} of ${currentChunks.length} chunks.`;
                       appendLog(`\n=== Execution cancelled. Remaining chunks not queued. ===\n`);
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
 
-                    const chunkSql = chunks[idx];
+                    const chunkSql = currentChunks[idx];
                     // Seed a history entry per chunk with table-derived title
-                    const arrSeed = loadHistory();
                     const chunkTitle = deriveChunkTitle(chunkSql, idx);
-                    arrSeed.push({
-                      timestamp: new Date().toISOString(),
-                      job,
-                      env,
+                    const chunkTimestamp = new Date().toISOString();
+                    await addHistoryEntry({
+                      timestamp: chunkTimestamp,
+                      job: currentJob,
+                      env: currentEnv,
                       sql: chunkSql,
                       title: chunkTitle,
                       buildNumber: null,
                       buildUrl: null,
                     });
-                    const histIndex = arrSeed.length - 1;
-                    saveHistory(arrSeed);
-                    renderHistory();
+                    await renderHistory();
                     this.state.split.statuses[idx] = "running";
                     renderSplitChunksList();
-                    appendLog(`\n=== Running chunk ${idx + 1}/${chunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                    const chunkStartTime = Date.now();
+                    appendLog(`\n=== Running chunk ${idx + 1}/${currentChunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Triggering job...\n`);
                     this.state.lastRunArgListTooLong = false;
-                    const queueUrl = await this.service.triggerJob(baseUrl, job, env, chunkSql);
+                    const queueUrl = await this.service.triggerJob(currentBaseUrl, currentJob, currentEnv, chunkSql);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Job queued. Polling for build number...\n`);
                     this.state.queueUrl = queueUrl;
-                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} queued. Polling…`;
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} queued. Polling…`;
                     // Poll until build starts
                     let attempts = 0;
                     let buildNumber = null;
@@ -2104,7 +2505,7 @@ export class JenkinsRunner extends BaseTool {
                     while (!buildNumber && attempts <= 30) {
                       attempts++;
                       try {
-                        const res = await this.service.pollQueue(baseUrl, queueUrl);
+                        const res = await this.service.pollQueue(currentBaseUrl, queueUrl);
                         buildNumber = res.buildNumber || null;
                         executableUrl = res.executableUrl || null;
                         if (!buildNumber) await new Promise((r) => setTimeout(r, 2000));
@@ -2114,16 +2515,20 @@ export class JenkinsRunner extends BaseTool {
                         renderSplitChunksList();
                         this.showError(String(err));
                         splitExecuteAllBtn.disabled = false;
+                        this._cleanupSplitResources();
                         return;
                       }
                     }
                     if (!buildNumber) {
+                      appendLog(`[${new Date().toLocaleTimeString()}] ERROR: Polling timeout after ${attempts} attempts\n`);
                       if (splitProgressEl) splitProgressEl.textContent = `Polling timeout on chunk ${idx + 1}`;
                       this.state.split.statuses[idx] = "timeout";
                       renderSplitChunksList();
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
+                    appendLog(`[${new Date().toLocaleTimeString()}] Build #${buildNumber} started (poll attempts: ${attempts})\n`);
                     this.state.buildNumber = buildNumber;
                     this.state.executableUrl = executableUrl;
                     if (buildNumEl) {
@@ -2137,40 +2542,68 @@ export class JenkinsRunner extends BaseTool {
                     }
                     // Update this chunk’s history entry with build info
                     try {
-                      const arrUpdate = loadHistory();
-                      if (arrUpdate[histIndex]) {
-                        arrUpdate[histIndex].buildNumber = buildNumber || null;
-                        arrUpdate[histIndex].buildUrl = executableUrl || arrUpdate[histIndex].buildUrl;
-                        saveHistory(arrUpdate);
-                        renderHistory();
+                      const arrUpdate = await loadHistory();
+                      const histEntryToUpdate = arrUpdate.find((h) => h.timestamp === chunkTimestamp);
+                      if (histEntryToUpdate) {
+                        histEntryToUpdate.buildNumber = buildNumber || null;
+                        histEntryToUpdate.buildUrl = executableUrl || histEntryToUpdate.buildUrl;
+                        await addHistoryEntry(histEntryToUpdate);
+                        await renderHistory();
                       }
                     } catch (_) {}
-                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
+                    if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${currentChunks.length} streaming…`;
+                    appendLog(`[${new Date().toLocaleTimeString()}] Subscribing to log stream...\n`);
                     await subscribeToLogs();
-                    await this.service.streamLogs(baseUrl, job, buildNumber);
-                    await waitForBuildCompletion(buildNumber);
+                    // Set up completion waiter BEFORE starting stream to avoid race condition
+                    const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Starting log stream for build #${buildNumber}...\n`);
+                    await this.service.streamLogs(currentBaseUrl, currentJob, buildNumber);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Waiting for build completion...\n`);
+                    await waitForCompletion();
+                    const chunkDuration = ((Date.now() - chunkStartTime) / 1000).toFixed(1);
+                    appendLog(`[${new Date().toLocaleTimeString()}] Build #${buildNumber} completed (${chunkDuration}s)\n`);
                     if (this.state.lastRunArgListTooLong) {
                       if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
                       this.state.split.statuses[idx] = "error";
                       renderSplitChunksList();
                       this.showError(
-                        "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                        "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates.",
                       );
                       splitExecuteAllBtn.disabled = false;
+                      this._cleanupSplitResources();
                       return;
                     }
                     this.state.split.statuses[idx] = "success";
                     renderSplitChunksList();
-                    appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
+                    appendLog(`\n=== Chunk ${idx + 1}/${currentChunks.length} complete ===\n`);
                   }
-                  renderHistory();
-                  statusEl.textContent = "All chunks completed.";
-                  if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
-                  // Final status is shown in progress and logs
-                  splitExecuteAllBtn.disabled = false;
+                  await renderHistory();
+                  // Calculate success report
+                  const successCount = this.state.split.statuses.filter((s) => s === "success").length;
+                  const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
+                  const completionMessage =
+                    `✓ Execution Complete: ${successCount}/${currentChunks.length} chunks succeeded` +
+                    (failedCount > 0 ? ` (${failedCount} failed)` : "") +
+                    ` on ${currentEnv}`;
+                  statusEl.textContent = completionMessage;
+                  if (splitProgressEl) {
+                    splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${currentChunks.length} chunks executed successfully on ${currentEnv}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
+                  }
+                  // Update button to indicate completion and prevent accidental re-run
+                  splitExecuteAllBtn.textContent = "✓ Execution Complete";
+                  splitExecuteAllBtn.disabled = true;
+                  // Mark as completed and update cancel to dismiss
+                  this.state.split.completed = true;
+                  if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
+                  appendLog(
+                    `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${currentEnv}\n  Total Chunks: ${currentChunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`,
+                  );
+                  // Cleanup resources after successful completion
+                  this._cleanupSplitResources();
                 } catch (err) {
                   splitExecuteAllBtn.disabled = false;
                   this.showError(errorMapping(err));
+                  this._cleanupSplitResources();
                 }
               });
             }
@@ -2205,10 +2638,9 @@ export class JenkinsRunner extends BaseTool {
 
         if (totalBytes <= MAX_SQL_BYTES) {
           // Seed history for single-run (non-split)
-          const histEntry = { timestamp: new Date().toISOString(), job, env, sql, buildNumber: null, buildUrl: null };
-          const hist = loadHistory();
-          hist.push(histEntry);
-          saveHistory(hist);
+          const histTimestamp = new Date().toISOString();
+          const histEntry = { timestamp: histTimestamp, job, env, sql, buildNumber: null, buildUrl: null };
+          await addHistoryEntry(histEntry);
           statusEl.textContent = "Triggering job…";
           const queueUrl = await this.service.triggerJob(baseUrl, job, env, sql);
           this.state.queueUrl = queueUrl;
@@ -2229,20 +2661,22 @@ export class JenkinsRunner extends BaseTool {
                   buildLink.href = executableUrl;
                   buildLink.style.display = "inline-block";
                 }
-                // Update history with build
-                const arr = loadHistory();
-                if (arr.length) {
-                  const last = arr[arr.length - 1];
-                  last.buildNumber = buildNumber;
-                  last.buildUrl = executableUrl || last.buildUrl;
-                  saveHistory(arr);
+                // Update history with build info by finding entry with matching timestamp
+                const arr = await loadHistory();
+                const histEntryToUpdate = arr.find((h) => h.timestamp === histTimestamp);
+                if (histEntryToUpdate) {
+                  histEntryToUpdate.buildNumber = buildNumber;
+                  histEntryToUpdate.buildUrl = executableUrl || histEntryToUpdate.buildUrl;
+                  await addHistoryEntry(histEntryToUpdate);
                 }
                 statusEl.textContent = `Build #${buildNumber} started. Streaming logs…`;
                 await subscribeToLogs();
+                // Set up completion waiter BEFORE starting stream to avoid race condition
+                const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
                 await this.service.streamLogs(baseUrl, job, buildNumber);
-                await waitForBuildCompletion(buildNumber);
+                await waitForCompletion();
                 runBtn.disabled = false;
-                renderHistory();
+                await renderHistory();
                 return;
               }
               if (attempts > 30) {
@@ -2272,7 +2706,7 @@ export class JenkinsRunner extends BaseTool {
               if (oversizeStatement) {
                 statusEl.textContent = "Cannot run: a single SQL statement exceeds 90KB.";
                 this.showError(
-                  "One statement is too large to send safely. Please reduce the statement size or run via an alternate method."
+                  "One statement is too large to send safely. Please reduce the statement size or run via an alternate method.",
                 );
                 runBtn.disabled = false;
                 return;
@@ -2297,7 +2731,8 @@ export class JenkinsRunner extends BaseTool {
                     this.state.split.started = true;
                     // Initialize logs for split execution
                     logsEl.textContent = "";
-                    if (splitMiniLogsEl) splitMiniLogsEl.textContent = "";
+                    const miniL2 = document.getElementById("jr-split-mini-log");
+                    if (miniL2) miniL2.textContent = "";
                     let lastBuildUrl = null;
                     for (let idx = 0; idx < chunks.length; idx++) {
                       // Check if user requested cancellation
@@ -2382,14 +2817,16 @@ export class JenkinsRunner extends BaseTool {
                       } catch (_) {}
                       if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;
                       await subscribeToLogs();
+                      // Set up completion waiter BEFORE starting stream to avoid race condition
+                      const waitForCompletion = await createBuildCompletionWaiter(buildNumber);
                       await this.service.streamLogs(baseUrl, job, buildNumber);
-                      await waitForBuildCompletion(buildNumber);
+                      await waitForCompletion();
                       if (this.state.lastRunArgListTooLong) {
                         if (splitProgressEl) splitProgressEl.textContent = "Argument list too long detected.";
                         this.state.split.statuses[idx] = "error";
                         renderSplitChunksList();
                         this.showError(
-                          "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates."
+                          "Jenkins reported 'Argument list too long'. Consider reducing query size or further splitting templates.",
                         );
                         splitExecuteAllBtn.disabled = false;
                         return;
@@ -2399,10 +2836,26 @@ export class JenkinsRunner extends BaseTool {
                       appendLog(`\n=== Chunk ${idx + 1}/${chunks.length} complete ===\n`);
                     }
                     renderHistory();
-                    statusEl.textContent = "All chunks completed.";
-                    if (splitProgressEl) splitProgressEl.textContent = "All chunks completed.";
-                    // Final status is shown in progress and logs
-                    splitExecuteAllBtn.disabled = false;
+                    // Calculate success report
+                    const successCount = this.state.split.statuses.filter((s) => s === "success").length;
+                    const failedCount = this.state.split.statuses.filter((s) => s === "failed" || s === "error" || s === "timeout").length;
+                    const completionMessage =
+                      `✓ Execution Complete: ${successCount}/${chunks.length} chunks succeeded` +
+                      (failedCount > 0 ? ` (${failedCount} failed)` : "") +
+                      ` on ${env}`;
+                    statusEl.textContent = completionMessage;
+                    if (splitProgressEl) {
+                      splitProgressEl.innerHTML = `<strong style="color: var(--success-color, #22c55e);">✓ All ${chunks.length} chunks executed successfully on ${env}</strong><br><span style="font-size: 0.85em; opacity: 0.8;">Check the History tab for individual build links.</span>`;
+                    }
+                    // Update button to indicate completion and prevent accidental re-run
+                    splitExecuteAllBtn.textContent = "✓ Execution Complete";
+                    splitExecuteAllBtn.disabled = true;
+                    // Mark as completed and update cancel to dismiss
+                    this.state.split.completed = true;
+                    if (splitCancelBtn) splitCancelBtn.textContent = "Dismiss";
+                    appendLog(
+                      `\n========================================\n✓ SPLIT EXECUTION COMPLETE\n  Environment: ${env}\n  Total Chunks: ${chunks.length}\n  Successful: ${successCount}\n  Failed: ${failedCount}\n========================================\n`,
+                    );
                   } catch (err) {
                     splitExecuteAllBtn.disabled = false;
                     this.showError(errorMapping(err));
@@ -2431,6 +2884,10 @@ export class JenkinsRunner extends BaseTool {
 
   onUnmount() {
     try {
+      // Clean up split execution resources (log listeners, beforeunload handler, indicator)
+      // On unmount, we fully clean up including the indicator since the component is being destroyed
+      this._cleanupSplitResources({ hideIndicator: true });
+
       if (this._sidebarUnsubs && Array.isArray(this._sidebarUnsubs)) {
         this._sidebarUnsubs.forEach((off) => {
           try {
@@ -2459,17 +2916,75 @@ export class JenkinsRunner extends BaseTool {
         } catch (_) {}
         this.templateEditor = null;
       }
+
+      // Remove orphaned global split indicator element from DOM
+      const globalIndicator = document.getElementById("jr-global-split-indicator");
+      if (globalIndicator && globalIndicator.parentNode) {
+        globalIndicator.parentNode.removeChild(globalIndicator);
+      }
     } catch (_) {}
   }
 
   onDeactivate() {
-    // Cleanup listeners
-    try {
-      for (const un of this._logUnsubscribes) {
-        un();
+    // If split execution is running (started but not completed), preserve log listeners
+    // so the async execution loop can continue in the background
+    const splitRunning = this.state?.split?.started && !this.state?.split?.completed;
+
+    // Auto-minimize split modal if execution is running (or completed) AND modal is visible
+    // Check if the modal is currently visible or already minimized
+    const splitModal = document.getElementById("jr-split-modal");
+    const isModalVisible = splitModal && splitModal.style.display !== "none";
+    const isMinimized = this.state?.split?.minimized;
+    if ((splitRunning || this.state?.split?.completed) && (isModalVisible || isMinimized)) {
+      this.state.split.minimized = true;
+      // Create/show global indicator so user can navigate back
+      let globalEl = document.getElementById("jr-global-split-indicator");
+      if (!globalEl) {
+        globalEl = document.createElement("div");
+        globalEl.id = "jr-global-split-indicator";
+        globalEl.className = "jr-split-minimized";
+        globalEl.setAttribute("role", "status");
+        globalEl.innerHTML = `
+          <div class="jr-split-minimized-content" style="cursor:pointer;">
+            <span class="jr-split-minimized-icon">⏳</span>
+            <span class="jr-global-split-text">Running...</span>
+          </div>
+          <button class="btn btn-sm-xs">Show</button>
+        `;
+        document.body.appendChild(globalEl);
       }
-    } catch (_) {}
-    this._logUnsubscribes = [];
+      // Update text based on state
+      const { chunks, statuses, completed } = this.state.split;
+      const total = chunks?.length || 0;
+      const doneCount = statuses?.filter((s) => s === "success" || s === "failed" || s === "error" || s === "timeout").length || 0;
+      const textEl = globalEl.querySelector(".jr-global-split-text");
+      if (textEl) {
+        if (completed) {
+          const ok = statuses?.filter((s) => s === "success").length || 0;
+          textEl.textContent = `✓ Complete: ${ok}/${total}`;
+          globalEl.classList.add("completed");
+        } else {
+          textEl.textContent = `Running Query Chunk: ${doneCount + 1}/${total}...`;
+          globalEl.classList.remove("completed");
+        }
+      }
+      globalEl.style.display = "flex";
+      this._globalSplitIndicator = globalEl;
+      // Bind click handler
+      const self = this;
+      globalEl.onclick = () => {
+        window.location.hash = "run-query";
+      };
+    }
+
+    // Cleanup listeners and beforeunload handler only if split is not running
+    // When split IS running, we intentionally preserve listeners so the background
+    // async loop can continue receiving log events
+    if (!splitRunning) {
+      this._cleanupSplitResources();
+    }
+
+    // Dispose editors to save memory regardless
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -2477,6 +2992,10 @@ export class JenkinsRunner extends BaseTool {
     if (this.templateEditor) {
       this.templateEditor.dispose();
       this.templateEditor = null;
+    }
+    if (this.splitEditor) {
+      this.splitEditor.dispose();
+      this.splitEditor = null;
     }
   }
 }

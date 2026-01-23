@@ -170,6 +170,7 @@ class HTMLTemplateTool extends BaseTool {
         if (action) {
           await action.run();
           this.renderPreview(this.editor.getValue());
+          UsageTracker.trackEvent("html-template", "format_action");
         }
       });
     }
@@ -179,6 +180,7 @@ class HTMLTemplateTool extends BaseTool {
         const html = this.editor.getValue();
         btnMinify.disabled = true;
         this.minifyWorker.postMessage({ type: "minify", html });
+        UsageTracker.trackEvent("html-template", "minify_action");
       });
     }
 
@@ -424,6 +426,11 @@ class HTMLTemplateTool extends BaseTool {
     select.addEventListener("change", (e) => {
       const envKey = e.target.value;
       this.updateVtlBaseUrlFromEnv(envKey);
+
+      // Track env switch for behavior analysis
+      UsageTracker.trackEvent("html-template", "env_switch", {
+        env: envKey,
+      });
     });
   }
 

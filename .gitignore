@@ -63,3 +63,4 @@ target/
 
 #macOS
 .DS_Store
+backend-workers/.dev.vars
