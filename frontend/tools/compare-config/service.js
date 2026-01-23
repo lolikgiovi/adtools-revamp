@@ -115,6 +115,27 @@ export class CompareConfigService {
   }
 
   /**
+   * Fetches Oracle data for unified comparison (data-only, no comparison)
+   * This is used for mixed source comparisons (Oracle vs Excel)
+   * @param {Object} request - Fetch data request
+   * @param {string} request.connection_name - Connection name (for credential lookup)
+   * @param {Object} request.config - Connection configuration
+   * @param {string} request.mode - "table" or "raw-sql"
+   * @param {string} [request.owner] - Schema/owner (table mode)
+   * @param {string} [request.table_name] - Table name (table mode)
+   * @param {string} [request.where_clause] - WHERE clause (table mode)
+   * @param {string[]} [request.fields] - Fields to select (table mode)
+   * @param {string} [request.sql] - SQL query (raw-sql mode)
+   * @param {number} [request.max_rows] - Maximum rows to fetch
+   * @returns {Promise<{headers: string[], rows: Object[], row_count: number, source_name: string}>}
+   */
+  static async fetchOracleData(request) {
+    return await invoke("fetch_oracle_data", {
+      request,
+    });
+  }
+
+  /**
    * Exports comparison results to a file
    * @param {Object} result - Comparison result
    * @param {string} format - Export format (json or csv)

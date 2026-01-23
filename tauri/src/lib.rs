@@ -60,7 +60,9 @@ pub fn run() {
       // Oracle connection pool commands
       oracle::get_active_connections,
       oracle::close_all_connections,
-      oracle::close_connection
+      oracle::close_connection,
+      // Unified data fetch command
+      oracle::fetch_oracle_data
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

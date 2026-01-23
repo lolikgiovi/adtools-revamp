@@ -17,6 +17,8 @@ import * as FileParser from "./lib/file-parser.js";
 import * as FileMatcher from "./lib/file-matcher.js";
 import { ExcelComparator } from "./lib/excel-comparator.js";
 import * as IndexedDBManager from "./lib/indexed-db-manager.js";
+import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
+import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -67,6 +69,7 @@ class CompareConfigTool extends BaseTool {
 
     // Multi-tab results support
     this.results = {
+      "unified": null,
       "schema-table": null,
       "raw-sql": null,
       "excel-compare": null,
@@ -99,6 +102,65 @@ class CompareConfigTool extends BaseTool {
 
       // UI state
       currentStep: 1, // 1=upload, 2=pairing, 3=config, 4=results
+    };
+
+    // Unified Compare state (for mixed Oracle/Excel comparison)
+    this.unified = {
+      // Source A (Reference)
+      sourceA: {
+        type: null,           // 'oracle' or 'excel'
+        // Oracle config
+        connection: null,     // { name, connect_string }
+        queryMode: 'table',   // 'table' or 'sql'
+        schema: null,
+        table: null,
+        sql: '',
+        whereClause: '',
+        maxRows: 100,
+        // Excel config
+        file: null,           // File object
+        parsedData: null,     // { headers, rows, metadata }
+        // Fetched data (normalized)
+        data: null,           // { headers: [], rows: [], metadata: {} }
+        dataLoaded: false,
+      },
+
+      // Source B (Comparator)
+      sourceB: {
+        type: null,
+        connection: null,
+        queryMode: 'table',
+        schema: null,
+        table: null,
+        sql: '',
+        whereClause: '',
+        maxRows: 100,
+        file: null,
+        parsedData: null,
+        data: null,
+        dataLoaded: false,
+      },
+
+      // Field reconciliation (computed when both sources have data)
+      fields: {
+        common: [],           // Common field names (from source A)
+        commonMapped: [],     // [{normalized, sourceA, sourceB}]
+        onlyInA: [],          // Fields only in source A
+        onlyInB: [],          // Fields only in source B
+      },
+
+      // User selections
+      selectedPkFields: [],       // Normalized field names
+      selectedCompareFields: [],  // Normalized field names
+
+      // Comparison options
+      options: {
+        rowMatching: 'key',       // 'key' or 'position'
+        dataComparison: 'strict', // 'strict' or 'normalized'
+      },
+
+      // UI state
+      currentStep: 1,  // 1=source-config, 2=field-selection, 3=results
     };
 
     // View instances
@@ -279,7 +341,7 @@ class CompareConfigTool extends BaseTool {
       } catch (e) {
         // If quota exceeded, try saving without large results
         console.warn("Could not save full state to localStorage (likely quota exceeded). Saving without results.");
-        state.results = { "schema-table": null, "raw-sql": null, "excel-compare": null };
+        state.results = { "unified": null, "schema-table": null, "raw-sql": null, "excel-compare": null };
         localStorage.setItem("compare-config.last-state", JSON.stringify(state));
       }
     } catch (error) {
@@ -298,7 +360,7 @@ class CompareConfigTool extends BaseTool {
       const state = JSON.parse(saved);
 
       // Restore results first to inform clean slate logic
-      this.results = state.results || { "schema-table": null, "raw-sql": null, "excel-compare": null };
+      this.results = state.results || { "unified": null, "schema-table": null, "raw-sql": null, "excel-compare": null };
 
       // Restore basic state with clean-slate check
       this.queryMode = state.queryMode || "schema-table";
@@ -740,6 +802,9 @@ class CompareConfigTool extends BaseTool {
     // Excel field selection events
     this.bindExcelFieldSelectionEvents();
 
+    // Unified Compare mode events
+    this.bindUnifiedModeEvents();
+
     // Excel comparison option radio listeners
     const rowMatchingRadios = document.querySelectorAll('input[name="excel-row-matching"]');
     const dataComparisonRadios = document.querySelectorAll('input[name="excel-data-comparison"]');
@@ -797,7 +862,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Switches between tabs (schema-table, raw-sql, excel-compare)
+   * Switches between tabs (unified, schema-table, raw-sql, excel-compare)
    */
   switchTab(tab) {
     this.queryMode = tab;
@@ -819,6 +884,7 @@ class CompareConfigTool extends BaseTool {
     const fieldSelection = document.getElementById("field-selection");
     const rawSqlMode = document.getElementById("raw-sql-mode");
     const excelCompareMode = document.getElementById("excel-compare-mode");
+    const unifiedCompareMode = document.getElementById("unified-compare-mode");
     const resultsSection = document.getElementById("results-section");
     const desktopOnlyNotice = document.getElementById("desktop-only-notice");
     const desktopFeatureName = document.getElementById("desktop-feature-name");
@@ -835,6 +901,7 @@ class CompareConfigTool extends BaseTool {
       if (fieldSelection) fieldSelection.style.display = "none";
       if (rawSqlMode) rawSqlMode.style.display = "none";
       if (excelCompareMode) excelCompareMode.style.display = "none";
+      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
       if (resultsSection) resultsSection.style.display = "none";
       return;
     }
@@ -843,21 +910,32 @@ class CompareConfigTool extends BaseTool {
     if (desktopOnlyNotice) desktopOnlyNotice.style.display = "none";
 
     // Show/hide appropriate UI sections
-    if (tab === "schema-table") {
+    if (tab === "unified") {
+      if (envSelection) envSelection.style.display = "none";
+      if (fieldSelection) fieldSelection.style.display = "none";
+      if (rawSqlMode) rawSqlMode.style.display = "none";
+      if (excelCompareMode) excelCompareMode.style.display = "none";
+      if (unifiedCompareMode) unifiedCompareMode.style.display = "block";
+      // Initialize unified mode UI
+      this.initUnifiedModeUI();
+    } else if (tab === "schema-table") {
       if (envSelection) envSelection.style.display = "block";
       if (fieldSelection) fieldSelection.style.display = this.metadata ? "block" : "none";
       if (rawSqlMode) rawSqlMode.style.display = "none";
       if (excelCompareMode) excelCompareMode.style.display = "none";
+      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
     } else if (tab === "raw-sql") {
       if (envSelection) envSelection.style.display = "none";
       if (fieldSelection) fieldSelection.style.display = "none";
       if (rawSqlMode) rawSqlMode.style.display = "block";
       if (excelCompareMode) excelCompareMode.style.display = "none";
+      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
     } else if (tab === "excel-compare") {
       if (envSelection) envSelection.style.display = "none";
       if (fieldSelection) fieldSelection.style.display = "none";
       if (rawSqlMode) rawSqlMode.style.display = "none";
       if (excelCompareMode) excelCompareMode.style.display = "block";
+      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
     }
 
     // Toggle results visibility based on current tab's results
@@ -4705,6 +4783,984 @@ class CompareConfigTool extends BaseTool {
       console.log(`Saved Raw SQL preferences for query hash`);
     } catch (error) {
       console.warn("Failed to save raw SQL preferences to IndexedDB:", error);
+    }
+  }
+
+  // =============================================================================
+  // Unified Compare Mode Methods
+  // =============================================================================
+
+  /**
+   * Bind event listeners for the Unified Compare mode
+   */
+  bindUnifiedModeEvents() {
+    // Quick preset buttons
+    const presetButtons = document.querySelectorAll('.preset-btn');
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        this.applyUnifiedPreset(preset);
+      });
+    });
+
+    // Source A type selection
+    const sourceATypeRadios = document.querySelectorAll('input[name="source-a-type"]');
+    sourceATypeRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.onUnifiedSourceTypeChange('A', e.target.value);
+      });
+    });
+
+    // Source B type selection
+    const sourceBTypeRadios = document.querySelectorAll('input[name="source-b-type"]');
+    sourceBTypeRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.onUnifiedSourceTypeChange('B', e.target.value);
+      });
+    });
+
+    // Source A Oracle config
+    this.bindUnifiedOracleConfigEvents('A');
+    this.bindUnifiedOracleConfigEvents('B');
+
+    // Source A/B Excel file upload
+    this.bindUnifiedExcelConfigEvents('A');
+    this.bindUnifiedExcelConfigEvents('B');
+
+    // Load Data button
+    const loadDataBtn = document.getElementById('btn-unified-load-data');
+    if (loadDataBtn) {
+      loadDataBtn.addEventListener('click', () => this.loadUnifiedData());
+    }
+
+    // Field selection events
+    this.bindUnifiedFieldSelectionEvents();
+
+    // Comparison options
+    const unifiedRowMatchingRadios = document.querySelectorAll('input[name="unified-row-matching"]');
+    unifiedRowMatchingRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.unified.options.rowMatching = e.target.value;
+      });
+    });
+
+    const unifiedDataComparisonRadios = document.querySelectorAll('input[name="unified-data-comparison"]');
+    unifiedDataComparisonRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.unified.options.dataComparison = e.target.value;
+      });
+    });
+
+    // Compare button
+    const compareBtn = document.getElementById('btn-unified-compare');
+    if (compareBtn) {
+      compareBtn.addEventListener('click', () => this.executeUnifiedComparison());
+    }
+  }
+
+  /**
+   * Bind Oracle config events for a source (A or B)
+   */
+  bindUnifiedOracleConfigEvents(source) {
+    const prefix = `source-${source.toLowerCase()}`;
+
+    // Connection select
+    const connectionSelect = document.getElementById(`${prefix}-connection`);
+    if (connectionSelect) {
+      connectionSelect.addEventListener('change', (e) => {
+        this.onUnifiedConnectionSelected(source, e.target.value);
+      });
+    }
+
+    // Query mode selection
+    const queryModeRadios = document.querySelectorAll(`input[name="${prefix}-query-mode"]`);
+    queryModeRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.onUnifiedQueryModeChange(source, e.target.value);
+      });
+    });
+
+    // Schema select
+    const schemaSelect = document.getElementById(`${prefix}-schema`);
+    if (schemaSelect) {
+      schemaSelect.addEventListener('change', (e) => {
+        this.onUnifiedSchemaSelected(source, e.target.value);
+      });
+    }
+
+    // Table select
+    const tableSelect = document.getElementById(`${prefix}-table`);
+    if (tableSelect) {
+      tableSelect.addEventListener('change', (e) => {
+        this.onUnifiedTableSelected(source, e.target.value);
+      });
+    }
+
+    // WHERE clause
+    const whereInput = document.getElementById(`${prefix}-where`);
+    if (whereInput) {
+      whereInput.addEventListener('input', (e) => {
+        const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+        this.unified[sourceKey].whereClause = e.target.value.trim();
+      });
+    }
+
+    // SQL textarea
+    const sqlInput = document.getElementById(`${prefix}-sql`);
+    if (sqlInput) {
+      sqlInput.addEventListener('input', (e) => {
+        const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+        this.unified[sourceKey].sql = e.target.value;
+      });
+    }
+
+    // Max rows
+    const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
+    if (maxRowsInput) {
+      maxRowsInput.addEventListener('input', (e) => {
+        const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+        const value = parseInt(e.target.value, 10);
+        this.unified[sourceKey].maxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+      });
+    }
+  }
+
+  /**
+   * Bind Excel config events for a source (A or B)
+   */
+  bindUnifiedExcelConfigEvents(source) {
+    const prefix = `source-${source.toLowerCase()}`;
+
+    // Browse link
+    const browseLink = document.getElementById(`${prefix}-browse`);
+    const fileInput = document.getElementById(`${prefix}-file-input`);
+
+    if (browseLink && fileInput) {
+      browseLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        fileInput.click();
+      });
+    }
+
+    // File input change
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          this.handleUnifiedFileSelection(source, e.target.files[0]);
+        }
+      });
+    }
+
+    // Remove file button
+    const removeBtn = document.getElementById(`${prefix}-remove-file`);
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        this.removeUnifiedFile(source);
+      });
+    }
+
+    // Upload zone drag & drop
+    const uploadZone = document.getElementById(`${prefix}-upload-zone`);
+    if (uploadZone) {
+      uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('drag-over');
+      });
+
+      uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('drag-over');
+      });
+
+      uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          this.handleUnifiedFileSelection(source, files[0]);
+        }
+      });
+    }
+  }
+
+  /**
+   * Bind field selection events for unified mode
+   */
+  bindUnifiedFieldSelectionEvents() {
+    // Select All / Clear buttons for PK
+    const selectAllPkBtn = document.getElementById('btn-unified-select-all-pk');
+    const deselectAllPkBtn = document.getElementById('btn-unified-deselect-all-pk');
+
+    if (selectAllPkBtn) {
+      selectAllPkBtn.addEventListener('click', () => {
+        this.unified.selectedPkFields = [...this.unified.fields.common];
+        this.renderUnifiedFieldSelection();
+      });
+    }
+
+    if (deselectAllPkBtn) {
+      deselectAllPkBtn.addEventListener('click', () => {
+        this.unified.selectedPkFields = [];
+        this.renderUnifiedFieldSelection();
+      });
+    }
+
+    // Select All / Clear buttons for compare fields
+    const selectAllFieldsBtn = document.getElementById('btn-unified-select-all-fields');
+    const deselectAllFieldsBtn = document.getElementById('btn-unified-deselect-all-fields');
+
+    if (selectAllFieldsBtn) {
+      selectAllFieldsBtn.addEventListener('click', () => {
+        this.unified.selectedCompareFields = [...this.unified.fields.common];
+        this.renderUnifiedFieldSelection();
+      });
+    }
+
+    if (deselectAllFieldsBtn) {
+      deselectAllFieldsBtn.addEventListener('click', () => {
+        this.unified.selectedCompareFields = [];
+        this.renderUnifiedFieldSelection();
+      });
+    }
+  }
+
+  /**
+   * Initialize the Unified mode UI
+   */
+  initUnifiedModeUI() {
+    const tauri = isTauri();
+
+    // Populate connection dropdowns if in Tauri mode
+    if (tauri && this.savedConnections.length > 0) {
+      this.populateUnifiedConnectionDropdowns();
+    }
+
+    // In Web mode, hide Oracle options and pre-select Excel
+    if (!tauri) {
+      const oracleOptions = document.querySelectorAll('.source-type-option:has(input[value="oracle"])');
+      oracleOptions.forEach(opt => opt.style.display = 'none');
+
+      // Pre-select Excel for both sources
+      const excelARadio = document.getElementById('source-a-type-excel');
+      const excelBRadio = document.getElementById('source-b-type-excel');
+      if (excelARadio) excelARadio.checked = true;
+      if (excelBRadio) excelBRadio.checked = true;
+
+      this.unified.sourceA.type = 'excel';
+      this.unified.sourceB.type = 'excel';
+
+      // Show Excel configs
+      this.updateUnifiedSourceConfigVisibility('A');
+      this.updateUnifiedSourceConfigVisibility('B');
+    }
+
+    // Update Load Data button state
+    this.updateUnifiedLoadButtonState();
+  }
+
+  /**
+   * Populate connection dropdowns for unified mode
+   */
+  populateUnifiedConnectionDropdowns() {
+    const dropdowns = [
+      document.getElementById('source-a-connection'),
+      document.getElementById('source-b-connection')
+    ];
+
+    dropdowns.forEach(dropdown => {
+      if (!dropdown) return;
+
+      dropdown.innerHTML = '<option value="">Select connection...</option>';
+      this.savedConnections.forEach(conn => {
+        const option = document.createElement('option');
+        option.value = conn.name;
+        option.textContent = conn.name;
+        dropdown.appendChild(option);
+      });
+    });
+  }
+
+  /**
+   * Apply a quick preset for unified mode
+   */
+  applyUnifiedPreset(preset) {
+    // Update preset button styles
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.preset === preset);
+    });
+
+    // Reset sources
+    this.resetUnifiedSource('A');
+    this.resetUnifiedSource('B');
+
+    switch (preset) {
+      case 'oracle-oracle':
+        this.unified.sourceA.type = 'oracle';
+        this.unified.sourceB.type = 'oracle';
+        break;
+      case 'excel-excel':
+        this.unified.sourceA.type = 'excel';
+        this.unified.sourceB.type = 'excel';
+        break;
+      case 'oracle-excel':
+        this.unified.sourceA.type = 'oracle';
+        this.unified.sourceB.type = 'excel';
+        break;
+    }
+
+    // Update radio buttons
+    const sourceAOracleRadio = document.getElementById('source-a-type-oracle');
+    const sourceAExcelRadio = document.getElementById('source-a-type-excel');
+    const sourceBOracleRadio = document.getElementById('source-b-type-oracle');
+    const sourceBExcelRadio = document.getElementById('source-b-type-excel');
+
+    if (sourceAOracleRadio) sourceAOracleRadio.checked = this.unified.sourceA.type === 'oracle';
+    if (sourceAExcelRadio) sourceAExcelRadio.checked = this.unified.sourceA.type === 'excel';
+    if (sourceBOracleRadio) sourceBOracleRadio.checked = this.unified.sourceB.type === 'oracle';
+    if (sourceBExcelRadio) sourceBExcelRadio.checked = this.unified.sourceB.type === 'excel';
+
+    // Update config visibility
+    this.updateUnifiedSourceConfigVisibility('A');
+    this.updateUnifiedSourceConfigVisibility('B');
+
+    // Update button state
+    this.updateUnifiedLoadButtonState();
+  }
+
+  /**
+   * Reset a unified source configuration
+   */
+  resetUnifiedSource(source) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+
+    this.unified[sourceKey] = {
+      type: null,
+      connection: null,
+      queryMode: 'table',
+      schema: null,
+      table: null,
+      sql: '',
+      whereClause: '',
+      maxRows: 100,
+      file: null,
+      parsedData: null,
+      data: null,
+      dataLoaded: false,
+    };
+  }
+
+  /**
+   * Handle source type change (Oracle/Excel)
+   */
+  onUnifiedSourceTypeChange(source, type) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    this.unified[sourceKey].type = type;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    this.updateUnifiedSourceConfigVisibility(source);
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Update source config visibility based on selected type
+   */
+  updateUnifiedSourceConfigVisibility(source) {
+    const prefix = `source-${source.toLowerCase()}`;
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const type = this.unified[sourceKey].type;
+
+    const oracleConfig = document.getElementById(`${prefix}-oracle-config`);
+    const excelConfig = document.getElementById(`${prefix}-excel-config`);
+    const preview = document.getElementById(`${prefix}-preview`);
+
+    if (oracleConfig) oracleConfig.style.display = type === 'oracle' ? 'flex' : 'none';
+    if (excelConfig) excelConfig.style.display = type === 'excel' ? 'block' : 'none';
+    if (preview) preview.style.display = this.unified[sourceKey].dataLoaded ? 'block' : 'none';
+  }
+
+  /**
+   * Handle connection selection in unified mode
+   */
+  async onUnifiedConnectionSelected(source, connectionName) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+
+    if (!connectionName) {
+      this.unified[sourceKey].connection = null;
+      this.updateUnifiedLoadButtonState();
+      return;
+    }
+
+    const connection = this.savedConnections.find(c => c.name === connectionName);
+    if (!connection) return;
+
+    this.unified[sourceKey].connection = connection;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    // Fetch schemas
+    const schemaSelect = document.getElementById(`${prefix}-schema`);
+    if (schemaSelect) {
+      schemaSelect.innerHTML = '<option value="">Loading schemas...</option>';
+      schemaSelect.disabled = true;
+
+      try {
+        const schemas = await CompareConfigService.fetchSchemas(connection.name, connection);
+        schemaSelect.innerHTML = '<option value="">Select schema...</option>';
+        schemas.forEach(schema => {
+          const option = document.createElement('option');
+          option.value = schema;
+          option.textContent = schema;
+          schemaSelect.appendChild(option);
+        });
+        schemaSelect.disabled = false;
+      } catch (error) {
+        console.error('Failed to fetch schemas:', error);
+        schemaSelect.innerHTML = '<option value="">Failed to load schemas</option>';
+      }
+    }
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Handle query mode change in unified mode
+   */
+  onUnifiedQueryModeChange(source, mode) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+
+    this.unified[sourceKey].queryMode = mode;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    const tableConfig = document.getElementById(`${prefix}-table-config`);
+    const sqlConfig = document.getElementById(`${prefix}-sql-config`);
+
+    if (tableConfig) tableConfig.style.display = mode === 'table' ? 'block' : 'none';
+    if (sqlConfig) sqlConfig.style.display = mode === 'sql' ? 'block' : 'none';
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Handle schema selection in unified mode
+   */
+  async onUnifiedSchemaSelected(source, schema) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+    const connection = this.unified[sourceKey].connection;
+
+    this.unified[sourceKey].schema = schema;
+    this.unified[sourceKey].table = null;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    const tableSelect = document.getElementById(`${prefix}-table`);
+    if (!tableSelect || !connection || !schema) {
+      if (tableSelect) {
+        tableSelect.innerHTML = '<option value="">Select schema first...</option>';
+        tableSelect.disabled = true;
+      }
+      this.updateUnifiedLoadButtonState();
+      return;
+    }
+
+    // Fetch tables
+    tableSelect.innerHTML = '<option value="">Loading tables...</option>';
+    tableSelect.disabled = true;
+
+    try {
+      const tables = await CompareConfigService.fetchTables(connection.name, connection, schema);
+      tableSelect.innerHTML = '<option value="">Select table...</option>';
+      tables.forEach(table => {
+        const option = document.createElement('option');
+        option.value = table;
+        option.textContent = table;
+        tableSelect.appendChild(option);
+      });
+      tableSelect.disabled = false;
+    } catch (error) {
+      console.error('Failed to fetch tables:', error);
+      tableSelect.innerHTML = '<option value="">Failed to load tables</option>';
+    }
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Handle table selection in unified mode
+   */
+  onUnifiedTableSelected(source, table) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+
+    this.unified[sourceKey].table = table;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Handle file selection in unified mode
+   */
+  async handleUnifiedFileSelection(source, file) {
+    if (!FileParser.isSupported(file)) {
+      this.eventBus.emit('notification:show', {
+        type: 'warning',
+        message: `Unsupported file format. Please use .xlsx, .xls, or .csv files.`,
+      });
+      return;
+    }
+
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+
+    this.unified[sourceKey].file = file;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    // Update UI to show selected file
+    const uploadZone = document.getElementById(`${prefix}-upload-zone`);
+    const selectedFileDisplay = document.getElementById(`${prefix}-selected-file`);
+    const fileNameSpan = document.getElementById(`${prefix}-file-name`);
+
+    if (uploadZone) uploadZone.style.display = 'none';
+    if (selectedFileDisplay) selectedFileDisplay.style.display = 'flex';
+    if (fileNameSpan) fileNameSpan.textContent = file.name;
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Remove a file from unified mode
+   */
+  removeUnifiedFile(source) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+
+    this.unified[sourceKey].file = null;
+    this.unified[sourceKey].parsedData = null;
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    // Update UI
+    const uploadZone = document.getElementById(`${prefix}-upload-zone`);
+    const selectedFileDisplay = document.getElementById(`${prefix}-selected-file`);
+    const preview = document.getElementById(`${prefix}-preview`);
+
+    if (uploadZone) uploadZone.style.display = 'block';
+    if (selectedFileDisplay) selectedFileDisplay.style.display = 'none';
+    if (preview) preview.style.display = 'none';
+
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Update the Load Data button state
+   */
+  updateUnifiedLoadButtonState() {
+    const loadBtn = document.getElementById('btn-unified-load-data');
+    if (!loadBtn) return;
+
+    const canLoad = this.canLoadUnifiedData();
+    loadBtn.disabled = !canLoad;
+  }
+
+  /**
+   * Check if we can load data from both sources
+   */
+  canLoadUnifiedData() {
+    return this.isUnifiedSourceConfigured('A') && this.isUnifiedSourceConfigured('B');
+  }
+
+  /**
+   * Check if a source is configured
+   */
+  isUnifiedSourceConfigured(source) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const config = this.unified[sourceKey];
+
+    if (!config.type) return false;
+
+    if (config.type === 'oracle') {
+      if (!config.connection) return false;
+      if (config.queryMode === 'table') {
+        return !!config.schema && !!config.table;
+      } else {
+        return !!config.sql && config.sql.trim().length > 0;
+      }
+    } else if (config.type === 'excel') {
+      return !!config.file;
+    }
+
+    return false;
+  }
+
+  /**
+   * Load data from both sources
+   */
+  async loadUnifiedData() {
+    if (!this.canLoadUnifiedData()) {
+      this.eventBus.emit('notification:show', {
+        type: 'warning',
+        message: 'Please configure both sources before loading data.',
+      });
+      return;
+    }
+
+    this.showProgress('Loading Data');
+    this.updateProgressStep('env1', 'active', 'Loading Source A...');
+
+    try {
+      // Load Source A
+      const dataA = await this.fetchUnifiedSourceData('A');
+      this.unified.sourceA.data = dataA;
+      this.unified.sourceA.dataLoaded = true;
+      this.updateProgressStep('env1', 'done', `${dataA.metadata.rowCount} rows loaded`);
+      this.updateUnifiedSourcePreview('A');
+
+      // Load Source B
+      this.updateProgressStep('env2', 'active', 'Loading Source B...');
+      const dataB = await this.fetchUnifiedSourceData('B');
+      this.unified.sourceB.data = dataB;
+      this.unified.sourceB.dataLoaded = true;
+      this.updateProgressStep('env2', 'done', `${dataB.metadata.rowCount} rows loaded`);
+      this.updateUnifiedSourcePreview('B');
+
+      // Reconcile columns
+      this.updateProgressStep('fetch', 'active', 'Reconciling fields...');
+      this.reconcileUnifiedFields();
+      this.updateProgressStep('fetch', 'done', `${this.unified.fields.common.length} common fields`);
+
+      // Show field reconciliation UI
+      await new Promise(r => setTimeout(r, 300));
+      this.hideProgress();
+      this.showUnifiedFieldReconciliation();
+
+    } catch (error) {
+      console.error('Failed to load unified data:', error);
+      this.hideProgress();
+      this.eventBus.emit('notification:show', {
+        type: 'error',
+        message: `Failed to load data: ${error.message || error}`,
+      });
+    }
+  }
+
+  /**
+   * Fetch data from a unified source
+   */
+  async fetchUnifiedSourceData(source) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const config = this.unified[sourceKey];
+
+    if (config.type === 'oracle') {
+      const sourceConfig = {
+        type: config.queryMode === 'table' ? SourceType.ORACLE_TABLE : SourceType.ORACLE_SQL,
+        connection: config.connection,
+        schema: config.schema,
+        table: config.table,
+        sql: config.sql,
+        whereClause: config.whereClause,
+        maxRows: config.maxRows,
+      };
+      return await UnifiedDataService.fetchData(sourceConfig);
+    } else if (config.type === 'excel') {
+      // Parse the file if not already parsed
+      if (!config.parsedData) {
+        config.parsedData = await FileParser.parseFile(config.file);
+      }
+      return await UnifiedDataService.fetchData({
+        type: SourceType.EXCEL,
+        file: config.file,
+        parsedData: config.parsedData,
+      });
+    }
+
+    throw new Error(`Unknown source type: ${config.type}`);
+  }
+
+  /**
+   * Update the source preview after data is loaded
+   */
+  updateUnifiedSourcePreview(source) {
+    const sourceKey = source === 'A' ? 'sourceA' : 'sourceB';
+    const prefix = `source-${source.toLowerCase()}`;
+    const data = this.unified[sourceKey].data;
+
+    const preview = document.getElementById(`${prefix}-preview`);
+    const stats = document.getElementById(`${prefix}-stats`);
+    const status = document.getElementById(`${prefix}-status`);
+
+    if (preview && data) {
+      preview.style.display = 'block';
+      if (stats) {
+        stats.textContent = `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`;
+      }
+    }
+
+    if (status) {
+      status.textContent = 'Ready';
+      status.className = 'source-status ready';
+    }
+  }
+
+  /**
+   * Reconcile fields between the two sources
+   */
+  reconcileUnifiedFields() {
+    const dataA = this.unified.sourceA.data;
+    const dataB = this.unified.sourceB.data;
+
+    if (!dataA || !dataB) return;
+
+    const reconciled = reconcileColumns(dataA.headers, dataB.headers);
+
+    this.unified.fields = {
+      common: reconciled.common,
+      commonMapped: reconciled.commonMapped,
+      onlyInA: reconciled.onlyInA,
+      onlyInB: reconciled.onlyInB,
+    };
+
+    // Default: select all common fields for comparison
+    this.unified.selectedPkFields = [];
+    this.unified.selectedCompareFields = [...reconciled.common];
+  }
+
+  /**
+   * Show the field reconciliation UI
+   */
+  showUnifiedFieldReconciliation() {
+    const section = document.getElementById('unified-field-reconciliation');
+    const loadActions = document.getElementById('unified-load-actions');
+
+    if (section) section.style.display = 'block';
+    if (loadActions) loadActions.style.display = 'none';
+
+    // Show column warning if there are differences
+    this.updateUnifiedColumnWarning();
+
+    // Render field selection
+    this.renderUnifiedFieldSelection();
+
+    // Update compare button state
+    this.updateUnifiedCompareButtonState();
+  }
+
+  /**
+   * Hide the field reconciliation UI
+   */
+  hideUnifiedFieldReconciliation() {
+    const section = document.getElementById('unified-field-reconciliation');
+    const loadActions = document.getElementById('unified-load-actions');
+
+    if (section) section.style.display = 'none';
+    if (loadActions) loadActions.style.display = 'flex';
+  }
+
+  /**
+   * Update the column mismatch warning
+   */
+  updateUnifiedColumnWarning() {
+    const warningDiv = document.getElementById('unified-column-warning');
+    const onlyInADiv = document.getElementById('unified-columns-only-in-a');
+    const onlyInBDiv = document.getElementById('unified-columns-only-in-b');
+
+    if (!warningDiv) return;
+
+    const { onlyInA, onlyInB } = this.unified.fields;
+
+    if (onlyInA.length === 0 && onlyInB.length === 0) {
+      warningDiv.style.display = 'none';
+      return;
+    }
+
+    warningDiv.style.display = 'flex';
+
+    if (onlyInADiv) {
+      if (onlyInA.length > 0) {
+        onlyInADiv.innerHTML = `<strong>Only in Source A:</strong> ${onlyInA.join(', ')}`;
+      } else {
+        onlyInADiv.innerHTML = '';
+      }
+    }
+
+    if (onlyInBDiv) {
+      if (onlyInB.length > 0) {
+        onlyInBDiv.innerHTML = `<strong>Only in Source B:</strong> ${onlyInB.join(', ')}`;
+      } else {
+        onlyInBDiv.innerHTML = '';
+      }
+    }
+  }
+
+  /**
+   * Render the field selection checkboxes
+   */
+  renderUnifiedFieldSelection() {
+    const pkFieldList = document.getElementById('unified-pk-field-list');
+    const compareFieldList = document.getElementById('unified-compare-field-list');
+
+    if (!pkFieldList || !compareFieldList) return;
+
+    const { common } = this.unified.fields;
+    const { selectedPkFields, selectedCompareFields } = this.unified;
+
+    // Render PK fields
+    pkFieldList.innerHTML = common.map(field => `
+      <label class="field-chip">
+        <input type="checkbox" name="unified-pk-field" value="${field}"
+               ${selectedPkFields.includes(field) ? 'checked' : ''}>
+        <span>${field}</span>
+      </label>
+    `).join('');
+
+    // Render compare fields
+    compareFieldList.innerHTML = common.map(field => `
+      <label class="field-chip">
+        <input type="checkbox" name="unified-compare-field" value="${field}"
+               ${selectedCompareFields.includes(field) ? 'checked' : ''}>
+        <span>${field}</span>
+      </label>
+    `).join('');
+
+    // Bind checkbox events
+    this.bindUnifiedFieldCheckboxEvents();
+
+    // Update compare button state
+    this.updateUnifiedCompareButtonState();
+  }
+
+  /**
+   * Bind events to field checkboxes
+   */
+  bindUnifiedFieldCheckboxEvents() {
+    // PK checkboxes
+    const pkCheckboxes = document.querySelectorAll('input[name="unified-pk-field"]');
+    pkCheckboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checked = Array.from(document.querySelectorAll('input[name="unified-pk-field"]:checked'))
+          .map(c => c.value);
+        this.unified.selectedPkFields = checked;
+        this.updateUnifiedCompareButtonState();
+      });
+    });
+
+    // Compare field checkboxes
+    const fieldCheckboxes = document.querySelectorAll('input[name="unified-compare-field"]');
+    fieldCheckboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checked = Array.from(document.querySelectorAll('input[name="unified-compare-field"]:checked'))
+          .map(c => c.value);
+        this.unified.selectedCompareFields = checked;
+        this.updateUnifiedCompareButtonState();
+      });
+    });
+  }
+
+  /**
+   * Update the compare button state
+   */
+  updateUnifiedCompareButtonState() {
+    const compareBtn = document.getElementById('btn-unified-compare');
+    if (!compareBtn) return;
+
+    const { selectedPkFields, selectedCompareFields, options } = this.unified;
+    const rowMatching = options.rowMatching;
+
+    // Need PK if key-based matching, and always need at least one compare field
+    const hasPk = rowMatching === 'position' || selectedPkFields.length > 0;
+    const hasFields = selectedCompareFields.length > 0;
+
+    compareBtn.disabled = !hasPk || !hasFields;
+  }
+
+  /**
+   * Execute the unified comparison
+   */
+  async executeUnifiedComparison() {
+    const { sourceA, sourceB, selectedPkFields, selectedCompareFields, options, fields } = this.unified;
+    const { rowMatching, dataComparison } = options;
+
+    if (rowMatching === 'key' && selectedPkFields.length === 0) {
+      this.eventBus.emit('notification:show', {
+        type: 'warning',
+        message: 'Please select at least one primary key field.',
+      });
+      return;
+    }
+
+    if (selectedCompareFields.length === 0) {
+      this.eventBus.emit('notification:show', {
+        type: 'warning',
+        message: 'Please select at least one field to compare.',
+      });
+      return;
+    }
+
+    this.showProgress('Comparing Data');
+    this.updateProgressStep('compare', 'active', 'Comparing records...');
+
+    try {
+      // Normalize rows if there are case differences in field names
+      const { commonMapped } = fields;
+      let rowsA = sourceA.data.rows;
+      let rowsB = sourceB.data.rows;
+
+      // Use the field mappings to normalize field names to lowercase
+      if (commonMapped && commonMapped.some(m => m.sourceA !== m.sourceB)) {
+        rowsA = normalizeRowFields(rowsA, commonMapped, 'A');
+        rowsB = normalizeRowFields(rowsB, commonMapped, 'B');
+      }
+
+      // Normalize field names for comparison (use lowercase)
+      const normalizedPkFields = selectedPkFields.map(f => f.toLowerCase());
+      const normalizedCompareFields = selectedCompareFields.map(f => f.toLowerCase());
+
+      const jsResult = compareDatasets(rowsA, rowsB, {
+        keyColumns: normalizedPkFields,
+        fields: normalizedCompareFields,
+        normalize: dataComparison === 'normalized',
+        matchMode: rowMatching,
+      });
+
+      const { convertToViewFormat } = await import('./lib/diff-adapter.js');
+
+      const viewResult = convertToViewFormat(jsResult, {
+        env1Name: sourceA.data.metadata.sourceName,
+        env2Name: sourceB.data.metadata.sourceName,
+        tableName: `${sourceA.data.metadata.sourceName} vs ${sourceB.data.metadata.sourceName}`,
+        keyColumns: normalizedPkFields,
+      });
+
+      this.updateProgressStep('compare', 'done', `${viewResult.rows.length} records compared`);
+
+      // Store results
+      this.results['unified'] = viewResult;
+      this.unified.currentStep = 3;
+
+      await new Promise(r => setTimeout(r, 400));
+      this.hideProgress();
+      this.showResults();
+
+      this.eventBus.emit('comparison:complete', viewResult);
+
+    } catch (error) {
+      console.error('Unified comparison failed:', error);
+      this.hideProgress();
+      this.eventBus.emit('notification:show', {
+        type: 'error',
+        message: `Comparison failed: ${error.message || error}`,
+      });
     }
   }
 }

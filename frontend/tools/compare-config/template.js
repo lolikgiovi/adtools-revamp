@@ -57,7 +57,8 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Query Mode Tabs -->
         <div class="tabs-container">
             <div class="tabs-left">
-                <button class="tab-button active" data-tab="schema-table">Schema/Table</button>
+                <button class="tab-button active" data-tab="unified">Unified</button>
+                <button class="tab-button" data-tab="schema-table">Schema/Table</button>
                 <button class="tab-button" data-tab="raw-sql">Raw SQL</button>
                 <button class="tab-button" data-tab="excel-compare">Excel Compare</button>
             </div>
@@ -97,6 +98,381 @@ export const CompareConfigTemplate = /* html */ `
                         </button>
                     </div>
                     <p class="notice-hint">Excel Compare works in both desktop and web versions.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unified Compare Mode (shown when Unified tab is active) -->
+        <div id="unified-compare-mode" class="unified-compare-mode">
+            <!-- Quick Presets -->
+            <div class="comparison-presets">
+                <span class="preset-label">Quick Setup:</span>
+                <button class="preset-btn" data-preset="oracle-oracle" id="preset-oracle-oracle">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                    </svg>
+                    Oracle vs Oracle
+                </button>
+                <button class="preset-btn" data-preset="excel-excel" id="preset-excel-excel">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    Excel vs Excel
+                </button>
+                <button class="preset-btn" data-preset="oracle-excel" id="preset-oracle-excel">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                    </svg>
+                    Oracle vs Excel
+                </button>
+            </div>
+
+            <!-- Source Panels -->
+            <div class="source-panels">
+                <!-- Source A (Reference) -->
+                <div class="source-panel source-a">
+                    <div class="source-panel-header">
+                        <h4>Source A (Reference)</h4>
+                        <span class="source-status" id="source-a-status"></span>
+                    </div>
+
+                    <!-- Source Type Selection -->
+                    <div class="source-type-selector">
+                        <label class="source-type-option">
+                            <input type="radio" name="source-a-type" value="oracle" id="source-a-type-oracle">
+                            <span class="option-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                                </svg>
+                            </span>
+                            <span class="option-label">Oracle Database</span>
+                        </label>
+                        <label class="source-type-option">
+                            <input type="radio" name="source-a-type" value="excel" id="source-a-type-excel">
+                            <span class="option-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                            </span>
+                            <span class="option-label">Excel/CSV File</span>
+                        </label>
+                    </div>
+
+                    <!-- Oracle Config (shown when Oracle selected) -->
+                    <div class="oracle-config" id="source-a-oracle-config" style="display: none;">
+                        <!-- Connection Selection -->
+                        <div class="form-group">
+                            <label>Connection</label>
+                            <select id="source-a-connection" class="form-select">
+                                <option value="">Select connection...</option>
+                            </select>
+                        </div>
+
+                        <!-- Query Mode Selection -->
+                        <div class="query-mode-selector">
+                            <label class="query-mode-option">
+                                <input type="radio" name="source-a-query-mode" value="table" checked id="source-a-query-mode-table">
+                                <span>Select Table</span>
+                            </label>
+                            <label class="query-mode-option">
+                                <input type="radio" name="source-a-query-mode" value="sql" id="source-a-query-mode-sql">
+                                <span>Raw SQL</span>
+                            </label>
+                        </div>
+
+                        <!-- Table Mode Config -->
+                        <div class="table-mode-config" id="source-a-table-config">
+                            <div class="form-group">
+                                <label>Schema</label>
+                                <select id="source-a-schema" class="form-select" disabled>
+                                    <option value="">Select connection first...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Table</label>
+                                <select id="source-a-table" class="form-select" disabled>
+                                    <option value="">Select schema first...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>WHERE Clause (optional)</label>
+                                <input type="text" id="source-a-where" class="form-input"
+                                       placeholder="e.g., status = 'ACTIVE'">
+                            </div>
+                        </div>
+
+                        <!-- Raw SQL Mode Config -->
+                        <div class="sql-mode-config" id="source-a-sql-config" style="display: none;">
+                            <div class="form-group">
+                                <label>SQL Query</label>
+                                <textarea id="source-a-sql" class="form-textarea sql-input"
+                                          placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Common Oracle Options -->
+                        <div class="form-group">
+                            <label>Max Rows</label>
+                            <input type="number" id="source-a-max-rows" class="form-input"
+                                   value="100" min="1" max="10000">
+                        </div>
+                    </div>
+
+                    <!-- Excel Config (shown when Excel selected) -->
+                    <div class="excel-config" id="source-a-excel-config" style="display: none;">
+                        <div class="file-upload-zone compact" id="source-a-upload-zone">
+                            <div class="upload-area">
+                                <p>Drop file here or <a href="#" class="browse-link" id="source-a-browse">browse</a></p>
+                                <p class="file-types">Supports .xlsx, .xls, .csv</p>
+                            </div>
+                            <input type="file" id="source-a-file-input" accept=".xlsx,.xls,.csv" style="display: none;">
+                        </div>
+                        <div class="selected-file-display" id="source-a-selected-file" style="display: none;">
+                            <span class="file-name" id="source-a-file-name"></span>
+                            <button class="btn btn-ghost btn-xs btn-remove-file" id="source-a-remove-file" title="Remove file">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Preview -->
+                    <div class="data-preview" id="source-a-preview" style="display: none;">
+                        <div class="preview-header">
+                            <span class="preview-label">Loaded</span>
+                            <span class="preview-stats" id="source-a-stats"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Source B (Comparator) -->
+                <div class="source-panel source-b">
+                    <div class="source-panel-header">
+                        <h4>Source B (Comparator)</h4>
+                        <span class="source-status" id="source-b-status"></span>
+                    </div>
+
+                    <!-- Source Type Selection -->
+                    <div class="source-type-selector">
+                        <label class="source-type-option">
+                            <input type="radio" name="source-b-type" value="oracle" id="source-b-type-oracle">
+                            <span class="option-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                                </svg>
+                            </span>
+                            <span class="option-label">Oracle Database</span>
+                        </label>
+                        <label class="source-type-option">
+                            <input type="radio" name="source-b-type" value="excel" id="source-b-type-excel">
+                            <span class="option-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                            </span>
+                            <span class="option-label">Excel/CSV File</span>
+                        </label>
+                    </div>
+
+                    <!-- Oracle Config -->
+                    <div class="oracle-config" id="source-b-oracle-config" style="display: none;">
+                        <div class="form-group">
+                            <label>Connection</label>
+                            <select id="source-b-connection" class="form-select">
+                                <option value="">Select connection...</option>
+                            </select>
+                        </div>
+
+                        <div class="query-mode-selector">
+                            <label class="query-mode-option">
+                                <input type="radio" name="source-b-query-mode" value="table" checked id="source-b-query-mode-table">
+                                <span>Select Table</span>
+                            </label>
+                            <label class="query-mode-option">
+                                <input type="radio" name="source-b-query-mode" value="sql" id="source-b-query-mode-sql">
+                                <span>Raw SQL</span>
+                            </label>
+                        </div>
+
+                        <div class="table-mode-config" id="source-b-table-config">
+                            <div class="form-group">
+                                <label>Schema</label>
+                                <select id="source-b-schema" class="form-select" disabled>
+                                    <option value="">Select connection first...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Table</label>
+                                <select id="source-b-table" class="form-select" disabled>
+                                    <option value="">Select schema first...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>WHERE Clause (optional)</label>
+                                <input type="text" id="source-b-where" class="form-input"
+                                       placeholder="e.g., status = 'ACTIVE'">
+                            </div>
+                        </div>
+
+                        <div class="sql-mode-config" id="source-b-sql-config" style="display: none;">
+                            <div class="form-group">
+                                <label>SQL Query</label>
+                                <textarea id="source-b-sql" class="form-textarea sql-input"
+                                          placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Max Rows</label>
+                            <input type="number" id="source-b-max-rows" class="form-input"
+                                   value="100" min="1" max="10000">
+                        </div>
+                    </div>
+
+                    <!-- Excel Config -->
+                    <div class="excel-config" id="source-b-excel-config" style="display: none;">
+                        <div class="file-upload-zone compact" id="source-b-upload-zone">
+                            <div class="upload-area">
+                                <p>Drop file here or <a href="#" class="browse-link" id="source-b-browse">browse</a></p>
+                                <p class="file-types">Supports .xlsx, .xls, .csv</p>
+                            </div>
+                            <input type="file" id="source-b-file-input" accept=".xlsx,.xls,.csv" style="display: none;">
+                        </div>
+                        <div class="selected-file-display" id="source-b-selected-file" style="display: none;">
+                            <span class="file-name" id="source-b-file-name"></span>
+                            <button class="btn btn-ghost btn-xs btn-remove-file" id="source-b-remove-file" title="Remove file">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Preview -->
+                    <div class="data-preview" id="source-b-preview" style="display: none;">
+                        <div class="preview-header">
+                            <span class="preview-label">Loaded</span>
+                            <span class="preview-stats" id="source-b-stats"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Load Data Button -->
+            <div class="unified-load-actions" id="unified-load-actions">
+                <button class="btn btn-primary" id="btn-unified-load-data" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Load Data from Both Sources
+                </button>
+            </div>
+
+            <!-- Field Reconciliation (shown after both sources have data) -->
+            <div class="field-reconciliation" id="unified-field-reconciliation" style="display: none;">
+                <!-- Column Mismatch Warning -->
+                <div class="column-warning" id="unified-column-warning" style="display: none;">
+                    <div class="warning-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="warning-content">
+                        <strong>Column Differences Detected</strong>
+                        <p>Some columns exist in only one source and will be excluded from comparison.</p>
+                        <details>
+                            <summary>Show details</summary>
+                            <div class="column-details">
+                                <div class="only-in-a" id="unified-columns-only-in-a"></div>
+                                <div class="only-in-b" id="unified-columns-only-in-b"></div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Primary Key Selection -->
+                <div class="field-selection-section">
+                    <div class="field-header">
+                        <h4 class="field-title">Primary Key Selection</h4>
+                        <div class="field-actions">
+                            <button class="btn btn-ghost btn-sm" id="btn-unified-select-all-pk">Select All</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-unified-deselect-all-pk">Clear</button>
+                        </div>
+                    </div>
+                    <p class="field-help">Select field(s) to use as primary key for matching rows</p>
+                    <div id="unified-pk-field-list" class="field-list"></div>
+                </div>
+
+                <!-- Comparison Fields Selection -->
+                <div class="field-selection-section">
+                    <div class="field-header">
+                        <h4 class="field-title">Fields to Compare</h4>
+                        <div class="field-actions">
+                            <button class="btn btn-ghost btn-sm" id="btn-unified-select-all-fields">Select All</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-unified-deselect-all-fields">Clear</button>
+                        </div>
+                    </div>
+                    <p class="field-help">Select fields to include in comparison</p>
+                    <div id="unified-compare-field-list" class="field-list"></div>
+                </div>
+
+                <!-- Comparison Options -->
+                <div class="unified-comparison-options">
+                    <div class="settings-row">
+                        <div class="setting-group">
+                            <label>Row Matching:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="unified-row-matching" value="key" checked>
+                                    <span>By Primary Key</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="unified-row-matching" value="position">
+                                    <span>By Row Position</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Data Comparison:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="unified-data-comparison" value="strict" checked>
+                                    <span>Strict (as-is)</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="unified-data-comparison" value="normalized">
+                                    <span>Normalized</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compare Button -->
+                <div class="comparison-actions">
+                    <button class="btn btn-primary btn-lg" id="btn-unified-compare" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Compare Data
+                    </button>
                 </div>
             </div>
         </div>

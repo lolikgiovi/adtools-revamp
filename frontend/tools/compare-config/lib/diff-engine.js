@@ -696,25 +696,103 @@ function compareByPosition(refData, compData, fields, options = {}) {
 }
 
 /**
- * Reconcile columns between two datasets
- * @param {Array<string>} refHeaders
- * @param {Array<string>} compHeaders
- * @returns {Object} Column reconciliation result
+ * Reconcile columns between two datasets with case-insensitive matching
+ * Returns mapping information between source A and source B field names.
+ *
+ * @param {Array<string>} headersA - Headers from source A (e.g., Oracle returns "TYPE")
+ * @param {Array<string>} headersB - Headers from source B (e.g., Excel might have "type")
+ * @returns {Object} Column reconciliation result with field mappings
  */
-export function reconcileColumns(refHeaders, compHeaders) {
-  const refSet = new Set(refHeaders.map(h => h.toLowerCase()));
-  const compSet = new Set(compHeaders.map(h => h.toLowerCase()));
+export function reconcileColumns(headersA, headersB) {
+  // Create case-insensitive maps: lowercase -> original name
+  const normalizedA = new Map(headersA.map(h => [h.toLowerCase(), h]));
+  const normalizedB = new Map(headersB.map(h => [h.toLowerCase(), h]));
 
-  const common = refHeaders.filter(h => compSet.has(h.toLowerCase()));
-  const onlyInRef = refHeaders.filter(h => !compSet.has(h.toLowerCase()));
-  const onlyInComp = compHeaders.filter(h => !refSet.has(h.toLowerCase()));
+  const common = [];
+  const onlyInA = [];
+  const onlyInB = [];
+
+  // Find common fields and fields only in A
+  for (const [lower, originalA] of normalizedA) {
+    if (normalizedB.has(lower)) {
+      common.push({
+        normalized: lower,        // Lowercase key for comparison
+        sourceA: originalA,       // Original name from source A (e.g., "TYPE")
+        sourceB: normalizedB.get(lower)  // Original name from source B (e.g., "type")
+      });
+    } else {
+      onlyInA.push(originalA);
+    }
+  }
+
+  // Find fields only in B
+  for (const [lower, originalB] of normalizedB) {
+    if (!normalizedA.has(lower)) {
+      onlyInB.push(originalB);
+    }
+  }
+
+  // Legacy format: array of source A names for common fields (backward compatibility)
+  const commonNames = common.map(c => c.sourceA);
 
   return {
-    common,
-    onlyInRef,
-    onlyInComp,
-    isExactMatch: onlyInRef.length === 0 && onlyInComp.length === 0
+    common: commonNames,          // For backward compatibility: string[]
+    commonMapped: common,         // New: [{normalized, sourceA, sourceB}]
+    onlyInA,                      // Fields only in source A
+    onlyInB,                      // Fields only in source B
+    onlyInRef: onlyInA,           // Alias for backward compatibility
+    onlyInComp: onlyInB,          // Alias for backward compatibility
+    isExactMatch: onlyInA.length === 0 && onlyInB.length === 0,
+    hasCaseDifferences: common.some(c => c.sourceA !== c.sourceB)
   };
+}
+
+/**
+ * Normalize row data to use consistent field names for comparison.
+ * This is useful when comparing data from sources with different column name casing.
+ *
+ * @param {Array<Object>} rows - Array of row objects
+ * @param {Array<{normalized: string, sourceA: string, sourceB: string}>} fieldMappings - Field mappings from reconcileColumns
+ * @param {'A'|'B'} source - Which source the rows come from
+ * @returns {Array<Object>} Rows with normalized field names (lowercase)
+ */
+export function normalizeRowFields(rows, fieldMappings, source) {
+  if (!fieldMappings || fieldMappings.length === 0) {
+    return rows;
+  }
+
+  // Build mapping from original field name to normalized name
+  const fieldMap = new Map();
+  for (const mapping of fieldMappings) {
+    const originalName = source === 'A' ? mapping.sourceA : mapping.sourceB;
+    fieldMap.set(originalName, mapping.normalized);
+  }
+
+  return rows.map(row => {
+    const normalizedRow = {};
+    for (const [key, value] of Object.entries(row)) {
+      // Use normalized name if available, otherwise lowercase the key
+      const normalizedKey = fieldMap.get(key) || key.toLowerCase();
+      normalizedRow[normalizedKey] = value;
+    }
+    return normalizedRow;
+  });
+}
+
+/**
+ * Get the original field name from a normalized name for a specific source.
+ *
+ * @param {string} normalizedName - Lowercase normalized field name
+ * @param {Array<{normalized: string, sourceA: string, sourceB: string}>} fieldMappings - Field mappings
+ * @param {'A'|'B'} source - Which source to get the name for
+ * @returns {string} Original field name from the source
+ */
+export function getOriginalFieldName(normalizedName, fieldMappings, source) {
+  const mapping = fieldMappings.find(m => m.normalized === normalizedName);
+  if (!mapping) {
+    return normalizedName;
+  }
+  return source === 'A' ? mapping.sourceA : mapping.sourceB;
 }
 
 // Default export for convenience
@@ -732,5 +810,7 @@ export default {
   normalizeNumber,
   compareRow,
   compareDatasets,
-  reconcileColumns
+  reconcileColumns,
+  normalizeRowFields,
+  getOriginalFieldName
 };

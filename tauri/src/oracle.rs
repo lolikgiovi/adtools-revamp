@@ -171,6 +171,33 @@ pub struct ExportData {
 }
 
 // ============================================================================
+// Unified Fetch Data Types (for mixed source comparison)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchDataRequest {
+    pub connection_name: String,
+    pub config: ConnectionConfig,
+    pub mode: String,              // "table" or "raw-sql"
+    // Table mode fields
+    pub owner: Option<String>,
+    pub table_name: Option<String>,
+    pub where_clause: Option<String>,
+    pub fields: Option<Vec<String>>,
+    // Raw SQL mode fields
+    pub sql: Option<String>,
+    pub max_rows: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FetchDataResult {
+    pub headers: Vec<String>,
+    pub rows: Vec<HashMap<String, serde_json::Value>>,
+    pub row_count: usize,
+    pub source_name: String,
+}
+
+// ============================================================================
 // Oracle Client State (OnceLock for lazy initialization)
 // ============================================================================
 
@@ -1328,6 +1355,89 @@ pub fn close_connection(connect_string: String, username: String) -> bool {
     #[cfg(not(feature = "oracle"))]
     {
         false
+    }
+}
+
+/// Fetch Oracle data for unified comparison (data-only, no comparison)
+/// This command fetches data from a single Oracle source and returns it
+/// in a normalized format suitable for frontend comparison with other sources.
+#[tauri::command]
+#[allow(unused_variables)]
+pub fn fetch_oracle_data(request: FetchDataRequest) -> Result<FetchDataResult, String> {
+    #[cfg(feature = "oracle")]
+    {
+        // Get credentials
+        let (username, password) = get_credentials(&request.connection_name)?;
+
+        // Build SQL based on mode
+        let (sql, source_name) = match request.mode.as_str() {
+            "table" => {
+                let owner = request.owner
+                    .as_ref()
+                    .ok_or("Owner is required for table mode")?;
+                let table_name = request.table_name
+                    .as_ref()
+                    .ok_or("Table name is required for table mode")?;
+
+                // Validate identifiers
+                let owner = validate_identifier(owner).map_err(|e| e.message)?;
+                let table = validate_identifier(table_name).map_err(|e| e.message)?;
+
+                // Build SELECT query
+                let fields = if let Some(ref f) = request.fields {
+                    if f.is_empty() { "*".to_string() } else { f.join(", ") }
+                } else {
+                    "*".to_string()
+                };
+
+                let mut sql = format!("SELECT {} FROM \"{}\".\"{}\"", fields, owner, table);
+                if let Some(ref where_clause) = request.where_clause {
+                    if !where_clause.trim().is_empty() {
+                        sql.push_str(&format!(" WHERE {}", where_clause));
+                    }
+                }
+
+                (sql, format!("{}.{}", owner, table))
+            }
+            "raw-sql" => {
+                let sql = request.sql
+                    .as_ref()
+                    .ok_or("SQL query is required for raw-sql mode")?
+                    .clone();
+                (sql, "Raw SQL Query".to_string())
+            }
+            _ => return Err(format!("Invalid mode: {}. Use 'table' or 'raw-sql'", request.mode)),
+        };
+
+        // Execute query using pooled connection
+        let max_rows = request.max_rows;
+        let rows = with_pooled_connection(
+            &request.config.connect_string,
+            &username,
+            &password,
+            |conn| execute_select(conn, &sql, max_rows),
+        )
+        .map_err(|e| format!("Query failed: {}", e.message))?;
+
+        // Extract headers from first row
+        let headers: Vec<String> = if let Some(first_row) = rows.first() {
+            first_row.keys().cloned().collect()
+        } else {
+            Vec::new()
+        };
+
+        let row_count = rows.len();
+
+        Ok(FetchDataResult {
+            headers,
+            rows,
+            row_count,
+            source_name,
+        })
+    }
+    #[cfg(not(feature = "oracle"))]
+    {
+        Err("Oracle support not compiled".into())
     }
 }
 
