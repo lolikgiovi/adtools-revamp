@@ -462,6 +462,14 @@ export const CompareConfigTemplate = /* html */ `
                                 </label>
                             </div>
                         </div>
+
+                        <div class="setting-group">
+                            <label class="checkbox-label" title="Enable case-insensitive field name matching (e.g., PARAMETER_KEY matches parameter_key)">
+                                <input type="checkbox" id="unified-normalize-fields">
+                                <span>Normalize Field Names</span>
+                                <span class="setting-hint">(case-insensitive)</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 

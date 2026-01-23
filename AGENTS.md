@@ -21,3 +21,6 @@
 
 ## Database
 - Migrations: `backend-workers/migrations/`; apply with `npx wrangler d1 migrations apply adtools --local`
+
+# Client Performance Note
+Do not run `npm run test` directly, and never run more than one vitest instance, it will hang client computer. Tell user to run the `npm run test` themselves
