@@ -50,8 +50,6 @@ pub fn run() {
       oracle::fetch_schemas,
       oracle::fetch_tables,
       oracle::fetch_table_metadata,
-      oracle::compare_configurations,
-      oracle::compare_raw_sql,
       oracle::export_comparison_result,
       oracle::set_oracle_credentials,
       oracle::get_oracle_credentials,

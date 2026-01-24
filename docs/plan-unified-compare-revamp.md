@@ -632,14 +632,15 @@ pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, 
 pub fn compare_raw_sql(request: RawSqlRequest) -> Result<CompareResult, String>
 ```
 
-#### 6.4 Remove Legacy Tabs (Optional - Future)
+#### 6.4 Remove Legacy Tabs ✅
 
-Once the unified mode is stable and all comparisons use JS diff engine:
+Unified mode is now the only mode. Legacy tabs and their associated code have been removed:
 
-1. Remove "Schema/Table" and "Raw SQL" tabs from UI
-2. Keep only "Unified" tab (covers all use cases)
-3. Remove deprecated Rust comparison commands
-4. Clean up legacy state management code
+1. ✅ Removed "Schema/Table", "Raw SQL", and "Excel Compare" tabs from UI
+2. ✅ Removed corresponding mode sections from template.js
+3. ✅ Removed `compare_configurations` and `compare_raw_sql` Rust commands
+4. ✅ Removed legacy state variables and event bindings from main.js
+5. ✅ Removed legacy service methods from service.js
 
 ### Files to Modify
 
@@ -703,6 +704,6 @@ Once the unified mode is stable and all comparisons use JS diff engine:
 | Phase 6.1: Schema/Table JS Engine | ✅ COMPLETED | 2026-01-24 |
 | Phase 6.2: Raw SQL JS Engine | ✅ COMPLETED | 2026-01-24 |
 | Phase 6.3: Deprecate Rust Commands | ✅ COMPLETED | 2026-01-24 |
-| Phase 6.4: Remove Legacy Tabs | ⬚ FUTURE | - |
+| Phase 6.4: Remove Legacy Tabs | ✅ COMPLETED | 2026-01-24 |
 
-**Overall Progress**: 10/11 sub-phases completed (91%)
+**Overall Progress**: 11/11 sub-phases completed (100%)

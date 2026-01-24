@@ -52,74 +52,13 @@ class CompareConfigTool extends BaseTool {
     // State
     this.oracleClientReady = false;
     this.savedConnections = [];
-    this.queryMode = "schema-table"; // "schema-table" or "raw-sql"
-
-    // Schema/Table mode state
-    this.env1 = {
-      connection: null,
-    };
-    this.env2 = {
-      connection: null,
-    };
-    this.schema = null;
-    this.table = null;
-    this.metadata = null;
-    this.env2SchemaExists = false;
-    this.env2TableExists = false;
-    this.customPrimaryKey = []; // Custom PK fields for comparison
-    this.selectedFields = [];
-    this.whereClause = "";
-    this.maxRows = 100; // Max rows to fetch (default: 100)
-
-    // Raw SQL mode state
-    this.rawenv1 = {
-      connection: null,
-    };
-    this.rawenv2 = {
-      connection: null,
-    };
-    this.rawSql = ""; // Single SQL query for both environments
-    this.rawPrimaryKey = ""; // Optional primary key field(s) for raw SQL mode
-    this.rawMaxRows = 100; // Max rows for raw SQL mode (default: 100)
 
     this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
     this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
 
-    // Multi-tab results support
+    // Results storage (unified mode only)
     this.results = {
       unified: null,
-      "schema-table": null,
-      "raw-sql": null,
-      "excel-compare": null,
-    };
-
-    // Excel Compare state (new single-pair flow)
-    this.excelCompare = {
-      // Step 1: File upload
-      refFiles: [], // Array of { id, file }
-      compFiles: [], // Array of { id, file }
-
-      // Step 2: File pairing
-      selectedRefFile: null, // Selected reference file { id, file }
-      selectedCompFile: null, // Selected comparator file { id, file }
-      autoMatchedComp: null, // Auto-matched comparator (for UI hint)
-
-      // Step 3: Field configuration
-      headers: [], // All detected headers (union)
-      commonHeaders: [], // Headers in both files
-      refOnlyHeaders: [], // Headers only in reference
-      compOnlyHeaders: [], // Headers only in comparator
-      selectedPkFields: [], // Selected primary key fields
-      selectedFields: [], // Selected comparison fields
-      rowMatching: "key", // "key" or "position"
-      dataComparison: "strict", // "strict" or "normalized"
-
-      // Cached parsed data
-      refParsedData: null,
-      compParsedData: null,
-
-      // UI state
-      currentStep: 1, // 1=upload, 2=pairing, 3=config, 4=results
     };
 
     // Unified Compare state (for mixed Oracle/Excel comparison)
@@ -296,18 +235,11 @@ class CompareConfigTool extends BaseTool {
       el.style.display = tauri ? "" : "none";
     });
 
-    // Bind the "Use Excel Compare Instead" button
-    const switchToExcelBtn = document.getElementById("btn-switch-to-excel");
-    if (switchToExcelBtn) {
-      switchToExcelBtn.addEventListener("click", () => {
-        this.switchTab("excel-compare");
-      });
-    }
-
-    // In web mode, default to Excel Compare (but allow viewing other tabs)
-    if (!tauri) {
-      this.queryMode = "excel-compare";
-      this.switchTab("excel-compare");
+    // Phase 6.4: Unified mode is now the only mode
+    // Show unified mode UI by default
+    const unifiedMode = document.getElementById("unified-compare-mode");
+    if (unifiedMode) {
+      unifiedMode.style.display = "";
     }
   }
 
@@ -336,25 +268,6 @@ class CompareConfigTool extends BaseTool {
   saveToolState() {
     try {
       const state = {
-        queryMode: this.queryMode,
-        env1: this.env1.connection ? this.env1.connection.name : null,
-        env2: this.env2.connection ? this.env2.connection.name : null,
-        schema: this.schema,
-        table: this.table,
-        metadata: this.metadata,
-        customPrimaryKey: this.customPrimaryKey,
-        selectedFields: this.selectedFields,
-        whereClause: this.whereClause,
-        maxRows: this.maxRows,
-        env2SchemaExists: this.env2SchemaExists,
-        env2TableExists: this.env2TableExists,
-
-        rawenv1: this.rawenv1.connection ? this.rawenv1.connection.name : null,
-        rawenv2: this.rawenv2.connection ? this.rawenv2.connection.name : null,
-        rawSql: this.rawSql,
-        rawPrimaryKey: this.rawPrimaryKey,
-        rawMaxRows: this.rawMaxRows,
-
         currentView: this.currentView,
         statusFilter: this.statusFilter,
         results: this.results,
@@ -366,7 +279,7 @@ class CompareConfigTool extends BaseTool {
       } catch (e) {
         // If quota exceeded, try saving without large results
         console.warn("Could not save full state to localStorage (likely quota exceeded). Saving without results.");
-        state.results = { unified: null, "schema-table": null, "raw-sql": null, "excel-compare": null };
+        state.results = { unified: null };
         localStorage.setItem("compare-config.last-state", JSON.stringify(state));
       }
     } catch (error) {
@@ -384,63 +297,14 @@ class CompareConfigTool extends BaseTool {
 
       const state = JSON.parse(saved);
 
-      // Restore results first to inform clean slate logic
-      this.results = state.results || { unified: null, "schema-table": null, "raw-sql": null, "excel-compare": null };
-
-      // Restore basic state with clean-slate check
-      this.queryMode = state.queryMode || "schema-table";
-
-      // If no results for schema-table, clear its selection state
-      if (this.results["schema-table"]) {
-        this.schema = state.schema;
-        this.table = state.table;
-        this.metadata = state.metadata;
-        this.customPrimaryKey = state.customPrimaryKey || [];
-        this.selectedFields = state.selectedFields || [];
-        this.env2SchemaExists = state.env2SchemaExists || false;
-        this.env2TableExists = state.env2TableExists || false;
-      } else {
-        this.schema = null;
-        this.table = null;
-        this.metadata = null;
-        this.customPrimaryKey = [];
-        this.selectedFields = [];
-        this.env2SchemaExists = false;
-        this.env2TableExists = false;
-      }
-
-      // If no results for raw-sql, clear its selection state
-      if (this.results["raw-sql"]) {
-        this.rawSql = state.rawSql || "";
-        this.rawPrimaryKey = state.rawPrimaryKey || "";
-      } else {
-        this.rawSql = "";
-        this.rawPrimaryKey = "";
-      }
-
-      this.whereClause = state.whereClause || "";
-      this.maxRows = state.maxRows || 100;
-      this.rawMaxRows = state.rawMaxRows || 100;
+      // Restore results (unified mode only)
+      this.results = { unified: state.results?.unified || null };
 
       // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
       const savedView = state.currentView || "grid";
       this.currentView = savedView === "expandable" ? "grid" : savedView;
       // Default to "differ" filter if not set (null means "all")
       this.statusFilter = state.statusFilter !== undefined ? state.statusFilter : "differ";
-
-      // Restore connections
-      if (state.env1) {
-        this.env1.connection = this.savedConnections.find((c) => c.name === state.env1) || null;
-      }
-      if (state.env2) {
-        this.env2.connection = this.savedConnections.find((c) => c.name === state.env2) || null;
-      }
-      if (state.rawenv1) {
-        this.rawenv1.connection = this.savedConnections.find((c) => c.name === state.rawenv1) || null;
-      }
-      if (state.rawenv2) {
-        this.rawenv2.connection = this.savedConnections.find((c) => c.name === state.rawenv2) || null;
-      }
 
       // Restore UI
       this.restoreUIFromState();
@@ -453,57 +317,8 @@ class CompareConfigTool extends BaseTool {
    * Restores UI elements from loaded state
    */
   restoreUIFromState() {
-    // 1. Set active tab
-    this.switchTab(this.queryMode);
-
-    // 2. Set dropdowns and inputs
-    const env1Select = document.getElementById("env1-connection");
-    const env2Select = document.getElementById("env2-connection");
-    const schemaSelect = document.getElementById("schema-select");
-    const tableSelect = document.getElementById("table-select");
-    const whereClauseInput = document.getElementById("where-clause");
-    const maxRowsInput = document.getElementById("max-rows");
-
-    if (env1Select && this.env1.connection) env1Select.value = this.env1.connection.name;
-    if (env2Select && this.env2.connection) env2Select.value = this.env2.connection.name;
-
-    // If we have metadata, we can show fields and set schema/table
-    // If we have metadata, we can show fields and set schema/table
-    if (this.metadata && this.schema && this.table) {
-      // Only show field selection UI if we are in schema-table mode
-      if (this.queryMode === "schema-table") {
-        this.showFieldSelection();
-      }
-      if (schemaSelect) {
-        schemaSelect.innerHTML = `<option value="${this.schema}">${this.schema}</option>`;
-        schemaSelect.value = this.schema;
-        schemaSelect.disabled = false;
-      }
-      if (tableSelect) {
-        tableSelect.innerHTML = `<option value="${this.table}">${this.table}</option>`;
-        tableSelect.value = this.table;
-        tableSelect.disabled = false;
-      }
-    }
-
-    if (whereClauseInput) whereClauseInput.value = this.whereClause;
-    if (maxRowsInput) maxRowsInput.value = this.maxRows;
-
-    // 3. Set Raw SQL inputs
-    const rawEnv1Select = document.getElementById("raw-env1-connection");
-    const rawEnv2Select = document.getElementById("raw-env2-connection");
-    const rawSqlInput = document.getElementById("raw-sql");
-    const rawPrimaryKeyInput = document.getElementById("raw-primary-key");
-    const rawMaxRowsInput = document.getElementById("raw-max-rows");
-
-    if (rawEnv1Select && this.rawenv1.connection) rawEnv1Select.value = this.rawenv1.connection.name;
-    if (rawEnv2Select && this.rawenv2.connection) rawEnv2Select.value = this.rawenv2.connection.name;
-    if (rawSqlInput) rawSqlInput.value = this.rawSql;
-    if (rawPrimaryKeyInput) rawPrimaryKeyInput.value = this.rawPrimaryKey;
-    if (rawMaxRowsInput) rawMaxRowsInput.value = this.rawMaxRows;
-
-    // 4. Show results if they exist for current tab
-    if (this.results[this.queryMode]) {
+    // Show results if they exist for unified mode
+    if (this.results.unified) {
       this.showResults();
       // Set view type selector
       const viewTypeSelect = document.getElementById("view-type");
@@ -594,14 +409,7 @@ class CompareConfigTool extends BaseTool {
    * Binds event listeners
    */
   bindEvents() {
-    // Tab switching events
-    const tabButtons = document.querySelectorAll(".tab-button");
-    tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tab = btn.dataset.tab;
-        this.switchTab(tab);
-      });
-    });
+    // Phase 6.4: Tab switching removed - only unified mode now
 
     // Connection status close button
     const closeConnectionsBtn = document.querySelector(".btn-close-connections");
@@ -886,112 +694,7 @@ class CompareConfigTool extends BaseTool {
     }
   }
 
-  /**
-   * Switches between tabs (unified, schema-table, raw-sql, excel-compare)
-   */
-  switchTab(tab) {
-    this.queryMode = tab;
-    const tauri = isTauri();
-    const isDesktopOnlyTab = tab === "schema-table" || tab === "raw-sql";
-
-    // Update tab button states
-    const tabButtons = document.querySelectorAll(".tab-button");
-    tabButtons.forEach((btn) => {
-      if (btn.dataset.tab === tab) {
-        btn.classList.add("active");
-      } else {
-        btn.classList.remove("active");
-      }
-    });
-
-    // Get UI sections
-    const envSelection = document.querySelector(".environment-selection");
-    const fieldSelection = document.getElementById("field-selection");
-    const rawSqlMode = document.getElementById("raw-sql-mode");
-    const excelCompareMode = document.getElementById("excel-compare-mode");
-    const unifiedCompareMode = document.getElementById("unified-compare-mode");
-    const resultsSection = document.getElementById("results-section");
-    const desktopOnlyNotice = document.getElementById("desktop-only-notice");
-    const desktopFeatureName = document.getElementById("desktop-feature-name");
-
-    // In Web mode, show desktop-only notice for Schema/Table and Raw SQL
-    if (!tauri && isDesktopOnlyTab) {
-      // Update the feature name in the notice
-      if (desktopFeatureName) {
-        desktopFeatureName.textContent = tab === "schema-table" ? "Schema/Table" : "Raw SQL";
-      }
-      // Show notice, hide all other sections
-      if (desktopOnlyNotice) desktopOnlyNotice.style.display = "block";
-      if (envSelection) envSelection.style.display = "none";
-      if (fieldSelection) fieldSelection.style.display = "none";
-      if (rawSqlMode) rawSqlMode.style.display = "none";
-      if (excelCompareMode) excelCompareMode.style.display = "none";
-      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
-      if (resultsSection) resultsSection.style.display = "none";
-      return;
-    }
-
-    // Hide desktop-only notice for Tauri mode or Excel Compare tab
-    if (desktopOnlyNotice) desktopOnlyNotice.style.display = "none";
-
-    // Show/hide appropriate UI sections
-    if (tab === "unified") {
-      if (envSelection) envSelection.style.display = "none";
-      if (fieldSelection) fieldSelection.style.display = "none";
-      if (rawSqlMode) rawSqlMode.style.display = "none";
-      if (excelCompareMode) excelCompareMode.style.display = "none";
-      if (unifiedCompareMode) unifiedCompareMode.style.display = "flex";
-      // Initialize unified mode UI
-      this.initUnifiedModeUI();
-    } else if (tab === "schema-table") {
-      if (envSelection) envSelection.style.display = "block";
-      if (fieldSelection) fieldSelection.style.display = this.metadata ? "block" : "none";
-      if (rawSqlMode) rawSqlMode.style.display = "none";
-      if (excelCompareMode) excelCompareMode.style.display = "none";
-      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
-    } else if (tab === "raw-sql") {
-      if (envSelection) envSelection.style.display = "none";
-      if (fieldSelection) fieldSelection.style.display = "none";
-      if (rawSqlMode) rawSqlMode.style.display = "block";
-      if (excelCompareMode) excelCompareMode.style.display = "none";
-      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
-    } else if (tab === "excel-compare") {
-      if (envSelection) envSelection.style.display = "none";
-      if (fieldSelection) fieldSelection.style.display = "none";
-      if (rawSqlMode) rawSqlMode.style.display = "none";
-      if (excelCompareMode) excelCompareMode.style.display = "block";
-      if (unifiedCompareMode) unifiedCompareMode.style.display = "none";
-    }
-
-    // Toggle results visibility based on current tab's results
-    if (this.results[tab]) {
-      this.showResults();
-    } else if (resultsSection) {
-      resultsSection.style.display = "none";
-    }
-
-    // Save state
-    this.saveToolState();
-  }
-
-  /**
-   * Handler for raw SQL connection selection
-   */
-  onRawConnectionSelected(envKey, connectionName) {
-    if (!connectionName) {
-      this[`raw${envKey}`] = { connection: null };
-      return;
-    }
-
-    const connection = this.savedConnections.find((c) => c.name === connectionName);
-    if (!connection) {
-      console.error("Connection not found:", connectionName);
-      return;
-    }
-
-    this[`raw${envKey}`] = { connection };
-    this.saveToolState();
-  }
+  // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
 
   /**
    * Copies the installation command to clipboard

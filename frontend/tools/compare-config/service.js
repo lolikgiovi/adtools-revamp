@@ -92,27 +92,8 @@ export class CompareConfigService {
     });
   }
 
-  /**
-   * Compares configurations between two environments
-   * @param {Object} request - Comparison request object
-   * @returns {Promise<Object>} Comparison result
-   */
-  static async compareConfigurations(request) {
-    return await invoke("compare_configurations", {
-      request,
-    });
-  }
-
-  /**
-   * Compares data using raw SQL queries
-   * @param {Object} request - Raw SQL comparison request
-   * @returns {Promise<Object>} Comparison result
-   */
-  static async compareRawSql(request) {
-    return await invoke("compare_raw_sql", {
-      request,
-    });
-  }
+  // Phase 6.4: compareConfigurations and compareRawSql methods removed.
+  // Use fetchOracleData + frontend JS compareDatasets() instead.
 
   /**
    * Fetches Oracle data for unified comparison (data-only, no comparison)
