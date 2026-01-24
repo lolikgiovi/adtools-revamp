@@ -1167,6 +1167,19 @@ pub fn fetch_table_metadata(
     }
 }
 
+/// Compares configurations between two Oracle environments.
+///
+/// # Deprecated
+/// This command is deprecated as of Phase 6 refactoring.
+/// Use `fetch_oracle_data` + frontend JS `compareDatasets()` instead.
+/// The JS diff engine provides richer features (character-level diff, word diff,
+/// adaptive thresholds) and unifies all comparison logic in one place.
+///
+/// This command will be removed in a future release.
+#[deprecated(
+    since = "2026-01-24",
+    note = "Use fetch_oracle_data + frontend JS comparison instead"
+)]
 #[tauri::command]
 #[allow(unused_variables)]
 pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, String> {
@@ -1232,6 +1245,19 @@ pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, 
     }
 }
 
+/// Compares data between two Oracle environments using raw SQL queries.
+///
+/// # Deprecated
+/// This command is deprecated as of Phase 6 refactoring.
+/// Use `fetch_oracle_data` with `mode: "raw-sql"` + frontend JS `compareDatasets()` instead.
+/// The JS diff engine provides richer features (character-level diff, word diff,
+/// adaptive thresholds) and unifies all comparison logic in one place.
+///
+/// This command will be removed in a future release.
+#[deprecated(
+    since = "2026-01-24",
+    note = "Use fetch_oracle_data with mode='raw-sql' + frontend JS comparison instead"
+)]
 #[tauri::command]
 #[allow(unused_variables)]
 pub fn compare_raw_sql(request: RawSqlRequest) -> Result<CompareResult, String> {

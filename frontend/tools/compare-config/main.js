@@ -11,7 +11,7 @@ import { VerticalCardView } from "./views/VerticalCardView.js";
 import { MasterDetailView } from "./views/MasterDetailView.js";
 import { GridView } from "./views/GridView.js";
 import { getFeatureFlag, FLAGS } from "./lib/feature-flags.js";
-import { enhanceWithDetailedDiff } from "./lib/diff-adapter.js";
+import { enhanceWithDetailedDiff, convertToViewFormat } from "./lib/diff-adapter.js";
 import { isTauri } from "../../core/Runtime.js";
 import * as FileParser from "./lib/file-parser.js";
 import * as FileMatcher from "./lib/file-matcher.js";
@@ -2848,38 +2848,71 @@ class CompareConfigTool extends BaseTool {
     this.updateProgressStep("fetch", "active", `${this.schema}.${this.table}`);
 
     try {
-      // Build comparison request matching Rust CompareRequest struct
-      const request = {
-        env1_connection_name: this.env1.connection.name,
-        env1_config: this.env1.connection,
-        env2_connection_name: this.env2.connection.name,
-        env2_config: this.env2.connection,
+      // Determine primary key columns to use
+      const pkColumns = this.customPrimaryKey && this.customPrimaryKey.length > 0
+        ? this.customPrimaryKey
+        : (this.metadata?.primary_key || []);
+
+      console.log("[Compare] Using JS diff engine (Phase 6 refactor)");
+      console.log("[Compare] Schema.Table:", `${this.schema}.${this.table}`);
+      console.log("[Compare] PK columns:", pkColumns);
+      console.log("[Compare] Selected fields:", this.selectedFields);
+
+      // Step 1: Fetch data from Environment 1
+      console.log("[Compare] Fetching data from env1:", this.env1.connection.name);
+      const dataEnv1 = await CompareConfigService.fetchOracleData({
+        connection_name: this.env1.connection.name,
+        config: this.env1.connection,
+        mode: "table",
         owner: this.schema,
         table_name: this.table,
-        primary_key: this.customPrimaryKey || [],
-        fields: this.selectedFields || [],
         where_clause: this.whereClause || null,
+        fields: this.selectedFields || [],
         max_rows: this.maxRows || 100,
-      };
+      });
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
 
-      console.log("[Compare] Sending request:", JSON.stringify(request, null, 2));
+      // Update progress - env1 fetch done, start env2
+      this.updateProgressStep("fetch", "active", `Fetching from ${this.env2.connection.name}...`);
+
+      // Step 2: Fetch data from Environment 2
+      console.log("[Compare] Fetching data from env2:", this.env2.connection.name);
+      const dataEnv2 = await CompareConfigService.fetchOracleData({
+        connection_name: this.env2.connection.name,
+        config: this.env2.connection,
+        mode: "table",
+        owner: this.schema,
+        table_name: this.table,
+        where_clause: this.whereClause || null,
+        fields: this.selectedFields || [],
+        max_rows: this.maxRows || 100,
+      });
+      console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows");
 
       // Update to compare step
       this.updateProgressStep("fetch", "done", `${this.schema}.${this.table}`);
-      this.updateProgressStep("compare", "active", "Processing...");
+      this.updateProgressStep("compare", "active", "Comparing records...");
 
-      // Execute comparison
-      let result = await CompareConfigService.compareConfigurations(request);
+      // Step 3: Compare using JS diff engine
+      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+        keyColumns: pkColumns,
+        fields: this.selectedFields || dataEnv1.headers,
+        normalize: false,
+        matchMode: "key",
+      });
 
-      console.log("[Compare] Result received:", result);
+      console.log("[Compare] JS diff result:", jsResult.summary);
+
+      // Step 4: Convert to view format (matches Rust backend format for views)
+      let result = convertToViewFormat(jsResult, {
+        env1Name: this.env1.connection.name,
+        env2Name: this.env2.connection.name,
+        tableName: `${this.schema}.${this.table}`,
+        keyColumns: pkColumns,
+      });
+
+      console.log("[Compare] Result converted to view format");
       console.log("[Compare] Result rows:", result?.rows?.length || 0);
-
-      // Enhance with detailed character-level diff if feature flag enabled
-      if (getFeatureFlag(FLAGS.ENHANCE_DIFF_WITH_JS) && result?.rows?.length > 0) {
-        console.log("[Compare] Enhancing with JS diff engine...");
-        result = await enhanceWithDetailedDiff(result, { threshold: 0.5 });
-        console.log("[Compare] Enhancement complete");
-      }
 
       // Update compare step done
       this.updateProgressStep("compare", "done", `${result?.rows?.length || 0} records compared`);
@@ -2971,27 +3004,58 @@ class CompareConfigTool extends BaseTool {
             .filter((f) => f.length > 0)
         : [];
 
-      // Build comparison request matching RawSqlRequest struct
-      // Primary key will be auto-detected as the first column from SQL results if not provided
-      const request = {
-        env1_connection_name: this.rawenv1.connection.name,
-        env1_config: this.rawenv1.connection,
-        env2_connection_name: this.rawenv2.connection.name,
-        env2_config: this.rawenv2.connection,
+      console.log("[Compare] Using JS diff engine for Raw SQL (Phase 6 refactor)");
+      console.log("[Compare] SQL query:", cleanSql.substring(0, 100) + (cleanSql.length > 100 ? "..." : ""));
+      console.log("[Compare] PK fields:", primaryKeyFields);
+
+      // Step 1: Fetch data from Environment 1
+      console.log("[Compare] Fetching raw SQL data from env1:", this.rawenv1.connection.name);
+      const dataEnv1 = await CompareConfigService.fetchOracleData({
+        connection_name: this.rawenv1.connection.name,
+        config: this.rawenv1.connection,
+        mode: "raw-sql",
         sql: cleanSql,
-        primary_key: primaryKeyFields.length > 0 ? primaryKeyFields.join(",") : null,
         max_rows: this.rawMaxRows,
-      };
+      });
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows, headers:", dataEnv1.headers);
 
-      // Execute comparison
-      let result = await CompareConfigService.compareRawSql(request);
+      // Step 2: Fetch data from Environment 2
+      console.log("[Compare] Fetching raw SQL data from env2:", this.rawenv2.connection.name);
+      const dataEnv2 = await CompareConfigService.fetchOracleData({
+        connection_name: this.rawenv2.connection.name,
+        config: this.rawenv2.connection,
+        mode: "raw-sql",
+        sql: cleanSql,
+        max_rows: this.rawMaxRows,
+      });
+      console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows, headers:", dataEnv2.headers);
 
-      // Enhance with detailed character-level diff if feature flag enabled
-      if (getFeatureFlag(FLAGS.ENHANCE_DIFF_WITH_JS) && result?.rows?.length > 0) {
-        console.log("[Compare] Enhancing raw SQL results with JS diff engine...");
-        result = await enhanceWithDetailedDiff(result, { threshold: 0.5 });
-        console.log("[Compare] Enhancement complete");
-      }
+      // Determine primary key columns (use provided or default to first column)
+      const pkColumns = primaryKeyFields.length > 0
+        ? primaryKeyFields
+        : (dataEnv1.headers.length > 0 ? [dataEnv1.headers[0]] : []);
+      console.log("[Compare] Using PK columns:", pkColumns);
+
+      // Step 3: Compare using JS diff engine
+      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+        keyColumns: pkColumns,
+        fields: dataEnv1.headers,
+        normalize: false,
+        matchMode: "key",
+      });
+
+      console.log("[Compare] JS diff result:", jsResult.summary);
+
+      // Step 4: Convert to view format
+      let result = convertToViewFormat(jsResult, {
+        env1Name: this.rawenv1.connection.name,
+        env2Name: this.rawenv2.connection.name,
+        tableName: "Raw SQL Query",
+        keyColumns: pkColumns,
+      });
+
+      console.log("[Compare] Result converted to view format");
+      console.log("[Compare] Result rows:", result?.rows?.length || 0);
 
       this.results[this.queryMode] = result;
 

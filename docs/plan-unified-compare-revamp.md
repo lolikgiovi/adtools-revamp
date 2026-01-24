@@ -445,7 +445,14 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ---
 
-## Phase 6: Unify Diff Engine (Refactoring)
+## Phase 6: Unify Diff Engine (Refactoring) ✅ COMPLETED
+
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `main.js` - Refactored `executeComparison()` and `executeRawSqlComparison()` to use JS diff engine
+> - `lib/diff-adapter.js` - Added `convertToViewFormat` to imports
+> - `tauri/src/oracle.rs` - Marked `compare_configurations` and `compare_raw_sql` as deprecated
 
 ### Problem Statement
 
@@ -492,7 +499,7 @@ PROPOSED (Single Engine):
 
 ### Implementation Plan
 
-#### 6.1 Refactor Schema/Table Mode to Use JS Diff Engine
+#### 6.1 Refactor Schema/Table Mode to Use JS Diff Engine ✅
 
 **File:** `frontend/tools/compare-config/main.js`
 
@@ -552,7 +559,7 @@ async executeComparison() {
 }
 ```
 
-#### 6.2 Refactor Raw SQL Mode to Use JS Diff Engine
+#### 6.2 Refactor Raw SQL Mode to Use JS Diff Engine ✅
 
 **File:** `frontend/tools/compare-config/main.js`
 
@@ -609,7 +616,7 @@ async executeRawSqlComparison() {
 }
 ```
 
-#### 6.3 Deprecate Rust Comparison Commands
+#### 6.3 Deprecate Rust Comparison Commands ✅
 
 **File:** `tauri/src/oracle.rs`
 
@@ -693,9 +700,9 @@ Once the unified mode is stable and all comparisons use JS diff engine:
 | Phase 5.1: Visual Feedback | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.2: Loading States | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.3: Error Handling | ✅ COMPLETED | 2026-01-24 |
-| Phase 6.1: Schema/Table JS Engine | ⬚ TODO | - |
-| Phase 6.2: Raw SQL JS Engine | ⬚ TODO | - |
-| Phase 6.3: Deprecate Rust Commands | ⬚ TODO | - |
+| Phase 6.1: Schema/Table JS Engine | ✅ COMPLETED | 2026-01-24 |
+| Phase 6.2: Raw SQL JS Engine | ✅ COMPLETED | 2026-01-24 |
+| Phase 6.3: Deprecate Rust Commands | ✅ COMPLETED | 2026-01-24 |
 | Phase 6.4: Remove Legacy Tabs | ⬚ FUTURE | - |
 
-**Overall Progress**: 7/11 sub-phases completed (64%)
+**Overall Progress**: 10/11 sub-phases completed (91%)
