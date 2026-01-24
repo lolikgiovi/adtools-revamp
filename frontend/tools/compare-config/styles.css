@@ -2695,6 +2695,19 @@
   gap: 2rem;
 }
 
+/* File Selection Dropdown (Unified Compare) */
+.file-selection-dropdown {
+  margin-top: 0.75rem;
+}
+
+.file-selection-dropdown label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 0.375rem;
+}
+
 /* Searchable Select Dropdown */
 .searchable-select {
   position: relative;

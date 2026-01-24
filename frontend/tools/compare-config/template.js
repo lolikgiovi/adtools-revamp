@@ -221,23 +221,37 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
 
-                    <!-- Excel Config (shown when Excel selected) -->
+                    <!-- Excel Config (shown when Excel selected) - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-a-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-a-upload-zone">
+                            <div class="upload-zone-header">
+                                <span class="zone-label">Excel Files</span>
+                                <button class="btn btn-ghost btn-xs btn-clear-files" id="source-a-clear-all" style="display: none;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                    Clear All
+                                </button>
+                            </div>
                             <div class="upload-area">
-                                <p>Drop file here or <a href="#" class="browse-link" id="source-a-browse">browse</a></p>
+                                <p>Click to <a href="#" class="browse-link" id="source-a-browse-files">browse files</a>
+                                   or <a href="#" class="browse-link" id="source-a-browse-folder">select folder</a></p>
                                 <p class="file-types">Supports .xlsx, .xls, .csv</p>
                             </div>
-                            <input type="file" id="source-a-file-input" accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="source-a-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="source-a-folder-input" webkitdirectory style="display: none;">
+                            <div class="file-list" id="source-a-file-list"></div>
                         </div>
-                        <div class="selected-file-display" id="source-a-selected-file" style="display: none;">
-                            <span class="file-name" id="source-a-file-name"></span>
-                            <button class="btn btn-ghost btn-xs btn-remove-file" id="source-a-remove-file" title="Remove file">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
+
+                        <!-- File Selection Dropdown (shown when files are uploaded) -->
+                        <div class="file-selection-dropdown" id="source-a-file-selection" style="display: none;">
+                            <label>Select File to Compare</label>
+                            <div class="searchable-select" id="source-a-file-wrapper">
+                                <input type="text" class="form-input searchable-input"
+                                       id="source-a-file-search" placeholder="Search or select file..." autocomplete="off">
+                                <div class="searchable-dropdown" id="source-a-file-dropdown"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -340,23 +354,37 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
 
-                    <!-- Excel Config -->
+                    <!-- Excel Config - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-b-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-b-upload-zone">
+                            <div class="upload-zone-header">
+                                <span class="zone-label">Excel Files</span>
+                                <button class="btn btn-ghost btn-xs btn-clear-files" id="source-b-clear-all" style="display: none;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                    Clear All
+                                </button>
+                            </div>
                             <div class="upload-area">
-                                <p>Drop file here or <a href="#" class="browse-link" id="source-b-browse">browse</a></p>
+                                <p>Click to <a href="#" class="browse-link" id="source-b-browse-files">browse files</a>
+                                   or <a href="#" class="browse-link" id="source-b-browse-folder">select folder</a></p>
                                 <p class="file-types">Supports .xlsx, .xls, .csv</p>
                             </div>
-                            <input type="file" id="source-b-file-input" accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="source-b-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+                            <input type="file" id="source-b-folder-input" webkitdirectory style="display: none;">
+                            <div class="file-list" id="source-b-file-list"></div>
                         </div>
-                        <div class="selected-file-display" id="source-b-selected-file" style="display: none;">
-                            <span class="file-name" id="source-b-file-name"></span>
-                            <button class="btn btn-ghost btn-xs btn-remove-file" id="source-b-remove-file" title="Remove file">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
+
+                        <!-- File Selection Dropdown (shown when files are uploaded) -->
+                        <div class="file-selection-dropdown" id="source-b-file-selection" style="display: none;">
+                            <label>Select File to Compare</label>
+                            <div class="searchable-select" id="source-b-file-wrapper">
+                                <input type="text" class="form-input searchable-input"
+                                       id="source-b-file-search" placeholder="Search or select file..." autocomplete="off">
+                                <div class="searchable-dropdown" id="source-b-file-dropdown"></div>
+                            </div>
                         </div>
                     </div>
 

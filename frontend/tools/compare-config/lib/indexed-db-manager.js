@@ -12,7 +12,7 @@
  * Database configuration
  */
 const DB_NAME = 'CompareConfigDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /**
  * Object store names
@@ -24,6 +24,7 @@ export const STORES = {
   SCHEMA_TABLE_PREFS: 'schemaTablePrefs',
   RAW_SQL_PREFS: 'rawSqlPrefs',
   COMPARISON_HISTORY: 'comparisonHistory',
+  UNIFIED_EXCEL_FILES: 'unifiedExcelFiles', // Phase 2: For unified compare Excel files
 };
 
 /**
@@ -102,6 +103,13 @@ function openDatabase() {
         });
         historyStore.createIndex('mode', 'mode', { unique: false });
         historyStore.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+
+      // Create unifiedExcelFiles store (Phase 2: for unified compare mode)
+      if (!db.objectStoreNames.contains(STORES.UNIFIED_EXCEL_FILES)) {
+        const unifiedExcelFilesStore = db.createObjectStore(STORES.UNIFIED_EXCEL_FILES, { keyPath: 'id' });
+        unifiedExcelFilesStore.createIndex('source', 'source', { unique: false }); // 'sourceA' or 'sourceB'
+        unifiedExcelFilesStore.createIndex('uploadedAt', 'uploadedAt', { unique: false });
       }
     };
   });
@@ -252,6 +260,114 @@ export async function getExcelCompareState() {
  */
 export async function clearExcelCompareState() {
   return withStore(STORES.EXCEL_COMPARE_STATE, 'readwrite', (store) => store.delete('current'));
+}
+
+// =============================================================================
+// Unified Excel Files Store Operations (Phase 2)
+// =============================================================================
+
+/**
+ * Saves a unified Excel file to IndexedDB
+ * @param {Object} fileData - File data object
+ * @param {string} fileData.id - Unique file ID
+ * @param {string} fileData.name - Original filename
+ * @param {ArrayBuffer} fileData.content - File binary content
+ * @param {string} fileData.source - 'sourceA' or 'sourceB'
+ * @returns {Promise<string>} The file ID
+ */
+export async function saveUnifiedExcelFile(fileData) {
+  const record = {
+    id: fileData.id,
+    name: fileData.name,
+    content: fileData.content,
+    source: fileData.source,
+    size: fileData.content.byteLength,
+    uploadedAt: new Date(),
+  };
+
+  await withStore(STORES.UNIFIED_EXCEL_FILES, 'readwrite', (store) => store.put(record));
+  return record.id;
+}
+
+/**
+ * Gets a unified Excel file by ID
+ * @param {string} id - File ID
+ * @returns {Promise<Object|null>} File data or null if not found
+ */
+export async function getUnifiedExcelFile(id) {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readonly', (store) => store.get(id));
+}
+
+/**
+ * Gets all unified Excel files for a specific source
+ * @param {string} source - 'sourceA' or 'sourceB'
+ * @returns {Promise<Array>} Array of file records
+ */
+export async function getUnifiedExcelFiles(source) {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readonly', (store, resolve, reject) => {
+    const index = store.index('source');
+    const request = index.getAll(source);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Gets all unified Excel files
+ * @returns {Promise<Array>} Array of all file records
+ */
+export async function getAllUnifiedExcelFiles() {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readonly', (store) => store.getAll());
+}
+
+/**
+ * Deletes a unified Excel file by ID
+ * @param {string} id - File ID
+ * @returns {Promise<void>}
+ */
+export async function deleteUnifiedExcelFile(id) {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readwrite', (store) => store.delete(id));
+}
+
+/**
+ * Clears all unified Excel files for a specific source
+ * @param {string} source - 'sourceA' or 'sourceB'
+ * @returns {Promise<void>}
+ */
+export async function clearUnifiedExcelFiles(source) {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readwrite', (store, resolve, reject) => {
+    const index = store.index('source');
+    const request = index.getAllKeys(source);
+
+    request.onsuccess = () => {
+      const keys = request.result;
+      let pending = keys.length;
+
+      if (pending === 0) {
+        resolve();
+        return;
+      }
+
+      for (const key of keys) {
+        const deleteRequest = store.delete(key);
+        deleteRequest.onsuccess = () => {
+          pending--;
+          if (pending === 0) resolve();
+        };
+        deleteRequest.onerror = () => reject(deleteRequest.error);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Clears all unified Excel files (both sources)
+ * @returns {Promise<void>}
+ */
+export async function clearAllUnifiedExcelFiles() {
+  return withStore(STORES.UNIFIED_EXCEL_FILES, 'readwrite', (store) => store.clear());
 }
 
 // =============================================================================
@@ -629,6 +745,7 @@ export async function clearAllData() {
       STORES.SCHEMA_TABLE_PREFS,
       STORES.RAW_SQL_PREFS,
       STORES.COMPARISON_HISTORY,
+      STORES.UNIFIED_EXCEL_FILES,
     ];
 
     const transaction = db.transaction(storeNames, 'readwrite');
@@ -656,6 +773,7 @@ export async function getStorageStats() {
     STORES.SCHEMA_TABLE_PREFS,
     STORES.RAW_SQL_PREFS,
     STORES.COMPARISON_HISTORY,
+    STORES.UNIFIED_EXCEL_FILES,
   ];
 
   for (const storeName of storeNames) {
@@ -711,6 +829,15 @@ export default {
   getExcelCompareState,
   clearExcelCompareState,
   clearAllExcelCompareData,
+
+  // Unified Excel files (Phase 2)
+  saveUnifiedExcelFile,
+  getUnifiedExcelFile,
+  getUnifiedExcelFiles,
+  getAllUnifiedExcelFiles,
+  deleteUnifiedExcelFile,
+  clearUnifiedExcelFiles,
+  clearAllUnifiedExcelFiles,
 
   // Excel file preferences
   saveExcelFilePrefs,

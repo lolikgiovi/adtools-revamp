@@ -124,8 +124,10 @@ class CompareConfigTool extends BaseTool {
         sql: "",
         whereClause: "",
         maxRows: 100,
-        // Excel config
-        file: null, // File object
+        // Excel config (Phase 2: multi-file support)
+        excelFiles: [], // Array of { id, file } - all uploaded files
+        selectedExcelFile: null, // { id, file } - selected file for comparison
+        file: null, // File object (legacy, for backward compat)
         parsedData: null, // { headers, rows, metadata }
         // Fetched data (normalized)
         data: null, // { headers: [], rows: [], metadata: {} }
@@ -142,6 +144,9 @@ class CompareConfigTool extends BaseTool {
         sql: "",
         whereClause: "",
         maxRows: 100,
+        // Excel config (Phase 2: multi-file support)
+        excelFiles: [], // Array of { id, file } - all uploaded files
+        selectedExcelFile: null, // { id, file } - selected file for comparison
         file: null,
         parsedData: null,
         data: null,
@@ -4945,43 +4950,68 @@ class CompareConfigTool extends BaseTool {
   /**
    * Bind Excel config events for a source (A or B)
    */
+  /**
+   * Bind Excel config events for unified mode (Phase 2: multi-file support)
+   */
   bindUnifiedExcelConfigEvents(source) {
     const prefix = `source-${source.toLowerCase()}`;
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
 
-    // Browse link
-    const browseLink = document.getElementById(`${prefix}-browse`);
+    // Browse files link
+    const browseFilesLink = document.getElementById(`${prefix}-browse-files`);
     const fileInput = document.getElementById(`${prefix}-file-input`);
 
-    if (browseLink) {
-      browseLink.addEventListener("click", async (e) => {
+    if (browseFilesLink) {
+      browseFilesLink.addEventListener("click", async (e) => {
         e.preventDefault();
-
         if (isTauri()) {
-          // Tauri: use native file dialog
-          await this._handleUnifiedFileBrowseTauri(source);
-        } else {
-          // Web: trigger file input
-          if (fileInput) {
-            fileInput.click();
-          }
+          await this._handleUnifiedFileBrowseTauri(source, false);
+        } else if (fileInput) {
+          fileInput.click();
         }
       });
     }
 
-    // File input change (for Web mode)
+    // Browse folder link
+    const browseFolderLink = document.getElementById(`${prefix}-browse-folder`);
+    const folderInput = document.getElementById(`${prefix}-folder-input`);
+
+    if (browseFolderLink) {
+      browseFolderLink.addEventListener("click", async (e) => {
+        e.preventDefault();
+        if (isTauri()) {
+          await this._handleUnifiedFileBrowseTauri(source, true);
+        } else if (folderInput) {
+          folderInput.click();
+        }
+      });
+    }
+
+    // File input change (multi-file)
     if (fileInput) {
       fileInput.addEventListener("change", (e) => {
         if (e.target.files.length > 0) {
-          this.handleUnifiedFileSelection(source, e.target.files[0]);
+          this.handleUnifiedExcelFileSelection(sourceKey, e.target.files);
+          e.target.value = ""; // Reset for re-selection
         }
       });
     }
 
-    // Remove file button
-    const removeBtn = document.getElementById(`${prefix}-remove-file`);
-    if (removeBtn) {
-      removeBtn.addEventListener("click", () => {
-        this.removeUnifiedFile(source);
+    // Folder input change
+    if (folderInput) {
+      folderInput.addEventListener("change", (e) => {
+        if (e.target.files.length > 0) {
+          this.handleUnifiedExcelFileSelection(sourceKey, e.target.files);
+          e.target.value = "";
+        }
+      });
+    }
+
+    // Clear All button
+    const clearAllBtn = document.getElementById(`${prefix}-clear-all`);
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener("click", () => {
+        this.clearUnifiedExcelFiles(sourceKey);
       });
     }
 
@@ -5002,55 +5032,115 @@ class CompareConfigTool extends BaseTool {
         uploadZone.classList.remove("drag-over");
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-          this.handleUnifiedFileSelection(source, files[0]);
+          this.handleUnifiedExcelFileSelection(sourceKey, files);
         }
       });
     }
   }
 
   /**
-   * Handle file browsing in Tauri (desktop) for unified mode
-   * Uses native file dialog
+   * Handle file/folder browsing in Tauri for unified mode (Phase 2)
    */
-  async _handleUnifiedFileBrowseTauri(source) {
+  async _handleUnifiedFileBrowseTauri(source, isFolder = false) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const { readFile } = await import("@tauri-apps/plugin-fs");
+      const { readFile, readDir } = await import("@tauri-apps/plugin-fs");
 
-      const selected = await open({
-        multiple: false,
-        title: `Select ${source === "A" ? "Source A (Reference)" : "Source B (Comparator)"} File`,
-        filters: [
-          {
-            name: "Spreadsheet",
-            extensions: ["xlsx", "xls", "csv"],
-          },
-        ],
-      });
+      if (isFolder) {
+        // Folder selection
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: `Select Folder for ${source === "A" ? "Source A" : "Source B"}`,
+        });
 
-      if (!selected) return;
+        if (!selected) return;
 
-      // Read file from path
-      const filePath = typeof selected === "string" ? selected : selected.path;
-      const fileName = filePath.split("/").pop() || filePath.split("\\").pop();
-      const ext = FileParser.getFileExtension(fileName);
+        // Recursively scan folder for supported files
+        const files = [];
+        await this._scanFolderForExcelFiles(selected, readDir, readFile, files);
 
-      const mimeTypes = {
-        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        xls: "application/vnd.ms-excel",
-        csv: "text/csv",
-      };
+        if (files.length > 0) {
+          await this.handleUnifiedExcelFileSelection(sourceKey, files);
+        } else {
+          this.eventBus.emit("notification:show", {
+            type: "warning",
+            message: "No supported files (.xlsx, .xls, .csv) found in the selected folder.",
+          });
+        }
+      } else {
+        // File selection (multiple)
+        const selected = await open({
+          multiple: true,
+          title: `Select Files for ${source === "A" ? "Source A" : "Source B"}`,
+          filters: [{ name: "Spreadsheet", extensions: ["xlsx", "xls", "csv"] }],
+        });
 
-      const fileData = await readFile(filePath);
-      const file = new File([fileData], fileName, { type: mimeTypes[ext] || "application/octet-stream" });
+        if (!selected || selected.length === 0) return;
 
-      await this.handleUnifiedFileSelection(source, file);
+        const selectedPaths = Array.isArray(selected) ? selected : [selected];
+        const files = [];
+
+        for (const filePath of selectedPaths) {
+          const path = typeof filePath === "string" ? filePath : filePath.path;
+          const fileName = path.split("/").pop() || path.split("\\").pop();
+          const ext = FileParser.getFileExtension(fileName);
+
+          if (!FileParser.SUPPORTED_EXTENSIONS.includes(ext)) continue;
+
+          const mimeTypes = {
+            xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            xls: "application/vnd.ms-excel",
+            csv: "text/csv",
+          };
+
+          const fileData = await readFile(path);
+          files.push(new File([fileData], fileName, { type: mimeTypes[ext] || "application/octet-stream" }));
+        }
+
+        if (files.length > 0) {
+          await this.handleUnifiedExcelFileSelection(sourceKey, files);
+        }
+      }
     } catch (error) {
-      console.error(`Failed to browse file (Tauri, unified ${source}):`, error);
+      console.error(`Failed to browse ${isFolder ? "folder" : "files"} (Tauri, unified ${source}):`, error);
       this.eventBus.emit("notification:show", {
         type: "error",
-        message: `Failed to open file: ${error.message}`,
+        message: `Failed to open ${isFolder ? "folder" : "files"}: ${error.message}`,
       });
+    }
+  }
+
+  /**
+   * Recursively scan folder for Excel files (Tauri only)
+   */
+  async _scanFolderForExcelFiles(folderPath, readDir, readFile, files) {
+    try {
+      const entries = await readDir(folderPath);
+
+      for (const entry of entries) {
+        const entryPath = `${folderPath}/${entry.name}`;
+
+        if (entry.isDirectory) {
+          await this._scanFolderForExcelFiles(entryPath, readDir, readFile, files);
+        } else if (entry.isFile) {
+          const ext = FileParser.getFileExtension(entry.name);
+          if (FileParser.SUPPORTED_EXTENSIONS.includes(ext)) {
+            const mimeTypes = {
+              xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              xls: "application/vnd.ms-excel",
+              csv: "text/csv",
+            };
+
+            const fileData = await readFile(entryPath);
+            files.push(new File([fileData], entry.name, { type: mimeTypes[ext] || "application/octet-stream" }));
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to read directory ${folderPath}:`, error);
     }
   }
 
@@ -5130,8 +5220,62 @@ class CompareConfigTool extends BaseTool {
       this.updateUnifiedSourceConfigVisibility("B");
     }
 
+    // Restore cached unified Excel files from IndexedDB
+    this.restoreCachedUnifiedExcelFiles();
+
     // Update Load Data button state
     this.updateUnifiedLoadButtonState();
+  }
+
+  /**
+   * Restore cached unified Excel files from IndexedDB (Phase 2)
+   */
+  async restoreCachedUnifiedExcelFiles() {
+    if (!IndexedDBManager.isIndexedDBAvailable()) return;
+
+    try {
+      // Restore Source A files
+      const sourceAFiles = await IndexedDBManager.getUnifiedExcelFiles("sourceA");
+      if (sourceAFiles && sourceAFiles.length > 0) {
+        const filesWithBlobs = sourceAFiles.map((record) => ({
+          id: record.id,
+          file: new File([record.content], record.name, { type: this._getMimeType(record.name) }),
+        }));
+        this.unified.sourceA.excelFiles = filesWithBlobs;
+        this.updateUnifiedExcelUI("sourceA");
+      }
+
+      // Restore Source B files
+      const sourceBFiles = await IndexedDBManager.getUnifiedExcelFiles("sourceB");
+      if (sourceBFiles && sourceBFiles.length > 0) {
+        const filesWithBlobs = sourceBFiles.map((record) => ({
+          id: record.id,
+          file: new File([record.content], record.name, { type: this._getMimeType(record.name) }),
+        }));
+        this.unified.sourceB.excelFiles = filesWithBlobs;
+        this.updateUnifiedExcelUI("sourceB");
+      }
+
+      // Update button state after restoring
+      this.updateUnifiedLoadButtonState();
+    } catch (error) {
+      console.warn("Failed to restore cached unified Excel files:", error);
+    }
+  }
+
+  /**
+   * Get MIME type from filename extension
+   * @param {string} filename
+   * @returns {string}
+   */
+  _getMimeType(filename) {
+    const ext = FileParser.getFileExtension(filename);
+    const mimeTypes = {
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      xls: "application/vnd.ms-excel",
+      csv: "text/csv",
+    };
+    return mimeTypes[ext] || "application/octet-stream";
   }
 
   /**
@@ -5433,58 +5577,336 @@ class CompareConfigTool extends BaseTool {
   /**
    * Handle file selection in unified mode
    */
-  async handleUnifiedFileSelection(source, file) {
-    if (!FileParser.isSupported(file)) {
+  /**
+   * Handle Excel file selection for unified mode (Phase 2: multi-file)
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   * @param {FileList|File[]} files - Selected files
+   */
+  async handleUnifiedExcelFileSelection(sourceKey, files) {
+    const fileArray = Array.from(files);
+    const supportedFiles = FileParser.filterSupportedFiles(fileArray);
+
+    if (supportedFiles.length === 0) {
       this.eventBus.emit("notification:show", {
         type: "warning",
-        message: `Unsupported file format. Please use .xlsx, .xls, or .csv files.`,
+        message: "No supported files (.xlsx, .xls, .csv) were selected.",
       });
       return;
     }
 
-    const sourceKey = source === "A" ? "sourceA" : "sourceB";
-    const prefix = `source-${source.toLowerCase()}`;
+    // Wrap files with IDs
+    const filesWithIds = supportedFiles.map((file) => ({
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
+      file,
+    }));
 
-    this.unified[sourceKey].file = file;
+    // Add to existing list
+    this.unified[sourceKey].excelFiles = [...this.unified[sourceKey].excelFiles, ...filesWithIds];
+
+    // Reset data loaded state since files changed
     this.unified[sourceKey].dataLoaded = false;
     this.unified[sourceKey].data = null;
+    this.unified[sourceKey].parsedData = null;
 
-    // Update UI to show selected file
-    const uploadZone = document.getElementById(`${prefix}-upload-zone`);
-    const selectedFileDisplay = document.getElementById(`${prefix}-selected-file`);
-    const fileNameSpan = document.getElementById(`${prefix}-file-name`);
+    // Cache files in IndexedDB
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      for (const fileWrapper of filesWithIds) {
+        try {
+          const arrayBuffer = await fileWrapper.file.arrayBuffer();
+          await IndexedDBManager.saveUnifiedExcelFile({
+            id: fileWrapper.id,
+            name: fileWrapper.file.name,
+            content: arrayBuffer,
+            source: sourceKey,
+          });
+        } catch (error) {
+          console.warn("Failed to cache unified Excel file:", error);
+        }
+      }
+    }
 
-    if (uploadZone) uploadZone.style.display = "none";
-    if (selectedFileDisplay) selectedFileDisplay.style.display = "flex";
-    if (fileNameSpan) fileNameSpan.textContent = file.name;
-
+    // Update UI
+    this.updateUnifiedExcelUI(sourceKey);
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
   }
 
   /**
-   * Remove a file from unified mode
+   * Clear all Excel files from a unified source
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
    */
-  removeUnifiedFile(source) {
-    const sourceKey = source === "A" ? "sourceA" : "sourceB";
-    const prefix = `source-${source.toLowerCase()}`;
+  async clearUnifiedExcelFiles(sourceKey) {
+    // Clear from IndexedDB
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      for (const fileWrapper of this.unified[sourceKey].excelFiles) {
+        try {
+          await IndexedDBManager.deleteUnifiedExcelFile(fileWrapper.id);
+        } catch (error) {
+          console.warn("Failed to delete unified Excel file from IndexedDB:", error);
+        }
+      }
+    }
 
+    // Clear state
+    this.unified[sourceKey].excelFiles = [];
+    this.unified[sourceKey].selectedExcelFile = null;
     this.unified[sourceKey].file = null;
     this.unified[sourceKey].parsedData = null;
     this.unified[sourceKey].dataLoaded = false;
     this.unified[sourceKey].data = null;
 
     // Update UI
-    const uploadZone = document.getElementById(`${prefix}-upload-zone`);
-    const selectedFileDisplay = document.getElementById(`${prefix}-selected-file`);
-    const preview = document.getElementById(`${prefix}-preview`);
+    this.updateUnifiedExcelUI(sourceKey);
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
 
-    if (uploadZone) uploadZone.style.display = "block";
-    if (selectedFileDisplay) selectedFileDisplay.style.display = "none";
-    if (preview) preview.style.display = "none";
+  /**
+   * Remove a single Excel file from a unified source
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   * @param {string} fileId - ID of file to remove
+   */
+  async removeUnifiedExcelFile(sourceKey, fileId) {
+    // Remove from IndexedDB
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      try {
+        await IndexedDBManager.deleteUnifiedExcelFile(fileId);
+      } catch (error) {
+        console.warn("Failed to delete unified Excel file from IndexedDB:", error);
+      }
+    }
+
+    // Remove from list
+    this.unified[sourceKey].excelFiles = this.unified[sourceKey].excelFiles.filter((f) => f.id !== fileId);
+
+    // Clear selection if removed file was selected
+    if (this.unified[sourceKey].selectedExcelFile?.id === fileId) {
+      this.unified[sourceKey].selectedExcelFile = null;
+      this.unified[sourceKey].file = null;
+      this.unified[sourceKey].parsedData = null;
+      this.unified[sourceKey].dataLoaded = false;
+      this.unified[sourceKey].data = null;
+    }
+
+    // Update UI
+    this.updateUnifiedExcelUI(sourceKey);
+    this.updateUnifiedLoadButtonState();
+    this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Update the Excel UI for a unified source (file list, dropdown, clear button)
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   */
+  updateUnifiedExcelUI(sourceKey) {
+    const source = sourceKey === "sourceA" ? "a" : "b";
+    const prefix = `source-${source}`;
+    const files = this.unified[sourceKey].excelFiles;
+
+    // Update file list
+    const fileListEl = document.getElementById(`${prefix}-file-list`);
+    if (fileListEl) {
+      if (files.length === 0) {
+        fileListEl.innerHTML = "";
+      } else {
+        fileListEl.innerHTML = files
+          .sort((a, b) => a.file.name.localeCompare(b.file.name))
+          .map(
+            (f) => `
+          <div class="file-item" data-file-id="${f.id}">
+            <span class="file-name">${f.file.name}</span>
+            <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        `
+          )
+          .join("");
+
+        // Bind remove buttons
+        fileListEl.querySelectorAll(".btn-remove-file").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            const fileItem = e.target.closest(".file-item");
+            const fileId = fileItem?.dataset.fileId;
+            if (fileId) {
+              this.removeUnifiedExcelFile(sourceKey, fileId);
+            }
+          });
+        });
+      }
+    }
+
+    // Show/hide Clear All button
+    const clearAllBtn = document.getElementById(`${prefix}-clear-all`);
+    if (clearAllBtn) {
+      clearAllBtn.style.display = files.length > 0 ? "" : "none";
+    }
+
+    // Show/hide file selection dropdown
+    const fileSelectionDiv = document.getElementById(`${prefix}-file-selection`);
+    if (fileSelectionDiv) {
+      fileSelectionDiv.style.display = files.length > 0 ? "block" : "none";
+
+      if (files.length > 0) {
+        // Setup searchable dropdown
+        this.setupUnifiedExcelFileDropdown(sourceKey);
+
+        // Auto-select if only 1 file
+        if (files.length === 1 && !this.unified[sourceKey].selectedExcelFile) {
+          this.selectUnifiedExcelFile(sourceKey, files[0].id);
+        }
+      }
+    }
+  }
+
+  /**
+   * Setup searchable dropdown for unified Excel file selection
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   */
+  setupUnifiedExcelFileDropdown(sourceKey) {
+    const source = sourceKey === "sourceA" ? "a" : "b";
+    const prefix = `source-${source}`;
+    const files = this.unified[sourceKey].excelFiles;
+    const selectedId = this.unified[sourceKey].selectedExcelFile?.id;
+
+    const input = document.getElementById(`${prefix}-file-search`);
+    const dropdown = document.getElementById(`${prefix}-file-dropdown`);
+
+    if (!input || !dropdown) return;
+
+    // Set input value if file is selected
+    if (selectedId) {
+      const selectedFile = files.find((f) => f.id === selectedId);
+      if (selectedFile) {
+        input.value = selectedFile.file.name;
+      }
+    } else {
+      input.value = "";
+    }
+
+    let highlightedIndex = -1;
+
+    const renderOptions = (filter = "") => {
+      const filtered = files.filter((f) => f.file.name.toLowerCase().includes(filter.toLowerCase()));
+
+      if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-empty">No files match</div>';
+        return;
+      }
+
+      dropdown.innerHTML = filtered
+        .map(
+          (f, i) => `
+        <div class="dropdown-option ${f.id === selectedId ? "selected" : ""}" data-file-id="${f.id}" data-index="${i}">
+          ${f.file.name}
+        </div>
+      `
+        )
+        .join("");
+
+      // Bind click handlers
+      dropdown.querySelectorAll(".dropdown-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const fileId = opt.dataset.fileId;
+          this.selectUnifiedExcelFile(sourceKey, fileId);
+          dropdown.style.display = "none";
+        });
+      });
+    };
+
+    // Input events
+    input.addEventListener("focus", () => {
+      renderOptions(input.value);
+      dropdown.style.display = "block";
+      highlightedIndex = -1;
+    });
+
+    input.addEventListener("input", () => {
+      renderOptions(input.value);
+      dropdown.style.display = "block";
+      highlightedIndex = -1;
+    });
+
+    input.addEventListener("blur", () => {
+      // Delay to allow click on option
+      setTimeout(() => {
+        dropdown.style.display = "none";
+      }, 200);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      const options = dropdown.querySelectorAll(".dropdown-option");
+      if (options.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        highlightedIndex = Math.min(highlightedIndex + 1, options.length - 1);
+        updateHighlighting(options);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        highlightedIndex = Math.max(highlightedIndex - 1, 0);
+        updateHighlighting(options);
+      } else if (e.key === "Enter" && highlightedIndex >= 0) {
+        e.preventDefault();
+        const fileId = options[highlightedIndex].dataset.fileId;
+        this.selectUnifiedExcelFile(sourceKey, fileId);
+        dropdown.style.display = "none";
+        input.blur();
+      } else if (e.key === "Escape") {
+        dropdown.style.display = "none";
+        input.blur();
+      }
+    });
+
+    const updateHighlighting = (options) => {
+      options.forEach((opt, i) => {
+        opt.classList.toggle("highlighted", i === highlightedIndex);
+        if (i === highlightedIndex) {
+          opt.scrollIntoView({ block: "nearest" });
+        }
+      });
+    };
+  }
+
+  /**
+   * Select a file for comparison in unified mode
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   * @param {string} fileId - ID of file to select
+   */
+  selectUnifiedExcelFile(sourceKey, fileId) {
+    const file = this.unified[sourceKey].excelFiles.find((f) => f.id === fileId);
+    if (!file) return;
+
+    this.unified[sourceKey].selectedExcelFile = file;
+    this.unified[sourceKey].file = file.file; // For backward compat
+    this.unified[sourceKey].parsedData = null; // Will be parsed on load
+    this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].data = null;
+
+    // Update input display
+    const source = sourceKey === "sourceA" ? "a" : "b";
+    const input = document.getElementById(`source-${source}-file-search`);
+    if (input) {
+      input.value = file.file.name;
+    }
 
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+  }
+
+  // Legacy function for backward compatibility
+  async handleUnifiedFileSelection(source, file) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    await this.handleUnifiedExcelFileSelection(sourceKey, [file]);
+  }
+
+  // Legacy function for backward compatibility
+  removeUnifiedFile(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    this.clearUnifiedExcelFiles(sourceKey);
   }
 
   /**
@@ -5529,7 +5951,7 @@ class CompareConfigTool extends BaseTool {
         return !!config.sql && config.sql.trim().length > 0;
       }
     } else if (config.type === "excel") {
-      return !!config.file;
+      return !!config.selectedExcelFile;
     }
 
     return false;
@@ -5683,13 +6105,18 @@ class CompareConfigTool extends BaseTool {
       };
       return await UnifiedDataService.fetchData(sourceConfig);
     } else if (config.type === "excel") {
+      // Phase 2: Use selectedExcelFile from multi-file upload
+      const excelFile = config.selectedExcelFile?.file;
+      if (!excelFile) {
+        throw new Error("No Excel file selected");
+      }
       // Parse the file if not already parsed
       if (!config.parsedData) {
-        config.parsedData = await FileParser.parseFile(config.file);
+        config.parsedData = await FileParser.parseFile(excelFile);
       }
       return await UnifiedDataService.fetchData({
         type: SourceType.EXCEL,
-        file: config.file,
+        file: excelFile,
         parsedData: config.parsedData,
       });
     }
