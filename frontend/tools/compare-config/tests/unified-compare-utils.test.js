@@ -10,6 +10,9 @@ import {
   createSourceBConfigFromSourceA,
   getSourceBDisabledFieldsForFollowMode,
   validateFieldSelection,
+  isMixedMode,
+  findCommonFields,
+  validateMixedModeConfig,
 } from '../lib/unified-compare-utils.js';
 
 describe('UnifiedCompareUtils', () => {
@@ -354,6 +357,185 @@ describe('UnifiedCompareUtils', () => {
     it('returns valid for position matching with only compare fields', () => {
       const result = validateFieldSelection([], ['name', 'value'], 'position');
       expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('isMixedMode', () => {
+    it('returns true for Oracle vs Excel', () => {
+      expect(isMixedMode('oracle', 'excel')).toBe(true);
+    });
+
+    it('returns true for Excel vs Oracle', () => {
+      expect(isMixedMode('excel', 'oracle')).toBe(true);
+    });
+
+    it('returns false for Oracle vs Oracle', () => {
+      expect(isMixedMode('oracle', 'oracle')).toBe(false);
+    });
+
+    it('returns false for Excel vs Excel', () => {
+      expect(isMixedMode('excel', 'excel')).toBe(false);
+    });
+
+    it('returns false if source A is null', () => {
+      expect(isMixedMode(null, 'excel')).toBe(false);
+    });
+
+    it('returns false if source B is null', () => {
+      expect(isMixedMode('oracle', null)).toBe(false);
+    });
+  });
+
+  describe('findCommonFields', () => {
+    it('finds common fields with exact case match', () => {
+      const result = findCommonFields(['ID', 'NAME', 'VALUE'], ['ID', 'NAME', 'STATUS']);
+      expect(result.common).toEqual(['ID', 'NAME']);
+      expect(result.onlyInA).toEqual(['VALUE']);
+      expect(result.onlyInB).toEqual(['STATUS']);
+    });
+
+    it('finds common fields with case-insensitive match', () => {
+      const result = findCommonFields(['ID', 'Name', 'VALUE'], ['id', 'name', 'status']);
+      expect(result.common).toEqual(['ID', 'Name']);
+      expect(result.onlyInA).toEqual(['VALUE']);
+      expect(result.onlyInB).toEqual(['status']);
+    });
+
+    it('returns empty common when no overlap', () => {
+      const result = findCommonFields(['A', 'B'], ['C', 'D']);
+      expect(result.common).toEqual([]);
+      expect(result.onlyInA).toEqual(['A', 'B']);
+      expect(result.onlyInB).toEqual(['C', 'D']);
+    });
+
+    it('handles null headersA', () => {
+      const result = findCommonFields(null, ['A', 'B']);
+      expect(result.common).toEqual([]);
+      expect(result.onlyInA).toEqual([]);
+      expect(result.onlyInB).toEqual(['A', 'B']);
+    });
+
+    it('handles null headersB', () => {
+      const result = findCommonFields(['A', 'B'], null);
+      expect(result.common).toEqual([]);
+      expect(result.onlyInA).toEqual(['A', 'B']);
+      expect(result.onlyInB).toEqual([]);
+    });
+
+    it('handles empty arrays', () => {
+      const result = findCommonFields([], []);
+      expect(result.common).toEqual([]);
+      expect(result.onlyInA).toEqual([]);
+      expect(result.onlyInB).toEqual([]);
+    });
+
+    it('returns all common when headers are identical', () => {
+      const result = findCommonFields(['A', 'B', 'C'], ['A', 'B', 'C']);
+      expect(result.common).toEqual(['A', 'B', 'C']);
+      expect(result.onlyInA).toEqual([]);
+      expect(result.onlyInB).toEqual([]);
+    });
+  });
+
+  describe('validateMixedModeConfig', () => {
+    const oracleSourceWithHeaders = {
+      type: 'oracle',
+      headers: ['ID', 'NAME', 'VALUE', 'STATUS'],
+    };
+
+    const excelSourceWithHeaders = {
+      type: 'excel',
+      headers: ['ID', 'NAME', 'DESCRIPTION', 'AMOUNT'],
+    };
+
+    it('returns valid for Oracle vs Excel with common fields', () => {
+      const result = validateMixedModeConfig(oracleSourceWithHeaders, excelSourceWithHeaders);
+      expect(result.valid).toBe(true);
+      expect(result.commonFields).toEqual(['ID', 'NAME']);
+    });
+
+    it('returns valid for Excel vs Oracle with common fields', () => {
+      const result = validateMixedModeConfig(excelSourceWithHeaders, oracleSourceWithHeaders);
+      expect(result.valid).toBe(true);
+      expect(result.commonFields).toEqual(['ID', 'NAME']);
+    });
+
+    it('returns error for non-mixed mode (Oracle vs Oracle)', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: ['A'] },
+        { type: 'oracle', headers: ['A'] }
+      );
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Not a mixed mode');
+    });
+
+    it('returns error for non-mixed mode (Excel vs Excel)', () => {
+      const result = validateMixedModeConfig(
+        { type: 'excel', headers: ['A'] },
+        { type: 'excel', headers: ['A'] }
+      );
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Not a mixed mode');
+    });
+
+    it('returns error when source A has no headers', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: [] },
+        excelSourceWithHeaders
+      );
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Source A has no columns');
+    });
+
+    it('returns error when source B has no headers', () => {
+      const result = validateMixedModeConfig(oracleSourceWithHeaders, { type: 'excel', headers: [] });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Source B has no columns');
+    });
+
+    it('returns error when no common fields exist', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: ['A', 'B', 'C'] },
+        { type: 'excel', headers: ['X', 'Y', 'Z'] }
+      );
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('No common fields');
+      expect(result.error).toContain('A, B, C');
+      expect(result.error).toContain('X, Y, Z');
+    });
+
+    it('returns warning when mismatch ratio is high', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: ['ID', 'A1', 'A2', 'A3', 'A4'] },
+        { type: 'excel', headers: ['ID', 'B1', 'B2', 'B3', 'B4'] }
+      );
+      expect(result.valid).toBe(true);
+      expect(result.warning).toContain('Only 1 common fields');
+      expect(result.commonFields).toEqual(['ID']);
+    });
+
+    it('does not return warning when mismatch ratio is acceptable', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: ['ID', 'NAME', 'VALUE'] },
+        { type: 'excel', headers: ['ID', 'NAME', 'STATUS'] }
+      );
+      expect(result.valid).toBe(true);
+      expect(result.warning).toBeUndefined();
+      expect(result.commonFields).toEqual(['ID', 'NAME']);
+    });
+
+    it('handles case-insensitive header matching', () => {
+      const result = validateMixedModeConfig(
+        { type: 'oracle', headers: ['ID', 'Name', 'VALUE'] },
+        { type: 'excel', headers: ['id', 'name', 'status'] }
+      );
+      expect(result.valid).toBe(true);
+      expect(result.commonFields).toEqual(['ID', 'Name']);
+    });
+
+    it('returns error for null source config', () => {
+      const result = validateMixedModeConfig(null, excelSourceWithHeaders);
+      expect(result.valid).toBe(false);
     });
   });
 });

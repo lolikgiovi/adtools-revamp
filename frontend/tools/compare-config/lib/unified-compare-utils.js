@@ -147,3 +147,91 @@ export function validateFieldSelection(selectedPkFields, selectedCompareFields, 
 
   return { valid: true };
 }
+
+/**
+ * Checks if the comparison mode is mixed (Oracle + Excel in either direction)
+ * @param {string|null} sourceAType - 'oracle' or 'excel' or null
+ * @param {string|null} sourceBType - 'oracle' or 'excel' or null
+ * @returns {boolean}
+ */
+export function isMixedMode(sourceAType, sourceBType) {
+  if (!sourceAType || !sourceBType) return false;
+  return (
+    (sourceAType === 'oracle' && sourceBType === 'excel') ||
+    (sourceAType === 'excel' && sourceBType === 'oracle')
+  );
+}
+
+/**
+ * Finds common fields between two sets of headers (case-insensitive)
+ * @param {string[]} headersA - Headers from Source A
+ * @param {string[]} headersB - Headers from Source B
+ * @returns {{common: string[], onlyInA: string[], onlyInB: string[]}}
+ */
+export function findCommonFields(headersA, headersB) {
+  if (!headersA || !headersB) {
+    return { common: [], onlyInA: headersA || [], onlyInB: headersB || [] };
+  }
+
+  const normalizedA = headersA.map((h) => h.toLowerCase());
+  const normalizedB = headersB.map((h) => h.toLowerCase());
+  const normalizedBSet = new Set(normalizedB);
+  const normalizedASet = new Set(normalizedA);
+
+  const common = headersA.filter((h) => normalizedBSet.has(h.toLowerCase()));
+  const onlyInA = headersA.filter((h) => !normalizedBSet.has(h.toLowerCase()));
+  const onlyInB = headersB.filter((h) => !normalizedASet.has(h.toLowerCase()));
+
+  return { common, onlyInA, onlyInB };
+}
+
+/**
+ * Validates mixed mode configuration (Oracle + Excel).
+ * Checks if both sources have headers available and if there are common fields.
+ *
+ * @param {Object} sourceAConfig - Source A configuration with type and headers
+ * @param {Object} sourceBConfig - Source B configuration with type and headers
+ * @returns {{valid: boolean, warning?: string, error?: string, commonFields?: string[]}}
+ */
+export function validateMixedModeConfig(sourceAConfig, sourceBConfig) {
+  // Must be mixed mode
+  if (!isMixedMode(sourceAConfig?.type, sourceBConfig?.type)) {
+    return { valid: false, error: 'Not a mixed mode configuration (Oracle + Excel)' };
+  }
+
+  const headersA = sourceAConfig.headers;
+  const headersB = sourceBConfig.headers;
+
+  // Both sources must have headers
+  if (!headersA || headersA.length === 0) {
+    return { valid: false, error: 'Source A has no columns/headers available' };
+  }
+
+  if (!headersB || headersB.length === 0) {
+    return { valid: false, error: 'Source B has no columns/headers available' };
+  }
+
+  // Find common fields
+  const { common, onlyInA, onlyInB } = findCommonFields(headersA, headersB);
+
+  if (common.length === 0) {
+    return {
+      valid: false,
+      error: `No common fields between Oracle and Excel sources. Source A has: ${headersA.slice(0, 5).join(', ')}${headersA.length > 5 ? '...' : ''}. Source B has: ${headersB.slice(0, 5).join(', ')}${headersB.length > 5 ? '...' : ''}.`,
+    };
+  }
+
+  // Valid but with warning if significant mismatch
+  const totalFields = new Set([...headersA, ...headersB]).size;
+  const mismatchRatio = (onlyInA.length + onlyInB.length) / totalFields;
+
+  if (mismatchRatio > 0.5) {
+    return {
+      valid: true,
+      warning: `Only ${common.length} common fields found out of ${totalFields} total fields. ${onlyInA.length} fields only in Source A, ${onlyInB.length} only in Source B.`,
+      commonFields: common,
+    };
+  }
+
+  return { valid: true, commonFields: common };
+}

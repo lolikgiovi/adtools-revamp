@@ -25,6 +25,8 @@ import {
   validateOracleToOracleConfig,
   createSourceBConfigFromSourceA,
   getSourceBDisabledFieldsForFollowMode,
+  isMixedMode,
+  validateMixedModeConfig,
 } from "./lib/unified-compare-utils.js";
 
 class CompareConfigTool extends BaseTool {
@@ -6017,6 +6019,36 @@ class CompareConfigTool extends BaseTool {
       this.unified.sourceB.dataLoaded = true;
       this.updateProgressStep("env2", "done", `${dataB.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("B");
+
+      // Phase 2.3: Validate mixed mode (Oracle + Excel) configuration
+      const isMixedModeComparison = isMixedMode(
+        this.unified.sourceA.type,
+        this.unified.sourceB.type
+      );
+
+      if (isMixedModeComparison) {
+        this.updateProgressStep("fetch", "active", "Validating field compatibility...");
+        const mixedValidation = validateMixedModeConfig(
+          { type: this.unified.sourceA.type, headers: dataA.headers },
+          { type: this.unified.sourceB.type, headers: dataB.headers }
+        );
+
+        if (!mixedValidation.valid) {
+          this.hideProgress();
+          this.eventBus.emit("notification:show", {
+            type: "error",
+            message: mixedValidation.error,
+          });
+          return;
+        }
+
+        if (mixedValidation.warning) {
+          this.eventBus.emit("notification:show", {
+            type: "warning",
+            message: mixedValidation.warning,
+          });
+        }
+      }
 
       // Reconcile columns
       this.updateProgressStep("fetch", "active", "Reconciling fields...");

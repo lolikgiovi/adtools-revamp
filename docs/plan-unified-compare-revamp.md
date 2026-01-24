@@ -149,13 +149,17 @@ The enhanced Excel config applies to **any source set to Excel**, whether Source
    - Files restored on init via `restoreCachedUnifiedExcelFiles()`
    - Helper: `_getMimeType(filename)` for MIME type detection
 
-#### 2.3 Pre-Load Validation for Mixed Mode (Oracle + Excel)
-**Status**: Not yet implemented
-
-**Planned Changes**:
-- Validate Excel file has columns matching Oracle query result
-- Works for both directions (Oracle vs Excel, Excel vs Oracle)
-- Show warning if no common fields found
+#### 2.3 Pre-Load Validation for Mixed Mode (Oracle + Excel) ✅
+**Implementation**:
+- Created `isMixedMode()` utility to detect Oracle+Excel or Excel+Oracle modes
+- Created `findCommonFields()` utility for case-insensitive field matching
+- Created `validateMixedModeConfig()` utility that validates:
+  - Both sources have headers available
+  - At least one common field exists between sources
+  - Returns warning if significant mismatch (>50% fields don't match)
+- Updated `loadUnifiedData()` to call validation after both sources loaded
+- Shows error if no common fields, warning if significant mismatch
+- 24 new unit tests covering all new utility functions
 
 ---
 
@@ -299,7 +303,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 2. **Phase 4.1** - New Comparison reset logic (foundation for all modes)
 3. ~~**Phase 1.1 & 1.2** - Oracle vs Oracle improvements (Source B follows A)~~ ✅ DONE
 4. ~~**Phase 2.1 & 2.2** - Enhanced Excel upload (symmetric for both sources)~~ ✅ DONE
-5. **Phase 2.3** - Mixed mode validation (Oracle + Excel field matching)
+5. ~~**Phase 2.3** - Mixed mode validation (Oracle + Excel field matching)~~ ✅ DONE
 6. ~~**Phase 3.2** - IndexedDB store for unified Excel files~~ ✅ DONE (part of Phase 2)
 7. **Phase 5** - UI/UX polish
 
@@ -307,7 +311,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Testing Checklist
 
-### Unit Tests (Phase 1) ✅
+### Unit Tests (Phase 1 & 2.3) ✅
 - [x] `getComparisonMode()` - 7 tests
 - [x] `isSourceBFollowMode()` - 6 tests
 - [x] `syncPkFieldsToCompareFields()` - 9 tests
@@ -315,8 +319,11 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [x] `createSourceBConfigFromSourceA()` - 3 tests
 - [x] `getSourceBDisabledFieldsForFollowMode()` - 2 tests
 - [x] `validateFieldSelection()` - 7 tests
+- [x] `isMixedMode()` - 6 tests
+- [x] `findCommonFields()` - 7 tests
+- [x] `validateMixedModeConfig()` - 11 tests
 
-**Total: 44 unit tests passing**
+**Total: 68 unit tests passing**
 
 ### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
@@ -335,7 +342,8 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [ ] Can select folder (Web) for Source B
 - [ ] File selection dropdown appears when multiple files
 - [ ] Auto-selects when only 1 file uploaded
-- [ ] Validation warns if no common fields
+- [ ] **Validation shows error if no common fields between Oracle and Excel** (Phase 2.3)
+- [ ] **Validation shows warning if significant field mismatch (>50%)** (Phase 2.3)
 - [ ] Files persist in IndexedDB across sessions
 - [ ] New Comparison keeps cached files, clears selection
 
@@ -346,7 +354,8 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [ ] Can select folder for Source A
 - [ ] File selection dropdown works for Source A
 - [ ] Auto-selects when only 1 file uploaded
-- [ ] Validation warns if no common fields
+- [ ] **Validation shows error if no common fields between Excel and Oracle** (Phase 2.3)
+- [ ] **Validation shows warning if significant field mismatch (>50%)** (Phase 2.3)
 - [ ] Files persist in IndexedDB across sessions
 - [ ] New Comparison keeps cached files, clears selection
 
