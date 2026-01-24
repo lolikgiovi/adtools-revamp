@@ -441,4 +441,261 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | Phase 5.2: Loading States | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.3: Error Handling | ✅ COMPLETED | 2026-01-24 |
 
-**Overall Progress**: 7/7 sub-phases completed (100%) 🎉
+**Overall Progress**: 7/11 sub-phases completed (64%)
+
+---
+
+## Phase 6: Unify Diff Engine (Refactoring)
+
+### Problem Statement
+
+Currently there are **two diff engines** in the codebase:
+
+| Engine | Location | Used By |
+|--------|----------|---------|
+| **Rust Diff Engine** | `tauri/src/oracle.rs` → `compare_data()` | Schema/Table mode, Raw SQL mode |
+| **JavaScript Diff Engine** | `lib/diff-engine.js` → `compareDatasets()` | Excel Compare mode, Unified Compare mode |
+
+### Issues with Dual Engines
+
+| Issue | Impact |
+|-------|--------|
+| **Maintenance burden** | Bug fixes and features must be implemented twice |
+| **Inconsistent behavior** | Subtle differences in comparison logic between modes |
+| **Code duplication** | Similar logic in two different languages |
+| **Testing overhead** | Need to test both engines for same scenarios |
+| **Feature disparity** | JS engine has richer features (character-level diff, word diff, adaptive thresholds) |
+
+### Proposed Solution
+
+**Unify all comparison logic in the JavaScript diff engine.**
+
+```
+CURRENT (Dual Engine):
+┌─────────────────────────────────────────────────────────────────┐
+│  Schema/Table Mode     Raw SQL Mode        Unified/Excel Mode   │
+│  ────────────────     ────────────        ──────────────────   │
+│  Oracle ──┐           Oracle ──┐          Any Source ──┐        │
+│           ├─► Rust              ├─► Rust               │        │
+│  Oracle ──┘           Oracle ──┘          Any Source ──┼─► JS   │
+└─────────────────────────────────────────────────────────────────┘
+
+PROPOSED (Single Engine):
+┌─────────────────────────────────────────────────────────────────┐
+│  ALL MODES                                                       │
+│  ─────────                                                       │
+│  Any Source ──► fetch_data() ──┐                                │
+│                                 ├─► JS compareDatasets()        │
+│  Any Source ──► fetch_data() ──┘                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Plan
+
+#### 6.1 Refactor Schema/Table Mode to Use JS Diff Engine
+
+**File:** `frontend/tools/compare-config/main.js`
+
+Update `executeComparison()` method:
+
+```javascript
+// BEFORE: Uses Rust compare_configurations
+async executeComparison() {
+  const result = await CompareConfigService.compareConfigurations(request);
+  this.results["schema-table"] = result;
+}
+
+// AFTER: Uses fetch_oracle_data + JS compareDatasets
+async executeComparison() {
+  // Step 1: Fetch data from both environments
+  const dataEnv1 = await CompareConfigService.fetchOracleData({
+    connection_name: this.env1.connection.name,
+    config: this.env1.connection,
+    mode: 'table',
+    owner: this.schema,
+    table_name: this.table,
+    where_clause: this.whereClause || null,
+    fields: this.selectedFields,
+    max_rows: this.maxRows,
+  });
+
+  const dataEnv2 = await CompareConfigService.fetchOracleData({
+    connection_name: this.env2.connection.name,
+    config: this.env2.connection,
+    mode: 'table',
+    owner: this.schema,
+    table_name: this.table,
+    where_clause: this.whereClause || null,
+    fields: this.selectedFields,
+    max_rows: this.maxRows,
+  });
+
+  // Step 2: Compare using JS diff engine
+  const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+    keyColumns: this.customPrimaryKey.length > 0
+      ? this.customPrimaryKey
+      : this.metadata.primary_key,
+    fields: this.selectedFields,
+    normalize: false,
+    matchMode: 'key',
+  });
+
+  // Step 3: Convert to view format
+  const viewResult = convertToViewFormat(jsResult, {
+    env1Name: this.env1.connection.name,
+    env2Name: this.env2.connection.name,
+    tableName: `${this.schema}.${this.table}`,
+    keyColumns: this.customPrimaryKey,
+  });
+
+  this.results["schema-table"] = viewResult;
+}
+```
+
+#### 6.2 Refactor Raw SQL Mode to Use JS Diff Engine
+
+**File:** `frontend/tools/compare-config/main.js`
+
+Update `executeRawSqlComparison()` method:
+
+```javascript
+// BEFORE: Uses Rust compare_raw_sql
+async executeRawSqlComparison() {
+  const result = await CompareConfigService.compareRawSql(request);
+  this.results["raw-sql"] = result;
+}
+
+// AFTER: Uses fetch_oracle_data + JS compareDatasets
+async executeRawSqlComparison() {
+  // Step 1: Fetch data from both environments
+  const dataEnv1 = await CompareConfigService.fetchOracleData({
+    connection_name: this.rawenv1.connection.name,
+    config: this.rawenv1.connection,
+    mode: 'raw-sql',
+    sql: this.rawSql,
+    max_rows: this.rawMaxRows,
+  });
+
+  const dataEnv2 = await CompareConfigService.fetchOracleData({
+    connection_name: this.rawenv2.connection.name,
+    config: this.rawenv2.connection,
+    mode: 'raw-sql',
+    sql: this.rawSql,
+    max_rows: this.rawMaxRows,
+  });
+
+  // Step 2: Determine primary key columns
+  const pkColumns = this.rawPrimaryKey
+    ? this.rawPrimaryKey.split(',').map(s => s.trim())
+    : [dataEnv1.headers[0]]; // Default to first column
+
+  // Step 3: Compare using JS diff engine
+  const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+    keyColumns: pkColumns,
+    fields: dataEnv1.headers,
+    normalize: false,
+    matchMode: 'key',
+  });
+
+  // Step 4: Convert to view format
+  const viewResult = convertToViewFormat(jsResult, {
+    env1Name: this.rawenv1.connection.name,
+    env2Name: this.rawenv2.connection.name,
+    tableName: 'Raw SQL Query',
+    keyColumns: pkColumns,
+  });
+
+  this.results["raw-sql"] = viewResult;
+}
+```
+
+#### 6.3 Deprecate Rust Comparison Commands
+
+**File:** `tauri/src/oracle.rs`
+
+Mark as deprecated (keep for backward compatibility initially):
+
+```rust
+/// @deprecated Use fetch_oracle_data + frontend JS comparison instead
+#[tauri::command]
+pub fn compare_configurations(request: CompareRequest) -> Result<CompareResult, String>
+
+/// @deprecated Use fetch_oracle_data + frontend JS comparison instead
+#[tauri::command]
+pub fn compare_raw_sql(request: RawSqlRequest) -> Result<CompareResult, String>
+```
+
+#### 6.4 Remove Legacy Tabs (Optional - Future)
+
+Once the unified mode is stable and all comparisons use JS diff engine:
+
+1. Remove "Schema/Table" and "Raw SQL" tabs from UI
+2. Keep only "Unified" tab (covers all use cases)
+3. Remove deprecated Rust comparison commands
+4. Clean up legacy state management code
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `main.js` | Refactor `executeComparison()` and `executeRawSqlComparison()` |
+| `service.js` | Ensure `fetchOracleData()` is available (already exists for unified mode) |
+| `lib/diff-adapter.js` | Add `convertToViewFormat()` if not already present |
+| `tauri/src/oracle.rs` | Mark `compare_configurations` and `compare_raw_sql` as deprecated |
+
+### Benefits After Refactoring
+
+| Benefit | Description |
+|---------|-------------|
+| **Single source of truth** | All comparison logic in `diff-engine.js` |
+| **Richer features everywhere** | Character-level diff, word diff available in all modes |
+| **Easier maintenance** | One place to fix bugs or add features |
+| **Consistent behavior** | Same comparison logic across all source combinations |
+| **Smaller Rust binary** | Remove comparison logic from backend |
+
+### Migration Strategy
+
+1. **Phase 6.1-6.2**: Refactor existing modes to use JS engine (non-breaking, feature flag)
+2. **Testing**: Verify parity with Rust engine results
+3. **Phase 6.3**: Mark Rust commands as deprecated
+4. **Phase 6.4**: Remove legacy code in future release
+
+### Testing Checklist
+
+#### Unit Tests
+- [ ] `convertToViewFormat()` correctly maps JS diff result to view format
+- [ ] Key-based matching produces same results as Rust engine
+- [ ] Character-level diff works on Schema/Table mode results
+- [ ] Character-level diff works on Raw SQL mode results
+
+#### Integration Tests
+- [ ] Schema/Table comparison with JS engine matches Rust results
+- [ ] Raw SQL comparison with JS engine matches Rust results
+- [ ] Progress overlay shows correct steps for legacy modes
+- [ ] Error handling works correctly for Oracle errors
+
+#### Regression Tests
+- [ ] Existing Unified mode still works
+- [ ] Existing Excel Compare mode still works
+- [ ] View switching (Grid, Cards, Detail) works with all modes
+- [ ] Export (JSON, CSV) works with all modes
+
+---
+
+## Updated Progress Summary
+
+| Phase | Status | Completion Date |
+|-------|--------|-----------------|
+| Phase 1: Oracle vs Oracle | ✅ COMPLETED | 2026-01-24 |
+| Phase 2: Mixed Mode | ✅ COMPLETED | 2026-01-24 |
+| Phase 3: Excel vs Excel | ✅ COMPLETED | 2026-01-24 |
+| Phase 4: Reset Behavior | ✅ COMPLETED | 2026-01-24 |
+| Phase 5.1: Visual Feedback | ✅ COMPLETED | 2026-01-24 |
+| Phase 5.2: Loading States | ✅ COMPLETED | 2026-01-24 |
+| Phase 5.3: Error Handling | ✅ COMPLETED | 2026-01-24 |
+| Phase 6.1: Schema/Table JS Engine | ⬚ TODO | - |
+| Phase 6.2: Raw SQL JS Engine | ⬚ TODO | - |
+| Phase 6.3: Deprecate Rust Commands | ⬚ TODO | - |
+| Phase 6.4: Remove Legacy Tabs | ⬚ FUTURE | - |
+
+**Overall Progress**: 7/11 sub-phases completed (64%)
