@@ -255,6 +255,15 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
 
+                    <!-- Inline Validation Message -->
+                    <div class="inline-validation" id="source-a-validation" style="display: none;">
+                        <div class="validation-icon"></div>
+                        <div class="validation-content">
+                            <span class="validation-message-text"></span>
+                            <span class="validation-hint"></span>
+                        </div>
+                    </div>
+
                     <!-- Data Preview -->
                     <div class="data-preview" id="source-a-preview" style="display: none;">
                         <div class="preview-header">
@@ -392,6 +401,15 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
 
+                    <!-- Inline Validation Message -->
+                    <div class="inline-validation" id="source-b-validation" style="display: none;">
+                        <div class="validation-icon"></div>
+                        <div class="validation-content">
+                            <span class="validation-message-text"></span>
+                            <span class="validation-hint"></span>
+                        </div>
+                    </div>
+
                     <!-- Data Preview -->
                     <div class="data-preview" id="source-b-preview" style="display: none;">
                         <div class="preview-header">
@@ -400,6 +418,28 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Unified Inline Error Banner (shown between panels and Load button) -->
+            <div class="unified-error-banner" id="unified-error-banner" style="display: none;">
+                <div class="error-banner-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                </div>
+                <div class="error-banner-content">
+                    <strong class="error-banner-title"></strong>
+                    <p class="error-banner-message"></p>
+                    <p class="error-banner-hint"></p>
+                </div>
+                <button class="btn btn-ghost btn-xs error-banner-dismiss" title="Dismiss">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
 
             <!-- Load Data Button -->

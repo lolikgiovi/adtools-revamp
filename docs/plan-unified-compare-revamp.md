@@ -284,15 +284,45 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
    - `getVisibleStepsForMode()` - Returns which steps to show based on mode
    - `getStepLabel()` - Gets label for a step ID
 
-#### 5.3 Error Handling Improvements
-**Status**: Not yet implemented
+#### 5.3 Error Handling Improvements ✅
+**Status**: COMPLETED
 
-**Planned Changes**:
-1. Clear error messages with actionable guidance:
-   - "Table X.Y not found in Source B. Please verify the table exists or select a different connection."
-   - "No common fields between sources. Ensure both sources have matching column names."
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `lib/unified-compare-utils.js` - Added error handling utilities
+> - `tests/unified-compare-utils.test.js` - Added 36 new tests (148 total)
+> - `main.js` - Added error banner methods, updated error handling
+> - `template.js` - Added inline validation and error banner elements
+> - `styles.css` - Added inline-validation and unified-error-banner styles
 
-2. Inline validation feedback (not just toast messages)
+**Implementation**:
+1. **Actionable Error Messages**:
+   - Created `UnifiedErrorType` enum for categorizing errors
+   - Created `getActionableErrorMessage()` utility that returns title, message, and actionable hint
+   - Supports: TABLE_NOT_FOUND, SCHEMA_NOT_FOUND, CONNECTION_FAILED, NO_COMMON_FIELDS, NO_DATA, FILE_PARSE_ERROR, VALIDATION_ERROR
+   - Created `parseOracleError()` to convert Oracle error codes (ORA-xxxxx) to user-friendly messages
+   - Created `formatFieldList()` for displaying field lists with truncation
+
+2. **Inline Validation UI**:
+   - Added inline validation message elements to both source panels
+   - Created `validateSourceConfig()` utility to determine validation state
+   - Added `showUnifiedSourceValidation()` / `hideUnifiedSourceValidation()` methods
+   - Shows info/warning/error states with appropriate styling
+
+3. **Error Banner**:
+   - Added unified error banner between source panels and Load button
+   - Shows title, detailed message, and actionable hint
+   - Supports error and warning variants
+   - Dismissible with X button
+   - Auto-hides when starting new data load
+
+4. **Improved Error Flow**:
+   - Table not found in Source B → Shows banner with table name and hint to verify/change connection
+   - Schema not accessible → Shows banner with Oracle error details
+   - No common fields → Shows banner with field lists from both sources
+   - Field mismatch warning → Shows warning banner instead of toast
+   - Generic errors → Parsed for Oracle codes, shown with friendly messages
 
 ---
 
@@ -300,12 +330,12 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 | File | Changes |
 |------|---------|
-| `template.js` | Enhanced Excel config sections for both sources, follow mode badge, unified progress overlay |
-| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select with animation, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()`, unified progress methods, upload loading states |
-| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown, follow-mode-badge, PK auto-add animations, upload loading indicator |
+| `template.js` | Enhanced Excel config sections for both sources, follow mode badge, unified progress overlay, inline validation elements, error banner |
+| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select with animation, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()`, unified progress methods, upload loading states, error banner methods |
+| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown, follow-mode-badge, PK auto-add animations, upload loading indicator, inline-validation, unified-error-banner |
 | `lib/indexed-db-manager.js` | New `UNIFIED_EXCEL_FILES` store with helper methods |
-| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions, `syncPkFieldsWithTracking()`, progress step utilities |
-| `tests/unified-compare-utils.test.js` | 112 unit tests |
+| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior, progress steps, error handling utilities (UnifiedErrorType, getActionableErrorMessage, parseOracleError, validateSourceConfig, formatFieldList) |
+| `tests/unified-compare-utils.test.js` | 148 unit tests |
 
 ---
 
@@ -323,7 +353,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Testing Checklist
 
-### Unit Tests (Phase 1, 2.3, 4 & 5.2) ✅
+### Unit Tests (Phase 1, 2.3, 4 & 5) ✅
 - [x] `getComparisonMode()` - 7 tests
 - [x] `isSourceBFollowMode()` - 6 tests
 - [x] `syncPkFieldsToCompareFields()` - 9 tests
@@ -341,8 +371,13 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [x] `getUnifiedProgressSteps()` - 4 tests
 - [x] `getVisibleStepsForMode()` - 5 tests
 - [x] `getStepLabel()` - 6 tests
+- [x] `UnifiedErrorType` - 4 tests
+- [x] `getActionableErrorMessage()` - 9 tests
+- [x] `formatFieldList()` - 6 tests
+- [x] `validateSourceConfig()` - 12 tests
+- [x] `parseOracleError()` - 9 tests
 
-**Total: 112 unit tests passing**
+**Total: 148 unit tests passing**
 
 ### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
@@ -404,6 +439,6 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | Phase 4: Reset Behavior | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.1: Visual Feedback | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.2: Loading States | ✅ COMPLETED | 2026-01-24 |
-| Phase 5.3: Error Handling | ⏳ Pending | - |
+| Phase 5.3: Error Handling | ✅ COMPLETED | 2026-01-24 |
 
-**Overall Progress**: 6/7 sub-phases completed (~86%)
+**Overall Progress**: 7/7 sub-phases completed (100%) 🎉

@@ -393,3 +393,230 @@ export function syncPkFieldsWithTracking(selectedPkFields, selectedCompareFields
     newlyAddedFields,
   };
 }
+
+// ============================================
+// Phase 5.3: Error Handling Utilities
+// ============================================
+
+/**
+ * Error types for unified compare mode
+ */
+export const UnifiedErrorType = {
+  TABLE_NOT_FOUND: 'table_not_found',
+  SCHEMA_NOT_FOUND: 'schema_not_found',
+  CONNECTION_FAILED: 'connection_failed',
+  NO_COMMON_FIELDS: 'no_common_fields',
+  NO_DATA: 'no_data',
+  FILE_PARSE_ERROR: 'file_parse_error',
+  VALIDATION_ERROR: 'validation_error',
+};
+
+/**
+ * Generates an actionable error message with guidance for resolution.
+ *
+ * @param {string} errorType - Type of error from UnifiedErrorType
+ * @param {Object} context - Context for the error (varies by type)
+ * @returns {{title: string, message: string, hint: string}}
+ */
+export function getActionableErrorMessage(errorType, context = {}) {
+  switch (errorType) {
+    case UnifiedErrorType.TABLE_NOT_FOUND:
+      return {
+        title: 'Table Not Found',
+        message: `Table "${context.schema}.${context.table}" does not exist in ${context.connectionName || 'Source B'}.`,
+        hint: 'Verify the table exists in the target database, or select a different connection.',
+      };
+
+    case UnifiedErrorType.SCHEMA_NOT_FOUND:
+      return {
+        title: 'Schema Not Accessible',
+        message: `Cannot access schema "${context.schema}" in ${context.connectionName || 'the connection'}.`,
+        hint: 'Check that the schema exists and the connection has permission to access it.',
+      };
+
+    case UnifiedErrorType.CONNECTION_FAILED:
+      return {
+        title: 'Connection Failed',
+        message: `Could not connect to ${context.connectionName || 'the database'}.`,
+        hint: context.errorDetail
+          ? `Error: ${context.errorDetail}. Check network connectivity and credentials.`
+          : 'Check network connectivity and ensure credentials are correct.',
+      };
+
+    case UnifiedErrorType.NO_COMMON_FIELDS:
+      return {
+        title: 'No Common Fields',
+        message: 'No matching column names found between the two sources.',
+        hint: `Source A has: ${formatFieldList(context.headersA)}. Source B has: ${formatFieldList(context.headersB)}. Ensure column names match (case-insensitive).`,
+      };
+
+    case UnifiedErrorType.NO_DATA:
+      return {
+        title: 'No Data Returned',
+        message: `${context.source || 'Source'} returned no rows.`,
+        hint: context.whereClause
+          ? `The WHERE clause "${context.whereClause}" may be filtering out all data. Try removing or adjusting it.`
+          : 'The table or query returned no data. Verify data exists in the source.',
+      };
+
+    case UnifiedErrorType.FILE_PARSE_ERROR:
+      return {
+        title: 'File Parse Error',
+        message: `Could not parse file "${context.fileName || 'the file'}".`,
+        hint: context.errorDetail || 'Ensure the file is a valid Excel (.xlsx, .xls) or CSV file.',
+      };
+
+    case UnifiedErrorType.VALIDATION_ERROR:
+      return {
+        title: 'Validation Error',
+        message: context.message || 'Configuration is invalid.',
+        hint: context.hint || 'Please check the configuration and try again.',
+      };
+
+    default:
+      return {
+        title: 'Error',
+        message: context.message || 'An unexpected error occurred.',
+        hint: context.hint || 'Please try again or contact support if the issue persists.',
+      };
+  }
+}
+
+/**
+ * Formats a field list for display, truncating if too long.
+ *
+ * @param {string[]} fields - Array of field names
+ * @param {number} maxDisplay - Maximum fields to show before truncating
+ * @returns {string}
+ */
+export function formatFieldList(fields, maxDisplay = 5) {
+  if (!fields || fields.length === 0) return '(none)';
+
+  if (fields.length <= maxDisplay) {
+    return fields.join(', ');
+  }
+
+  const displayed = fields.slice(0, maxDisplay).join(', ');
+  const remaining = fields.length - maxDisplay;
+  return `${displayed}, +${remaining} more`;
+}
+
+/**
+ * Determines inline validation state for a source configuration.
+ * Returns null if configuration is valid, or an error object if invalid.
+ *
+ * @param {Object} config - Source configuration
+ * @param {'A'|'B'} source - Which source is being validated
+ * @param {Object} otherSourceConfig - The other source's configuration (for follow mode)
+ * @returns {null|{type: string, message: string, hint: string}}
+ */
+export function validateSourceConfig(config, source, otherSourceConfig = null) {
+  if (!config.type) {
+    return null; // No type selected yet, not an error
+  }
+
+  if (config.type === 'oracle') {
+    if (!config.connection) {
+      return {
+        type: 'info',
+        message: 'Select a connection to continue.',
+        hint: null,
+      };
+    }
+
+    // For Source B in follow mode, connection is enough
+    if (source === 'B' && otherSourceConfig?.type === 'oracle') {
+      return null; // Valid in follow mode
+    }
+
+    if (config.queryMode === 'table') {
+      if (!config.schema) {
+        return {
+          type: 'info',
+          message: 'Select a schema to continue.',
+          hint: null,
+        };
+      }
+      if (!config.table) {
+        return {
+          type: 'info',
+          message: 'Select a table to continue.',
+          hint: null,
+        };
+      }
+    } else if (config.queryMode === 'sql') {
+      if (!config.sql || config.sql.trim().length === 0) {
+        return {
+          type: 'info',
+          message: 'Enter a SQL query to continue.',
+          hint: null,
+        };
+      }
+    }
+  } else if (config.type === 'excel') {
+    if (!config.excelFiles || config.excelFiles.length === 0) {
+      return {
+        type: 'info',
+        message: 'Upload Excel or CSV files to continue.',
+        hint: null,
+      };
+    }
+    if (!config.selectedExcelFile) {
+      return {
+        type: 'info',
+        message: 'Select a file from the list to compare.',
+        hint: null,
+      };
+    }
+  }
+
+  return null; // Valid
+}
+
+/**
+ * Parses Oracle error codes and returns a user-friendly message.
+ *
+ * @param {string} errorMessage - Raw error message
+ * @returns {{code: string|null, friendlyMessage: string}}
+ */
+export function parseOracleError(errorMessage) {
+  if (!errorMessage) {
+    return { code: null, friendlyMessage: 'An unknown error occurred.' };
+  }
+
+  const errorStr = String(errorMessage);
+
+  // Common Oracle error patterns
+  const oracleErrors = {
+    'ORA-12154': 'TNS name could not be resolved. Check the connection host/service name.',
+    'ORA-12514': 'Service name not found. Verify the service name is correct.',
+    'ORA-12541': 'No listener at the specified host/port. Check if the database is running.',
+    'ORA-12543': 'Connection refused. The database may be down or blocked by firewall.',
+    'ORA-01017': 'Invalid username or password.',
+    'ORA-28000': 'Account is locked. Contact your DBA.',
+    'ORA-00942': 'Table or view does not exist.',
+    'ORA-00904': 'Invalid column name in query.',
+    'ORA-01031': 'Insufficient privileges to perform this operation.',
+    'ORA-00955': 'Object already exists.',
+    'ORA-02291': 'Foreign key constraint violation.',
+    'ORA-00001': 'Unique constraint violated.',
+  };
+
+  for (const [code, message] of Object.entries(oracleErrors)) {
+    if (errorStr.includes(code)) {
+      return { code, friendlyMessage: message };
+    }
+  }
+
+  // Check for timeout patterns
+  if (errorStr.toLowerCase().includes('timeout')) {
+    return { code: 'TIMEOUT', friendlyMessage: 'Connection timed out. The database may be slow or unreachable.' };
+  }
+
+  // Check for network patterns
+  if (errorStr.toLowerCase().includes('network') || errorStr.toLowerCase().includes('socket')) {
+    return { code: 'NETWORK', friendlyMessage: 'Network error. Check your connection to the database.' };
+  }
+
+  return { code: null, friendlyMessage: errorStr };
+}

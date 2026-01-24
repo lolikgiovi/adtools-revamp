@@ -20,6 +20,11 @@ import {
   getUnifiedProgressSteps,
   getVisibleStepsForMode,
   getStepLabel,
+  UnifiedErrorType,
+  getActionableErrorMessage,
+  formatFieldList,
+  validateSourceConfig,
+  parseOracleError,
 } from '../lib/unified-compare-utils.js';
 
 describe('UnifiedCompareUtils', () => {
@@ -852,6 +857,320 @@ describe('UnifiedCompareUtils', () => {
 
     it('returns null for empty string', () => {
       expect(getStepLabel('')).toBeNull();
+    });
+  });
+
+  // ============================================
+  // Phase 5.3: Error Handling Utilities
+  // ============================================
+
+  describe('UnifiedErrorType', () => {
+    it('defines TABLE_NOT_FOUND error type', () => {
+      expect(UnifiedErrorType.TABLE_NOT_FOUND).toBe('table_not_found');
+    });
+
+    it('defines SCHEMA_NOT_FOUND error type', () => {
+      expect(UnifiedErrorType.SCHEMA_NOT_FOUND).toBe('schema_not_found');
+    });
+
+    it('defines NO_COMMON_FIELDS error type', () => {
+      expect(UnifiedErrorType.NO_COMMON_FIELDS).toBe('no_common_fields');
+    });
+
+    it('defines all expected error types', () => {
+      expect(UnifiedErrorType).toHaveProperty('TABLE_NOT_FOUND');
+      expect(UnifiedErrorType).toHaveProperty('SCHEMA_NOT_FOUND');
+      expect(UnifiedErrorType).toHaveProperty('CONNECTION_FAILED');
+      expect(UnifiedErrorType).toHaveProperty('NO_COMMON_FIELDS');
+      expect(UnifiedErrorType).toHaveProperty('NO_DATA');
+      expect(UnifiedErrorType).toHaveProperty('FILE_PARSE_ERROR');
+      expect(UnifiedErrorType).toHaveProperty('VALIDATION_ERROR');
+    });
+  });
+
+  describe('getActionableErrorMessage', () => {
+    it('returns actionable message for TABLE_NOT_FOUND', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.TABLE_NOT_FOUND, {
+        schema: 'HR',
+        table: 'EMPLOYEES',
+        connectionName: 'PROD',
+      });
+      expect(result.title).toBe('Table Not Found');
+      expect(result.message).toContain('HR.EMPLOYEES');
+      expect(result.message).toContain('PROD');
+      expect(result.hint).toBeTruthy();
+    });
+
+    it('returns actionable message for SCHEMA_NOT_FOUND', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.SCHEMA_NOT_FOUND, {
+        schema: 'UNKNOWN_SCHEMA',
+        connectionName: 'DEV',
+      });
+      expect(result.title).toBe('Schema Not Accessible');
+      expect(result.message).toContain('UNKNOWN_SCHEMA');
+      expect(result.hint).toContain('permission');
+    });
+
+    it('returns actionable message for CONNECTION_FAILED', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.CONNECTION_FAILED, {
+        connectionName: 'STAGING',
+        errorDetail: 'timeout',
+      });
+      expect(result.title).toBe('Connection Failed');
+      expect(result.message).toContain('STAGING');
+      expect(result.hint).toContain('timeout');
+    });
+
+    it('returns actionable message for NO_COMMON_FIELDS with headers', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.NO_COMMON_FIELDS, {
+        headersA: ['id', 'name', 'email'],
+        headersB: ['user_id', 'full_name', 'contact'],
+      });
+      expect(result.title).toBe('No Common Fields');
+      expect(result.hint).toContain('id, name, email');
+      expect(result.hint).toContain('user_id, full_name, contact');
+    });
+
+    it('returns actionable message for NO_DATA with WHERE clause', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.NO_DATA, {
+        source: 'Source A',
+        whereClause: "status = 'DELETED'",
+      });
+      expect(result.title).toBe('No Data Returned');
+      expect(result.message).toContain('Source A');
+      expect(result.hint).toContain("status = 'DELETED'");
+    });
+
+    it('returns actionable message for FILE_PARSE_ERROR', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.FILE_PARSE_ERROR, {
+        fileName: 'data.xlsx',
+        errorDetail: 'Corrupted file format',
+      });
+      expect(result.title).toBe('File Parse Error');
+      expect(result.message).toContain('data.xlsx');
+      expect(result.hint).toContain('Corrupted file format');
+    });
+
+    it('returns generic message for unknown error type', () => {
+      const result = getActionableErrorMessage('unknown_type', {
+        message: 'Something went wrong',
+      });
+      expect(result.title).toBe('Error');
+      expect(result.message).toBe('Something went wrong');
+    });
+
+    it('uses default values when context is empty', () => {
+      const result = getActionableErrorMessage(UnifiedErrorType.TABLE_NOT_FOUND, {});
+      expect(result.title).toBe('Table Not Found');
+      expect(result.message).toContain('undefined.undefined'); // schema.table placeholders
+      expect(result.hint).toBeTruthy();
+    });
+  });
+
+  describe('formatFieldList', () => {
+    it('returns (none) for empty array', () => {
+      expect(formatFieldList([])).toBe('(none)');
+    });
+
+    it('returns (none) for null', () => {
+      expect(formatFieldList(null)).toBe('(none)');
+    });
+
+    it('returns all fields if under maxDisplay', () => {
+      const fields = ['id', 'name', 'email'];
+      expect(formatFieldList(fields)).toBe('id, name, email');
+    });
+
+    it('returns exactly maxDisplay fields without truncation', () => {
+      const fields = ['a', 'b', 'c', 'd', 'e'];
+      expect(formatFieldList(fields, 5)).toBe('a, b, c, d, e');
+    });
+
+    it('truncates fields over maxDisplay', () => {
+      const fields = ['id', 'name', 'email', 'phone', 'address', 'city', 'state'];
+      expect(formatFieldList(fields, 5)).toBe('id, name, email, phone, address, +2 more');
+    });
+
+    it('uses default maxDisplay of 5', () => {
+      const fields = ['a', 'b', 'c', 'd', 'e', 'f'];
+      const result = formatFieldList(fields);
+      expect(result).toContain('+1 more');
+    });
+  });
+
+  describe('validateSourceConfig', () => {
+    it('returns null for valid Oracle table config', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'table',
+        schema: 'HR',
+        table: 'EMPLOYEES',
+      };
+      expect(validateSourceConfig(config, 'A')).toBeNull();
+    });
+
+    it('returns null for valid Oracle SQL config', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'sql',
+        sql: 'SELECT * FROM HR.EMPLOYEES',
+      };
+      expect(validateSourceConfig(config, 'A')).toBeNull();
+    });
+
+    it('returns null for valid Excel config with selected file', () => {
+      const config = {
+        type: 'excel',
+        excelFiles: [{ id: '1', file: {} }],
+        selectedExcelFile: { id: '1', file: {} },
+      };
+      expect(validateSourceConfig(config, 'A')).toBeNull();
+    });
+
+    it('returns info message when Oracle connection not selected', () => {
+      const config = {
+        type: 'oracle',
+        connection: null,
+        queryMode: 'table',
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('connection');
+    });
+
+    it('returns info message when Oracle schema not selected', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'table',
+        schema: null,
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('schema');
+    });
+
+    it('returns info message when Oracle table not selected', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'table',
+        schema: 'HR',
+        table: null,
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('table');
+    });
+
+    it('returns info message when SQL is empty', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'sql',
+        sql: '   ',
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('SQL');
+    });
+
+    it('returns info message when Excel files not uploaded', () => {
+      const config = {
+        type: 'excel',
+        excelFiles: [],
+        selectedExcelFile: null,
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('Upload');
+    });
+
+    it('returns info message when Excel file not selected', () => {
+      const config = {
+        type: 'excel',
+        excelFiles: [{ id: '1', file: {} }],
+        selectedExcelFile: null,
+      };
+      const result = validateSourceConfig(config, 'A');
+      expect(result.type).toBe('info');
+      expect(result.message).toContain('Select a file');
+    });
+
+    it('returns null for Source B in Oracle-Oracle follow mode with just connection', () => {
+      const config = {
+        type: 'oracle',
+        connection: { name: 'PROD' },
+        queryMode: 'table',
+        schema: null,
+        table: null,
+      };
+      const otherConfig = { type: 'oracle' };
+      const result = validateSourceConfig(config, 'B', otherConfig);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when type is null', () => {
+      const config = { type: null };
+      expect(validateSourceConfig(config, 'A')).toBeNull();
+    });
+  });
+
+  describe('parseOracleError', () => {
+    it('returns friendly message for ORA-12154', () => {
+      const result = parseOracleError('ORA-12154: TNS:could not resolve the connect identifier');
+      expect(result.code).toBe('ORA-12154');
+      expect(result.friendlyMessage).toContain('TNS name');
+    });
+
+    it('returns friendly message for ORA-12514', () => {
+      const result = parseOracleError('ORA-12514: TNS:listener does not currently know of service');
+      expect(result.code).toBe('ORA-12514');
+      expect(result.friendlyMessage).toContain('Service name');
+    });
+
+    it('returns friendly message for ORA-01017', () => {
+      const result = parseOracleError('ORA-01017: invalid username/password; logon denied');
+      expect(result.code).toBe('ORA-01017');
+      expect(result.friendlyMessage).toContain('username or password');
+    });
+
+    it('returns friendly message for ORA-00942', () => {
+      const result = parseOracleError('ORA-00942: table or view does not exist');
+      expect(result.code).toBe('ORA-00942');
+      expect(result.friendlyMessage).toContain('Table or view');
+    });
+
+    it('returns friendly message for timeout errors', () => {
+      const result = parseOracleError('Connection timeout after 30000ms');
+      expect(result.code).toBe('TIMEOUT');
+      expect(result.friendlyMessage).toContain('timed out');
+    });
+
+    it('returns friendly message for network errors', () => {
+      const result = parseOracleError('Network error: socket closed');
+      expect(result.code).toBe('NETWORK');
+      expect(result.friendlyMessage).toContain('Network error');
+    });
+
+    it('returns original message for unknown error', () => {
+      const result = parseOracleError('Some unexpected error occurred');
+      expect(result.code).toBeNull();
+      expect(result.friendlyMessage).toBe('Some unexpected error occurred');
+    });
+
+    it('handles null input', () => {
+      const result = parseOracleError(null);
+      expect(result.code).toBeNull();
+      expect(result.friendlyMessage).toContain('unknown error');
+    });
+
+    it('handles empty string input', () => {
+      const result = parseOracleError('');
+      expect(result.code).toBeNull();
+      expect(result.friendlyMessage).toContain('unknown error');
     });
   });
 });

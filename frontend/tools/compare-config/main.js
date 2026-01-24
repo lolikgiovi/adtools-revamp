@@ -32,6 +32,10 @@ import {
   createResetSourceState,
   getComparisonMode,
   getVisibleStepsForMode,
+  UnifiedErrorType,
+  getActionableErrorMessage,
+  parseOracleError,
+  validateSourceConfig,
 } from "./lib/unified-compare-utils.js";
 
 class CompareConfigTool extends BaseTool {
@@ -6169,6 +6173,9 @@ class CompareConfigTool extends BaseTool {
       this.unified.sourceB.type
     );
 
+    // Hide any previous error banner
+    this.hideUnifiedErrorBanner();
+
     this.showUnifiedProgress("Loading Data", comparisonMode);
     this.updateUnifiedProgressStep("source-a", "active", "Loading...");
 
@@ -6216,18 +6223,22 @@ class CompareConfigTool extends BaseTool {
         if (!mixedValidation.valid) {
           this.updateUnifiedProgressStep("reconcile", "error", "No common fields");
           this.hideUnifiedProgress();
-          this.eventBus.emit("notification:show", {
-            type: "error",
-            message: mixedValidation.error,
+          const errorInfo = getActionableErrorMessage(UnifiedErrorType.NO_COMMON_FIELDS, {
+            headersA: dataA.headers,
+            headersB: dataB.headers,
           });
+          this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
           return;
         }
 
         if (mixedValidation.warning) {
-          this.eventBus.emit("notification:show", {
-            type: "warning",
-            message: mixedValidation.warning,
-          });
+          // Show warning in banner instead of toast for better visibility
+          this.showUnifiedErrorBanner(
+            "Field Mismatch Warning",
+            mixedValidation.warning,
+            "Comparison will proceed with common fields only.",
+            "warning"
+          );
         }
       }
 
@@ -6243,10 +6254,25 @@ class CompareConfigTool extends BaseTool {
     } catch (error) {
       console.error("Failed to load unified data:", error);
       this.hideUnifiedProgress();
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Failed to load data: ${error.message || error}`,
-      });
+
+      // Parse error for better messaging
+      const { code, friendlyMessage } = parseOracleError(error.message || error);
+
+      if (code) {
+        // Oracle-specific error
+        this.showUnifiedErrorBanner(
+          "Database Error",
+          friendlyMessage,
+          "Check your connection settings and try again."
+        );
+      } else {
+        // Generic error with context
+        const errorInfo = getActionableErrorMessage(UnifiedErrorType.VALIDATION_ERROR, {
+          message: `Failed to load data: ${friendlyMessage}`,
+          hint: "Please check your configuration and try again.",
+        });
+        this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
+      }
     }
   }
 
@@ -6272,21 +6298,141 @@ class CompareConfigTool extends BaseTool {
       );
 
       if (!tableExists) {
-        this.eventBus.emit("notification:show", {
-          type: "error",
-          message: `Table "${schema}.${table}" does not exist in Source B connection (${sourceBConnection.name}). Please verify the table exists or select a different connection.`,
+        const errorInfo = getActionableErrorMessage(UnifiedErrorType.TABLE_NOT_FOUND, {
+          schema,
+          table,
+          connectionName: sourceBConnection.name,
         });
+        this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
         return false;
       }
 
       return true;
     } catch (error) {
       // Schema might not exist - try to give a helpful error
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Cannot access schema "${schema}" in Source B connection (${sourceBConnection.name}): ${error.message || error}`,
+      const { friendlyMessage } = parseOracleError(error.message || error);
+      const errorInfo = getActionableErrorMessage(UnifiedErrorType.SCHEMA_NOT_FOUND, {
+        schema,
+        connectionName: sourceBConnection.name,
       });
+      this.showUnifiedErrorBanner(
+        errorInfo.title,
+        errorInfo.message,
+        `${friendlyMessage}`
+      );
       return false;
+    }
+  }
+
+  // ============================================
+  // Phase 5.3: Error Banner Methods
+  // ============================================
+
+  /**
+   * Shows the unified error banner with actionable error message
+   * @param {string} title - Error title
+   * @param {string} message - Error message
+   * @param {string} hint - Actionable hint
+   * @param {'error'|'warning'} type - Banner type
+   */
+  showUnifiedErrorBanner(title, message, hint, type = "error") {
+    const banner = document.getElementById("unified-error-banner");
+    if (!banner) return;
+
+    const titleEl = banner.querySelector(".error-banner-title");
+    const messageEl = banner.querySelector(".error-banner-message");
+    const hintEl = banner.querySelector(".error-banner-hint");
+    const dismissBtn = banner.querySelector(".error-banner-dismiss");
+
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    if (hintEl) {
+      hintEl.textContent = hint || "";
+      hintEl.style.display = hint ? "block" : "none";
+    }
+
+    banner.className = `unified-error-banner ${type}`;
+    banner.style.display = "flex";
+
+    // Bind dismiss handler
+    if (dismissBtn) {
+      dismissBtn.onclick = () => this.hideUnifiedErrorBanner();
+    }
+  }
+
+  /**
+   * Hides the unified error banner
+   */
+  hideUnifiedErrorBanner() {
+    const banner = document.getElementById("unified-error-banner");
+    if (banner) {
+      banner.style.display = "none";
+    }
+  }
+
+  /**
+   * Shows inline validation message for a source
+   * @param {'A'|'B'} source - Source identifier
+   * @param {'info'|'error'|'warning'} type - Message type
+   * @param {string} message - Validation message
+   * @param {string|null} hint - Optional hint
+   */
+  showUnifiedSourceValidation(source, type, message, hint = null) {
+    const id = `source-${source.toLowerCase()}-validation`;
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const messageEl = el.querySelector(".validation-message-text");
+    const hintEl = el.querySelector(".validation-hint");
+
+    if (messageEl) messageEl.textContent = message;
+    if (hintEl) {
+      hintEl.textContent = hint || "";
+      hintEl.style.display = hint ? "inline" : "none";
+    }
+
+    el.className = `inline-validation ${type}`;
+    el.style.display = "flex";
+  }
+
+  /**
+   * Hides inline validation message for a source
+   * @param {'A'|'B'} source - Source identifier
+   */
+  hideUnifiedSourceValidation(source) {
+    const id = `source-${source.toLowerCase()}-validation`;
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = "none";
+    }
+  }
+
+  /**
+   * Updates inline validation for both sources based on current config
+   */
+  updateUnifiedSourceValidation() {
+    // Validate Source A
+    const validationA = validateSourceConfig(
+      this.unified.sourceA,
+      "A",
+      this.unified.sourceB
+    );
+    if (validationA) {
+      this.showUnifiedSourceValidation("A", validationA.type, validationA.message, validationA.hint);
+    } else {
+      this.hideUnifiedSourceValidation("A");
+    }
+
+    // Validate Source B
+    const validationB = validateSourceConfig(
+      this.unified.sourceB,
+      "B",
+      this.unified.sourceA
+    );
+    if (validationB) {
+      this.showUnifiedSourceValidation("B", validationB.type, validationB.message, validationB.hint);
+    } else {
+      this.hideUnifiedSourceValidation("B");
     }
   }
 
