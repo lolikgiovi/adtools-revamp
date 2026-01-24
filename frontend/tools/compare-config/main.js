@@ -27,6 +27,8 @@ import {
   getSourceBDisabledFieldsForFollowMode,
   isMixedMode,
   validateMixedModeConfig,
+  getResetBehaviorForSourceType,
+  createResetSourceState,
 } from "./lib/unified-compare-utils.js";
 
 class CompareConfigTool extends BaseTool {
@@ -4133,6 +4135,12 @@ class CompareConfigTool extends BaseTool {
    * Resets the form for a new comparison (complete clean slate)
    */
   resetForm() {
+    // Phase 4: Handle Unified mode separately
+    if (this.queryMode === "unified") {
+      this.handleUnifiedNewComparison();
+      return;
+    }
+
     // Reset Schema/Table state
     this.env1 = {
       connection: null,
@@ -6233,6 +6241,125 @@ class CompareConfigTool extends BaseTool {
 
     if (section) section.style.display = "none";
     if (loadActions) loadActions.style.display = "flex";
+  }
+
+  /**
+   * Handle New Comparison for Unified Compare mode (Phase 4)
+   * Resets state based on source types:
+   * - Excel sources: keep cached files, clear selection
+   * - Oracle sources: reset all config
+   */
+  handleUnifiedNewComparison() {
+    // 1. Always clear results
+    this.results.unified = null;
+    const resultsSection = document.getElementById("results-section");
+    if (resultsSection) resultsSection.style.display = "none";
+
+    // 2. Always hide field reconciliation
+    this.hideUnifiedFieldReconciliation();
+
+    // 3. Reset field selections
+    this.unified.selectedPkFields = [];
+    this.unified.selectedCompareFields = [];
+
+    // 4. Reset fields reconciliation state
+    this.unified.fields = {
+      common: [],
+      commonMapped: [],
+      onlyInA: [],
+      onlyInB: [],
+    };
+
+    // 5. Source-specific resets using utility functions
+    const sourceAType = this.unified.sourceA.type;
+    const sourceBType = this.unified.sourceB.type;
+
+    // Reset Source A based on type
+    this.unified.sourceA = createResetSourceState(
+      sourceAType,
+      this.unified.sourceA.excelFiles
+    );
+
+    // Reset Source B based on type
+    this.unified.sourceB = createResetSourceState(
+      sourceBType,
+      this.unified.sourceB.excelFiles
+    );
+
+    // 6. Reset UI elements
+    this.resetUnifiedSourceUI("A");
+    this.resetUnifiedSourceUI("B");
+
+    // 7. Update button states
+    this.updateUnifiedLoadButtonState();
+    this.updateSourceBFollowModeUI();
+
+    // 8. Scroll to top and save state
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    this.saveToolState();
+  }
+
+  /**
+   * Reset UI elements for a unified source (Phase 4)
+   * @param {'A'|'B'} source - The source to reset
+   */
+  resetUnifiedSourceUI(source) {
+    const prefix = `source-${source.toLowerCase()}`;
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const sourceType = this.unified[sourceKey].type;
+
+    // Hide preview
+    const preview = document.getElementById(`${prefix}-preview`);
+    if (preview) preview.style.display = "none";
+
+    // Reset status
+    const status = document.getElementById(`${prefix}-status`);
+    if (status) {
+      status.textContent = "Not loaded";
+      status.className = "source-status";
+    }
+
+    if (sourceType === "oracle") {
+      // Reset Oracle UI
+      const connectionSelect = document.getElementById(`${prefix}-connection`);
+      const schemaSelect = document.getElementById(`${prefix}-schema`);
+      const tableSelect = document.getElementById(`${prefix}-table`);
+      const whereInput = document.getElementById(`${prefix}-where`);
+      const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
+      const sqlInput = document.getElementById(`${prefix}-sql`);
+
+      if (connectionSelect) connectionSelect.value = "";
+      if (schemaSelect) {
+        schemaSelect.value = "";
+        schemaSelect.innerHTML = '<option value="">Select connection first...</option>';
+        schemaSelect.disabled = true;
+      }
+      if (tableSelect) {
+        tableSelect.value = "";
+        tableSelect.innerHTML = '<option value="">Select schema first...</option>';
+        tableSelect.disabled = true;
+      }
+      if (whereInput) whereInput.value = "";
+      if (maxRowsInput) maxRowsInput.value = "100";
+      if (sqlInput) sqlInput.value = "";
+
+      // Reset query mode to table
+      const queryModeSelect = document.getElementById(`${prefix}-query-mode`);
+      if (queryModeSelect) queryModeSelect.value = "table";
+
+      // Show table config, hide SQL config
+      const tableConfig = document.getElementById(`${prefix}-table-config`);
+      const sqlConfig = document.getElementById(`${prefix}-sql-config`);
+      if (tableConfig) tableConfig.style.display = "block";
+      if (sqlConfig) sqlConfig.style.display = "none";
+    } else if (sourceType === "excel") {
+      // For Excel: keep file list visible, clear selection
+      const fileSearchInput = document.getElementById(`${prefix}-file-search`);
+      if (fileSearchInput) fileSearchInput.value = "";
+
+      // Update the Excel UI to reflect cleared selection but preserved files
+      this.updateUnifiedExcelUI(sourceKey);
+    }
   }
 
   /**

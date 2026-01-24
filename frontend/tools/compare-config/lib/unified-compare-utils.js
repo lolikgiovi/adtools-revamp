@@ -235,3 +235,88 @@ export function validateMixedModeConfig(sourceAConfig, sourceBConfig) {
 
   return { valid: true, commonFields: common };
 }
+
+/**
+ * Determines the reset behavior for a source based on its type.
+ * For Excel: keep cached files, clear selection and data
+ * For Oracle: reset all config except connection (user may want to keep connection)
+ *
+ * @param {'oracle'|'excel'|null} sourceType - The source type
+ * @returns {{keepCachedFiles: boolean, clearConnection: boolean, clearSelection: boolean, clearData: boolean}}
+ */
+export function getResetBehaviorForSourceType(sourceType) {
+  if (sourceType === 'excel') {
+    return {
+      keepCachedFiles: true,
+      clearConnection: false,
+      clearSelection: true,
+      clearData: true,
+    };
+  }
+
+  if (sourceType === 'oracle') {
+    return {
+      keepCachedFiles: false,
+      clearConnection: true,
+      clearSelection: true,
+      clearData: true,
+    };
+  }
+
+  // Unknown or null type - full reset
+  return {
+    keepCachedFiles: false,
+    clearConnection: true,
+    clearSelection: true,
+    clearData: true,
+  };
+}
+
+/**
+ * Creates a reset unified source state object.
+ * For Excel: preserves excelFiles array, clears everything else
+ * For Oracle: resets everything
+ *
+ * @param {'oracle'|'excel'|null} sourceType - Current source type
+ * @param {Array} existingExcelFiles - Existing Excel files to preserve (if Excel type)
+ * @returns {Object} Reset source state
+ */
+export function createResetSourceState(sourceType, existingExcelFiles = []) {
+  const behavior = getResetBehaviorForSourceType(sourceType);
+
+  return {
+    type: sourceType, // Keep the type so UI stays on same source type
+    connection: null,
+    queryMode: 'table',
+    schema: null,
+    table: null,
+    sql: '',
+    whereClause: '',
+    maxRows: 100,
+    // Excel-specific
+    excelFiles: behavior.keepCachedFiles ? existingExcelFiles : [],
+    selectedExcelFile: null,
+    file: null,
+    parsedData: null,
+    // Data
+    data: null,
+    dataLoaded: false,
+  };
+}
+
+/**
+ * Validates if a unified comparison can be started (for reset to enable proper UI state)
+ * @param {Object} unified - The unified state object
+ * @returns {{canCompare: boolean, reason?: string}}
+ */
+export function canStartUnifiedComparison(unified) {
+  if (!unified.sourceA.type) {
+    return { canCompare: false, reason: 'Source A type not selected' };
+  }
+
+  if (!unified.sourceB.type) {
+    return { canCompare: false, reason: 'Source B type not selected' };
+  }
+
+  return { canCompare: true };
+}

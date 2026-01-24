@@ -189,59 +189,43 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ---
 
-### Phase 4: New Comparison Reset Behavior
+### Phase 4: New Comparison Reset Behavior ✅ COMPLETED
 
-#### 4.1 Reset Logic Based on Source Types
-**Status**: Not yet implemented
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `lib/unified-compare-utils.js` - Added reset behavior utilities
+> - `tests/unified-compare-utils.test.js` - Added 19 new unit tests
+> - `main.js` - Added `handleUnifiedNewComparison()` and `resetUnifiedSourceUI()` methods
 
-**Planned Changes**:
-1. Update `handleNewComparison()` (or create `handleUnifiedNewComparison()`):
-   ```javascript
-   handleUnifiedNewComparison() {
-     // Always clear results
-     this.hideResults();
-     this.unified.results = null;
+#### 4.1 Reset Logic Based on Source Types ✅
+**Implementation**:
+1. Created `handleUnifiedNewComparison()` method that:
+   - Clears results and hides results section
+   - Hides field reconciliation UI
+   - Resets field selections (PK and compare fields)
+   - Resets field reconciliation state
+   - Uses `createResetSourceState()` utility for source-specific resets
+   - Calls `resetUnifiedSourceUI()` to reset UI elements
+   - Updates button states
 
-     // Always hide field reconciliation
-     this.hideUnifiedFieldReconciliation();
+2. Created utility functions in `unified-compare-utils.js`:
+   - `getResetBehaviorForSourceType(sourceType)` - Determines reset behavior by type
+   - `createResetSourceState(sourceType, existingExcelFiles)` - Creates reset state object
+   - `canStartUnifiedComparison(unified)` - Validates if comparison can start
 
-     // Reset data loaded flags
-     this.unified.sourceA.dataLoaded = false;
-     this.unified.sourceA.data = null;
-     this.unified.sourceB.dataLoaded = false;
-     this.unified.sourceB.data = null;
-
-     // Reset field selections
-     this.unified.selectedPkFields = [];
-     this.unified.selectedCompareFields = [];
-
-     // Source-specific resets
-     if (this.unified.sourceA.type === 'oracle') {
-       this.resetOracleSourceConfig('sourceA');
-     }
-     // Note: Source A Excel files remain cached
-
-     if (this.unified.sourceB.type === 'oracle') {
-       this.resetOracleSourceConfig('sourceB');
-     }
-     // Note: Source B Excel files remain cached (unless Clear All clicked)
-
-     // Reset UI state
-     this.updateUnifiedSourcePreview('sourceA', null);
-     this.updateUnifiedSourcePreview('sourceB', null);
-     this.updateUnifiedLoadButtonState();
-   }
-   ```
-
-2. For Excel sources:
-   - Keep cached files in IndexedDB
-   - Keep file list visible in UI
-   - Only clear `selectedExcelFile` and data preview
+3. For Excel sources:
+   - `keepCachedFiles: true` - Preserves files in IndexedDB and state
+   - File list remains visible in UI
+   - Only clears `selectedExcelFile` and data preview
    - User must click "Clear All" to remove cached files
 
-3. For Oracle sources:
-   - Reset connection, schema, table selections
-   - Clear all form fields to initial state
+4. For Oracle sources:
+   - `clearConnection: true` - Resets connection selection
+   - Resets schema, table, SQL, WHERE clause to defaults
+   - Clears all form fields to initial state
+
+5. Updated `resetForm()` to delegate to `handleUnifiedNewComparison()` when in unified mode
 
 ---
 
@@ -289,18 +273,18 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | File | Changes |
 |------|---------|
 | `template.js` | Enhanced Excel config sections for both sources, follow mode note |
-| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select |
+| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()` |
 | `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown |
 | `lib/indexed-db-manager.js` | New `UNIFIED_EXCEL_FILES` store with helper methods |
-| `lib/unified-compare-utils.js` | Core business logic utilities (NEW) |
-| `tests/unified-compare-utils.test.js` | 44 unit tests (NEW) |
+| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions |
+| `tests/unified-compare-utils.test.js` | 87 unit tests |
 
 ---
 
 ## Implementation Order
 
 1. ~~**Phase 1.3** - PK auto-select for comparison fields (quick win, isolated change)~~ ✅ DONE
-2. **Phase 4.1** - New Comparison reset logic (foundation for all modes)
+2. ~~**Phase 4.1** - New Comparison reset logic (foundation for all modes)~~ ✅ DONE
 3. ~~**Phase 1.1 & 1.2** - Oracle vs Oracle improvements (Source B follows A)~~ ✅ DONE
 4. ~~**Phase 2.1 & 2.2** - Enhanced Excel upload (symmetric for both sources)~~ ✅ DONE
 5. ~~**Phase 2.3** - Mixed mode validation (Oracle + Excel field matching)~~ ✅ DONE
@@ -311,7 +295,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Testing Checklist
 
-### Unit Tests (Phase 1 & 2.3) ✅
+### Unit Tests (Phase 1, 2.3 & 4) ✅
 - [x] `getComparisonMode()` - 7 tests
 - [x] `isSourceBFollowMode()` - 6 tests
 - [x] `syncPkFieldsToCompareFields()` - 9 tests
@@ -322,8 +306,11 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [x] `isMixedMode()` - 6 tests
 - [x] `findCommonFields()` - 7 tests
 - [x] `validateMixedModeConfig()` - 11 tests
+- [x] `getResetBehaviorForSourceType()` - 5 tests
+- [x] `createResetSourceState()` - 8 tests
+- [x] `canStartUnifiedComparison()` - 6 tests
 
-**Total: 68 unit tests passing**
+**Total: 87 unit tests passing**
 
 ### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
@@ -382,7 +369,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | Phase 1: Oracle vs Oracle | ✅ COMPLETED | 2026-01-24 |
 | Phase 2: Mixed Mode | ✅ COMPLETED | 2026-01-24 |
 | Phase 3: Excel vs Excel | ✅ COMPLETED | 2026-01-24 |
-| Phase 4: Reset Behavior | ⏳ Pending | - |
+| Phase 4: Reset Behavior | ✅ COMPLETED | 2026-01-24 |
 | Phase 5: UI/UX Polish | ⏳ Pending | - |
 
-**Overall Progress**: 3/5 phases completed (60%)
+**Overall Progress**: 4/5 phases completed (80%)

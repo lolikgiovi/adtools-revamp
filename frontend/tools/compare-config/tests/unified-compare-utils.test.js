@@ -13,6 +13,9 @@ import {
   isMixedMode,
   findCommonFields,
   validateMixedModeConfig,
+  getResetBehaviorForSourceType,
+  createResetSourceState,
+  canStartUnifiedComparison,
 } from '../lib/unified-compare-utils.js';
 
 describe('UnifiedCompareUtils', () => {
@@ -536,6 +539,172 @@ describe('UnifiedCompareUtils', () => {
     it('returns error for null source config', () => {
       const result = validateMixedModeConfig(null, excelSourceWithHeaders);
       expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('getResetBehaviorForSourceType', () => {
+    it('returns keepCachedFiles=true for Excel type', () => {
+      const result = getResetBehaviorForSourceType('excel');
+      expect(result.keepCachedFiles).toBe(true);
+      expect(result.clearConnection).toBe(false);
+      expect(result.clearSelection).toBe(true);
+      expect(result.clearData).toBe(true);
+    });
+
+    it('returns keepCachedFiles=false for Oracle type', () => {
+      const result = getResetBehaviorForSourceType('oracle');
+      expect(result.keepCachedFiles).toBe(false);
+      expect(result.clearConnection).toBe(true);
+      expect(result.clearSelection).toBe(true);
+      expect(result.clearData).toBe(true);
+    });
+
+    it('returns full reset for null type', () => {
+      const result = getResetBehaviorForSourceType(null);
+      expect(result.keepCachedFiles).toBe(false);
+      expect(result.clearConnection).toBe(true);
+      expect(result.clearSelection).toBe(true);
+      expect(result.clearData).toBe(true);
+    });
+
+    it('returns full reset for undefined type', () => {
+      const result = getResetBehaviorForSourceType(undefined);
+      expect(result.keepCachedFiles).toBe(false);
+      expect(result.clearConnection).toBe(true);
+    });
+
+    it('returns full reset for unknown type', () => {
+      const result = getResetBehaviorForSourceType('unknown');
+      expect(result.keepCachedFiles).toBe(false);
+      expect(result.clearConnection).toBe(true);
+    });
+  });
+
+  describe('createResetSourceState', () => {
+    const mockExcelFiles = [
+      { id: 'file-1', file: { name: 'test1.xlsx' } },
+      { id: 'file-2', file: { name: 'test2.xlsx' } },
+    ];
+
+    it('preserves excelFiles for Excel type', () => {
+      const result = createResetSourceState('excel', mockExcelFiles);
+      expect(result.type).toBe('excel');
+      expect(result.excelFiles).toEqual(mockExcelFiles);
+      expect(result.selectedExcelFile).toBeNull();
+      expect(result.data).toBeNull();
+      expect(result.dataLoaded).toBe(false);
+    });
+
+    it('clears excelFiles for Oracle type', () => {
+      const result = createResetSourceState('oracle', mockExcelFiles);
+      expect(result.type).toBe('oracle');
+      expect(result.excelFiles).toEqual([]);
+      expect(result.connection).toBeNull();
+      expect(result.schema).toBeNull();
+      expect(result.table).toBeNull();
+    });
+
+    it('resets all Oracle config fields', () => {
+      const result = createResetSourceState('oracle');
+      expect(result.connection).toBeNull();
+      expect(result.queryMode).toBe('table');
+      expect(result.schema).toBeNull();
+      expect(result.table).toBeNull();
+      expect(result.sql).toBe('');
+      expect(result.whereClause).toBe('');
+      expect(result.maxRows).toBe(100);
+    });
+
+    it('clears Excel selection but keeps files', () => {
+      const result = createResetSourceState('excel', mockExcelFiles);
+      expect(result.selectedExcelFile).toBeNull();
+      expect(result.file).toBeNull();
+      expect(result.parsedData).toBeNull();
+      expect(result.excelFiles).toHaveLength(2);
+    });
+
+    it('handles null type with empty excelFiles', () => {
+      const result = createResetSourceState(null);
+      expect(result.type).toBeNull();
+      expect(result.excelFiles).toEqual([]);
+      expect(result.connection).toBeNull();
+    });
+
+    it('handles undefined existing files', () => {
+      const result = createResetSourceState('excel', undefined);
+      expect(result.excelFiles).toEqual([]);
+    });
+
+    it('handles empty existing files array', () => {
+      const result = createResetSourceState('excel', []);
+      expect(result.excelFiles).toEqual([]);
+    });
+
+    it('preserves type so UI stays on same source type', () => {
+      const excelResult = createResetSourceState('excel', mockExcelFiles);
+      const oracleResult = createResetSourceState('oracle');
+
+      expect(excelResult.type).toBe('excel');
+      expect(oracleResult.type).toBe('oracle');
+    });
+  });
+
+  describe('canStartUnifiedComparison', () => {
+    it('returns canCompare=false when sourceA type is null', () => {
+      const unified = {
+        sourceA: { type: null },
+        sourceB: { type: 'oracle' },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(false);
+      expect(result.reason).toContain('Source A');
+    });
+
+    it('returns canCompare=false when sourceB type is null', () => {
+      const unified = {
+        sourceA: { type: 'oracle' },
+        sourceB: { type: null },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(false);
+      expect(result.reason).toContain('Source B');
+    });
+
+    it('returns canCompare=true for Oracle vs Oracle', () => {
+      const unified = {
+        sourceA: { type: 'oracle' },
+        sourceB: { type: 'oracle' },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it('returns canCompare=true for Oracle vs Excel', () => {
+      const unified = {
+        sourceA: { type: 'oracle' },
+        sourceB: { type: 'excel' },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(true);
+    });
+
+    it('returns canCompare=true for Excel vs Oracle', () => {
+      const unified = {
+        sourceA: { type: 'excel' },
+        sourceB: { type: 'oracle' },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(true);
+    });
+
+    it('returns canCompare=true for Excel vs Excel', () => {
+      const unified = {
+        sourceA: { type: 'excel' },
+        sourceB: { type: 'excel' },
+      };
+      const result = canStartUnifiedComparison(unified);
+      expect(result.canCompare).toBe(true);
     });
   });
 });
