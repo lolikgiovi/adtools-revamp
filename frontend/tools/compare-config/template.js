@@ -851,6 +851,46 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
 
+        <!-- Unified Progress Overlay (used in unified mode) -->
+        <div id="unified-progress-overlay" class="progress-overlay" style="display: none;">
+            <div class="progress-card">
+                <div class="progress-header">
+                    <div class="progress-spinner"></div>
+                    <h3 id="unified-progress-title">Loading Data</h3>
+                </div>
+                <div class="progress-steps" id="unified-progress-steps">
+                    <div class="progress-step" id="unified-step-source-a">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Loading Source A data</div>
+                            <div class="step-detail" id="unified-step-source-a-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="unified-step-validate-b" style="display: none;">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Validating Source B</div>
+                            <div class="step-detail" id="unified-step-validate-b-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="unified-step-source-b">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Loading Source B data</div>
+                            <div class="step-detail" id="unified-step-source-b-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="unified-step-reconcile">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Reconciling fields</div>
+                            <div class="step-detail" id="unified-step-reconcile-detail">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Results Section -->
         <div id="results-section" class="results-section" style="display: none;">
             <div class="results-header">

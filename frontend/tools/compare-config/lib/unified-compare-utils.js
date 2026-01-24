@@ -322,6 +322,47 @@ export function canStartUnifiedComparison(unified) {
 }
 
 /**
+ * Defines the progress steps for unified compare mode.
+ * Each step has an id, label, and optional detail.
+ * @returns {Array<{id: string, label: string, defaultDetail: string}>}
+ */
+export function getUnifiedProgressSteps() {
+  return [
+    { id: 'source-a', label: 'Loading Source A data', defaultDetail: '—' },
+    { id: 'validate-b', label: 'Validating Source B', defaultDetail: '—' },
+    { id: 'source-b', label: 'Loading Source B data', defaultDetail: '—' },
+    { id: 'reconcile', label: 'Reconciling fields', defaultDetail: '—' },
+  ];
+}
+
+/**
+ * Determines which steps to show based on comparison mode.
+ * For Oracle vs Oracle, all 4 steps are shown.
+ * For other modes, the "Validating Source B" step is hidden.
+ *
+ * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode
+ * @returns {string[]} Array of step IDs to show
+ */
+export function getVisibleStepsForMode(mode) {
+  if (mode === 'oracle-oracle') {
+    return ['source-a', 'validate-b', 'source-b', 'reconcile'];
+  }
+  // For mixed or excel-excel modes, skip validation step
+  return ['source-a', 'source-b', 'reconcile'];
+}
+
+/**
+ * Gets the step label for a given step ID (for testing/documentation).
+ * @param {string} stepId
+ * @returns {string|null}
+ */
+export function getStepLabel(stepId) {
+  const steps = getUnifiedProgressSteps();
+  const step = steps.find((s) => s.id === stepId);
+  return step ? step.label : null;
+}
+
+/**
  * Syncs PK fields to compare fields and returns which fields were newly added.
  * This is used for animation purposes.
  *

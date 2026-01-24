@@ -30,6 +30,8 @@ import {
   validateMixedModeConfig,
   getResetBehaviorForSourceType,
   createResetSourceState,
+  getComparisonMode,
+  getVisibleStepsForMode,
 } from "./lib/unified-compare-utils.js";
 
 class CompareConfigTool extends BaseTool {
@@ -3470,6 +3472,86 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Shows the unified progress overlay with dynamic steps based on comparison mode
+   * @param {string} title - Title for the overlay
+   * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode - Comparison mode
+   */
+  showUnifiedProgress(title = "Loading Data", mode = null) {
+    const overlay = document.getElementById("unified-progress-overlay");
+    const titleEl = document.getElementById("unified-progress-title");
+
+    if (titleEl) titleEl.textContent = title;
+    if (overlay) overlay.style.display = "flex";
+
+    // Configure visible steps based on mode
+    const visibleSteps = getVisibleStepsForMode(mode);
+
+    // Show/hide validate-b step based on mode
+    const validateBStep = document.getElementById("unified-step-validate-b");
+    if (validateBStep) {
+      validateBStep.style.display = visibleSteps.includes("validate-b") ? "flex" : "none";
+    }
+
+    // Reset all unified steps to pending
+    this.resetUnifiedProgressSteps();
+  }
+
+  /**
+   * Hides the unified progress overlay
+   */
+  hideUnifiedProgress() {
+    const overlay = document.getElementById("unified-progress-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+
+  /**
+   * Updates a unified progress step's state and detail
+   * @param {string} stepId - One of: source-a, validate-b, source-b, reconcile
+   * @param {string} state - One of: pending, active, done, error
+   * @param {string} detail - Detail text to show
+   */
+  updateUnifiedProgressStep(stepId, state, detail = "") {
+    const stepEl = document.getElementById(`unified-step-${stepId}`);
+    if (!stepEl) return;
+
+    const iconEl = stepEl.querySelector(".step-icon");
+    const detailEl = document.getElementById(`unified-step-${stepId}-detail`);
+
+    // Update icon based on state
+    if (iconEl) {
+      iconEl.className = `step-icon ${state}`;
+      switch (state) {
+        case "pending":
+          iconEl.textContent = "○";
+          break;
+        case "active":
+          iconEl.textContent = "◉";
+          break;
+        case "done":
+          iconEl.textContent = "✓";
+          break;
+        case "error":
+          iconEl.textContent = "✕";
+          break;
+      }
+    }
+
+    // Update detail text
+    if (detailEl && detail) {
+      detailEl.textContent = detail;
+    }
+  }
+
+  /**
+   * Resets all unified progress steps to pending state
+   */
+  resetUnifiedProgressSteps() {
+    ["source-a", "validate-b", "source-b", "reconcile"].forEach((stepId) => {
+      this.updateUnifiedProgressStep(stepId, "pending", "—");
+    });
+  }
+
+  /**
    * Shows comparison results
    */
   showResults() {
@@ -5070,9 +5152,15 @@ class CompareConfigTool extends BaseTool {
 
         if (!selected) return;
 
+        // Show loading indicator during folder scan
+        this.showUnifiedUploadLoading(sourceKey, "Scanning folder...");
+
         // Recursively scan folder for supported files
         const files = [];
         await this._scanFolderForExcelFiles(selected, readDir, readFile, files);
+
+        // Hide loading indicator (handleUnifiedExcelFileSelection will show its own if needed)
+        this.hideUnifiedUploadLoading(sourceKey);
 
         if (files.length > 0) {
           await this.handleUnifiedExcelFileSelection(sourceKey, files);
@@ -5614,6 +5702,12 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
+    // Show loading indicator for file upload (especially for multiple files)
+    const showLoadingIndicator = supportedFiles.length > 1;
+    if (showLoadingIndicator) {
+      this.showUnifiedUploadLoading(sourceKey, `Processing ${supportedFiles.length} files...`);
+    }
+
     // Wrap files with IDs
     const filesWithIds = supportedFiles.map((file) => ({
       id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
@@ -5630,6 +5724,7 @@ class CompareConfigTool extends BaseTool {
 
     // Cache files in IndexedDB
     if (IndexedDBManager.isIndexedDBAvailable()) {
+      let cachedCount = 0;
       for (const fileWrapper of filesWithIds) {
         try {
           const arrayBuffer = await fileWrapper.file.arrayBuffer();
@@ -5639,10 +5734,19 @@ class CompareConfigTool extends BaseTool {
             content: arrayBuffer,
             source: sourceKey,
           });
+          cachedCount++;
+          if (showLoadingIndicator) {
+            this.showUnifiedUploadLoading(sourceKey, `Caching files (${cachedCount}/${filesWithIds.length})...`);
+          }
         } catch (error) {
           console.warn("Failed to cache unified Excel file:", error);
         }
       }
+    }
+
+    // Hide loading indicator
+    if (showLoadingIndicator) {
+      this.hideUnifiedUploadLoading(sourceKey);
     }
 
     // Update UI
@@ -5712,6 +5816,56 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedExcelUI(sourceKey);
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Shows a loading indicator on the upload zone during file processing
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   * @param {string} message - Loading message to display
+   */
+  showUnifiedUploadLoading(sourceKey, message = "Processing files...") {
+    const source = sourceKey === "sourceA" ? "a" : "b";
+    const uploadZone = document.getElementById(`source-${source}-upload-zone`);
+    if (!uploadZone) return;
+
+    uploadZone.classList.add("uploading");
+
+    // Add loading indicator if not present
+    let loadingEl = uploadZone.querySelector(".upload-loading-indicator");
+    if (!loadingEl) {
+      loadingEl = document.createElement("div");
+      loadingEl.className = "upload-loading-indicator";
+      loadingEl.innerHTML = `
+        <div class="loading-spinner-small"></div>
+        <span class="upload-loading-text">${message}</span>
+      `;
+      const uploadArea = uploadZone.querySelector(".upload-area");
+      if (uploadArea) {
+        uploadArea.insertAdjacentElement("afterend", loadingEl);
+      } else {
+        uploadZone.appendChild(loadingEl);
+      }
+    } else {
+      const textEl = loadingEl.querySelector(".upload-loading-text");
+      if (textEl) textEl.textContent = message;
+    }
+  }
+
+  /**
+   * Hides the loading indicator on the upload zone
+   * @param {string} sourceKey - 'sourceA' or 'sourceB'
+   */
+  hideUnifiedUploadLoading(sourceKey) {
+    const source = sourceKey === "sourceA" ? "a" : "b";
+    const uploadZone = document.getElementById(`source-${source}-upload-zone`);
+    if (!uploadZone) return;
+
+    uploadZone.classList.remove("uploading");
+
+    const loadingEl = uploadZone.querySelector(".upload-loading-indicator");
+    if (loadingEl) {
+      loadingEl.remove();
+    }
   }
 
   /**
@@ -6009,33 +6163,41 @@ class CompareConfigTool extends BaseTool {
       }
     }
 
-    this.showProgress("Loading Data");
-    this.updateProgressStep("env1", "active", "Loading Source A...");
+    // Determine comparison mode for progress overlay
+    const comparisonMode = getComparisonMode(
+      this.unified.sourceA.type,
+      this.unified.sourceB.type
+    );
+
+    this.showUnifiedProgress("Loading Data", comparisonMode);
+    this.updateUnifiedProgressStep("source-a", "active", "Loading...");
 
     try {
       // Load Source A
       const dataA = await this.fetchUnifiedSourceData("A");
       this.unified.sourceA.data = dataA;
       this.unified.sourceA.dataLoaded = true;
-      this.updateProgressStep("env1", "done", `${dataA.metadata.rowCount} rows loaded`);
+      this.updateUnifiedProgressStep("source-a", "done", `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
 
       // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
       if (isOracleToOracle && this.unified.sourceA.queryMode === "table") {
-        this.updateProgressStep("env2", "active", "Validating Source B...");
+        this.updateUnifiedProgressStep("validate-b", "active", "Checking table exists...");
         const tableExists = await this.validateOracleTableExistsInSourceB();
         if (!tableExists) {
-          this.hideProgress();
+          this.updateUnifiedProgressStep("validate-b", "error", "Table not found");
+          this.hideUnifiedProgress();
           return; // Error already shown by validateOracleTableExistsInSourceB
         }
+        this.updateUnifiedProgressStep("validate-b", "done", "Table verified");
       }
 
       // Load Source B
-      this.updateProgressStep("env2", "active", "Loading Source B...");
+      this.updateUnifiedProgressStep("source-b", "active", "Loading...");
       const dataB = await this.fetchUnifiedSourceData("B");
       this.unified.sourceB.data = dataB;
       this.unified.sourceB.dataLoaded = true;
-      this.updateProgressStep("env2", "done", `${dataB.metadata.rowCount} rows loaded`);
+      this.updateUnifiedProgressStep("source-b", "done", `${dataB.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("B");
 
       // Phase 2.3: Validate mixed mode (Oracle + Excel) configuration
@@ -6045,14 +6207,15 @@ class CompareConfigTool extends BaseTool {
       );
 
       if (isMixedModeComparison) {
-        this.updateProgressStep("fetch", "active", "Validating field compatibility...");
+        this.updateUnifiedProgressStep("reconcile", "active", "Validating field compatibility...");
         const mixedValidation = validateMixedModeConfig(
           { type: this.unified.sourceA.type, headers: dataA.headers },
           { type: this.unified.sourceB.type, headers: dataB.headers }
         );
 
         if (!mixedValidation.valid) {
-          this.hideProgress();
+          this.updateUnifiedProgressStep("reconcile", "error", "No common fields");
+          this.hideUnifiedProgress();
           this.eventBus.emit("notification:show", {
             type: "error",
             message: mixedValidation.error,
@@ -6069,17 +6232,17 @@ class CompareConfigTool extends BaseTool {
       }
 
       // Reconcile columns
-      this.updateProgressStep("fetch", "active", "Reconciling fields...");
+      this.updateUnifiedProgressStep("reconcile", "active", "Reconciling fields...");
       this.reconcileUnifiedFields();
-      this.updateProgressStep("fetch", "done", `${this.unified.fields.common.length} common fields`);
+      this.updateUnifiedProgressStep("reconcile", "done", `${this.unified.fields.common.length} common fields`);
 
       // Show field reconciliation UI
       await new Promise((r) => setTimeout(r, 300));
-      this.hideProgress();
+      this.hideUnifiedProgress();
       this.showUnifiedFieldReconciliation();
     } catch (error) {
       console.error("Failed to load unified data:", error);
-      this.hideProgress();
+      this.hideUnifiedProgress();
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Failed to load data: ${error.message || error}`,

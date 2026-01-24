@@ -17,6 +17,9 @@ import {
   getResetBehaviorForSourceType,
   createResetSourceState,
   canStartUnifiedComparison,
+  getUnifiedProgressSteps,
+  getVisibleStepsForMode,
+  getStepLabel,
 } from '../lib/unified-compare-utils.js';
 
 describe('UnifiedCompareUtils', () => {
@@ -760,6 +763,95 @@ describe('UnifiedCompareUtils', () => {
       const result = syncPkFieldsWithTracking(['id'], null);
       expect(result.updatedCompareFields).toEqual(['id']);
       expect(result.newlyAddedFields).toEqual(['id']);
+    });
+  });
+
+  describe('getUnifiedProgressSteps', () => {
+    it('returns 4 progress steps', () => {
+      const steps = getUnifiedProgressSteps();
+      expect(steps).toHaveLength(4);
+    });
+
+    it('returns steps with correct IDs', () => {
+      const steps = getUnifiedProgressSteps();
+      const ids = steps.map((s) => s.id);
+      expect(ids).toEqual(['source-a', 'validate-b', 'source-b', 'reconcile']);
+    });
+
+    it('each step has id, label, and defaultDetail', () => {
+      const steps = getUnifiedProgressSteps();
+      for (const step of steps) {
+        expect(step).toHaveProperty('id');
+        expect(step).toHaveProperty('label');
+        expect(step).toHaveProperty('defaultDetail');
+        expect(typeof step.id).toBe('string');
+        expect(typeof step.label).toBe('string');
+        expect(typeof step.defaultDetail).toBe('string');
+      }
+    });
+
+    it('returns correct labels for each step', () => {
+      const steps = getUnifiedProgressSteps();
+      expect(steps[0].label).toBe('Loading Source A data');
+      expect(steps[1].label).toBe('Validating Source B');
+      expect(steps[2].label).toBe('Loading Source B data');
+      expect(steps[3].label).toBe('Reconciling fields');
+    });
+  });
+
+  describe('getVisibleStepsForMode', () => {
+    it('returns all 4 steps for oracle-oracle mode', () => {
+      const steps = getVisibleStepsForMode('oracle-oracle');
+      expect(steps).toEqual(['source-a', 'validate-b', 'source-b', 'reconcile']);
+    });
+
+    it('returns 3 steps (no validate-b) for oracle-excel mode', () => {
+      const steps = getVisibleStepsForMode('oracle-excel');
+      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
+      expect(steps).not.toContain('validate-b');
+    });
+
+    it('returns 3 steps (no validate-b) for excel-oracle mode', () => {
+      const steps = getVisibleStepsForMode('excel-oracle');
+      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
+      expect(steps).not.toContain('validate-b');
+    });
+
+    it('returns 3 steps (no validate-b) for excel-excel mode', () => {
+      const steps = getVisibleStepsForMode('excel-excel');
+      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
+      expect(steps).not.toContain('validate-b');
+    });
+
+    it('returns 3 steps for null mode', () => {
+      const steps = getVisibleStepsForMode(null);
+      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
+    });
+  });
+
+  describe('getStepLabel', () => {
+    it('returns correct label for source-a step', () => {
+      expect(getStepLabel('source-a')).toBe('Loading Source A data');
+    });
+
+    it('returns correct label for validate-b step', () => {
+      expect(getStepLabel('validate-b')).toBe('Validating Source B');
+    });
+
+    it('returns correct label for source-b step', () => {
+      expect(getStepLabel('source-b')).toBe('Loading Source B data');
+    });
+
+    it('returns correct label for reconcile step', () => {
+      expect(getStepLabel('reconcile')).toBe('Reconciling fields');
+    });
+
+    it('returns null for unknown step ID', () => {
+      expect(getStepLabel('unknown-step')).toBeNull();
+    });
+
+    it('returns null for empty string', () => {
+      expect(getStepLabel('')).toBeNull();
     });
   });
 });

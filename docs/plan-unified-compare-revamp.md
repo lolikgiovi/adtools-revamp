@@ -255,20 +255,34 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
    - Checkboxes get `pk-synced` class for box-shadow pulse effect
    - Animation clears after 600ms to allow re-triggering
 
-#### 5.2 Loading States
-**Status**: Not yet implemented
+#### 5.2 Loading States ✅
+**Status**: COMPLETED
 
-**Planned Changes**:
-1. Show loading spinner when:
-   - Uploading files (especially folders with many files)
-   - Validating table existence in Source B
-   - Fetching schemas/tables
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `template.js` - Added unified progress overlay with 4 dynamic steps
+> - `main.js` - Added `showUnifiedProgress()`, `hideUnifiedProgress()`, `updateUnifiedProgressStep()`, `resetUnifiedProgressSteps()`, `showUnifiedUploadLoading()`, `hideUnifiedUploadLoading()`
+> - `styles.css` - Added `.file-upload-zone.uploading` and `.upload-loading-indicator` styles
+> - `lib/unified-compare-utils.js` - Added `getUnifiedProgressSteps()`, `getVisibleStepsForMode()`, `getStepLabel()`
+> - `tests/unified-compare-utils.test.js` - Added 17 new tests (112 total)
 
-2. Update progress overlay for unified mode:
-   - Step 1: "Loading Source A data"
-   - Step 2: "Validating Source B" (for Oracle-Oracle)
-   - Step 3: "Loading Source B data"
-   - Step 4: "Reconciling fields"
+**Implementation**:
+1. **Unified Progress Overlay**:
+   - Created dedicated progress overlay (`#unified-progress-overlay`) with 4 steps
+   - Step visibility is dynamic based on comparison mode
+   - "Validating Source B" step only shown for Oracle vs Oracle mode
+   - Each step shows state (pending/active/done/error) with detail text
+
+2. **File Upload Loading States**:
+   - Added `.uploading` class to upload zone during multi-file processing
+   - Shows spinner with progress text (e.g., "Caching files (3/10)...")
+   - Folder scanning in Tauri shows "Scanning folder..." loading state
+
+3. **Utility Functions**:
+   - `getUnifiedProgressSteps()` - Returns step definitions
+   - `getVisibleStepsForMode()` - Returns which steps to show based on mode
+   - `getStepLabel()` - Gets label for a step ID
 
 #### 5.3 Error Handling Improvements
 **Status**: Not yet implemented
@@ -286,12 +300,12 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 | File | Changes |
 |------|---------|
-| `template.js` | Enhanced Excel config sections for both sources, follow mode badge |
-| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select with animation, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()` |
-| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown, follow-mode-badge, PK auto-add animations |
+| `template.js` | Enhanced Excel config sections for both sources, follow mode badge, unified progress overlay |
+| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select with animation, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()`, unified progress methods, upload loading states |
+| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown, follow-mode-badge, PK auto-add animations, upload loading indicator |
 | `lib/indexed-db-manager.js` | New `UNIFIED_EXCEL_FILES` store with helper methods |
-| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions, `syncPkFieldsWithTracking()` |
-| `tests/unified-compare-utils.test.js` | 95 unit tests |
+| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions, `syncPkFieldsWithTracking()`, progress step utilities |
+| `tests/unified-compare-utils.test.js` | 112 unit tests |
 
 ---
 
@@ -309,7 +323,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Testing Checklist
 
-### Unit Tests (Phase 1, 2.3 & 4) ✅
+### Unit Tests (Phase 1, 2.3, 4 & 5.2) ✅
 - [x] `getComparisonMode()` - 7 tests
 - [x] `isSourceBFollowMode()` - 6 tests
 - [x] `syncPkFieldsToCompareFields()` - 9 tests
@@ -324,8 +338,11 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [x] `createResetSourceState()` - 8 tests
 - [x] `canStartUnifiedComparison()` - 6 tests
 - [x] `syncPkFieldsWithTracking()` - 8 tests
+- [x] `getUnifiedProgressSteps()` - 4 tests
+- [x] `getVisibleStepsForMode()` - 5 tests
+- [x] `getStepLabel()` - 6 tests
 
-**Total: 95 unit tests passing**
+**Total: 112 unit tests passing**
 
 ### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
@@ -386,7 +403,7 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | Phase 3: Excel vs Excel | ✅ COMPLETED | 2026-01-24 |
 | Phase 4: Reset Behavior | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.1: Visual Feedback | ✅ COMPLETED | 2026-01-24 |
-| Phase 5.2: Loading States | ⏳ Pending | - |
+| Phase 5.2: Loading States | ✅ COMPLETED | 2026-01-24 |
 | Phase 5.3: Error Handling | ⏳ Pending | - |
 
-**Overall Progress**: 5/7 sub-phases completed (~71%)
+**Overall Progress**: 6/7 sub-phases completed (~86%)

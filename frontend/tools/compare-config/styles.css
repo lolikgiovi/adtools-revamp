@@ -665,6 +665,31 @@
   animation: spin 1s linear infinite;
 }
 
+/* Upload Zone Loading State */
+.file-upload-zone.uploading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.file-upload-zone.uploading .upload-area {
+  display: none;
+}
+
+.upload-loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+.upload-loading-indicator .loading-spinner-small {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
 /* ============================================
    PROGRESS OVERLAY
    ============================================ */
