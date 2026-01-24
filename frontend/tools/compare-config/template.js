@@ -291,6 +291,10 @@ export const CompareConfigTemplate = /* html */ `
                                 <select id="source-b-connection" class="form-select">
                                     <option value="">Select connection...</option>
                                 </select>
+                                <!-- Follow Mode Note (shown in Oracle vs Oracle mode) -->
+                                <p class="help-text follow-mode-note" id="source-b-follow-mode-note" style="display: none;">
+                                    Other options will follow Source A configuration.
+                                </p>
                             </div>
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>

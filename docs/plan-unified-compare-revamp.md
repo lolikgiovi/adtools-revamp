@@ -23,75 +23,41 @@ Transform the Unified Compare Config into the sole UI for all comparison modes (
 
 ## Implementation Plan
 
-### Phase 1: Oracle vs Oracle Mode Improvements
+### Phase 1: Oracle vs Oracle Mode Improvements ✅ COMPLETED
 
-#### 1.1 Source B Oracle Config Auto-Sync
-**Files**: `template.js`, `main.js`
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `lib/unified-compare-utils.js` (NEW) - Core business logic utilities
+> - `tests/unified-compare-utils.test.js` (NEW) - 44 unit tests
+> - `main.js` - Updated with follow mode logic
+> - `template.js` - Added follow mode note element
+> - `styles.css` - Added follow mode styling
 
-**Changes**:
-1. When Source A = Oracle AND Source B = Oracle:
-   - Source B shows only **Connection** dropdown
-   - All other fields (Query Mode, Schema, Table, WHERE, Max Rows) are **disabled/hidden**
-   - Add help note below Connection: *"Comparison settings will follow Source A configuration"*
+#### 1.1 Source B Oracle Config Auto-Sync ✅
+**Implementation**:
+- Created `updateSourceBFollowModeUI()` method that detects Oracle vs Oracle mode
+- Uses `isSourceBFollowMode()` utility to check if both sources are Oracle
+- Hides Query Mode, Schema, Table, WHERE, Max Rows, SQL in Source B
+- Shows follow mode note: "Other options will follow Source A configuration"
+- Added CSS styling for disabled fields with `.disabled-follow-mode` class
 
-2. Update `handleSourceTypeChange()` to detect Oracle-Oracle mode:
-   ```javascript
-   // When both sources are Oracle, sync configuration from A to B
-   if (this.unified.sourceA.type === 'oracle' && this.unified.sourceB.type === 'oracle') {
-     this.showOracleFollowModeForSourceB();
-   }
-   ```
+#### 1.2 Pre-Load Validation for Oracle vs Oracle ✅
+**Implementation**:
+- Created `validateOracleTableExistsInSourceB()` method
+- Uses `validateOracleToOracleConfig()` utility for early validation
+- Validates schema.table exists in Source B before loading data
+- Shows clear error message if table doesn't exist
+- Updated `loadUnifiedData()` to call validation first
+- Updated `fetchUnifiedSourceData()` to use `createSourceBConfigFromSourceA()` for Source B
 
-3. Create `showOracleFollowModeForSourceB()`:
-   - Hide Query Mode, Schema, Table, WHERE, Max Rows in Source B
-   - Show helper text explaining auto-follow behavior
-   - Source B only needs different Connection
-
-#### 1.2 Pre-Load Validation for Oracle vs Oracle
-**Files**: `main.js`
-
-**Changes**:
-1. Before loading data, validate Schema+Table exist in Source B:
-   ```javascript
-   async validateOracleSourceBTableExists() {
-     const { schema, table } = this.unified.sourceA;
-     const connectionB = this.unified.sourceB.connection;
-
-     // Query Source B to check if schema.table exists
-     const exists = await this.service.validateTableExists(connectionB, schema, table);
-
-     if (!exists) {
-       this.showError(`Table "${schema}.${table}" does not exist in Source B connection`);
-       return false;
-     }
-     return true;
-   }
-   ```
-
-2. Update `loadUnifiedData()` to call validation first for Oracle-Oracle mode
-
-#### 1.3 Primary Key Auto-Select for Comparison Fields
-**Files**: `main.js`
-
-**Changes**:
-1. When user selects/changes Primary Key fields, auto-add them to Fields to Compare:
-   ```javascript
-   onUnifiedPkSelectionChange() {
-     const selectedPks = this.unified.selectedPkFields;
-
-     // Ensure all PKs are also in comparison fields
-     for (const pk of selectedPks) {
-       if (!this.unified.selectedCompareFields.includes(pk)) {
-         this.unified.selectedCompareFields.push(pk);
-       }
-     }
-
-     this.renderUnifiedFieldSelection();
-     this.updateUnifiedCompareButtonState();
-   }
-   ```
-
-2. Update checkbox event handlers to trigger this auto-selection
+#### 1.3 Primary Key Auto-Select for Comparison Fields ✅
+**Implementation**:
+- Created `syncPkFieldsToCompareFields()` utility function (pure, testable)
+- Updated PK checkbox event handler to auto-sync PKs to compare fields
+- Updated "Select All PK" button to also trigger auto-sync
+- Re-renders field selection UI to show updated checkboxes
+- 44 unit tests covering all utility functions
 
 ---
 
@@ -369,9 +335,9 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Implementation Order
 
-1. **Phase 1.3** - PK auto-select for comparison fields (quick win, isolated change)
+1. ~~**Phase 1.3** - PK auto-select for comparison fields (quick win, isolated change)~~ ✅ DONE
 2. **Phase 4.1** - New Comparison reset logic (foundation for all modes)
-3. **Phase 1.1 & 1.2** - Oracle vs Oracle improvements (Source B follows A)
+3. ~~**Phase 1.1 & 1.2** - Oracle vs Oracle improvements (Source B follows A)~~ ✅ DONE
 4. **Phase 2.1 & 2.2** - Enhanced Excel upload (symmetric for both sources - covers Oracle vs Excel AND Excel vs Oracle)
 5. **Phase 2.3** - Mixed mode validation (Oracle + Excel field matching)
 6. **Phase 3.2** - IndexedDB store for unified Excel files
@@ -381,7 +347,18 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ## Testing Checklist
 
-### Oracle vs Oracle
+### Unit Tests (Phase 1) ✅
+- [x] `getComparisonMode()` - 7 tests
+- [x] `isSourceBFollowMode()` - 6 tests
+- [x] `syncPkFieldsToCompareFields()` - 9 tests
+- [x] `validateOracleToOracleConfig()` - 10 tests
+- [x] `createSourceBConfigFromSourceA()` - 3 tests
+- [x] `getSourceBDisabledFieldsForFollowMode()` - 2 tests
+- [x] `validateFieldSelection()` - 7 tests
+
+**Total: 44 unit tests passing**
+
+### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
 - [ ] Helper text appears explaining "follow" mode
 - [ ] Validation catches missing table in Source B before load

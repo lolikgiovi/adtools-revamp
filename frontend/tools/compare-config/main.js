@@ -19,6 +19,13 @@ import { ExcelComparator } from "./lib/excel-comparator.js";
 import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
+import {
+  isSourceBFollowMode,
+  syncPkFieldsToCompareFields,
+  validateOracleToOracleConfig,
+  createSourceBConfigFromSourceA,
+  getSourceBDisabledFieldsForFollowMode,
+} from "./lib/unified-compare-utils.js";
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
@@ -5058,6 +5065,11 @@ class CompareConfigTool extends BaseTool {
     if (selectAllPkBtn) {
       selectAllPkBtn.addEventListener("click", () => {
         this.unified.selectedPkFields = [...this.unified.fields.common];
+        // Phase 1.3: Auto-sync PK fields to comparison fields
+        this.unified.selectedCompareFields = syncPkFieldsToCompareFields(
+          this.unified.selectedPkFields,
+          this.unified.selectedCompareFields
+        );
         this.renderUnifiedFieldSelection();
       });
     }
@@ -5220,8 +5232,58 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].data = null;
 
     this.updateUnifiedSourceConfigVisibility(source);
+    this.updateSourceBFollowModeUI();
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Update Source B UI for Oracle vs Oracle "follow mode"
+   * In follow mode, Source B only shows Connection; other fields follow Source A
+   */
+  updateSourceBFollowModeUI() {
+    const isFollowMode = isSourceBFollowMode(
+      this.unified.sourceA.type,
+      this.unified.sourceB.type
+    );
+
+    const disabledFields = getSourceBDisabledFieldsForFollowMode();
+    const followModeNote = document.getElementById("source-b-follow-mode-note");
+
+    // Show/hide the follow mode note
+    if (followModeNote) {
+      followModeNote.style.display = isFollowMode ? "block" : "none";
+    }
+
+    // Enable/disable Source B fields based on follow mode
+    for (const fieldId of disabledFields) {
+      const element = document.getElementById(fieldId);
+      if (element) {
+        element.disabled = isFollowMode;
+        // Add visual indication
+        element.closest(".form-group")?.classList.toggle("disabled-follow-mode", isFollowMode);
+      }
+    }
+
+    // Hide table/sql config sections in follow mode (only show connection)
+    const tableModeConfig = document.getElementById("source-b-table-config");
+    const sqlModeConfig = document.getElementById("source-b-sql-config");
+    const maxRowsGroup = document.getElementById("source-b-max-rows")?.closest(".form-group");
+    const queryModeGroup = document.getElementById("source-b-query-mode")?.closest(".form-group");
+
+    if (isFollowMode) {
+      if (tableModeConfig) tableModeConfig.style.display = "none";
+      if (sqlModeConfig) sqlModeConfig.style.display = "none";
+      if (maxRowsGroup) maxRowsGroup.style.display = "none";
+      if (queryModeGroup) queryModeGroup.style.display = "none";
+    } else {
+      // Restore visibility based on current query mode
+      const queryMode = this.unified.sourceB.queryMode;
+      if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "block" : "none";
+      if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "block" : "none";
+      if (maxRowsGroup) maxRowsGroup.style.display = "block";
+      if (queryModeGroup) queryModeGroup.style.display = "block";
+    }
   }
 
   /**
@@ -5454,6 +5516,13 @@ class CompareConfigTool extends BaseTool {
 
     if (config.type === "oracle") {
       if (!config.connection) return false;
+
+      // Phase 1.1: In Oracle vs Oracle follow mode, Source B only needs connection
+      // (schema/table/sql will be copied from Source A)
+      if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
+        return true; // Connection is enough for Source B in follow mode
+      }
+
       if (config.queryMode === "table") {
         return !!config.schema && !!config.table;
       } else {
@@ -5478,6 +5547,26 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
+    // Phase 1.2: Validate Oracle vs Oracle configuration
+    const isOracleToOracle = isSourceBFollowMode(
+      this.unified.sourceA.type,
+      this.unified.sourceB.type
+    );
+
+    if (isOracleToOracle) {
+      const validation = validateOracleToOracleConfig(
+        this.unified.sourceA,
+        this.unified.sourceB
+      );
+      if (!validation.valid) {
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: validation.error,
+        });
+        return;
+      }
+    }
+
     this.showProgress("Loading Data");
     this.updateProgressStep("env1", "active", "Loading Source A...");
 
@@ -5488,6 +5577,16 @@ class CompareConfigTool extends BaseTool {
       this.unified.sourceA.dataLoaded = true;
       this.updateProgressStep("env1", "done", `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
+
+      // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
+      if (isOracleToOracle && this.unified.sourceA.queryMode === "table") {
+        this.updateProgressStep("env2", "active", "Validating Source B...");
+        const tableExists = await this.validateOracleTableExistsInSourceB();
+        if (!tableExists) {
+          this.hideProgress();
+          return; // Error already shown by validateOracleTableExistsInSourceB
+        }
+      }
 
       // Load Source B
       this.updateProgressStep("env2", "active", "Loading Source B...");
@@ -5517,11 +5616,60 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Validate that the schema.table from Source A exists in Source B connection
+   * Used in Oracle vs Oracle mode before loading data
+   * @returns {Promise<boolean>}
+   */
+  async validateOracleTableExistsInSourceB() {
+    const { schema, table } = this.unified.sourceA;
+    const sourceBConnection = this.unified.sourceB.connection;
+
+    try {
+      // Fetch tables for the schema in Source B
+      const tables = await CompareConfigService.fetchTables(
+        sourceBConnection.name,
+        sourceBConnection,
+        schema
+      );
+
+      const tableExists = tables.some(
+        (t) => t.toLowerCase() === table.toLowerCase()
+      );
+
+      if (!tableExists) {
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: `Table "${schema}.${table}" does not exist in Source B connection (${sourceBConnection.name}). Please verify the table exists or select a different connection.`,
+        });
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      // Schema might not exist - try to give a helpful error
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Cannot access schema "${schema}" in Source B connection (${sourceBConnection.name}): ${error.message || error}`,
+      });
+      return false;
+    }
+  }
+
+  /**
    * Fetch data from a unified source
    */
   async fetchUnifiedSourceData(source) {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
-    const config = this.unified[sourceKey];
+    let config = this.unified[sourceKey];
+
+    // Phase 1.1: In Oracle vs Oracle follow mode, Source B uses Source A's config
+    // with only the connection being different
+    if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
+      config = createSourceBConfigFromSourceA(
+        this.unified.sourceA,
+        this.unified.sourceB.connection
+      );
+    }
 
     if (config.type === "oracle") {
       const sourceConfig = {
@@ -5715,15 +5863,19 @@ class CompareConfigTool extends BaseTool {
   bindUnifiedFieldCheckboxEvents() {
     // PK checkboxes
     const pkCheckboxes = document.querySelectorAll('input[name="unified-pk-field"]');
-    console.log("[DEBUG] Binding PK checkboxes, count:", pkCheckboxes.length);
     pkCheckboxes.forEach((cb) => {
-      console.log("[DEBUG] PK checkbox value:", cb.value, "checked:", cb.checked);
       cb.addEventListener("change", () => {
         const checked = Array.from(document.querySelectorAll('input[name="unified-pk-field"]:checked')).map((c) => c.value);
-        console.log("[DEBUG] PK selection changed, selected fields:", checked);
         this.unified.selectedPkFields = checked;
-        console.log("[DEBUG] this.unified.selectedPkFields after assignment:", this.unified.selectedPkFields);
-        this.updateUnifiedCompareButtonState();
+
+        // Phase 1.3: Auto-sync PK fields to comparison fields
+        this.unified.selectedCompareFields = syncPkFieldsToCompareFields(
+          this.unified.selectedPkFields,
+          this.unified.selectedCompareFields
+        );
+
+        // Re-render to update the compare field checkboxes
+        this.renderUnifiedFieldSelection();
       });
     });
 

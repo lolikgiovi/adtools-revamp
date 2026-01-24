@@ -3037,6 +3037,23 @@
   color: hsl(var(--warning));
 }
 
+/* Follow Mode (Oracle vs Oracle) */
+.follow-mode-note {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.form-group.disabled-follow-mode {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.form-group.disabled-follow-mode label {
+  color: hsl(var(--muted-foreground));
+}
+
 /* Source Type Selector */
 .source-type-selector {
   display: flex;
