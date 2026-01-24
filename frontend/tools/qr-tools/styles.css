@@ -51,7 +51,9 @@ label {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-size: 0.875rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .form-control:focus {
@@ -83,25 +85,25 @@ label {
   justify-content: center;
 }
 
-.preview-header {
+.qr-preview-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 0.5rem;
 }
 
-.preview-title {
+.qr-preview-title {
   font-size: 1rem;
   font-weight: 600;
   color: hsl(var(--foreground));
 }
 
-.preview-tip {
+.qr-preview-tip {
   color: hsl(var(--muted-foreground));
   font-size: 0.8rem;
 }
 
-.preview-area {
+.qr-preview-area {
   display: flex;
   align-items: center;
   justify-content: center;
