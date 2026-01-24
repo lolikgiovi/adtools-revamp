@@ -320,3 +320,35 @@ export function canStartUnifiedComparison(unified) {
 
   return { canCompare: true };
 }
+
+/**
+ * Syncs PK fields to compare fields and returns which fields were newly added.
+ * This is used for animation purposes.
+ *
+ * @param {string[]} selectedPkFields - Currently selected primary key fields
+ * @param {string[]} selectedCompareFields - Currently selected comparison fields
+ * @returns {{updatedCompareFields: string[], newlyAddedFields: string[]}}
+ */
+export function syncPkFieldsWithTracking(selectedPkFields, selectedCompareFields) {
+  if (!selectedPkFields || selectedPkFields.length === 0) {
+    return {
+      updatedCompareFields: selectedCompareFields || [],
+      newlyAddedFields: [],
+    };
+  }
+
+  const existingSet = new Set(selectedCompareFields || []);
+  const newlyAddedFields = [];
+
+  for (const pkField of selectedPkFields) {
+    if (!existingSet.has(pkField)) {
+      newlyAddedFields.push(pkField);
+      existingSet.add(pkField);
+    }
+  }
+
+  return {
+    updatedCompareFields: Array.from(existingSet),
+    newlyAddedFields,
+  };
+}

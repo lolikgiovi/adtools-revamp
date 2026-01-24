@@ -22,6 +22,7 @@ import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/dif
 import {
   isSourceBFollowMode,
   syncPkFieldsToCompareFields,
+  syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
   createSourceBConfigFromSourceA,
   getSourceBDisabledFieldsForFollowMode,
@@ -168,6 +169,7 @@ class CompareConfigTool extends BaseTool {
       // User selections
       selectedPkFields: [], // Normalized field names
       selectedCompareFields: [], // Normalized field names
+      _pkAutoAddedFields: [], // Temporary: fields auto-added from PK sync (for animation)
 
       // Comparison options
       options: {
@@ -5165,11 +5167,13 @@ class CompareConfigTool extends BaseTool {
     if (selectAllPkBtn) {
       selectAllPkBtn.addEventListener("click", () => {
         this.unified.selectedPkFields = [...this.unified.fields.common];
-        // Phase 1.3: Auto-sync PK fields to comparison fields
-        this.unified.selectedCompareFields = syncPkFieldsToCompareFields(
+        // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
+        const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
           this.unified.selectedPkFields,
           this.unified.selectedCompareFields
         );
+        this.unified.selectedCompareFields = updatedCompareFields;
+        this.unified._pkAutoAddedFields = newlyAddedFields;
         this.renderUnifiedFieldSelection();
       });
     }
@@ -5403,10 +5407,16 @@ class CompareConfigTool extends BaseTool {
 
     const disabledFields = getSourceBDisabledFieldsForFollowMode();
     const followModeNote = document.getElementById("source-b-follow-mode-note");
+    const sourceBPanel = document.querySelector(".source-panel.source-b");
 
-    // Show/hide the follow mode note
+    // Show/hide the follow mode badge
     if (followModeNote) {
-      followModeNote.style.display = isFollowMode ? "block" : "none";
+      followModeNote.style.display = isFollowMode ? "flex" : "none";
+    }
+
+    // Add/remove follow-mode-active class on source panel for visual indicator
+    if (sourceBPanel) {
+      sourceBPanel.classList.toggle("follow-mode-active", isFollowMode);
     }
 
     // Enable/disable Source B fields based on follow mode
@@ -6408,7 +6418,7 @@ class CompareConfigTool extends BaseTool {
     if (!pkFieldList || !compareFieldList) return;
 
     const { common } = this.unified.fields;
-    const { selectedPkFields, selectedCompareFields } = this.unified;
+    const { selectedPkFields, selectedCompareFields, _pkAutoAddedFields } = this.unified;
 
     // Render PK fields
     pkFieldList.innerHTML = common
@@ -6423,18 +6433,28 @@ class CompareConfigTool extends BaseTool {
       )
       .join("");
 
-    // Render compare fields
+    // Render compare fields with animation class for newly auto-added PK fields
     compareFieldList.innerHTML = common
-      .map(
-        (field) => `
-      <label class="field-chip">
+      .map((field) => {
+        const isAutoAdded = _pkAutoAddedFields.includes(field);
+        const animationClass = isAutoAdded ? "pk-auto-added" : "";
+        return `
+      <label class="field-chip ${animationClass}">
         <input type="checkbox" name="unified-compare-field" value="${field}"
-               ${selectedCompareFields.includes(field) ? "checked" : ""}>
+               ${selectedCompareFields.includes(field) ? "checked" : ""}
+               ${isAutoAdded ? 'class="pk-synced"' : ""}>
         <span>${field}</span>
       </label>
-    `,
-      )
+    `;
+      })
       .join("");
+
+    // Clear the auto-added tracking after render (animation will play once)
+    if (_pkAutoAddedFields.length > 0) {
+      setTimeout(() => {
+        this.unified._pkAutoAddedFields = [];
+      }, 600);
+    }
 
     // Bind checkbox events
     this.bindUnifiedFieldCheckboxEvents();
@@ -6454,11 +6474,13 @@ class CompareConfigTool extends BaseTool {
         const checked = Array.from(document.querySelectorAll('input[name="unified-pk-field"]:checked')).map((c) => c.value);
         this.unified.selectedPkFields = checked;
 
-        // Phase 1.3: Auto-sync PK fields to comparison fields
-        this.unified.selectedCompareFields = syncPkFieldsToCompareFields(
+        // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
+        const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
           this.unified.selectedPkFields,
           this.unified.selectedCompareFields
         );
+        this.unified.selectedCompareFields = updatedCompareFields;
+        this.unified._pkAutoAddedFields = newlyAddedFields;
 
         // Re-render to update the compare field checkboxes
         this.renderUnifiedFieldSelection();

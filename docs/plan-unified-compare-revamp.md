@@ -231,15 +231,29 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 ### Phase 5: UI/UX Polish
 
-#### 5.1 Visual Feedback for Mode Detection
-**Status**: Not yet implemented
+#### 5.1 Visual Feedback for Mode Detection ✅
+**Status**: COMPLETED
 
-**Planned Changes**:
-1. Add visual indicator when Oracle-Oracle mode detected:
-   - Subtle connection line or badge showing "Following Source A"
-   - Dimmed/disabled appearance for hidden Source B fields
+> **Implementation Date**: 2026-01-24
+>
+> **Files Modified**:
+> - `template.js` - Updated follow mode note to styled badge with link icon
+> - `styles.css` - Added follow-mode-badge styles, panel indicator, PK auto-add animations
+> - `main.js` - Added follow-mode-active class to panel, animation tracking for PK sync
+> - `lib/unified-compare-utils.js` - Added `syncPkFieldsWithTracking()` utility
+> - `tests/unified-compare-utils.test.js` - Added 8 new tests (95 total)
 
-2. Add animation for field auto-selection (PK → Compare Fields)
+**Implementation**:
+1. **Follow Mode Badge** (Oracle vs Oracle):
+   - Replaced plain text note with styled badge showing link icon + "Following Source A"
+   - Badge has primary color background, subtle border, fade-in animation
+   - Source B panel gets `follow-mode-active` class with animated left border indicator
+
+2. **PK to Compare Field Animation**:
+   - Created `syncPkFieldsWithTracking()` utility that returns both updated fields and newly added fields
+   - Compare field chips get `pk-auto-added` class for pulse animation when auto-synced from PK
+   - Checkboxes get `pk-synced` class for box-shadow pulse effect
+   - Animation clears after 600ms to allow re-triggering
 
 #### 5.2 Loading States
 **Status**: Not yet implemented
@@ -272,12 +286,12 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 
 | File | Changes |
 |------|---------|
-| `template.js` | Enhanced Excel config sections for both sources, follow mode note |
-| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()` |
-| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown |
+| `template.js` | Enhanced Excel config sections for both sources, follow mode badge |
+| `main.js` | Multi-file upload handlers, searchable dropdown, IndexedDB caching, Oracle follow mode, PK auto-select with animation, `handleUnifiedNewComparison()`, `resetUnifiedSourceUI()` |
+| `styles.css` | Styles for enhanced Excel upload, disabled states, file-selection-dropdown, follow-mode-badge, PK auto-add animations |
 | `lib/indexed-db-manager.js` | New `UNIFIED_EXCEL_FILES` store with helper methods |
-| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions |
-| `tests/unified-compare-utils.test.js` | 87 unit tests |
+| `lib/unified-compare-utils.js` | Core business logic utilities including reset behavior functions, `syncPkFieldsWithTracking()` |
+| `tests/unified-compare-utils.test.js` | 95 unit tests |
 
 ---
 
@@ -309,8 +323,9 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 - [x] `getResetBehaviorForSourceType()` - 5 tests
 - [x] `createResetSourceState()` - 8 tests
 - [x] `canStartUnifiedComparison()` - 6 tests
+- [x] `syncPkFieldsWithTracking()` - 8 tests
 
-**Total: 87 unit tests passing**
+**Total: 95 unit tests passing**
 
 ### Oracle vs Oracle (Manual Testing)
 - [ ] Source B shows only Connection when both sources are Oracle
@@ -370,6 +385,8 @@ Since Phase 2 implements **symmetric** Excel upload for both Source A and Source
 | Phase 2: Mixed Mode | ✅ COMPLETED | 2026-01-24 |
 | Phase 3: Excel vs Excel | ✅ COMPLETED | 2026-01-24 |
 | Phase 4: Reset Behavior | ✅ COMPLETED | 2026-01-24 |
-| Phase 5: UI/UX Polish | ⏳ Pending | - |
+| Phase 5.1: Visual Feedback | ✅ COMPLETED | 2026-01-24 |
+| Phase 5.2: Loading States | ⏳ Pending | - |
+| Phase 5.3: Error Handling | ⏳ Pending | - |
 
-**Overall Progress**: 4/5 phases completed (80%)
+**Overall Progress**: 5/7 sub-phases completed (~71%)

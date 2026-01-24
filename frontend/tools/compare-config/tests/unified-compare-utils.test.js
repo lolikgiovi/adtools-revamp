@@ -6,6 +6,7 @@ import {
   getComparisonMode,
   isSourceBFollowMode,
   syncPkFieldsToCompareFields,
+  syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
   createSourceBConfigFromSourceA,
   getSourceBDisabledFieldsForFollowMode,
@@ -705,6 +706,60 @@ describe('UnifiedCompareUtils', () => {
       };
       const result = canStartUnifiedComparison(unified);
       expect(result.canCompare).toBe(true);
+    });
+  });
+
+  describe('syncPkFieldsWithTracking', () => {
+    it('returns empty arrays when no PK fields selected', () => {
+      const result = syncPkFieldsWithTracking([], ['field1', 'field2']);
+      expect(result.updatedCompareFields).toEqual(['field1', 'field2']);
+      expect(result.newlyAddedFields).toEqual([]);
+    });
+
+    it('returns empty arrays when PK fields is null', () => {
+      const result = syncPkFieldsWithTracking(null, ['field1']);
+      expect(result.updatedCompareFields).toEqual(['field1']);
+      expect(result.newlyAddedFields).toEqual([]);
+    });
+
+    it('adds new PK field and tracks it as newly added', () => {
+      const result = syncPkFieldsWithTracking(['id'], ['name', 'status']);
+      expect(result.updatedCompareFields).toContain('id');
+      expect(result.updatedCompareFields).toContain('name');
+      expect(result.updatedCompareFields).toContain('status');
+      expect(result.newlyAddedFields).toEqual(['id']);
+    });
+
+    it('does not track already existing fields as newly added', () => {
+      const result = syncPkFieldsWithTracking(['id'], ['id', 'name']);
+      expect(result.updatedCompareFields).toEqual(['id', 'name']);
+      expect(result.newlyAddedFields).toEqual([]);
+    });
+
+    it('tracks multiple newly added fields', () => {
+      const result = syncPkFieldsWithTracking(['pk1', 'pk2', 'pk3'], ['existing']);
+      expect(result.updatedCompareFields).toHaveLength(4);
+      expect(result.newlyAddedFields).toEqual(['pk1', 'pk2', 'pk3']);
+    });
+
+    it('tracks only fields that are new', () => {
+      const result = syncPkFieldsWithTracking(['pk1', 'pk2'], ['pk1', 'other']);
+      expect(result.updatedCompareFields).toContain('pk1');
+      expect(result.updatedCompareFields).toContain('pk2');
+      expect(result.updatedCompareFields).toContain('other');
+      expect(result.newlyAddedFields).toEqual(['pk2']);
+    });
+
+    it('handles empty compare fields array', () => {
+      const result = syncPkFieldsWithTracking(['id'], []);
+      expect(result.updatedCompareFields).toEqual(['id']);
+      expect(result.newlyAddedFields).toEqual(['id']);
+    });
+
+    it('handles null compare fields array', () => {
+      const result = syncPkFieldsWithTracking(['id'], null);
+      expect(result.updatedCompareFields).toEqual(['id']);
+      expect(result.newlyAddedFields).toEqual(['id']);
     });
   });
 });

@@ -3051,20 +3051,110 @@
 }
 
 /* Follow Mode (Oracle vs Oracle) */
-.follow-mode-note {
-  margin-top: 0.375rem;
+.follow-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.3);
+  border-radius: calc(var(--radius) - 2px);
   font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
-  font-style: italic;
+  font-weight: 500;
+  color: hsl(var(--primary));
+  animation: followModeFadeIn 0.3s ease-out;
+}
+
+.follow-mode-badge svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+@keyframes followModeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .form-group.disabled-follow-mode {
-  opacity: 0.5;
+  opacity: 0.4;
   pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 .form-group.disabled-follow-mode label {
   color: hsl(var(--muted-foreground));
+}
+
+/* Source Panel Follow Mode State */
+.source-panel.follow-mode-active {
+  position: relative;
+}
+
+.source-panel.follow-mode-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary) / 0.3));
+  border-radius: var(--radius) 0 0 var(--radius);
+  animation: followModeBarSlide 0.4s ease-out;
+}
+
+@keyframes followModeBarSlide {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 100%;
+    opacity: 1;
+  }
+}
+
+/* PK to Compare Field Auto-Selection Animation */
+.field-item.pk-auto-added {
+  animation: pkAutoAddPulse 0.5s ease-out;
+}
+
+@keyframes pkAutoAddPulse {
+  0% {
+    background-color: hsl(var(--primary) / 0.2);
+    transform: scale(1);
+  }
+  50% {
+    background-color: hsl(var(--primary) / 0.3);
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+/* Field checkbox highlight for newly added PKs */
+.field-item input[type="checkbox"].pk-synced {
+  animation: checkboxPulse 0.4s ease-out;
+}
+
+@keyframes checkboxPulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
 }
 
 /* Source Type Selector */
