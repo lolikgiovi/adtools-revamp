@@ -316,7 +316,7 @@ describe('UnifiedCompareUtils', () => {
     it('returns list of field IDs to disable', () => {
       const result = getSourceBDisabledFieldsForFollowMode();
 
-      expect(result).toContain('source-b-query-mode');
+      expect(result).toContain('source-b-query-mode-wrapper');
       expect(result).toContain('source-b-schema-search');
       expect(result).toContain('source-b-table-search');
       expect(result).toContain('source-b-where');

@@ -4854,15 +4854,10 @@ class CompareConfigTool extends BaseTool {
   bindUnifiedOracleConfigEvents(source) {
     const prefix = `source-${source.toLowerCase()}`;
 
-    // Connection searchable dropdown is set up by populateUnifiedConnectionDropdowns()
+    // Connection dropdown is set up by populateUnifiedConnectionDropdowns()
 
-    // Query mode selection (now a dropdown)
-    const queryModeSelect = document.getElementById(`${prefix}-query-mode`);
-    if (queryModeSelect) {
-      queryModeSelect.addEventListener("change", (e) => {
-        this.onUnifiedQueryModeChange(source, e.target.value);
-      });
-    }
+    // Query mode dropdown (button-based)
+    this.setupUnifiedQueryModeDropdown(source);
 
     // Schema and Table searchable dropdowns are set up dynamically when schemas/tables are loaded
 
@@ -5243,7 +5238,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Setup searchable dropdown for unified connection selection
+   * Setup button-based dropdown for unified connection selection
    * @param {string} source - 'A' or 'B'
    */
   setupUnifiedConnectionDropdown(source) {
@@ -5251,130 +5246,129 @@ class CompareConfigTool extends BaseTool {
     const prefix = `source-${source.toLowerCase()}`;
     const connections = this.savedConnections;
 
-    const input = document.getElementById(`${prefix}-connection-search`);
+    const btn = document.getElementById(`${prefix}-connection-btn`);
+    const label = document.getElementById(`${prefix}-connection-label`);
     const dropdown = document.getElementById(`${prefix}-connection-dropdown`);
 
-    if (!input || !dropdown) return;
+    if (!btn || !dropdown || !label) return;
 
-    // Remove old event listeners by cloning the input
-    const newInput = input.cloneNode(true);
-    input.parentNode.replaceChild(newInput, input);
+    // Update label based on current state
+    const currentConnection = this.unified[sourceKey].connection;
+    label.textContent = currentConnection?.name || (connections.length > 0 ? "Select connection..." : "No connections saved");
+    btn.disabled = connections.length === 0;
 
-    newInput.placeholder = connections.length > 0 ? "Search or select connection..." : "No connections saved";
-    newInput.disabled = connections.length === 0;
-    newInput.value = this.unified[sourceKey].connection?.name || "";
-
-    let highlightedIndex = -1;
-    let filteredConnections = [];
-
-    const renderOptions = (filter = "") => {
-      filteredConnections = connections.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()));
-      highlightedIndex = -1;
-
-      if (filteredConnections.length === 0) {
-        dropdown.innerHTML = '<div class="searchable-no-results">No matching connections</div>';
+    // Render options
+    const renderOptions = () => {
+      if (connections.length === 0) {
+        dropdown.innerHTML = '<div class="config-dropdown-no-results">No connections saved</div>';
         return;
       }
 
       const selectedName = this.unified[sourceKey].connection?.name;
-      dropdown.innerHTML = filteredConnections
+      dropdown.innerHTML = connections
         .map(
-          (conn, i) => `
-        <div class="searchable-option ${conn.name === selectedName ? "selected" : ""}" data-value="${conn.name}" data-index="${i}">
-          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-          <span class="option-text">${conn.name}</span>
-        </div>
+          (conn) => `
+        <button class="config-dropdown-option ${conn.name === selectedName ? "active" : ""}" data-value="${conn.name}">
+          ${conn.name}
+        </button>
       `
         )
         .join("");
 
       // Bind click handlers
-      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
-        opt.addEventListener("click", () => {
+      dropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+        opt.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           const value = opt.dataset.value;
-          newInput.value = value;
-          dropdown.classList.remove("open");
+          label.textContent = value;
+          dropdown.classList.remove("show");
+          // Update active state
+          dropdown.querySelectorAll(".config-dropdown-option").forEach((o) => o.classList.remove("active"));
+          opt.classList.add("active");
           this.onUnifiedConnectionSelected(source, value);
         });
       });
     };
 
-    const updateHighlighting = () => {
-      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
-        if (i === highlightedIndex) {
-          opt.classList.add("highlighted");
-          opt.scrollIntoView({ block: "nearest" });
-        } else {
-          opt.classList.remove("highlighted");
-        }
-      });
-    };
+    // Clone button to remove old event listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
 
-    // Input events
-    newInput.addEventListener("focus", () => {
-      renderOptions(newInput.value);
-      dropdown.classList.add("open");
+    // Toggle dropdown on button click
+    newBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      renderOptions();
+      dropdown.classList.toggle("show");
     });
 
-    newInput.addEventListener("input", () => {
-      renderOptions(newInput.value);
-      dropdown.classList.add("open");
-    });
-
-    newInput.addEventListener("blur", () => {
-      setTimeout(() => {
-        dropdown.classList.remove("open");
-        highlightedIndex = -1;
-      }, 200);
-    });
-
-    newInput.addEventListener("keydown", (e) => {
-      if (!dropdown.classList.contains("open")) {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          renderOptions(newInput.value);
-          dropdown.classList.add("open");
-        }
-        return;
-      }
-
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          highlightedIndex = Math.min(highlightedIndex + 1, filteredConnections.length - 1);
-          updateHighlighting();
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          highlightedIndex = Math.max(highlightedIndex - 1, -1);
-          updateHighlighting();
-          break;
-        case "Enter":
-          if (highlightedIndex >= 0 && highlightedIndex < filteredConnections.length) {
-            e.preventDefault();
-            const conn = filteredConnections[highlightedIndex];
-            newInput.value = conn.name;
-            dropdown.classList.remove("open");
-            this.onUnifiedConnectionSelected(source, conn.name);
-          }
-          break;
-        case "Escape":
-          e.preventDefault();
-          dropdown.classList.remove("open");
-          highlightedIndex = -1;
-          break;
-        case "Tab":
-          dropdown.classList.remove("open");
-          highlightedIndex = -1;
-          break;
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("show");
       }
     });
 
     // Initial render
     renderOptions();
+  }
+
+  /**
+   * Setup button-based dropdown for query mode selection
+   * @param {string} source - 'A' or 'B'
+   */
+  setupUnifiedQueryModeDropdown(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const prefix = `source-${source.toLowerCase()}`;
+
+    const btn = document.getElementById(`${prefix}-query-mode-btn`);
+    const label = document.getElementById(`${prefix}-query-mode-label`);
+    const dropdown = document.getElementById(`${prefix}-query-mode-dropdown`);
+
+    if (!btn || !dropdown || !label) return;
+
+    // Update label based on current state
+    const currentMode = this.unified[sourceKey].queryMode || "table";
+    label.textContent = currentMode === "table" ? "By Table" : "By Raw SQL";
+
+    // Update active state in dropdown
+    dropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+      opt.classList.toggle("active", opt.dataset.value === currentMode);
+    });
+
+    // Clone button to remove old event listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Toggle dropdown on button click
+    newBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropdown.classList.toggle("show");
+    });
+
+    // Bind option click handlers
+    dropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+      opt.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const value = opt.dataset.value;
+        label.textContent = value === "table" ? "By Table" : "By Raw SQL";
+        dropdown.classList.remove("show");
+        // Update active state
+        dropdown.querySelectorAll(".config-dropdown-option").forEach((o) => o.classList.remove("active"));
+        opt.classList.add("active");
+        this.onUnifiedQueryModeChange(source, value);
+      });
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("show");
+      }
+    });
   }
 
   /**
@@ -5452,7 +5446,7 @@ class CompareConfigTool extends BaseTool {
     const tableModeConfig = document.getElementById("source-b-table-config");
     const sqlModeConfig = document.getElementById("source-b-sql-config");
     const maxRowsGroup = document.getElementById("source-b-max-rows")?.closest(".form-group");
-    const queryModeGroup = document.getElementById("source-b-query-mode")?.closest(".form-group");
+    const queryModeGroup = document.getElementById("source-b-query-mode-wrapper")?.closest(".form-group");
 
     if (isFollowMode) {
       if (tableModeConfig) tableModeConfig.style.display = "none";
@@ -6892,8 +6886,7 @@ class CompareConfigTool extends BaseTool {
 
     if (sourceType === "oracle") {
       // Reset Oracle UI
-      const connectionInput = document.getElementById(`${prefix}-connection-search`);
-      const connectionDropdown = document.getElementById(`${prefix}-connection-dropdown`);
+      const connectionLabel = document.getElementById(`${prefix}-connection-label`);
       const schemaInput = document.getElementById(`${prefix}-schema-search`);
       const schemaDropdown = document.getElementById(`${prefix}-schema-dropdown`);
       const tableInput = document.getElementById(`${prefix}-table-search`);
@@ -6902,11 +6895,13 @@ class CompareConfigTool extends BaseTool {
       const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
       const sqlInput = document.getElementById(`${prefix}-sql`);
 
-      if (connectionInput) {
-        connectionInput.value = "";
-        // Re-setup dropdown to reset state
-        this.setupUnifiedConnectionDropdown(source);
+      // Reset connection dropdown
+      if (connectionLabel) {
+        connectionLabel.textContent = "Select connection...";
       }
+      // Re-setup dropdown to reset state
+      this.setupUnifiedConnectionDropdown(source);
+
       if (schemaInput) {
         schemaInput.value = "";
         schemaInput.placeholder = "Select connection first...";
@@ -6923,9 +6918,15 @@ class CompareConfigTool extends BaseTool {
       if (maxRowsInput) maxRowsInput.value = "100";
       if (sqlInput) sqlInput.value = "";
 
-      // Reset query mode to table
-      const queryModeSelect = document.getElementById(`${prefix}-query-mode`);
-      if (queryModeSelect) queryModeSelect.value = "table";
+      // Reset query mode dropdown to table
+      const queryModeLabel = document.getElementById(`${prefix}-query-mode-label`);
+      const queryModeDropdown = document.getElementById(`${prefix}-query-mode-dropdown`);
+      if (queryModeLabel) queryModeLabel.textContent = "By Table";
+      if (queryModeDropdown) {
+        queryModeDropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+          opt.classList.toggle("active", opt.dataset.value === "table");
+        });
+      }
 
       // Show table config, hide SQL config
       const tableConfig = document.getElementById(`${prefix}-table-config`);

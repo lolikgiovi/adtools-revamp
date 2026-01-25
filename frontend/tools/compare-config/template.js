@@ -129,18 +129,30 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="oracle-config-row">
                             <div class="form-group connection-group">
                                 <label>Connection</label>
-                                <div class="searchable-select" id="source-a-connection-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-a-connection-search" placeholder="Select connection..." autocomplete="off">
-                                    <div class="searchable-dropdown" id="source-a-connection-dropdown"></div>
+                                <div class="config-dropdown" id="source-a-connection-wrapper">
+                                    <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-a-connection-btn">
+                                        <span id="source-a-connection-label">Select connection...</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="config-dropdown-menu" id="source-a-connection-dropdown"></div>
                                 </div>
                             </div>
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>
-                                <select id="source-a-query-mode" class="form-select">
-                                    <option value="table">By Table</option>
-                                    <option value="sql">By Raw SQL</option>
-                                </select>
+                                <div class="config-dropdown" id="source-a-query-mode-wrapper">
+                                    <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-a-query-mode-btn">
+                                        <span id="source-a-query-mode-label">By Table</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="config-dropdown-menu" id="source-a-query-mode-dropdown">
+                                        <button class="config-dropdown-option active" data-value="table">By Table</button>
+                                        <button class="config-dropdown-option" data-value="sql">By Raw SQL</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -275,10 +287,14 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="oracle-config-row">
                             <div class="form-group connection-group">
                                 <label>Connection</label>
-                                <div class="searchable-select" id="source-b-connection-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-b-connection-search" placeholder="Select connection..." autocomplete="off">
-                                    <div class="searchable-dropdown" id="source-b-connection-dropdown"></div>
+                                <div class="config-dropdown" id="source-b-connection-wrapper">
+                                    <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-b-connection-btn">
+                                        <span id="source-b-connection-label">Select connection...</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="config-dropdown-menu" id="source-b-connection-dropdown"></div>
                                 </div>
                                 <!-- Follow Mode Badge (shown in Oracle vs Oracle mode) -->
                                 <div class="follow-mode-badge" id="source-b-follow-mode-note" style="display: none;">
@@ -291,10 +307,18 @@ export const CompareConfigTemplate = /* html */ `
                             </div>
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>
-                                <select id="source-b-query-mode" class="form-select">
-                                    <option value="table">By Table</option>
-                                    <option value="sql">By Raw SQL</option>
-                                </select>
+                                <div class="config-dropdown" id="source-b-query-mode-wrapper">
+                                    <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-b-query-mode-btn">
+                                        <span id="source-b-query-mode-label">By Table</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="config-dropdown-menu" id="source-b-query-mode-dropdown">
+                                        <button class="config-dropdown-option active" data-value="table">By Table</button>
+                                        <button class="config-dropdown-option" data-value="sql">By Raw SQL</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
