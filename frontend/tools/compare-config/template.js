@@ -158,20 +158,22 @@ export const CompareConfigTemplate = /* html */ `
 
                         <!-- Table Mode Config -->
                         <div class="table-mode-config" id="source-a-table-config">
-                            <div class="form-group">
-                                <label>Schema</label>
-                                <div class="searchable-select" id="source-a-schema-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-a-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
-                                    <div class="searchable-dropdown" id="source-a-schema-dropdown"></div>
+                            <div class="schema-table-row">
+                                <div class="form-group">
+                                    <label>Schema</label>
+                                    <div class="searchable-select" id="source-a-schema-wrapper">
+                                        <input type="text" class="form-input searchable-input"
+                                               id="source-a-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
+                                        <div class="searchable-dropdown" id="source-a-schema-dropdown"></div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Table</label>
-                                <div class="searchable-select" id="source-a-table-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-a-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
-                                    <div class="searchable-dropdown" id="source-a-table-dropdown"></div>
+                                <div class="form-group">
+                                    <label>Table</label>
+                                    <div class="searchable-select" id="source-a-table-wrapper">
+                                        <input type="text" class="form-input searchable-input"
+                                               id="source-a-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
+                                        <div class="searchable-dropdown" id="source-a-table-dropdown"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -201,19 +203,34 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Excel Config (shown when Excel selected) - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-a-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-a-upload-zone">
-                            <div class="upload-area">
-                                <p>Click to <a href="#" class="browse-link" id="source-a-browse-files">browse files</a>
-                                   or <a href="#" class="browse-link" id="source-a-browse-folder">select folder</a>, supports .xlsx, .xls, .csv</p>
-                            </div>
                             <div class="upload-zone-header">
                                 <span class="zone-label">Excel Files</span>
-                                <button class="btn btn-ghost btn-xs btn-clear-files" id="source-a-clear-all" style="display: none;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                    Clear All
-                                </button>
+                                <div class="upload-zone-actions">
+                                    <button class="btn btn-ghost btn-xs btn-browse" id="source-a-browse-files">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                                        </svg>
+                                        Add Files
+                                    </button>
+                                    <button class="btn btn-ghost btn-xs btn-browse" id="source-a-browse-folder">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                            <line x1="12" y1="11" x2="12" y2="17"></line>
+                                            <line x1="9" y1="14" x2="15" y2="14"></line>
+                                        </svg>
+                                        Add Folder
+                                    </button>
+                                    <button class="btn btn-ghost btn-xs btn-clear-files" id="source-a-clear-all" style="display: none;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                        Clear All
+                                    </button>
+                                </div>
                             </div>
                             <input type="file" id="source-a-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-a-folder-input" webkitdirectory style="display: none;">
@@ -323,20 +340,22 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
 
                         <div class="table-mode-config" id="source-b-table-config">
-                            <div class="form-group">
-                                <label>Schema</label>
-                                <div class="searchable-select" id="source-b-schema-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-b-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
-                                    <div class="searchable-dropdown" id="source-b-schema-dropdown"></div>
+                            <div class="schema-table-row">
+                                <div class="form-group">
+                                    <label>Schema</label>
+                                    <div class="searchable-select" id="source-b-schema-wrapper">
+                                        <input type="text" class="form-input searchable-input"
+                                               id="source-b-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
+                                        <div class="searchable-dropdown" id="source-b-schema-dropdown"></div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Table</label>
-                                <div class="searchable-select" id="source-b-table-wrapper">
-                                    <input type="text" class="form-input searchable-input"
-                                           id="source-b-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
-                                    <div class="searchable-dropdown" id="source-b-table-dropdown"></div>
+                                <div class="form-group">
+                                    <label>Table</label>
+                                    <div class="searchable-select" id="source-b-table-wrapper">
+                                        <input type="text" class="form-input searchable-input"
+                                               id="source-b-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
+                                        <div class="searchable-dropdown" id="source-b-table-dropdown"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -364,19 +383,34 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Excel Config - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-b-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-b-upload-zone">
-                            <div class="upload-area">
-                                <p>Click to <a href="#" class="browse-link" id="source-b-browse-files">browse files</a>
-                                   or <a href="#" class="browse-link" id="source-b-browse-folder">select folder</a>, supports .xlsx, .xls, .csv</p>
-                            </div>
                             <div class="upload-zone-header">
                                 <span class="zone-label">Excel Files</span>
-                                <button class="btn btn-ghost btn-xs btn-clear-files" id="source-b-clear-all" style="display: none;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                    Clear All
-                                </button>
+                                <div class="upload-zone-actions">
+                                    <button class="btn btn-ghost btn-xs btn-browse" id="source-b-browse-files">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                                        </svg>
+                                        Add Files
+                                    </button>
+                                    <button class="btn btn-ghost btn-xs btn-browse" id="source-b-browse-folder">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                            <line x1="12" y1="11" x2="12" y2="17"></line>
+                                            <line x1="9" y1="14" x2="15" y2="14"></line>
+                                        </svg>
+                                        Add Folder
+                                    </button>
+                                    <button class="btn btn-ghost btn-xs btn-clear-files" id="source-b-clear-all" style="display: none;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                        Clear All
+                                    </button>
+                                </div>
                             </div>
                             <input type="file" id="source-b-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-b-folder-input" webkitdirectory style="display: none;">
