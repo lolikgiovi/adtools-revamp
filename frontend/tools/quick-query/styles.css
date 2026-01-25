@@ -932,12 +932,12 @@
   min-height: 300px;
 }
 
-.tab-content {
+.qq-tab-content {
   display: none;
   height: 100%;
 }
 
-.tab-content.active {
+.qq-tab-content.active {
   display: block;
 }
 

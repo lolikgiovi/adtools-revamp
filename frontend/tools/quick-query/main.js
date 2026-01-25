@@ -2789,7 +2789,7 @@ export class QuickQueryUI {
         document.querySelectorAll(".qq-tab-button").forEach((btn) => btn.classList.remove("active"));
         button.classList.add("active");
 
-        document.querySelectorAll(".tab-content").forEach((content) => content.classList.remove("active"));
+        document.querySelectorAll(".qq-tab-content").forEach((content) => content.classList.remove("active"));
         document.getElementById(`${button.dataset.tab}Content`).classList.add("active");
       };
     });
