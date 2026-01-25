@@ -218,7 +218,7 @@ const CONFLUENCE_KEYCHAIN_SERVICE: &str = "ad-tools:confluence";
 const UNIFIED_KEYCHAIN_SERVICE: &str = "ad-tools:credentials";
 const UNIFIED_KEYCHAIN_KEY: &str = "secrets";
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 struct UnifiedSecrets {
     jenkins_token: Option<String>,
     confluence_pat: Option<String>,
@@ -256,12 +256,12 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     let mut secrets = load_unified_secrets()?;
     let had_jenkins = secrets.jenkins_token.is_some();
     let had_confluence = secrets.confluence_pat.is_some();
-    
+
     let mut migrated_jenkins = false;
     let mut migrated_confluence = false;
     let mut found_old_jenkins = false;
     let mut found_old_confluence = false;
-    
+
     // Try migrating Jenkins token if not already in unified
     if secrets.jenkins_token.is_none() && !username.is_empty() {
         if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
@@ -272,7 +272,7 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // Try migrating Confluence PAT if not already in unified
     if secrets.confluence_pat.is_none() {
         if let Ok(entry) = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
@@ -283,11 +283,11 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // Save if anything changed
     if migrated_jenkins || migrated_confluence {
         save_unified_secrets(&secrets)?;
-        
+
         // Delete old entries after successful migration
         if migrated_jenkins {
             if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
@@ -300,10 +300,10 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // no_credentials = true if there's nothing in unified AND nothing was found in old locations
     let no_credentials = !had_jenkins && !had_confluence && !found_old_jenkins && !found_old_confluence;
-    
+
     Ok(MigrationResult {
         migrated_jenkins,
         migrated_confluence,

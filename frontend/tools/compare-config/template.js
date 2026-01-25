@@ -54,10 +54,18 @@ export const CompareConfigTemplate = /* html */ `
 
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
-        <!-- Query Mode Header -->
+        <!-- Tabs Header -->
         <div class="tabs-container">
             <div class="tabs-left">
-                <h2 class="mode-title">Compare Config</h2>
+                <div class="tool-tabs">
+                    <button class="tool-tab active" data-tab="compare" id="tab-compare">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Compare
+                    </button>
+                    <!-- Additional tabs will be added here in the future -->
+                </div>
             </div>
             <div class="tabs-right">
                 <!-- Connection Status Indicator (Tauri modes only) -->
@@ -76,33 +84,10 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
 
+        <!-- Compare Tab Content -->
+        <div id="tab-content-compare" class="tab-content active">
         <!-- Unified Compare Mode -->
         <div id="unified-compare-mode" class="unified-compare-mode">
-            <!-- Quick Presets -->
-            <div class="comparison-presets">
-                <span class="preset-label">Quick Setup:</span>
-                <button class="preset-btn" data-preset="oracle-oracle" id="preset-oracle-oracle">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-                    </svg>
-                    Oracle vs Oracle
-                </button>
-                <button class="preset-btn" data-preset="excel-excel" id="preset-excel-excel">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                    Excel vs Excel
-                </button>
-                <button class="preset-btn" data-preset="oracle-excel" id="preset-oracle-excel">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                    </svg>
-                    Oracle vs Excel
-                </button>
-            </div>
 
             <!-- Source Panels -->
             <div class="source-panels">
@@ -610,6 +595,7 @@ export const CompareConfigTemplate = /* html */ `
                 <!-- Results will be populated here based on selected view -->
             </div>
         </div>
+        </div><!-- End tab-content-compare -->
     </div>
 
     <!-- Generic Modal for Pairing & Config -->

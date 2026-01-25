@@ -59,6 +59,57 @@
   padding-right: 1rem;
 }
 
+/* Tool Tabs - Main navigation tabs */
+.tool-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.tool-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-tab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.tool-tab.active {
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+  background: transparent;
+}
+
+.tool-tab svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.tool-tab.active svg {
+  opacity: 1;
+}
+
+/* Tab Content Sections */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
 /* ============================================
    MAIN INTERFACE
    ============================================ */
@@ -2970,63 +3021,6 @@
   gap: 1.5rem;
 }
 
-/* Quick Presets */
-.comparison-presets {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 1rem;
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-}
-
-.preset-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  margin-right: 0.5rem;
-}
-
-.preset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: hsl(var(--muted) / 0.3);
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px);
-  color: hsl(var(--foreground));
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.preset-btn:hover {
-  background: hsl(var(--muted) / 0.5);
-  border-color: hsl(var(--ring));
-}
-
-.preset-btn:active {
-  transform: scale(0.98);
-}
-
-.preset-btn.active {
-  background: hsl(var(--primary) / 0.1);
-  border-color: hsl(var(--primary));
-  color: hsl(var(--primary));
-}
-
-.preset-btn svg {
-  opacity: 0.7;
-}
-
-.preset-btn:hover svg {
-  opacity: 1;
-}
-
 /* Source Panels */
 .source-panels {
   display: grid;
@@ -3663,19 +3657,6 @@
 }
 
 @media (max-width: 640px) {
-  .comparison-presets {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .preset-label {
-    margin-bottom: 0.5rem;
-  }
-
-  .preset-btn {
-    justify-content: center;
-  }
-
   .source-type-selector {
     flex-direction: column;
   }

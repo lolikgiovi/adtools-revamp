@@ -163,11 +163,15 @@ class CompareConfigTool extends BaseTool {
       this.loadSavedConnections();
       // Load last tool state (includes view preferences, results for all modes)
       this.loadToolState();
+      // Initialize unified mode UI (populates connection dropdowns, restores cached files)
+      this.initUnifiedModeUI();
       // Start connection status polling
       this.startConnectionStatusPolling();
     } else {
       // Web mode: Still load tool state for view preferences and Excel compare results
       this.loadToolState();
+      // Initialize unified mode UI for web (pre-selects Excel mode)
+      this.initUnifiedModeUI();
     }
   }
 
@@ -251,10 +255,11 @@ class CompareConfigTool extends BaseTool {
       const connections = localStorage.getItem("config.oracle.connections");
       if (connections) {
         this.savedConnections = JSON.parse(connections);
-        this.populateConnectionDropdowns();
+        // Connection dropdowns are populated by initUnifiedModeUI()
       } else {
         this.savedConnections = [];
-        this.showNoConnectionsMessage();
+        // Note: showNoConnectionsMessage is no longer needed since unified mode
+        // supports Excel sources without Oracle connections
       }
     } catch (error) {
       console.error("Failed to load saved connections:", error);
@@ -326,84 +331,6 @@ class CompareConfigTool extends BaseTool {
     }
   }
 
-  /**
-   * Populates connection dropdowns
-   */
-  populateConnectionDropdowns() {
-    const env1Select = document.getElementById("env1-connection");
-    const env2Select = document.getElementById("env2-connection");
-    const rawEnv1Select = document.getElementById("raw-env1-connection");
-    const rawEnv2Select = document.getElementById("raw-env2-connection");
-
-    // Schema/Table mode dropdowns
-    if (env1Select && env2Select) {
-      env1Select.innerHTML = '<option value="">Select connection...</option>';
-      env2Select.innerHTML = '<option value="">Select connection...</option>';
-
-      this.savedConnections.forEach((conn) => {
-        const option1 = document.createElement("option");
-        option1.value = conn.name;
-        option1.textContent = conn.name;
-        env1Select.appendChild(option1);
-
-        const option2 = document.createElement("option");
-        option2.value = conn.name;
-        option2.textContent = conn.name;
-        env2Select.appendChild(option2);
-      });
-    }
-
-    // Raw SQL mode dropdowns
-    if (rawEnv1Select && rawEnv2Select) {
-      rawEnv1Select.innerHTML = '<option value="">Select connection...</option>';
-      rawEnv2Select.innerHTML = '<option value="">Select connection...</option>';
-
-      this.savedConnections.forEach((conn) => {
-        const option1 = document.createElement("option");
-        option1.value = conn.name;
-        option1.textContent = conn.name;
-        rawEnv1Select.appendChild(option1);
-
-        const option2 = document.createElement("option");
-        option2.value = conn.name;
-        option2.textContent = conn.name;
-        rawEnv2Select.appendChild(option2);
-      });
-    }
-  }
-
-  /**
-   * Shows a message when no connections are configured
-   */
-  showNoConnectionsMessage() {
-    const main = document.getElementById("main-interface");
-    if (!main) return;
-
-    const message = document.createElement("div");
-    message.className = "no-connections-message";
-    message.innerHTML = `
-      <div class="installation-card">
-        <h3>No Oracle Connections Configured</h3>
-        <p>Please configure Oracle database connections in Settings before using this tool.</p>
-        <button class="btn btn-primary" id="btn-go-to-settings">Go to Settings</button>
-      </div>
-    `;
-
-    // Replace content
-    const envSelection = document.querySelector(".environment-selection");
-    if (envSelection) {
-      envSelection.innerHTML = "";
-      envSelection.appendChild(message);
-
-      // Bind event
-      const settingsBtn = document.getElementById("btn-go-to-settings");
-      if (settingsBtn) {
-        settingsBtn.addEventListener("click", () => {
-          this.eventBus.emit("navigate", "settings");
-        });
-      }
-    }
-  }
 
   /**
    * Binds event listeners
@@ -3332,7 +3259,10 @@ class CompareConfigTool extends BaseTool {
     // Update title with schema.table name
     const titleEl = document.getElementById("results-title");
     if (titleEl) {
-      if (this.queryMode === "schema-table" && this.schema && this.table) {
+      if (this.queryMode === "unified" && this.results.unified) {
+        const result = this.results.unified;
+        titleEl.textContent = `Comparison Results: ${result.env1_name || "Source A"} vs ${result.env2_name || "Source B"}`;
+      } else if (this.queryMode === "schema-table" && this.schema && this.table) {
         titleEl.textContent = `Comparison Results for ${this.schema}.${this.table}`;
       } else if (this.queryMode === "raw-sql") {
         titleEl.textContent = "Comparison Results (Raw SQL)";
@@ -3501,7 +3431,10 @@ class CompareConfigTool extends BaseTool {
 
     // Check if primary key was selected (for warning)
     let hasPrimaryKey = true;
-    if (this.queryMode === "schema-table") {
+    if (this.queryMode === "unified") {
+      // Unified mode: PK is selected in UI or using position matching
+      hasPrimaryKey = this.unified.options.rowMatching === "position" || this.unified.selectedPkFields.length > 0;
+    } else if (this.queryMode === "schema-table") {
       hasPrimaryKey = this.customPrimaryKey && this.customPrimaryKey.length > 0;
     } else if (this.queryMode === "raw-sql") {
       hasPrimaryKey = this.rawPrimaryKey && this.rawPrimaryKey.trim().length > 0;
@@ -3524,7 +3457,10 @@ class CompareConfigTool extends BaseTool {
     let env1Name = "Env 1";
     let env2Name = "Env 2";
 
-    if (this.queryMode === "schema-table") {
+    if (this.queryMode === "unified" && this.results.unified) {
+      env1Name = this.results.unified.env1Name || "Source A";
+      env2Name = this.results.unified.env2Name || "Source B";
+    } else if (this.queryMode === "schema-table") {
       env1Name = this.env1.connection?.name || "Env 1";
       env2Name = this.env2.connection?.name || "Env 2";
     } else if (this.queryMode === "raw-sql") {
@@ -4672,15 +4608,6 @@ class CompareConfigTool extends BaseTool {
    * Bind event listeners for the Unified Compare mode
    */
   bindUnifiedModeEvents() {
-    // Quick preset buttons
-    const presetButtons = document.querySelectorAll(".preset-btn");
-    presetButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const preset = btn.dataset.preset;
-        this.applyUnifiedPreset(preset);
-      });
-    });
-
     // Source A type selection
     const sourceATypeRadios = document.querySelectorAll('input[name="source-a-type"]');
     sourceATypeRadios.forEach((radio) => {
@@ -5168,53 +5095,6 @@ class CompareConfigTool extends BaseTool {
         dropdown.appendChild(option);
       });
     });
-  }
-
-  /**
-   * Apply a quick preset for unified mode
-   */
-  applyUnifiedPreset(preset) {
-    // Update preset button styles
-    document.querySelectorAll(".preset-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.preset === preset);
-    });
-
-    // Reset sources
-    this.resetUnifiedSource("A");
-    this.resetUnifiedSource("B");
-
-    switch (preset) {
-      case "oracle-oracle":
-        this.unified.sourceA.type = "oracle";
-        this.unified.sourceB.type = "oracle";
-        break;
-      case "excel-excel":
-        this.unified.sourceA.type = "excel";
-        this.unified.sourceB.type = "excel";
-        break;
-      case "oracle-excel":
-        this.unified.sourceA.type = "oracle";
-        this.unified.sourceB.type = "excel";
-        break;
-    }
-
-    // Update radio buttons
-    const sourceAOracleRadio = document.getElementById("source-a-type-oracle");
-    const sourceAExcelRadio = document.getElementById("source-a-type-excel");
-    const sourceBOracleRadio = document.getElementById("source-b-type-oracle");
-    const sourceBExcelRadio = document.getElementById("source-b-type-excel");
-
-    if (sourceAOracleRadio) sourceAOracleRadio.checked = this.unified.sourceA.type === "oracle";
-    if (sourceAExcelRadio) sourceAExcelRadio.checked = this.unified.sourceA.type === "excel";
-    if (sourceBOracleRadio) sourceBOracleRadio.checked = this.unified.sourceB.type === "oracle";
-    if (sourceBExcelRadio) sourceBExcelRadio.checked = this.unified.sourceB.type === "excel";
-
-    // Update config visibility
-    this.updateUnifiedSourceConfigVisibility("A");
-    this.updateUnifiedSourceConfigVisibility("B");
-
-    // Update button state
-    this.updateUnifiedLoadButtonState();
   }
 
   /**
@@ -6671,6 +6551,7 @@ class CompareConfigTool extends BaseTool {
 
       // Store results
       this.results["unified"] = viewResult;
+      this.queryMode = "unified"; // Set queryMode so showResults() finds the results
       this.unified.currentStep = 3;
 
       await new Promise((r) => setTimeout(r, 400));
