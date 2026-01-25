@@ -113,7 +113,7 @@ export class UnifiedDataService {
       headers: result.headers,
       rows: result.rows,
       metadata: {
-        sourceName: result.source_name,
+        sourceName: `(${config.connection.name}) ${result.source_name}`,
         rowCount: result.row_count,
         columnCount: result.headers.length,
         sourceType: SourceType.ORACLE_TABLE,
@@ -151,7 +151,7 @@ export class UnifiedDataService {
       headers: result.headers,
       rows: result.rows,
       metadata: {
-        sourceName: result.source_name,
+        sourceName: `(${config.connection.name}) ${result.source_name}`,
         rowCount: result.row_count,
         columnCount: result.headers.length,
         sourceType: SourceType.ORACLE_SQL,
