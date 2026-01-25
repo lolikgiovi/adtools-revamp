@@ -5257,8 +5257,15 @@ class CompareConfigTool extends BaseTool {
     label.textContent = currentConnection?.name || (connections.length > 0 ? "Select connection..." : "No connections saved");
     btn.disabled = connections.length === 0;
 
-    // Render options
-    const renderOptions = () => {
+    // Clone button to remove old event listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Get the label inside the cloned button
+    const newLabel = newBtn.querySelector(`#${prefix}-connection-label`);
+
+    // Update renderOptions to use the new label reference
+    const renderOptionsWithLabel = () => {
       if (connections.length === 0) {
         dropdown.innerHTML = '<div class="config-dropdown-no-results">No connections saved</div>';
         return;
@@ -5281,7 +5288,7 @@ class CompareConfigTool extends BaseTool {
           e.preventDefault();
           e.stopPropagation();
           const value = opt.dataset.value;
-          label.textContent = value;
+          if (newLabel) newLabel.textContent = value;
           dropdown.classList.remove("show");
           // Update active state
           dropdown.querySelectorAll(".config-dropdown-option").forEach((o) => o.classList.remove("active"));
@@ -5291,15 +5298,11 @@ class CompareConfigTool extends BaseTool {
       });
     };
 
-    // Clone button to remove old event listeners
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-
     // Toggle dropdown on button click
     newBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      renderOptions();
+      renderOptionsWithLabel();
       dropdown.classList.toggle("show");
     });
 
@@ -5311,7 +5314,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Initial render
-    renderOptions();
+    renderOptionsWithLabel();
   }
 
   /**
