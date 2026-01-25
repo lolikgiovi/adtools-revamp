@@ -624,26 +624,95 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Results events
+    const exportBtn = document.getElementById("btn-export");
+    const exportDropdownMenu = document.getElementById("export-dropdown-menu");
     const exportJsonBtn = document.getElementById("btn-export-json");
+    const exportExcelBtn = document.getElementById("btn-export-excel");
     const exportCsvBtn = document.getElementById("btn-export-csv");
     const newComparisonBtn = document.getElementById("btn-new-comparison");
-    const viewTypeSelect = document.getElementById("view-type");
+    // Export dropdown toggle
+    if (exportBtn && exportDropdownMenu) {
+      exportBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // Close view dropdown if open
+        document.getElementById("view-dropdown-menu")?.classList.remove("show");
+        exportDropdownMenu.classList.toggle("show");
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".export-dropdown")) {
+          exportDropdownMenu.classList.remove("show");
+        }
+      });
+    }
 
     if (exportJsonBtn) {
-      exportJsonBtn.addEventListener("click", () => this.exportResults("json"));
+      exportJsonBtn.addEventListener("click", () => {
+        exportDropdownMenu?.classList.remove("show");
+        this.exportResults("json");
+      });
+    }
+
+    if (exportExcelBtn) {
+      exportExcelBtn.addEventListener("click", () => {
+        exportDropdownMenu?.classList.remove("show");
+        this.exportResults("excel");
+      });
     }
 
     if (exportCsvBtn) {
-      exportCsvBtn.addEventListener("click", () => this.exportResults("csv"));
+      exportCsvBtn.addEventListener("click", () => {
+        exportDropdownMenu?.classList.remove("show");
+        this.exportResults("csv");
+      });
     }
 
     if (newComparisonBtn) {
       newComparisonBtn.addEventListener("click", () => this.resetForm());
     }
 
-    if (viewTypeSelect) {
-      viewTypeSelect.addEventListener("change", (e) => this.changeView(e.target.value));
+    // View dropdown toggle
+    const viewBtn = document.getElementById("btn-view");
+    const viewDropdownMenu = document.getElementById("view-dropdown-menu");
+    const viewOptions = document.querySelectorAll(".view-option");
+
+    if (viewBtn && viewDropdownMenu) {
+      viewBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // Close export dropdown if open
+        exportDropdownMenu?.classList.remove("show");
+        viewDropdownMenu.classList.toggle("show");
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".view-dropdown")) {
+          viewDropdownMenu.classList.remove("show");
+        }
+      });
     }
+
+    viewOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        const value = option.dataset.value;
+        const label = option.textContent.trim();
+
+        // Update button label
+        const labelEl = document.getElementById("view-type-label");
+        if (labelEl) labelEl.textContent = label;
+
+        // Update active state
+        viewOptions.forEach((o) => o.classList.remove("active"));
+        option.classList.add("active");
+
+        // Close dropdown
+        viewDropdownMenu?.classList.remove("show");
+
+        // Change view
+        this.changeView(value);
+      });
+    });
   }
 
   // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
@@ -3327,9 +3396,11 @@ class CompareConfigTool extends BaseTool {
 
     // Enable/disable export buttons based on results
     const exportJsonBtn = document.getElementById("btn-export-json");
+    const exportExcelBtn = document.getElementById("btn-export-excel");
     const exportCsvBtn = document.getElementById("btn-export-csv");
     const hasResults = this.results[this.queryMode]?.rows?.length > 0;
     if (exportJsonBtn) exportJsonBtn.disabled = !hasResults;
+    if (exportExcelBtn) exportExcelBtn.disabled = !hasResults;
     if (exportCsvBtn) exportCsvBtn.disabled = !hasResults;
 
     // Show results section
@@ -3917,6 +3988,12 @@ class CompareConfigTool extends BaseTool {
     }
 
     try {
+      // Handle Excel export separately (client-side with xlsx library)
+      if (format === "excel") {
+        await this.exportResultsAsExcel();
+        return;
+      }
+
       // Get export data from backend
       const exportData = await CompareConfigService.exportComparisonResult(this.results[this.queryMode], format);
 
@@ -3949,6 +4026,74 @@ class CompareConfigTool extends BaseTool {
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Export failed: ${error.message || error}`,
+      });
+    }
+  }
+
+  /**
+   * Exports comparison results as Excel file
+   */
+  async exportResultsAsExcel() {
+    const result = this.results[this.queryMode];
+    if (!result || !result.rows?.length) {
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: "No comparison results to export",
+      });
+      return;
+    }
+
+    try {
+      // Dynamic import of xlsx library
+      const XLSX = await import("xlsx");
+
+      // Prepare data for Excel
+      const headers = result.columns || Object.keys(result.rows[0] || {});
+      const wsData = [headers];
+
+      result.rows.forEach((row) => {
+        const rowData = headers.map((col) => {
+          const value = row[col];
+          // Handle objects/arrays by stringifying them
+          if (typeof value === "object" && value !== null) {
+            return JSON.stringify(value);
+          }
+          return value ?? "";
+        });
+        wsData.push(rowData);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Auto-size columns
+      const colWidths = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...wsData.slice(1).map((row) => String(row[i] || "").length));
+        return { wch: Math.min(maxLen + 2, 50) };
+      });
+      ws["!cols"] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, "Comparison Results");
+
+      // Generate filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `comparison_results_${timestamp}.xlsx`;
+
+      // Download
+      XLSX.writeFile(wb, filename);
+
+      this.eventBus.emit("notification:show", {
+        type: "success",
+        message: `Results exported as ${filename}`,
+      });
+
+      this.eventBus.emit("comparison:exported", { filename, format: "excel" });
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: `Excel export failed: ${error.message || error}`,
       });
     }
   }

@@ -556,36 +556,105 @@ export const CompareConfigTemplate = /* html */ `
 
         <!-- Results Section -->
         <div id="results-section" class="results-section" style="display: none;">
-            <div class="results-header">
-                <div class="header-left">
-                    <h3 id="results-title">Comparison Results</h3>
-                    <div class="view-selector">
-                        <label>View:</label>
-                        <select id="view-type" class="form-select">
-                            <option value="grid">Summary Grid</option>
-                            <option value="vertical">Cards</option>
-                            <option value="master-detail">Detail View</option>
-                        </select>
-                    </div>
+            <div class="results-title-row">
+                <h3 id="results-title">Comparison Results</h3>
+                <!-- Comparison Context (Excel Compare only) -->
+                <div id="comparison-context" class="comparison-context" style="display: none;">
+                    <span class="context-label">Comparing:</span>
+                    <span class="context-file ref" id="context-ref-file"></span>
+                    <span class="context-vs">vs</span>
+                    <span class="context-file comp" id="context-comp-file"></span>
+                </div>
+            </div>
+
+            <!-- Summary + Actions Row -->
+            <div class="results-toolbar">
+                <div id="results-summary" class="results-summary">
+                    <!-- Summary will be populated here -->
                 </div>
                 <div class="results-actions">
-                    <button class="btn btn-secondary btn-sm" id="btn-export-json">Export JSON</button>
-                    <button class="btn btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
+                    <div class="view-dropdown" id="view-dropdown">
+                        <button class="btn btn-secondary btn-sm" id="btn-view">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                            <span id="view-type-label">Summary Grid</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="view-dropdown-menu" id="view-dropdown-menu">
+                            <button class="view-option active" data-value="grid">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                Summary Grid
+                            </button>
+                            <button class="view-option" data-value="vertical">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="5" rx="1"></rect>
+                                    <rect x="3" y="10" width="18" height="5" rx="1"></rect>
+                                    <rect x="3" y="17" width="18" height="5" rx="1"></rect>
+                                </svg>
+                                Cards
+                            </button>
+                            <button class="view-option" data-value="master-detail">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                                Detail View
+                            </button>
+                        </div>
+                    </div>
+                    <div class="export-dropdown" id="export-dropdown">
+                        <button class="btn btn-secondary btn-sm" id="btn-export">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Export
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="export-dropdown-menu" id="export-dropdown-menu">
+                            <button class="export-option" id="btn-export-json">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                                Export as JSON
+                            </button>
+                            <button class="export-option" id="btn-export-excel">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                                Export as Excel
+                            </button>
+                            <button class="export-option" id="btn-export-csv">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                                Export as CSV
+                            </button>
+                        </div>
+                    </div>
                     <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
                 </div>
-            </div>
-
-            <!-- Comparison Context (Excel Compare only) -->
-            <div id="comparison-context" class="comparison-context" style="display: none;">
-                <span class="context-label">Comparing:</span>
-                <span class="context-file ref" id="context-ref-file"></span>
-                <span class="context-vs">vs</span>
-                <span class="context-file comp" id="context-comp-file"></span>
-            </div>
-
-            <!-- Summary -->
-            <div id="results-summary" class="results-summary">
-                <!-- Summary will be populated here -->
             </div>
 
             <!-- Results Content -->
