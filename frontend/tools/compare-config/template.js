@@ -129,9 +129,11 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="oracle-config-row">
                             <div class="form-group connection-group">
                                 <label>Connection</label>
-                                <select id="source-a-connection" class="form-select">
-                                    <option value="">Select connection...</option>
-                                </select>
+                                <div class="searchable-select" id="source-a-connection-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-a-connection-search" placeholder="Select connection..." autocomplete="off">
+                                    <div class="searchable-dropdown" id="source-a-connection-dropdown"></div>
+                                </div>
                             </div>
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>
@@ -146,15 +148,19 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="table-mode-config" id="source-a-table-config">
                             <div class="form-group">
                                 <label>Schema</label>
-                                <select id="source-a-schema" class="form-select" disabled>
-                                    <option value="">Select connection first...</option>
-                                </select>
+                                <div class="searchable-select" id="source-a-schema-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-a-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
+                                    <div class="searchable-dropdown" id="source-a-schema-dropdown"></div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Table</label>
-                                <select id="source-a-table" class="form-select" disabled>
-                                    <option value="">Select schema first...</option>
-                                </select>
+                                <div class="searchable-select" id="source-a-table-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-a-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
+                                    <div class="searchable-dropdown" id="source-a-table-dropdown"></div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>
@@ -269,9 +275,11 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="oracle-config-row">
                             <div class="form-group connection-group">
                                 <label>Connection</label>
-                                <select id="source-b-connection" class="form-select">
-                                    <option value="">Select connection...</option>
-                                </select>
+                                <div class="searchable-select" id="source-b-connection-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-b-connection-search" placeholder="Select connection..." autocomplete="off">
+                                    <div class="searchable-dropdown" id="source-b-connection-dropdown"></div>
+                                </div>
                                 <!-- Follow Mode Badge (shown in Oracle vs Oracle mode) -->
                                 <div class="follow-mode-badge" id="source-b-follow-mode-note" style="display: none;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -293,15 +301,19 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="table-mode-config" id="source-b-table-config">
                             <div class="form-group">
                                 <label>Schema</label>
-                                <select id="source-b-schema" class="form-select" disabled>
-                                    <option value="">Select connection first...</option>
-                                </select>
+                                <div class="searchable-select" id="source-b-schema-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-b-schema-search" placeholder="Select connection first..." autocomplete="off" disabled>
+                                    <div class="searchable-dropdown" id="source-b-schema-dropdown"></div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Table</label>
-                                <select id="source-b-table" class="form-select" disabled>
-                                    <option value="">Select schema first...</option>
-                                </select>
+                                <div class="searchable-select" id="source-b-table-wrapper">
+                                    <input type="text" class="form-input searchable-input"
+                                           id="source-b-table-search" placeholder="Select schema first..." autocomplete="off" disabled>
+                                    <div class="searchable-dropdown" id="source-b-table-dropdown"></div>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>

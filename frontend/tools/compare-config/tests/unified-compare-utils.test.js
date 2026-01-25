@@ -317,8 +317,8 @@ describe('UnifiedCompareUtils', () => {
       const result = getSourceBDisabledFieldsForFollowMode();
 
       expect(result).toContain('source-b-query-mode');
-      expect(result).toContain('source-b-schema');
-      expect(result).toContain('source-b-table');
+      expect(result).toContain('source-b-schema-search');
+      expect(result).toContain('source-b-table-search');
       expect(result).toContain('source-b-where');
       expect(result).toContain('source-b-max-rows');
       expect(result).toContain('source-b-sql');

@@ -119,8 +119,8 @@ export function createSourceBConfigFromSourceA(sourceAConfig, sourceBConnection)
 export function getSourceBDisabledFieldsForFollowMode() {
   return [
     'source-b-query-mode',
-    'source-b-schema',
-    'source-b-table',
+    'source-b-schema-search',
+    'source-b-table-search',
     'source-b-where',
     'source-b-max-rows',
     'source-b-sql',

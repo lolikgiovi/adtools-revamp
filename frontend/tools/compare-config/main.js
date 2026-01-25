@@ -4854,13 +4854,7 @@ class CompareConfigTool extends BaseTool {
   bindUnifiedOracleConfigEvents(source) {
     const prefix = `source-${source.toLowerCase()}`;
 
-    // Connection select
-    const connectionSelect = document.getElementById(`${prefix}-connection`);
-    if (connectionSelect) {
-      connectionSelect.addEventListener("change", (e) => {
-        this.onUnifiedConnectionSelected(source, e.target.value);
-      });
-    }
+    // Connection searchable dropdown is set up by populateUnifiedConnectionDropdowns()
 
     // Query mode selection (now a dropdown)
     const queryModeSelect = document.getElementById(`${prefix}-query-mode`);
@@ -4870,21 +4864,7 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
-    // Schema select
-    const schemaSelect = document.getElementById(`${prefix}-schema`);
-    if (schemaSelect) {
-      schemaSelect.addEventListener("change", (e) => {
-        this.onUnifiedSchemaSelected(source, e.target.value);
-      });
-    }
-
-    // Table select
-    const tableSelect = document.getElementById(`${prefix}-table`);
-    if (tableSelect) {
-      tableSelect.addEventListener("change", (e) => {
-        this.onUnifiedTableSelected(source, e.target.value);
-      });
-    }
+    // Schema and Table searchable dropdowns are set up dynamically when schemas/tables are loaded
 
     // WHERE clause
     const whereInput = document.getElementById(`${prefix}-where`);
@@ -5258,19 +5238,143 @@ class CompareConfigTool extends BaseTool {
    * Populate connection dropdowns for unified mode
    */
   populateUnifiedConnectionDropdowns() {
-    const dropdowns = [document.getElementById("source-a-connection"), document.getElementById("source-b-connection")];
+    this.setupUnifiedConnectionDropdown("A");
+    this.setupUnifiedConnectionDropdown("B");
+  }
 
-    dropdowns.forEach((dropdown) => {
-      if (!dropdown) return;
+  /**
+   * Setup searchable dropdown for unified connection selection
+   * @param {string} source - 'A' or 'B'
+   */
+  setupUnifiedConnectionDropdown(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const prefix = `source-${source.toLowerCase()}`;
+    const connections = this.savedConnections;
 
-      dropdown.innerHTML = '<option value="">Select connection...</option>';
-      this.savedConnections.forEach((conn) => {
-        const option = document.createElement("option");
-        option.value = conn.name;
-        option.textContent = conn.name;
-        dropdown.appendChild(option);
+    const input = document.getElementById(`${prefix}-connection-search`);
+    const dropdown = document.getElementById(`${prefix}-connection-dropdown`);
+
+    if (!input || !dropdown) return;
+
+    // Remove old event listeners by cloning the input
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+
+    newInput.placeholder = connections.length > 0 ? "Search or select connection..." : "No connections saved";
+    newInput.disabled = connections.length === 0;
+    newInput.value = this.unified[sourceKey].connection?.name || "";
+
+    let highlightedIndex = -1;
+    let filteredConnections = [];
+
+    const renderOptions = (filter = "") => {
+      filteredConnections = connections.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()));
+      highlightedIndex = -1;
+
+      if (filteredConnections.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-no-results">No matching connections</div>';
+        return;
+      }
+
+      const selectedName = this.unified[sourceKey].connection?.name;
+      dropdown.innerHTML = filteredConnections
+        .map(
+          (conn, i) => `
+        <div class="searchable-option ${conn.name === selectedName ? "selected" : ""}" data-value="${conn.name}" data-index="${i}">
+          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span class="option-text">${conn.name}</span>
+        </div>
+      `
+        )
+        .join("");
+
+      // Bind click handlers
+      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const value = opt.dataset.value;
+          newInput.value = value;
+          dropdown.classList.remove("open");
+          this.onUnifiedConnectionSelected(source, value);
+        });
       });
+    };
+
+    const updateHighlighting = () => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
+        if (i === highlightedIndex) {
+          opt.classList.add("highlighted");
+          opt.scrollIntoView({ block: "nearest" });
+        } else {
+          opt.classList.remove("highlighted");
+        }
+      });
+    };
+
+    // Input events
+    newInput.addEventListener("focus", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
     });
+
+    newInput.addEventListener("input", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        dropdown.classList.remove("open");
+        highlightedIndex = -1;
+      }, 200);
+    });
+
+    newInput.addEventListener("keydown", (e) => {
+      if (!dropdown.classList.contains("open")) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          renderOptions(newInput.value);
+          dropdown.classList.add("open");
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          highlightedIndex = Math.min(highlightedIndex + 1, filteredConnections.length - 1);
+          updateHighlighting();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          highlightedIndex = Math.max(highlightedIndex - 1, -1);
+          updateHighlighting();
+          break;
+        case "Enter":
+          if (highlightedIndex >= 0 && highlightedIndex < filteredConnections.length) {
+            e.preventDefault();
+            const conn = filteredConnections[highlightedIndex];
+            newInput.value = conn.name;
+            dropdown.classList.remove("open");
+            this.onUnifiedConnectionSelected(source, conn.name);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+        case "Tab":
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+      }
+    });
+
+    // Initial render
+    renderOptions();
   }
 
   /**
@@ -5401,31 +5505,179 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].connection = connection;
     this.unified[sourceKey].dataLoaded = false;
     this.unified[sourceKey].data = null;
+    this.unified[sourceKey].schema = null;
+    this.unified[sourceKey].table = null;
 
-    // Fetch schemas
-    const schemaSelect = document.getElementById(`${prefix}-schema`);
-    if (schemaSelect) {
-      schemaSelect.innerHTML = '<option value="">Loading schemas...</option>';
-      schemaSelect.disabled = true;
+    // Reset table dropdown
+    const tableInput = document.getElementById(`${prefix}-table-search`);
+    const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
+    if (tableInput) {
+      tableInput.value = "";
+      tableInput.placeholder = "Select schema first...";
+      tableInput.disabled = true;
+    }
+    if (tableDropdown) tableDropdown.innerHTML = "";
+
+    // Fetch schemas and setup searchable dropdown
+    const schemaInput = document.getElementById(`${prefix}-schema-search`);
+    const schemaDropdown = document.getElementById(`${prefix}-schema-dropdown`);
+    if (schemaInput) {
+      schemaInput.value = "";
+      schemaInput.placeholder = "Loading schemas...";
+      schemaInput.disabled = true;
 
       try {
         const schemas = await CompareConfigService.fetchSchemas(connection.name, connection);
-        schemaSelect.innerHTML = '<option value="">Select schema...</option>';
-        schemas.forEach((schema) => {
-          const option = document.createElement("option");
-          option.value = schema;
-          option.textContent = schema;
-          schemaSelect.appendChild(option);
-        });
-        schemaSelect.disabled = false;
+        this.setupUnifiedSchemaDropdown(source, schemas);
       } catch (error) {
         console.error("Failed to fetch schemas:", error);
-        schemaSelect.innerHTML = '<option value="">Failed to load schemas</option>';
+        schemaInput.placeholder = "Failed to load schemas";
+        if (schemaDropdown) schemaDropdown.innerHTML = "";
       }
     }
 
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Setup searchable dropdown for unified schema selection
+   * @param {string} source - 'A' or 'B'
+   * @param {string[]} schemas - Array of schema names
+   */
+  setupUnifiedSchemaDropdown(source, schemas) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const prefix = `source-${source.toLowerCase()}`;
+
+    const input = document.getElementById(`${prefix}-schema-search`);
+    const dropdown = document.getElementById(`${prefix}-schema-dropdown`);
+
+    if (!input || !dropdown) return;
+
+    // Store schemas for this source
+    this._schemaOptions = this._schemaOptions || {};
+    this._schemaOptions[sourceKey] = schemas;
+
+    // Remove old event listeners by cloning the input
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+
+    newInput.placeholder = schemas.length > 0 ? "Search or select schema..." : "No schemas found";
+    newInput.disabled = schemas.length === 0;
+    newInput.value = this.unified[sourceKey].schema || "";
+
+    let highlightedIndex = -1;
+    let filteredSchemas = [];
+
+    const renderOptions = (filter = "") => {
+      filteredSchemas = schemas.filter((s) => s.toLowerCase().includes(filter.toLowerCase()));
+      highlightedIndex = -1;
+
+      if (filteredSchemas.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-no-results">No matching schemas</div>';
+        return;
+      }
+
+      const selectedSchema = this.unified[sourceKey].schema;
+      dropdown.innerHTML = filteredSchemas
+        .map(
+          (schema, i) => `
+        <div class="searchable-option ${schema === selectedSchema ? "selected" : ""}" data-value="${schema}" data-index="${i}">
+          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+          <span class="option-text">${schema}</span>
+        </div>
+      `
+        )
+        .join("");
+
+      // Bind click handlers
+      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const value = opt.dataset.value;
+          newInput.value = value;
+          dropdown.classList.remove("open");
+          this.onUnifiedSchemaSelected(source, value);
+        });
+      });
+    };
+
+    const updateHighlighting = () => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
+        if (i === highlightedIndex) {
+          opt.classList.add("highlighted");
+          opt.scrollIntoView({ block: "nearest" });
+        } else {
+          opt.classList.remove("highlighted");
+        }
+      });
+    };
+
+    // Input events
+    newInput.addEventListener("focus", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("input", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        dropdown.classList.remove("open");
+        highlightedIndex = -1;
+      }, 200);
+    });
+
+    newInput.addEventListener("keydown", (e) => {
+      if (!dropdown.classList.contains("open")) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          renderOptions(newInput.value);
+          dropdown.classList.add("open");
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          highlightedIndex = Math.min(highlightedIndex + 1, filteredSchemas.length - 1);
+          updateHighlighting();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          highlightedIndex = Math.max(highlightedIndex - 1, -1);
+          updateHighlighting();
+          break;
+        case "Enter":
+          if (highlightedIndex >= 0 && highlightedIndex < filteredSchemas.length) {
+            e.preventDefault();
+            const schema = filteredSchemas[highlightedIndex];
+            newInput.value = schema;
+            dropdown.classList.remove("open");
+            this.onUnifiedSchemaSelected(source, schema);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+        case "Tab":
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+      }
+    });
+
+    // Initial render
+    renderOptions();
   }
 
   /**
@@ -5462,37 +5714,180 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].dataLoaded = false;
     this.unified[sourceKey].data = null;
 
-    const tableSelect = document.getElementById(`${prefix}-table`);
-    if (!tableSelect || !connection || !schema) {
-      if (tableSelect) {
-        tableSelect.innerHTML = '<option value="">Select schema first...</option>';
-        tableSelect.disabled = true;
+    const tableInput = document.getElementById(`${prefix}-table-search`);
+    const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
+
+    if (!connection || !schema) {
+      if (tableInput) {
+        tableInput.value = "";
+        tableInput.placeholder = "Select schema first...";
+        tableInput.disabled = true;
       }
+      if (tableDropdown) tableDropdown.innerHTML = "";
       this.updateUnifiedLoadButtonState();
       return;
     }
 
-    // Fetch tables
-    tableSelect.innerHTML = '<option value="">Loading tables...</option>';
-    tableSelect.disabled = true;
+    // Fetch tables and setup searchable dropdown
+    if (tableInput) {
+      tableInput.value = "";
+      tableInput.placeholder = "Loading tables...";
+      tableInput.disabled = true;
+    }
 
     try {
       const tables = await CompareConfigService.fetchTables(connection.name, connection, schema);
-      tableSelect.innerHTML = '<option value="">Select table...</option>';
-      tables.forEach((table) => {
-        const option = document.createElement("option");
-        option.value = table;
-        option.textContent = table;
-        tableSelect.appendChild(option);
-      });
-      tableSelect.disabled = false;
+      this.setupUnifiedTableDropdown(source, tables);
     } catch (error) {
       console.error("Failed to fetch tables:", error);
-      tableSelect.innerHTML = '<option value="">Failed to load tables</option>';
+      if (tableInput) {
+        tableInput.placeholder = "Failed to load tables";
+      }
+      if (tableDropdown) tableDropdown.innerHTML = "";
     }
 
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+  }
+
+  /**
+   * Setup searchable dropdown for unified table selection
+   * @param {string} source - 'A' or 'B'
+   * @param {string[]} tables - Array of table names
+   */
+  setupUnifiedTableDropdown(source, tables) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const prefix = `source-${source.toLowerCase()}`;
+
+    const input = document.getElementById(`${prefix}-table-search`);
+    const dropdown = document.getElementById(`${prefix}-table-dropdown`);
+
+    if (!input || !dropdown) return;
+
+    // Store tables for this source
+    this._tableOptions = this._tableOptions || {};
+    this._tableOptions[sourceKey] = tables;
+
+    // Remove old event listeners by cloning the input
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+
+    newInput.placeholder = tables.length > 0 ? "Search or select table..." : "No tables found";
+    newInput.disabled = tables.length === 0;
+    newInput.value = this.unified[sourceKey].table || "";
+
+    let highlightedIndex = -1;
+    let filteredTables = [];
+
+    const renderOptions = (filter = "") => {
+      filteredTables = tables.filter((t) => t.toLowerCase().includes(filter.toLowerCase()));
+      highlightedIndex = -1;
+
+      if (filteredTables.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-no-results">No matching tables</div>';
+        return;
+      }
+
+      const selectedTable = this.unified[sourceKey].table;
+      dropdown.innerHTML = filteredTables
+        .map(
+          (table, i) => `
+        <div class="searchable-option ${table === selectedTable ? "selected" : ""}" data-value="${table}" data-index="${i}">
+          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span class="option-text">${table}</span>
+        </div>
+      `
+        )
+        .join("");
+
+      // Bind click handlers
+      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
+        opt.addEventListener("click", () => {
+          const value = opt.dataset.value;
+          newInput.value = value;
+          dropdown.classList.remove("open");
+          this.onUnifiedTableSelected(source, value);
+        });
+      });
+    };
+
+    const updateHighlighting = () => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
+        if (i === highlightedIndex) {
+          opt.classList.add("highlighted");
+          opt.scrollIntoView({ block: "nearest" });
+        } else {
+          opt.classList.remove("highlighted");
+        }
+      });
+    };
+
+    // Input events
+    newInput.addEventListener("focus", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("input", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        dropdown.classList.remove("open");
+        highlightedIndex = -1;
+      }, 200);
+    });
+
+    newInput.addEventListener("keydown", (e) => {
+      if (!dropdown.classList.contains("open")) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          renderOptions(newInput.value);
+          dropdown.classList.add("open");
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          highlightedIndex = Math.min(highlightedIndex + 1, filteredTables.length - 1);
+          updateHighlighting();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          highlightedIndex = Math.max(highlightedIndex - 1, -1);
+          updateHighlighting();
+          break;
+        case "Enter":
+          if (highlightedIndex >= 0 && highlightedIndex < filteredTables.length) {
+            e.preventDefault();
+            const table = filteredTables[highlightedIndex];
+            newInput.value = table;
+            dropdown.classList.remove("open");
+            this.onUnifiedTableSelected(source, table);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+        case "Tab":
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+      }
+    });
+
+    // Initial render
+    renderOptions();
   }
 
   /**
@@ -6497,24 +6892,33 @@ class CompareConfigTool extends BaseTool {
 
     if (sourceType === "oracle") {
       // Reset Oracle UI
-      const connectionSelect = document.getElementById(`${prefix}-connection`);
-      const schemaSelect = document.getElementById(`${prefix}-schema`);
-      const tableSelect = document.getElementById(`${prefix}-table`);
+      const connectionInput = document.getElementById(`${prefix}-connection-search`);
+      const connectionDropdown = document.getElementById(`${prefix}-connection-dropdown`);
+      const schemaInput = document.getElementById(`${prefix}-schema-search`);
+      const schemaDropdown = document.getElementById(`${prefix}-schema-dropdown`);
+      const tableInput = document.getElementById(`${prefix}-table-search`);
+      const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
       const whereInput = document.getElementById(`${prefix}-where`);
       const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
       const sqlInput = document.getElementById(`${prefix}-sql`);
 
-      if (connectionSelect) connectionSelect.value = "";
-      if (schemaSelect) {
-        schemaSelect.value = "";
-        schemaSelect.innerHTML = '<option value="">Select connection first...</option>';
-        schemaSelect.disabled = true;
+      if (connectionInput) {
+        connectionInput.value = "";
+        // Re-setup dropdown to reset state
+        this.setupUnifiedConnectionDropdown(source);
       }
-      if (tableSelect) {
-        tableSelect.value = "";
-        tableSelect.innerHTML = '<option value="">Select schema first...</option>';
-        tableSelect.disabled = true;
+      if (schemaInput) {
+        schemaInput.value = "";
+        schemaInput.placeholder = "Select connection first...";
+        schemaInput.disabled = true;
       }
+      if (schemaDropdown) schemaDropdown.innerHTML = "";
+      if (tableInput) {
+        tableInput.value = "";
+        tableInput.placeholder = "Select schema first...";
+        tableInput.disabled = true;
+      }
+      if (tableDropdown) tableDropdown.innerHTML = "";
       if (whereInput) whereInput.value = "";
       if (maxRowsInput) maxRowsInput.value = "100";
       if (sqlInput) sqlInput.value = "";
