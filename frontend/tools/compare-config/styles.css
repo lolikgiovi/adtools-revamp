@@ -2210,13 +2210,6 @@
   gap: 1rem;
 }
 
-.upload-zone-header h4 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: hsl(var(--foreground));
-}
-
 .upload-area {
   border: 2px dashed hsl(var(--border));
   border-radius: var(--radius);
@@ -2335,7 +2328,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 250px;
+  max-height: 220px;
   overflow-y: auto;
   padding: 0;
   transition: all 0.3s ease;
@@ -3298,9 +3291,6 @@
 }
 
 /* Excel Config Compact Upload Zone */
-.file-upload-zone.compact {
-  padding: 1rem;
-}
 
 .file-upload-zone.compact .upload-area {
   padding: 1rem;
@@ -3310,12 +3300,6 @@
 .file-upload-zone.compact .upload-area p {
   margin: 0;
   font-size: 0.8125rem;
-}
-
-.file-upload-zone.compact .file-types {
-  font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
-  margin-top: 0.25rem;
 }
 
 /* Selected File Display */
@@ -3536,18 +3520,18 @@
 }
 
 .inline-validation.info .validation-icon::before {
-  content: 'ℹ';
+  content: "ℹ";
   font-size: 14px;
 }
 
 .inline-validation.error .validation-icon::before {
-  content: '✕';
+  content: "✕";
   font-size: 12px;
   font-weight: 600;
 }
 
 .inline-validation.warning .validation-icon::before {
-  content: '⚠';
+  content: "⚠";
   font-size: 13px;
 }
 

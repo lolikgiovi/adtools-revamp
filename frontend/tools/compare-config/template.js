@@ -136,8 +136,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>
                                 <select id="source-a-query-mode" class="form-select">
-                                    <option value="table">Select Table</option>
-                                    <option value="sql">Raw SQL</option>
+                                    <option value="table">By Table</option>
+                                    <option value="sql">By Raw SQL</option>
                                 </select>
                             </div>
                         </div>
@@ -183,6 +183,10 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Excel Config (shown when Excel selected) - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-a-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-a-upload-zone">
+                            <div class="upload-area">
+                                <p>Click to <a href="#" class="browse-link" id="source-a-browse-files">browse files</a>
+                                   or <a href="#" class="browse-link" id="source-a-browse-folder">select folder</a>, supports .xlsx, .xls, .csv</p>
+                            </div>
                             <div class="upload-zone-header">
                                 <span class="zone-label">Excel Files</span>
                                 <button class="btn btn-ghost btn-xs btn-clear-files" id="source-a-clear-all" style="display: none;">
@@ -192,11 +196,6 @@ export const CompareConfigTemplate = /* html */ `
                                     </svg>
                                     Clear All
                                 </button>
-                            </div>
-                            <div class="upload-area">
-                                <p>Click to <a href="#" class="browse-link" id="source-a-browse-files">browse files</a>
-                                   or <a href="#" class="browse-link" id="source-a-browse-folder">select folder</a></p>
-                                <p class="file-types">Supports .xlsx, .xls, .csv</p>
                             </div>
                             <input type="file" id="source-a-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-a-folder-input" webkitdirectory style="display: none;">
@@ -285,8 +284,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group query-mode-group">
                                 <label>Query Mode</label>
                                 <select id="source-b-query-mode" class="form-select">
-                                    <option value="table">Select Table</option>
-                                    <option value="sql">Raw SQL</option>
+                                    <option value="table">By Table</option>
+                                    <option value="sql">By Raw SQL</option>
                                 </select>
                             </div>
                         </div>
@@ -329,6 +328,10 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Excel Config - Enhanced with multi-file support -->
                     <div class="excel-config" id="source-b-excel-config" style="display: none;">
                         <div class="file-upload-zone compact" id="source-b-upload-zone">
+                            <div class="upload-area">
+                                <p>Click to <a href="#" class="browse-link" id="source-b-browse-files">browse files</a>
+                                   or <a href="#" class="browse-link" id="source-b-browse-folder">select folder</a>, supports .xlsx, .xls, .csv</p>
+                            </div>
                             <div class="upload-zone-header">
                                 <span class="zone-label">Excel Files</span>
                                 <button class="btn btn-ghost btn-xs btn-clear-files" id="source-b-clear-all" style="display: none;">
@@ -338,11 +341,6 @@ export const CompareConfigTemplate = /* html */ `
                                     </svg>
                                     Clear All
                                 </button>
-                            </div>
-                            <div class="upload-area">
-                                <p>Click to <a href="#" class="browse-link" id="source-b-browse-files">browse files</a>
-                                   or <a href="#" class="browse-link" id="source-b-browse-folder">select folder</a></p>
-                                <p class="file-types">Supports .xlsx, .xls, .csv</p>
                             </div>
                             <input type="file" id="source-b-file-input" multiple accept=".xlsx,.xls,.csv" style="display: none;">
                             <input type="file" id="source-b-folder-input" webkitdirectory style="display: none;">

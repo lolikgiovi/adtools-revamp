@@ -3458,7 +3458,13 @@ class CompareConfigTool extends BaseTool {
     let hasPrimaryKey = true;
     if (this.queryMode === "unified") {
       // Unified mode: PK is selected in UI or using position matching
-      hasPrimaryKey = this.unified.options.rowMatching === "position" || this.unified.selectedPkFields.length > 0;
+      // Also check cached result metadata when loading from cache (source panels may be empty)
+      const cachedMetadata = this.results.unified?._metadata;
+      if (cachedMetadata) {
+        hasPrimaryKey = cachedMetadata.rowMatching === "position" || (cachedMetadata.keyColumns && cachedMetadata.keyColumns.length > 0);
+      } else {
+        hasPrimaryKey = this.unified.options.rowMatching === "position" || this.unified.selectedPkFields.length > 0;
+      }
     } else if (this.queryMode === "schema-table") {
       hasPrimaryKey = this.customPrimaryKey && this.customPrimaryKey.length > 0;
     } else if (this.queryMode === "raw-sql") {
@@ -6605,6 +6611,12 @@ class CompareConfigTool extends BaseTool {
         tableName: `${sourceA.data.metadata.sourceName} vs ${sourceB.data.metadata.sourceName}`,
         keyColumns: pkFields,
       });
+
+      // Store metadata about matching options for cache restoration
+      viewResult._metadata = {
+        keyColumns: pkFields,
+        rowMatching: rowMatching,
+      };
 
       this.updateProgressStep("compare", "done", `${viewResult.rows.length} records compared`);
 
