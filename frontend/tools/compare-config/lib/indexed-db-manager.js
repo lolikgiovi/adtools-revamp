@@ -12,7 +12,7 @@
  * Database configuration
  */
 const DB_NAME = 'CompareConfigDB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /**
  * Object store names
@@ -25,6 +25,7 @@ export const STORES = {
   RAW_SQL_PREFS: 'rawSqlPrefs',
   COMPARISON_HISTORY: 'comparisonHistory',
   UNIFIED_EXCEL_FILES: 'unifiedExcelFiles', // Phase 2: For unified compare Excel files
+  TOOL_STATE: 'toolState', // For persisting large comparison results
 };
 
 /**
@@ -110,6 +111,11 @@ function openDatabase() {
         const unifiedExcelFilesStore = db.createObjectStore(STORES.UNIFIED_EXCEL_FILES, { keyPath: 'id' });
         unifiedExcelFilesStore.createIndex('source', 'source', { unique: false }); // 'sourceA' or 'sourceB'
         unifiedExcelFilesStore.createIndex('uploadedAt', 'uploadedAt', { unique: false });
+      }
+
+      // Create toolState store (for persisting large comparison results)
+      if (!db.objectStoreNames.contains(STORES.TOOL_STATE)) {
+        db.createObjectStore(STORES.TOOL_STATE, { keyPath: 'id' });
       }
     };
   });
@@ -803,6 +809,43 @@ export function isIndexedDBAvailable() {
 }
 
 // =============================================================================
+// Tool State Store Operations (for large comparison results)
+// =============================================================================
+
+const TOOL_STATE_ID = 'compare-config-state';
+
+/**
+ * Saves tool state (comparison results) to IndexedDB
+ * @param {Object} state - State object containing results
+ * @returns {Promise<void>}
+ */
+export async function saveToolState(state) {
+  const record = {
+    id: TOOL_STATE_ID,
+    results: state.results,
+    savedAt: new Date().toISOString(),
+  };
+
+  await withStore(STORES.TOOL_STATE, 'readwrite', (store) => store.put(record));
+}
+
+/**
+ * Loads tool state (comparison results) from IndexedDB
+ * @returns {Promise<Object|null>} State object or null if not found
+ */
+export async function loadToolState() {
+  return withStore(STORES.TOOL_STATE, 'readonly', (store) => store.get(TOOL_STATE_ID));
+}
+
+/**
+ * Clears tool state from IndexedDB
+ * @returns {Promise<void>}
+ */
+export async function clearToolState() {
+  await withStore(STORES.TOOL_STATE, 'readwrite', (store) => store.delete(TOOL_STATE_ID));
+}
+
+// =============================================================================
 // Default Export
 // =============================================================================
 
@@ -868,4 +911,9 @@ export default {
   deleteComparisonHistory,
   clearComparisonHistory,
   pruneComparisonHistory,
+
+  // Tool state (for large comparison results)
+  saveToolState,
+  loadToolState,
+  clearToolState,
 };

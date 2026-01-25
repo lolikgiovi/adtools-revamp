@@ -157,15 +157,15 @@ class CompareConfigTool extends BaseTool {
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
       this.loadSavedConnections();
-      // Load last tool state (includes view preferences, results for all modes)
-      this.loadToolState();
+      // Load last tool state (includes view preferences, results from IndexedDB)
+      await this.loadToolState();
       // Initialize unified mode UI (populates connection dropdowns, restores cached files)
       this.initUnifiedModeUI();
       // Start connection status polling
       this.startConnectionStatusPolling();
     } else {
       // Web mode: Still load tool state for view preferences and Excel compare results
-      this.loadToolState();
+      await this.loadToolState();
       // Initialize unified mode UI for web (pre-selects Excel mode)
       this.initUnifiedModeUI();
     }
@@ -264,24 +264,24 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Saves current tool state to localStorage
+   * Saves current tool state
+   * - Small settings (view, filter) go to localStorage for quick sync access
+   * - Large results go to IndexedDB to avoid localStorage quota limits
    */
   saveToolState() {
     try {
-      const state = {
+      // Save small settings to localStorage (sync, fast)
+      const settings = {
         currentView: this.currentView,
         statusFilter: this.statusFilter,
-        results: this.results,
       };
+      localStorage.setItem("compare-config.settings", JSON.stringify(settings));
 
-      // Try to save to localStorage
-      try {
-        localStorage.setItem("compare-config.last-state", JSON.stringify(state));
-      } catch (e) {
-        // If quota exceeded, try saving without large results
-        console.warn("Could not save full state to localStorage (likely quota exceeded). Saving without results.");
-        state.results = { unified: null };
-        localStorage.setItem("compare-config.last-state", JSON.stringify(state));
+      // Save large results to IndexedDB (async, no size limit)
+      if (IndexedDBManager.isIndexedDBAvailable()) {
+        IndexedDBManager.saveToolState({ results: this.results }).catch((error) => {
+          console.error("Failed to save results to IndexedDB:", error);
+        });
       }
     } catch (error) {
       console.error("Failed to save tool state:", error);
@@ -289,23 +289,48 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Loads last tool state from localStorage
+   * Loads last tool state
+   * - Settings from localStorage (sync)
+   * - Results from IndexedDB (async)
    */
-  loadToolState() {
+  async loadToolState() {
     try {
-      const saved = localStorage.getItem("compare-config.last-state");
-      if (!saved) return;
+      // Load settings from localStorage (sync)
+      const savedSettings = localStorage.getItem("compare-config.settings");
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
+        const savedView = settings.currentView || "grid";
+        this.currentView = savedView === "expandable" ? "grid" : savedView;
+        // Default to "differ" filter if not set (null means "all")
+        this.statusFilter = settings.statusFilter !== undefined ? settings.statusFilter : "differ";
+      }
 
-      const state = JSON.parse(saved);
+      // Migrate from old localStorage format if present
+      const oldState = localStorage.getItem("compare-config.last-state");
+      if (oldState) {
+        const parsed = JSON.parse(oldState);
+        // Migrate settings if not already loaded
+        if (!savedSettings) {
+          const savedView = parsed.currentView || "grid";
+          this.currentView = savedView === "expandable" ? "grid" : savedView;
+          this.statusFilter = parsed.statusFilter !== undefined ? parsed.statusFilter : "differ";
+        }
+        // Migrate results to IndexedDB
+        if (parsed.results && IndexedDBManager.isIndexedDBAvailable()) {
+          await IndexedDBManager.saveToolState({ results: parsed.results });
+        }
+        // Remove old format
+        localStorage.removeItem("compare-config.last-state");
+      }
 
-      // Restore results (unified mode only)
-      this.results = { unified: state.results?.unified || null };
-
-      // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
-      const savedView = state.currentView || "grid";
-      this.currentView = savedView === "expandable" ? "grid" : savedView;
-      // Default to "differ" filter if not set (null means "all")
-      this.statusFilter = state.statusFilter !== undefined ? state.statusFilter : "differ";
+      // Load results from IndexedDB (async)
+      if (IndexedDBManager.isIndexedDBAvailable()) {
+        const savedState = await IndexedDBManager.loadToolState();
+        if (savedState?.results) {
+          this.results = { unified: savedState.results.unified || null };
+        }
+      }
 
       // Restore UI
       this.restoreUIFromState();
@@ -5589,6 +5614,7 @@ class CompareConfigTool extends BaseTool {
 
   /**
    * Setup searchable dropdown for unified Excel file selection
+   * Uses same pattern as Quick Query schema dropdown for keyboard navigation
    * @param {string} sourceKey - 'sourceA' or 'sourceB'
    */
   setupUnifiedExcelFileDropdown(sourceKey) {
@@ -5602,98 +5628,131 @@ class CompareConfigTool extends BaseTool {
 
     if (!input || !dropdown) return;
 
+    // Remove old event listeners by cloning the input
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+
     // Set input value if file is selected
     if (selectedId) {
       const selectedFile = files.find((f) => f.id === selectedId);
       if (selectedFile) {
-        input.value = selectedFile.file.name;
+        newInput.value = selectedFile.file.name;
       }
     } else {
-      input.value = "";
+      newInput.value = "";
     }
 
     let highlightedIndex = -1;
+    let filteredFiles = [];
 
     const renderOptions = (filter = "") => {
-      const filtered = files.filter((f) => f.file.name.toLowerCase().includes(filter.toLowerCase()));
+      filteredFiles = files.filter((f) => f.file.name.toLowerCase().includes(filter.toLowerCase()));
+      highlightedIndex = -1;
 
-      if (filtered.length === 0) {
-        dropdown.innerHTML = '<div class="dropdown-empty">No files match</div>';
+      if (filteredFiles.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-no-results">No matching files</div>';
         return;
       }
 
-      dropdown.innerHTML = filtered
+      dropdown.innerHTML = filteredFiles
         .map(
           (f, i) => `
-        <div class="dropdown-option ${f.id === selectedId ? "selected" : ""}" data-file-id="${f.id}" data-index="${i}">
-          ${f.file.name}
+        <div class="searchable-option ${f.id === selectedId ? "selected" : ""}" data-file-id="${f.id}" data-index="${i}">
+          <svg class="option-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="option-text">${f.file.name}</span>
         </div>
       `
         )
         .join("");
 
       // Bind click handlers
-      dropdown.querySelectorAll(".dropdown-option").forEach((opt) => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
         opt.addEventListener("click", () => {
           const fileId = opt.dataset.fileId;
           this.selectUnifiedExcelFile(sourceKey, fileId);
-          dropdown.style.display = "none";
+          dropdown.classList.remove("open");
         });
       });
     };
 
-    // Input events
-    input.addEventListener("focus", () => {
-      renderOptions(input.value);
-      dropdown.style.display = "block";
-      highlightedIndex = -1;
-    });
-
-    input.addEventListener("input", () => {
-      renderOptions(input.value);
-      dropdown.style.display = "block";
-      highlightedIndex = -1;
-    });
-
-    input.addEventListener("blur", () => {
-      // Delay to allow click on option
-      setTimeout(() => {
-        dropdown.style.display = "none";
-      }, 200);
-    });
-
-    input.addEventListener("keydown", (e) => {
-      const options = dropdown.querySelectorAll(".dropdown-option");
-      if (options.length === 0) return;
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        highlightedIndex = Math.min(highlightedIndex + 1, options.length - 1);
-        updateHighlighting(options);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        highlightedIndex = Math.max(highlightedIndex - 1, 0);
-        updateHighlighting(options);
-      } else if (e.key === "Enter" && highlightedIndex >= 0) {
-        e.preventDefault();
-        const fileId = options[highlightedIndex].dataset.fileId;
-        this.selectUnifiedExcelFile(sourceKey, fileId);
-        dropdown.style.display = "none";
-        input.blur();
-      } else if (e.key === "Escape") {
-        dropdown.style.display = "none";
-        input.blur();
-      }
-    });
-
-    const updateHighlighting = (options) => {
-      options.forEach((opt, i) => {
-        opt.classList.toggle("highlighted", i === highlightedIndex);
+    const updateHighlighting = () => {
+      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
         if (i === highlightedIndex) {
+          opt.classList.add("highlighted");
           opt.scrollIntoView({ block: "nearest" });
+        } else {
+          opt.classList.remove("highlighted");
         }
       });
     };
+
+    // Input events
+    newInput.addEventListener("focus", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("input", () => {
+      renderOptions(newInput.value);
+      dropdown.classList.add("open");
+    });
+
+    newInput.addEventListener("blur", () => {
+      // Delay to allow click on option
+      setTimeout(() => {
+        dropdown.classList.remove("open");
+        highlightedIndex = -1;
+      }, 200);
+    });
+
+    newInput.addEventListener("keydown", (e) => {
+      // Open dropdown on ArrowDown when closed
+      if (!dropdown.classList.contains("open")) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          renderOptions(newInput.value);
+          dropdown.classList.add("open");
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          highlightedIndex = Math.min(highlightedIndex + 1, filteredFiles.length - 1);
+          updateHighlighting();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          highlightedIndex = Math.max(highlightedIndex - 1, -1);
+          updateHighlighting();
+          break;
+        case "Enter":
+          if (highlightedIndex >= 0 && highlightedIndex < filteredFiles.length) {
+            e.preventDefault();
+            const file = filteredFiles[highlightedIndex];
+            newInput.value = file.file.name;
+            dropdown.classList.remove("open");
+            this.selectUnifiedExcelFile(sourceKey, file.id);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+        case "Tab":
+          dropdown.classList.remove("open");
+          highlightedIndex = -1;
+          break;
+      }
+    });
+
+    // Initial render (hidden)
+    renderOptions();
   }
 
   /**
