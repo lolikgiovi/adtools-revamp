@@ -154,10 +154,6 @@ class CompareConfigTool extends BaseTool {
     // Always bind UI events so the installation guide actions work
     this.bindEvents();
 
-    // Load Excel Compare cached files from IndexedDB (works in both Tauri and Web)
-    // Note: We load files but reset selection state to avoid confusing UI on navigation
-    await this.loadExcelCompareFilesOnly();
-
     if (this.oracleClientReady) {
       // Load saved connections from localStorage
       this.loadSavedConnections();
@@ -322,12 +318,16 @@ class CompareConfigTool extends BaseTool {
    * Restores UI elements from loaded state
    */
   restoreUIFromState() {
-    // Show results if they exist for unified mode
-    if (this.results.unified) {
+    // Show results if they exist for unified mode and have valid data
+    if (this.results.unified && this.results.unified.rows && this.results.unified.rows.length > 0) {
+      this.queryMode = "unified"; // Ensure queryMode is set for showResults
       this.showResults();
       // Set view type selector
       const viewTypeSelect = document.getElementById("view-type");
       if (viewTypeSelect) viewTypeSelect.value = this.currentView;
+    } else {
+      // Clear invalid/stale results
+      this.results.unified = null;
     }
   }
 
