@@ -119,6 +119,7 @@ export class GridView {
           <table class="excel-table">
             <thead>
               <tr class="h-row-1">
+                <th rowspan="2" class="sticky-col index-header">#</th>
                 ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
                 <th rowspan="2" class="sticky-col pk-header">${this.escapeHtml(pkHeaderName)}</th>
                 ${showStatus ? '<th rowspan="2" class="sticky-col status-header">STATUS</th>' : ""}
@@ -151,38 +152,7 @@ export class GridView {
           </table>
         </div>
 
-        ${comparisons.length > this.BATCH_SIZE ? `<div id="grid-load-more-sentinel" class="grid-load-sentinel"></div>` : ""}
 
-        <div class="grid-info-footer">
-          ${
-            isUserSelected
-              ? `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            <span>Showing ${fieldsToDisplay.length} selected field${fieldsToDisplay.length !== 1 ? "s" : ""} (${diffFieldCount} with differences).</span>
-          `
-              : diffFieldCount > 0 && diffFieldCount < allFieldNames.size
-                ? `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            <span>Smart Filter: Showing only ${diffFieldCount} columns with differences (hiding ${
-              allFieldNames.size - diffFieldCount
-            } identical columns).</span>
-          `
-                : ""
-          }
-          ${
-            comparisons.length > this.BATCH_SIZE
-              ? `<span id="grid-row-count" class="row-count-info">Showing ${Math.min(this.BATCH_SIZE, comparisons.length)} of ${comparisons.length} rows</span>`
-              : ""
-          }
-        </div>
       </div>
     `;
   }
@@ -196,9 +166,8 @@ export class GridView {
    * @returns {string} HTML for initial batch
    */
   renderInitialBatch(comparisons, fields, hasSourceFile, showStatus = true) {
-    const initialBatch = comparisons.slice(0, this.BATCH_SIZE);
-    this.renderedCount = initialBatch.length;
-    return initialBatch.map((comp) => this.renderRow(comp, fields, hasSourceFile, showStatus)).join("");
+    this.renderedCount = comparisons.length;
+    return comparisons.map((comp, idx) => this.renderRow(comp, fields, hasSourceFile, showStatus, idx + 1)).join("");
   }
 
   /**
@@ -260,7 +229,9 @@ export class GridView {
     // Render and append rows
     const fragment = document.createDocumentFragment();
     const tempDiv = document.createElement("tbody");
-    tempDiv.innerHTML = nextBatch.map((comp) => this.renderRow(comp, this.fieldsToDisplay, this.hasSourceFile, this.showStatus)).join("");
+    tempDiv.innerHTML = nextBatch
+      .map((comp, idx) => this.renderRow(comp, this.fieldsToDisplay, this.hasSourceFile, this.showStatus, this.renderedCount + idx + 1))
+      .join("");
 
     while (tempDiv.firstChild) {
       fragment.appendChild(tempDiv.firstChild);
@@ -293,7 +264,7 @@ export class GridView {
   /**
    * Renders a single row
    */
-  renderRow(comparison, fields, hasSourceFile = false, showStatus = true) {
+  renderRow(comparison, fields, hasSourceFile = false, showStatus = true, rowIndex = 0) {
     const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status, hasSourceFile);
     const pkValue = this.formatPrimaryKey(comparison.key);
@@ -302,6 +273,7 @@ export class GridView {
 
     return `
       <tr class="data-row status-${statusClass}">
+        <td class="sticky-col index-cell">${rowIndex}</td>
         ${
           hasSourceFile
             ? `<td class="sticky-col source-cell" title="${this.escapeHtml(comparison._sourceFile)}">${this.escapeHtml(
