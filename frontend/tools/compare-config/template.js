@@ -114,7 +114,7 @@ export const CompareConfigTemplate = /* html */ `
                                 <span>Excel</span>
                             </label>
                         </div>
-                        <span class="source-status" id="source-a-status"></span>
+                        <span class="source-status" id="source-a-status">Not loaded</span>
                     </div>
 
                     <!-- Oracle Config (shown when Oracle selected) -->
@@ -283,7 +283,7 @@ export const CompareConfigTemplate = /* html */ `
                                 <span>Excel</span>
                             </label>
                         </div>
-                        <span class="source-status" id="source-b-status"></span>
+                        <span class="source-status" id="source-b-status">Not loaded</span>
                     </div>
 
                     <!-- Oracle Config -->

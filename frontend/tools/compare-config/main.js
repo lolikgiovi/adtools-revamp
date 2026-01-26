@@ -5157,6 +5157,10 @@ class CompareConfigTool extends BaseTool {
 
     // Update Load Data button state
     this.updateUnifiedLoadButtonState();
+
+    // Ensure status pills are initialized correctly
+    this.updateUnifiedSourceConfigVisibility("A");
+    this.updateUnifiedSourceConfigVisibility("B");
   }
 
   /**
@@ -5464,6 +5468,24 @@ class CompareConfigTool extends BaseTool {
     if (oracleConfig) oracleConfig.style.display = type === "oracle" ? "flex" : "none";
     if (excelConfig) excelConfig.style.display = type === "excel" ? "block" : "none";
     if (preview) preview.style.display = this.unified[sourceKey].dataLoaded ? "block" : "none";
+
+    // Manage status visibility and text
+    const status = document.getElementById(`${prefix}-status`);
+    if (status) {
+      if (type) {
+        status.style.display = "inline-flex";
+        if (!this.unified[sourceKey].dataLoaded) {
+          status.textContent = "Not loaded";
+          status.className = "source-status";
+        } else {
+          status.textContent = "Ready";
+          status.className = "source-status ready";
+        }
+      } else {
+        status.style.display = "none";
+        status.textContent = "Not loaded"; // Reset text but keep hidden
+      }
+    }
   }
 
   /**
@@ -6855,12 +6877,8 @@ class CompareConfigTool extends BaseTool {
     const preview = document.getElementById(`${prefix}-preview`);
     if (preview) preview.style.display = "none";
 
-    // Reset status
-    const status = document.getElementById(`${prefix}-status`);
-    if (status) {
-      status.textContent = "Not loaded";
-      status.className = "source-status";
-    }
+    // Update status and visibility
+    this.updateUnifiedSourceConfigVisibility(source);
 
     if (sourceType === "oracle") {
       // Reset Oracle UI

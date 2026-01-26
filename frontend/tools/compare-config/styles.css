@@ -3322,11 +3322,16 @@
 }
 
 .source-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.625rem;
   border-radius: 9999px;
   background: hsl(var(--muted) / 0.5);
   color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .source-status.ready {
