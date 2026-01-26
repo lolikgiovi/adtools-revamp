@@ -1000,7 +1000,6 @@
 /* Export Dropdown */
 .export-dropdown {
   position: relative;
-  display: none;
 }
 
 .export-dropdown #btn-export {
@@ -1561,7 +1560,7 @@
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: 1rem;
-  height: 100%;
+  height: calc(100vh - 280px);
   min-height: 0;
 }
 
