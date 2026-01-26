@@ -356,7 +356,6 @@ class CompareConfigTool extends BaseTool {
     }
   }
 
-
   /**
    * Binds event listeners
    */
@@ -2573,9 +2572,8 @@ class CompareConfigTool extends BaseTool {
 
     try {
       // Determine primary key columns to use
-      const pkColumns = this.customPrimaryKey && this.customPrimaryKey.length > 0
-        ? this.customPrimaryKey
-        : (this.metadata?.primary_key || []);
+      const pkColumns =
+        this.customPrimaryKey && this.customPrimaryKey.length > 0 ? this.customPrimaryKey : this.metadata?.primary_key || [];
 
       console.log("[Compare] Using JS diff engine (Phase 6 refactor)");
       console.log("[Compare] Schema.Table:", `${this.schema}.${this.table}`);
@@ -2755,9 +2753,7 @@ class CompareConfigTool extends BaseTool {
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows, headers:", dataEnv2.headers);
 
       // Determine primary key columns (use provided or default to first column)
-      const pkColumns = primaryKeyFields.length > 0
-        ? primaryKeyFields
-        : (dataEnv1.headers.length > 0 ? [dataEnv1.headers[0]] : []);
+      const pkColumns = primaryKeyFields.length > 0 ? primaryKeyFields : dataEnv1.headers.length > 0 ? [dataEnv1.headers[0]] : [];
       console.log("[Compare] Using PK columns:", pkColumns);
 
       // Step 3: Compare using JS diff engine
@@ -5107,7 +5103,7 @@ class CompareConfigTool extends BaseTool {
         // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
         const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
           this.unified.selectedPkFields,
-          this.unified.selectedCompareFields
+          this.unified.selectedCompareFields,
         );
         this.unified.selectedCompareFields = updatedCompareFields;
         this.unified._pkAutoAddedFields = newlyAddedFields;
@@ -5278,7 +5274,7 @@ class CompareConfigTool extends BaseTool {
         <button class="config-dropdown-option ${conn.name === selectedName ? "active" : ""}" data-value="${conn.name}">
           ${conn.name}
         </button>
-      `
+      `,
         )
         .join("");
 
@@ -5409,6 +5405,11 @@ class CompareConfigTool extends BaseTool {
     this.updateSourceBFollowModeUI();
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+
+    // Re-initialize Excel UI when switching to Excel type to ensure dropdown event listeners are set up
+    if (type === "excel" && this.unified[sourceKey].excelFiles.length > 0) {
+      this.updateUnifiedExcelUI(sourceKey);
+    }
   }
 
   /**
@@ -5416,10 +5417,7 @@ class CompareConfigTool extends BaseTool {
    * In follow mode, Source B only shows Connection; other fields follow Source A
    */
   updateSourceBFollowModeUI() {
-    const isFollowMode = isSourceBFollowMode(
-      this.unified.sourceA.type,
-      this.unified.sourceB.type
-    );
+    const isFollowMode = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
 
     const disabledFields = getSourceBDisabledFieldsForFollowMode();
     const followModeNote = document.getElementById("source-b-follow-mode-note");
@@ -5459,10 +5457,10 @@ class CompareConfigTool extends BaseTool {
     } else {
       // Restore visibility based on current query mode
       const queryMode = this.unified.sourceB.queryMode;
-      if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "block" : "none";
-      if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "block" : "none";
-      if (maxRowsGroup) maxRowsGroup.style.display = "block";
-      if (queryModeGroup) queryModeGroup.style.display = "block";
+      if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
+      if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
+      if (maxRowsGroup) maxRowsGroup.style.display = "flex";
+      if (queryModeGroup) queryModeGroup.style.display = "flex";
     }
   }
 
@@ -5587,7 +5585,7 @@ class CompareConfigTool extends BaseTool {
           </svg>
           <span class="option-text">${schema}</span>
         </div>
-      `
+      `,
         )
         .join("");
 
@@ -5797,7 +5795,7 @@ class CompareConfigTool extends BaseTool {
           </svg>
           <span class="option-text">${table}</span>
         </div>
-      `
+      `,
         )
         .join("");
 
@@ -6115,7 +6113,7 @@ class CompareConfigTool extends BaseTool {
               </svg>
             </button>
           </div>
-        `
+        `,
           )
           .join("");
 
@@ -6210,7 +6208,7 @@ class CompareConfigTool extends BaseTool {
           </svg>
           <span class="option-text">${f.file.name}</span>
         </div>
-      `
+      `,
         )
         .join("");
     };
@@ -6404,16 +6402,10 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Phase 1.2: Validate Oracle vs Oracle configuration
-    const isOracleToOracle = isSourceBFollowMode(
-      this.unified.sourceA.type,
-      this.unified.sourceB.type
-    );
+    const isOracleToOracle = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
 
     if (isOracleToOracle) {
-      const validation = validateOracleToOracleConfig(
-        this.unified.sourceA,
-        this.unified.sourceB
-      );
+      const validation = validateOracleToOracleConfig(this.unified.sourceA, this.unified.sourceB);
       if (!validation.valid) {
         this.eventBus.emit("notification:show", {
           type: "error",
@@ -6424,10 +6416,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Determine comparison mode for progress overlay
-    const comparisonMode = getComparisonMode(
-      this.unified.sourceA.type,
-      this.unified.sourceB.type
-    );
+    const comparisonMode = getComparisonMode(this.unified.sourceA.type, this.unified.sourceB.type);
 
     // Hide any previous error banner
     this.hideUnifiedErrorBanner();
@@ -6464,16 +6453,13 @@ class CompareConfigTool extends BaseTool {
       this.updateUnifiedSourcePreview("B");
 
       // Phase 2.3: Validate mixed mode (Oracle + Excel) configuration
-      const isMixedModeComparison = isMixedMode(
-        this.unified.sourceA.type,
-        this.unified.sourceB.type
-      );
+      const isMixedModeComparison = isMixedMode(this.unified.sourceA.type, this.unified.sourceB.type);
 
       if (isMixedModeComparison) {
         this.updateUnifiedProgressStep("reconcile", "active", "Validating field compatibility...");
         const mixedValidation = validateMixedModeConfig(
           { type: this.unified.sourceA.type, headers: dataA.headers },
-          { type: this.unified.sourceB.type, headers: dataB.headers }
+          { type: this.unified.sourceB.type, headers: dataB.headers },
         );
 
         if (!mixedValidation.valid) {
@@ -6493,7 +6479,7 @@ class CompareConfigTool extends BaseTool {
             "Field Mismatch Warning",
             mixedValidation.warning,
             "Comparison will proceed with common fields only.",
-            "warning"
+            "warning",
           );
         }
       }
@@ -6516,11 +6502,7 @@ class CompareConfigTool extends BaseTool {
 
       if (code) {
         // Oracle-specific error
-        this.showUnifiedErrorBanner(
-          "Database Error",
-          friendlyMessage,
-          "Check your connection settings and try again."
-        );
+        this.showUnifiedErrorBanner("Database Error", friendlyMessage, "Check your connection settings and try again.");
       } else {
         // Generic error with context
         const errorInfo = getActionableErrorMessage(UnifiedErrorType.VALIDATION_ERROR, {
@@ -6543,15 +6525,9 @@ class CompareConfigTool extends BaseTool {
 
     try {
       // Fetch tables for the schema in Source B
-      const tables = await CompareConfigService.fetchTables(
-        sourceBConnection.name,
-        sourceBConnection,
-        schema
-      );
+      const tables = await CompareConfigService.fetchTables(sourceBConnection.name, sourceBConnection, schema);
 
-      const tableExists = tables.some(
-        (t) => t.toLowerCase() === table.toLowerCase()
-      );
+      const tableExists = tables.some((t) => t.toLowerCase() === table.toLowerCase());
 
       if (!tableExists) {
         const errorInfo = getActionableErrorMessage(UnifiedErrorType.TABLE_NOT_FOUND, {
@@ -6571,11 +6547,7 @@ class CompareConfigTool extends BaseTool {
         schema,
         connectionName: sourceBConnection.name,
       });
-      this.showUnifiedErrorBanner(
-        errorInfo.title,
-        errorInfo.message,
-        `${friendlyMessage}`
-      );
+      this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, `${friendlyMessage}`);
       return false;
     }
   }
@@ -6668,11 +6640,7 @@ class CompareConfigTool extends BaseTool {
    */
   updateUnifiedSourceValidation() {
     // Validate Source A
-    const validationA = validateSourceConfig(
-      this.unified.sourceA,
-      "A",
-      this.unified.sourceB
-    );
+    const validationA = validateSourceConfig(this.unified.sourceA, "A", this.unified.sourceB);
     if (validationA) {
       this.showUnifiedSourceValidation("A", validationA.type, validationA.message, validationA.hint);
     } else {
@@ -6680,11 +6648,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     // Validate Source B
-    const validationB = validateSourceConfig(
-      this.unified.sourceB,
-      "B",
-      this.unified.sourceA
-    );
+    const validationB = validateSourceConfig(this.unified.sourceB, "B", this.unified.sourceA);
     if (validationB) {
       this.showUnifiedSourceValidation("B", validationB.type, validationB.message, validationB.hint);
     } else {
@@ -6702,10 +6666,7 @@ class CompareConfigTool extends BaseTool {
     // Phase 1.1: In Oracle vs Oracle follow mode, Source B uses Source A's config
     // with only the connection being different
     if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
-      config = createSourceBConfigFromSourceA(
-        this.unified.sourceA,
-        this.unified.sourceB.connection
-      );
+      config = createSourceBConfigFromSourceA(this.unified.sourceA, this.unified.sourceB.connection);
     }
 
     if (config.type === "oracle") {
@@ -6850,16 +6811,10 @@ class CompareConfigTool extends BaseTool {
     const sourceBType = this.unified.sourceB.type;
 
     // Reset Source A based on type
-    this.unified.sourceA = createResetSourceState(
-      sourceAType,
-      this.unified.sourceA.excelFiles
-    );
+    this.unified.sourceA = createResetSourceState(sourceAType, this.unified.sourceA.excelFiles);
 
     // Reset Source B based on type
-    this.unified.sourceB = createResetSourceState(
-      sourceBType,
-      this.unified.sourceB.excelFiles
-    );
+    this.unified.sourceB = createResetSourceState(sourceBType, this.unified.sourceB.excelFiles);
 
     // 6. Reset UI elements
     this.resetUnifiedSourceUI("A");
@@ -7058,7 +7013,7 @@ class CompareConfigTool extends BaseTool {
         // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
         const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
           this.unified.selectedPkFields,
-          this.unified.selectedCompareFields
+          this.unified.selectedCompareFields,
         );
         this.unified.selectedCompareFields = updatedCompareFields;
         this.unified._pkAutoAddedFields = newlyAddedFields;
