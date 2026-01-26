@@ -210,7 +210,13 @@ const BUNDLED_IC_SUBPATH: &str = "Frameworks/instantclient";
 /// Sets up the Oracle Instant Client library path for the bundled IC.
 /// This must be called at app startup, before any Oracle operations.
 ///
-/// On macOS, this sets DYLD_LIBRARY_PATH to point to the bundled IC location.
+/// On macOS, we preload the library using dlopen with the full path.
+/// This works because when ODPI-C later tries dlopen("libclntsh.dylib"),
+/// the dynamic linker returns the already-loaded library handle.
+///
+/// Note: Setting DYLD_LIBRARY_PATH at runtime doesn't work on macOS because
+/// dyld reads environment variables only at process start, and SIP may strip
+/// DYLD_* variables from signed apps anyway.
 ///
 /// Returns Ok(true) if bundled IC was found and configured,
 /// Ok(false) if IC was not bundled (development mode - uses system IC),
@@ -226,10 +232,49 @@ pub fn setup_oracle_library_path() -> Result<bool, String> {
         .map(|p| p.join(BUNDLED_IC_SUBPATH));
 
     if let Some(path) = ic_path {
-        if path.exists() && path.join("libclntsh.dylib").exists() {
-            // Bundled IC found - set environment variable
+        let libclntsh_path = path.join("libclntsh.dylib");
+        if path.exists() && libclntsh_path.exists() {
+            // Preload the Oracle client library using dlopen with full path
+            // This makes it available when ODPI-C later calls dlopen("libclntsh.dylib")
+            #[cfg(target_os = "macos")]
+            {
+                use std::ffi::CString;
+                use std::os::raw::{c_char, c_int, c_void};
+
+                extern "C" {
+                    fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
+                    fn dlerror() -> *const c_char;
+                }
+
+                const RTLD_NOW: c_int = 0x2;
+                const RTLD_GLOBAL: c_int = 0x8;
+
+                let lib_path = CString::new(libclntsh_path.to_string_lossy().as_bytes())
+                    .map_err(|e| format!("Invalid library path: {}", e))?;
+
+                let handle = unsafe { dlopen(lib_path.as_ptr(), RTLD_NOW | RTLD_GLOBAL) };
+
+                if handle.is_null() {
+                    let err = unsafe {
+                        let err_ptr = dlerror();
+                        if err_ptr.is_null() {
+                            "Unknown dlopen error".to_string()
+                        } else {
+                            std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().into_owned()
+                        }
+                    };
+                    log::error!("Failed to preload Oracle library: {}", err);
+                    return Err(format!("Failed to preload Oracle library: {}", err));
+                }
+
+                log::info!("Oracle Instant Client preloaded from bundle: {:?}", libclntsh_path);
+                // Note: We intentionally don't dlclose() - we want it to stay loaded
+            }
+
+            // Also set env var as fallback (may help in some scenarios)
             std::env::set_var("DYLD_LIBRARY_PATH", &path);
-            log::info!("Oracle Instant Client configured from bundle: {:?}", path);
+            std::env::set_var("OCI_LIB_DIR", &path);
+
             return Ok(true);
         }
     }
