@@ -229,7 +229,57 @@ bundle_oracle_ic() {
     return 1
   fi
 
+  # Fix dylib install names to use @loader_path (required for macOS to find bundled libs)
+  # Without this, the dylibs reference their original install location which won't exist on user machines
+  echo "Fixing dylib install names with install_name_tool..."
+
+  local rpath_prefix="@loader_path"
+
+  for dylib in "$ic_dest"/*.dylib; do
+    if [[ -f "$dylib" ]]; then
+      local dylib_name
+      dylib_name="$(basename "$dylib")"
+
+      # Change the dylib's own ID to use @loader_path
+      install_name_tool -id "$rpath_prefix/$dylib_name" "$dylib" 2>/dev/null || true
+
+      # Update references to other Oracle dylibs within this dylib
+      # Get all LC_LOAD_DYLIB entries that reference Oracle libs
+      for dep in $(otool -L "$dylib" 2>/dev/null | grep -E 'lib(clntsh|nnz|ociei|occi|clntshcore)' | awk '{print $1}'); do
+        local dep_name
+        dep_name="$(basename "$dep")"
+        # Only fix if it's not already using @loader_path/@rpath/@executable_path
+        if [[ "$dep" != @* ]]; then
+          install_name_tool -change "$dep" "$rpath_prefix/$dep_name" "$dylib" 2>/dev/null || true
+        fi
+      done
+    fi
+  done
+
+  # Also add @rpath to the main executable pointing to Frameworks/instantclient
+  local main_exe="$app_path/Contents/MacOS/AD Tools"
+  if [[ -f "$main_exe" ]]; then
+    echo "Adding @rpath to main executable..."
+    # Add rpath for the instantclient directory (Tauri may not include this by default)
+    install_name_tool -add_rpath "@executable_path/../Frameworks/instantclient" "$main_exe" 2>/dev/null || true
+  fi
+
+  # Create symlinks in Contents/MacOS/ for dlopen to find the libraries
+  # ODPI-C uses dlopen("libclntsh.dylib") which searches in the executable's directory
+  # This is more reliable than DYLD_LIBRARY_PATH which may be stripped by SIP
+  local macos_dir="$app_path/Contents/MacOS"
+  echo "Creating symlinks in MacOS/ for dlopen compatibility..."
+  for dylib in "$ic_dest"/*.dylib; do
+    if [[ -f "$dylib" ]]; then
+      local dylib_name
+      dylib_name="$(basename "$dylib")"
+      # Create relative symlink: MacOS/libclntsh.dylib -> ../Frameworks/instantclient/libclntsh.dylib
+      ln -sf "../Frameworks/instantclient/$dylib_name" "$macos_dir/$dylib_name" 2>/dev/null || true
+    fi
+  done
+
   # Sign the bundled dylibs (ad-hoc signing for now, proper signing done by Tauri)
+  # Must be done AFTER install_name_tool changes
   echo "Signing bundled Oracle IC dylibs..."
   for dylib in "$ic_dest"/*.dylib; do
     if [[ -f "$dylib" ]]; then
