@@ -6432,6 +6432,19 @@ class CompareConfigTool extends BaseTool {
       this.updateUnifiedProgressStep("source-a", "done", `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
 
+      // Check for empty Source A data
+      if (dataA.metadata.rowCount === 0) {
+        this.updateUnifiedProgressStep("source-b", "error", "Source A returned no data");
+        this.hideUnifiedProgress();
+
+        const errorInfo = getActionableErrorMessage(UnifiedErrorType.NO_DATA, {
+          source: `Source A (${this.unified.sourceA.connection?.name || "Reference"})`,
+          whereClause: this.unified.sourceA.whereClause,
+        });
+        this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
+        return;
+      }
+
       // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
       if (isOracleToOracle && this.unified.sourceA.queryMode === "table") {
         this.updateUnifiedProgressStep("validate-b", "active", "Checking table exists...");
@@ -6451,6 +6464,21 @@ class CompareConfigTool extends BaseTool {
       this.unified.sourceB.dataLoaded = true;
       this.updateUnifiedProgressStep("source-b", "done", `${dataB.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("B");
+
+      // Check for empty Source B data (especially important in follow mode with WHERE clause)
+      if (dataB.metadata.rowCount === 0) {
+        this.updateUnifiedProgressStep("reconcile", "error", "Source B returned no data");
+        this.hideUnifiedProgress();
+
+        // In Oracle follow mode, the WHERE clause is inherited from Source A
+        const whereClause = isOracleToOracle ? this.unified.sourceA.whereClause : this.unified.sourceB.whereClause;
+        const errorInfo = getActionableErrorMessage(UnifiedErrorType.NO_DATA, {
+          source: `Source B (${this.unified.sourceB.connection?.name || "Comparator"})`,
+          whereClause: whereClause,
+        });
+        this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
+        return;
+      }
 
       // Phase 2.3: Validate mixed mode (Oracle + Excel) configuration
       const isMixedModeComparison = isMixedMode(this.unified.sourceA.type, this.unified.sourceB.type);
