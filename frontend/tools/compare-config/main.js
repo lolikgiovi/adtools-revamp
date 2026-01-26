@@ -6508,15 +6508,9 @@ class CompareConfigTool extends BaseTool {
           return;
         }
 
-        if (mixedValidation.warning) {
-          // Show warning in banner instead of toast for better visibility
-          this.showUnifiedErrorBanner(
-            "Field Mismatch Warning",
-            mixedValidation.warning,
-            "Comparison will proceed with common fields only.",
-            "warning",
-          );
-        }
+        // Note: Field mismatch warning is handled by the inline "Column Differences Detected"
+        // warning in the field reconciliation UI (updateUnifiedColumnWarning), which provides
+        // more detailed information with expandable details.
       }
 
       // Reconcile columns
