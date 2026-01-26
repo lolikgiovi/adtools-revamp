@@ -32,7 +32,7 @@ export class GridView {
    * @param {Array<string>} options.compareFields - Fields to display (from user selection). If provided, only these fields are shown.
    */
   render(comparisons, env1Name, env2Name, options = {}) {
-    const { compareFields } = options;
+    const { compareFields, showStatus = true } = options;
 
     // Reset lazy loading state
     this.renderedCount = 0;
@@ -100,6 +100,7 @@ export class GridView {
     // Cache for lazy loading (after PK filtering)
     this.fieldsToDisplay = fieldsToDisplay;
     this.hasSourceFile = comparisons.some((c) => c._sourceFile);
+    this.showStatus = showStatus;
 
     // Check if any row has a source file (for multi-file Excel compare)
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
@@ -120,7 +121,7 @@ export class GridView {
               <tr class="h-row-1">
                 ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
                 <th rowspan="2" class="sticky-col pk-header">${this.escapeHtml(pkHeaderName)}</th>
-                <th rowspan="2" class="sticky-col status-header">STATUS</th>
+                ${showStatus ? '<th rowspan="2" class="sticky-col status-header">STATUS</th>' : ""}
                 ${fieldsToDisplay
                   .map(
                     (f) => `
@@ -145,7 +146,7 @@ export class GridView {
               </tr>
             </thead>
             <tbody id="grid-tbody">
-              ${this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile)}
+              ${this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile, showStatus)}
             </tbody>
           </table>
         </div>
@@ -171,8 +172,8 @@ export class GridView {
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
             <span>Smart Filter: Showing only ${diffFieldCount} columns with differences (hiding ${
-                allFieldNames.size - diffFieldCount
-              } identical columns).</span>
+              allFieldNames.size - diffFieldCount
+            } identical columns).</span>
           `
                 : ""
           }
@@ -191,12 +192,13 @@ export class GridView {
    * @param {Array} comparisons - All comparison objects
    * @param {Array} fields - Fields to display
    * @param {boolean} hasSourceFile - Whether to show source file column
+   * @param {boolean} showStatus - Whether to show status column
    * @returns {string} HTML for initial batch
    */
-  renderInitialBatch(comparisons, fields, hasSourceFile) {
+  renderInitialBatch(comparisons, fields, hasSourceFile, showStatus = true) {
     const initialBatch = comparisons.slice(0, this.BATCH_SIZE);
     this.renderedCount = initialBatch.length;
-    return initialBatch.map((comp) => this.renderRow(comp, fields, hasSourceFile)).join("");
+    return initialBatch.map((comp) => this.renderRow(comp, fields, hasSourceFile, showStatus)).join("");
   }
 
   /**
@@ -227,7 +229,7 @@ export class GridView {
         root: container.querySelector(".table-scroll-area"),
         rootMargin: "200px",
         threshold: 0,
-      }
+      },
     );
 
     this.observer.observe(sentinel);
@@ -253,17 +255,12 @@ export class GridView {
     if (!tbody) return;
 
     // Get next batch
-    const nextBatch = this.comparisons.slice(
-      this.renderedCount,
-      this.renderedCount + this.BATCH_SIZE
-    );
+    const nextBatch = this.comparisons.slice(this.renderedCount, this.renderedCount + this.BATCH_SIZE);
 
     // Render and append rows
     const fragment = document.createDocumentFragment();
     const tempDiv = document.createElement("tbody");
-    tempDiv.innerHTML = nextBatch
-      .map((comp) => this.renderRow(comp, this.fieldsToDisplay, this.hasSourceFile))
-      .join("");
+    tempDiv.innerHTML = nextBatch.map((comp) => this.renderRow(comp, this.fieldsToDisplay, this.hasSourceFile, this.showStatus)).join("");
 
     while (tempDiv.firstChild) {
       fragment.appendChild(tempDiv.firstChild);
@@ -296,7 +293,7 @@ export class GridView {
   /**
    * Renders a single row
    */
-  renderRow(comparison, fields, hasSourceFile = false) {
+  renderRow(comparison, fields, hasSourceFile = false, showStatus = true) {
     const statusClass = comparison.status.toLowerCase().replace("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status, hasSourceFile);
     const pkValue = this.formatPrimaryKey(comparison.key);
@@ -313,9 +310,15 @@ export class GridView {
             : ""
         }
         <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${this.escapeHtml(pkValue)}</td>
-        <td class="sticky-col status-cell">
-          <span class="status-badge status-${statusClass}">${statusLabel}</span>
-        </td>
+        ${
+          showStatus
+            ? `
+          <td class="sticky-col status-cell">
+            <span class="status-badge status-${statusClass}">${statusLabel}</span>
+          </td>
+        `
+            : ""
+        }
         ${fields
           .map((fieldName) => {
             const v1 = comparison.env1_data && fieldName in comparison.env1_data ? comparison.env1_data[fieldName] : undefined;

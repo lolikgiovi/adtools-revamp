@@ -1822,8 +1822,9 @@
 .excel-table .status-header,
 .excel-table .status-cell {
   left: 250px;
-  width: 120px;
-  min-width: 120px;
+  width: 90px;
+  min-width: 90px;
+  text-align: center;
 }
 
 .excel-table thead .sticky-col {
@@ -2012,7 +2013,10 @@
 
 .status-header {
   left: 250px; /* matches pkWidth in JS */
+  width: 90px;
+  min-width: 90px;
   z-index: 20;
+  text-align: center;
 }
 
 .pk-cell {
@@ -2024,7 +2028,10 @@
 
 .status-cell {
   left: 250px; /* matches pkWidth in JS */
+  width: 90px;
+  min-width: 90px;
   justify-content: center;
+  text-align: center;
 }
 
 .grid-header-row .sticky-col {

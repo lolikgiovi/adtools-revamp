@@ -3492,7 +3492,7 @@ class CompareConfigTool extends BaseTool {
         break;
 
       case "grid":
-        html = this.gridView.render(comparisons, env1_name, env2_name, { compareFields });
+        html = this.gridView.render(comparisons, env1_name, env2_name, { compareFields, showStatus: this.statusFilter === null });
         resultsContent.innerHTML = html;
         // Attach event listeners for lazy loading
         this.gridView.attachEventListeners(resultsContent);
