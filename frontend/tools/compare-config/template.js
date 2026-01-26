@@ -95,32 +95,26 @@ export const CompareConfigTemplate = /* html */ `
                 <div class="source-panel source-a">
                     <div class="source-panel-header">
                         <h4>Source A (Reference)</h4>
-                        <span class="source-status" id="source-a-status"></span>
-                    </div>
-
-                    <!-- Source Type Selection -->
-                    <div class="source-type-selector">
-                        <label class="source-type-option">
-                            <input type="radio" name="source-a-type" value="oracle" id="source-a-type-oracle">
-                            <span class="option-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <div class="source-type-selector-inline">
+                            <label class="source-type-btn" title="Oracle Database">
+                                <input type="radio" name="source-a-type" value="oracle" id="source-a-type-oracle">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                                     <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                                     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                                 </svg>
-                            </span>
-                            <span class="option-label">Oracle Database</span>
-                        </label>
-                        <label class="source-type-option">
-                            <input type="radio" name="source-a-type" value="excel" id="source-a-type-excel">
-                            <span class="option-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <span>Oracle</span>
+                            </label>
+                            <label class="source-type-btn" title="Excel/CSV File">
+                                <input type="radio" name="source-a-type" value="excel" id="source-a-type-excel">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                     <polyline points="14 2 14 8 20 8"></polyline>
                                 </svg>
-                            </span>
-                            <span class="option-label">Excel/CSV File</span>
-                        </label>
+                                <span>Excel</span>
+                            </label>
+                        </div>
+                        <span class="source-status" id="source-a-status"></span>
                     </div>
 
                     <!-- Oracle Config (shown when Oracle selected) -->
@@ -270,32 +264,26 @@ export const CompareConfigTemplate = /* html */ `
                 <div class="source-panel source-b">
                     <div class="source-panel-header">
                         <h4>Source B (Comparator)</h4>
-                        <span class="source-status" id="source-b-status"></span>
-                    </div>
-
-                    <!-- Source Type Selection -->
-                    <div class="source-type-selector">
-                        <label class="source-type-option">
-                            <input type="radio" name="source-b-type" value="oracle" id="source-b-type-oracle">
-                            <span class="option-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <div class="source-type-selector-inline">
+                            <label class="source-type-btn" title="Oracle Database">
+                                <input type="radio" name="source-b-type" value="oracle" id="source-b-type-oracle">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                                     <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                                     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                                 </svg>
-                            </span>
-                            <span class="option-label">Oracle Database</span>
-                        </label>
-                        <label class="source-type-option">
-                            <input type="radio" name="source-b-type" value="excel" id="source-b-type-excel">
-                            <span class="option-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <span>Oracle</span>
+                            </label>
+                            <label class="source-type-btn" title="Excel/CSV File">
+                                <input type="radio" name="source-b-type" value="excel" id="source-b-type-excel">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                     <polyline points="14 2 14 8 20 8"></polyline>
                                 </svg>
-                            </span>
-                            <span class="option-label">Excel/CSV File</span>
-                        </label>
+                                <span>Excel</span>
+                            </label>
+                        </div>
+                        <span class="source-status" id="source-b-status"></span>
                     </div>
 
                     <!-- Oracle Config -->
