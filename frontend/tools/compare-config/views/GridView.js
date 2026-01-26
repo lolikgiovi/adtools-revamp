@@ -78,8 +78,8 @@ export class GridView {
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
 
     // When env names are identical (e.g., same filename in Excel compare), use Reference/Comparator labels
-    let displayEnv1Name = env1Name;
-    let displayEnv2Name = env2Name;
+    let displayEnv1Name = this.formatEnvName(env1Name);
+    let displayEnv2Name = this.formatEnvName(env2Name);
     if (env1Name === env2Name) {
       displayEnv1Name = "Reference";
       displayEnv2Name = "Comparator";
@@ -97,7 +97,7 @@ export class GridView {
                 ${fieldsToDisplay
                   .map(
                     (f) => `
-                  <th colspan="2" class="field-header-main">${this.escapeHtml(f)}</th>
+                  <th colspan="2" class="field-header-main" title="${this.escapeHtml(f)}">${this.escapeHtml(this.extractFieldName(f))}</th>
                 `,
                   )
                   .join("")}
@@ -307,8 +307,10 @@ export class GridView {
    * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
   renderCellPair(v1, v2, hasV1, hasV2, isDifferent, diffInfo = null) {
-    const val1 = hasV1 ? this.formatValue(v1) : "";
-    const val2 = hasV2 ? this.formatValue(v2) : "";
+    const rawVal1 = hasV1 ? this.formatValue(v1) : "";
+    const rawVal2 = hasV2 ? this.formatValue(v2) : "";
+    const val1 = this.formatCellDisplay(rawVal1);
+    const val2 = this.formatCellDisplay(rawVal2);
 
     let c1Class = "val-cell env-1";
     let c2Class = "val-cell env-2";
@@ -417,5 +419,69 @@ export class GridView {
     const div = document.createElement("div");
     div.textContent = String(text);
     return div.innerHTML;
+  }
+
+  /**
+   * Extracts just the field name from a potentially qualified name (TABLE_NAME.FIELD_NAME)
+   * @param {string} qualifiedName - The full field name (may include table prefix)
+   * @returns {string} Just the field name portion
+   */
+  extractFieldName(qualifiedName) {
+    if (!qualifiedName || typeof qualifiedName !== "string") return qualifiedName;
+    const lastDotIndex = qualifiedName.lastIndexOf(".");
+    if (lastDotIndex === -1) return qualifiedName;
+    return qualifiedName.substring(lastDotIndex + 1);
+  }
+
+  /**
+   * Formats a cell value for display, simplifying qualified references
+   * - "(ENV) TABLE.FIELD..." → "(ENV)" only (table info is in title bar)
+   * - "TABLE.FIELD..." (no prefix) → "(Excel)" for Excel sources
+   * @param {string} value - The cell value
+   * @returns {string} Formatted display value
+   */
+  formatCellDisplay(value) {
+    if (!value || typeof value !== "string") return value;
+
+    // Match pattern: (ENV_NAME) followed by anything with a dot (TABLE.FIELD...)
+    const dbRefPattern = /^\(([^)]+)\)\s+\S+\.\S+/i;
+    const dbMatch = value.match(dbRefPattern);
+    if (dbMatch) {
+      return dbMatch[1];
+    }
+
+    // Match pattern: starts with WORD.WORD (no parentheses prefix - Excel source)
+    const excelRefPattern = /^[A-Z_][A-Z0-9_]*\.[A-Z_]/i;
+    if (excelRefPattern.test(value)) {
+      return "Excel";
+    }
+
+    return value;
+  }
+
+  /**
+   * Formats environment name for header display
+   * - "(ENV) TABLE.FIELD" → "ENV"
+   * - "TABLE.FIELD" → "Excel"
+   * @param {string} envName - The environment name
+   * @returns {string} Formatted name
+   */
+  formatEnvName(envName) {
+    if (!envName || typeof envName !== "string") return envName;
+
+    // Match pattern: (ENV_NAME) followed by TABLE.FIELD
+    const dbPattern = /^\(([^)]+)\)\s+\S+\.\S+/i;
+    const dbMatch = envName.match(dbPattern);
+    if (dbMatch) {
+      return dbMatch[1];
+    }
+
+    // Match pattern: TABLE.FIELD (Excel source)
+    const excelPattern = /^[A-Z_][A-Z0-9_]*\.[A-Z_]/i;
+    if (excelPattern.test(envName)) {
+      return "Excel";
+    }
+
+    return envName;
   }
 }

@@ -2993,7 +2993,7 @@
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
   box-shadow: 0 8px 24px hsl(0 0% 0% / 0.15);
-  z-index: 200;
+  z-index: 1000;
   display: none;
 }
 
@@ -3209,6 +3209,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+  overflow: visible;
 }
 
 .source-panel {
@@ -3219,6 +3220,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: visible;
+  position: relative;
 }
 
 .source-panel-header {

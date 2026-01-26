@@ -6171,9 +6171,12 @@ class CompareConfigTool extends BaseTool {
 
     if (!input || !dropdown) return;
 
-    // Remove old event listeners by cloning the input
+    // Remove old event listeners by cloning both input and dropdown
     const newInput = input.cloneNode(true);
     input.parentNode.replaceChild(newInput, input);
+
+    const newDropdown = dropdown.cloneNode(false); // shallow clone to clear children and listeners
+    dropdown.parentNode.replaceChild(newDropdown, dropdown);
 
     // Set input value if file is selected
     if (selectedId) {
@@ -6193,11 +6196,11 @@ class CompareConfigTool extends BaseTool {
       highlightedIndex = -1;
 
       if (filteredFiles.length === 0) {
-        dropdown.innerHTML = '<div class="searchable-no-results">No matching files</div>';
+        newDropdown.innerHTML = '<div class="searchable-no-results">No matching files</div>';
         return;
       }
 
-      dropdown.innerHTML = filteredFiles
+      newDropdown.innerHTML = filteredFiles
         .map(
           (f, i) => `
         <div class="searchable-option ${f.id === selectedId ? "selected" : ""}" data-file-id="${f.id}" data-index="${i}">
@@ -6210,19 +6213,23 @@ class CompareConfigTool extends BaseTool {
       `
         )
         .join("");
-
-      // Bind click handlers
-      dropdown.querySelectorAll(".searchable-option").forEach((opt) => {
-        opt.addEventListener("click", () => {
-          const fileId = opt.dataset.fileId;
-          this.selectUnifiedExcelFile(sourceKey, fileId);
-          dropdown.classList.remove("open");
-        });
-      });
     };
 
+    // Event delegation on dropdown container (more reliable than per-option listeners)
+    newDropdown.addEventListener("mousedown", (e) => {
+      const opt = e.target.closest(".searchable-option");
+      if (opt) {
+        e.preventDefault(); // Prevent blur from firing
+        e.stopPropagation();
+        const fileId = opt.dataset.fileId;
+        this.selectUnifiedExcelFile(sourceKey, fileId);
+        newDropdown.classList.remove("open");
+        newInput.blur();
+      }
+    });
+
     const updateHighlighting = () => {
-      dropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
+      newDropdown.querySelectorAll(".searchable-option").forEach((opt, i) => {
         if (i === highlightedIndex) {
           opt.classList.add("highlighted");
           opt.scrollIntoView({ block: "nearest" });
@@ -6235,29 +6242,29 @@ class CompareConfigTool extends BaseTool {
     // Input events
     newInput.addEventListener("focus", () => {
       renderOptions(newInput.value);
-      dropdown.classList.add("open");
+      newDropdown.classList.add("open");
     });
 
     newInput.addEventListener("input", () => {
       renderOptions(newInput.value);
-      dropdown.classList.add("open");
+      newDropdown.classList.add("open");
     });
 
     newInput.addEventListener("blur", () => {
       // Delay to allow click on option
       setTimeout(() => {
-        dropdown.classList.remove("open");
+        newDropdown.classList.remove("open");
         highlightedIndex = -1;
       }, 200);
     });
 
     newInput.addEventListener("keydown", (e) => {
       // Open dropdown on ArrowDown when closed
-      if (!dropdown.classList.contains("open")) {
+      if (!newDropdown.classList.contains("open")) {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
           renderOptions(newInput.value);
-          dropdown.classList.add("open");
+          newDropdown.classList.add("open");
         }
         return;
       }
@@ -6278,17 +6285,17 @@ class CompareConfigTool extends BaseTool {
             e.preventDefault();
             const file = filteredFiles[highlightedIndex];
             newInput.value = file.file.name;
-            dropdown.classList.remove("open");
+            newDropdown.classList.remove("open");
             this.selectUnifiedExcelFile(sourceKey, file.id);
           }
           break;
         case "Escape":
           e.preventDefault();
-          dropdown.classList.remove("open");
+          newDropdown.classList.remove("open");
           highlightedIndex = -1;
           break;
         case "Tab":
-          dropdown.classList.remove("open");
+          newDropdown.classList.remove("open");
           highlightedIndex = -1;
           break;
       }
