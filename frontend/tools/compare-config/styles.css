@@ -1766,7 +1766,7 @@
 }
 
 .excel-table .field-header-main {
-  background: hsl(var(--muted) / 0.9);
+  background: hsl(var(--muted));
   border-bottom: 1px solid hsl(var(--border));
   border-right: 2px solid hsl(var(--border)); /* Stronger boundary for top tier */
 }
@@ -1850,21 +1850,14 @@
   background-color: hsl(var(--muted) / 0.1);
 }
 
-.excel-table tr:hover .sticky-col {
-  background-color: hsl(var(--muted) / 0.25) !important; /* Semi-trans is okay if applied ON TOP of solid */
-  background-clip: padding-box;
+.excel-table tr:hover td.sticky-col {
+  background-color: hsl(var(--muted)) !important; /* Solid background to prevent transparency */
 }
 
 /* Ensure sticky columns have a SOLID base to prevent transparency */
 .excel-table td.sticky-col {
   background-color: hsl(var(--card)) !important;
   z-index: 20;
-}
-
-/* On hover, we mix the hover tint with the solid base */
-.excel-table tr:hover td.sticky-col {
-  background-image: linear-gradient(hsl(var(--muted) / 0.2), hsl(var(--muted) / 0.2));
-  background-color: hsl(var(--card)) !important;
 }
 
 /* Data Styling */
