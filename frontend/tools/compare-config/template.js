@@ -190,7 +190,7 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="form-group">
                             <label>Max Rows</label>
                             <input type="number" id="source-a-max-rows" class="form-input"
-                                   value="100" min="1" max="10000">
+                                   value="500" min="1" max="10000">
                         </div>
                     </div>
 
@@ -364,7 +364,7 @@ export const CompareConfigTemplate = /* html */ `
                         <div class="form-group">
                             <label>Max Rows</label>
                             <input type="number" id="source-b-max-rows" class="form-input"
-                                   value="100" min="1" max="10000">
+                                   value="500" min="1" max="10000">
                         </div>
                     </div>
 

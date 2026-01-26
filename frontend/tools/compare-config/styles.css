@@ -894,7 +894,6 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   padding: 1rem 1.5rem;
-  border-left: 4px solid hsl(var(--primary) / 0.4);
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
@@ -1147,12 +1146,12 @@
 }
 
 .summary-stat:hover {
-  background: hsl(var(--muted) / 0.5);
-  box-shadow: 0 2px 8px hsl(var(--shadow, 0 0% 0%) / 0.1);
+  background: hsl(var(--primary-hover) / 0.15);
+  border-color: hsl(var(--ring));
 }
 
 .summary-stat.selected {
-  border: 2px solid hsl(var(--primary));
+  border-bottom: 1px solid hsl(var(--primary));
   box-shadow: 0 2px 8px hsl(var(--primary) / 0.2);
 }
 

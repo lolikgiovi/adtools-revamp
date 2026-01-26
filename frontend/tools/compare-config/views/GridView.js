@@ -78,18 +78,28 @@ export class GridView {
     // For footer info: count how many fields have differences
     const diffFieldCount = fieldsWithDiffs.size;
 
-    // Cache for lazy loading
-    this.fieldsToDisplay = fieldsToDisplay;
-    this.hasSourceFile = comparisons.some((c) => c._sourceFile);
-
-    // 3. Determine PK Header name from actual metadata
+    // 3. Determine PK Header name from actual metadata and filter out PK fields from display
     let pkHeaderName = "PRIMARY KEY";
+    let pkFieldsSet = new Set();
     if (comparisons.length > 0 && comparisons[0].key) {
       const pkKeys = Object.keys(comparisons[0].key);
       if (pkKeys.length > 0) {
         pkHeaderName = pkKeys.join(", ").toUpperCase();
+        // Create a set of PK field names (case-insensitive) to filter from display
+        pkKeys.forEach((k) => {
+          pkFieldsSet.add(k.toLowerCase());
+        });
       }
     }
+
+    // Filter out primary key fields from fieldsToDisplay - they're already shown in the PK column
+    if (pkFieldsSet.size > 0) {
+      fieldsToDisplay = fieldsToDisplay.filter((f) => !pkFieldsSet.has(f.toLowerCase()));
+    }
+
+    // Cache for lazy loading (after PK filtering)
+    this.fieldsToDisplay = fieldsToDisplay;
+    this.hasSourceFile = comparisons.some((c) => c._sourceFile);
 
     // Check if any row has a source file (for multi-file Excel compare)
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
