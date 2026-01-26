@@ -13,8 +13,12 @@ export class VerticalCardView {
    * @param {Array} comparisons - Array of comparison objects
    * @param {string} env1Name - Environment 1 name
    * @param {string} env2Name - Environment 2 name
+   * @param {Object} options - Render options
+   * @param {Array<string>} options.compareFields - Fields to display (from user selection)
    */
-  render(comparisons, env1Name, env2Name) {
+  render(comparisons, env1Name, env2Name, options = {}) {
+    this.compareFields = options.compareFields || null;
+
     if (!comparisons || comparisons.length === 0) {
       return `
         <div class="placeholder-message">
@@ -107,14 +111,19 @@ export class VerticalCardView {
       `;
     }
 
-    // Status is 'differ' - show all fields, highlight differences
+    // Status is 'differ' - show selected fields, highlight differences
     const diffFields = new Set(comparison.differences || []);
     const diffDetails = comparison._diffDetails || {};
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
 
-    // Get all unique field names
-    const allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
+    // Get fields to display: use compareFields if provided, otherwise derive from data
+    let allFields;
+    if (this.compareFields && this.compareFields.length > 0) {
+      allFields = this.compareFields;
+    } else {
+      allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
+    }
 
     return `
       <div class="card-diff-section">

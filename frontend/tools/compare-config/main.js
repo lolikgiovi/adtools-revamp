@@ -3466,8 +3466,11 @@ class CompareConfigTool extends BaseTool {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.results[this.queryMode]) return;
 
-    const { env1_name, env2_name } = this.results[this.queryMode];
+    const { env1_name, env2_name, _metadata } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
+
+    // Get the selected compare fields from metadata (for unified mode) or use null for auto-detection
+    const compareFields = _metadata?.compareFields || null;
 
     let html = "";
     switch (this.currentView) {
@@ -3477,19 +3480,19 @@ class CompareConfigTool extends BaseTool {
         return; // Exit early since renderExpandableView handles everything
 
       case "vertical":
-        html = this.verticalCardView.render(comparisons, env1_name, env2_name);
+        html = this.verticalCardView.render(comparisons, env1_name, env2_name, { compareFields });
         resultsContent.innerHTML = html;
         break;
 
       case "master-detail":
-        html = this.masterDetailView.render(comparisons, env1_name, env2_name);
+        html = this.masterDetailView.render(comparisons, env1_name, env2_name, { compareFields });
         resultsContent.innerHTML = html;
         // Attach event listeners for master-detail view
         this.masterDetailView.attachEventListeners(resultsContent);
         break;
 
       case "grid":
-        html = this.gridView.render(comparisons, env1_name, env2_name);
+        html = this.gridView.render(comparisons, env1_name, env2_name, { compareFields });
         resultsContent.innerHTML = html;
         // Attach event listeners for lazy loading
         this.gridView.attachEventListeners(resultsContent);
@@ -7159,6 +7162,7 @@ class CompareConfigTool extends BaseTool {
       viewResult._metadata = {
         keyColumns: pkFields,
         rowMatching: rowMatching,
+        compareFields: compareFields,
       };
 
       this.updateProgressStep("compare", "done", `${viewResult.rows.length} records compared`);

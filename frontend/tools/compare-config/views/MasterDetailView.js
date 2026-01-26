@@ -20,11 +20,14 @@ export class MasterDetailView {
    * @param {Array} comparisons - Array of comparison objects
    * @param {string} env1Name - Environment 1 name
    * @param {string} env2Name - Environment 2 name
+   * @param {Object} options - Render options
+   * @param {Array<string>} options.compareFields - Fields to display (from user selection)
    */
-  render(comparisons, env1Name, env2Name) {
+  render(comparisons, env1Name, env2Name, options = {}) {
     this.comparisons = comparisons || [];
     this.env1Name = env1Name;
     this.env2Name = env2Name;
+    this.compareFields = options.compareFields || null;
 
     if (this.comparisons.length === 0) {
       return `
@@ -194,14 +197,19 @@ export class MasterDetailView {
       `;
     }
 
-    // Status is 'differ' - show all fields, highlight differences
+    // Status is 'differ' - show selected fields, highlight differences
     const diffFields = new Set(comparison.differences || []);
     const diffDetails = comparison._diffDetails || {};
     const env1Data = comparison.env1_data || {};
     const env2Data = comparison.env2_data || {};
 
-    // Get all unique field names
-    const allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
+    // Get fields to display: use compareFields if provided, otherwise derive from data
+    let allFields;
+    if (this.compareFields && this.compareFields.length > 0) {
+      allFields = this.compareFields;
+    } else {
+      allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
+    }
 
     return `
       <div class="detail-body">
@@ -366,8 +374,8 @@ export class MasterDetailView {
   selectItem(index, container) {
     this.selectedIndex = index;
 
-    // Re-render the entire view
-    const html = this.render(this.comparisons, this.env1Name, this.env2Name);
+    // Re-render the entire view (pass compareFields to preserve user selection)
+    const html = this.render(this.comparisons, this.env1Name, this.env2Name, { compareFields: this.compareFields });
     container.innerHTML = html;
 
     // Re-attach event listeners

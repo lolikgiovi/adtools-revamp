@@ -28,8 +28,12 @@ export class GridView {
    * @param {Array} comparisons - Array of comparison objects
    * @param {string} env1Name - Environment 1 name
    * @param {string} env2Name - Environment 2 name
+   * @param {Object} options - Render options
+   * @param {Array<string>} options.compareFields - Fields to display (from user selection). If provided, only these fields are shown.
    */
-  render(comparisons, env1Name, env2Name) {
+  render(comparisons, env1Name, env2Name, options = {}) {
+    const { compareFields } = options;
+
     // Reset lazy loading state
     this.renderedCount = 0;
     this.comparisons = comparisons || [];
@@ -54,12 +58,25 @@ export class GridView {
       }
     });
 
-    // 2. Filter fields for Smart Diff View
-    const activeFields = Array.from(allFieldNames)
-      .filter((f) => fieldsWithDiffs.has(f))
-      .sort();
+    // 2. Determine fields to display
+    // If compareFields is provided (user selection), use those fields only
+    // Otherwise, fall back to smart diff view (fields with differences)
+    let fieldsToDisplay;
+    let isUserSelected = false;
+    if (compareFields && compareFields.length > 0) {
+      // User-selected fields - preserve their selection order
+      fieldsToDisplay = compareFields;
+      isUserSelected = true;
+    } else {
+      // Auto-detect: show fields with differences, or all fields if none differ
+      const activeFields = Array.from(allFieldNames)
+        .filter((f) => fieldsWithDiffs.has(f))
+        .sort();
+      fieldsToDisplay = activeFields.length > 0 ? activeFields : Array.from(allFieldNames).sort();
+    }
 
-    const fieldsToDisplay = activeFields.length > 0 ? activeFields : Array.from(allFieldNames).sort();
+    // For footer info: count how many fields have differences
+    const diffFieldCount = fieldsWithDiffs.size;
 
     // Cache for lazy loading
     this.fieldsToDisplay = fieldsToDisplay;
@@ -127,18 +144,27 @@ export class GridView {
 
         <div class="grid-info-footer">
           ${
-            activeFields.length > 0 && activeFields.length < allFieldNames.size
+            isUserSelected
               ? `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
-            <span>Smart Filter: Showing only ${activeFields.length} columns with differences (hiding ${
-                allFieldNames.size - activeFields.length
+            <span>Showing ${fieldsToDisplay.length} selected field${fieldsToDisplay.length !== 1 ? "s" : ""} (${diffFieldCount} with differences).</span>
+          `
+              : diffFieldCount > 0 && diffFieldCount < allFieldNames.size
+                ? `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Smart Filter: Showing only ${diffFieldCount} columns with differences (hiding ${
+                allFieldNames.size - diffFieldCount
               } identical columns).</span>
           `
-              : ""
+                : ""
           }
           ${
             comparisons.length > this.BATCH_SIZE
