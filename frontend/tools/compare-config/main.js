@@ -3979,10 +3979,7 @@ class CompareConfigTool extends BaseTool {
    */
   async exportResults(format) {
     if (!this.results[this.queryMode]) {
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "No comparison results to export",
-      });
+      this.showError("No comparison results to export");
       return;
     }
 
@@ -4013,19 +4010,13 @@ class CompareConfigTool extends BaseTool {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      this.eventBus.emit("notification:show", {
-        type: "success",
-        message: `Results exported as ${exportData.filename}`,
-      });
+      this.showSuccess(`Results exported as ${exportData.filename}`);
 
       this.eventBus.emit("comparison:exported", { filename: exportData.filename, format });
     } catch (error) {
       console.error("Export failed:", error);
 
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Export failed: ${error.message || error}`,
-      });
+      this.showError(`Export failed: ${error.message || error}`);
     }
   }
 
@@ -4035,10 +4026,7 @@ class CompareConfigTool extends BaseTool {
   async exportResultsAsExcel() {
     const result = this.results[this.queryMode];
     if (!result || !result.rows?.length) {
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: "No comparison results to export",
-      });
+      this.showError("No comparison results to export");
       return;
     }
 
@@ -4082,18 +4070,12 @@ class CompareConfigTool extends BaseTool {
       // Download
       XLSX.writeFile(wb, filename);
 
-      this.eventBus.emit("notification:show", {
-        type: "success",
-        message: `Results exported as ${filename}`,
-      });
+      this.showSuccess(`Results exported as ${filename}`);
 
       this.eventBus.emit("comparison:exported", { filename, format: "excel" });
     } catch (error) {
       console.error("Excel export failed:", error);
-      this.eventBus.emit("notification:show", {
-        type: "error",
-        message: `Excel export failed: ${error.message || error}`,
-      });
+      this.showError(`Excel export failed: ${error.message || error}`);
     }
   }
 

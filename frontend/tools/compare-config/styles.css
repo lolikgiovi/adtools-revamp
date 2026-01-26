@@ -1000,6 +1000,7 @@
 /* Export Dropdown */
 .export-dropdown {
   position: relative;
+  display: none;
 }
 
 .export-dropdown #btn-export {
