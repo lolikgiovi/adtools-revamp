@@ -13,6 +13,7 @@ import { GridView } from "./views/GridView.js";
 import { getFeatureFlag, FLAGS } from "./lib/feature-flags.js";
 import { enhanceWithDetailedDiff, convertToViewFormat } from "./lib/diff-adapter.js";
 import { isTauri } from "../../core/Runtime.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
 import * as FileParser from "./lib/file-parser.js";
 import * as FileMatcher from "./lib/file-matcher.js";
 import { ExcelComparator } from "./lib/excel-comparator.js";
@@ -2103,6 +2104,13 @@ class CompareConfigTool extends BaseTool {
       this.showResults();
 
       this.eventBus.emit("comparison:complete", viewResult);
+
+      // Track feature usage: one comparison = one usage
+      UsageTracker.trackFeature("compare-config", "excel", {
+        rows_compared: viewResult.rows?.length || 0,
+        pk_fields: selectedPkFields.length,
+        compare_fields: selectedFields.length,
+      });
     } catch (error) {
       console.error("[ExcelCompare] Comparison failed:", error);
       this.hideProgress();
@@ -2110,6 +2118,13 @@ class CompareConfigTool extends BaseTool {
         type: "error",
         message: `Comparison failed: ${error.message || error}`,
       });
+
+      // Track error for debugging insights (rich error with code, stack)
+      UsageTracker.trackEvent(
+        "compare-config",
+        "comparison_error",
+        UsageTracker.enrichErrorMeta(error, { mode: "excel" }),
+      );
     }
   }
 
@@ -2511,6 +2526,12 @@ class CompareConfigTool extends BaseTool {
       this.showResults();
 
       this.eventBus.emit("comparison:complete", results);
+
+      // Track feature usage: one comparison = one usage
+      UsageTracker.trackFeature("compare-config", "excel_batch", {
+        rows_compared: results?.rows?.length || 0,
+        pairs_count: preparedPairs.length,
+      });
     } catch (error) {
       console.error("[ExcelCompare] Comparison failed:", error);
       this.hideProgress();
@@ -2518,6 +2539,13 @@ class CompareConfigTool extends BaseTool {
         type: "error",
         message: `Excel comparison failed: ${error.message || error}`,
       });
+
+      // Track error for debugging insights (rich error with code, stack)
+      UsageTracker.trackEvent(
+        "compare-config",
+        "comparison_error",
+        UsageTracker.enrichErrorMeta(error, { mode: "excel_batch" }),
+      );
     }
   }
 
@@ -2652,6 +2680,13 @@ class CompareConfigTool extends BaseTool {
 
       // Emit event
       this.eventBus.emit("comparison:complete", result);
+
+      // Track feature usage: one comparison = one usage
+      UsageTracker.trackFeature("compare-config", "table", {
+        rows_compared: result?.rows?.length || 0,
+        pk_fields: pkColumns.length,
+        compare_fields: this.selectedFields?.length || 0,
+      });
     } catch (error) {
       console.error("[Compare] Comparison failed:", error);
       this.hideLoading();
@@ -2671,11 +2706,25 @@ class CompareConfigTool extends BaseTool {
 
         // Update connection status to reflect potential disconnection
         this.updateConnectionStatus();
+
+        // Track connection error (rich error with code, stack)
+        UsageTracker.trackEvent(
+          "compare-config",
+          "comparison_error",
+          UsageTracker.enrichErrorMeta(error, { mode: "table", error_type: "connection" }),
+        );
       } else {
         this.eventBus.emit("notification:show", {
           type: "error",
           message: `Comparison failed: ${error.message || error}`,
         });
+
+        // Track general error (rich error with code, stack)
+        UsageTracker.trackEvent(
+          "compare-config",
+          "comparison_error",
+          UsageTracker.enrichErrorMeta(error, { mode: "table", error_type: "general" }),
+        );
       }
     }
   }
@@ -2790,6 +2839,12 @@ class CompareConfigTool extends BaseTool {
 
       // Emit event
       this.eventBus.emit("comparison:complete", result);
+
+      // Track feature usage: one comparison = one usage
+      UsageTracker.trackFeature("compare-config", "raw_sql", {
+        rows_compared: result?.rows?.length || 0,
+        pk_fields: pkColumns.length,
+      });
     } catch (error) {
       console.error("Raw SQL comparison failed:", error);
       this.hideLoading();
@@ -2806,11 +2861,25 @@ class CompareConfigTool extends BaseTool {
           message: `${friendlyError}. Please check your connections and try again.`,
         });
         this.updateConnectionStatus();
+
+        // Track connection error (rich error with code, stack)
+        UsageTracker.trackEvent(
+          "compare-config",
+          "comparison_error",
+          UsageTracker.enrichErrorMeta(error, { mode: "raw_sql", error_type: "connection" }),
+        );
       } else {
         this.eventBus.emit("notification:show", {
           type: "error",
           message: `Comparison failed: ${error.message || error}`,
         });
+
+        // Track general error (rich error with code, stack)
+        UsageTracker.trackEvent(
+          "compare-config",
+          "comparison_error",
+          UsageTracker.enrichErrorMeta(error, { mode: "raw_sql", error_type: "general" }),
+        );
       }
     }
   }
@@ -6540,6 +6609,18 @@ class CompareConfigTool extends BaseTool {
         });
         this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
       }
+
+      // Track data loading error (rich error with code, stack)
+      const sourceAType = this.unified.sourceA.type || "unknown";
+      const sourceBType = this.unified.sourceB.type || "unknown";
+      UsageTracker.trackEvent(
+        "compare-config",
+        "data_load_error",
+        UsageTracker.enrichErrorMeta(error, {
+          mode: `unified_${sourceAType}_${sourceBType}`,
+          oracle_code: code || null,
+        }),
+      );
     }
   }
 
@@ -7171,6 +7252,14 @@ class CompareConfigTool extends BaseTool {
       this.showResults();
 
       this.eventBus.emit("comparison:complete", viewResult);
+
+      // Track feature usage: one comparison = one usage
+      const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
+      UsageTracker.trackFeature("compare-config", comparisonMode, {
+        rows_compared: viewResult.rows?.length || 0,
+        pk_fields: selectedPkFields.length,
+        compare_fields: selectedCompareFields.length,
+      });
     } catch (error) {
       console.error("Unified comparison failed:", error);
       this.hideProgress();
@@ -7178,6 +7267,14 @@ class CompareConfigTool extends BaseTool {
         type: "error",
         message: `Comparison failed: ${error.message || error}`,
       });
+
+      // Track error for debugging insights (rich error with code, stack)
+      const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
+      UsageTracker.trackEvent(
+        "compare-config",
+        "comparison_error",
+        UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }),
+      );
     }
   }
 }
