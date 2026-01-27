@@ -33,6 +33,23 @@ export class CompareConfigService {
   }
 
   /**
+   * Debug Oracle IC setup - returns detailed diagnostic information
+   * @returns {Promise<string[]>} Array of debug log lines
+   */
+  static async debugOracleSetup() {
+    try {
+      const logs = await invoke("debug_oracle_setup");
+      console.log("=== Oracle IC Debug Info ===");
+      logs.forEach((line) => console.log(line));
+      console.log("=== End Debug Info ===");
+      return logs;
+    } catch (error) {
+      console.error("Failed to get Oracle debug info:", error);
+      return [`Error: ${error}`];
+    }
+  }
+
+  /**
    * Tests an Oracle database connection
    * @param {Object} config - Connection configuration
    * @param {string} username - Database username

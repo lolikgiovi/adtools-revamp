@@ -187,6 +187,10 @@ class CompareConfigTool extends BaseTool {
 
     // Tauri/Desktop mode - check for Oracle client
     try {
+      // Run debug diagnostics first (logs to console)
+      console.log("[OracleCheck] Running Oracle IC diagnostics...");
+      await CompareConfigService.debugOracleSetup();
+
       this.oracleClientReady = await CompareConfigService.checkOracleClientReady();
 
       if (this.oracleClientReady) {
@@ -194,10 +198,15 @@ class CompareConfigTool extends BaseTool {
         await CompareConfigService.primeOracleClient();
         this.showMainInterface();
       } else {
+        console.warn("[OracleCheck] Oracle client not ready - showing installation guide");
         this.showInstallationGuide();
       }
     } catch (error) {
       console.error("Failed to check Oracle client:", error);
+      // Run debug again on error to capture state
+      try {
+        await CompareConfigService.debugOracleSetup();
+      } catch (_) {}
       this.showInstallationGuide();
     }
   }

@@ -1126,6 +1126,163 @@ pub fn prime_oracle_client() -> Result<(), String> {
     init_oracle_client().map_err(|e| e.message)
 }
 
+/// Debug command to diagnose Oracle IC setup issues
+/// Returns detailed information about paths, symlinks, and library loading
+#[tauri::command]
+pub fn debug_oracle_setup() -> Result<Vec<String>, String> {
+    let mut logs: Vec<String> = Vec::new();
+
+    // 1. Get executable path
+    let exe_path = match std::env::current_exe() {
+        Ok(p) => {
+            logs.push(format!("✓ Executable path: {:?}", p));
+            p
+        }
+        Err(e) => {
+            logs.push(format!("✗ Failed to get executable path: {}", e));
+            return Ok(logs);
+        }
+    };
+
+    // 2. Calculate bundled IC path
+    let ic_path = exe_path
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join(BUNDLED_IC_SUBPATH));
+
+    let ic_path = match ic_path {
+        Some(p) => {
+            logs.push(format!("✓ Bundled IC path (calculated): {:?}", p));
+            p
+        }
+        None => {
+            logs.push("✗ Failed to calculate bundled IC path".to_string());
+            return Ok(logs);
+        }
+    };
+
+    // 3. Check if bundled IC directory exists
+    if ic_path.exists() {
+        logs.push(format!("✓ Bundled IC directory EXISTS: {:?}", ic_path));
+
+        // List contents
+        if let Ok(entries) = std::fs::read_dir(&ic_path) {
+            logs.push("  Contents:".to_string());
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let metadata = entry.metadata().ok();
+                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                logs.push(format!("    - {} ({} bytes)", name.to_string_lossy(), size));
+            }
+        }
+    } else {
+        logs.push(format!("✗ Bundled IC directory DOES NOT EXIST: {:?}", ic_path));
+        logs.push("  → This means Oracle IC was not bundled into the app!".to_string());
+        logs.push("  → Check that OCI_LIB_DIR was set during build".to_string());
+        return Ok(logs);
+    }
+
+    // 4. Check libclntsh.dylib specifically
+    let libclntsh_path = ic_path.join("libclntsh.dylib");
+    if libclntsh_path.exists() {
+        logs.push(format!("✓ libclntsh.dylib EXISTS: {:?}", libclntsh_path));
+    } else {
+        logs.push(format!("✗ libclntsh.dylib MISSING: {:?}", libclntsh_path));
+        return Ok(logs);
+    }
+
+    // 5. Check $HOME/lib symlinks
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            let home_str = home.to_string_lossy();
+            logs.push(format!("✓ HOME: {}", home_str));
+
+            let home_lib = std::path::PathBuf::from(&home).join("lib");
+            logs.push(format!("  Checking $HOME/lib: {:?}", home_lib));
+
+            if home_lib.exists() {
+                logs.push(format!("✓ $HOME/lib EXISTS"));
+
+                // Check for Oracle symlinks
+                let symlink_path = home_lib.join("libclntsh.dylib");
+                if symlink_path.exists() || symlink_path.is_symlink() {
+                    if symlink_path.is_symlink() {
+                        match std::fs::read_link(&symlink_path) {
+                            Ok(target) => {
+                                logs.push(format!("✓ Symlink exists: {:?} -> {:?}", symlink_path, target));
+                                // Check if target exists
+                                if target.exists() {
+                                    logs.push(format!("  ✓ Symlink target EXISTS"));
+                                } else {
+                                    logs.push(format!("  ✗ Symlink target BROKEN (file doesn't exist)"));
+                                }
+                            }
+                            Err(e) => {
+                                logs.push(format!("✗ Failed to read symlink: {}", e));
+                            }
+                        }
+                    } else {
+                        logs.push(format!("  Note: {:?} is a regular file, not a symlink", symlink_path));
+                    }
+                } else {
+                    logs.push(format!("✗ Symlink DOES NOT EXIST: {:?}", symlink_path));
+                    logs.push("  → setup_oracle_library_path() may not have run".to_string());
+                }
+
+                // List all files in $HOME/lib
+                if let Ok(entries) = std::fs::read_dir(&home_lib) {
+                    logs.push("  All files in $HOME/lib:".to_string());
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        let is_symlink = entry.file_type().map(|t| t.is_symlink()).unwrap_or(false);
+                        if is_symlink {
+                            if let Ok(target) = std::fs::read_link(entry.path()) {
+                                logs.push(format!("    - {} -> {:?} (symlink)", name.to_string_lossy(), target));
+                            }
+                        } else {
+                            logs.push(format!("    - {} (file)", name.to_string_lossy()));
+                        }
+                    }
+                }
+            } else {
+                logs.push(format!("✗ $HOME/lib DOES NOT EXIST: {:?}", home_lib));
+                logs.push("  → setup_oracle_library_path() should create this".to_string());
+            }
+        } else {
+            logs.push("✗ HOME environment variable not set!".to_string());
+        }
+    }
+
+    // 6. Check environment variables
+    logs.push("Environment variables:".to_string());
+    if let Ok(val) = std::env::var("DYLD_LIBRARY_PATH") {
+        logs.push(format!("  DYLD_LIBRARY_PATH = {}", val));
+    } else {
+        logs.push("  DYLD_LIBRARY_PATH = (not set)".to_string());
+    }
+    if let Ok(val) = std::env::var("OCI_LIB_DIR") {
+        logs.push(format!("  OCI_LIB_DIR = {}", val));
+    } else {
+        logs.push("  OCI_LIB_DIR = (not set)".to_string());
+    }
+    if let Ok(val) = std::env::var("DYLD_FALLBACK_LIBRARY_PATH") {
+        logs.push(format!("  DYLD_FALLBACK_LIBRARY_PATH = {}", val));
+    } else {
+        logs.push("  DYLD_FALLBACK_LIBRARY_PATH = (not set, using default: $HOME/lib:/usr/local/lib:/usr/lib)".to_string());
+    }
+
+    // 7. Try to manually call setup again and report result
+    logs.push("Attempting setup_oracle_library_path()...".to_string());
+    match setup_oracle_library_path() {
+        Ok(true) => logs.push("  ✓ setup_oracle_library_path() returned Ok(true) - bundled IC configured".to_string()),
+        Ok(false) => logs.push("  ⚠ setup_oracle_library_path() returned Ok(false) - no bundled IC found".to_string()),
+        Err(e) => logs.push(format!("  ✗ setup_oracle_library_path() returned Err: {}", e)),
+    }
+
+    Ok(logs)
+}
+
 #[tauri::command]
 pub fn set_oracle_credentials(name: String, username: String, password: String) -> Result<(), String> {
     set_credentials(&name, &username, &password)

@@ -46,6 +46,7 @@ pub fn run() {
       // Oracle commands
       oracle::check_oracle_client_ready,
       oracle::prime_oracle_client,
+      oracle::debug_oracle_setup,
       oracle::test_oracle_connection,
       oracle::fetch_schemas,
       oracle::fetch_tables,
