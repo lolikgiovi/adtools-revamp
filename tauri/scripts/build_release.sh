@@ -416,6 +416,11 @@ main() {
   IFS='|' read -r APP_ARM64 DMG_ARM64 <<<"$(find_artifacts aarch64-apple-darwin)"
   IFS='|' read -r APP_X64 DMG_X64 <<<"$(find_artifacts x86_64-apple-darwin)"
 
+  # Bundle Oracle Instant Client into both app builds
+  echo "Bundling Oracle Instant Client into apps..."
+  bundle_oracle_ic "$APP_ARM64"
+  bundle_oracle_ic "$APP_X64"
+
   # Copy DMGs with naming convention
   if [[ -n "$DMG_ARM64" && -f "$DMG_ARM64" ]]; then
     cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
