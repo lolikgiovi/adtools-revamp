@@ -210,9 +210,9 @@ const BUNDLED_IC_SUBPATH: &str = "Frameworks/instantclient";
 /// Sets up the Oracle Instant Client library path for the bundled IC.
 /// This must be called at app startup, before any Oracle operations.
 ///
-/// On macOS, we preload the library using dlopen with the full path.
-/// This works because when ODPI-C later tries dlopen("libclntsh.dylib"),
-/// the dynamic linker returns the already-loaded library handle.
+/// On macOS, we create symlinks in $HOME/lib pointing to the bundled libraries.
+/// This works because $HOME/lib is part of DYLD_FALLBACK_LIBRARY_PATH, which
+/// dlopen searches when given a bare library name like "libclntsh.dylib".
 ///
 /// Note: Setting DYLD_LIBRARY_PATH at runtime doesn't work on macOS because
 /// dyld reads environment variables only at process start, and SIP may strip
@@ -234,44 +234,63 @@ pub fn setup_oracle_library_path() -> Result<bool, String> {
     if let Some(path) = ic_path {
         let libclntsh_path = path.join("libclntsh.dylib");
         if path.exists() && libclntsh_path.exists() {
-            // Preload the Oracle client library using dlopen with full path
-            // This makes it available when ODPI-C later calls dlopen("libclntsh.dylib")
+            // Create symlinks in $HOME/lib so dlopen can find the bundled libraries
+            // $HOME/lib is part of DYLD_FALLBACK_LIBRARY_PATH (macOS default search path)
             #[cfg(target_os = "macos")]
             {
-                use std::ffi::CString;
-                use std::os::raw::{c_char, c_int, c_void};
+                if let Some(home) = std::env::var_os("HOME") {
+                    let home_lib = std::path::PathBuf::from(home).join("lib");
 
-                extern "C" {
-                    fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
-                    fn dlerror() -> *const c_char;
-                }
-
-                const RTLD_NOW: c_int = 0x2;
-                const RTLD_GLOBAL: c_int = 0x8;
-
-                let lib_path = CString::new(libclntsh_path.to_string_lossy().as_bytes())
-                    .map_err(|e| format!("Invalid library path: {}", e))?;
-
-                let handle = unsafe { dlopen(lib_path.as_ptr(), RTLD_NOW | RTLD_GLOBAL) };
-
-                if handle.is_null() {
-                    let err = unsafe {
-                        let err_ptr = dlerror();
-                        if err_ptr.is_null() {
-                            "Unknown dlopen error".to_string()
-                        } else {
-                            std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().into_owned()
+                    // Create $HOME/lib if it doesn't exist
+                    if !home_lib.exists() {
+                        if let Err(e) = std::fs::create_dir_all(&home_lib) {
+                            log::warn!("Failed to create $HOME/lib: {}", e);
                         }
-                    };
-                    log::error!("Failed to preload Oracle library: {}", err);
-                    return Err(format!("Failed to preload Oracle library: {}", err));
-                }
+                    }
 
-                log::info!("Oracle Instant Client preloaded from bundle: {:?}", libclntsh_path);
-                // Note: We intentionally don't dlclose() - we want it to stay loaded
+                    // Create symlinks for all Oracle IC dylibs
+                    if home_lib.exists() {
+                        if let Ok(entries) = std::fs::read_dir(&path) {
+                            for entry in entries.flatten() {
+                                let file_name = entry.file_name();
+                                let name = file_name.to_string_lossy();
+                                if name.ends_with(".dylib") {
+                                    let link_path = home_lib.join(&file_name);
+                                    let target_path = entry.path();
+
+                                    // Remove existing symlink if it points elsewhere or is broken
+                                    if link_path.is_symlink() {
+                                        if let Ok(existing_target) = std::fs::read_link(&link_path) {
+                                            if existing_target != target_path {
+                                                let _ = std::fs::remove_file(&link_path);
+                                            } else {
+                                                continue; // Already correct
+                                            }
+                                        } else {
+                                            let _ = std::fs::remove_file(&link_path);
+                                        }
+                                    }
+
+                                    // Create symlink if it doesn't exist
+                                    if !link_path.exists() {
+                                        #[cfg(unix)]
+                                        {
+                                            if let Err(e) = std::os::unix::fs::symlink(&target_path, &link_path) {
+                                                log::warn!("Failed to create symlink {:?} -> {:?}: {}", link_path, target_path, e);
+                                            } else {
+                                                log::info!("Created symlink: {:?} -> {:?}", link_path, target_path);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        log::info!("Oracle Instant Client symlinks created in {:?}", home_lib);
+                    }
+                }
             }
 
-            // Also set env var as fallback (may help in some scenarios)
+            // Also set env vars as fallback
             std::env::set_var("DYLD_LIBRARY_PATH", &path);
             std::env::set_var("OCI_LIB_DIR", &path);
 
