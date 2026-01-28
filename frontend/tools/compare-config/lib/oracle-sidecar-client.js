@@ -18,24 +18,24 @@
  *   });
  */
 
-const SIDECAR_PORT = 21521;
+const SIDECAR_PORT = 21522;
 const SIDECAR_BASE_URL = `http://127.0.0.1:${SIDECAR_PORT}`;
 
 /**
  * Sidecar status enum
  */
 export const SidecarStatus = {
-  STOPPED: 'stopped',
-  STARTING: 'starting',
-  READY: 'ready',
-  ERROR: 'error',
+  STOPPED: "stopped",
+  STARTING: "starting",
+  READY: "ready",
+  ERROR: "error",
 };
 
 /**
  * Check if we're running in Tauri environment
  */
 function isTauri() {
-  return typeof window !== 'undefined' && window.__TAURI_INTERNALS__;
+  return typeof window !== "undefined" && window.__TAURI_INTERNALS__;
 }
 
 /**
@@ -79,7 +79,7 @@ export class OracleSidecarClient {
         try {
           listener(status);
         } catch (e) {
-          console.error('Error in status listener:', e);
+          console.error("Error in status listener:", e);
         }
       });
     }
@@ -93,14 +93,14 @@ export class OracleSidecarClient {
     this._setStatus(SidecarStatus.STARTING);
 
     if (isTauri()) {
-      const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
+      const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
       try {
-        await tauriInvoke('start_oracle_sidecar');
+        await tauriInvoke("start_oracle_sidecar");
         this._started = true;
         this._setStatus(SidecarStatus.READY);
         return true;
       } catch (error) {
-        console.warn('Failed to start Oracle sidecar via Tauri:', error);
+        console.warn("Failed to start Oracle sidecar via Tauri:", error);
         // Fall through to check if sidecar is running manually
       }
     }
@@ -108,17 +108,14 @@ export class OracleSidecarClient {
     // Check if sidecar is already running manually (dev mode or Tauri fallback)
     const isRunning = await this.healthCheck();
     if (isRunning) {
-      console.log('Oracle sidecar is running (started manually)');
+      console.log("Oracle sidecar is running (started manually)");
       this._started = true;
       this._setStatus(SidecarStatus.READY);
       return true;
     }
 
     // Sidecar not available
-    console.warn(
-      'Oracle sidecar not running. Start it manually:\n' +
-        'cd tauri/sidecar && python oracle_sidecar.py'
-    );
+    console.warn("Oracle sidecar not running. Start it manually:\n" + "cd tauri/sidecar && python oracle_sidecar.py");
     this._started = false;
     this._setStatus(SidecarStatus.STOPPED);
     return false;
@@ -143,13 +140,13 @@ export class OracleSidecarClient {
    */
   async stop() {
     if (isTauri()) {
-      const { invoke } = await import('@tauri-apps/api/core');
+      const { invoke } = await import("@tauri-apps/api/core");
       try {
-        await invoke('stop_oracle_sidecar');
+        await invoke("stop_oracle_sidecar");
         this._started = false;
         this._setStatus(SidecarStatus.STOPPED);
       } catch (error) {
-        console.error('Failed to stop Oracle sidecar:', error);
+        console.error("Failed to stop Oracle sidecar:", error);
       }
     }
   }
@@ -167,7 +164,7 @@ export class OracleSidecarClient {
   async healthCheck() {
     try {
       const response = await fetch(`${this._baseUrl}/health`, {
-        method: 'GET',
+        method: "GET",
         signal: AbortSignal.timeout(2000),
       });
       return response.ok;
@@ -182,7 +179,7 @@ export class OracleSidecarClient {
   async getStatus() {
     const response = await fetch(`${this._baseUrl}/health`);
     if (!response.ok) {
-      throw new Error('Sidecar not responding');
+      throw new Error("Sidecar not responding");
     }
     return response.json();
   }
@@ -193,8 +190,8 @@ export class OracleSidecarClient {
    */
   async testConnection(connection) {
     const response = await fetch(`${this._baseUrl}/test-connection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ connection }),
     });
 
@@ -216,8 +213,8 @@ export class OracleSidecarClient {
    */
   async query({ connection, sql, max_rows = 1000 }) {
     const response = await fetch(`${this._baseUrl}/query`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ connection, sql, max_rows }),
     });
 
@@ -239,8 +236,8 @@ export class OracleSidecarClient {
    */
   async queryAsDict({ connection, sql, max_rows = 1000 }) {
     const response = await fetch(`${this._baseUrl}/query-dict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ connection, sql, max_rows }),
     });
 
@@ -258,7 +255,7 @@ export class OracleSidecarClient {
   async listPools() {
     const response = await fetch(`${this._baseUrl}/pools`);
     if (!response.ok) {
-      throw new Error('Failed to list pools');
+      throw new Error("Failed to list pools");
     }
     return response.json();
   }
@@ -269,11 +266,11 @@ export class OracleSidecarClient {
  */
 export class OracleSidecarError extends Error {
   constructor(detail) {
-    const message = typeof detail === 'string' ? detail : detail.message || 'Unknown error';
+    const message = typeof detail === "string" ? detail : detail.message || "Unknown error";
     super(message);
-    this.name = 'OracleSidecarError';
-    this.code = typeof detail === 'object' ? detail.code || 0 : 0;
-    this.hint = typeof detail === 'object' ? detail.hint : null;
+    this.name = "OracleSidecarError";
+    this.code = typeof detail === "object" ? detail.code || 0 : 0;
+    this.hint = typeof detail === "object" ? detail.hint : null;
   }
 }
 

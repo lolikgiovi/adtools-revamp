@@ -17,31 +17,31 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 
 ### What's Done ✅
 
-| Component                     | Status         | Location                                                     |
-| ----------------------------- | -------------- | ------------------------------------------------------------ |
-| Python FastAPI sidecar        | ✅ Working     | `tauri/sidecar/oracle_sidecar.py`                            |
-| Connection pooling            | ✅ Implemented | Pool per connection config, auto-cleanup                     |
-| Health endpoint               | ✅ Working     | `GET /health`                                                |
-| Query endpoint                | ✅ Implemented | `POST /query`, `POST /query-dict`                            |
-| Test connection               | ✅ Implemented | `POST /test-connection`                                      |
-| Rust sidecar manager          | ✅ Compiles    | `tauri/src/oracle_sidecar.rs`                                |
-| Frontend client               | ✅ Created     | `frontend/tools/compare-config/lib/oracle-sidecar-client.js` |
-| Tauri config                  | ✅ Updated     | `externalBin`, shell plugin, capabilities                    |
-| PyInstaller build script      | ✅ Created     | `tauri/sidecar/build_sidecar.py`                             |
-| **Phase 1: UI Integration**   | ✅ Complete    | `service.js`, `main.js`, `unified-data-service.js`           |
-| **Phase 1: Credentials**      | ✅ Complete    | `service.js` - `buildSidecarConnection()`                    |
-| **Phase 1: Status Indicator** | ✅ Complete    | `template.js`, `styles.css`                                  |
-| **Phase 2: Auto-lifecycle**   | ✅ Complete    | `lib.rs` - auto-start on launch, auto-stop on exit           |
-| **Phase 2: Dual-arch build**  | ✅ Complete    | `build.sh` - builds arm64 + x86_64 via Rosetta               |
-| **Phase 2: Ad-hoc signing**   | ✅ Complete    | `build_sidecar.py` - codesign after PyInstaller              |
-| **Phase 2: Release integration** | ✅ Complete | `build_release.sh` - auto-builds sidecar before Tauri        |
+| Component                        | Status         | Location                                                     |
+| -------------------------------- | -------------- | ------------------------------------------------------------ |
+| Python FastAPI sidecar           | ✅ Working     | `tauri/sidecar/oracle_sidecar.py`                            |
+| Connection pooling               | ✅ Implemented | Pool per connection config, auto-cleanup                     |
+| Health endpoint                  | ✅ Working     | `GET /health`                                                |
+| Query endpoint                   | ✅ Implemented | `POST /query`, `POST /query-dict`                            |
+| Test connection                  | ✅ Implemented | `POST /test-connection`                                      |
+| Rust sidecar manager             | ✅ Compiles    | `tauri/src/oracle_sidecar.rs`                                |
+| Frontend client                  | ✅ Created     | `frontend/tools/compare-config/lib/oracle-sidecar-client.js` |
+| Tauri config                     | ✅ Updated     | `externalBin`, shell plugin, capabilities                    |
+| PyInstaller build script         | ✅ Created     | `tauri/sidecar/build_sidecar.py`                             |
+| **Phase 1: UI Integration**      | ✅ Complete    | `service.js`, `main.js`, `unified-data-service.js`           |
+| **Phase 1: Credentials**         | ✅ Complete    | `service.js` - `buildSidecarConnection()`                    |
+| **Phase 1: Status Indicator**    | ✅ Complete    | `template.js`, `styles.css`                                  |
+| **Phase 2: Auto-lifecycle**      | ✅ Complete    | `lib.rs` - auto-start on launch, auto-stop on exit           |
+| **Phase 2: Dual-arch build**     | ✅ Complete    | `build.sh` - builds arm64 + x86_64 via Rosetta               |
+| **Phase 2: Ad-hoc signing**      | ✅ Complete    | `build_sidecar.py` - codesign after PyInstaller              |
+| **Phase 2: Release integration** | ✅ Complete    | `build_release.sh` - auto-builds sidecar before Tauri        |
 
 ### What's Not Done ❌
 
-| Component               | Status     | Notes                                                   |
-| ----------------------- | ---------- | ------------------------------------------------------- |
-| Error handling in UI    | ❌ Pending | Map sidecar errors to user-friendly messages            |
-| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed             |
+| Component               | Status     | Notes                                        |
+| ----------------------- | ---------- | -------------------------------------------- |
+| Error handling in UI    | ❌ Pending | Map sidecar errors to user-friendly messages |
+| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed  |
 
 ## Architecture
 
@@ -67,7 +67,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 │            │                                                        │
 └────────────┼────────────────────────────────────────────────────────┘
              │
-             │ localhost:21521
+             │ localhost:21522
              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Python Sidecar (FastAPI)                         │
@@ -121,7 +121,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    ```bash
    # Builds both arm64 and x86_64 (via Rosetta on Apple Silicon)
    npm run sidecar:build
-   
+
    # Or manually:
    cd tauri/sidecar
    source venv/bin/activate
@@ -143,7 +143,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    - [x] Ad-hoc signing implemented in `build_sidecar.py`
    - [x] Sidecar included in app bundle correctly
    - [ ] Full Apple notarization (requires $99/year Developer ID)
-   
+
    **Note on notarization bypass**: For internal distribution without notarization:
    - Initial install: Users run `xattr -cr "AD Tools.app"` once
    - Future updates via Tauri updater work automatically (no user action needed)
@@ -250,10 +250,10 @@ python oracle_sidecar.py
 
 ```bash
 # Health check
-curl http://127.0.0.1:21521/health
+curl http://127.0.0.1:21522/health
 
 # Test connection
-curl -X POST http://127.0.0.1:21521/test-connection \
+curl -X POST http://127.0.0.1:21522/test-connection \
   -H "Content-Type: application/json" \
   -d '{"connection": {"name": "TEST", "connect_string": "host:1521/svc", "username": "u", "password": "p"}}'
 ```
@@ -294,18 +294,18 @@ npm run release:build
 | ---------------------------- | ---------------------------------------------- |
 | PyInstaller bundle too large | Currently ~50-80MB; acceptable for desktop app |
 | Sidecar crashes              | Rust manager can detect and restart            |
-| Port conflict (21521)        | Could make port configurable                   |
+| Port conflict (21522)        | Could make port configurable                   |
 | Startup delay                | Pre-start sidecar, show loading indicator      |
 | Security (password in HTTP)  | localhost only, could add encryption if needed |
 
 ## Decision Log
 
-| Date       | Decision                        | Rationale                                                      |
-| ---------- | ------------------------------- | -------------------------------------------------------------- |
-| 2026-01-28 | Use Python sidecar              | Oracle IC bundling failed; oracledb thin mode works without IC |
-| 2026-01-28 | FastAPI + uvicorn               | Lightweight, async, easy to use                                |
-| 2026-01-28 | Port 21521                      | Easy to remember (2 + Oracle default 1521)                     |
-| 2026-01-28 | Frontend calls sidecar directly | Simpler than routing through Rust backend                      |
+| Date       | Decision                        | Rationale                                                                      |
+| ---------- | ------------------------------- | ------------------------------------------------------------------------------ |
+| 2026-01-28 | Use Python sidecar              | Oracle IC bundling failed; oracledb thin mode works without IC                 |
+| 2026-01-28 | FastAPI + uvicorn               | Lightweight, async, easy to use                                                |
+| 2026-01-28 | Port 21522                      | Easy to remember (2 + Oracle default 1521)                                     |
+| 2026-01-28 | Frontend calls sidecar directly | Simpler than routing through Rust backend                                      |
 | 2026-01-28 | Dual-arch build via Rosetta     | PyInstaller only builds for current arch; Rosetta enables x86_64 builds on ARM |
-| 2026-01-28 | Ad-hoc signing                  | Allows distribution without $99/year Apple Developer ID; users run xattr once |
-| 2026-01-28 | Tauri updater for updates       | After initial xattr, updates work seamlessly without user action |
+| 2026-01-28 | Ad-hoc signing                  | Allows distribution without $99/year Apple Developer ID; users run xattr once  |
+| 2026-01-28 | Tauri updater for updates       | After initial xattr, updates work seamlessly without user action               |

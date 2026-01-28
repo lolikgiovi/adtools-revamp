@@ -41,7 +41,7 @@ POOL_MAX = 2
 POOL_INCREMENT = 1
 POOL_TIMEOUT = 120  # Close idle connections after 2 minutes
 POOL_GETMODE = oracledb.POOL_GETMODE_WAIT
-PORT = 21521  # Sidecar port (easy to remember: 2 + Oracle default 1521)
+PORT = 21522  # Sidecar port (easy to remember: 2 + Oracle default 1521)
 
 
 # =============================================================================

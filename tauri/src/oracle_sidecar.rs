@@ -10,7 +10,7 @@ use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
-const SIDECAR_PORT: u16 = 21521;
+const SIDECAR_PORT: u16 = 21522;
 const SIDECAR_NAME: &str = "oracle-sidecar";
 const STARTUP_TIMEOUT_MS: u64 = 10000;
 const HEALTH_CHECK_INTERVAL_MS: u64 = 100;
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn test_sidecar_url() {
         let url = get_oracle_sidecar_url();
-        assert_eq!(url, "http://127.0.0.1:21521");
+        assert_eq!(url, "http://127.0.0.1:21522");
     }
 
     #[test]
