@@ -39,10 +39,10 @@ def get_target_triple() -> str:
 def main():
     script_dir = Path(__file__).parent
     project_root = script_dir.parent  # tauri/
-    binaries_dir = project_root / "binaries"
+    # Output directly to tauri/ root (Tauri expects sidecar next to tauri.conf.json)
+    binaries_dir = project_root
 
-    # Ensure binaries directory exists
-    binaries_dir.mkdir(exist_ok=True)
+    # Note: No need to create directory, outputting to tauri/ root
 
     target_triple = get_target_triple()
     output_name = f"oracle-sidecar-{target_triple}"
@@ -74,6 +74,14 @@ def main():
         "--hidden-import", "uvicorn.protocols.websockets.auto",
         "--hidden-import", "uvicorn.lifespan",
         "--hidden-import", "uvicorn.lifespan.on",
+        # Cryptography is required by oracledb thin mode
+        "--hidden-import", "cryptography",
+        "--hidden-import", "cryptography.hazmat.primitives.ciphers",
+        "--hidden-import", "cryptography.hazmat.primitives.ciphers.algorithms",
+        "--hidden-import", "cryptography.hazmat.primitives.ciphers.modes",
+        "--hidden-import", "cryptography.hazmat.backends",
+        "--hidden-import", "cryptography.hazmat.backends.openssl",
+        "--collect-all", "cryptography",
         str(script_dir / "oracle_sidecar.py"),
     ]
 

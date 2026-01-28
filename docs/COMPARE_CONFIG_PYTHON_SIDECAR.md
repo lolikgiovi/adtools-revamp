@@ -31,11 +31,13 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 | **Phase 1: Credentials** | ✅ Complete | `service.js` - `buildSidecarConnection()` |
 | **Phase 1: Status Indicator** | ✅ Complete | `template.js`, `styles.css` |
 
+| **Phase 2: Auto-lifecycle** | ✅ Complete | `lib.rs` - auto-start on launch, auto-stop on exit |
+
 ### What's Not Done ❌
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Build & bundle testing | ❌ Pending | Need to test PyInstaller + Tauri bundle |
+| Build & bundle testing | ❌ Pending | Need to test `cargo tauri build` + verify sidecar works |
 | Error handling in UI | ❌ Pending | Map sidecar errors to user-friendly messages |
 | Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed |
 
@@ -110,9 +112,9 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    - [ ] Verify 1000+ row queries work
    - [ ] Check performance vs Rust implementation
 
-### Phase 2: Build & Distribution (Priority: High)
+### Phase 2: Build & Distribution (Priority: High) ✅ MOSTLY COMPLETE
 
-4. **Build the sidecar executable**
+4. **Build the sidecar executable** ✅
    ```bash
    cd tauri/sidecar
    source venv/bin/activate
@@ -120,13 +122,17 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    python build_sidecar.py
    ```
 
-5. **Test bundled app**
+5. **Auto-lifecycle** ✅
+   - [x] Sidecar auto-starts when Tauri app launches (`lib.rs` setup hook)
+   - [x] Sidecar auto-stops when app window closes (`on_window_event` hook)
+
+6. **Test bundled app** ❌ MANUAL TESTING REQUIRED
    - [ ] Build Tauri app: `cargo tauri build`
    - [ ] Verify sidecar starts with app
    - [ ] Verify sidecar stops when app closes
    - [ ] Test on clean macOS (no Python installed)
 
-6. **Code signing & notarization**
+7. **Code signing & notarization**
    - [ ] Sign the sidecar executable
    - [ ] Include in app bundle correctly
    - [ ] Test notarization passes

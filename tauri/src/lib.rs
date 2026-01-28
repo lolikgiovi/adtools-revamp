@@ -95,7 +95,27 @@ pub fn run() {
       if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_zoom(ZOOM_DEFAULT);
       }
+
+      // Auto-start Oracle sidecar in the background
+      let app_handle = app.handle().clone();
+      tauri::async_runtime::spawn(async move {
+        match oracle_sidecar::start_oracle_sidecar(app_handle).await {
+          Ok(msg) => log::info!("Oracle sidecar auto-start: {}", msg),
+          Err(e) => log::warn!("Oracle sidecar auto-start failed (will retry on demand): {}", e),
+        }
+      });
+
       Ok(())
+    })
+    .on_window_event(|window, event| {
+      if let tauri::WindowEvent::Destroyed = event {
+        let app = window.app_handle().clone();
+        tauri::async_runtime::spawn(async move {
+          if let Err(e) = oracle_sidecar::stop_oracle_sidecar(app).await {
+            log::warn!("Failed to stop Oracle sidecar on window close: {}", e);
+          }
+        });
+      }
     })
     .on_menu_event(|app, event| {
       let id = event.id().as_ref();

@@ -24,7 +24,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "binaries/oracle-sidecar",
+          "name": "oracle-sidecar",
           "sidecar": true,
           "args": true
         }
