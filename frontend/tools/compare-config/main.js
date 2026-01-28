@@ -5687,6 +5687,9 @@ class CompareConfigTool extends BaseTool {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
+    // Get the label inside the cloned button (the old label reference is stale)
+    const newLabel = newBtn.querySelector(`#${prefix}-query-mode-label`);
+
     // Toggle dropdown on button click
     newBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -5700,7 +5703,7 @@ class CompareConfigTool extends BaseTool {
         e.preventDefault();
         e.stopPropagation();
         const value = opt.dataset.value;
-        label.textContent = value === "table" ? "By Table" : "By Raw SQL";
+        if (newLabel) newLabel.textContent = value === "table" ? "By Table" : "By Raw SQL";
         dropdown.classList.remove("show");
         // Update active state
         dropdown.querySelectorAll(".config-dropdown-option").forEach((o) => o.classList.remove("active"));
