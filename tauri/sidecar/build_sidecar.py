@@ -96,6 +96,20 @@ def main():
     if output_path.exists():
         print(f"✅ Build successful: {output_path}")
         print(f"   Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
+
+        # Ad-hoc sign on macOS for Gatekeeper compatibility
+        if platform.system() == "Darwin":
+            print("🔏 Ad-hoc signing for macOS...")
+            sign_result = subprocess.run(
+                ["codesign", "--force", "--sign", "-", str(output_path)],
+                capture_output=True,
+                text=True
+            )
+            if sign_result.returncode == 0:
+                print("✅ Ad-hoc signing successful")
+            else:
+                print(f"⚠️  Ad-hoc signing failed: {sign_result.stderr}")
+                print("   (App may still work but could trigger Gatekeeper warnings)")
     else:
         print("❌ Output file not found!")
         sys.exit(1)

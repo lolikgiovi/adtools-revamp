@@ -147,6 +147,11 @@ validate_json() {
 build_tauri_targets() {
   # Ensure we run Node/Vite/Tauri from the repository root (one level above src-tauri)
   pushd "$ROOT_DIR" >/dev/null
+
+  # Build the Python sidecar first (includes ad-hoc signing)
+  echo "Building Oracle sidecar..."
+  npm run sidecar:build
+
   echo "Building web assets (vite build --mode tauri)..."
   npm run build:tauri
 
