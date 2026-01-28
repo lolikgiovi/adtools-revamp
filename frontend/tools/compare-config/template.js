@@ -482,6 +482,25 @@ export const CompareConfigTemplate = /* html */ `
 
             <!-- Field Reconciliation (shown after both sources have data) -->
             <div class="field-reconciliation" id="unified-field-reconciliation" style="display: none;">
+                <!-- Config Changed Banner (shown when user changes config after loading data) -->
+                <div class="config-changed-banner" id="unified-config-changed-banner" style="display: none;">
+                    <div class="banner-content">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <span>Configuration has changed. Click <strong>Reload Data</strong> to refresh.</span>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="btn-unified-reload-data">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Reload Data
+                    </button>
+                </div>
+
                 <!-- Column Mismatch Warning -->
                 <div class="column-warning" id="unified-column-warning" style="display: none;">
                     <div class="warning-icon">

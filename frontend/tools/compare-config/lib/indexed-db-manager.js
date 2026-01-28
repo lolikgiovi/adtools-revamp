@@ -443,15 +443,16 @@ export async function clearAllExcelFilePrefs() {
 // =============================================================================
 
 /**
- * Generates a key for schema/table preferences (based on table name only for portability)
+ * Generates a key for schema/table preferences
+ * Uses schema.table format for specificity while remaining portable across connections
  * @param {string} connectionId - Connection identifier (kept for compatibility, not used in key)
- * @param {string} schema - Schema name (kept for compatibility, not used in key)
- * @param {string} table - Table name (used as the key)
- * @returns {string} Key based on table name
+ * @param {string} schema - Schema name
+ * @param {string} table - Table name
+ * @returns {string} Key based on schema.table
  */
 export function generateSchemaTableKey(connectionId, schema, table) {
-  // Use only table name as key for portability across connections/schemas
-  return `table_${table}`;
+  // Use schema.table for better specificity (same table name can exist in different schemas)
+  return `${schema}.${table}`;
 }
 
 /**
