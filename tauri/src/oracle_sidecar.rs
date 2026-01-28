@@ -4,6 +4,7 @@
 //! The sidecar provides Oracle database connectivity without requiring
 //! Oracle Instant Client to be bundled with the app.
 
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
@@ -14,6 +15,26 @@ const SIDECAR_PORT: u16 = 21522;
 const SIDECAR_NAME: &str = "oracle-sidecar";
 const STARTUP_TIMEOUT_MS: u64 = 10000;
 const HEALTH_CHECK_INTERVAL_MS: u64 = 100;
+
+/// Kill any orphan process occupying the sidecar port.
+/// This handles cases where the app crashed and left the sidecar running.
+fn kill_orphan_sidecar() {
+    // Use lsof to find any process listening on the sidecar port
+    let output = Command::new("lsof")
+        .args(["-ti", &format!(":{}", SIDECAR_PORT)])
+        .output();
+
+    if let Ok(output) = output {
+        let pids = String::from_utf8_lossy(&output.stdout);
+        for pid_str in pids.lines() {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                log::info!("Killing orphan sidecar process with PID: {}", pid);
+                // Kill the process
+                let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+            }
+        }
+    }
+}
 
 /// Holds the sidecar child process
 pub struct SidecarState {
@@ -33,7 +54,7 @@ impl Default for SidecarState {
 pub async fn start_oracle_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     let state = app.state::<SidecarState>();
 
-    // Check if already running
+    // Check if already running (our managed child)
     let already_has_child = {
         let child = state.child.lock().map_err(|e| e.to_string())?;
         child.is_some()
@@ -46,6 +67,13 @@ pub async fn start_oracle_sidecar(app: tauri::AppHandle) -> Result<String, Strin
         }
         // Process exists but not responding, will restart below
     }
+
+    // Kill any orphan sidecar process from a previous crash
+    // This ensures the port is free before we try to start
+    kill_orphan_sidecar();
+
+    // Small delay to ensure port is released
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Spawn the sidecar
     let sidecar_command = app

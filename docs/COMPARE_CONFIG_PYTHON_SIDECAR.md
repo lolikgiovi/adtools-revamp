@@ -38,6 +38,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 | **Phase 3: Error handling**      | ✅ Complete    | `OracleSidecarError` with user-friendly messages + hints     |
 | **Phase 3: Sidecar restart**     | ✅ Complete    | Restart button in sidecar status indicator                   |
 | **Phase 3: Check Connection**    | ✅ Complete    | Settings → Oracle Connections → Check button                 |
+| **Phase 3: Orphan cleanup**      | ✅ Complete    | `kill_orphan_sidecar()` on startup in `oracle_sidecar.rs`    |
 
 ### What's Not Done ❌
 
