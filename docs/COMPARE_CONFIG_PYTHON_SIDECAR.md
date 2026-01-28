@@ -6,6 +6,7 @@
 ## Background
 
 Previous attempts to bundle Oracle Instant Client with the Tauri app failed due to:
+
 - macOS code signing/notarization issues
 - DYLD library path restrictions on signed apps
 - Complex symlink setup requirements
@@ -16,30 +17,30 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 
 ### What's Done ✅
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Python FastAPI sidecar | ✅ Working | `tauri/sidecar/oracle_sidecar.py` |
-| Connection pooling | ✅ Implemented | Pool per connection config, auto-cleanup |
-| Health endpoint | ✅ Working | `GET /health` |
-| Query endpoint | ✅ Implemented | `POST /query`, `POST /query-dict` |
-| Test connection | ✅ Implemented | `POST /test-connection` |
-| Rust sidecar manager | ✅ Compiles | `tauri/src/oracle_sidecar.rs` |
-| Frontend client | ✅ Created | `frontend/tools/compare-config/lib/oracle-sidecar-client.js` |
-| Tauri config | ✅ Updated | `externalBin`, shell plugin, capabilities |
-| PyInstaller build script | ✅ Created | `tauri/sidecar/build_sidecar.py` |
-| **Phase 1: UI Integration** | ✅ Complete | `service.js`, `main.js`, `unified-data-service.js` |
-| **Phase 1: Credentials** | ✅ Complete | `service.js` - `buildSidecarConnection()` |
-| **Phase 1: Status Indicator** | ✅ Complete | `template.js`, `styles.css` |
+| Component                     | Status         | Location                                                     |
+| ----------------------------- | -------------- | ------------------------------------------------------------ |
+| Python FastAPI sidecar        | ✅ Working     | `tauri/sidecar/oracle_sidecar.py`                            |
+| Connection pooling            | ✅ Implemented | Pool per connection config, auto-cleanup                     |
+| Health endpoint               | ✅ Working     | `GET /health`                                                |
+| Query endpoint                | ✅ Implemented | `POST /query`, `POST /query-dict`                            |
+| Test connection               | ✅ Implemented | `POST /test-connection`                                      |
+| Rust sidecar manager          | ✅ Compiles    | `tauri/src/oracle_sidecar.rs`                                |
+| Frontend client               | ✅ Created     | `frontend/tools/compare-config/lib/oracle-sidecar-client.js` |
+| Tauri config                  | ✅ Updated     | `externalBin`, shell plugin, capabilities                    |
+| PyInstaller build script      | ✅ Created     | `tauri/sidecar/build_sidecar.py`                             |
+| **Phase 1: UI Integration**   | ✅ Complete    | `service.js`, `main.js`, `unified-data-service.js`           |
+| **Phase 1: Credentials**      | ✅ Complete    | `service.js` - `buildSidecarConnection()`                    |
+| **Phase 1: Status Indicator** | ✅ Complete    | `template.js`, `styles.css`                                  |
 
 | **Phase 2: Auto-lifecycle** | ✅ Complete | `lib.rs` - auto-start on launch, auto-stop on exit |
 
 ### What's Not Done ❌
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Build & bundle testing | ❌ Pending | Need to test `cargo tauri build` + verify sidecar works |
-| Error handling in UI | ❌ Pending | Map sidecar errors to user-friendly messages |
-| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed |
+| Component               | Status     | Notes                                                   |
+| ----------------------- | ---------- | ------------------------------------------------------- |
+| Build & bundle testing  | ❌ Pending | Need to test `cargo tauri build` + verify sidecar works |
+| Error handling in UI    | ❌ Pending | Map sidecar errors to user-friendly messages            |
+| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed             |
 
 ## Architecture
 
@@ -115,6 +116,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 ### Phase 2: Build & Distribution (Priority: High) ✅ MOSTLY COMPLETE
 
 4. **Build the sidecar executable** ✅
+
    ```bash
    cd tauri/sidecar
    source venv/bin/activate
@@ -148,11 +150,6 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    - [ ] Show sidecar status in UI (starting/ready/error)
    - [ ] Allow manual restart if sidecar crashes
 
-9. **Fallback strategy** (Optional)
-   - [ ] Detect if Oracle Instant Client is installed
-   - [ ] Use Rust implementation if available (faster)
-   - [ ] Fall back to Python sidecar otherwise
-
 ### Phase 4: Cleanup (Priority: Low)
 
 10. **Remove old Oracle IC bundling code**
@@ -170,11 +167,13 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 ### Sidecar Endpoints
 
 #### `GET /health`
+
 ```json
-{"status": "ok", "active_pools": 0, "timestamp": "2026-01-28T10:38:36.308025"}
+{ "status": "ok", "active_pools": 0, "timestamp": "2026-01-28T10:38:36.308025" }
 ```
 
 #### `POST /test-connection`
+
 ```json
 {
   "connection": {
@@ -187,6 +186,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 ```
 
 #### `POST /query`
+
 ```json
 {
   "connection": { ... },
@@ -194,22 +194,32 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
   "max_rows": 1000
 }
 ```
+
 Response:
+
 ```json
 {
   "columns": ["ID", "NAME"],
-  "rows": [[1, "Alice"], [2, "Bob"]],
+  "rows": [
+    [1, "Alice"],
+    [2, "Bob"]
+  ],
   "row_count": 2,
   "execution_time_ms": 45.23
 }
 ```
 
 #### `POST /query-dict`
+
 Same request, but response rows are objects:
+
 ```json
 {
   "columns": ["ID", "NAME"],
-  "rows": [{"ID": 1, "NAME": "Alice"}, {"ID": 2, "NAME": "Bob"}],
+  "rows": [
+    { "ID": 1, "NAME": "Alice" },
+    { "ID": 2, "NAME": "Bob" }
+  ],
   "row_count": 2,
   "execution_time_ms": 45.23
 }
@@ -218,6 +228,7 @@ Same request, but response rows are objects:
 ## Development
 
 ### Running sidecar locally
+
 ```bash
 cd tauri/sidecar
 python3 -m venv venv
@@ -227,6 +238,7 @@ python oracle_sidecar.py
 ```
 
 ### Testing endpoints
+
 ```bash
 # Health check
 curl http://127.0.0.1:21521/health
@@ -238,6 +250,7 @@ curl -X POST http://127.0.0.1:21521/test-connection \
 ```
 
 ### Building for distribution
+
 ```bash
 cd tauri/sidecar
 source venv/bin/activate
@@ -248,19 +261,19 @@ python build_sidecar.py
 
 ## Risks & Mitigations
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                         | Mitigation                                     |
+| ---------------------------- | ---------------------------------------------- |
 | PyInstaller bundle too large | Currently ~50-80MB; acceptable for desktop app |
-| Sidecar crashes | Rust manager can detect and restart |
-| Port conflict (21521) | Could make port configurable |
-| Startup delay | Pre-start sidecar, show loading indicator |
-| Security (password in HTTP) | localhost only, could add encryption if needed |
+| Sidecar crashes              | Rust manager can detect and restart            |
+| Port conflict (21521)        | Could make port configurable                   |
+| Startup delay                | Pre-start sidecar, show loading indicator      |
+| Security (password in HTTP)  | localhost only, could add encryption if needed |
 
 ## Decision Log
 
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-01-28 | Use Python sidecar | Oracle IC bundling failed; oracledb thin mode works without IC |
-| 2026-01-28 | FastAPI + uvicorn | Lightweight, async, easy to use |
-| 2026-01-28 | Port 21521 | Easy to remember (2 + Oracle default 1521) |
-| 2026-01-28 | Frontend calls sidecar directly | Simpler than routing through Rust backend |
+| Date       | Decision                        | Rationale                                                      |
+| ---------- | ------------------------------- | -------------------------------------------------------------- |
+| 2026-01-28 | Use Python sidecar              | Oracle IC bundling failed; oracledb thin mode works without IC |
+| 2026-01-28 | FastAPI + uvicorn               | Lightweight, async, easy to use                                |
+| 2026-01-28 | Port 21521                      | Easy to remember (2 + Oracle default 1521)                     |
+| 2026-01-28 | Frontend calls sidecar directly | Simpler than routing through Rust backend                      |
