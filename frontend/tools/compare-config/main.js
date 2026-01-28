@@ -6059,7 +6059,7 @@ class CompareConfigTool extends BaseTool {
     const tableConfig = document.getElementById(`${prefix}-table-config`);
     const sqlConfig = document.getElementById(`${prefix}-sql-config`);
 
-    if (tableConfig) tableConfig.style.display = mode === "table" ? "block" : "none";
+    if (tableConfig) tableConfig.style.display = mode === "table" ? "flex" : "none";
     if (sqlConfig) sqlConfig.style.display = mode === "sql" ? "block" : "none";
 
     this.updateUnifiedLoadButtonState();
@@ -7309,7 +7309,7 @@ class CompareConfigTool extends BaseTool {
       // Show table config, hide SQL config
       const tableConfig = document.getElementById(`${prefix}-table-config`);
       const sqlConfig = document.getElementById(`${prefix}-sql-config`);
-      if (tableConfig) tableConfig.style.display = "block";
+      if (tableConfig) tableConfig.style.display = "flex";
       if (sqlConfig) sqlConfig.style.display = "none";
     } else if (sourceType === "excel") {
       // For Excel: keep file list visible, clear selection
