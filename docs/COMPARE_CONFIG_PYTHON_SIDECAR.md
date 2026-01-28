@@ -27,13 +27,14 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 | Frontend client | ✅ Created | `frontend/tools/compare-config/lib/oracle-sidecar-client.js` |
 | Tauri config | ✅ Updated | `externalBin`, shell plugin, capabilities |
 | PyInstaller build script | ✅ Created | `tauri/sidecar/build_sidecar.py` |
+| **Phase 1: UI Integration** | ✅ Complete | `service.js`, `main.js`, `unified-data-service.js` |
+| **Phase 1: Credentials** | ✅ Complete | `service.js` - `buildSidecarConnection()` |
+| **Phase 1: Status Indicator** | ✅ Complete | `template.js`, `styles.css` |
 
 ### What's Not Done ❌
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Integration with Compare Config UI | ❌ Pending | Need to wire up the new client |
-| Credentials handling | ❌ Pending | Currently requires passing password directly |
 | Build & bundle testing | ❌ Pending | Need to test PyInstaller + Tauri bundle |
 | Error handling in UI | ❌ Pending | Map sidecar errors to user-friendly messages |
 | Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed |
@@ -91,17 +92,18 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 
 ## Next Steps
 
-### Phase 1: Integration (Priority: High)
+### Phase 1: Integration (Priority: High) ✅ COMPLETE
 
-1. **Wire up Compare Config UI to use sidecar**
-   - [ ] Modify `service.js` to use `OracleSidecarClient` instead of Tauri invoke
-   - [ ] Add sidecar startup on tool initialization
-   - [ ] Handle sidecar connection errors gracefully
+1. **Wire up Compare Config UI to use sidecar** ✅
+   - [x] Modify `service.js` to use `OracleSidecarClient` instead of Tauri invoke
+   - [x] Add sidecar startup on tool initialization
+   - [x] Handle sidecar connection errors gracefully
+   - [x] Add sidecar status indicator in UI header
 
-2. **Credentials handling**
-   - [ ] Retrieve credentials from keychain (existing `oracle::get_oracle_credentials`)
-   - [ ] Pass to sidecar in request (don't store in sidecar)
-   - [ ] Consider: encrypt in transit? (localhost only, probably fine)
+2. **Credentials handling** ✅
+   - [x] Retrieve credentials from keychain (existing `oracle::get_oracle_credentials`)
+   - [x] Pass to sidecar in request (don't store in sidecar)
+   - [x] `buildSidecarConnection()` method in service.js handles this
 
 3. **Test with real Oracle database**
    - [ ] Test connection to DEV/UAT environments

@@ -68,6 +68,11 @@ export const CompareConfigTemplate = /* html */ `
                 </div>
             </div>
             <div class="tabs-right">
+                <!-- Sidecar Status Indicator (Tauri modes only) -->
+                <div id="sidecar-status-indicator" class="sidecar-status-indicator tauri-only">
+                    <span class="status-dot stopped"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
                 <!-- Connection Status Indicator (Tauri modes only) -->
                 <div id="connection-status" class="connection-status tauri-only" style="display: none;">
                     <span class="connection-indicator"></span>

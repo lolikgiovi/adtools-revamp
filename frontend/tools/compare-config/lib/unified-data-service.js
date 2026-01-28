@@ -4,12 +4,20 @@
  *
  * This service provides a consistent interface for fetching data regardless of
  * whether the source is an Oracle database or an Excel/CSV file.
+ *
+ * Phase 1: Now uses Python sidecar for Oracle connectivity (no Instant Client needed).
  */
 
 import { CompareConfigService } from '../service.js';
 import * as FileParser from './file-parser.js';
 import { reconcileColumns, normalizeRowFields } from './diff-engine.js';
 import { isTauri } from '../../../core/Runtime.js';
+
+/**
+ * Whether to use the sidecar for Oracle operations.
+ * Set to true to use Python sidecar, false to use Rust/Tauri invoke.
+ */
+const USE_SIDECAR = true;
 
 /**
  * Source type constants
@@ -107,7 +115,10 @@ export class UnifiedDataService {
       max_rows: config.maxRows || 1000,
     };
 
-    const result = await CompareConfigService.fetchOracleData(request);
+    // Use sidecar or Tauri invoke based on configuration
+    const result = USE_SIDECAR
+      ? await CompareConfigService.fetchOracleDataViaSidecar(request)
+      : await CompareConfigService.fetchOracleData(request);
 
     return {
       headers: result.headers,
@@ -145,7 +156,10 @@ export class UnifiedDataService {
       max_rows: config.maxRows || 1000,
     };
 
-    const result = await CompareConfigService.fetchOracleData(request);
+    // Use sidecar or Tauri invoke based on configuration
+    const result = USE_SIDECAR
+      ? await CompareConfigService.fetchOracleDataViaSidecar(request)
+      : await CompareConfigService.fetchOracleData(request);
 
     return {
       headers: result.headers,

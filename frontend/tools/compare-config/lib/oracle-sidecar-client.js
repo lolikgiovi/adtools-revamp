@@ -22,6 +22,16 @@ const SIDECAR_PORT = 21521;
 const SIDECAR_BASE_URL = `http://127.0.0.1:${SIDECAR_PORT}`;
 
 /**
+ * Sidecar status enum
+ */
+export const SidecarStatus = {
+  STOPPED: 'stopped',
+  STARTING: 'starting',
+  READY: 'ready',
+  ERROR: 'error',
+};
+
+/**
  * Check if we're running in Tauri environment
  */
 function isTauri() {
@@ -35,6 +45,44 @@ export class OracleSidecarClient {
   constructor() {
     this._baseUrl = SIDECAR_BASE_URL;
     this._started = false;
+    this._status = SidecarStatus.STOPPED;
+    this._statusListeners = [];
+  }
+
+  /**
+   * Get current sidecar status
+   */
+  get status() {
+    return this._status;
+  }
+
+  /**
+   * Subscribe to status changes
+   * @param {function(string): void} listener - Called with new status
+   * @returns {function} Unsubscribe function
+   */
+  onStatusChange(listener) {
+    this._statusListeners.push(listener);
+    return () => {
+      this._statusListeners = this._statusListeners.filter((l) => l !== listener);
+    };
+  }
+
+  /**
+   * Update status and notify listeners
+   * @private
+   */
+  _setStatus(status) {
+    if (this._status !== status) {
+      this._status = status;
+      this._statusListeners.forEach((listener) => {
+        try {
+          listener(status);
+        } catch (e) {
+          console.error('Error in status listener:', e);
+        }
+      });
+    }
   }
 
   /**
@@ -42,28 +90,52 @@ export class OracleSidecarClient {
    * In development without Tauri, assumes sidecar is running manually
    */
   async start() {
+    this._setStatus(SidecarStatus.STARTING);
+
     if (isTauri()) {
-      const { invoke } = await import('@anthropic-ai/anthropic-sdk/internal/shim/web-runtime/fetch.mjs');
       const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
       try {
         await tauriInvoke('start_oracle_sidecar');
         this._started = true;
+        this._setStatus(SidecarStatus.READY);
+        return true;
       } catch (error) {
-        console.error('Failed to start Oracle sidecar:', error);
-        throw new Error(`Failed to start Oracle sidecar: ${error}`);
+        console.warn('Failed to start Oracle sidecar via Tauri:', error);
+        // Fall through to check if sidecar is running manually
       }
-    } else {
-      // In dev mode without Tauri, check if sidecar is already running
-      const isRunning = await this.healthCheck();
-      if (!isRunning) {
-        console.warn(
-          'Oracle sidecar not running. Start it manually:\n' +
-            'cd tauri/sidecar && python oracle_sidecar.py'
-        );
-      }
-      this._started = isRunning;
     }
-    return this._started;
+
+    // Check if sidecar is already running manually (dev mode or Tauri fallback)
+    const isRunning = await this.healthCheck();
+    if (isRunning) {
+      console.log('Oracle sidecar is running (started manually)');
+      this._started = true;
+      this._setStatus(SidecarStatus.READY);
+      return true;
+    }
+
+    // Sidecar not available
+    console.warn(
+      'Oracle sidecar not running. Start it manually:\n' +
+        'cd tauri/sidecar && python oracle_sidecar.py'
+    );
+    this._started = false;
+    this._setStatus(SidecarStatus.STOPPED);
+    return false;
+  }
+
+  /**
+   * Ensure the sidecar is started, starting it if needed
+   * Safe to call multiple times
+   */
+  async ensureStarted() {
+    if (this._status === SidecarStatus.READY) {
+      // Verify it's still responding
+      const healthy = await this.healthCheck();
+      if (healthy) return true;
+    }
+
+    return this.start();
   }
 
   /**
@@ -75,10 +147,18 @@ export class OracleSidecarClient {
       try {
         await invoke('stop_oracle_sidecar');
         this._started = false;
+        this._setStatus(SidecarStatus.STOPPED);
       } catch (error) {
         console.error('Failed to stop Oracle sidecar:', error);
       }
     }
+  }
+
+  /**
+   * Check if sidecar is ready for queries
+   */
+  isReady() {
+    return this._status === SidecarStatus.READY;
   }
 
   /**

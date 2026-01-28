@@ -20,6 +20,7 @@ import { ExcelComparator } from "./lib/excel-comparator.js";
 import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
+import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
 import {
   isSourceBFollowMode,
   syncPkFieldsToCompareFields,
@@ -52,6 +53,7 @@ class CompareConfigTool extends BaseTool {
 
     // State
     this.oracleClientReady = false;
+    this.sidecarStatus = SidecarStatus.STOPPED;
     this.savedConnections = [];
 
     this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
@@ -173,7 +175,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Checks if Oracle Instant Client is installed (Tauri/Desktop only)
+   * Checks if Oracle connectivity is available (via Python sidecar)
    * In Web mode, this check is skipped as Oracle features are not available
    */
   async checkOracleClient() {
@@ -185,29 +187,70 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    // Tauri/Desktop mode - check for Oracle client
+    // Tauri/Desktop mode - start the Python sidecar for Oracle connectivity
     try {
-      // Run debug diagnostics first (logs to console)
-      console.log("[OracleCheck] Running Oracle IC diagnostics...");
-      await CompareConfigService.debugOracleSetup();
+      console.log("[OracleCheck] Starting Oracle sidecar...");
 
-      this.oracleClientReady = await CompareConfigService.checkOracleClientReady();
+      const sidecarClient = getOracleSidecarClient();
 
-      if (this.oracleClientReady) {
-        // Prime the client
-        await CompareConfigService.primeOracleClient();
+      // Subscribe to status changes to update UI
+      sidecarClient.onStatusChange((status) => {
+        this.sidecarStatus = status;
+        this.updateSidecarStatusUI();
+      });
+
+      // Start the sidecar
+      const started = await sidecarClient.start();
+
+      if (started) {
+        console.log("[OracleCheck] Oracle sidecar started successfully");
+        this.oracleClientReady = true;
         this.showMainInterface();
       } else {
-        console.warn("[OracleCheck] Oracle client not ready - showing installation guide");
-        this.showInstallationGuide();
+        // Sidecar not running in dev mode - still show main interface
+        // but Oracle features may not work
+        console.warn("[OracleCheck] Oracle sidecar not running - Oracle features may not work");
+        console.warn("Start sidecar manually: cd tauri/sidecar && python oracle_sidecar.py");
+        this.oracleClientReady = false;
+        this.showMainInterface();
       }
     } catch (error) {
-      console.error("Failed to check Oracle client:", error);
-      // Run debug again on error to capture state
-      try {
-        await CompareConfigService.debugOracleSetup();
-      } catch (_) {}
-      this.showInstallationGuide();
+      console.error("Failed to start Oracle sidecar:", error);
+      // Show main interface anyway - user can still use Excel compare
+      this.oracleClientReady = false;
+      this.showMainInterface();
+    }
+  }
+
+  /**
+   * Update the sidecar status indicator in the UI
+   */
+  updateSidecarStatusUI() {
+    const statusIndicator = document.getElementById("sidecar-status-indicator");
+    if (!statusIndicator) return;
+
+    const statusText = statusIndicator.querySelector(".status-text");
+    const statusDot = statusIndicator.querySelector(".status-dot");
+
+    if (statusText) {
+      switch (this.sidecarStatus) {
+        case SidecarStatus.STARTING:
+          statusText.textContent = "Starting...";
+          break;
+        case SidecarStatus.READY:
+          statusText.textContent = "Connected";
+          break;
+        case SidecarStatus.ERROR:
+          statusText.textContent = "Error";
+          break;
+        default:
+          statusText.textContent = "Disconnected";
+      }
+    }
+
+    if (statusDot) {
+      statusDot.classList.remove("starting", "ready", "error", "stopped");
+      statusDot.classList.add(this.sidecarStatus);
     }
   }
 
@@ -834,8 +877,8 @@ class CompareConfigTool extends BaseTool {
       schemaSelect.disabled = true;
       schemaSelect.innerHTML = '<option value="">Loading schemas from Env 1...</option>';
 
-      // Fetch schemas from Env 1
-      const schemas = await CompareConfigService.fetchSchemas(this.env1.connection.name, this.env1.connection);
+      // Fetch schemas from Env 1 (via sidecar)
+      const schemas = await CompareConfigService.fetchSchemasViaSidecar(this.env1.connection.name, this.env1.connection);
 
       // Populate dropdown
       schemaSelect.innerHTML = '<option value="">Select schema...</option>';
@@ -937,7 +980,7 @@ class CompareConfigTool extends BaseTool {
    */
   async validateSchemaInEnv2(schema) {
     try {
-      const schemas = await CompareConfigService.fetchSchemas(this.env2.connection.name, this.env2.connection);
+      const schemas = await CompareConfigService.fetchSchemasViaSidecar(this.env2.connection.name, this.env2.connection);
 
       this.env2SchemaExists = schemas.includes(schema);
 
@@ -972,8 +1015,8 @@ class CompareConfigTool extends BaseTool {
       tableSelect.disabled = true;
       tableSelect.innerHTML = '<option value="">Loading tables from Env 1...</option>';
 
-      // Fetch tables from Env 1
-      const tables = await CompareConfigService.fetchTables(this.env1.connection.name, this.env1.connection, this.schema);
+      // Fetch tables from Env 1 (via sidecar)
+      const tables = await CompareConfigService.fetchTablesViaSidecar(this.env1.connection.name, this.env1.connection, this.schema);
 
       // Populate dropdown
       tableSelect.innerHTML = '<option value="">Select table...</option>';
@@ -1038,7 +1081,7 @@ class CompareConfigTool extends BaseTool {
    */
   async validateTableInEnv2(tableName) {
     try {
-      const tables = await CompareConfigService.fetchTables(this.env2.connection.name, this.env2.connection, this.schema);
+      const tables = await CompareConfigService.fetchTablesViaSidecar(this.env2.connection.name, this.env2.connection, this.schema);
 
       this.env2TableExists = tables.includes(tableName);
 
@@ -2619,7 +2662,7 @@ class CompareConfigTool extends BaseTool {
 
       // Step 1: Fetch data from Environment 1
       console.log("[Compare] Fetching data from env1:", this.env1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleData({
+      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: this.env1.connection.name,
         config: this.env1.connection,
         mode: "table",
@@ -2636,7 +2679,7 @@ class CompareConfigTool extends BaseTool {
 
       // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching data from env2:", this.env2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleData({
+      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: this.env2.connection.name,
         config: this.env2.connection,
         mode: "table",
@@ -2790,7 +2833,7 @@ class CompareConfigTool extends BaseTool {
 
       // Step 1: Fetch data from Environment 1
       console.log("[Compare] Fetching raw SQL data from env1:", this.rawenv1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleData({
+      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: this.rawenv1.connection.name,
         config: this.rawenv1.connection,
         mode: "raw-sql",
@@ -2801,7 +2844,7 @@ class CompareConfigTool extends BaseTool {
 
       // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching raw SQL data from env2:", this.rawenv2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleData({
+      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: this.rawenv2.connection.name,
         config: this.rawenv2.connection,
         mode: "raw-sql",
@@ -2972,7 +3015,7 @@ class CompareConfigTool extends BaseTool {
         message: `Reconnecting to ${env.connection.name}...`,
       });
 
-      await CompareConfigService.fetchSchemas(env.connection.name, env.connection);
+      await CompareConfigService.fetchSchemasViaSidecar(env.connection.name, env.connection);
 
       const updatedConnections = await CompareConfigService.getActiveConnections();
       const reconnected = updatedConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
@@ -3024,7 +3067,7 @@ class CompareConfigTool extends BaseTool {
 
       // Trigger a simple operation to re-establish connection
       // This will create a new connection if needed (pool reuses by connect_string)
-      await CompareConfigService.fetchSchemas(env.connection.name, env.connection);
+      await CompareConfigService.fetchSchemasViaSidecar(env.connection.name, env.connection);
 
       // Verify connection is now alive
       const updatedConnections = await CompareConfigService.getActiveConnections();
@@ -5607,7 +5650,7 @@ class CompareConfigTool extends BaseTool {
       schemaInput.disabled = true;
 
       try {
-        const schemas = await CompareConfigService.fetchSchemas(connection.name, connection);
+        const schemas = await CompareConfigService.fetchSchemasViaSidecar(connection.name, connection);
         this.setupUnifiedSchemaDropdown(source, schemas);
       } catch (error) {
         console.error("Failed to fetch schemas:", error);
@@ -5816,7 +5859,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     try {
-      const tables = await CompareConfigService.fetchTables(connection.name, connection, schema);
+      const tables = await CompareConfigService.fetchTablesViaSidecar(connection.name, connection, schema);
       this.setupUnifiedTableDropdown(source, tables);
     } catch (error) {
       console.error("Failed to fetch tables:", error);
@@ -6643,8 +6686,8 @@ class CompareConfigTool extends BaseTool {
     const sourceBConnection = this.unified.sourceB.connection;
 
     try {
-      // Fetch tables for the schema in Source B
-      const tables = await CompareConfigService.fetchTables(sourceBConnection.name, sourceBConnection, schema);
+      // Fetch tables for the schema in Source B (via sidecar)
+      const tables = await CompareConfigService.fetchTablesViaSidecar(sourceBConnection.name, sourceBConnection, schema);
 
       const tableExists = tables.some((t) => t.toLowerCase() === table.toLowerCase());
 
