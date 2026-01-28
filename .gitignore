@@ -72,3 +72,5 @@ tauri/binaries/oracle-sidecar-*
 #macOS
 .DS_Store
 backend-workers/.dev.vars
+venv-x64/
+tauri/gen/schemas/capabilities.json
