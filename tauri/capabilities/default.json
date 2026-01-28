@@ -17,7 +17,19 @@
     "dialog:default",
     "dialog:allow-open",
     "fs:default",
-    "fs:allow-read"
+    "fs:allow-read",
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/oracle-sidecar",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
   ],
   "platforms": ["macOS"]
 }

@@ -151,31 +151,75 @@ build_tauri_targets() {
   npm run build:tauri
 
   # Oracle Instant Client setup for oracle feature
-  # Default location: ~/Documents/adtools_library/oracle_instantclient
-  if [[ -z "${OCI_LIB_DIR:-}" ]]; then
-    local default_oci="$HOME/Documents/adtools_library/oracle_instantclient"
-    if [[ -d "$default_oci" && -f "$default_oci/libclntsh.dylib" ]]; then
-      export OCI_LIB_DIR="$default_oci"
-      echo "Using Oracle Instant Client at: $OCI_LIB_DIR"
-    else
-      echo "WARNING: Oracle Instant Client not found at $default_oci"
-      echo "         Building without Oracle support (--features oracle disabled)"
-      echo "         To enable: install IC and set OCI_LIB_DIR environment variable"
+  # Supports architecture-specific directories:
+  #   - OCI_LIB_DIR_ARM64 / OCI_LIB_DIR_X64 environment variables, OR
+  #   - Subdirectories: oracle_instantclient/arm64/ and oracle_instantclient/x86_64/
+  # Falls back to single OCI_LIB_DIR for backwards compatibility
+  local default_oci="$HOME/Documents/adtools_library/oracle_instantclient"
+
+  # Set up ARM64 Oracle IC path
+  if [[ -z "${OCI_LIB_DIR_ARM64:-}" ]]; then
+    if [[ -d "$default_oci/arm64" && -f "$default_oci/arm64/libclntsh.dylib" ]]; then
+      export OCI_LIB_DIR_ARM64="$default_oci/arm64"
+    elif [[ -d "$default_oci" && -f "$default_oci/libclntsh.dylib" ]]; then
+      # Check if the existing IC is arm64
+      if file "$default_oci/libclntsh.dylib" 2>/dev/null | grep -q "arm64"; then
+        export OCI_LIB_DIR_ARM64="$default_oci"
+      fi
     fi
   fi
 
-  # Build with oracle feature if OCI_LIB_DIR is set
+  # Set up x86_64 Oracle IC path
+  if [[ -z "${OCI_LIB_DIR_X64:-}" ]]; then
+    if [[ -d "$default_oci/x86_64" && -f "$default_oci/x86_64/libclntsh.dylib" ]]; then
+      export OCI_LIB_DIR_X64="$default_oci/x86_64"
+    elif [[ -d "$default_oci" && -f "$default_oci/libclntsh.dylib" ]]; then
+      # Check if the existing IC is x86_64
+      if file "$default_oci/libclntsh.dylib" 2>/dev/null | grep -q "x86_64"; then
+        export OCI_LIB_DIR_X64="$default_oci"
+      fi
+    fi
+  fi
+
+  # Report Oracle IC status
+  if [[ -n "${OCI_LIB_DIR_ARM64:-}" ]]; then
+    echo "Oracle IC for ARM64: $OCI_LIB_DIR_ARM64"
+  else
+    echo "WARNING: Oracle IC for ARM64 not found"
+  fi
+  if [[ -n "${OCI_LIB_DIR_X64:-}" ]]; then
+    echo "Oracle IC for x86_64: $OCI_LIB_DIR_X64"
+  else
+    echo "WARNING: Oracle IC for x86_64 not found"
+  fi
+
+  # For cargo build, we need OCI_LIB_DIR set to compile with oracle feature
+  # Use whichever is available (prefer native architecture)
   local cargo_features=""
-  if [[ -n "${OCI_LIB_DIR:-}" ]]; then
+  if [[ -n "${OCI_LIB_DIR_ARM64:-}" || -n "${OCI_LIB_DIR_X64:-}" ]]; then
     cargo_features="--features oracle"
     echo "Oracle feature enabled"
+  else
+    echo "WARNING: Building without Oracle support (no Oracle IC found)"
+    echo "         To enable, either:"
+    echo "         - Set OCI_LIB_DIR_ARM64 and OCI_LIB_DIR_X64 environment variables, OR"
+    echo "         - Create subdirectories: $default_oci/arm64/ and $default_oci/x86_64/"
   fi
 
   echo "Building Tauri app for aarch64-apple-darwin..."
-  npx tauri build --target aarch64-apple-darwin $cargo_features
+  # Set OCI_LIB_DIR for cargo compilation (needs matching arch for linking)
+  if [[ -n "${OCI_LIB_DIR_ARM64:-}" ]]; then
+    OCI_LIB_DIR="$OCI_LIB_DIR_ARM64" npx tauri build --target aarch64-apple-darwin $cargo_features
+  else
+    npx tauri build --target aarch64-apple-darwin $cargo_features
+  fi
 
   echo "Building Tauri app for x86_64-apple-darwin..."
-  npx tauri build --target x86_64-apple-darwin $cargo_features
+  if [[ -n "${OCI_LIB_DIR_X64:-}" ]]; then
+    OCI_LIB_DIR="$OCI_LIB_DIR_X64" npx tauri build --target x86_64-apple-darwin $cargo_features
+  else
+    npx tauri build --target x86_64-apple-darwin $cargo_features
+  fi
   popd >/dev/null
 }
 
@@ -197,14 +241,29 @@ find_artifacts() {
 
 # Bundle Oracle Instant Client into the app
 # Copies IC dylibs to Contents/Frameworks/instantclient/
+# Usage: bundle_oracle_ic <app_path> <arch>
+#   arch: "arm64" or "x86_64"
 bundle_oracle_ic() {
   local app_path="$1"
-  local ic_source="${OCI_LIB_DIR:-}"
+  local arch="${2:-}"
+  local ic_source=""
+
+  # Select the appropriate Oracle IC source based on architecture
+  if [[ "$arch" == "arm64" ]]; then
+    ic_source="${OCI_LIB_DIR_ARM64:-}"
+  elif [[ "$arch" == "x86_64" ]]; then
+    ic_source="${OCI_LIB_DIR_X64:-}"
+  else
+    # Fallback for backwards compatibility
+    ic_source="${OCI_LIB_DIR:-}"
+  fi
 
   if [[ -z "$ic_source" || ! -d "$ic_source" ]]; then
-    echo "Skipping Oracle IC bundling (OCI_LIB_DIR not set or not found)"
+    echo "Skipping Oracle IC bundling for $arch (no matching Oracle IC found)"
     return 0
   fi
+
+  echo "Using Oracle IC for $arch from: $ic_source"
 
   local ic_dest="$app_path/Contents/Frameworks/instantclient"
   echo "Bundling Oracle Instant Client into $ic_dest..."
@@ -299,6 +358,33 @@ compress_app() {
   # Create a tarball without macOS extended attributes or AppleDouble files to avoid `._` entries.
   # This prevents plugin-updater from mistakenly unpacking `._AD Tools.app`.
   COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --exclude='.DS_Store' --exclude='._*' -czf "$out_file" -C "$app_parent" "$app_name"
+}
+
+# Create a DMG from an .app bundle
+# This is needed because Tauri creates the DMG before we bundle Oracle IC
+create_dmg() {
+  local app_path="$1" out_dmg="$2"
+  local app_name volume_name tmp_dmg
+
+  app_name="$(basename "$app_path" .app)"
+  volume_name="$app_name"
+
+  echo "Creating DMG from $app_path..."
+
+  # Remove existing output if present
+  rm -f "$out_dmg"
+
+  # Create DMG directly from the app using hdiutil
+  # -volname: Name shown when mounted
+  # -srcfolder: Source folder/app to include
+  # -ov: Overwrite existing
+  # -format UDZO: Compressed DMG format
+  hdiutil create -volname "$volume_name" \
+    -srcfolder "$app_path" \
+    -ov -format UDZO \
+    "$out_dmg"
+
+  echo "DMG created: $out_dmg"
 }
 
 sign_file() {
@@ -416,18 +502,16 @@ main() {
   IFS='|' read -r APP_ARM64 DMG_ARM64 <<<"$(find_artifacts aarch64-apple-darwin)"
   IFS='|' read -r APP_X64 DMG_X64 <<<"$(find_artifacts x86_64-apple-darwin)"
 
-  # Bundle Oracle Instant Client into both app builds
+  # Bundle Oracle Instant Client into both app builds (architecture-specific)
   echo "Bundling Oracle Instant Client into apps..."
-  bundle_oracle_ic "$APP_ARM64"
-  bundle_oracle_ic "$APP_X64"
+  bundle_oracle_ic "$APP_ARM64" "arm64"
+  bundle_oracle_ic "$APP_X64" "x86_64"
 
-  # Copy DMGs with naming convention
-  if [[ -n "$DMG_ARM64" && -f "$DMG_ARM64" ]]; then
-    cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
-  fi
-  if [[ -n "$DMG_X64" && -f "$DMG_X64" ]]; then
-    cp "$DMG_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg"
-  fi
+  # Create DMGs from the modified .app bundles (with Oracle IC included)
+  # We recreate DMGs because Tauri's DMGs were created before Oracle IC bundling
+  echo "Creating DMGs with Oracle IC included..."
+  create_dmg "$APP_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
+  create_dmg "$APP_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg"
 
   # Create .app.tar.gz for each arch
   compress_app "$APP_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.app.tar.gz"

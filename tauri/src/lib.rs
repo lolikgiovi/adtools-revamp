@@ -17,7 +17,9 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_shell::init())
     .manage(ZoomState(Mutex::new(ZOOM_DEFAULT)))
+    .manage(oracle_sidecar::SidecarState::default())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
       get_jenkins_username,
@@ -61,7 +63,12 @@ pub fn run() {
       oracle::close_all_connections,
       oracle::close_connection,
       // Unified data fetch command
-      oracle::fetch_oracle_data
+      oracle::fetch_oracle_data,
+      // Oracle sidecar commands
+      oracle_sidecar::start_oracle_sidecar,
+      oracle_sidecar::stop_oracle_sidecar,
+      oracle_sidecar::check_oracle_sidecar_status,
+      oracle_sidecar::get_oracle_sidecar_url
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -208,6 +215,7 @@ fn apply_zoom(app: &tauri::AppHandle, level: f64) {
 pub mod jenkins;
 pub mod confluence;
 pub mod oracle;
+pub mod oracle_sidecar;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;

@@ -294,6 +294,41 @@ pub fn setup_oracle_library_path() -> Result<bool, String> {
             std::env::set_var("DYLD_LIBRARY_PATH", &path);
             std::env::set_var("OCI_LIB_DIR", &path);
 
+            // CRITICAL: Preload libclntsh.dylib using dlopen with the absolute path.
+            // This works around macOS SIP restrictions that prevent dlopen from finding
+            // libraries in $HOME/lib for hardened-runtime signed apps.
+            // When ODPI-C calls dlopen("libclntsh.dylib", ...), it will find the
+            // library already loaded in memory.
+            #[cfg(target_os = "macos")]
+            {
+                use std::ffi::CString;
+                use std::os::raw::{c_char, c_int, c_void};
+
+                extern "C" {
+                    fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
+                    fn dlerror() -> *const c_char;
+                }
+
+                const RTLD_NOW: c_int = 0x2;
+                const RTLD_GLOBAL: c_int = 0x8;
+
+                let lib_path = libclntsh_path.to_string_lossy();
+                if let Ok(cpath) = CString::new(lib_path.as_bytes()) {
+                    let handle = unsafe { dlopen(cpath.as_ptr(), RTLD_NOW | RTLD_GLOBAL) };
+                    if handle.is_null() {
+                        let err = unsafe { dlerror() };
+                        let err_msg = if err.is_null() {
+                            "unknown error".to_string()
+                        } else {
+                            unsafe { std::ffi::CStr::from_ptr(err).to_string_lossy().to_string() }
+                        };
+                        log::warn!("Failed to preload libclntsh.dylib: {}", err_msg);
+                    } else {
+                        log::info!("Successfully preloaded libclntsh.dylib from {:?}", libclntsh_path);
+                    }
+                }
+            }
+
             return Ok(true);
         }
     }
