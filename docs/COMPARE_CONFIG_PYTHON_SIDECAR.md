@@ -39,6 +39,7 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 | **Phase 3: Sidecar restart**     | ✅ Complete    | Restart button in sidecar status indicator                   |
 | **Phase 3: Check Connection**    | ✅ Complete    | Settings → Oracle Connections → Check button                 |
 | **Phase 3: Orphan cleanup**      | ✅ Complete    | `kill_orphan_sidecar()` on startup in `oracle_sidecar.rs`    |
+| **Phase 4: IC cleanup**          | ✅ Complete    | Removed legacy Oracle IC bundling code                       |
 
 ### What's Not Done ❌
 
@@ -166,12 +167,16 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
     - [x] Added "Check" button to Oracle Connections list in Settings
     - [x] Tests connection via sidecar with visual feedback
 
-### Phase 4: Cleanup (Priority: Low)
+### Phase 4: Cleanup (Priority: Low) ✅ COMPLETE
 
-10. **Remove old Oracle IC bundling code** (Optional - keep for fallback)
-    - [ ] Remove `setup_oracle_library_path()` complexity
-    - [ ] Remove `build.rs` Oracle IC bundling
-    - [ ] Remove symlink creation in `$HOME/lib`
+10. **Remove old Oracle IC bundling code** ✅
+    - [x] Remove `setup_oracle_library_path()` function from `oracle.rs`
+    - [x] Remove `get_bundled_ic_path()` function from `oracle.rs`
+    - [x] Remove `debug_oracle_setup()` command from `oracle.rs`
+    - [x] Remove `check_oracle_client_ready` and `prime_oracle_client` commands
+    - [x] Remove legacy IC setup call in `lib.rs`
+    - [x] Remove frontend service methods for legacy IC commands
+    - [x] Note: `build.rs` was already clean (no IC bundling code)
 
 11. **Documentation**
     - [x] Update architecture docs (this file)

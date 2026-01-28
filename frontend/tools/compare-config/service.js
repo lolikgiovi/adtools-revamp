@@ -11,48 +11,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getOracleSidecarClient, OracleSidecarError } from "./lib/oracle-sidecar-client.js";
 
 export class CompareConfigService {
-  /**
-   * Checks if Oracle Instant Client is installed and ready
-   * @returns {Promise<boolean>}
-   */
-  static async checkOracleClientReady() {
-    try {
-      return await invoke("check_oracle_client_ready");
-    } catch (error) {
-      console.error("Failed to check Oracle client:", error);
-      return false;
-    }
-  }
-
-  /**
-   * Primes (loads) the Oracle client library
-   * @returns {Promise<void>}
-   */
-  static async primeOracleClient() {
-    try {
-      await invoke("prime_oracle_client");
-    } catch (error) {
-      console.error("Failed to prime Oracle client:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Debug Oracle IC setup - returns detailed diagnostic information
-   * @returns {Promise<string[]>} Array of debug log lines
-   */
-  static async debugOracleSetup() {
-    try {
-      const logs = await invoke("debug_oracle_setup");
-      console.log("=== Oracle IC Debug Info ===");
-      logs.forEach((line) => console.log(line));
-      console.log("=== End Debug Info ===");
-      return logs;
-    } catch (error) {
-      console.error("Failed to get Oracle debug info:", error);
-      return [`Error: ${error}`];
-    }
-  }
+  // NOTE: checkOracleClientReady, primeOracleClient, and debugOracleSetup
+  // were removed in Phase 4.10. Oracle operations now use the Python sidecar.
 
   /**
    * Tests an Oracle database connection

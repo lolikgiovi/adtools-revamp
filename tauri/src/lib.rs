@@ -45,10 +45,7 @@ pub fn run() {
       confluence_fetch_page,
       confluence_fetch_by_space_title,
       confluence_search_pages,
-      // Oracle commands
-      oracle::check_oracle_client_ready,
-      oracle::prime_oracle_client,
-      oracle::debug_oracle_setup,
+      // Oracle commands (legacy IC commands removed in Phase 4.10 - now using Python sidecar)
       oracle::test_oracle_connection,
       oracle::fetch_schemas,
       oracle::fetch_tables,
@@ -79,13 +76,7 @@ pub fn run() {
         )?;
       }
 
-      // Setup Oracle Instant Client library path (must be done before any Oracle operations)
-      #[cfg(feature = "oracle")]
-      {
-        if let Err(e) = oracle::setup_oracle_library_path() {
-          eprintln!("Warning: Failed to setup Oracle library path: {}", e);
-        }
-      }
+      // NOTE: Oracle IC setup removed in Phase 4.10 - now using Python sidecar with oracledb thin mode
 
       // Build custom menu with zoom controls
       let menu = build_menu(app.handle())?;
