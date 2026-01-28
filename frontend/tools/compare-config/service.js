@@ -391,7 +391,8 @@ export class CompareConfigService {
     let sourceName;
 
     if (mode === "raw-sql") {
-      querySql = sql;
+      // Strip trailing semicolons - Oracle's programmatic interface doesn't accept them
+      querySql = sql.trim().replace(/;+$/, "");
       sourceName = "SQL Query";
     } else {
       // Table mode - build SELECT statement

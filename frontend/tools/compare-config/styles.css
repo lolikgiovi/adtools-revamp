@@ -2688,8 +2688,8 @@
 }
 
 .diff-delete {
-  background-color: hsl(var(--destructive) / 0.25);
-  color: hsl(var(--destructive));
+  background-color: hsl(0 70% 45% / 0.3);
+  color: hsl(0 90% 75%);
   /* text-decoration: line-through; */
   padding: 1px 0px;
   border-radius: 2px;

@@ -103,13 +103,7 @@ function convertRowToViewFormat(jsRow, keyColumns) {
  * @returns {Object} Key as object
  */
 function parseKeyToObject(keyString, rowData, keyColumns) {
-  console.log('[DEBUG DiffAdapter] parseKeyToObject called');
-  console.log('[DEBUG DiffAdapter] keyString:', keyString);
-  console.log('[DEBUG DiffAdapter] keyColumns:', keyColumns);
-  console.log('[DEBUG DiffAdapter] rowData keys:', rowData ? Object.keys(rowData) : 'null');
-
   if (!keyColumns || keyColumns.length === 0) {
-    console.log('[DEBUG DiffAdapter] No keyColumns, returning { KEY: keyString }');
     return { KEY: keyString };
   }
 
@@ -118,11 +112,7 @@ function parseKeyToObject(keyString, rowData, keyColumns) {
     const keyObj = {};
     for (const col of keyColumns) {
       keyObj[col] = rowData[col] ?? null;
-      if (rowData[col] === undefined) {
-        console.log('[DEBUG DiffAdapter] Column not found in rowData:', col);
-      }
     }
-    console.log('[DEBUG DiffAdapter] Extracted keyObj:', keyObj);
     return keyObj;
   }
 
