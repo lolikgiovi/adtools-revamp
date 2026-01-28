@@ -654,6 +654,40 @@
   color: #ef4444;
 }
 
+/* Connection status in the list */
+.oracle-conn-status {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  min-height: 1em;
+}
+
+.oracle-conn-status.success {
+  color: #22c55e;
+}
+
+.oracle-conn-status.error {
+  color: #ef4444;
+}
+
+/* Check connection button */
+.oracle-check-conn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.oracle-check-conn svg {
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn-danger {
   color: #ef4444;
   border-color: #ef4444;

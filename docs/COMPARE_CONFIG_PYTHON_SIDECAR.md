@@ -35,13 +35,15 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
 | **Phase 2: Dual-arch build**     | ✅ Complete    | `build.sh` - builds arm64 + x86_64 via Rosetta               |
 | **Phase 2: Ad-hoc signing**      | ✅ Complete    | `build_sidecar.py` - codesign after PyInstaller              |
 | **Phase 2: Release integration** | ✅ Complete    | `build_release.sh` - auto-builds sidecar before Tauri        |
+| **Phase 3: Error handling**      | ✅ Complete    | `OracleSidecarError` with user-friendly messages + hints     |
+| **Phase 3: Sidecar restart**     | ✅ Complete    | Restart button in sidecar status indicator                   |
+| **Phase 3: Check Connection**    | ✅ Complete    | Settings → Oracle Connections → Check button                 |
 
 ### What's Not Done ❌
 
-| Component               | Status     | Notes                                        |
-| ----------------------- | ---------- | -------------------------------------------- |
-| Error handling in UI    | ❌ Pending | Map sidecar errors to user-friendly messages |
-| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed  |
+| Component               | Status     | Notes                                       |
+| ----------------------- | ---------- | ------------------------------------------- |
+| Fallback to Rust Oracle | ❌ Pending | For users who have Instant Client installed |
 
 ## Architecture
 
@@ -148,16 +150,20 @@ The Python sidecar approach bypasses all these issues by using `oracledb` in **t
    - Initial install: Users run `xattr -cr "AD Tools.app"` once
    - Future updates via Tauri updater work automatically (no user action needed)
 
-### Phase 3: Polish (Priority: Medium)
+### Phase 3: Polish (Priority: Medium) ✅ COMPLETE
 
-8. **Error handling improvements**
-   - [ ] Map Oracle error codes to user-friendly messages
-   - [ ] Show connection hints in UI
-   - [ ] Retry logic for transient failures
+8. **Error handling improvements** ✅
+   - [x] Map Oracle error codes to user-friendly messages (in `OracleSidecarError`)
+   - [x] Show connection hints in UI (error hints displayed with messages)
+   - [x] Retry logic for transient failures (restart button for sidecar)
 
-9. **Sidecar status indicator enhancements**
-   - [x] Show sidecar status in UI (starting/ready/error) - basic implementation done
-   - [ ] Allow manual restart if sidecar crashes
+9. **Sidecar status indicator enhancements** ✅
+   - [x] Show sidecar status in UI (starting/ready/error)
+   - [x] Allow manual restart if sidecar crashes (restart button in header)
+
+10. **Check Connection in Settings** ✅
+    - [x] Added "Check" button to Oracle Connections list in Settings
+    - [x] Tests connection via sidecar with visual feedback
 
 ### Phase 4: Cleanup (Priority: Low)
 

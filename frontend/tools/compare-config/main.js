@@ -231,6 +231,7 @@ class CompareConfigTool extends BaseTool {
 
     const statusText = statusIndicator.querySelector(".status-text");
     const statusDot = statusIndicator.querySelector(".status-dot");
+    const restartBtn = statusIndicator.querySelector("#btn-sidecar-restart");
 
     if (statusText) {
       switch (this.sidecarStatus) {
@@ -251,6 +252,49 @@ class CompareConfigTool extends BaseTool {
     if (statusDot) {
       statusDot.classList.remove("starting", "ready", "error", "stopped");
       statusDot.classList.add(this.sidecarStatus);
+    }
+
+    // Show restart button when sidecar is in error or stopped state
+    if (restartBtn) {
+      const showRestart = this.sidecarStatus === SidecarStatus.ERROR || this.sidecarStatus === SidecarStatus.STOPPED;
+      restartBtn.style.display = showRestart ? "flex" : "none";
+    }
+  }
+
+  /**
+   * Handle sidecar restart button click
+   */
+  async handleSidecarRestart() {
+    const restartBtn = document.getElementById("btn-sidecar-restart");
+    if (restartBtn) {
+      restartBtn.disabled = true;
+    }
+
+    try {
+      const sidecarClient = getOracleSidecarClient();
+      const success = await sidecarClient.restart();
+
+      if (success) {
+        this.eventBus.emit("notification:show", {
+          type: "success",
+          message: "Oracle sidecar restarted successfully",
+        });
+      } else {
+        this.eventBus.emit("notification:show", {
+          type: "error",
+          message: "Failed to restart Oracle sidecar. Try restarting the app.",
+        });
+      }
+    } catch (error) {
+      console.error("Sidecar restart error:", error);
+      this.eventBus.emit("notification:show", {
+        type: "error",
+        message: "Failed to restart Oracle sidecar",
+      });
+    } finally {
+      if (restartBtn) {
+        restartBtn.disabled = false;
+      }
     }
   }
 
@@ -419,6 +463,12 @@ class CompareConfigTool extends BaseTool {
     const closeConnectionsBtn = document.querySelector(".btn-close-connections");
     if (closeConnectionsBtn) {
       closeConnectionsBtn.addEventListener("click", () => this.closeAllConnections());
+    }
+
+    // Sidecar restart button
+    const sidecarRestartBtn = document.getElementById("btn-sidecar-restart");
+    if (sidecarRestartBtn) {
+      sidecarRestartBtn.addEventListener("click", () => this.handleSidecarRestart());
     }
 
     // Installation guide events

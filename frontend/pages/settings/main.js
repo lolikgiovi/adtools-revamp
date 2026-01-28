@@ -534,8 +534,16 @@ class SettingsPage {
             <div class="oracle-conn-info">
               <span class="oracle-conn-name">${esc(c.name)}</span>
               <span class="oracle-conn-string">${esc(c.connect_string)}</span>
+              <span class="oracle-conn-status" id="oracle-conn-status-${i}"></span>
             </div>
             <div class="oracle-conn-actions">
+              <button class="btn btn-outline btn-sm oracle-check-conn" data-index="${i}" data-name="${esc(c.name)}" title="Test connection">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Check
+              </button>
               <button class="btn btn-outline btn-sm oracle-edit-conn" data-index="${i}">Edit</button>
               <button class="btn btn-outline btn-sm btn-danger oracle-delete-conn" data-index="${i}">Delete</button>
             </div>
@@ -655,10 +663,101 @@ class SettingsPage {
         }
       });
 
-      // Event delegation for edit/delete
+      // Event delegation for check/edit/delete
       listEl.addEventListener("click", async (e) => {
+        const checkBtn = e.target.closest(".oracle-check-conn");
         const editBtn = e.target.closest(".oracle-edit-conn");
         const deleteBtn = e.target.closest(".oracle-delete-conn");
+
+        if (checkBtn) {
+          const idx = parseInt(checkBtn.dataset.index, 10);
+          const connName = checkBtn.dataset.name;
+          const statusEl = document.getElementById(`oracle-conn-status-${idx}`);
+
+          // Disable button during check
+          checkBtn.disabled = true;
+          checkBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; animation: spin 1s linear infinite;">
+              <circle cx="12" cy="12" r="10" opacity="0.3"/>
+              <path d="M12 2 a10 10 0 0 1 0 20"/>
+            </svg>
+            Checking...
+          `;
+          if (statusEl) {
+            statusEl.textContent = "";
+            statusEl.className = "oracle-conn-status";
+          }
+
+          try {
+            // Fetch credentials from keychain
+            const [username, password] = await invoke("get_oracle_credentials", { name: connName });
+            if (!username) {
+              throw new Error("No credentials found. Edit the connection to add credentials.");
+            }
+
+            // Get connection config
+            const conns = this.service.getValue(storageKey, "oracle-connections", []);
+            const conn = conns[idx];
+            if (!conn) throw new Error("Connection not found");
+
+            // Test connection via sidecar or Tauri backend
+            try {
+              // Try sidecar first (preferred)
+              const response = await fetch("http://127.0.0.1:21522/test-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  connection: {
+                    name: connName,
+                    connect_string: conn.connect_string,
+                    username,
+                    password,
+                  },
+                }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail?.message || err.detail || "Connection failed");
+              }
+              // Success via sidecar
+              if (statusEl) {
+                statusEl.textContent = "✓ Connected";
+                statusEl.className = "oracle-conn-status success";
+              }
+            } catch (fetchErr) {
+              // Fallback to Tauri backend if sidecar not available
+              if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+                await invoke("test_oracle_connection", {
+                  config: { name: connName, connect_string: conn.connect_string },
+                  username,
+                  password,
+                });
+                if (statusEl) {
+                  statusEl.textContent = "✓ Connected";
+                  statusEl.className = "oracle-conn-status success";
+                }
+              } else {
+                throw fetchErr;
+              }
+            }
+          } catch (err) {
+            const errMsg = String(err.message || err);
+            if (statusEl) {
+              statusEl.textContent = `✗ ${errMsg.length > 50 ? errMsg.substring(0, 50) + "..." : errMsg}`;
+              statusEl.className = "oracle-conn-status error";
+            }
+          } finally {
+            checkBtn.disabled = false;
+            checkBtn.innerHTML = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              Check
+            `;
+          }
+        }
 
         if (editBtn) {
           const idx = parseInt(editBtn.dataset.index, 10);

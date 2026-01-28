@@ -4027,6 +4027,49 @@
   font-weight: 500;
 }
 
+.sidecar-status-indicator .btn-sidecar-restart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 0.25rem;
+  border: none;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidecar-status-indicator .btn-sidecar-restart:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.sidecar-status-indicator .btn-sidecar-restart:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sidecar-status-indicator .btn-sidecar-restart svg {
+  animation: none;
+}
+
+.sidecar-status-indicator .btn-sidecar-restart:not(:disabled):hover svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

@@ -72,6 +72,12 @@ export const CompareConfigTemplate = /* html */ `
                 <div id="sidecar-status-indicator" class="sidecar-status-indicator tauri-only">
                     <span class="status-dot stopped"></span>
                     <span class="status-text">Disconnected</span>
+                    <button class="btn-sidecar-restart" id="btn-sidecar-restart" title="Restart Oracle sidecar" style="display: none;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                    </button>
                 </div>
                 <!-- Connection Status Indicator (Tauri modes only) -->
                 <div id="connection-status" class="connection-status tauri-only" style="display: none;">

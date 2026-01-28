@@ -152,6 +152,35 @@ export class OracleSidecarClient {
   }
 
   /**
+   * Restart the sidecar process (stop + start)
+   * Useful when sidecar crashes or becomes unresponsive
+   * @returns {Promise<boolean>} True if restart succeeded
+   */
+  async restart() {
+    console.log("[OracleSidecar] Restarting sidecar...");
+    this._setStatus(SidecarStatus.STARTING);
+
+    try {
+      // Stop first (ignore errors - sidecar might already be dead)
+      await this.stop().catch(() => {});
+
+      // Small delay to ensure cleanup
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Start fresh
+      const success = await this.start();
+      if (success) {
+        console.log("[OracleSidecar] Restart successful");
+      }
+      return success;
+    } catch (error) {
+      console.error("[OracleSidecar] Restart failed:", error);
+      this._setStatus(SidecarStatus.ERROR);
+      return false;
+    }
+  }
+
+  /**
    * Check if sidecar is ready for queries
    */
   isReady() {
@@ -262,16 +291,118 @@ export class OracleSidecarClient {
 }
 
 /**
- * Error class for Oracle sidecar errors
+ * Error class for Oracle sidecar errors with user-friendly messages
  */
 export class OracleSidecarError extends Error {
   constructor(detail) {
-    const message = typeof detail === "string" ? detail : detail.message || "Unknown error";
-    super(message);
+    const rawMessage = typeof detail === "string" ? detail : detail.message || "Unknown error";
+    const parsed = parseOracleErrorMessage(rawMessage);
+    super(parsed.friendlyMessage);
     this.name = "OracleSidecarError";
-    this.code = typeof detail === "object" ? detail.code || 0 : 0;
-    this.hint = typeof detail === "object" ? detail.hint : null;
+    this.code = typeof detail === "object" ? detail.code || parsed.code || 0 : parsed.code || 0;
+    this.hint = typeof detail === "object" ? detail.hint || parsed.hint : parsed.hint;
+    this.rawMessage = rawMessage;
   }
+}
+
+/**
+ * Parse Oracle error messages and return user-friendly versions
+ * @param {string} errorMessage - Raw error message
+ * @returns {{code: string|null, friendlyMessage: string, hint: string|null}}
+ */
+function parseOracleErrorMessage(errorMessage) {
+  if (!errorMessage) {
+    return { code: null, friendlyMessage: "An unknown error occurred.", hint: null };
+  }
+
+  const errorStr = String(errorMessage);
+
+  // Common Oracle error patterns with hints
+  const oracleErrors = {
+    "ORA-12154": {
+      message: "TNS name could not be resolved",
+      hint: "Check the connection host/service name is correct.",
+    },
+    "ORA-12514": {
+      message: "Service name not found",
+      hint: "Verify the service name exists on the target database.",
+    },
+    "ORA-12541": {
+      message: "No listener at the specified host/port",
+      hint: "Check if the database is running and the port is correct.",
+    },
+    "ORA-12543": {
+      message: "Connection refused",
+      hint: "The database may be down or blocked by a firewall.",
+    },
+    "ORA-01017": {
+      message: "Invalid username or password",
+      hint: "Check your credentials in Settings → Oracle Connections.",
+    },
+    "ORA-28000": {
+      message: "Account is locked",
+      hint: "Contact your DBA to unlock the account.",
+    },
+    "ORA-00942": {
+      message: "Table or view does not exist",
+      hint: "Check the schema and table name are correct.",
+    },
+    "ORA-00904": {
+      message: "Invalid column name",
+      hint: "Verify the column exists in the table.",
+    },
+    "ORA-01031": {
+      message: "Insufficient privileges",
+      hint: "Request access from your DBA.",
+    },
+    "ORA-12170": {
+      message: "Connection timed out",
+      hint: "The database may be unreachable or slow. Try again.",
+    },
+    "DPY-6005": {
+      message: "Cannot connect to database",
+      hint: "Check network connectivity and connection string format.",
+    },
+    "DPY-4011": {
+      message: "Connection closed",
+      hint: "The database connection was lost. Try again.",
+    },
+  };
+
+  for (const [code, info] of Object.entries(oracleErrors)) {
+    if (errorStr.includes(code)) {
+      return { code, friendlyMessage: info.message, hint: info.hint };
+    }
+  }
+
+  // Check for timeout patterns
+  if (errorStr.toLowerCase().includes("timeout")) {
+    return {
+      code: "TIMEOUT",
+      friendlyMessage: "Connection timed out",
+      hint: "The database may be slow or unreachable.",
+    };
+  }
+
+  // Check for network patterns
+  if (errorStr.toLowerCase().includes("network") || errorStr.toLowerCase().includes("socket")) {
+    return {
+      code: "NETWORK",
+      friendlyMessage: "Network error",
+      hint: "Check your connection to the database network.",
+    };
+  }
+
+  // Check for sidecar-specific errors
+  if (errorStr.includes("Sidecar not responding") || errorStr.includes("fetch failed")) {
+    return {
+      code: "SIDECAR",
+      friendlyMessage: "Oracle sidecar is not responding",
+      hint: "Try restarting the sidecar using the status indicator.",
+    };
+  }
+
+  return { code: null, friendlyMessage: errorStr, hint: null };
 }
 
 /**
