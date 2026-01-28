@@ -108,13 +108,19 @@ pub fn run() {
       Ok(())
     })
     .on_window_event(|window, event| {
-      if let tauri::WindowEvent::Destroyed = event {
-        let app = window.app_handle().clone();
-        tauri::async_runtime::spawn(async move {
-          if let Err(e) = oracle_sidecar::stop_oracle_sidecar(app).await {
-            log::warn!("Failed to stop Oracle sidecar on window close: {}", e);
-          }
-        });
+      match event {
+        tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+          let app = window.app_handle().clone();
+          tauri::async_runtime::spawn(async move {
+            // First try graceful shutdown via our managed child process
+            if let Err(e) = oracle_sidecar::stop_oracle_sidecar(app).await {
+              log::warn!("Failed to stop Oracle sidecar gracefully: {}", e);
+            }
+            // Also kill by port as fallback (handles edge cases)
+            oracle_sidecar::kill_sidecar_by_port();
+          });
+        }
+        _ => {}
       }
     })
     .on_menu_event(|app, event| {
