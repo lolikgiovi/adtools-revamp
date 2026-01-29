@@ -29,6 +29,7 @@ import { JenkinsRunner } from "./tools/run-query/main.js";
 import { RunBatch } from "./tools/run-batch/main.js";
 import { MasterLockey } from "./tools/master-lockey/main.js";
 import { CompareConfigTool } from "./tools/compare-config/main.js";
+import { MergeSqlTool } from "./tools/merge-sql/main.js";
 import { RegisterPage } from "./pages/register/main.js";
 import { AnalyticsDashboardPage } from "./pages/analytics-dashboard/main.js";
 import { isTauri } from "./core/Runtime.js";
@@ -288,6 +289,10 @@ class App {
     // Register Compare Config
     const compareConfig = new CompareConfigTool(this.eventBus);
     this.registerTool(compareConfig);
+
+    // Register Merge SQL
+    const mergeSql = new MergeSqlTool(this.eventBus);
+    this.registerTool(mergeSql);
 
     // Add more tools here as they are implemented
   }

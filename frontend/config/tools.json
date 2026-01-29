@@ -132,6 +132,16 @@
       "order": 80
     },
     {
+      "id": "merge-sql",
+      "name": "Merge SQL",
+      "category": "config",
+      "icon": "merge-sql",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 85
+    },
+    {
       "id": "check-image",
       "name": "Check Image",
       "category": "config",
