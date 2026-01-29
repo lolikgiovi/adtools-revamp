@@ -154,9 +154,6 @@ class CompareConfigTool extends BaseTool {
     this.gridView.onSortChange = () => {
       this.renderResults();
     };
-
-    // Connection status polling
-    this.connectionStatusInterval = null;
   }
 
   getIconSvg() {
@@ -184,8 +181,6 @@ class CompareConfigTool extends BaseTool {
       await this.loadToolState();
       // Initialize unified mode UI (populates connection dropdowns, restores cached files)
       this.initUnifiedModeUI();
-      // Start connection status polling
-      this.startConnectionStatusPolling();
     } else {
       // Web mode: Still load tool state for view preferences and Excel compare results
       await this.loadToolState();
@@ -482,12 +477,6 @@ class CompareConfigTool extends BaseTool {
 
     // Bulk Select tab events
     this.bindBulkSelectEvents();
-
-    // Connection status close button
-    const closeConnectionsBtn = document.querySelector(".btn-close-connections");
-    if (closeConnectionsBtn) {
-      closeConnectionsBtn.addEventListener("click", () => this.closeAllConnections());
-    }
 
     // Sidecar restart button
     const sidecarRestartBtn = document.getElementById("btn-sidecar-restart");
@@ -2292,11 +2281,7 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track error for debugging insights (rich error with code, stack)
-      UsageTracker.trackEvent(
-        "compare-config",
-        "comparison_error",
-        UsageTracker.enrichErrorMeta(error, { mode: "excel" }),
-      );
+      UsageTracker.trackEvent("compare-config", "comparison_error", UsageTracker.enrichErrorMeta(error, { mode: "excel" }));
     }
   }
 
@@ -2569,7 +2554,7 @@ class CompareConfigTool extends BaseTool {
     sortedFiles.forEach((fileWrapper) => {
       const file = fileWrapper.file;
       const item = document.createElement("div");
-      item.className = "file-item";
+      item.className = "excel-file-item";
 
       item.innerHTML = `
         <div class="file-icon">
@@ -2713,11 +2698,7 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track error for debugging insights (rich error with code, stack)
-      UsageTracker.trackEvent(
-        "compare-config",
-        "comparison_error",
-        UsageTracker.enrichErrorMeta(error, { mode: "excel_batch" }),
-      );
+      UsageTracker.trackEvent("compare-config", "comparison_error", UsageTracker.enrichErrorMeta(error, { mode: "excel_batch" }));
     }
   }
 
@@ -2876,9 +2857,6 @@ class CompareConfigTool extends BaseTool {
           message: `${friendlyError}. Please check your connections and try again.`,
         });
 
-        // Update connection status to reflect potential disconnection
-        this.updateConnectionStatus();
-
         // Track connection error (rich error with code, stack)
         UsageTracker.trackEvent(
           "compare-config",
@@ -3032,8 +3010,6 @@ class CompareConfigTool extends BaseTool {
           type: "error",
           message: `${friendlyError}. Please check your connections and try again.`,
         });
-        this.updateConnectionStatus();
-
         // Track connection error (rich error with code, stack)
         UsageTracker.trackEvent(
           "compare-config",
@@ -3141,7 +3117,6 @@ class CompareConfigTool extends BaseTool {
       const reconnected = updatedConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
 
       if (reconnected) {
-        this.updateConnectionStatus();
         return { success: true, message: "Reconnected successfully" };
       }
 
@@ -3194,7 +3169,6 @@ class CompareConfigTool extends BaseTool {
       const reconnected = updatedConnections.find((c) => c.connect_string === env.connection.connect_string && c.is_alive);
 
       if (reconnected) {
-        this.updateConnectionStatus();
         console.log(`[Connection] ${envLabel} reconnected successfully`);
         return { success: true, message: "Reconnected successfully" };
       }
@@ -3911,7 +3885,9 @@ class CompareConfigTool extends BaseTool {
    */
   formatPrimaryKeyForSearch(keyMap) {
     if (!keyMap || typeof keyMap !== "object") return "";
-    return Object.values(keyMap).map((v) => String(v ?? "")).join(" ");
+    return Object.values(keyMap)
+      .map((v) => String(v ?? ""))
+      .join(" ");
   }
 
   /**
@@ -4511,145 +4487,6 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Starts polling for connection status
-   */
-  startConnectionStatusPolling() {
-    // Update immediately
-    this.updateConnectionStatus();
-
-    // Poll every 5 seconds
-    this.connectionStatusInterval = setInterval(() => {
-      this.updateConnectionStatus();
-    }, 5000);
-  }
-
-  /**
-   * Stops connection status polling
-   */
-  stopConnectionStatusPolling() {
-    if (this.connectionStatusInterval) {
-      clearInterval(this.connectionStatusInterval);
-      this.connectionStatusInterval = null;
-    }
-  }
-
-  /**
-   * Updates the connection status indicator UI
-   */
-  async updateConnectionStatus() {
-    try {
-      const connections = await CompareConfigService.getActiveConnections();
-      const statusEl = document.getElementById("connection-status");
-      const listEl = statusEl?.querySelector(".connection-list");
-
-      if (!statusEl || !listEl) return;
-
-      const activeConnections = connections.filter((c) => c.is_alive);
-
-      // Filter to only connections with valid display info
-      const validConnections = activeConnections.filter((conn) => {
-        const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
-        return savedConn?.name || conn.connect_string;
-      });
-
-      if (validConnections.length > 0) {
-        statusEl.style.display = "flex";
-        listEl.innerHTML = validConnections
-          .map((conn) => {
-            // Look up the saved connection name
-            const savedConn = this.savedConnections.find((sc) => sc.connect_string === conn.connect_string);
-            const displayName = savedConn?.name || conn.connect_string;
-            return `
-              <span class="connection-chip" title="${conn.connect_string}">
-                <span class="chip-name">${displayName}</span>
-                <button class="chip-close" data-connect-string="${conn.connect_string}" data-username="${conn.username}" title="Close connection">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </span>`;
-          })
-          .join("");
-
-        // Attach click handlers to individual close buttons
-        listEl.querySelectorAll(".chip-close").forEach((btn) => {
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const connectString = btn.dataset.connectString;
-            const username = btn.dataset.username;
-            this.closeSingleConnection(connectString, username);
-          });
-        });
-      } else {
-        statusEl.style.display = "none";
-        listEl.innerHTML = "";
-      }
-    } catch (error) {
-      console.error("Failed to update connection status:", error);
-    }
-  }
-
-  /**
-   * Closes a single connection by connect string and username.
-   * Also syncs dropdown state when a connection is closed.
-   */
-  async closeSingleConnection(connectString, username) {
-    try {
-      await CompareConfigService.closeConnection(connectString, username);
-
-      // Sync dropdown state - clear env if it matches the closed connection
-      if (this.env1.connection?.connect_string === connectString) {
-        this.env1.connection = null;
-        const env1Select = document.getElementById("env1-connection");
-        if (env1Select) env1Select.value = "";
-      }
-      if (this.env2.connection?.connect_string === connectString) {
-        this.env2.connection = null;
-        const env2Select = document.getElementById("env2-connection");
-        if (env2Select) env2Select.value = "";
-      }
-      if (this.rawenv1.connection?.connect_string === connectString) {
-        this.rawenv1.connection = null;
-        const rawEnv1Select = document.getElementById("raw-env1-connection");
-        if (rawEnv1Select) rawEnv1Select.value = "";
-      }
-      if (this.rawenv2.connection?.connect_string === connectString) {
-        this.rawenv2.connection = null;
-        const rawEnv2Select = document.getElementById("raw-env2-connection");
-        if (rawEnv2Select) rawEnv2Select.value = "";
-      }
-
-      this.updateConnectionStatus();
-      this.saveToolState();
-
-      this.eventBus.emit("notification:show", {
-        type: "info",
-        message: "Connection closed",
-      });
-    } catch (error) {
-      console.error("Failed to close connection:", error);
-    }
-  }
-
-  /**
-   * Handles closing all connections
-   */
-  async closeAllConnections() {
-    try {
-      await CompareConfigService.closeAllConnections();
-      this.updateConnectionStatus();
-
-      // If no comparison results, reset to empty state
-      if (!this.results[this.queryMode]) {
-        this.resetToEmptyState();
-      }
-    } catch (error) {
-      console.error("Failed to close connections:", error);
-    }
-  }
-
-  /**
    * Resets the UI to empty state (no results), optionally showing an error
    * @param {string} errorMessage - Optional error message to display
    */
@@ -4686,10 +4523,7 @@ class CompareConfigTool extends BaseTool {
     }
   }
 
-  onUnmount() {
-    // Stop connection status polling
-    this.stopConnectionStatusPolling();
-  }
+  onUnmount() {}
 
   // =============================================================================
   // IndexedDB State Management
@@ -6694,7 +6528,7 @@ class CompareConfigTool extends BaseTool {
           .sort((a, b) => a.file.name.localeCompare(b.file.name))
           .map(
             (f) => `
-          <div class="file-item" data-file-id="${f.id}">
+          <div class="excel-file-item" data-file-id="${f.id}">
             <span class="file-name">${f.file.name}</span>
             <button class="btn btn-ghost btn-xs btn-remove-file" title="Remove">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6710,7 +6544,7 @@ class CompareConfigTool extends BaseTool {
         // Bind remove buttons
         fileListEl.querySelectorAll(".btn-remove-file").forEach((btn) => {
           btn.addEventListener("click", (e) => {
-            const fileItem = e.target.closest(".file-item");
+            const fileItem = e.target.closest(".excel-file-item");
             const fileId = fileItem?.dataset.fileId;
             if (fileId) {
               this.removeUnifiedExcelFile(sourceKey, fileId);
@@ -7797,11 +7631,7 @@ class CompareConfigTool extends BaseTool {
 
       // Track error for debugging insights (rich error with code, stack)
       const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
-      UsageTracker.trackEvent(
-        "compare-config",
-        "comparison_error",
-        UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }),
-      );
+      UsageTracker.trackEvent("compare-config", "comparison_error", UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }));
     }
   }
 
@@ -8551,8 +8381,7 @@ class CompareConfigTool extends BaseTool {
     const { index, status, rowA, rowB, differences } = comp;
     const diffSet = new Set(differences);
 
-    const statusLabel =
-      status === "match" ? "Match" : status === "differ" ? "Differ" : status === "only_in_a" ? "Only A" : "Only B";
+    const statusLabel = status === "match" ? "Match" : status === "differ" ? "Differ" : status === "only_in_a" ? "Only A" : "Only B";
 
     const statusClass = status === "match" ? "match" : status === "differ" ? "differ" : "missing";
 

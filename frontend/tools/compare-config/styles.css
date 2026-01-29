@@ -2327,106 +2327,6 @@
   margin: 0;
 }
 
-/* ============================================
-   CONNECTION STATUS INDICATOR
-   ============================================ */
-
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  background: hsl(var(--success) / 0.1);
-  border: 1px solid hsl(var(--success) / 0.3);
-  border-radius: var(--radius);
-  font-size: 0.75rem;
-  color: hsl(var(--success));
-  animation: fadeIn 0.2s ease-out;
-}
-
-.connection-indicator {
-  width: 8px;
-  height: 8px;
-  background: hsl(var(--success));
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(0.9);
-  }
-}
-
-.connection-list {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.connection-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px 2px 8px;
-  background: hsl(var(--success) / 0.15);
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: hsl(var(--success));
-  max-width: 150px;
-}
-
-.connection-chip .chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100px;
-}
-
-.connection-chip .chip-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  color: hsl(var(--success) / 0.6);
-  cursor: pointer;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.connection-chip .chip-close:hover {
-  color: hsl(var(--destructive));
-  background: hsl(var(--destructive) / 0.15);
-}
-
-.btn-close-connections {
-  margin-left: 4px;
-  padding: 2px 4px !important;
-  color: hsl(var(--success) / 0.7);
-  flex-shrink: 0;
-  transition: color 0.15s ease;
-}
-
-.btn-close-connections:hover {
-  color: hsl(var(--destructive));
-  background: hsl(var(--destructive) / 0.1);
-}
-
 .btn-xs {
   padding: 2px 6px;
   font-size: 0.7rem;
@@ -2661,7 +2561,7 @@
   padding: 0.5rem 0.5rem; /* Adjusted horizontal padding */
 }
 
-.file-item {
+.excel-file-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -2673,27 +2573,26 @@
   color: hsl(var(--foreground));
   box-shadow: 0 1px 2px hsl(var(--shadow, 0 0% 0%) / 0.05);
   transition: all 0.2s ease;
-  width: auto; /* Ensure it doesn't overflow container padding */
-  overflow: hidden; /* Contain children */
+  overflow: hidden;
 }
 
-.file-item.paired {
+.excel-file-item.paired {
   border-left: 3px solid hsl(var(--primary));
   background: hsl(var(--primary) / 0.03);
 }
 
-.file-item:hover {
+.excel-file-item:hover {
   border-color: hsl(var(--border-hover));
 }
 
-.file-item .file-icon {
+.excel-file-item .file-icon {
   color: hsl(var(--primary));
   flex-shrink: 0;
   display: flex;
   align-items: center;
 }
 
-.file-item .file-name {
+.excel-file-item .file-name {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -2702,14 +2601,14 @@
   min-width: 0; /* Allow shrink */
 }
 
-.file-item .file-actions {
+.excel-file-item .file-actions {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0; /* Don't squash buttons */
 }
 
-.file-item .btn-remove-file {
+.excel-file-item .btn-remove-file {
   color: hsl(var(--muted-foreground));
   padding: 2px;
   border-radius: 4px;
@@ -2717,11 +2616,11 @@
   /* transition: all 0.2s ease; */
 }
 
-.file-item:hover .btn-remove-file {
+.excel-file-item:hover .btn-remove-file {
   opacity: 1;
 }
 
-.file-item .btn-remove-file:hover {
+.excel-file-item .btn-remove-file:hover {
   color: hsl(var(--destructive));
   /* background: hsl(var(--destructive) / 0.1); */
 }

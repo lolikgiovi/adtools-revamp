@@ -85,19 +85,6 @@ export const CompareConfigTemplate = /* html */ `
                         </svg>
                     </button>
                 </div>
-                <!-- Connection Status Indicator (Tauri modes only) -->
-                <div id="connection-status" class="connection-status tauri-only" style="display: none;">
-                    <span class="connection-indicator"></span>
-                    <div class="connection-list">
-                        <!-- Connection chips will be populated here -->
-                    </div>
-                    <button class="btn btn-ghost btn-xs btn-close-connections" title="Close all connections">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
             </div>
         </div>
 
