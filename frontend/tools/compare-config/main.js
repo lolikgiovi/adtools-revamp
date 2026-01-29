@@ -854,6 +854,22 @@ class CompareConfigTool extends BaseTool {
         }
       });
     }
+
+    // Filter toggle button
+    const filterToggleBtn = document.getElementById("btn-toggle-filter");
+    const searchBox = document.getElementById("results-search-box");
+
+    if (filterToggleBtn && searchBox) {
+      filterToggleBtn.addEventListener("click", () => {
+        const isVisible = searchBox.style.display !== "none";
+        searchBox.style.display = isVisible ? "none" : "flex";
+        filterToggleBtn.classList.toggle("active", !isVisible);
+        // Focus the input when showing
+        if (!isVisible && searchInput) {
+          searchInput.focus();
+        }
+      });
+    }
   }
 
   // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
@@ -3556,18 +3572,18 @@ class CompareConfigTool extends BaseTool {
     const resultsSection = document.getElementById("results-section");
     if (!resultsSection) return;
 
-    // Update title with schema.table name
+    // Update title with comparison info (without "Comparison Results:" prefix)
     const titleEl = document.getElementById("results-title");
     if (titleEl) {
       if (this.queryMode === "unified" && this.results.unified) {
         const result = this.results.unified;
-        titleEl.textContent = `Comparison Results: ${result.env1_name || "Source A"} vs ${result.env2_name || "Source B"}`;
+        titleEl.textContent = `${result.env1_name || "Source A"} vs ${result.env2_name || "Source B"}`;
       } else if (this.queryMode === "schema-table" && this.schema && this.table) {
-        titleEl.textContent = `Comparison Results for ${this.schema}.${this.table}`;
+        titleEl.textContent = `${this.schema}.${this.table}`;
       } else if (this.queryMode === "raw-sql") {
-        titleEl.textContent = "Comparison Results (Raw SQL)";
+        titleEl.textContent = "Raw SQL Comparison";
       } else if (this.queryMode === "excel-compare") {
-        titleEl.textContent = "Comparison Results (Excel/CSV)";
+        titleEl.textContent = "Excel/CSV Comparison";
       } else {
         titleEl.textContent = "Comparison Results";
       }

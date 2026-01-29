@@ -663,19 +663,14 @@ export const CompareConfigTemplate = /* html */ `
                     <!-- Summary will be populated here -->
                 </div>
                 <div class="results-actions">
-                    <div class="results-search-box">
-                        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <div class="results-actions-row">
+                    <button class="btn btn-ghost btn-sm" id="btn-toggle-filter">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
-                        <input type="text" id="results-search-input" class="results-search-input" placeholder="Filter results..." />
-                        <button id="results-search-clear" class="results-search-clear" title="Clear search" style="display: none;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
+                        Filter
+                    </button>
                     <div class="view-dropdown" id="view-dropdown">
                         <button class="btn btn-secondary btn-sm" id="btn-view">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
@@ -757,6 +752,20 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
                     <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
+                    </div>
+                    <div class="results-search-box" id="results-search-box" style="display: none;">
+                        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input type="text" id="results-search-input" class="results-search-input" placeholder="Filter results..." />
+                        <button id="results-search-clear" class="results-search-clear" title="Clear search" style="display: none;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
 
