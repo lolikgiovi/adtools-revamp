@@ -199,53 +199,6 @@ export class MergeSqlTool extends BaseTool {
       });
     }
 
-    this.bindDropZone();
-  }
-
-  bindDropZone() {
-    const container = document.querySelector(".merge-sql-container");
-
-    if (container) {
-      container.addEventListener("dragover", (e) => {
-        if (this.draggedItem) return;
-        e.preventDefault();
-        container.classList.add("drag-active");
-      });
-
-      container.addEventListener("dragleave", (e) => {
-        if (!container.contains(e.relatedTarget)) {
-          container.classList.remove("drag-active");
-        }
-      });
-
-      container.addEventListener("drop", (e) => {
-        if (this.draggedItem) return;
-        e.preventDefault();
-        container.classList.remove("drag-active");
-        this.handleExternalDrop(e);
-      });
-    }
-  }
-
-  handleExternalDrop(e) {
-    if (this.draggedItem) return;
-
-    const items = e.dataTransfer?.items;
-    if (!items) return;
-
-    const files = [];
-    for (const item of items) {
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file && file.name.toLowerCase().endsWith(".sql")) {
-          files.push(file);
-        }
-      }
-    }
-
-    if (files.length > 0) {
-      this.addFiles(files);
-    }
   }
 
   handleFileSelect(e) {

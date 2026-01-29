@@ -465,11 +465,4 @@
   }
 }
 
-/* ============================================
-   DRAG & DROP OVERLAY
-   ============================================ */
 
-.merge-sql-container.drag-active .file-list-container {
-  border: 2px dashed hsl(var(--primary));
-  background: hsl(var(--primary) / 0.05);
-}

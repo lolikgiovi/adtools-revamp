@@ -69,8 +69,8 @@ export const MergeSqlTemplate = /* html */ `
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
-          <p>Drop SQL files here or use the buttons above</p>
-          <span class="hint">Supports .sql files only</span>
+          <p>No SQL files added</p>
+          <span class="hint">Use the buttons above to add .sql files</span>
         </div>
         <div class="file-list-items" id="merge-sql-file-items"></div>
       </div>
