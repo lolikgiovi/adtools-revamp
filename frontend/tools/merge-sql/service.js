@@ -127,31 +127,26 @@ export class MergeSqlService {
   static mergeFiles(parsedFiles) {
     const allDmlStatements = [];
     const allSelectStatements = [];
-    const statementFileMap = new Map(); // Track which files contain each statement
+    const dmlStatementFileMap = new Map(); // Track which files contain each DML statement (for duplicate detection)
 
     for (const file of parsedFiles) {
       for (const stmt of file.dmlStatements) {
         const normalized = this.normalizeStatement(stmt);
-        if (!statementFileMap.has(normalized)) {
-          statementFileMap.set(normalized, { statement: stmt, files: [] });
+        if (!dmlStatementFileMap.has(normalized)) {
+          dmlStatementFileMap.set(normalized, { statement: stmt, files: [] });
         }
-        statementFileMap.get(normalized).files.push(file.fileName);
+        dmlStatementFileMap.get(normalized).files.push(file.fileName);
         allDmlStatements.push({ statement: stmt, fileName: file.fileName });
       }
 
       for (const stmt of file.selectStatements) {
-        const normalized = this.normalizeStatement(stmt);
-        if (!statementFileMap.has(normalized)) {
-          statementFileMap.set(normalized, { statement: stmt, files: [] });
-        }
-        statementFileMap.get(normalized).files.push(file.fileName);
         allSelectStatements.push({ statement: stmt, fileName: file.fileName });
       }
     }
 
-    // Find duplicates
+    // Find duplicates (only for DML statements, not SELECT)
     const duplicates = [];
-    for (const [_, info] of statementFileMap) {
+    for (const [_, info] of dmlStatementFileMap) {
       if (info.files.length > 1) {
         duplicates.push({
           statement: info.statement,

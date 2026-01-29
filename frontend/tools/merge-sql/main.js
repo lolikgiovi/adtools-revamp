@@ -3,13 +3,13 @@
  * Merges multiple SQL files into combined MERGE/INSERT/UPDATE and SELECT files
  */
 
-import * as monaco from "monaco-editor";
 import "./styles.css";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
-import { ensureMonacoWorkers, setupMonacoOracle } from "../../core/MonacoOracle.js";
+import { createOracleEditor } from "../../core/MonacoOracle.js";
+import * as IndexedDBManager from "./indexeddb-manager.js";
 
 export class MergeSqlTool extends BaseTool {
   constructor(eventBus) {
@@ -28,6 +28,8 @@ export class MergeSqlTool extends BaseTool {
     this.selectEditor = null;
     this.currentTab = "merged";
     this.result = null;
+    this.draggedItem = null;
+    this.saveDebounceTimer = null;
   }
 
   getIconSvg() {
@@ -41,10 +43,14 @@ export class MergeSqlTool extends BaseTool {
   async onMount() {
     this.initMonaco();
     this.bindEvents();
+    await this.loadFromIndexedDB();
     this.updateUI();
   }
 
   onUnmount() {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+    }
     if (this.mergedEditor) {
       this.mergedEditor.dispose();
       this.mergedEditor = null;
@@ -56,16 +62,10 @@ export class MergeSqlTool extends BaseTool {
   }
 
   initMonaco() {
-    ensureMonacoWorkers();
-    setupMonacoOracle();
-
     const mergedContainer = document.getElementById("merge-sql-merged-editor");
     const selectContainer = document.getElementById("merge-sql-select-editor");
 
     const editorOptions = {
-      language: "sql",
-      theme: "vs-dark",
-      minimap: { enabled: false },
       fontSize: 13,
       lineNumbers: "on",
       scrollBeyondLastLine: false,
@@ -76,18 +76,84 @@ export class MergeSqlTool extends BaseTool {
     };
 
     if (mergedContainer) {
-      this.mergedEditor = monaco.editor.create(mergedContainer, {
-        ...editorOptions,
-        value: "",
-      });
+      this.mergedEditor = createOracleEditor(mergedContainer, editorOptions);
+      this.mergedEditor.onDidChangeModelContent(() => this.debounceSaveResults());
     }
 
     if (selectContainer) {
-      this.selectEditor = monaco.editor.create(selectContainer, {
-        ...editorOptions,
-        value: "",
-      });
+      this.selectEditor = createOracleEditor(selectContainer, editorOptions);
+      this.selectEditor.onDidChangeModelContent(() => this.debounceSaveResults());
     }
+  }
+
+  async loadFromIndexedDB() {
+    const [files, state, results] = await Promise.all([
+      IndexedDBManager.loadFiles(),
+      IndexedDBManager.loadState(),
+      IndexedDBManager.loadResults(),
+    ]);
+
+    if (files && files.length > 0) {
+      this.files = files;
+    }
+
+    if (state) {
+      this.sortOrder = state.sortOrder || "asc";
+      this.currentTab = state.currentTab || "merged";
+
+      const folderNameInput = document.getElementById("merge-sql-folder-name");
+      if (folderNameInput && state.folderName) {
+        folderNameInput.value = state.folderName;
+      }
+    }
+
+    if (results) {
+      this.result = {
+        mergedSql: results.mergedSql || "",
+        selectSql: results.selectSql || "",
+        duplicates: results.duplicates || [],
+      };
+
+      if (this.mergedEditor && results.mergedSql) {
+        this.mergedEditor.setValue(results.mergedSql);
+      }
+      if (this.selectEditor && results.selectSql) {
+        this.selectEditor.setValue(results.selectSql);
+      }
+
+      if (results.mergedSql || results.selectSql) {
+        this.showResult();
+        this.updateDuplicatesInsight();
+      }
+    }
+
+    this.handleTabSwitch(this.currentTab);
+  }
+
+  debounceSaveResults() {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+    }
+
+    this.saveDebounceTimer = setTimeout(() => {
+      const mergedSql = this.mergedEditor?.getValue() || "";
+      const selectSql = this.selectEditor?.getValue() || "";
+      const duplicates = this.result?.duplicates || [];
+      IndexedDBManager.saveResults(mergedSql, selectSql, duplicates);
+    }, 1000);
+  }
+
+  saveStateToIndexedDB() {
+    const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
+    IndexedDBManager.saveState({
+      sortOrder: this.sortOrder,
+      folderName,
+      currentTab: this.currentTab,
+    });
+  }
+
+  saveFilesToIndexedDB() {
+    IndexedDBManager.saveFiles(this.files);
   }
 
   bindEvents() {
@@ -107,98 +173,86 @@ export class MergeSqlTool extends BaseTool {
     const viewDuplicatesBtn = document.getElementById("merge-sql-view-duplicates");
     const closeDuplicatesBtn = document.getElementById("merge-sql-close-duplicates");
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
-    const fileListContainer = document.getElementById("merge-sql-file-list");
+    const folderNameInput = document.getElementById("merge-sql-folder-name");
 
-    if (addFilesBtn) {
-      addFilesBtn.addEventListener("click", () => fileInput?.click());
-    }
-
-    if (addFolderBtn) {
-      addFolderBtn.addEventListener("click", () => folderInput?.click());
-    }
-
-    if (fileInput) {
-      fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
-    }
-
-    if (folderInput) {
-      folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
-    }
-
-    if (mergeBtn) {
-      mergeBtn.addEventListener("click", () => this.handleMerge());
-    }
-
-    if (clearBtn) {
-      clearBtn.addEventListener("click", () => this.handleClearAll());
-    }
-
-    if (copyBtn) {
-      copyBtn.addEventListener("click", () => this.handleCopy());
-    }
-
-    if (downloadBtn) {
-      downloadBtn.addEventListener("click", () => this.handleDownload());
-    }
-
-    if (downloadAllBtn) {
-      downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
-    }
-
-    if (sortAscBtn) {
-      sortAscBtn.addEventListener("click", () => this.handleSort("asc"));
-    }
-
-    if (sortDescBtn) {
-      sortDescBtn.addEventListener("click", () => this.handleSort("desc"));
-    }
-
-    if (sortManualBtn) {
-      sortManualBtn.addEventListener("click", () => this.handleSort("manual"));
-    }
+    if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
+    if (addFolderBtn) addFolderBtn.addEventListener("click", () => folderInput?.click());
+    if (fileInput) fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
+    if (folderInput) folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
+    if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
+    if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
+    if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
+    if (downloadBtn) downloadBtn.addEventListener("click", () => this.handleDownload());
+    if (downloadAllBtn) downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
+    if (sortAscBtn) sortAscBtn.addEventListener("click", () => this.handleSort("asc"));
+    if (sortDescBtn) sortDescBtn.addEventListener("click", () => this.handleSort("desc"));
+    if (sortManualBtn) sortManualBtn.addEventListener("click", () => this.handleSort("manual"));
+    if (viewDuplicatesBtn) viewDuplicatesBtn.addEventListener("click", () => this.showDuplicatesModal());
+    if (closeDuplicatesBtn) closeDuplicatesBtn.addEventListener("click", () => this.hideDuplicatesModal());
+    if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
+    if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
 
     if (resultTabs) {
       resultTabs.addEventListener("click", (e) => {
         const tab = e.target.closest(".result-tab");
-        if (tab) {
-          this.handleTabSwitch(tab.dataset.tab);
-        }
+        if (tab) this.handleTabSwitch(tab.dataset.tab);
       });
     }
 
-    if (viewDuplicatesBtn) {
-      viewDuplicatesBtn.addEventListener("click", () => this.showDuplicatesModal());
-    }
+    this.bindDropZone();
+  }
 
-    if (closeDuplicatesBtn) {
-      closeDuplicatesBtn.addEventListener("click", () => this.hideDuplicatesModal());
-    }
-
-    if (duplicatesCloseBtn) {
-      duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
-    }
-
-    if (fileListContainer) {
-      fileListContainer.addEventListener("dragover", (e) => this.handleDragOver(e));
-      fileListContainer.addEventListener("drop", (e) => this.handleDrop(e));
-      fileListContainer.addEventListener("dragleave", (e) => this.handleDragLeave(e));
-    }
-
+  bindDropZone() {
     const container = document.querySelector(".merge-sql-container");
+    const fileListContainer = document.getElementById("merge-sql-file-list");
+
     if (container) {
       container.addEventListener("dragover", (e) => {
         e.preventDefault();
         container.classList.add("drag-active");
       });
+
       container.addEventListener("dragleave", (e) => {
         if (!container.contains(e.relatedTarget)) {
           container.classList.remove("drag-active");
         }
       });
+
       container.addEventListener("drop", (e) => {
         e.preventDefault();
         container.classList.remove("drag-active");
+        this.handleExternalDrop(e);
       });
+    }
+
+    if (fileListContainer) {
+      fileListContainer.addEventListener("dragover", (e) => {
+        e.preventDefault();
+      });
+
+      fileListContainer.addEventListener("drop", (e) => {
+        e.preventDefault();
+        this.handleExternalDrop(e);
+      });
+    }
+  }
+
+  handleExternalDrop(e) {
+    const items = e.dataTransfer?.items;
+    if (!items) return;
+
+    const files = [];
+    for (const item of items) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file && file.name.toLowerCase().endsWith(".sql")) {
+          files.push(file);
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      this.addFiles(files);
     }
   }
 
@@ -213,36 +267,6 @@ export class MergeSqlTool extends BaseTool {
     const sqlFiles = files.filter((f) => f.name.toLowerCase().endsWith(".sql"));
     this.addFiles(sqlFiles);
     e.target.value = "";
-  }
-
-  handleDragOver(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  handleDragLeave(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  handleDrop(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const items = e.dataTransfer?.items;
-    if (!items) return;
-
-    const files = [];
-    for (const item of items) {
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file && file.name.toLowerCase().endsWith(".sql")) {
-          files.push(file);
-        }
-      }
-    }
-
-    this.addFiles(files);
   }
 
   addFiles(files) {
@@ -260,11 +284,13 @@ export class MergeSqlTool extends BaseTool {
     }
 
     this.applySorting();
+    this.saveFilesToIndexedDB();
     this.updateUI();
   }
 
   removeFile(fileId) {
     this.files = this.files.filter((f) => f.id !== fileId);
+    this.saveFilesToIndexedDB();
     this.updateUI();
   }
 
@@ -272,6 +298,7 @@ export class MergeSqlTool extends BaseTool {
     this.sortOrder = order;
     this.applySorting();
     this.updateSortButtons();
+    this.saveStateToIndexedDB();
     this.renderFileList();
   }
 
@@ -295,6 +322,7 @@ export class MergeSqlTool extends BaseTool {
 
   handleTabSwitch(tab) {
     this.currentTab = tab;
+    this.saveStateToIndexedDB();
 
     const tabs = document.querySelectorAll(".result-tab");
     tabs.forEach((t) => t.classList.remove("active"));
@@ -332,6 +360,8 @@ export class MergeSqlTool extends BaseTool {
     }
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       const parsedFiles = [];
 
       for (const fileItem of this.files) {
@@ -348,6 +378,8 @@ export class MergeSqlTool extends BaseTool {
       if (this.selectEditor) {
         this.selectEditor.setValue(this.result.selectSql);
       }
+
+      await IndexedDBManager.saveResults(this.result.mergedSql, this.result.selectSql, this.result.duplicates);
 
       this.showResult();
       this.updateDuplicatesInsight();
@@ -370,12 +402,13 @@ export class MergeSqlTool extends BaseTool {
     }
   }
 
-  handleClearAll() {
+  async handleClearAll() {
     this.files = [];
     this.result = null;
     if (this.mergedEditor) this.mergedEditor.setValue("");
     if (this.selectEditor) this.selectEditor.setValue("");
     this.hideResult();
+    await IndexedDBManager.clearAll();
     this.updateUI();
   }
 
@@ -464,7 +497,7 @@ export class MergeSqlTool extends BaseTool {
 
     if (insights) insights.style.display = "flex";
     if (duplicatesText) {
-      duplicatesText.textContent = `${this.result.duplicates.length} duplicate ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
+      duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
     }
   }
 
@@ -530,12 +563,10 @@ export class MergeSqlTool extends BaseTool {
     let html = "";
     for (let i = 0; i < this.files.length; i++) {
       const file = this.files[i];
-      const metadata = MergeSqlService.parseFileName(file.name);
-      const size = this.formatFileSize(file.file.size);
 
       html += `
-        <div class="file-item" draggable="true" data-id="${file.id}" data-index="${i}">
-          <div class="drag-handle">
+        <div class="file-item" draggable="${this.sortOrder === "manual"}" data-id="${file.id}" data-index="${i}">
+          <div class="drag-handle" style="${this.sortOrder === "manual" ? "" : "visibility: hidden;"}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="9" cy="5" r="1"></circle>
               <circle cx="9" cy="12" r="1"></circle>
@@ -553,7 +584,6 @@ export class MergeSqlTool extends BaseTool {
           </div>
           <div class="file-info">
             <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
-            <div class="file-meta">${size}${metadata ? ` • ${metadata.squadName}` : ""}</div>
           </div>
           <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -587,12 +617,17 @@ export class MergeSqlTool extends BaseTool {
       item.addEventListener("dragstart", (e) => this.handleItemDragStart(e, item));
       item.addEventListener("dragend", (e) => this.handleItemDragEnd(e, item));
       item.addEventListener("dragover", (e) => this.handleItemDragOver(e, item));
+      item.addEventListener("dragleave", (e) => this.handleItemDragLeave(e, item));
       item.addEventListener("drop", (e) => this.handleItemDrop(e, item));
     });
   }
 
   handleItemDragStart(e, item) {
-    if (this.sortOrder !== "manual") return;
+    if (this.sortOrder !== "manual") {
+      e.preventDefault();
+      return;
+    }
+    this.draggedItem = item;
     item.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", item.dataset.id);
@@ -600,28 +635,31 @@ export class MergeSqlTool extends BaseTool {
 
   handleItemDragEnd(e, item) {
     item.classList.remove("dragging");
+    this.draggedItem = null;
     document.querySelectorAll(".file-item").forEach((el) => el.classList.remove("drag-over"));
   }
 
   handleItemDragOver(e, item) {
-    if (this.sortOrder !== "manual") return;
+    if (this.sortOrder !== "manual" || !this.draggedItem) return;
     e.preventDefault();
     e.stopPropagation();
 
-    const dragging = document.querySelector(".file-item.dragging");
-    if (!dragging || dragging === item) return;
-
+    if (this.draggedItem === item) return;
     item.classList.add("drag-over");
   }
 
+  handleItemDragLeave(e, item) {
+    item.classList.remove("drag-over");
+  }
+
   handleItemDrop(e, item) {
-    if (this.sortOrder !== "manual") return;
+    if (this.sortOrder !== "manual" || !this.draggedItem) return;
     e.preventDefault();
     e.stopPropagation();
 
     item.classList.remove("drag-over");
 
-    const draggedId = e.dataTransfer.getData("text/plain");
+    const draggedId = this.draggedItem.dataset.id;
     const targetId = item.dataset.id;
 
     if (draggedId === targetId) return;
@@ -634,6 +672,7 @@ export class MergeSqlTool extends BaseTool {
     const [draggedFile] = this.files.splice(draggedIndex, 1);
     this.files.splice(targetIndex, 0, draggedFile);
 
+    this.saveFilesToIndexedDB();
     this.renderFileList();
   }
 
@@ -642,11 +681,5 @@ export class MergeSqlTool extends BaseTool {
     if (mergeBtn) {
       mergeBtn.disabled = this.files.length === 0;
     }
-  }
-
-  formatFileSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 }

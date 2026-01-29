@@ -173,7 +173,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.selectSql).toContain("SELECT * FROM T2");
     });
 
-    it("detects duplicate statements", () => {
+    it("detects duplicate DML statements", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO T1 (c) VALUES (1);"],
@@ -192,6 +192,26 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.duplicates).toHaveLength(1);
       expect(result.duplicates[0].files).toContain("file1.sql");
       expect(result.duplicates[0].files).toContain("file2.sql");
+    });
+
+    it("does not detect duplicates for SELECT statements", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM T1;"],
+          fileName: "file1.sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM T1;"],
+          fileName: "file2.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.duplicates).toHaveLength(0);
+      expect(result.selectSql).toContain("SELECT * FROM T1");
     });
 
     it("handles empty input", () => {
