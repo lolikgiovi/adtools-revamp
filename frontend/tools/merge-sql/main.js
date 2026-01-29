@@ -204,10 +204,10 @@ export class MergeSqlTool extends BaseTool {
 
   bindDropZone() {
     const container = document.querySelector(".merge-sql-container");
-    const fileListContainer = document.getElementById("merge-sql-file-list");
 
     if (container) {
       container.addEventListener("dragover", (e) => {
+        if (this.draggedItem) return;
         e.preventDefault();
         container.classList.add("drag-active");
       });
@@ -219,25 +219,17 @@ export class MergeSqlTool extends BaseTool {
       });
 
       container.addEventListener("drop", (e) => {
+        if (this.draggedItem) return;
         e.preventDefault();
         container.classList.remove("drag-active");
-        this.handleExternalDrop(e);
-      });
-    }
-
-    if (fileListContainer) {
-      fileListContainer.addEventListener("dragover", (e) => {
-        e.preventDefault();
-      });
-
-      fileListContainer.addEventListener("drop", (e) => {
-        e.preventDefault();
         this.handleExternalDrop(e);
       });
     }
   }
 
   handleExternalDrop(e) {
+    if (this.draggedItem) return;
+
     const items = e.dataTransfer?.items;
     if (!items) return;
 
@@ -640,24 +632,28 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleItemDragOver(e, item) {
-    if (this.sortOrder !== "manual" || !this.draggedItem) return;
     e.preventDefault();
     e.stopPropagation();
 
+    if (this.sortOrder !== "manual" || !this.draggedItem) return;
     if (this.draggedItem === item) return;
+
+    e.dataTransfer.dropEffect = "move";
     item.classList.add("drag-over");
   }
 
   handleItemDragLeave(e, item) {
+    e.stopPropagation();
     item.classList.remove("drag-over");
   }
 
   handleItemDrop(e, item) {
-    if (this.sortOrder !== "manual" || !this.draggedItem) return;
     e.preventDefault();
     e.stopPropagation();
 
     item.classList.remove("drag-over");
+
+    if (this.sortOrder !== "manual" || !this.draggedItem) return;
 
     const draggedId = this.draggedItem.dataset.id;
     const targetId = item.dataset.id;
@@ -672,6 +668,7 @@ export class MergeSqlTool extends BaseTool {
     const [draggedFile] = this.files.splice(draggedIndex, 1);
     this.files.splice(targetIndex, 0, draggedFile);
 
+    this.draggedItem = null;
     this.saveFilesToIndexedDB();
     this.renderFileList();
   }
