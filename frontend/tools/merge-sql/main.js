@@ -548,7 +548,10 @@ export class MergeSqlTool extends BaseTool {
   }
 
   bindFileItemEvents() {
-    const fileItems = document.querySelectorAll(".file-item");
+    const fileItemsContainer = document.getElementById("merge-sql-file-items");
+    const fileItems = fileItemsContainer?.querySelectorAll(".file-item");
+
+    if (!fileItems) return;
 
     fileItems.forEach((item) => {
       const removeBtn = item.querySelector(".btn-remove");
@@ -560,58 +563,73 @@ export class MergeSqlTool extends BaseTool {
         });
       }
 
-      item.addEventListener("dragstart", (e) => this.handleItemDragStart(e, item));
-      item.addEventListener("dragend", (e) => this.handleItemDragEnd(e, item));
-      item.addEventListener("dragover", (e) => this.handleItemDragOver(e, item));
-      item.addEventListener("dragleave", (e) => this.handleItemDragLeave(e, item));
-      item.addEventListener("drop", (e) => this.handleItemDrop(e, item));
+      if (this.sortOrder === "manual") {
+        const dragHandle = item.querySelector(".drag-handle");
+        if (dragHandle) {
+          dragHandle.addEventListener("mousedown", (e) => this.handleDragStart(e, item));
+        }
+      }
     });
+
+    if (this.sortOrder === "manual" && fileItemsContainer) {
+      fileItemsContainer.addEventListener("mousemove", (e) => this.handleDragMove(e));
+      fileItemsContainer.addEventListener("mouseup", (e) => this.handleDragEnd(e));
+      fileItemsContainer.addEventListener("mouseleave", (e) => this.handleDragEnd(e));
+    }
   }
 
-  handleItemDragStart(e, item) {
+  handleDragStart(e, item) {
+    e.preventDefault();
     this.draggedItem = item;
+    this.dragStartY = e.clientY;
+    this.draggedItemRect = item.getBoundingClientRect();
     item.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", item.dataset.id);
   }
 
-  handleItemDragEnd(e, item) {
-    item.classList.remove("dragging");
+  handleDragMove(e) {
+    if (!this.draggedItem) return;
+
+    const fileItemsContainer = document.getElementById("merge-sql-file-items");
+    const fileItems = fileItemsContainer?.querySelectorAll(".file-item:not(.dragging)");
+
+    if (!fileItems) return;
+
+    fileItems.forEach((item) => item.classList.remove("drag-over"));
+
+    for (const item of fileItems) {
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (e.clientY < midY + rect.height / 2 && e.clientY > midY - rect.height / 2) {
+        item.classList.add("drag-over");
+        break;
+      }
+    }
+  }
+
+  handleDragEnd(e) {
+    if (!this.draggedItem) return;
+
+    const fileItemsContainer = document.getElementById("merge-sql-file-items");
+    const dragOverItem = fileItemsContainer?.querySelector(".file-item.drag-over");
+
+    if (dragOverItem && dragOverItem !== this.draggedItem) {
+      const draggedId = this.draggedItem.dataset.id;
+      const targetId = dragOverItem.dataset.id;
+
+      const draggedIndex = this.files.findIndex((f) => f.id === draggedId);
+      const targetIndex = this.files.findIndex((f) => f.id === targetId);
+
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const [draggedFile] = this.files.splice(draggedIndex, 1);
+        this.files.splice(targetIndex, 0, draggedFile);
+        this.saveFilesToIndexedDB();
+      }
+    }
+
+    this.draggedItem.classList.remove("dragging");
+    fileItemsContainer?.querySelectorAll(".file-item").forEach((el) => el.classList.remove("drag-over"));
     this.draggedItem = null;
-    document.querySelectorAll(".file-item").forEach((el) => el.classList.remove("drag-over"));
-  }
-
-  handleItemDragOver(e, item) {
-    if (!this.draggedItem || this.draggedItem === item) return;
-
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    item.classList.add("drag-over");
-  }
-
-  handleItemDragLeave(e, item) {
-    item.classList.remove("drag-over");
-  }
-
-  handleItemDrop(e, item) {
-    e.preventDefault();
-    item.classList.remove("drag-over");
-
-    if (!this.draggedItem || this.draggedItem === item) return;
-
-    const draggedId = this.draggedItem.dataset.id;
-    const targetId = item.dataset.id;
-
-    const draggedIndex = this.files.findIndex((f) => f.id === draggedId);
-    const targetIndex = this.files.findIndex((f) => f.id === targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    const [draggedFile] = this.files.splice(draggedIndex, 1);
-    this.files.splice(targetIndex, 0, draggedFile);
-
-    this.draggedItem = null;
-    this.saveFilesToIndexedDB();
     this.renderFileList();
   }
 

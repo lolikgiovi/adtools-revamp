@@ -66,21 +66,28 @@ export async function saveFiles(files) {
   if (!isIndexedDBAvailable()) return;
 
   try {
+    const filesData = await Promise.all(
+      files.map(async (fileItem, index) => {
+        const arrayBuffer = await fileItem.file.arrayBuffer();
+        return {
+          id: fileItem.id,
+          name: fileItem.name,
+          content: arrayBuffer,
+          size: fileItem.file.size,
+          lastModified: fileItem.file.lastModified,
+          order: index,
+        };
+      })
+    );
+
     const db = await openDatabase();
     const tx = db.transaction(STORES.FILES, "readwrite");
     const store = tx.objectStore(STORES.FILES);
 
-    await store.clear();
+    store.clear();
 
-    for (const fileItem of files) {
-      const arrayBuffer = await fileItem.file.arrayBuffer();
-      await store.put({
-        id: fileItem.id,
-        name: fileItem.name,
-        content: arrayBuffer,
-        size: fileItem.file.size,
-        lastModified: fileItem.file.lastModified,
-      });
+    for (const fileData of filesData) {
+      store.put(fileData);
     }
 
     await new Promise((resolve, reject) => {
@@ -104,6 +111,7 @@ export async function loadFiles() {
       const request = store.getAll();
       request.onsuccess = () => {
         const items = request.result || [];
+        items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         const files = items.map((item) => ({
           id: item.id,
           name: item.name,

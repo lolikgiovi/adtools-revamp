@@ -161,8 +161,11 @@
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
-  cursor: grab;
   transition: all 0.15s ease;
+}
+
+.file-item.draggable-item {
+  cursor: grab;
 }
 
 .file-item:hover {
@@ -184,6 +187,18 @@
   color: hsl(var(--muted-foreground));
   cursor: grab;
   flex-shrink: 0;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius) - 2px);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.file-item .drag-handle:hover {
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
+}
+
+.file-item .drag-handle:active {
+  cursor: grabbing;
 }
 
 .file-item .file-icon {
