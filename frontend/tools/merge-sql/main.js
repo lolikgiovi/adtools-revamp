@@ -505,13 +505,14 @@ export class MergeSqlTool extends BaseTool {
 
     if (emptyState) emptyState.style.display = "none";
 
+    const isManual = this.sortOrder === "manual";
     let html = "";
     for (let i = 0; i < this.files.length; i++) {
       const file = this.files[i];
 
       html += `
-        <div class="file-item" draggable="${this.sortOrder === "manual"}" data-id="${file.id}" data-index="${i}">
-          <div class="drag-handle" style="${this.sortOrder === "manual" ? "" : "visibility: hidden;"}">
+        <div class="file-item${isManual ? " draggable-item" : ""}" ${isManual ? 'draggable="true"' : ""} data-id="${file.id}" data-index="${i}">
+          <div class="drag-handle" style="${isManual ? "" : "display: none;"}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="9" cy="5" r="1"></circle>
               <circle cx="9" cy="12" r="1"></circle>
@@ -568,10 +569,6 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleItemDragStart(e, item) {
-    if (this.sortOrder !== "manual") {
-      e.preventDefault();
-      return;
-    }
     this.draggedItem = item;
     item.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
@@ -585,33 +582,25 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleItemDragOver(e, item) {
+    if (!this.draggedItem || this.draggedItem === item) return;
+
     e.preventDefault();
-    e.stopPropagation();
-
-    if (this.sortOrder !== "manual" || !this.draggedItem) return;
-    if (this.draggedItem === item) return;
-
     e.dataTransfer.dropEffect = "move";
     item.classList.add("drag-over");
   }
 
   handleItemDragLeave(e, item) {
-    e.stopPropagation();
     item.classList.remove("drag-over");
   }
 
   handleItemDrop(e, item) {
     e.preventDefault();
-    e.stopPropagation();
-
     item.classList.remove("drag-over");
 
-    if (this.sortOrder !== "manual" || !this.draggedItem) return;
+    if (!this.draggedItem || this.draggedItem === item) return;
 
     const draggedId = this.draggedItem.dataset.id;
     const targetId = item.dataset.id;
-
-    if (draggedId === targetId) return;
 
     const draggedIndex = this.files.findIndex((f) => f.id === draggedId);
     const targetIndex = this.files.findIndex((f) => f.id === targetId);
