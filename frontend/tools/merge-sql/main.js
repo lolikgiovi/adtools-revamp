@@ -373,17 +373,22 @@ export class MergeSqlTool extends BaseTool {
     const editor = this.currentTab === "merged" ? this.mergedEditor : this.selectEditor;
     if (editor) {
       const content = editor.getValue();
-      this.downloadFile(fileName, content);
+      if (content) {
+        this.downloadFile(fileName, content);
+        this.showSuccess(`Downloaded ${fileName}`);
+      }
     }
   }
 
   handleDownloadAll() {
     const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
+    const downloadedFiles = [];
 
     if (this.mergedEditor) {
       const mergedContent = this.mergedEditor.getValue();
       if (mergedContent) {
         this.downloadFile(`${folderName}-MERGED.sql`, mergedContent);
+        downloadedFiles.push("MERGED");
       }
     }
 
@@ -392,7 +397,12 @@ export class MergeSqlTool extends BaseTool {
         const selectContent = this.selectEditor.getValue();
         if (selectContent) {
           this.downloadFile(`${folderName}-SELECT.sql`, selectContent);
+          downloadedFiles.push("SELECT");
         }
+      }
+
+      if (downloadedFiles.length > 0) {
+        this.showSuccess(`Downloaded ${downloadedFiles.length} file${downloadedFiles.length > 1 ? "s" : ""}`);
       }
     }, 500);
   }
