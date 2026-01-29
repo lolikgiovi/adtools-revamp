@@ -61,6 +61,16 @@ tauri/releases/
 # rust analyzer
 target/
 
+# PyInstaller build artifacts
+tauri/sidecar/build/
+tauri/sidecar/*.spec
+
+# Sidecar binaries (large, built locally)
+tauri/oracle-sidecar-*
+tauri/binaries/oracle-sidecar-*
+
 #macOS
 .DS_Store
 backend-workers/.dev.vars
+venv-x64/
+tauri/gen/schemas/capabilities.json

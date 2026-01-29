@@ -17,7 +17,9 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_shell::init())
     .manage(ZoomState(Mutex::new(ZOOM_DEFAULT)))
+    .manage(oracle_sidecar::SidecarState::default())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
       get_jenkins_username,
@@ -42,7 +44,28 @@ pub fn run() {
       has_confluence_pat,
       confluence_fetch_page,
       confluence_fetch_by_space_title,
-      confluence_search_pages
+      confluence_search_pages,
+      // Oracle commands (legacy IC commands removed in Phase 4.10 - now using Python sidecar)
+      oracle::test_oracle_connection,
+      oracle::fetch_schemas,
+      oracle::fetch_tables,
+      oracle::fetch_table_metadata,
+      oracle::export_comparison_result,
+      oracle::set_oracle_credentials,
+      oracle::get_oracle_credentials,
+      oracle::delete_oracle_credentials,
+      oracle::has_oracle_credentials,
+      // Oracle connection pool commands
+      oracle::get_active_connections,
+      oracle::close_all_connections,
+      oracle::close_connection,
+      // Unified data fetch command
+      oracle::fetch_oracle_data,
+      // Oracle sidecar commands
+      oracle_sidecar::start_oracle_sidecar,
+      oracle_sidecar::stop_oracle_sidecar,
+      oracle_sidecar::check_oracle_sidecar_status,
+      oracle_sidecar::get_oracle_sidecar_url
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -53,6 +76,8 @@ pub fn run() {
         )?;
       }
 
+      // NOTE: Oracle IC setup removed in Phase 4.10 - now using Python sidecar with oracledb thin mode
+
       // Build custom menu with zoom controls
       let menu = build_menu(app.handle())?;
       app.set_menu(menu)?;
@@ -61,7 +86,33 @@ pub fn run() {
       if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_zoom(ZOOM_DEFAULT);
       }
+
+      // Auto-start Oracle sidecar in the background
+      let app_handle = app.handle().clone();
+      tauri::async_runtime::spawn(async move {
+        match oracle_sidecar::start_oracle_sidecar(app_handle).await {
+          Ok(msg) => log::info!("Oracle sidecar auto-start: {}", msg),
+          Err(e) => log::warn!("Oracle sidecar auto-start failed (will retry on demand): {}", e),
+        }
+      });
+
       Ok(())
+    })
+    .on_window_event(|window, event| {
+      match event {
+        tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+          let app = window.app_handle().clone();
+          tauri::async_runtime::spawn(async move {
+            // First try graceful shutdown via our managed child process
+            if let Err(e) = oracle_sidecar::stop_oracle_sidecar(app).await {
+              log::warn!("Failed to stop Oracle sidecar gracefully: {}", e);
+            }
+            // Also kill by port as fallback (handles edge cases)
+            oracle_sidecar::kill_sidecar_by_port();
+          });
+        }
+        _ => {}
+      }
     })
     .on_menu_event(|app, event| {
       let id = event.id().as_ref();
@@ -180,6 +231,8 @@ fn apply_zoom(app: &tauri::AppHandle, level: f64) {
 }
 pub mod jenkins;
 pub mod confluence;
+pub mod oracle;
+pub mod oracle_sidecar;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
@@ -191,7 +244,7 @@ const CONFLUENCE_KEYCHAIN_SERVICE: &str = "ad-tools:confluence";
 const UNIFIED_KEYCHAIN_SERVICE: &str = "ad-tools:credentials";
 const UNIFIED_KEYCHAIN_KEY: &str = "secrets";
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 struct UnifiedSecrets {
     jenkins_token: Option<String>,
     confluence_pat: Option<String>,
@@ -229,12 +282,12 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     let mut secrets = load_unified_secrets()?;
     let had_jenkins = secrets.jenkins_token.is_some();
     let had_confluence = secrets.confluence_pat.is_some();
-    
+
     let mut migrated_jenkins = false;
     let mut migrated_confluence = false;
     let mut found_old_jenkins = false;
     let mut found_old_confluence = false;
-    
+
     // Try migrating Jenkins token if not already in unified
     if secrets.jenkins_token.is_none() && !username.is_empty() {
         if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
@@ -245,7 +298,7 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // Try migrating Confluence PAT if not already in unified
     if secrets.confluence_pat.is_none() {
         if let Ok(entry) = Entry::new(CONFLUENCE_KEYCHAIN_SERVICE, "pat") {
@@ -256,11 +309,11 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // Save if anything changed
     if migrated_jenkins || migrated_confluence {
         save_unified_secrets(&secrets)?;
-        
+
         // Delete old entries after successful migration
         if migrated_jenkins {
             if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, &username) {
@@ -273,10 +326,10 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
             }
         }
     }
-    
+
     // no_credentials = true if there's nothing in unified AND nothing was found in old locations
     let no_credentials = !had_jenkins && !had_confluence && !found_old_jenkins && !found_old_confluence;
-    
+
     Ok(MigrationResult {
         migrated_jenkins,
         migrated_confluence,

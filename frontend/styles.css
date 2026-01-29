@@ -20,3 +20,6 @@
 
 /* Responsive breakpoints and animation utilities */
 @import "./styles/utilities.css";
+
+/* Tool-specific styles */
+@import "./tools/compare-config/styles.css";

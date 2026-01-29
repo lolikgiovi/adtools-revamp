@@ -486,7 +486,7 @@ class CheckImageTool extends BaseTool {
 
     // Add summary at the top
     const summary = document.createElement("div");
-    summary.className = "results-summary";
+    summary.className = "image-checker-results-summary";
     const existingCount = results.filter((r) => r.exists).length;
     summary.innerHTML = `
       <h4>Summary</h4>

@@ -35,10 +35,10 @@ export const QRToolsTemplate = /* html */ `
       </div>
 
       <div class="qr-tools-right">
-        <div class="preview-header">
-          <div class="preview-title">Preview</div>
+        <div class="qr-preview-header">
+          <div class="qr-preview-title">Preview</div>
         </div>
-        <div class="preview-area">
+        <div class="qr-preview-area">
           <canvas id="qrCanvas"></canvas>
         </div>
         <div id="qrContrastWarning" class="warning-text"></div>

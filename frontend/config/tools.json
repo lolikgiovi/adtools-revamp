@@ -69,6 +69,16 @@
       "order": 50
     },
     {
+      "id": "compare-config",
+      "name": "Compare Config",
+      "category": "config",
+      "icon": "database-compare",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 51
+    },
+    {
       "id": "run-query",
       "name": "Run Query",
       "category": "jenkins",
@@ -120,6 +130,16 @@
       "showOnHome": true,
       "enabled": true,
       "order": 80
+    },
+    {
+      "id": "merge-sql",
+      "name": "Merge SQL",
+      "category": "config",
+      "icon": "merge-sql",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 85
     },
     {
       "id": "check-image",

@@ -470,6 +470,360 @@ class SettingsPage {
       return wrapper;
     }
 
+    // Oracle Connections custom type - connection management UI
+    if (item.type === "oracle-connections") {
+      const connections = this.service.getValue(storageKey, "oracle-connections", []);
+      wrapper.className = "setting-item setting-item-oracle";
+      wrapper.innerHTML = `
+        <div class="oracle-connections-header">
+          <div class="setting-name">${item.label}</div>
+          <button class="btn btn-primary btn-sm oracle-add-btn">Add Connection</button>
+        </div>
+        <p class="setting-description">${item.description || ""}</p>
+        <div class="oracle-connections-list"></div>
+        <div class="oracle-connection-form" style="display:none">
+          <h4 class="oracle-form-title">Add Connection</h4>
+          <div class="oracle-form-row">
+            <label>Connection Name</label>
+            <input type="text" class="oracle-input oracle-name" placeholder="e.g., DEV, UAT, PROD" />
+          </div>
+          <div class="oracle-form-row">
+            <label>Connect String</label>
+            <input type="text" class="oracle-input oracle-connect-string" placeholder="host:port/service_name" />
+          </div>
+          <div class="oracle-form-row">
+            <label>Username</label>
+            <input type="text" class="oracle-input oracle-username" placeholder="Oracle username" />
+          </div>
+          <div class="oracle-form-row">
+            <label>Password</label>
+            <input type="password" class="oracle-input oracle-password" placeholder="Oracle password" />
+          </div>
+          <div class="oracle-form-actions">
+            <button class="btn btn-primary btn-sm oracle-save-btn">Save</button>
+            <button class="btn btn-secondary btn-sm oracle-cancel-btn">Cancel</button>
+            <button class="btn btn-outline btn-sm oracle-test-btn">Test Connection</button>
+          </div>
+          <div class="oracle-form-status"></div>
+        </div>
+      `;
+
+      const listEl = wrapper.querySelector(".oracle-connections-list");
+      const formEl = wrapper.querySelector(".oracle-connection-form");
+      const addBtn = wrapper.querySelector(".oracle-add-btn");
+      const saveBtn = wrapper.querySelector(".oracle-save-btn");
+      const cancelBtn = wrapper.querySelector(".oracle-cancel-btn");
+      const testBtn = wrapper.querySelector(".oracle-test-btn");
+      const statusEl = wrapper.querySelector(".oracle-form-status");
+      let editingIndex = -1;
+
+      // Local escape function for HTML content
+      const esc = (s) =>
+        String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+
+      const renderList = () => {
+        const conns = this.service.getValue(storageKey, "oracle-connections", []);
+        if (!conns || conns.length === 0) {
+          listEl.innerHTML = '<div class="oracle-empty">No connections configured</div>';
+          return;
+        }
+        listEl.innerHTML = conns
+          .map(
+            (c, i) => `
+          <div class="oracle-connection-row" data-index="${i}">
+            <div class="oracle-conn-info">
+              <span class="oracle-conn-name">${esc(c.name)}</span>
+              <span class="oracle-conn-string">${esc(c.connect_string)}</span>
+              <span class="oracle-conn-status" id="oracle-conn-status-${i}"></span>
+            </div>
+            <div class="oracle-conn-actions">
+              <button class="btn btn-outline btn-sm oracle-check-conn" data-index="${i}" data-name="${esc(c.name)}" title="Test connection">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Check
+              </button>
+              <button class="btn btn-outline btn-sm oracle-edit-conn" data-index="${i}">Edit</button>
+              <button class="btn btn-outline btn-sm btn-danger oracle-delete-conn" data-index="${i}">Delete</button>
+            </div>
+          </div>
+        `
+          )
+          .join("");
+      };
+
+      const showForm = (conn = null, index = -1, afterRowEl = null) => {
+        editingIndex = index;
+        formEl.querySelector(".oracle-form-title").textContent = conn ? "Edit Connection" : "Add Connection";
+        formEl.querySelector(".oracle-name").value = conn?.name || "";
+        formEl.querySelector(".oracle-connect-string").value = conn?.connect_string || "";
+        formEl.querySelector(".oracle-username").value = "";
+        formEl.querySelector(".oracle-password").value = "";
+        statusEl.textContent = "";
+        statusEl.className = "oracle-form-status";
+        // Position form: after the specific row when editing, or after the list when adding
+        if (afterRowEl) {
+          afterRowEl.insertAdjacentElement("afterend", formEl);
+        } else {
+          wrapper.appendChild(formEl);
+        }
+        formEl.style.display = "block";
+        // If editing, fetch credentials and populate
+        if (conn) {
+          (async () => {
+            try {
+              const [user, pass] = await invoke("get_oracle_credentials", { name: conn.name });
+              formEl.querySelector(".oracle-username").value = user || "";
+              formEl.querySelector(".oracle-password").value = pass || "";
+            } catch (_) {}
+          })();
+        }
+      };
+
+      const hideForm = () => {
+        formEl.style.display = "none";
+        // Move form back to wrapper so renderList() won't destroy it
+        wrapper.appendChild(formEl);
+        editingIndex = -1;
+      };
+
+      addBtn.addEventListener("click", () => showForm());
+      cancelBtn.addEventListener("click", () => hideForm());
+
+      saveBtn.addEventListener("click", async () => {
+        const name = formEl.querySelector(".oracle-name").value.trim();
+        const connectString = formEl.querySelector(".oracle-connect-string").value.trim();
+        const username = formEl.querySelector(".oracle-username").value.trim();
+        const password = formEl.querySelector(".oracle-password").value;
+
+        if (!name || !connectString || !username) {
+          statusEl.textContent = "Name, Connect String, and Username are required";
+          statusEl.className = "oracle-form-status error";
+          return;
+        }
+
+        // Save credentials to keychain
+        try {
+          await invoke("set_oracle_credentials", { name, username, password });
+        } catch (err) {
+          statusEl.textContent = `Failed to save credentials: ${err}`;
+          statusEl.className = "oracle-form-status error";
+          return;
+        }
+
+        // Update connections list in localStorage
+        let conns = this.service.getValue(storageKey, "oracle-connections", []);
+        if (!Array.isArray(conns)) conns = [];
+
+        const connData = { name, connect_string: connectString };
+        if (editingIndex >= 0) {
+          // If name changed, delete old credentials
+          const oldName = conns[editingIndex]?.name;
+          if (oldName && oldName !== name) {
+            try {
+              await invoke("delete_oracle_credentials", { name: oldName });
+            } catch (_) {}
+          }
+          conns[editingIndex] = connData;
+        } else {
+          // Check for duplicate name
+          if (conns.some((c) => c.name === name)) {
+            statusEl.textContent = "A connection with this name already exists";
+            statusEl.className = "oracle-form-status error";
+            return;
+          }
+          conns.push(connData);
+        }
+
+        this.service.setValue(storageKey, "oracle-connections", conns);
+        hideForm();
+        renderList();
+        this.eventBus?.emit?.("notification:success", { message: `Connection "${name}" saved` });
+      });
+
+      testBtn.addEventListener("click", async () => {
+        const name = formEl.querySelector(".oracle-name").value.trim();
+        const connectString = formEl.querySelector(".oracle-connect-string").value.trim();
+        const username = formEl.querySelector(".oracle-username").value.trim();
+        const password = formEl.querySelector(".oracle-password").value;
+
+        if (!connectString || !username) {
+          statusEl.textContent = "Connect String and Username are required for testing";
+          statusEl.className = "oracle-form-status error";
+          return;
+        }
+
+        statusEl.textContent = "Testing connection...";
+        statusEl.className = "oracle-form-status";
+        testBtn.disabled = true;
+
+        try {
+          const connName = name || "test";
+          // Try sidecar first (preferred)
+          try {
+            const response = await fetch("http://127.0.0.1:21522/test-connection", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                connection: {
+                  name: connName,
+                  connect_string: connectString,
+                  username,
+                  password,
+                },
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail?.message || err.detail || "Connection failed");
+            }
+            statusEl.textContent = "✓ Connection successful";
+            statusEl.className = "oracle-form-status success";
+          } catch (fetchErr) {
+            // Fallback to Tauri backend if sidecar not available
+            if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+              const config = { name: connName, connect_string: connectString };
+              await invoke("test_oracle_connection", { config, username, password });
+              statusEl.textContent = "✓ Connection successful";
+              statusEl.className = "oracle-form-status success";
+            } else {
+              throw fetchErr;
+            }
+          }
+        } catch (err) {
+          statusEl.textContent = `✗ Connection failed: ${err.message || err}`;
+          statusEl.className = "oracle-form-status error";
+        } finally {
+          testBtn.disabled = false;
+        }
+      });
+
+      // Event delegation for check/edit/delete
+      listEl.addEventListener("click", async (e) => {
+        const checkBtn = e.target.closest(".oracle-check-conn");
+        const editBtn = e.target.closest(".oracle-edit-conn");
+        const deleteBtn = e.target.closest(".oracle-delete-conn");
+
+        if (checkBtn) {
+          const idx = parseInt(checkBtn.dataset.index, 10);
+          const connName = checkBtn.dataset.name;
+          const statusEl = document.getElementById(`oracle-conn-status-${idx}`);
+
+          // Disable button during check
+          checkBtn.disabled = true;
+          checkBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; animation: spin 1s linear infinite;">
+              <circle cx="12" cy="12" r="10" opacity="0.3"/>
+              <path d="M12 2 a10 10 0 0 1 0 20"/>
+            </svg>
+            Checking...
+          `;
+          if (statusEl) {
+            statusEl.textContent = "";
+            statusEl.className = "oracle-conn-status";
+          }
+
+          try {
+            // Fetch credentials from keychain
+            const [username, password] = await invoke("get_oracle_credentials", { name: connName });
+            if (!username) {
+              throw new Error("No credentials found. Edit the connection to add credentials.");
+            }
+
+            // Get connection config
+            const conns = this.service.getValue(storageKey, "oracle-connections", []);
+            const conn = conns[idx];
+            if (!conn) throw new Error("Connection not found");
+
+            // Test connection via sidecar or Tauri backend
+            try {
+              // Try sidecar first (preferred)
+              const response = await fetch("http://127.0.0.1:21522/test-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  connection: {
+                    name: connName,
+                    connect_string: conn.connect_string,
+                    username,
+                    password,
+                  },
+                }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail?.message || err.detail || "Connection failed");
+              }
+              // Success via sidecar
+              if (statusEl) {
+                statusEl.textContent = "✓ Connected";
+                statusEl.className = "oracle-conn-status success";
+              }
+            } catch (fetchErr) {
+              // Fallback to Tauri backend if sidecar not available
+              if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+                await invoke("test_oracle_connection", {
+                  config: { name: connName, connect_string: conn.connect_string },
+                  username,
+                  password,
+                });
+                if (statusEl) {
+                  statusEl.textContent = "✓ Connected";
+                  statusEl.className = "oracle-conn-status success";
+                }
+              } else {
+                throw fetchErr;
+              }
+            }
+          } catch (err) {
+            const errMsg = String(err.message || err);
+            if (statusEl) {
+              statusEl.textContent = `✗ ${errMsg.length > 50 ? errMsg.substring(0, 50) + "..." : errMsg}`;
+              statusEl.className = "oracle-conn-status error";
+            }
+          } finally {
+            checkBtn.disabled = false;
+            checkBtn.innerHTML = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              Check
+            `;
+          }
+        }
+
+        if (editBtn) {
+          const idx = parseInt(editBtn.dataset.index, 10);
+          const conns = this.service.getValue(storageKey, "oracle-connections", []);
+          const rowEl = editBtn.closest(".oracle-connection-row");
+          if (conns[idx]) showForm(conns[idx], idx, rowEl);
+        }
+
+        if (deleteBtn) {
+          const idx = parseInt(deleteBtn.dataset.index, 10);
+          let conns = this.service.getValue(storageKey, "oracle-connections", []);
+          const conn = conns[idx];
+          if (conn && confirm(`Delete connection "${conn.name}"?`)) {
+            // Delete credentials from keychain
+            try {
+              await invoke("delete_oracle_credentials", { name: conn.name });
+            } catch (_) {}
+            conns.splice(idx, 1);
+            this.service.setValue(storageKey, "oracle-connections", conns);
+            renderList();
+            this.eventBus?.emit?.("notification:success", { message: `Connection "${conn.name}" deleted` });
+          }
+        }
+      });
+
+      renderList();
+      return wrapper;
+    }
+
     // Display value
     let displayValue = "";
     const isRequired = !!(item.validation && item.validation.required);

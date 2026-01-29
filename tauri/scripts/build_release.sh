@@ -147,8 +147,17 @@ validate_json() {
 build_tauri_targets() {
   # Ensure we run Node/Vite/Tauri from the repository root (one level above src-tauri)
   pushd "$ROOT_DIR" >/dev/null
+
+  # Build the Python sidecar first (includes ad-hoc signing)
+  echo "Building Oracle sidecar..."
+  npm run sidecar:build
+
   echo "Building web assets (vite build --mode tauri)..."
   npm run build:tauri
+
+  # NOTE: Oracle Instant Client is no longer needed for builds.
+  # The Python sidecar uses oracledb in "thin mode" which connects directly
+  # to Oracle without native client libraries.
 
   echo "Building Tauri app for aarch64-apple-darwin..."
   npx tauri build --target aarch64-apple-darwin
@@ -299,13 +308,14 @@ main() {
   IFS='|' read -r APP_ARM64 DMG_ARM64 <<<"$(find_artifacts aarch64-apple-darwin)"
   IFS='|' read -r APP_X64 DMG_X64 <<<"$(find_artifacts x86_64-apple-darwin)"
 
-  # Copy DMGs with naming convention
-  if [[ -n "$DMG_ARM64" && -f "$DMG_ARM64" ]]; then
-    cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
-  fi
-  if [[ -n "$DMG_X64" && -f "$DMG_X64" ]]; then
-    cp "$DMG_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg"
-  fi
+  # NOTE: Oracle Instant Client bundling is no longer needed.
+  # The Python sidecar uses oracledb in "thin mode" which connects directly
+  # to Oracle without native client libraries.
+
+  # Copy DMGs from Tauri build output
+  echo "Copying DMGs..."
+  cp "$DMG_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.dmg"
+  cp "$DMG_X64" "$release_dir/darwin-x86_64/ADTools-$selected_version-mac-intel.dmg"
 
   # Create .app.tar.gz for each arch
   compress_app "$APP_ARM64" "$release_dir/darwin-aarch64/ADTools-$selected_version-mac-arm64.app.tar.gz"

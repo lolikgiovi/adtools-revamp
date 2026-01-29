@@ -113,6 +113,19 @@
   border-color: hsl(var(--destructive) / 0.9);
 }
 
+/* Outline + Danger combination - outline style with danger hover */
+.btn-outline.btn-danger {
+  background: transparent;
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--border));
+}
+
+.btn-outline.btn-danger:hover:not(:disabled) {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  border-color: hsl(var(--destructive));
+}
+
 /* Icon-only button */
 .btn-icon-only {
   padding: 0.5rem;

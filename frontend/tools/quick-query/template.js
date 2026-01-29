@@ -3,11 +3,19 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="content-a">
             <div class="quick-query-left-panel">
                 <div class="button-group quick-query-search">
-                    <select id="queryTypeSelect">
-                        <option value="merge">MERGE INTO</option>
-                        <option value="insert">INSERT</option>
-                        <option value="update">UPDATE</option>
-                    </select>
+                    <div class="query-type-dropdown" id="queryTypeWrapper">
+                        <button type="button" class="btn btn-secondary query-type-dropdown-btn" id="queryTypeBtn">
+                            <span id="queryTypeLabel">MERGE INTO</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="query-type-dropdown-menu" id="queryTypeDropdown">
+                            <button class="query-type-option active" data-value="merge">MERGE INTO</button>
+                            <button class="query-type-option" data-value="insert">INSERT</button>
+                            <button class="query-type-option" data-value="update">UPDATE</button>
+                        </div>
+                    </div>
                     <input type="text" id="tableNameInput" placeholder="schema_name.table_name"
                         value="schema_name.table_name">
                 </div>

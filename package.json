@@ -1,6 +1,6 @@
 {
   "name": "ad-tools",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -16,7 +16,12 @@
     "cf:dev": "npm run build && npx wrangler dev",
     "cf:publish": "npm run build && npx wrangler publish",
     "release:build": "bash tauri/scripts/build_release.sh",
-    "release:upload": "bash tauri/scripts/upload_to_r2.sh"
+    "release:upload": "bash tauri/scripts/upload_to_r2.sh",
+    "sidecar:build": "bash tauri/sidecar/build.sh",
+    "tauri:dev": "npm run sidecar:build && npx tauri dev",
+    "tauri:dev:oracle-ic": "OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient npx tauri dev --features oracle",
+    "tauri:build": "npm run sidecar:build && npx tauri build",
+    "tauri:build:oracle-ic": "OCI_LIB_DIR=$HOME/Documents/adtools_library/oracle_instantclient npx tauri build --features oracle"
   },
   "keywords": [],
   "author": "",
@@ -37,6 +42,7 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-process": "^2.3.0",
     "@tauri-apps/plugin-updater": "^2.9.0",
+    "diff": "^8.0.3",
     "handsontable": "^16.2.0",
     "html-minifier": "^4.0.0",
     "jszip": "^3.10.1",

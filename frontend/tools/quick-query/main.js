@@ -126,6 +126,7 @@ export class QuickQueryUI {
 
       await this.initializeComponents();
       this.setupEventListeners();
+      this.setupQueryTypeDropdown();
       this.setupTableNameSearch();
 
       await this.loadMostRecentSchema();
@@ -165,7 +166,9 @@ export class QuickQueryUI {
     this.elements = {
       // Input elements
       tableNameInput: document.getElementById("tableNameInput"),
-      queryTypeSelect: document.getElementById("queryTypeSelect"),
+      queryTypeBtn: document.getElementById("queryTypeBtn"),
+      queryTypeLabel: document.getElementById("queryTypeLabel"),
+      queryTypeDropdown: document.getElementById("queryTypeDropdown"),
       schemaFileInput: document.getElementById("schemaFileInput"),
       savedSchemasSearch: document.getElementById("savedSchemasSearch"),
 
@@ -248,8 +251,8 @@ export class QuickQueryUI {
       savedSchemasSearch: {
         input: (e) => this.handleSavedSchemasSearchInput(e),
       },
-      queryTypeSelect: {
-        change: () => this.handleGenerateQuery(),
+      queryTypeBtn: {
+        click: (e) => this.handleQueryTypeDropdownToggle(e),
       },
       schemaFileInput: {
         change: (e) => this.handleSchemaFileInput(e),
@@ -573,13 +576,66 @@ export class QuickQueryUI {
   }
 
   // Event Handlers
+
+  /**
+   * Get current query type value from the dropdown
+   */
+  getQueryTypeValue() {
+    const activeOption = this.elements.queryTypeDropdown?.querySelector(".query-type-option.active");
+    return activeOption?.dataset.value || "merge";
+  }
+
+  /**
+   * Handle query type dropdown toggle
+   */
+  handleQueryTypeDropdownToggle(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.elements.queryTypeDropdown?.classList.toggle("show");
+  }
+
+  /**
+   * Setup query type dropdown event handlers
+   */
+  setupQueryTypeDropdown() {
+    const dropdown = this.elements.queryTypeDropdown;
+    const label = this.elements.queryTypeLabel;
+    const btn = this.elements.queryTypeBtn;
+
+    if (!dropdown || !label || !btn) return;
+
+    // Bind option click handlers
+    dropdown.querySelectorAll(".query-type-option").forEach((opt) => {
+      opt.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const value = opt.dataset.value;
+        const labelMap = { merge: "MERGE INTO", insert: "INSERT", update: "UPDATE" };
+        label.textContent = labelMap[value] || value;
+        dropdown.classList.remove("show");
+        // Update active state
+        dropdown.querySelectorAll(".query-type-option").forEach((o) => o.classList.remove("active"));
+        opt.classList.add("active");
+        // Trigger query regeneration
+        this.handleGenerateQuery();
+      });
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("show");
+      }
+    });
+  }
+
   async handleGenerateQuery() {
     // Prevent duplicate generation
     if (this.isGenerating) return;
 
     try {
       const tableName = this.elements.tableNameInput.value.trim();
-      const queryType = this.elements.queryTypeSelect.value;
+      const queryType = this.getQueryTypeValue();
 
       const schemaData = this.schemaTable.getData().filter((row) => row[0]);
 
@@ -980,7 +1036,15 @@ export class QuickQueryUI {
     }
 
     this.clearError();
-    this.elements.queryTypeSelect.value = "merge";
+    // Reset query type dropdown to MERGE INTO
+    if (this.elements.queryTypeLabel) {
+      this.elements.queryTypeLabel.textContent = "MERGE INTO";
+    }
+    if (this.elements.queryTypeDropdown) {
+      this.elements.queryTypeDropdown.querySelectorAll(".query-type-option").forEach((opt) => {
+        opt.classList.toggle("active", opt.dataset.value === "merge");
+      });
+    }
 
     // Clear imported Excel data
     this.handleClearExcelImport();
@@ -1011,7 +1075,7 @@ export class QuickQueryUI {
     UsageTracker.trackEvent("quick-query", "download_sql", {
       table_name: tableName,
       file_size: blob.size,
-      query_type: this.elements.queryTypeSelect?.value || "unknown",
+      query_type: this.getQueryTypeValue(),
     });
 
     const displayName = tableName || sanitizedTableName;
@@ -2789,7 +2853,7 @@ export class QuickQueryUI {
         document.querySelectorAll(".qq-tab-button").forEach((btn) => btn.classList.remove("active"));
         button.classList.add("active");
 
-        document.querySelectorAll(".tab-content").forEach((content) => content.classList.remove("active"));
+        document.querySelectorAll(".qq-tab-content").forEach((content) => content.classList.remove("active"));
         document.getElementById(`${button.dataset.tab}Content`).classList.add("active");
       };
     });
