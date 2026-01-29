@@ -415,7 +415,7 @@ export class MergeSqlTool extends BaseTool {
     const clearBtn = document.getElementById("merge-sql-clear-btn");
 
     if (emptyState) emptyState.style.display = "none";
-    if (resultActions) resultActions.style.display = "flex";
+    if (resultActions) resultActions.classList.add("visible");
     if (clearBtn) clearBtn.style.display = "block";
   }
 
@@ -426,7 +426,7 @@ export class MergeSqlTool extends BaseTool {
     const insights = document.getElementById("merge-sql-insights");
 
     if (emptyState) emptyState.style.display = "flex";
-    if (resultActions) resultActions.style.display = "none";
+    if (resultActions) resultActions.classList.remove("visible");
     if (clearBtn) clearBtn.style.display = "none";
     if (insights) insights.style.display = "none";
   }
