@@ -134,6 +134,17 @@ class CompareConfigTool extends BaseTool {
       _lastLoadedConfig: null, // { sourceA: {...}, sourceB: {...} }
     };
 
+    // Bulk Select state
+    this.bulkSelect = {
+      sourceAConnection: null, // { name, connect_string }
+      sourceBConnection: null, // { name, connect_string }
+      sqlStatements: "", // Raw textarea content
+      maxRows: 500,
+      dataComparison: "strict", // 'strict' or 'normalized'
+      results: [], // Array of { sql, status, sourceAData, sourceBData, comparison, error }
+      isRunning: false,
+    };
+
     // View instances
     this.verticalCardView = new VerticalCardView();
     this.masterDetailView = new MasterDetailView();
@@ -466,7 +477,11 @@ class CompareConfigTool extends BaseTool {
    * Binds event listeners
    */
   bindEvents() {
-    // Phase 6.4: Tab switching removed - only unified mode now
+    // Tab switching
+    this.bindTabEvents();
+
+    // Bulk Select tab events
+    this.bindBulkSelectEvents();
 
     // Connection status close button
     const closeConnectionsBtn = document.querySelector(".btn-close-connections");
@@ -7693,6 +7708,520 @@ class CompareConfigTool extends BaseTool {
         UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }),
       );
     }
+  }
+
+  // ============================================================================
+  // TAB SWITCHING
+  // ============================================================================
+
+  /**
+   * Binds tab switching events
+   */
+  bindTabEvents() {
+    const tabs = document.querySelectorAll(".tool-tab");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const tabId = tab.dataset.tab;
+        this.switchTab(tabId);
+      });
+    });
+  }
+
+  /**
+   * Switches between tabs
+   */
+  switchTab(tabId) {
+    // Update tab buttons
+    document.querySelectorAll(".tool-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.tab === tabId);
+    });
+
+    // Update tab content
+    document.querySelectorAll(".tab-content").forEach((content) => {
+      const contentId = content.id.replace("tab-content-", "");
+      content.classList.toggle("active", contentId === tabId);
+    });
+
+    // Initialize Bulk Select UI when switching to that tab
+    if (tabId === "bulk-select" && this.oracleClientReady) {
+      this.initBulkSelectUI();
+    }
+  }
+
+  // ============================================================================
+  // BULK SELECT MODE
+  // ============================================================================
+
+  /**
+   * Binds Bulk Select tab event listeners
+   */
+  bindBulkSelectEvents() {
+    // SQL statements textarea
+    const sqlTextarea = document.getElementById("bulk-sql-statements");
+    if (sqlTextarea) {
+      sqlTextarea.addEventListener("input", (e) => {
+        this.bulkSelect.sqlStatements = e.target.value;
+        this.updateBulkCompareButton();
+      });
+    }
+
+    // Max rows input
+    const maxRowsInput = document.getElementById("bulk-max-rows");
+    if (maxRowsInput) {
+      maxRowsInput.addEventListener("input", (e) => {
+        const value = parseInt(e.target.value, 10);
+        this.bulkSelect.maxRows = isNaN(value) || value < 1 ? 500 : Math.min(value, 10000);
+      });
+    }
+
+    // Data comparison radio buttons
+    const dataCompRadios = document.querySelectorAll('input[name="bulk-data-comparison"]');
+    dataCompRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        this.bulkSelect.dataComparison = e.target.value;
+      });
+    });
+
+    // Compare button
+    const compareBtn = document.getElementById("btn-bulk-compare");
+    if (compareBtn) {
+      compareBtn.addEventListener("click", () => this.executeBulkComparison());
+    }
+  }
+
+  /**
+   * Initialize Bulk Select UI (connection dropdowns)
+   */
+  initBulkSelectUI() {
+    this.setupBulkConnectionDropdown("bulk-source-a", "sourceAConnection");
+    this.setupBulkConnectionDropdown("bulk-source-b", "sourceBConnection");
+    this.updateBulkCompareButton();
+  }
+
+  /**
+   * Setup a bulk select connection dropdown (matches unified mode pattern)
+   */
+  setupBulkConnectionDropdown(prefix, stateKey) {
+    const connections = this.savedConnections;
+    const btn = document.getElementById(`${prefix}-connection-btn`);
+    const label = document.getElementById(`${prefix}-connection-label`);
+    const dropdown = document.getElementById(`${prefix}-connection-dropdown`);
+
+    if (!btn || !dropdown || !label) return;
+
+    // Update label based on current state
+    const currentConnection = this.bulkSelect[stateKey];
+    label.textContent = currentConnection?.name || (connections.length > 0 ? "Select connection..." : "No connections saved");
+    btn.disabled = connections.length === 0;
+
+    // Clone button to remove old event listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Get the label inside the cloned button
+    const newLabel = newBtn.querySelector(`#${prefix}-connection-label`);
+
+    // Render dropdown options
+    const renderOptions = () => {
+      if (connections.length === 0) {
+        dropdown.innerHTML = '<div class="config-dropdown-no-results">No connections saved</div>';
+        return;
+      }
+
+      const selectedName = this.bulkSelect[stateKey]?.name;
+      dropdown.innerHTML = connections
+        .map(
+          (conn) => `
+        <button class="config-dropdown-option ${conn.name === selectedName ? "active" : ""}" data-name="${conn.name}" data-connect-string="${conn.connect_string}">
+          ${conn.name}
+        </button>
+      `,
+        )
+        .join("");
+
+      // Bind click handlers
+      dropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+        opt.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const name = opt.dataset.name;
+          const connectString = opt.dataset.connectString;
+          const connection = { name, connect_string: connectString };
+
+          this.bulkSelect[stateKey] = connection;
+
+          if (newLabel) newLabel.textContent = name;
+          dropdown.classList.remove("show");
+
+          // Update active state
+          dropdown.querySelectorAll(".config-dropdown-option").forEach((o) => o.classList.remove("active"));
+          opt.classList.add("active");
+          this.updateBulkCompareButton();
+        });
+      });
+    };
+
+    // Toggle dropdown on button click
+    newBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      renderOptions();
+      dropdown.classList.toggle("show");
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("show");
+      }
+    });
+
+    // Initial render
+    renderOptions();
+  }
+
+  /**
+   * Updates the Bulk Compare button state
+   */
+  updateBulkCompareButton() {
+    const compareBtn = document.getElementById("btn-bulk-compare");
+    if (!compareBtn) return;
+
+    const hasSourceA = !!this.bulkSelect.sourceAConnection;
+    const hasSourceB = !!this.bulkSelect.sourceBConnection;
+    const hasSql = this.bulkSelect.sqlStatements.trim().length > 0;
+
+    compareBtn.disabled = !hasSourceA || !hasSourceB || !hasSql || this.bulkSelect.isRunning;
+  }
+
+  /**
+   * Parse SQL statements from textarea (one per line)
+   */
+  parseBulkSqlStatements() {
+    return this.bulkSelect.sqlStatements
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("--")); // Ignore empty lines and comments
+  }
+
+  /**
+   * Execute bulk comparison of all SQL statements
+   */
+  async executeBulkComparison() {
+    const statements = this.parseBulkSqlStatements();
+    if (statements.length === 0) {
+      this.eventBus.emit("notification:show", {
+        type: "warning",
+        message: "Please enter at least one SELECT statement",
+      });
+      return;
+    }
+
+    this.bulkSelect.isRunning = true;
+    this.bulkSelect.results = [];
+    this.updateBulkCompareButton();
+
+    // Show progress section
+    const progressSection = document.getElementById("bulk-progress-section");
+    const resultsSection = document.getElementById("bulk-results-section");
+    if (progressSection) progressSection.style.display = "block";
+    if (resultsSection) resultsSection.style.display = "none";
+
+    const total = statements.length;
+    let completed = 0;
+    let matchCount = 0;
+    let differCount = 0;
+    let errorCount = 0;
+
+    for (const sql of statements) {
+      // Update progress
+      this.updateBulkProgress(completed, total, sql);
+
+      try {
+        const result = await this.executeSingleBulkQuery(sql);
+        this.bulkSelect.results.push(result);
+
+        if (result.status === "match") matchCount++;
+        else if (result.status === "differ") differCount++;
+        else errorCount++;
+      } catch (error) {
+        this.bulkSelect.results.push({
+          sql,
+          status: "error",
+          error: error.message || String(error),
+        });
+        errorCount++;
+      }
+
+      completed++;
+    }
+
+    // Final progress update
+    this.updateBulkProgress(total, total, "Complete");
+
+    // Hide progress, show results
+    setTimeout(() => {
+      if (progressSection) progressSection.style.display = "none";
+      this.renderBulkResults(matchCount, differCount, errorCount);
+    }, 500);
+
+    this.bulkSelect.isRunning = false;
+    this.updateBulkCompareButton();
+
+    // Track usage
+    UsageTracker.trackFeature("compare-config", "bulk_select", {
+      query_count: total,
+      match_count: matchCount,
+      differ_count: differCount,
+      error_count: errorCount,
+    });
+  }
+
+  /**
+   * Execute a single SQL query on both sources and compare
+   */
+  async executeSingleBulkQuery(sql) {
+    const { sourceAConnection, sourceBConnection, maxRows, dataComparison } = this.bulkSelect;
+
+    let sourceAResult = null;
+    let sourceBResult = null;
+    let sourceAError = null;
+    let sourceBError = null;
+
+    // Fetch from Source A
+    try {
+      sourceAResult = await CompareConfigService.fetchOracleDataViaSidecar({
+        connection_name: sourceAConnection.name,
+        config: sourceAConnection,
+        mode: "raw-sql",
+        sql: sql,
+        max_rows: maxRows,
+      });
+    } catch (error) {
+      sourceAError = this.extractOracleErrorMessage(error);
+    }
+
+    // Fetch from Source B
+    try {
+      sourceBResult = await CompareConfigService.fetchOracleDataViaSidecar({
+        connection_name: sourceBConnection.name,
+        config: sourceBConnection,
+        mode: "raw-sql",
+        sql: sql,
+        max_rows: maxRows,
+      });
+    } catch (error) {
+      sourceBError = this.extractOracleErrorMessage(error);
+    }
+
+    // If either source had an error, return error status
+    if (sourceAError || sourceBError) {
+      const errorMessages = [];
+      if (sourceAError) errorMessages.push(`Source A: ${sourceAError}`);
+      if (sourceBError) errorMessages.push(`Source B: ${sourceBError}`);
+      return {
+        sql,
+        status: "error",
+        error: errorMessages.join(" | "),
+        sourceAData: sourceAResult ? { rowCount: sourceAResult.row_count, headers: sourceAResult.headers, rows: sourceAResult.rows } : null,
+        sourceBData: sourceBResult ? { rowCount: sourceBResult.row_count, headers: sourceBResult.headers, rows: sourceBResult.rows } : null,
+      };
+    }
+
+    // Quick comparison: check if row counts match and data is identical
+    const rowsMatch = sourceAResult.row_count === sourceBResult.row_count;
+    const dataMatch = rowsMatch && this.compareDataQuick(sourceAResult.rows, sourceBResult.rows, dataComparison);
+
+    return {
+      sql,
+      status: dataMatch ? "match" : "differ",
+      sourceAData: {
+        rowCount: sourceAResult.row_count,
+        headers: sourceAResult.headers,
+        rows: sourceAResult.rows,
+      },
+      sourceBData: {
+        rowCount: sourceBResult.row_count,
+        headers: sourceBResult.headers,
+        rows: sourceBResult.rows,
+      },
+    };
+  }
+
+  /**
+   * Extract a user-friendly error message from Oracle errors
+   */
+  extractOracleErrorMessage(error) {
+    // Handle structured error responses from sidecar
+    if (error?.detail) {
+      const detail = error.detail;
+      if (detail.message) {
+        // Extract just the ORA code and short message
+        const match = detail.message.match(/ORA-\d+:[^\n]*/);
+        if (match) return match[0];
+        return detail.message;
+      }
+      if (detail.hint) return detail.hint;
+    }
+
+    // Handle string errors or error objects
+    if (typeof error === "string") return error;
+    if (error?.message) {
+      const match = error.message.match(/ORA-\d+:[^\n]*/);
+      if (match) return match[0];
+      return error.message;
+    }
+
+    return String(error);
+  }
+
+  /**
+   * Quick data comparison (row-by-row, field-by-field)
+   */
+  compareDataQuick(rowsA, rowsB, mode) {
+    if (rowsA.length !== rowsB.length) return false;
+
+    for (let i = 0; i < rowsA.length; i++) {
+      const rowA = rowsA[i];
+      const rowB = rowsB[i];
+
+      // Compare all fields
+      const keysA = Object.keys(rowA);
+      const keysB = Object.keys(rowB);
+
+      if (keysA.length !== keysB.length) return false;
+
+      for (const key of keysA) {
+        let valA = rowA[key];
+        let valB = rowB[key];
+
+        if (mode === "normalized") {
+          valA = this.normalizeValue(valA);
+          valB = this.normalizeValue(valB);
+        }
+
+        if (valA !== valB) return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Normalize a value for comparison
+   */
+  normalizeValue(val) {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string") return val.trim().toLowerCase();
+    return String(val);
+  }
+
+  /**
+   * Update bulk progress UI
+   */
+  updateBulkProgress(completed, total, currentSql) {
+    const counter = document.getElementById("bulk-progress-counter");
+    const fill = document.getElementById("bulk-progress-fill");
+    const current = document.getElementById("bulk-progress-current");
+
+    if (counter) counter.textContent = `${completed} / ${total}`;
+    if (fill) fill.style.width = `${(completed / total) * 100}%`;
+    if (current) current.textContent = currentSql;
+  }
+
+  /**
+   * Render bulk comparison results
+   */
+  renderBulkResults(matchCount, differCount, errorCount) {
+    const resultsSection = document.getElementById("bulk-results-section");
+    const summaryEl = document.getElementById("bulk-results-summary");
+    const listEl = document.getElementById("bulk-results-list");
+
+    if (!resultsSection || !summaryEl || !listEl) return;
+
+    resultsSection.style.display = "block";
+
+    // Render summary
+    summaryEl.innerHTML = `
+      <span class="summary-item match">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        ${matchCount} Match
+      </span>
+      <span class="summary-item differ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        ${differCount} Differ
+      </span>
+      ${
+        errorCount > 0
+          ? `
+        <span class="summary-item error">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          ${errorCount} Error
+        </span>
+      `
+          : ""
+      }
+    `;
+
+    // Render results list
+    listEl.innerHTML = this.bulkSelect.results
+      .map((result, index) => {
+        const statusLabel = result.status === "match" ? "Match" : result.status === "differ" ? "Differ" : "Error";
+        const statusClass = result.status;
+
+        let details = "";
+        if (result.status === "error") {
+          details = `<div class="bulk-result-error">${result.error}</div>`;
+        } else {
+          details = `
+          <div class="bulk-result-counts">
+            <span>Source A: ${result.sourceAData.rowCount} rows</span>
+            <span>Source B: ${result.sourceBData.rowCount} rows</span>
+          </div>
+        `;
+        }
+
+        return `
+        <div class="bulk-result-item" data-index="${index}">
+          <div class="bulk-result-header">
+            <span class="bulk-result-query">${this.escapeHtml(result.sql)}</span>
+            <span class="bulk-result-status ${statusClass}">${statusLabel}</span>
+            <svg class="bulk-result-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+          <div class="bulk-result-details">
+            ${details}
+          </div>
+        </div>
+      `;
+      })
+      .join("");
+
+    // Add expand/collapse handlers
+    listEl.querySelectorAll(".bulk-result-header").forEach((header) => {
+      header.addEventListener("click", () => {
+        header.closest(".bulk-result-item").classList.toggle("expanded");
+      });
+    });
+  }
+
+  /**
+   * Escape HTML special characters
+   */
+  escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
   }
 }
 

@@ -62,9 +62,14 @@ export const CompareConfigTemplate = /* html */ `
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
-                        Compare
+                        Single Comparison
                     </button>
-                    <!-- Additional tabs will be added here in the future -->
+                    <button class="tool-tab" data-tab="bulk-select" id="tab-bulk-select">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                        Bulk Select
+                    </button>
                 </div>
             </div>
             <div class="tabs-right">
@@ -775,6 +780,111 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
         </div><!-- End tab-content-compare -->
+
+        <!-- Bulk Select Tab Content -->
+        <div id="tab-content-bulk-select" class="tab-content">
+            <div class="bulk-select-mode">
+                <!-- Environment Selection Row -->
+                <div class="bulk-select-environments">
+                    <div class="bulk-env-panel">
+                        <h4>Source A (Reference)</h4>
+                        <div class="form-group">
+                            <label>Connection</label>
+                            <div class="config-dropdown" id="bulk-source-a-connection-wrapper">
+                                <button type="button" class="btn btn-secondary config-dropdown-btn" id="bulk-source-a-connection-btn">
+                                    <span id="bulk-source-a-connection-label">Select connection...</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="config-dropdown-menu" id="bulk-source-a-connection-dropdown"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bulk-env-panel">
+                        <h4>Source B (Comparator)</h4>
+                        <div class="form-group">
+                            <label>Connection</label>
+                            <div class="config-dropdown" id="bulk-source-b-connection-wrapper">
+                                <button type="button" class="btn btn-secondary config-dropdown-btn" id="bulk-source-b-connection-btn">
+                                    <span id="bulk-source-b-connection-label">Select connection...</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                <div class="config-dropdown-menu" id="bulk-source-b-connection-dropdown"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SQL Statements Input -->
+                <div class="bulk-sql-section">
+                    <div class="form-group">
+                        <label>SELECT Statements (one per line)</label>
+                        <textarea id="bulk-sql-statements" class="form-textarea bulk-sql-input" 
+                                  placeholder="SELECT * FROM SCHEMA.TABLE1 WHERE ID = 123
+SELECT COL1, COL2 FROM SCHEMA.TABLE2 WHERE STATUS = 'ACTIVE'
+SELECT COUNT(*) FROM SCHEMA.TABLE3"></textarea>
+                        <span class="form-hint">Enter one SELECT statement per line. Each query will be executed on both environments and compared.</span>
+                    </div>
+
+                    <div class="bulk-options-row">
+                        <div class="form-group">
+                            <label>Max Rows per Query</label>
+                            <input type="number" id="bulk-max-rows" class="form-input" value="500" min="1" max="10000">
+                        </div>
+                        <div class="setting-group">
+                            <label>Data Comparison:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="bulk-data-comparison" value="strict" checked>
+                                    <span>Strict (as-is)</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="bulk-data-comparison" value="normalized">
+                                    <span>Normalized</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compare Button -->
+                <div class="bulk-actions">
+                    <button class="btn btn-primary btn-lg" id="btn-bulk-compare" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Compare All Queries
+                    </button>
+                </div>
+
+                <!-- Progress Section -->
+                <div id="bulk-progress-section" class="bulk-progress-section" style="display: none;">
+                    <div class="bulk-progress-header">
+                        <h4>Comparison Progress</h4>
+                        <span id="bulk-progress-counter">0 / 0</span>
+                    </div>
+                    <div class="bulk-progress-bar">
+                        <div class="bulk-progress-fill" id="bulk-progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="bulk-progress-current" class="bulk-progress-current"></div>
+                </div>
+
+                <!-- Results Section -->
+                <div id="bulk-results-section" class="bulk-results-section" style="display: none;">
+                    <div class="bulk-results-header">
+                        <h3>Bulk Comparison Results</h3>
+                        <div class="bulk-results-summary" id="bulk-results-summary"></div>
+                    </div>
+                    <div id="bulk-results-list" class="bulk-results-list">
+                        <!-- Individual query results will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div><!-- End tab-content-bulk-select -->
     </div>
 
     <!-- Generic Modal for Pairing & Config -->

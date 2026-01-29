@@ -4243,3 +4243,304 @@
     opacity: 0.5;
   }
 }
+
+/* ============================================
+   BULK SELECT MODE
+   ============================================ */
+
+.bulk-select-mode {
+  padding-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.bulk-select-description {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+/* Bulk Select Environment Panels */
+.bulk-select-environments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.bulk-env-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.bulk-env-panel h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* Bulk SQL Section */
+.bulk-sql-section {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.bulk-sql-input {
+  min-height: 200px;
+  font-family: var(--font-mono, "SF Mono", "Monaco", "Consolas", monospace);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.bulk-options-row {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.bulk-options-row .form-group {
+  flex: 0 0 auto;
+}
+
+.bulk-options-row .form-group input[type="number"] {
+  width: 120px;
+}
+
+/* Bulk Actions */
+.bulk-actions {
+  display: flex;
+  justify-content: center;
+}
+
+/* Bulk Progress Section */
+.bulk-progress-section {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.bulk-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.bulk-progress-header h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+#bulk-progress-counter {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.bulk-progress-bar {
+  height: 8px;
+  background: hsl(var(--muted));
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.bulk-progress-fill {
+  height: 100%;
+  background: hsl(var(--primary));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bulk-progress-current {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono, monospace);
+  padding: 0.5rem;
+  background: hsl(var(--muted) / 0.3);
+  border-radius: calc(var(--radius) - 2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bulk Results Section */
+.bulk-results-section {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.bulk-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.bulk-results-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.bulk-results-summary {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.bulk-results-summary .summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.bulk-results-summary .summary-item.match {
+  color: hsl(var(--success));
+}
+
+.bulk-results-summary .summary-item.differ {
+  color: hsl(var(--destructive));
+}
+
+.bulk-results-summary .summary-item.error {
+  color: hsl(var(--warning));
+}
+
+/* Bulk Results List */
+.bulk-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bulk-result-item {
+  background: hsl(var(--muted) / 0.2);
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+
+.bulk-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.bulk-result-header:hover {
+  background: hsl(var(--muted) / 0.4);
+}
+
+.bulk-result-query {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  color: hsl(var(--foreground));
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 1rem;
+}
+
+.bulk-result-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.bulk-result-status.match {
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+}
+
+.bulk-result-status.differ {
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+}
+
+.bulk-result-status.error {
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(var(--warning));
+}
+
+.bulk-result-details {
+  display: none;
+  padding: 1rem;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.bulk-result-item.expanded .bulk-result-details {
+  display: block;
+}
+
+.bulk-result-item.expanded .bulk-result-header {
+  background: hsl(var(--muted) / 0.4);
+}
+
+.bulk-result-expand-icon {
+  transition: transform 0.2s ease;
+}
+
+.bulk-result-item.expanded .bulk-result-expand-icon {
+  transform: rotate(180deg);
+}
+
+.bulk-result-counts {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+}
+
+.bulk-result-counts span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bulk-result-error {
+  color: hsl(var(--warning));
+  font-size: 0.875rem;
+  font-family: var(--font-mono, monospace);
+  padding: 0.5rem;
+  background: hsl(var(--warning) / 0.1);
+  border-radius: calc(var(--radius) - 2px);
+}
+
+/* Responsive adjustments for Bulk Select */
+@media (max-width: 768px) {
+  .bulk-select-environments {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-options-row {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
