@@ -138,6 +138,11 @@ class CompareConfigTool extends BaseTool {
     this.masterDetailView = new MasterDetailView();
     this.gridView = new GridView();
 
+    // Set up sort change callback for GridView
+    this.gridView.onSortChange = () => {
+      this.renderResults();
+    };
+
     // Connection status polling
     this.connectionStatusInterval = null;
   }
@@ -3666,9 +3671,11 @@ class CompareConfigTool extends BaseTool {
         break;
 
       case "grid":
-        html = this.gridView.render(comparisons, env1_name, env2_name, { compareFields, showStatus: this.statusFilter === null });
+        // Apply sorting if active
+        const sortedComparisons = this.gridView.sortComparisons(comparisons);
+        html = this.gridView.render(sortedComparisons, env1_name, env2_name, { compareFields, showStatus: this.statusFilter === null });
         resultsContent.innerHTML = html;
-        // Attach event listeners for lazy loading
+        // Attach event listeners for lazy loading and sorting
         this.gridView.attachEventListeners(resultsContent);
         break;
 

@@ -1837,6 +1837,34 @@
   min-width: 250px;
 }
 
+/* Sortable PK Header */
+.excel-table .pk-header.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.excel-table .pk-header.sortable:hover {
+  background-color: hsl(var(--muted) / 0.8) !important;
+}
+
+.excel-table .pk-header .pk-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.excel-table .pk-header .sort-indicator {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+
+.excel-table .pk-header.sortable:hover .sort-indicator {
+  opacity: 1;
+}
+
 .excel-table .status-header,
 .excel-table .status-cell {
   left: 300px;
@@ -2515,7 +2543,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 188px;
+  max-height: 214px;
   overflow-y: auto;
   padding: 0;
   transition: all 0.3s ease;
@@ -4108,7 +4136,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {

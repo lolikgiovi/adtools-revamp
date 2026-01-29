@@ -21,6 +21,10 @@ export class GridView {
     this.comparisons = [];
     this.fieldsToDisplay = [];
     this.hasSourceFile = false;
+
+    // Sorting state
+    this.sortDirection = null; // null = original order, 'asc', 'desc'
+    this.onSortChange = null; // Callback when sort changes (to notify parent)
   }
 
   /**
@@ -101,6 +105,7 @@ export class GridView {
     this.fieldsToDisplay = fieldsToDisplay;
     this.hasSourceFile = comparisons.some((c) => c._sourceFile);
     this.showStatus = showStatus;
+    this.pkHeaderName = pkHeaderName;
 
     // Check if any row has a source file (for multi-file Excel compare)
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
@@ -121,7 +126,12 @@ export class GridView {
               <tr class="h-row-1">
                 <th rowspan="2" class="sticky-col index-header">#</th>
                 ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
-                <th rowspan="2" class="sticky-col pk-header">${this.escapeHtml(pkHeaderName)}</th>
+                <th rowspan="2" class="sticky-col pk-header sortable" id="pk-sort-header" title="Click to sort by ${this.escapeHtml(pkHeaderName)}">
+                  <span class="pk-header-content">
+                    ${this.escapeHtml(pkHeaderName)}
+                    <span class="sort-indicator">${this.getSortIndicator()}</span>
+                  </span>
+                </th>
                 ${showStatus ? '<th rowspan="2" class="sticky-col status-header">STATUS</th>' : ""}
                 ${fieldsToDisplay
                   .map(
@@ -171,12 +181,23 @@ export class GridView {
   }
 
   /**
-   * Attaches event listeners for lazy loading
+   * Attaches event listeners for lazy loading and sorting
    * @param {HTMLElement} container - The container element
    */
   attachEventListeners(container) {
     // Clean up any existing observer
     this.cleanupObserver();
+
+    // Attach sort click handler to PK header
+    const pkHeader = container.querySelector("#pk-sort-header");
+    if (pkHeader) {
+      pkHeader.addEventListener("click", () => {
+        this.toggleSort();
+        if (this.onSortChange) {
+          this.onSortChange(this.sortDirection);
+        }
+      });
+    }
 
     // Only set up observer if there are more rows to load
     if (this.renderedCount >= this.comparisons.length) {
@@ -494,5 +515,63 @@ export class GridView {
     }
 
     return envName;
+  }
+
+  /**
+   * Returns the sort indicator HTML based on current sort direction
+   */
+  getSortIndicator() {
+    switch (this.sortDirection) {
+      case "asc":
+        return "↑";
+      case "desc":
+        return "↓";
+      default:
+        return "⇅";
+    }
+  }
+
+  /**
+   * Toggles sort direction: null → asc → desc → null
+   */
+  toggleSort() {
+    switch (this.sortDirection) {
+      case null:
+        this.sortDirection = "asc";
+        break;
+      case "asc":
+        this.sortDirection = "desc";
+        break;
+      case "desc":
+        this.sortDirection = null;
+        break;
+    }
+  }
+
+  /**
+   * Sorts comparisons by primary key
+   * @param {Array} comparisons - Array of comparison objects
+   * @returns {Array} Sorted array (new array, does not mutate original)
+   */
+  sortComparisons(comparisons) {
+    if (!this.sortDirection || !comparisons || comparisons.length === 0) {
+      return comparisons;
+    }
+
+    return [...comparisons].sort((a, b) => {
+      const pkA = this.formatPrimaryKey(a.key).toLowerCase();
+      const pkB = this.formatPrimaryKey(b.key).toLowerCase();
+
+      let result = pkA.localeCompare(pkB, undefined, { numeric: true, sensitivity: "base" });
+
+      return this.sortDirection === "desc" ? -result : result;
+    });
+  }
+
+  /**
+   * Resets sort direction to default (null = original order)
+   */
+  resetSort() {
+    this.sortDirection = null;
   }
 }
