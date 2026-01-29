@@ -58,6 +58,7 @@ class CompareConfigTool extends BaseTool {
 
     this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
     this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
+    this.searchFilter = ""; // Search/filter keyword for results
 
     // Results storage (unified mode only)
     this.results = {
@@ -823,6 +824,36 @@ class CompareConfigTool extends BaseTool {
         this.changeView(value);
       });
     });
+
+    // Results search/filter input
+    const searchInput = document.getElementById("results-search-input");
+    const searchClearBtn = document.getElementById("results-search-clear");
+
+    if (searchInput) {
+      let debounceTimer;
+      searchInput.addEventListener("input", (e) => {
+        const query = e.target.value;
+        // Show/hide clear button
+        if (searchClearBtn) {
+          searchClearBtn.style.display = query.length > 0 ? "flex" : "none";
+        }
+        // Debounce the search
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          this.applySearchFilter(query);
+        }, 200);
+      });
+    }
+
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener("click", () => {
+        if (searchInput) {
+          searchInput.value = "";
+          searchClearBtn.style.display = "none";
+          this.applySearchFilter("");
+        }
+      });
+    }
   }
 
   // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
@@ -3804,7 +3835,56 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Gets filtered comparisons based on current status filter
+   * Applies search/filter to comparison results
+   */
+  applySearchFilter(query) {
+    this.searchFilter = query.trim().toLowerCase();
+    this.gridView.searchQuery = this.searchFilter; // Pass to GridView for highlighting
+    this.renderResults();
+  }
+
+  /**
+   * Checks if a comparison row matches the search query
+   * @param {Object} comp - Comparison object
+   * @param {string} query - Lowercase search query
+   * @returns {boolean}
+   */
+  matchesSearchQuery(comp, query) {
+    if (!query) return true;
+
+    // Check primary key
+    const pkValue = this.formatPrimaryKeyForSearch(comp.key);
+    if (pkValue.toLowerCase().includes(query)) return true;
+
+    // Check all field values in env1_data and env2_data
+    if (comp.env1_data) {
+      for (const val of Object.values(comp.env1_data)) {
+        if (val !== null && val !== undefined && String(val).toLowerCase().includes(query)) {
+          return true;
+        }
+      }
+    }
+    if (comp.env2_data) {
+      for (const val of Object.values(comp.env2_data)) {
+        if (val !== null && val !== undefined && String(val).toLowerCase().includes(query)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Formats primary key for search matching
+   */
+  formatPrimaryKeyForSearch(keyMap) {
+    if (!keyMap || typeof keyMap !== "object") return "";
+    return Object.values(keyMap).map((v) => String(v ?? "")).join(" ");
+  }
+
+  /**
+   * Gets filtered comparisons based on current status filter and search filter
    */
   getFilteredComparisons() {
     if (!this.results[this.queryMode]) return [];
@@ -3816,13 +3896,17 @@ class CompareConfigTool extends BaseTool {
       rows = rows.filter((r) => r._sourceFile === this.excelCompare.selectedFileResult);
     }
 
-    // If no filter, return all rows
-    if (!this.statusFilter) {
-      return rows;
+    // Filter by status
+    if (this.statusFilter) {
+      rows = rows.filter((comp) => comp.status === this.statusFilter);
     }
 
-    // Filter by status
-    return rows.filter((comp) => comp.status === this.statusFilter);
+    // Filter by search query
+    if (this.searchFilter) {
+      rows = rows.filter((comp) => this.matchesSearchQuery(comp, this.searchFilter));
+    }
+
+    return rows;
   }
 
   /**

@@ -25,6 +25,9 @@ export class GridView {
     // Sorting state
     this.sortDirection = null; // null = original order, 'asc', 'desc'
     this.onSortChange = null; // Callback when sort changes (to notify parent)
+
+    // Search/filter state
+    this.searchQuery = ""; // Lowercase search query for highlighting
   }
 
   /**
@@ -292,6 +295,9 @@ export class GridView {
     const diffFields = new Set(comparison.differences || []);
     const diffDetails = comparison._diffDetails || {};
 
+    // Apply search highlighting to PK value
+    const pkDisplay = this.searchQuery ? this.highlightSearchMatch(pkValue) : this.escapeHtml(pkValue);
+
     return `
       <tr class="data-row status-${statusClass}">
         <td class="sticky-col index-cell">${rowIndex}</td>
@@ -302,7 +308,7 @@ export class GridView {
               )}</td>`
             : ""
         }
-        <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${this.escapeHtml(pkValue)}</td>
+        <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${pkDisplay}</td>
         ${
           showStatus
             ? `
@@ -357,8 +363,12 @@ export class GridView {
 
     // Check if we have character-level diff details
     if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
-      // Render with character-level highlighting
-      const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
+      // Render with character-level highlighting (search highlight applied after)
+      let { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
+      if (this.searchQuery) {
+        env1Html = this.highlightSearchInHtml(env1Html);
+        env2Html = this.highlightSearchInHtml(env2Html);
+      }
       return `
         <td class="${c1Class}">${env1Html}</td>
         <td class="${c2Class} field-boundary">${env2Html}</td>
@@ -366,9 +376,12 @@ export class GridView {
     }
 
     // Standard rendering (cell-level diff or no diff details)
+    // Apply search highlighting if active
+    const display1 = this.searchQuery ? this.highlightSearchMatch(val1) : this.escapeHtml(val1);
+    const display2 = this.searchQuery ? this.highlightSearchMatch(val2) : this.escapeHtml(val2);
     return `
-      <td class="${c1Class}">${this.escapeHtml(val1)}</td>
-      <td class="${c2Class} field-boundary">${this.escapeHtml(val2)}</td>
+      <td class="${c1Class}">${display1}</td>
+      <td class="${c2Class} field-boundary">${display2}</td>
     `;
   }
 
@@ -573,5 +586,53 @@ export class GridView {
    */
   resetSort() {
     this.sortDirection = null;
+  }
+
+  /**
+   * Highlights search query matches in a plain text string
+   * @param {string} text - The text to highlight
+   * @returns {string} HTML with search matches wrapped in highlight spans
+   */
+  highlightSearchMatch(text) {
+    if (!this.searchQuery || !text) {
+      return this.escapeHtml(text);
+    }
+
+    const escaped = this.escapeHtml(text);
+    const query = this.escapeHtml(this.searchQuery);
+
+    // Case-insensitive replacement with preserved case
+    const regex = new RegExp(`(${this.escapeRegExp(query)})`, "gi");
+    return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+  }
+
+  /**
+   * Highlights search query in HTML that already contains other markup (e.g., diff spans)
+   * Only highlights text content, not inside tags
+   * @param {string} html - HTML string
+   * @returns {string} HTML with search highlights added to text content
+   */
+  highlightSearchInHtml(html) {
+    if (!this.searchQuery || !html) {
+      return html;
+    }
+
+    const query = this.escapeHtml(this.searchQuery);
+    const regex = new RegExp(`(${this.escapeRegExp(query)})`, "gi");
+
+    // Split by tags, highlight only text parts
+    return html.replace(/>([^<]+)</g, (match, textContent) => {
+      const highlighted = textContent.replace(regex, '<span class="search-highlight">$1</span>');
+      return `>${highlighted}<`;
+    });
+  }
+
+  /**
+   * Escapes special regex characters in a string
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string safe for use in RegExp
+   */
+  escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 }

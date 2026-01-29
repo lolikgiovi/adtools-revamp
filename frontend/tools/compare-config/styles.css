@@ -946,6 +946,63 @@
   flex-shrink: 0;
 }
 
+/* Results Search Box */
+.results-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.results-search-box .search-icon {
+  position: absolute;
+  left: 10px;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+.results-search-input {
+  width: 200px;
+  padding: 6px 30px 6px 32px;
+  font-size: 0.8125rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.results-search-input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.results-search-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15);
+}
+
+.results-search-clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: hsl(var(--muted));
+  border-radius: 50%;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.results-search-clear:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+  color: hsl(var(--foreground));
+}
+
 /* View Dropdown */
 .view-dropdown {
   position: relative;
@@ -1896,6 +1953,18 @@
 .excel-table td.sticky-col {
   background-color: hsl(var(--card)) !important;
   z-index: 20;
+}
+
+/* Search Highlight */
+.excel-table .search-highlight {
+  background-color: hsl(50 100% 50% / 0.4);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+:root[data-theme="dark"] .excel-table .search-highlight {
+  background-color: hsl(50 100% 40% / 0.5);
 }
 
 /* Data Styling */
