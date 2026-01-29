@@ -8172,47 +8172,314 @@ class CompareConfigTool extends BaseTool {
       }
     `;
 
-    // Render results list
+    // Render results list (skeleton only - data loaded on expand)
     listEl.innerHTML = this.bulkSelect.results
       .map((result, index) => {
         const statusLabel = result.status === "match" ? "Match" : result.status === "differ" ? "Differ" : "Error";
         const statusClass = result.status;
 
-        let details = "";
+        // Summary info shown in header
+        let summaryInfo = "";
         if (result.status === "error") {
-          details = `<div class="bulk-result-error">${result.error}</div>`;
+          summaryInfo = `<span class="bulk-result-row-info error">${this.escapeHtml(result.error.substring(0, 60))}${result.error.length > 60 ? "..." : ""}</span>`;
         } else {
-          details = `
-          <div class="bulk-result-counts">
-            <span>Source A: ${result.sourceAData.rowCount} rows</span>
-            <span>Source B: ${result.sourceBData.rowCount} rows</span>
-          </div>
-        `;
+          const rowDiff = result.sourceAData.rowCount !== result.sourceBData.rowCount;
+          summaryInfo = `<span class="bulk-result-row-info ${rowDiff ? "differ" : ""}">A: ${result.sourceAData.rowCount} rows | B: ${result.sourceBData.rowCount} rows</span>`;
         }
 
         return `
-        <div class="bulk-result-item" data-index="${index}">
+        <div class="bulk-result-item" data-index="${index}" data-loaded="false">
           <div class="bulk-result-header">
             <span class="bulk-result-query">${this.escapeHtml(result.sql)}</span>
+            ${summaryInfo}
             <span class="bulk-result-status ${statusClass}">${statusLabel}</span>
             <svg class="bulk-result-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </div>
           <div class="bulk-result-details">
-            ${details}
+            <div class="bulk-detail-loading">Loading data...</div>
           </div>
         </div>
       `;
       })
       .join("");
 
-    // Add expand/collapse handlers
+    // Add expand/collapse handlers with lazy loading
     listEl.querySelectorAll(".bulk-result-header").forEach((header) => {
       header.addEventListener("click", () => {
-        header.closest(".bulk-result-item").classList.toggle("expanded");
+        const item = header.closest(".bulk-result-item");
+        const isExpanding = !item.classList.contains("expanded");
+        item.classList.toggle("expanded");
+
+        // Lazy load detail content on first expand
+        if (isExpanding && item.dataset.loaded === "false") {
+          const index = parseInt(item.dataset.index, 10);
+          this.renderBulkResultDetail(item, index);
+        }
       });
     });
+  }
+
+  /**
+   * Renders the detailed data for a bulk result item (lazy loaded on expand)
+   */
+  renderBulkResultDetail(itemEl, index) {
+    const result = this.bulkSelect.results[index];
+    if (!result) return;
+
+    const detailsEl = itemEl.querySelector(".bulk-result-details");
+    if (!detailsEl) return;
+
+    itemEl.dataset.loaded = "true";
+
+    if (result.status === "error") {
+      detailsEl.innerHTML = `<div class="bulk-result-error">${this.escapeHtml(result.error)}</div>`;
+      return;
+    }
+
+    const { sourceAData, sourceBData } = result;
+    const sourceAName = this.bulkSelect.sourceAConnection?.name || "Source A";
+    const sourceBName = this.bulkSelect.sourceBConnection?.name || "Source B";
+
+    // Build comparison data for display
+    const comparisonData = this.buildBulkComparisonData(sourceAData, sourceBData);
+
+    const matchCount = comparisonData.comparisons.filter((c) => c.status === "match").length;
+
+    detailsEl.innerHTML = `
+      <div class="bulk-detail-summary">
+        <span class="bulk-detail-env"><strong>${this.escapeHtml(sourceAName)}:</strong> ${sourceAData.rowCount} rows</span>
+        <span class="bulk-detail-env"><strong>${this.escapeHtml(sourceBName)}:</strong> ${sourceBData.rowCount} rows</span>
+        <span class="bulk-detail-stats">
+          <span class="stat-match">${matchCount} matching</span>
+          <span class="stat-diff">${comparisonData.differCount} different</span>
+        </span>
+      </div>
+      ${this.renderBulkComparisonTable(comparisonData, sourceAName, sourceBName)}
+    `;
+
+    // Bind filter toggle event
+    const filterCheckbox = detailsEl.querySelector(".bulk-show-diff-only");
+    if (filterCheckbox) {
+      filterCheckbox.addEventListener("change", (e) => {
+        e.stopPropagation();
+        const tbody = detailsEl.querySelector(".bulk-comparison-tbody");
+        if (!tbody) return;
+        const showDiffOnly = e.target.checked;
+        const rows = tbody.querySelectorAll(".bulk-comparison-row");
+        rows.forEach((row) => {
+          const status = row.getAttribute("data-status");
+          if (showDiffOnly && status === "match") {
+            row.classList.add("bulk-row-hidden");
+          } else {
+            row.classList.remove("bulk-row-hidden");
+          }
+        });
+      });
+    }
+
+    // Prevent clicks in controls area from bubbling
+    const controlsWrapper = detailsEl.querySelector(".bulk-comparison-controls");
+    if (controlsWrapper) {
+      controlsWrapper.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    // Prevent clicks in table area from bubbling
+    const tableWrapper = detailsEl.querySelector(".bulk-comparison-table-wrapper");
+    if (tableWrapper) {
+      tableWrapper.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    // Bind load more event
+    const loadMoreBtn = detailsEl.querySelector(".bulk-load-more-btn");
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", () => {
+        const total = parseInt(loadMoreBtn.dataset.total, 10);
+        const loaded = parseInt(loadMoreBtn.dataset.loaded, 10);
+        const BATCH_SIZE = 50;
+        const nextBatch = comparisonData.comparisons.slice(loaded, loaded + BATCH_SIZE);
+        const tbody = detailsEl.querySelector(".bulk-comparison-tbody");
+
+        if (tbody && nextBatch.length > 0) {
+          const newRows = nextBatch.map((comp) => this.renderBulkComparisonRow(comp, comparisonData.headers)).join("");
+          tbody.insertAdjacentHTML("beforeend", newRows);
+
+          const newLoaded = loaded + nextBatch.length;
+          loadMoreBtn.dataset.loaded = newLoaded;
+
+          if (newLoaded >= total) {
+            loadMoreBtn.closest(".bulk-load-more").remove();
+          } else {
+            loadMoreBtn.textContent = `Load more (${total - newLoaded} remaining)`;
+          }
+
+          // Apply current filter state to new rows
+          const filterCheckbox = detailsEl.querySelector(".bulk-show-diff-only");
+          if (filterCheckbox?.checked) {
+            tbody.querySelectorAll(".bulk-comparison-row").forEach((row) => {
+              const status = row.dataset.status;
+              if (status === "match") {
+                row.classList.add("bulk-row-hidden");
+              }
+            });
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Builds comparison data from two result sets for bulk display
+   */
+  buildBulkComparisonData(sourceAData, sourceBData) {
+    const rowsA = sourceAData.rows || [];
+    const rowsB = sourceBData.rows || [];
+    const headers = sourceAData.headers || sourceBData.headers || [];
+
+    const comparisons = [];
+    let differCount = 0;
+    const maxRows = Math.max(rowsA.length, rowsB.length);
+
+    for (let i = 0; i < maxRows; i++) {
+      const rowA = rowsA[i] || null;
+      const rowB = rowsB[i] || null;
+
+      let status = "match";
+      const differences = [];
+
+      if (!rowA) {
+        status = "only_in_b";
+      } else if (!rowB) {
+        status = "only_in_a";
+      } else {
+        // Compare field by field
+        for (const key of headers) {
+          const valA = this.normalizeValueForDisplay(rowA[key]);
+          const valB = this.normalizeValueForDisplay(rowB[key]);
+          if (valA !== valB) {
+            differences.push(key);
+            status = "differ";
+          }
+        }
+      }
+
+      if (status !== "match") differCount++;
+
+      comparisons.push({
+        index: i,
+        status,
+        rowA,
+        rowB,
+        differences,
+      });
+    }
+
+    return { comparisons, headers, differCount };
+  }
+
+  /**
+   * Normalize a value for display comparison
+   */
+  normalizeValueForDisplay(val) {
+    if (val === null || val === undefined) return "";
+    return String(val);
+  }
+
+  /**
+   * Renders the comparison table for bulk results with virtualization
+   */
+  renderBulkComparisonTable(comparisonData, sourceAName, sourceBName) {
+    const { comparisons, headers, differCount } = comparisonData;
+
+    if (comparisons.length === 0) {
+      return '<div class="bulk-no-data">No data to display</div>';
+    }
+
+    // Limit initial render for performance (virtualization)
+    const INITIAL_RENDER_LIMIT = 50;
+    const hasMore = comparisons.length > INITIAL_RENDER_LIMIT;
+    const initialComparisons = comparisons.slice(0, INITIAL_RENDER_LIMIT);
+
+    // Filter is useful only when there's a mix of matching and differing rows
+    const matchCount = comparisons.length - differCount;
+    const canFilter = differCount > 0 && matchCount > 0;
+
+    return `
+      <div class="bulk-comparison-controls">
+        <label class="bulk-filter-toggle">
+          <input type="checkbox" class="bulk-show-diff-only" ${canFilter ? "" : "disabled"}>
+          <span>Show differences only${!canFilter ? " (no matching rows to hide)" : ""}</span>
+        </label>
+      </div>
+      <div class="bulk-comparison-table-wrapper">
+        <table class="bulk-comparison-table">
+          <thead>
+            <tr>
+              <th class="bulk-row-num">#</th>
+              <th class="bulk-status-col">Status</th>
+              ${headers.map((h) => `<th colspan="2" class="bulk-field-header">${this.escapeHtml(h)}</th>`).join("")}
+            </tr>
+            <tr class="bulk-env-row">
+              <th></th>
+              <th></th>
+              ${headers.map(() => `<th class="bulk-env-sub env-a">${this.escapeHtml(sourceAName)}</th><th class="bulk-env-sub env-b">${this.escapeHtml(sourceBName)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody class="bulk-comparison-tbody">
+            ${initialComparisons.map((comp) => this.renderBulkComparisonRow(comp, headers)).join("")}
+          </tbody>
+        </table>
+        ${
+          hasMore
+            ? `
+          <div class="bulk-load-more">
+            <button class="btn btn-secondary btn-sm bulk-load-more-btn" data-total="${comparisons.length}" data-loaded="${INITIAL_RENDER_LIMIT}">
+              Load more (${comparisons.length - INITIAL_RENDER_LIMIT} remaining)
+            </button>
+          </div>
+        `
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  /**
+   * Renders a single row in the bulk comparison table
+   */
+  renderBulkComparisonRow(comp, headers) {
+    const { index, status, rowA, rowB, differences } = comp;
+    const diffSet = new Set(differences);
+
+    const statusLabel =
+      status === "match" ? "Match" : status === "differ" ? "Differ" : status === "only_in_a" ? "Only A" : "Only B";
+
+    const statusClass = status === "match" ? "match" : status === "differ" ? "differ" : "missing";
+
+    let cells = "";
+    for (const header of headers) {
+      const valA = rowA ? this.formatValue(rowA[header]) : "(missing)";
+      const valB = rowB ? this.formatValue(rowB[header]) : "(missing)";
+      const isDiff = diffSet.has(header);
+
+      cells += `
+        <td class="bulk-cell ${isDiff ? "cell-diff cell-a" : ""}">${this.escapeHtml(valA)}</td>
+        <td class="bulk-cell ${isDiff ? "cell-diff cell-b" : ""}">${this.escapeHtml(valB)}</td>
+      `;
+    }
+
+    return `
+      <tr class="bulk-comparison-row ${statusClass}" data-status="${status}">
+        <td class="bulk-row-num">${index + 1}</td>
+        <td class="bulk-status-cell ${statusClass}">${statusLabel}</td>
+        ${cells}
+      </tr>
+    `;
   }
 
   /**

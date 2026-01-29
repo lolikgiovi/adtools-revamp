@@ -64,12 +64,13 @@ export const CompareConfigTemplate = /* html */ `
                         </svg>
                         Single Comparison
                     </button>
-                    <button class="tool-tab" data-tab="bulk-select" id="tab-bulk-select">
+                    <!-- Bulk Select tab hidden for now - needs more work -->
+                    <!-- <button class="tool-tab" data-tab="bulk-select" id="tab-bulk-select">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 6h16M4 12h16M4 18h16"></path>
                         </svg>
                         Bulk Select
-                    </button>
+                    </button> -->
                 </div>
             </div>
             <div class="tabs-right">

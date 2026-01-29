@@ -4533,6 +4533,235 @@
   border-radius: calc(var(--radius) - 2px);
 }
 
+/* Bulk Result Row Info (in header) */
+.bulk-result-row-info {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin-right: auto;
+  margin-left: 1rem;
+  white-space: nowrap;
+}
+
+.bulk-result-row-info.differ {
+  color: hsl(var(--destructive));
+}
+
+.bulk-result-row-info.error {
+  color: hsl(var(--warning));
+}
+
+/* Bulk Detail Loading State */
+.bulk-detail-loading {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+/* Bulk Detail Summary */
+.bulk-detail-summary {
+  display: flex;
+  gap: 1.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.bulk-detail-env {
+  color: hsl(var(--foreground));
+}
+
+.bulk-detail-diff-count {
+  color: hsl(var(--destructive));
+  font-weight: 500;
+}
+
+.bulk-detail-stats {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
+}
+
+.bulk-detail-stats .stat-match {
+  color: hsl(var(--success));
+  font-weight: 500;
+}
+
+.bulk-detail-stats .stat-diff {
+  color: hsl(var(--destructive));
+  font-weight: 500;
+}
+
+/* Bulk Comparison Controls */
+.bulk-comparison-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.bulk-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.bulk-filter-toggle input:disabled + span {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Bulk Comparison Table */
+.bulk-comparison-table-wrapper {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.bulk-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.bulk-comparison-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: hsl(var(--muted));
+}
+
+.bulk-comparison-table th {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid hsl(var(--border));
+  white-space: nowrap;
+}
+
+.bulk-comparison-table .bulk-row-num {
+  width: 40px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+}
+
+.bulk-comparison-table .bulk-status-col {
+  width: 70px;
+}
+
+.bulk-comparison-table .bulk-field-header {
+  text-align: center;
+  border-left: 1px solid hsl(var(--border));
+}
+
+.bulk-env-row th {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  padding: 0.25rem 0.5rem;
+}
+
+.bulk-env-sub.env-a {
+  background: hsl(var(--destructive) / 0.05);
+  border-left: 1px solid hsl(var(--border));
+}
+
+.bulk-env-sub.env-b {
+  background: hsl(var(--success) / 0.05);
+}
+
+/* Bulk Comparison Rows */
+.bulk-comparison-row {
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+.bulk-comparison-row.bulk-row-hidden {
+  display: none !important;
+}
+
+.bulk-comparison-row:hover {
+  background: hsl(var(--muted) / 0.3);
+}
+
+.bulk-comparison-row.match {
+  background: transparent;
+}
+
+.bulk-comparison-row.differ {
+  background: hsl(var(--destructive) / 0.03);
+}
+
+.bulk-comparison-row.missing {
+  background: hsl(var(--warning) / 0.05);
+}
+
+.bulk-comparison-row td {
+  padding: 0.4rem 0.5rem;
+  vertical-align: top;
+}
+
+.bulk-status-cell {
+  font-weight: 500;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.bulk-status-cell.match {
+  color: hsl(var(--success));
+}
+
+.bulk-status-cell.differ {
+  color: hsl(var(--destructive));
+}
+
+.bulk-status-cell.missing {
+  color: hsl(var(--warning));
+}
+
+/* Bulk Cells */
+.bulk-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 1px solid hsl(var(--border) / 0.3);
+}
+
+.bulk-cell.cell-diff.cell-a {
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+}
+
+.bulk-cell.cell-diff.cell-b {
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+}
+
+/* Load More Button */
+.bulk-load-more {
+  padding: 0.75rem;
+  text-align: center;
+  background: hsl(var(--muted) / 0.3);
+  border-top: 1px solid hsl(var(--border));
+}
+
+.bulk-load-more-btn {
+  font-size: 0.8rem;
+}
+
+/* No Data State */
+.bulk-no-data {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  padding: 1rem;
+  text-align: center;
+}
+
 /* Responsive adjustments for Bulk Select */
 @media (max-width: 768px) {
   .bulk-select-environments {
@@ -4542,5 +4771,14 @@
   .bulk-options-row {
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .bulk-detail-summary {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .bulk-comparison-table-wrapper {
+    max-height: 300px;
   }
 }
