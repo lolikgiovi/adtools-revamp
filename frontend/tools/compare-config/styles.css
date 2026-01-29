@@ -964,9 +964,9 @@
   background: hsl(var(--primary) / 0.1);
 }
 
-/* Search box on second row, matching buttons width */
+/* Search box on second row, matching buttons row width */
 .results-actions .results-search-box {
-  width: 320px;
+  width: 100%;
 }
 
 .results-actions .results-search-input {
