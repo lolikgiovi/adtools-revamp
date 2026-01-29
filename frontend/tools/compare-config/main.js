@@ -5868,6 +5868,12 @@ class CompareConfigTool extends BaseTool {
    * Handle source type change (Oracle/Excel)
    */
   onUnifiedSourceTypeChange(source, type) {
+    // Guardrail: Oracle is only available in desktop version
+    if (type === "oracle" && !isTauri()) {
+      this.showOracleDesktopOnlyModal(source);
+      return;
+    }
+
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
     this.unified[sourceKey].type = type;
     this.unified[sourceKey].dataLoaded = false;
@@ -5883,6 +5889,95 @@ class CompareConfigTool extends BaseTool {
     if (type === "excel" && this.unified[sourceKey].excelFiles.length > 0) {
       this.updateUnifiedExcelUI(sourceKey);
     }
+  }
+
+  /**
+   * Show modal explaining Oracle is only available in desktop version
+   */
+  showOracleDesktopOnlyModal(source) {
+    // Reset the radio back to current selection (or none)
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const currentType = this.unified[sourceKey].type;
+    const oracleRadio = document.getElementById(`source-${source.toLowerCase()}-type-oracle`);
+    const excelRadio = document.getElementById(`source-${source.toLowerCase()}-type-excel`);
+
+    if (oracleRadio) oracleRadio.checked = false;
+    if (currentType === "excel" && excelRadio) {
+      excelRadio.checked = true;
+    }
+
+    // Show the modal
+    const modalOverlay = document.getElementById("excel-modal-overlay");
+    const modalTitle = document.getElementById("excel-modal-title");
+    const modalBody = document.getElementById("excel-modal-body");
+    const modalSave = document.getElementById("btn-modal-save");
+    const modalCancel = document.getElementById("btn-modal-cancel");
+
+    if (!modalOverlay || !modalBody) return;
+
+    modalTitle.textContent = "Oracle - Desktop Only";
+    modalBody.innerHTML = `
+      <div class="oracle-desktop-only-message">
+        <div class="message-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+        </div>
+        <h4>Oracle Database connectivity is only available in the Desktop version</h4>
+        <p>The web version of AD Tools supports Excel/CSV comparisons only. To use Oracle Database features, please install the desktop application.</p>
+        
+        <div class="install-instructions">
+          <h5>Installation (macOS)</h5>
+          <p>Run this command in your terminal:</p>
+          <div class="code-block">
+            <code>curl -fsSL https://ad-tools.pages.dev/install.sh | bash</code>
+            <button class="btn btn-ghost btn-sm btn-copy-install" title="Copy to clipboard">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+          <p class="install-note">This will install AD Tools desktop app with full Oracle Database support.</p>
+        </div>
+      </div>
+    `;
+
+    // Hide save button, change cancel to "Close"
+    if (modalSave) modalSave.style.display = "none";
+    if (modalCancel) modalCancel.textContent = "Close";
+
+    modalOverlay.style.display = "flex";
+
+    // Bind copy button
+    const copyBtn = modalBody.querySelector(".btn-copy-install");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText("curl -fsSL https://ad-tools.pages.dev/install.sh | bash");
+          this.eventBus.emit("notification:show", {
+            type: "success",
+            message: "Install command copied to clipboard",
+          });
+        } catch (err) {
+          console.error("Failed to copy:", err);
+        }
+      });
+    }
+
+    // Close handler
+    const closeModal = () => {
+      modalOverlay.style.display = "none";
+      if (modalSave) modalSave.style.display = "";
+      if (modalCancel) modalCancel.textContent = "Cancel";
+    };
+
+    modalCancel.onclick = closeModal;
+    modalOverlay.onclick = (e) => {
+      if (e.target === modalOverlay) closeModal();
+    };
   }
 
   /**

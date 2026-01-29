@@ -4782,3 +4782,87 @@
     max-height: 300px;
   }
 }
+
+/* ============================================
+   ORACLE DESKTOP ONLY MODAL
+   ============================================ */
+
+.oracle-desktop-only-message {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.oracle-desktop-only-message .message-icon {
+  margin-bottom: 1rem;
+  color: hsl(var(--primary));
+}
+
+.oracle-desktop-only-message .message-icon svg {
+  opacity: 0.8;
+}
+
+.oracle-desktop-only-message h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0 0 0.75rem 0;
+}
+
+.oracle-desktop-only-message > p {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+}
+
+.oracle-desktop-only-message .install-instructions {
+  background: hsl(var(--muted) / 0.3);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.oracle-desktop-only-message .install-instructions h5 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0 0 0.5rem 0;
+}
+
+.oracle-desktop-only-message .install-instructions > p {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.5rem 0;
+}
+
+.oracle-desktop-only-message .code-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.oracle-desktop-only-message .code-block code {
+  flex: 1;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  color: hsl(var(--primary));
+  word-break: break-all;
+}
+
+.oracle-desktop-only-message .code-block .btn-copy-install {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+}
+
+.oracle-desktop-only-message .install-note {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+  font-style: italic;
+}
