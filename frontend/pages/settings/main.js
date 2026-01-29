@@ -553,9 +553,8 @@ class SettingsPage {
           .join("");
       };
 
-      const showForm = (conn = null, index = -1) => {
+      const showForm = (conn = null, index = -1, afterRowEl = null) => {
         editingIndex = index;
-        formEl.style.display = "block";
         formEl.querySelector(".oracle-form-title").textContent = conn ? "Edit Connection" : "Add Connection";
         formEl.querySelector(".oracle-name").value = conn?.name || "";
         formEl.querySelector(".oracle-connect-string").value = conn?.connect_string || "";
@@ -563,6 +562,13 @@ class SettingsPage {
         formEl.querySelector(".oracle-password").value = "";
         statusEl.textContent = "";
         statusEl.className = "oracle-form-status";
+        // Position form: after the specific row when editing, or after the list when adding
+        if (afterRowEl) {
+          afterRowEl.insertAdjacentElement("afterend", formEl);
+        } else {
+          wrapper.appendChild(formEl);
+        }
+        formEl.style.display = "block";
         // If editing, fetch credentials and populate
         if (conn) {
           (async () => {
@@ -577,6 +583,8 @@ class SettingsPage {
 
       const hideForm = () => {
         formEl.style.display = "none";
+        // Move form back to wrapper so renderList() won't destroy it
+        wrapper.appendChild(formEl);
         editingIndex = -1;
       };
 
@@ -651,12 +659,41 @@ class SettingsPage {
         testBtn.disabled = true;
 
         try {
-          const config = { name: name || "test", connect_string: connectString };
-          await invoke("test_oracle_connection", { config, username, password });
-          statusEl.textContent = "✓ Connection successful";
-          statusEl.className = "oracle-form-status success";
+          const connName = name || "test";
+          // Try sidecar first (preferred)
+          try {
+            const response = await fetch("http://127.0.0.1:21522/test-connection", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                connection: {
+                  name: connName,
+                  connect_string: connectString,
+                  username,
+                  password,
+                },
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.detail?.message || err.detail || "Connection failed");
+            }
+            statusEl.textContent = "✓ Connection successful";
+            statusEl.className = "oracle-form-status success";
+          } catch (fetchErr) {
+            // Fallback to Tauri backend if sidecar not available
+            if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+              const config = { name: connName, connect_string: connectString };
+              await invoke("test_oracle_connection", { config, username, password });
+              statusEl.textContent = "✓ Connection successful";
+              statusEl.className = "oracle-form-status success";
+            } else {
+              throw fetchErr;
+            }
+          }
         } catch (err) {
-          statusEl.textContent = `✗ Connection failed: ${err}`;
+          statusEl.textContent = `✗ Connection failed: ${err.message || err}`;
           statusEl.className = "oracle-form-status error";
         } finally {
           testBtn.disabled = false;
@@ -762,7 +799,8 @@ class SettingsPage {
         if (editBtn) {
           const idx = parseInt(editBtn.dataset.index, 10);
           const conns = this.service.getValue(storageKey, "oracle-connections", []);
-          if (conns[idx]) showForm(conns[idx], idx);
+          const rowEl = editBtn.closest(".oracle-connection-row");
+          if (conns[idx]) showForm(conns[idx], idx, rowEl);
         }
 
         if (deleteBtn) {
