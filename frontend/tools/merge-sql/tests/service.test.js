@@ -149,8 +149,8 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.mergedSql).toContain("SET DEFINE OFF;");
       expect(result.mergedSql).toContain("INSERT INTO T1");
       expect(result.mergedSql).toContain("INSERT INTO T2");
-      expect(result.mergedSql).toContain("-- Source: file1.sql");
-      expect(result.mergedSql).toContain("-- Source: file2.sql");
+      expect(result.mergedSql).toContain("-- file1.sql");
+      expect(result.mergedSql).toContain("-- file2.sql");
     });
 
     it("combines SELECT statements from multiple files", () => {
@@ -301,6 +301,232 @@ SELECT * FROM SCHEMA.TABLE3;`;
       MergeSqlService.sortFiles(files, "asc");
 
       expect(files[0].name).toBe(original[0].name);
+    });
+  });
+
+  describe("buildAdjacentGroups", () => {
+    it("returns empty array for empty input", () => {
+      const result = MergeSqlService.buildAdjacentGroups([]);
+      expect(result).toEqual([]);
+    });
+
+    it("groups consecutive standard files by SCHEMA.TABLE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.buildAdjacentGroups(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].groupKey).toBe("CONFIG.APP_CONFIG");
+      expect(result[0].isStandard).toBe(true);
+      expect(result[0].entries).toHaveLength(2);
+      expect(result[0].entries[0].subHeader).toBe("SQUAD1 - FEATURE1");
+      expect(result[0].entries[1].subHeader).toBe("SQUAD2 - FEATURE2");
+    });
+
+    it("does NOT merge non-adjacent files with same SCHEMA.TABLE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO OTHER.TABLE (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "OTHER.TABLE (SQUADX)[FEATUREX].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.buildAdjacentGroups(parsedFiles);
+
+      expect(result).toHaveLength(3);
+      expect(result[0].groupKey).toBe("CONFIG.APP_CONFIG");
+      expect(result[1].groupKey).toBe("OTHER.TABLE");
+      expect(result[2].groupKey).toBe("CONFIG.APP_CONFIG");
+    });
+
+    it("non-standard filenames form individual groups", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO T1 (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "custom_file.sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO T1 (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const result = MergeSqlService.buildAdjacentGroups(parsedFiles);
+
+      // Same non-standard filename still groups adjacently
+      expect(result).toHaveLength(1);
+      expect(result[0].groupKey).toBe("custom_file.sql");
+      expect(result[0].isStandard).toBe(false);
+      expect(result[0].entries[0].subHeader).toBeNull();
+    });
+  });
+
+  describe("mergeFiles grouped output", () => {
+    it("consecutive same-table files produce single group header in DML", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Should have exactly one group header
+      const headerMatches = result.mergedSql.match(/-- CONFIG\.APP_CONFIG\n/g);
+      expect(headerMatches).toHaveLength(1);
+      expect(result.mergedSql).toContain("-- SQUAD1 - FEATURE1");
+      expect(result.mergedSql).toContain("-- SQUAD2 - FEATURE2");
+      expect(result.mergedSql).toContain("SET DEFINE OFF;");
+    });
+
+    it("non-adjacent same-table files produce separate group headers", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO OTHER.TABLE_NAME (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "OTHER.TABLE_NAME (SQUADX)[FEATUREX].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      const headerMatches = result.mergedSql.match(/-- CONFIG\.APP_CONFIG\n/g);
+      expect(headerMatches).toHaveLength(2);
+      expect(result.mergedSql).toContain("-- OTHER.TABLE_NAME");
+    });
+
+    it("SELECT output includes SELECT * FROM SCHEMA.TABLE for standard filenames", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("-- CONFIG.APP_CONFIG");
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+      expect(result.selectSql).toContain("-- SQUAD1 - FEATURE1");
+    });
+
+    it("SELECT output does NOT include auto-generated SELECT for non-standard filenames", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM T1;"],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("-- custom_file.sql");
+      // Should not have a second SELECT * FROM line (only the original statement)
+      const selectFromMatches = result.selectSql.match(/SELECT \* FROM/g);
+      expect(selectFromMatches).toHaveLength(1);
+    });
+
+    it("handles mixed standard and non-standard filenames", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO T2 (c) VALUES (2);"],
+          selectStatements: ["SELECT * FROM T2;"],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // DML: standard group has schema.table header + sub-header
+      expect(result.mergedSql).toContain("-- CONFIG.APP_CONFIG");
+      expect(result.mergedSql).toContain("-- SQUAD1 - FEATURE1");
+      // DML: non-standard group has filename header, no sub-header
+      expect(result.mergedSql).toContain("-- custom_file.sql");
+
+      // SELECT: standard group has auto-generated SELECT * FROM
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+      // SELECT: non-standard group does NOT have auto-generated SELECT
+      expect(result.selectSql).toContain("-- custom_file.sql");
+    });
+
+    it("skips groups with no DML statements in merged output", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM T1;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // mergedSql should only have SET DEFINE OFF since there are no DML statements
+      expect(result.mergedSql).toBe("SET DEFINE OFF;");
+      // selectSql should still have content
+      expect(result.selectSql).toContain("SELECT * FROM T1;");
+    });
+
+    it("skips groups with no SELECT statements in select output", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO T1 (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.mergedSql).toContain("INSERT INTO T1");
+      expect(result.selectSql).toBe("");
     });
   });
 });

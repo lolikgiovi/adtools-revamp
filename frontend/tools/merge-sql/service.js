@@ -125,10 +125,8 @@ export class MergeSqlService {
    * @returns {{ mergedSql: string, selectSql: string, duplicates: Array<{ statement: string, files: string[] }> }}
    */
   static mergeFiles(parsedFiles) {
-    const allDmlStatements = [];
-    const allSelectStatements = [];
-    const dmlStatementFileMap = new Map(); // Track which files contain each DML statement (for duplicate detection)
-
+    // Duplicate detection (runs before grouping, unchanged logic)
+    const dmlStatementFileMap = new Map();
     for (const file of parsedFiles) {
       for (const stmt of file.dmlStatements) {
         const normalized = this.normalizeStatement(stmt);
@@ -136,39 +134,82 @@ export class MergeSqlService {
           dmlStatementFileMap.set(normalized, { statement: stmt, files: [] });
         }
         dmlStatementFileMap.get(normalized).files.push(file.fileName);
-        allDmlStatements.push({ statement: stmt, fileName: file.fileName });
-      }
-
-      for (const stmt of file.selectStatements) {
-        allSelectStatements.push({ statement: stmt, fileName: file.fileName });
       }
     }
 
-    // Find duplicates (only for DML statements, not SELECT)
     const duplicates = [];
     for (const [_, info] of dmlStatementFileMap) {
       if (info.files.length > 1) {
-        duplicates.push({
-          statement: info.statement,
-          files: info.files,
-        });
+        duplicates.push({ statement: info.statement, files: info.files });
       }
     }
 
-    // Build merged SQL with SET DEFINE OFF at the beginning
+    // Build adjacent groups
+    const groups = this.buildAdjacentGroups(parsedFiles);
+
+    // Build merged SQL (DML)
     const dmlLines = ["SET DEFINE OFF;", ""];
-    for (const item of allDmlStatements) {
-      dmlLines.push(`-- Source: ${item.fileName}`);
-      dmlLines.push(item.statement);
-      dmlLines.push("");
+    let dmlGroupCount = 0;
+
+    for (const group of groups) {
+      const groupHasDml = group.entries.some((e) => e.dmlStatements.length > 0);
+      if (!groupHasDml) continue;
+
+      if (dmlGroupCount > 0) dmlLines.push("");
+      dmlGroupCount++;
+
+      if (group.isStandard) {
+        dmlLines.push(`-- ${group.groupKey}`);
+        for (const entry of group.entries) {
+          if (entry.dmlStatements.length === 0) continue;
+          dmlLines.push(`-- ${entry.subHeader}`);
+          for (const stmt of entry.dmlStatements) {
+            dmlLines.push(stmt);
+            dmlLines.push("");
+          }
+        }
+      } else {
+        dmlLines.push(`-- ${group.groupKey}`);
+        for (const entry of group.entries) {
+          for (const stmt of entry.dmlStatements) {
+            dmlLines.push(stmt);
+            dmlLines.push("");
+          }
+        }
+      }
     }
 
     // Build select SQL
     const selectLines = [];
-    for (const item of allSelectStatements) {
-      selectLines.push(`-- Source: ${item.fileName}`);
-      selectLines.push(item.statement);
-      selectLines.push("");
+    let selectGroupCount = 0;
+
+    for (const group of groups) {
+      const groupHasSelect = group.entries.some((e) => e.selectStatements.length > 0);
+      if (!groupHasSelect) continue;
+
+      if (selectGroupCount > 0) selectLines.push("");
+      selectGroupCount++;
+
+      if (group.isStandard) {
+        selectLines.push(`-- ${group.groupKey}`);
+        selectLines.push(`SELECT * FROM ${group.groupKey};`);
+        for (const entry of group.entries) {
+          if (entry.selectStatements.length === 0) continue;
+          selectLines.push(`-- ${entry.subHeader}`);
+          for (const stmt of entry.selectStatements) {
+            selectLines.push(stmt);
+            selectLines.push("");
+          }
+        }
+      } else {
+        selectLines.push(`-- ${group.groupKey}`);
+        for (const entry of group.entries) {
+          for (const stmt of entry.selectStatements) {
+            selectLines.push(stmt);
+            selectLines.push("");
+          }
+        }
+      }
     }
 
     return {
@@ -212,6 +253,57 @@ export class MergeSqlService {
 
     // Fallback: just return the base name
     return null;
+  }
+
+  /**
+   * Build adjacent groups from parsed files, grouping consecutive files by SCHEMA.TABLE.
+   * Non-adjacent files with the same SCHEMA.TABLE are NOT merged into the same group.
+   * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
+   * @returns {Array<{ groupKey: string, isStandard: boolean, entries: Array<{ subHeader: string|null, dmlStatements: string[], selectStatements: string[] }> }>}
+   */
+  static buildAdjacentGroups(parsedFiles) {
+    const groups = [];
+
+    for (const file of parsedFiles) {
+      const parsed = this.parseFileName(file.fileName);
+      let groupKey;
+      let subHeader;
+      let isStandard;
+
+      if (parsed) {
+        groupKey = `${parsed.schemaName}.${parsed.tableName}`;
+        subHeader = `${parsed.squadName} - ${parsed.featureName}`;
+        isStandard = true;
+      } else {
+        groupKey = file.fileName;
+        subHeader = null;
+        isStandard = false;
+      }
+
+      const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+
+      if (lastGroup && lastGroup.groupKey === groupKey) {
+        lastGroup.entries.push({
+          subHeader,
+          dmlStatements: file.dmlStatements,
+          selectStatements: file.selectStatements,
+        });
+      } else {
+        groups.push({
+          groupKey,
+          isStandard,
+          entries: [
+            {
+              subHeader,
+              dmlStatements: file.dmlStatements,
+              selectStatements: file.selectStatements,
+            },
+          ],
+        });
+      }
+    }
+
+    return groups;
   }
 
   /**
