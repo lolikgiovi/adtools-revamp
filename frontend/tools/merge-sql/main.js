@@ -176,6 +176,7 @@ export class MergeSqlTool extends BaseTool {
     const closeDuplicatesBtn = document.getElementById("merge-sql-close-duplicates");
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
     const viewReportBtn = document.getElementById("merge-sql-view-report");
+    const reportBtn = document.getElementById("merge-sql-report-btn");
     const closeReportBtn = document.getElementById("merge-sql-close-report");
     const reportCloseBtn = document.getElementById("merge-sql-report-close-btn");
     const folderNameInput = document.getElementById("merge-sql-folder-name");
@@ -196,6 +197,7 @@ export class MergeSqlTool extends BaseTool {
     if (closeDuplicatesBtn) closeDuplicatesBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.showReportModal());
+    if (reportBtn) reportBtn.addEventListener("click", () => this.showReportModal());
     if (closeReportBtn) closeReportBtn.addEventListener("click", () => this.hideReportModal());
     if (reportCloseBtn) reportCloseBtn.addEventListener("click", () => this.hideReportModal());
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
@@ -432,10 +434,12 @@ export class MergeSqlTool extends BaseTool {
     const emptyState = document.getElementById("merge-sql-result-empty");
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
+    const reportBtn = document.getElementById("merge-sql-report-btn");
 
     if (emptyState) emptyState.style.display = "none";
     if (resultActions) resultActions.classList.add("visible");
     if (clearBtn) clearBtn.style.display = "block";
+    if (reportBtn) reportBtn.style.display = "";
   }
 
   hideResult() {
@@ -443,15 +447,18 @@ export class MergeSqlTool extends BaseTool {
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
     const insights = document.getElementById("merge-sql-insights");
+    const reportBtn = document.getElementById("merge-sql-report-btn");
 
     if (emptyState) emptyState.style.display = "flex";
     if (resultActions) resultActions.classList.remove("visible");
     if (clearBtn) clearBtn.style.display = "none";
     if (insights) insights.style.display = "none";
+    if (reportBtn) reportBtn.style.display = "none";
   }
 
   updateDuplicatesInsight() {
     const insights = document.getElementById("merge-sql-insights");
+    const insightTitle = document.getElementById("merge-sql-insight-title");
     const duplicatesText = document.getElementById("merge-sql-duplicates-text");
     const viewDuplicatesBtn = document.getElementById("merge-sql-view-duplicates");
     const viewReportBtn = document.getElementById("merge-sql-view-report");
@@ -459,27 +466,29 @@ export class MergeSqlTool extends BaseTool {
     const hasDuplicates = this.result && this.result.duplicates.length > 0;
     const hasReport = this.result && this.result.report;
 
-    if (!hasDuplicates && !hasReport) {
+    // Only show insight panel if there are actual duplicates
+    if (!hasDuplicates) {
       if (insights) insights.style.display = "none";
       return;
     }
 
-    if (insights) insights.style.display = "flex";
-
-    if (hasDuplicates) {
-      if (duplicatesText) {
-        duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
-      }
-      if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
-    } else {
-      if (duplicatesText) duplicatesText.textContent = "";
-      if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "none";
+    if (insights) {
+      insights.style.display = "flex";
+      insights.classList.add("insights-warning");
     }
 
-    if (hasReport) {
-      if (viewReportBtn) viewReportBtn.style.display = "";
-    } else {
-      if (viewReportBtn) viewReportBtn.style.display = "none";
+    if (insightTitle) {
+      insightTitle.textContent = "Duplicate Queries Detected";
+    }
+
+    if (duplicatesText) {
+      duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
+    }
+
+    if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
+
+    if (hasReport && viewReportBtn) {
+      viewReportBtn.style.display = "";
     }
   }
 
@@ -590,6 +599,19 @@ export class MergeSqlTool extends BaseTool {
     this.renderFileList();
     this.updateMergeButton();
     this.updateSortButtons();
+    this.updateFileCount();
+  }
+
+  updateFileCount() {
+    const fileCountBadge = document.getElementById("merge-sql-file-count");
+    if (fileCountBadge) {
+      if (this.files.length > 0) {
+        fileCountBadge.textContent = `${this.files.length} file${this.files.length === 1 ? "" : "s"}`;
+        fileCountBadge.style.display = "";
+      } else {
+        fileCountBadge.style.display = "none";
+      }
+    }
   }
 
   renderFileList() {

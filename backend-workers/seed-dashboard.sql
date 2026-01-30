@@ -13,17 +13,17 @@ INSERT OR IGNORE INTO users (id, email, created_time, last_seen) VALUES
   (8, 'emily.zhang@bankmandiri.co.id', '2026-01-08 10:30:00', '2026-01-09 16:00:00');
 
 -- Insert test devices
-INSERT OR IGNORE INTO device (device_id, user_id, platform, created_time, last_seen) VALUES
-  ('device-001', 1, 'macos', '2026-01-01 09:00:00', '2026-01-05 16:00:00'),
-  ('device-002', 1, 'web', '2026-01-01 09:30:00', '2026-01-05 15:00:00'),
-  ('device-003', 2, 'macos', '2026-01-02 10:00:00', '2026-01-05 15:30:00'),
-  ('device-004', 3, 'windows', '2026-01-03 08:30:00', '2026-01-05 14:00:00'),
-  ('device-005', 4, 'macos', '2026-01-04 11:00:00', '2026-01-06 10:00:00'),
-  ('device-006', 4, 'web', '2026-01-04 11:30:00', '2026-01-06 09:00:00'),
-  ('device-007', 5, 'windows', '2026-01-05 08:00:00', '2026-01-06 17:00:00'),
-  ('device-008', 6, 'macos', '2026-01-06 09:30:00', '2026-01-07 12:00:00'),
-  ('device-009', 7, 'web', '2026-01-07 14:00:00', '2026-01-08 09:00:00'),
-  ('device-010', 8, 'macos', '2026-01-08 10:30:00', '2026-01-09 16:00:00');
+INSERT OR IGNORE INTO device (device_id, user_id, platform, created_time, last_seen, app_version) VALUES
+  ('device-001', 1, 'macos', '2026-01-01 09:00:00', '2026-01-05 16:00:00', '1.2.0'),
+  ('device-002', 1, 'web', '2026-01-01 09:30:00', '2026-01-05 15:00:00', NULL),
+  ('device-003', 2, 'macos', '2026-01-02 10:00:00', '2026-01-05 15:30:00', '1.1.5'),
+  ('device-004', 3, 'windows', '2026-01-03 08:30:00', '2026-01-05 14:00:00', '1.2.0'),
+  ('device-005', 4, 'macos', '2026-01-04 11:00:00', '2026-01-06 10:00:00', '1.0.0'),
+  ('device-006', 4, 'web', '2026-01-04 11:30:00', '2026-01-06 09:00:00', NULL),
+  ('device-007', 5, 'windows', '2026-01-05 08:00:00', '2026-01-06 17:00:00', '1.2.0'),
+  ('device-008', 6, 'macos', '2026-01-06 09:30:00', '2026-01-07 12:00:00', '1.1.5'),
+  ('device-009', 7, 'web', '2026-01-07 14:00:00', '2026-01-08 09:00:00', NULL),
+  ('device-010', 8, 'macos', '2026-01-08 10:30:00', '2026-01-09 16:00:00', '1.2.0');
 
 -- Insert device_usage stats (many more rows for scroll testing)
 INSERT OR REPLACE INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES

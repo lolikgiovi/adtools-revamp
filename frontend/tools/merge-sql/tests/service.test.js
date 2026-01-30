@@ -795,6 +795,51 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       expect(result).toBe("id = 1");
     });
+
+    it("returns null for timestamp verification clauses with SYSDATE - INTERVAL", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT field_name FROM schema_name.table_name WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;"
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null for UPDATED_TIME >= SYSDATE patterns", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT * FROM TABLE WHERE UPDATED_TIME >= SYSDATE - INTERVAL '10' MINUTE;"
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null for CREATED_TIME >= SYSDATE patterns", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT * FROM TABLE WHERE CREATED_TIME >= SYSDATE - INTERVAL '1' HOUR;"
+      );
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("isTimestampVerificationClause", () => {
+    it("returns true for SYSDATE - INTERVAL pattern", () => {
+      expect(
+        MergeSqlService.isTimestampVerificationClause("updated_time >= SYSDATE - INTERVAL '5' MINUTE")
+      ).toBe(true);
+    });
+
+    it("returns true for various timestamp field names", () => {
+      expect(MergeSqlService.isTimestampVerificationClause("UPDATED_TIME >= SYSDATE - INTERVAL '5' MINUTE")).toBe(true);
+      expect(MergeSqlService.isTimestampVerificationClause("CREATED_TIME >= SYSDATE - INTERVAL '5' MINUTE")).toBe(true);
+      expect(MergeSqlService.isTimestampVerificationClause("UPDATE_TIME >= SYSDATE - INTERVAL '5' MINUTE")).toBe(true);
+      expect(MergeSqlService.isTimestampVerificationClause("UPDATED_AT >= SYSDATE - INTERVAL '5' MINUTE")).toBe(true);
+    });
+
+    it("returns false for non-timestamp WHERE clauses", () => {
+      expect(MergeSqlService.isTimestampVerificationClause("id = 1")).toBe(false);
+      expect(MergeSqlService.isTimestampVerificationClause("name = 'test'")).toBe(false);
+      expect(MergeSqlService.isTimestampVerificationClause("status = 'ACTIVE'")).toBe(false);
+    });
   });
 
   describe("modified SELECT output with WHERE concatenation", () => {
@@ -851,6 +896,69 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       // Should have WHERE because at least one select has a WHERE clause
       expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 5);");
+    });
+
+    it("outputs summary SELECT * plus original statements for standard files", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col2 FROM CONFIG.APP_CONFIG WHERE name = 'test';"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Should have the summary SELECT * statement
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (name = 'test');");
+      // Should ALSO contain the original individual SELECT statements
+      expect(result.selectSql).toContain("SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;");
+      expect(result.selectSql).toContain("SELECT col2 FROM CONFIG.APP_CONFIG WHERE name = 'test';");
+      // Should contain subheaders for individual entries
+      expect(result.selectSql).toContain("SQUAD1 - FEATURE1");
+      expect(result.selectSql).toContain("SQUAD2 - FEATURE2");
+    });
+
+    it("excludes timestamp verification SELECT statements from output", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;",
+            "SELECT field_name FROM CONFIG.APP_CONFIG WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;",
+          ],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Should have the summary SELECT * without the timestamp clause
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
+      // Should contain the valid SELECT statement
+      expect(result.selectSql).toContain("SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;");
+      // Should NOT contain the timestamp verification SELECT statement
+      expect(result.selectSql).not.toContain("updated_time >= SYSDATE - INTERVAL");
+    });
+
+    it("outputs original SELECT statements for non-standard files", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM SOME_TABLE WHERE id = 1;"],
+          fileName: "custom-file.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Non-standard files should keep their original SELECT statements
+      expect(result.selectSql).toContain("SELECT * FROM SOME_TABLE WHERE id = 1;");
     });
   });
 });

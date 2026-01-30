@@ -60,6 +60,7 @@ export const MergeSqlTemplate = /* html */ `
           </svg>
           Manual
         </button>
+        <span class="file-count-badge" id="merge-sql-file-count" style="display: none;">0 files</span>
       </div>
 
       <!-- File List -->
@@ -113,6 +114,16 @@ export const MergeSqlTemplate = /* html */ `
             </svg>
             Select SQL
           </button>
+          <button class="btn btn-ghost btn-xs result-tab-action" id="merge-sql-report-btn" title="View Merge Report" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Report
+          </button>
         </div>
         <div class="result-actions" id="merge-sql-result-actions">
           <button class="btn btn-ghost btn-xs" id="merge-sql-copy-btn" title="Copy">
@@ -142,7 +153,7 @@ export const MergeSqlTemplate = /* html */ `
       </div>
 
       <!-- Insights Panel -->
-      <div class="insights-panel" id="merge-sql-insights" style="display: none;">
+      <div class="insights-panel insights-warning" id="merge-sql-insights" style="display: none;">
         <div class="insight-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
@@ -151,10 +162,10 @@ export const MergeSqlTemplate = /* html */ `
           </svg>
         </div>
         <div class="insight-content">
-          <span class="insight-title">Duplicate Queries Detected</span>
+          <span class="insight-title" id="merge-sql-insight-title">Duplicate Queries Detected</span>
           <span class="insight-text" id="merge-sql-duplicates-text"></span>
         </div>
-        <button class="btn btn-ghost btn-xs" id="merge-sql-view-duplicates">View Details</button>
+        <button class="btn btn-ghost btn-xs" id="merge-sql-view-duplicates" style="display: none;">View Duplicates</button>
         <button class="btn btn-ghost btn-xs" id="merge-sql-view-report" style="display: none;">View Report</button>
       </div>
 
