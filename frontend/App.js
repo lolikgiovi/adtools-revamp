@@ -739,6 +739,8 @@ class App {
   renderUpdateBanner(result) {
     const container = this.getHeaderActions();
     if (!container) return;
+    // Store channel for use when user clicks "Update Now"
+    this._updateChannel = result?.channel || undefined;
     // Create banner if not exists
     if (!this._updateBannerEl) {
       const el = document.createElement("div");
@@ -762,14 +764,12 @@ class App {
 
     this._updateBannerEl.innerHTML = /*html*/ `
       <div class="update-banner-content">
-        <div class="update-banner-header">
-          <span class="update-banner-label">${label}</span>
-          ${
-            notes
-              ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="false">What\'s new?</button>'
-              : ""
-          }
-        </div>
+        <span class="update-banner-label">${label}</span>
+        ${
+          notes
+            ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="false">What\'s new?</button>'
+            : ""
+        }
         <div class="update-banner-actions">
           <button type="button" class="btn btn-sm btn-primary update-banner-update">Update Now</button>
           <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
@@ -813,7 +813,8 @@ class App {
           const { performUpdate } = await import("./core/Updater.js");
           const ok = await performUpdate(
             (loaded, total) => this.eventBus.emit("update:progress", { loaded, total }),
-            (stage) => this.eventBus.emit("update:stage", { stage })
+            (stage) => this.eventBus.emit("update:stage", { stage }),
+            this._updateChannel
           );
           if (!ok) {
             this.eventBus.emit("update:error", { message: "Update not available or install failed" });

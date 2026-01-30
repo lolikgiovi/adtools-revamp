@@ -120,9 +120,161 @@ export class MergeSqlService {
   }
 
   /**
+   * Analyze DML statements and count by type and target table
+   * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
+   * @returns {Array<{ table: string, insert: number, merge: number, update: number, total: number }>}
+   */
+  static analyzeStatements(parsedFiles) {
+    const tableMap = new Map(); // lowercase key -> { displayName, insert, merge, update }
+
+    for (const file of parsedFiles) {
+      for (const stmt of file.dmlStatements) {
+        const upperStmt = stmt.trimStart().toUpperCase();
+        let type = null;
+        let table = null;
+
+        if (upperStmt.startsWith("INSERT")) {
+          type = "insert";
+          const match = stmt.match(/INSERT\s+INTO\s+(\S+)/i);
+          if (match) table = match[1];
+        } else if (upperStmt.startsWith("MERGE")) {
+          type = "merge";
+          const match = stmt.match(/MERGE\s+INTO\s+(\S+)/i) || stmt.match(/MERGE\s+(\S+)/i);
+          if (match) table = match[1];
+        } else if (upperStmt.startsWith("UPDATE")) {
+          type = "update";
+          const match = stmt.match(/UPDATE\s+(\S+)/i);
+          if (match) table = match[1];
+        }
+
+        if (!type || !table) continue;
+
+        // Strip column list parentheses from table name
+        const parenIdx = table.indexOf("(");
+        if (parenIdx !== -1) table = table.substring(0, parenIdx);
+
+        const key = table.toUpperCase();
+        if (!tableMap.has(key)) {
+          tableMap.set(key, { displayName: table, insert: 0, merge: 0, update: 0 });
+        }
+        tableMap.get(key)[type]++;
+      }
+    }
+
+    return Array.from(tableMap.values())
+      .map((entry) => ({
+        table: entry.displayName,
+        insert: entry.insert,
+        merge: entry.merge,
+        update: entry.update,
+        total: entry.insert + entry.merge + entry.update,
+      }))
+      .sort((a, b) => a.table.toUpperCase().localeCompare(b.table.toUpperCase()));
+  }
+
+  /**
+   * Detect non-SYSTEM values in CREATED_BY/UPDATED_BY fields
+   * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
+   * @returns {Array<{ fileName: string, field: string, value: string }>}
+   */
+  static detectNonSystemAuthors(parsedFiles) {
+    const results = [];
+
+    for (const file of parsedFiles) {
+      for (const stmt of file.dmlStatements) {
+        const upperStmt = stmt.trimStart().toUpperCase();
+
+        if (upperStmt.startsWith("UPDATE") || upperStmt.startsWith("MERGE")) {
+          // Check SET clauses for CREATED_BY/UPDATED_BY = 'value'
+          const setRegex = /(?:CREATED_BY|UPDATED_BY)\s*=\s*'([^']*)'/gi;
+          let match;
+          while ((match = setRegex.exec(stmt)) !== null) {
+            const value = match[1];
+            if (value.toUpperCase() !== "SYSTEM") {
+              const fieldMatch = match[0].match(/^(CREATED_BY|UPDATED_BY)/i);
+              results.push({
+                fileName: file.fileName,
+                field: fieldMatch[1].toUpperCase(),
+                value,
+              });
+            }
+          }
+        }
+
+        if (upperStmt.startsWith("INSERT")) {
+          // Extract column list and values list
+          const colMatch = stmt.match(/INSERT\s+INTO\s+\S+\s*\(([^)]+)\)/i);
+          const valMatch = stmt.match(/VALUES\s*\(([\s\S]+)\)\s*;?\s*$/i);
+
+          if (colMatch && valMatch) {
+            const columns = this.splitParenAware(colMatch[1]);
+            const values = this.splitParenAware(valMatch[1]);
+
+            for (let i = 0; i < columns.length; i++) {
+              const colName = columns[i].trim().toUpperCase();
+              if (colName === "CREATED_BY" || colName === "UPDATED_BY") {
+                const val = (values[i] || "").trim();
+                // Extract string value from quotes
+                const strMatch = val.match(/^'([^']*)'$/);
+                if (strMatch && strMatch[1].toUpperCase() !== "SYSTEM") {
+                  results.push({
+                    fileName: file.fileName,
+                    field: colName,
+                    value: strMatch[1],
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Split a comma-separated string while respecting parentheses nesting
+   * @param {string} str
+   * @returns {string[]}
+   */
+  static splitParenAware(str) {
+    const parts = [];
+    let depth = 0;
+    let current = "";
+
+    for (const ch of str) {
+      if (ch === "(") {
+        depth++;
+        current += ch;
+      } else if (ch === ")") {
+        depth--;
+        current += ch;
+      } else if (ch === "," && depth === 0) {
+        parts.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    if (current) parts.push(current);
+    return parts;
+  }
+
+  /**
+   * Extract the WHERE clause from a SELECT statement
+   * @param {string} selectStatement
+   * @returns {string|null}
+   */
+  static extractWhereClause(selectStatement) {
+    const match = selectStatement.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
+    return match ? match[1].trim() : null;
+  }
+
+  /**
    * Merge multiple parsed files into combined output
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
-   * @returns {{ mergedSql: string, selectSql: string, duplicates: Array<{ statement: string, files: string[] }> }}
+   * @returns {{ mergedSql: string, selectSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
    */
   static mergeFiles(parsedFiles) {
     // Duplicate detection (runs before grouping, unchanged logic)
@@ -192,7 +344,23 @@ export class MergeSqlService {
 
       if (group.isStandard) {
         selectLines.push(`-- ${group.groupKey}`);
-        selectLines.push(`SELECT * FROM ${group.groupKey};`);
+
+        // Collect WHERE clauses from all SELECT statements in this group
+        const whereClauses = [];
+        for (const entry of group.entries) {
+          for (const stmt of entry.selectStatements) {
+            const where = this.extractWhereClause(stmt);
+            if (where) whereClauses.push(where);
+          }
+        }
+
+        if (whereClauses.length > 0) {
+          const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
+          selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
+        } else {
+          selectLines.push(`SELECT * FROM ${group.groupKey};`);
+        }
+
         for (const entry of group.entries) {
           if (entry.selectStatements.length === 0) continue;
           selectLines.push(`-- ${entry.subHeader}`);
@@ -216,6 +384,10 @@ export class MergeSqlService {
       mergedSql: dmlLines.join("\n").trim(),
       selectSql: selectLines.join("\n").trim(),
       duplicates,
+      report: {
+        statementCounts: this.analyzeStatements(parsedFiles),
+        nonSystemAuthors: this.detectNonSystemAuthors(parsedFiles),
+      },
     };
   }
 

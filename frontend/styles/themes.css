@@ -49,6 +49,16 @@
     --warning-foreground: 0 0% 0%;
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
+
+    /* Diff colors — light mode (darker text on light semi-transparent bg) */
+    --diff-cell-env1-bg-opacity: 0.15;
+    --diff-cell-env1-fg: 0 70% 35%;
+    --diff-cell-env2-bg-opacity: 0.15;
+    --diff-cell-env2-fg: 142 60% 30%;
+    --diff-delete-bg: 0 70% 50% / 0.2;
+    --diff-delete-fg: 0 70% 35%;
+    --diff-insert-bg: var(--success) / 0.25;
+    --diff-insert-fg: var(--success);
   }
 
   .dark {
@@ -96,6 +106,16 @@
     --warning-foreground: 0 0% 0%;
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
+
+    /* Diff colors — dark mode (lighter/brighter text on darker semi-transparent bg) */
+    --diff-cell-env1-bg-opacity: 0.12;
+    --diff-cell-env1-fg: 0 80% 65%;
+    --diff-cell-env2-bg-opacity: 0.12;
+    --diff-cell-env2-fg: 142 70% 55%;
+    --diff-delete-bg: 0 60% 40% / 0.35;
+    --diff-delete-fg: 0 80% 72%;
+    --diff-insert-bg: var(--success) / 0.30;
+    --diff-insert-fg: var(--success);
   }
 
   /* Grey Muted Theme - Professional/Cool grey */
