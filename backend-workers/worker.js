@@ -13,6 +13,7 @@ import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handl
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
 import { handleWhitelist } from './src/routes/whitelist.js';
+import { handleDeviceVersionUpdate } from './src/routes/device.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -96,6 +97,12 @@ export default {
     }
 
     // Analytics routes (batch and live log only)
+    // Device routes
+    if (url.pathname === "/device/version") {
+      if (method !== "PATCH") return methodNotAllowed();
+      return handleDeviceVersionUpdate(request, env);
+    }
+
     if (url.pathname === "/analytics/batch") {
       if (method === "POST") return handleAnalyticsBatchPost(request, env);
       if (method === "GET") return handleAnalyticsBatchGet(request, env);
