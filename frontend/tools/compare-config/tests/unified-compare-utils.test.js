@@ -59,8 +59,9 @@ describe('UnifiedCompareUtils', () => {
   });
 
   describe('isSourceBFollowMode', () => {
-    it('returns true for Oracle vs Oracle', () => {
-      expect(isSourceBFollowMode('oracle', 'oracle')).toBe(true);
+    // Note: Follow mode is deprecated - Source B now has independent configuration
+    it('returns false for Oracle vs Oracle (follow mode deprecated)', () => {
+      expect(isSourceBFollowMode('oracle', 'oracle')).toBe(false);
     });
 
     it('returns false for Oracle vs Excel', () => {
@@ -621,7 +622,7 @@ describe('UnifiedCompareUtils', () => {
       expect(result.table).toBeNull();
       expect(result.sql).toBe('');
       expect(result.whereClause).toBe('');
-      expect(result.maxRows).toBe(100);
+      expect(result.maxRows).toBe(500);
     });
 
     it('clears Excel selection but keeps files', () => {
@@ -1099,7 +1100,8 @@ describe('UnifiedCompareUtils', () => {
       expect(result.message).toContain('Select a file');
     });
 
-    it('returns null for Source B in Oracle-Oracle follow mode with just connection', () => {
+    it('returns info message for Source B in Oracle-Oracle mode without schema (no follow mode)', () => {
+      // Follow mode is deprecated - Source B requires full configuration
       const config = {
         type: 'oracle',
         connection: { name: 'PROD' },
@@ -1109,7 +1111,8 @@ describe('UnifiedCompareUtils', () => {
       };
       const otherConfig = { type: 'oracle' };
       const result = validateSourceConfig(config, 'B', otherConfig);
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result.message).toContain('schema');
     });
 
     it('returns null when type is null', () => {

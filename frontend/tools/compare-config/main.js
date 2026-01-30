@@ -22,12 +22,9 @@ import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
 import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
 import {
-  isSourceBFollowMode,
   syncPkFieldsToCompareFields,
   syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
-  createSourceBConfigFromSourceA,
-  getSourceBDisabledFieldsForFollowMode,
   isMixedMode,
   validateMixedModeConfig,
   getResetBehaviorForSourceType,
@@ -5860,55 +5857,34 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Update Source B UI for Oracle vs Oracle "follow mode"
-   * In follow mode, Source B only shows Connection; other fields follow Source A
+   * Update Source B UI visibility based on query mode
+   * Source B now has independent configuration (no follow mode)
    */
   updateSourceBFollowModeUI() {
-    const isFollowMode = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
-
-    const disabledFields = getSourceBDisabledFieldsForFollowMode();
     const followModeNote = document.getElementById("source-b-follow-mode-note");
     const sourceBPanel = document.querySelector(".source-panel.source-b");
 
-    // Show/hide the follow mode badge
+    // Always hide the follow mode badge (deprecated)
     if (followModeNote) {
-      followModeNote.style.display = isFollowMode ? "flex" : "none";
+      followModeNote.style.display = "none";
     }
 
-    // Add/remove follow-mode-active class on source panel for visual indicator
+    // Remove follow-mode-active class
     if (sourceBPanel) {
-      sourceBPanel.classList.toggle("follow-mode-active", isFollowMode);
+      sourceBPanel.classList.remove("follow-mode-active");
     }
 
-    // Enable/disable Source B fields based on follow mode
-    for (const fieldId of disabledFields) {
-      const element = document.getElementById(fieldId);
-      if (element) {
-        element.disabled = isFollowMode;
-        // Add visual indication
-        element.closest(".form-group")?.classList.toggle("disabled-follow-mode", isFollowMode);
-      }
-    }
-
-    // Hide table/sql config sections in follow mode (only show connection)
+    // Always show Source B config fields based on current query mode
     const tableModeConfig = document.getElementById("source-b-table-config");
     const sqlModeConfig = document.getElementById("source-b-sql-config");
     const maxRowsGroup = document.getElementById("source-b-max-rows")?.closest(".form-group");
     const queryModeGroup = document.getElementById("source-b-query-mode-wrapper")?.closest(".form-group");
 
-    if (isFollowMode) {
-      if (tableModeConfig) tableModeConfig.style.display = "none";
-      if (sqlModeConfig) sqlModeConfig.style.display = "none";
-      if (maxRowsGroup) maxRowsGroup.style.display = "none";
-      if (queryModeGroup) queryModeGroup.style.display = "none";
-    } else {
-      // Restore visibility based on current query mode
-      const queryMode = this.unified.sourceB.queryMode;
-      if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
-      if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
-      if (maxRowsGroup) maxRowsGroup.style.display = "flex";
-      if (queryModeGroup) queryModeGroup.style.display = "flex";
-    }
+    const queryMode = this.unified.sourceB.queryMode;
+    if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
+    if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
+    if (maxRowsGroup) maxRowsGroup.style.display = "flex";
+    if (queryModeGroup) queryModeGroup.style.display = "flex";
   }
 
   /**
@@ -6841,12 +6817,7 @@ class CompareConfigTool extends BaseTool {
     if (config.type === "oracle") {
       if (!config.connection) return false;
 
-      // Phase 1.1: In Oracle vs Oracle follow mode, Source B only needs connection
-      // (schema/table/sql will be copied from Source A)
-      if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
-        return true; // Connection is enough for Source B in follow mode
-      }
-
+      // Both sources require full configuration
       if (config.queryMode === "table") {
         return !!config.schema && !!config.table;
       } else {
@@ -6871,8 +6842,8 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    // Phase 1.2: Validate Oracle vs Oracle configuration
-    const isOracleToOracle = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
+    // Validate Oracle vs Oracle configuration (both sources independently)
+    const isOracleToOracle = this.unified.sourceA.type === "oracle" && this.unified.sourceB.type === "oracle";
 
     if (isOracleToOracle) {
       const validation = validateOracleToOracleConfig(this.unified.sourceA, this.unified.sourceB);
@@ -6909,18 +6880,6 @@ class CompareConfigTool extends BaseTool {
           type: "warning",
           message: `Source A (${this.unified.sourceA.connection?.name || "Reference"}) returned 0 rows. All rows will appear as "only in Source B".`,
         });
-      }
-
-      // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
-      if (isOracleToOracle && this.unified.sourceA.queryMode === "table") {
-        this.updateUnifiedProgressStep("validate-b", "active", "Checking table exists...");
-        const tableExists = await this.validateOracleTableExistsInSourceB();
-        if (!tableExists) {
-          this.updateUnifiedProgressStep("validate-b", "error", "Table not found");
-          this.hideUnifiedProgress();
-          return; // Error already shown by validateOracleTableExistsInSourceB
-        }
-        this.updateUnifiedProgressStep("validate-b", "done", "Table verified");
       }
 
       // Load Source B
@@ -7175,13 +7134,7 @@ class CompareConfigTool extends BaseTool {
    */
   async fetchUnifiedSourceData(source) {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
-    let config = this.unified[sourceKey];
-
-    // Phase 1.1: In Oracle vs Oracle follow mode, Source B uses Source A's config
-    // with only the connection being different
-    if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
-      config = createSourceBConfigFromSourceA(this.unified.sourceA, this.unified.sourceB.connection);
-    }
+    const config = this.unified[sourceKey];
 
     if (config.type === "oracle") {
       const sourceConfig = {

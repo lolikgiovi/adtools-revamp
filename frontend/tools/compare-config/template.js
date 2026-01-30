@@ -177,7 +177,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>
                                 <input type="text" id="source-a-where" class="form-input"
-                                       placeholder="STATUS = 'ACTIVE' AND ID > 100">
+                                       placeholder="STATUS = 'ACTIVE' AND ID > 100"
+                                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                                 <span class="form-hint">Condition only, without WHERE keyword. Use AND/OR to combine.</span>
                             </div>
                         </div>
@@ -354,7 +355,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>
                                 <input type="text" id="source-b-where" class="form-input"
-                                       placeholder="STATUS = 'ACTIVE' AND ID > 100">
+                                       placeholder="STATUS = 'ACTIVE' AND ID > 100"
+                                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                                 <span class="form-hint">Condition only, without WHERE keyword. Use AND/OR to combine.</span>
                             </div>
                         </div>
