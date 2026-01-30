@@ -197,9 +197,6 @@ export function computeAdaptiveDiff(oldStr, newStr, options = {}) {
 export function buildCompositeKey(row, keyColumns) {
   const keyValues = keyColumns.map(col => {
     const val = row[col];
-    if (val === undefined) {
-      console.log('[DEBUG DiffEngine] buildCompositeKey: column not found in row:', col, 'available keys:', Object.keys(row));
-    }
     return String(val ?? '');
   });
   return keyValues.join(KEY_DELIMITER);
@@ -499,13 +496,6 @@ export function compareDatasets(refData, compData, options = {}) {
     onProgress = null
   } = options;
 
-  console.log('[DEBUG DiffEngine] compareDatasets called');
-  console.log('[DEBUG DiffEngine] keyColumns:', keyColumns);
-  console.log('[DEBUG DiffEngine] fields:', fields);
-  console.log('[DEBUG DiffEngine] matchMode:', matchMode);
-  console.log('[DEBUG DiffEngine] refData.length:', refData?.length);
-  console.log('[DEBUG DiffEngine] compData.length:', compData?.length);
-
   const results = {
     summary: {
       total: 0,
@@ -526,12 +516,8 @@ export function compareDatasets(refData, compData, options = {}) {
   }
 
   // Key-based comparison
-  console.log('[DEBUG DiffEngine] Building key maps with keyColumns:', keyColumns);
   const { keyMap: refKeyMap, duplicates: refDuplicates } = buildKeyMaps(refData, keyColumns);
   const { keyMap: compKeyMap, duplicates: compDuplicates } = buildKeyMaps(compData, keyColumns);
-  console.log('[DEBUG DiffEngine] refKeyMap size:', refKeyMap.size);
-  console.log('[DEBUG DiffEngine] compKeyMap size:', compKeyMap.size);
-  console.log('[DEBUG DiffEngine] Sample refKeyMap keys (first 5):', Array.from(refKeyMap.keys()).slice(0, 5));
 
   results.duplicateKeys.reference = refDuplicates;
   results.duplicateKeys.comparator = compDuplicates;
