@@ -2010,21 +2010,13 @@
 }
 
 .val-cell.is-diff.env-1 {
-  background-color: hsl(var(--destructive) / 0.15);
-  color: hsl(0 70% 45%);
-}
-
-:root[data-theme="dark"] .val-cell.is-diff.env-1 {
-  color: hsl(0 80% 65%);
+  background-color: hsl(var(--destructive) / var(--diff-cell-env1-bg-opacity));
+  color: hsl(var(--diff-cell-env1-fg));
 }
 
 .val-cell.is-diff.env-2 {
-  background-color: hsl(var(--success) / 0.15);
-  color: hsl(142 60% 35%);
-}
-
-:root[data-theme="dark"] .val-cell.is-diff.env-2 {
-  color: hsl(142 70% 55%);
+  background-color: hsl(var(--success) / var(--diff-cell-env2-bg-opacity));
+  color: hsl(var(--diff-cell-env2-fg));
 }
 
 /* Status Labels (inside table) */
@@ -2707,15 +2699,15 @@
    ============================================ */
 
 .diff-insert {
-  background-color: hsl(var(--success) / 0.25);
-  color: hsl(var(--success));
+  background-color: hsl(var(--diff-insert-bg));
+  color: hsl(var(--diff-insert-fg));
   padding: 1px 0px;
   border-radius: 2px;
 }
 
 .diff-delete {
-  background-color: hsl(0 70% 45% / 0.3);
-  color: hsl(0 90% 75%);
+  background-color: hsl(var(--diff-delete-bg));
+  color: hsl(var(--diff-delete-fg));
   /* text-decoration: line-through; */
   padding: 1px 0px;
   border-radius: 2px;

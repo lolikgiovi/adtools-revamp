@@ -2272,6 +2272,20 @@ class CompareConfigTool extends BaseTool {
         pk_fields: selectedPkFields.length,
         compare_fields: selectedFields.length,
       });
+
+      // Track rich success event for behavioral insights
+      UsageTracker.trackEvent("compare-config", "comparison_success", {
+        mode: "excel",
+        source_a_type: "excel",
+        source_b_type: "excel",
+        rows_compared: viewResult.rows?.length || 0,
+        rows_match: viewResult.summary?.matches || 0,
+        rows_differ: viewResult.summary?.differs || 0,
+        rows_only_a: viewResult.summary?.only_in_env1 || 0,
+        rows_only_b: viewResult.summary?.only_in_env2 || 0,
+        pk_fields: selectedPkFields.length,
+        compare_fields: selectedFields.length,
+      });
     } catch (error) {
       console.error("[ExcelCompare] Comparison failed:", error);
       this.hideProgress();
@@ -2840,6 +2854,23 @@ class CompareConfigTool extends BaseTool {
         pk_fields: pkColumns.length,
         compare_fields: this.selectedFields?.length || 0,
       });
+
+      // Track rich success event for behavioral insights
+      UsageTracker.trackEvent("compare-config", "comparison_success", {
+        mode: "table",
+        source_a_type: "oracle",
+        source_b_type: "oracle",
+        rows_compared: result?.rows?.length || 0,
+        rows_match: result?.summary?.matches || 0,
+        rows_differ: result?.summary?.differs || 0,
+        rows_only_a: result?.summary?.only_in_env1 || 0,
+        rows_only_b: result?.summary?.only_in_env2 || 0,
+        pk_fields: pkColumns.length,
+        compare_fields: this.selectedFields?.length || 0,
+        query_mode: "table",
+        schema: this.selectedSchema || "",
+        table_name: this.selectedTable || "",
+      });
     } catch (error) {
       console.error("[Compare] Comparison failed:", error);
       this.hideLoading();
@@ -2994,6 +3025,20 @@ class CompareConfigTool extends BaseTool {
       UsageTracker.trackFeature("compare-config", "raw_sql", {
         rows_compared: result?.rows?.length || 0,
         pk_fields: pkColumns.length,
+      });
+
+      // Track rich success event for behavioral insights
+      UsageTracker.trackEvent("compare-config", "comparison_success", {
+        mode: "raw_sql",
+        source_a_type: "oracle",
+        source_b_type: "oracle",
+        rows_compared: result?.rows?.length || 0,
+        rows_match: result?.summary?.matches || 0,
+        rows_differ: result?.summary?.differs || 0,
+        rows_only_a: result?.summary?.only_in_env1 || 0,
+        rows_only_b: result?.summary?.only_in_env2 || 0,
+        pk_fields: pkColumns.length,
+        query_mode: "raw_sql",
       });
     } catch (error) {
       console.error("Raw SQL comparison failed:", error);
@@ -6857,17 +6902,13 @@ class CompareConfigTool extends BaseTool {
       this.updateUnifiedProgressStep("source-a", "done", `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
 
-      // Check for empty Source A data
-      if (dataA.metadata.rowCount === 0) {
-        this.updateUnifiedProgressStep("source-b", "error", "Source A returned no data");
-        this.hideUnifiedProgress();
-
-        const errorInfo = getActionableErrorMessage(UnifiedErrorType.NO_DATA, {
-          source: `Source A (${this.unified.sourceA.connection?.name || "Reference"})`,
-          whereClause: this.unified.sourceA.whereClause,
+      // Track empty Source A (warning only — comparison continues with single-side data)
+      const sourceAEmpty = dataA.metadata.rowCount === 0;
+      if (sourceAEmpty) {
+        this.eventBus.emit("notification:show", {
+          type: "warning",
+          message: `Source A (${this.unified.sourceA.connection?.name || "Reference"}) returned 0 rows. All rows will appear as "only in Source B".`,
         });
-        this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
-        return;
       }
 
       // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
@@ -6890,19 +6931,26 @@ class CompareConfigTool extends BaseTool {
       this.updateUnifiedProgressStep("source-b", "done", `${dataB.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("B");
 
-      // Check for empty Source B data (especially important in follow mode with WHERE clause)
-      if (dataB.metadata.rowCount === 0) {
-        this.updateUnifiedProgressStep("reconcile", "error", "Source B returned no data");
+      // Check for empty data — block only when BOTH sources return 0 rows
+      const sourceBEmpty = dataB.metadata.rowCount === 0;
+
+      if (sourceAEmpty && sourceBEmpty) {
+        this.updateUnifiedProgressStep("reconcile", "error", "Both sources returned no data");
         this.hideUnifiedProgress();
 
-        // In Oracle follow mode, the WHERE clause is inherited from Source A
-        const whereClause = isOracleToOracle ? this.unified.sourceA.whereClause : this.unified.sourceB.whereClause;
         const errorInfo = getActionableErrorMessage(UnifiedErrorType.NO_DATA, {
-          source: `Source B (${this.unified.sourceB.connection?.name || "Comparator"})`,
-          whereClause: whereClause,
+          source: "Both sources",
+          whereClause: this.unified.sourceA.whereClause || this.unified.sourceB.whereClause,
         });
         this.showUnifiedErrorBanner(errorInfo.title, errorInfo.message, errorInfo.hint);
         return;
+      }
+
+      if (sourceBEmpty) {
+        this.eventBus.emit("notification:show", {
+          type: "warning",
+          message: `Source B (${this.unified.sourceB.connection?.name || "Comparator"}) returned 0 rows. All rows will appear as "only in Source A".`,
+        });
       }
 
       // Phase 2.3: Validate mixed mode (Oracle + Excel) configuration
@@ -7620,6 +7668,23 @@ class CompareConfigTool extends BaseTool {
         rows_compared: viewResult.rows?.length || 0,
         pk_fields: selectedPkFields.length,
         compare_fields: selectedCompareFields.length,
+      });
+
+      // Track rich success event for behavioral insights
+      UsageTracker.trackEvent("compare-config", "comparison_success", {
+        mode: comparisonMode,
+        source_a_type: sourceA.type,
+        source_b_type: sourceB.type,
+        rows_compared: viewResult.rows?.length || 0,
+        rows_match: viewResult.summary?.matches || 0,
+        rows_differ: viewResult.summary?.differs || 0,
+        rows_only_a: viewResult.summary?.only_in_env1 || 0,
+        rows_only_b: viewResult.summary?.only_in_env2 || 0,
+        pk_fields: selectedPkFields.length,
+        compare_fields: selectedCompareFields.length,
+        query_mode: this.unified.sourceA.queryMode || "",
+        schema: this.unified.sourceA.schema || "",
+        table_name: this.unified.sourceA.table || "",
       });
     } catch (error) {
       console.error("Unified comparison failed:", error);
