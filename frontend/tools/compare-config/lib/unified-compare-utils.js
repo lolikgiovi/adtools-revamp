@@ -292,7 +292,7 @@ export function createResetSourceState(sourceType, existingExcelFiles = []) {
     table: null,
     sql: '',
     whereClause: '',
-    maxRows: 100,
+    maxRows: 500,
     // Excel-specific
     excelFiles: behavior.keepCachedFiles ? existingExcelFiles : [],
     selectedExcelFile: null,

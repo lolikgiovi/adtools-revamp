@@ -77,7 +77,7 @@ class CompareConfigTool extends BaseTool {
         table: null,
         sql: "",
         whereClause: "",
-        maxRows: 100,
+        maxRows: 500,
         // Excel config (Phase 2: multi-file support)
         excelFiles: [], // Array of { id, file } - all uploaded files
         selectedExcelFile: null, // { id, file } - selected file for comparison
@@ -97,7 +97,7 @@ class CompareConfigTool extends BaseTool {
         table: null,
         sql: "",
         whereClause: "",
-        maxRows: 100,
+        maxRows: 500,
         // Excel config (Phase 2: multi-file support)
         excelFiles: [], // Array of { id, file } - all uploaded files
         selectedExcelFile: null, // { id, file } - selected file for comparison
@@ -579,7 +579,7 @@ class CompareConfigTool extends BaseTool {
     if (maxRowsInput) {
       maxRowsInput.addEventListener("input", (e) => {
         const value = parseInt(e.target.value, 10);
-        this.maxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+        this.maxRows = isNaN(value) || value < 1 ? 500 : Math.min(value, 10000);
       });
     }
 
@@ -616,7 +616,7 @@ class CompareConfigTool extends BaseTool {
     if (rawMaxRowsInput) {
       rawMaxRowsInput.addEventListener("input", (e) => {
         const value = parseInt(e.target.value, 10);
-        this.rawMaxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+        this.rawMaxRows = isNaN(value) || value < 1 ? 500 : Math.min(value, 10000);
       });
     }
 
@@ -2785,7 +2785,7 @@ class CompareConfigTool extends BaseTool {
         table_name: this.table,
         where_clause: this.whereClause || null,
         fields: this.selectedFields || [],
-        max_rows: this.maxRows || 100,
+        max_rows: this.maxRows || 500,
       });
       console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
 
@@ -2802,7 +2802,7 @@ class CompareConfigTool extends BaseTool {
         table_name: this.table,
         where_clause: this.whereClause || null,
         fields: this.selectedFields || [],
-        max_rows: this.maxRows || 100,
+        max_rows: this.maxRows || 500,
       });
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows");
 
@@ -4424,7 +4424,7 @@ class CompareConfigTool extends BaseTool {
     this.customPrimaryKey = [];
     this.selectedFields = [];
     this.whereClause = "";
-    this.maxRows = 100;
+    this.maxRows = 500;
     this.metadata = null;
     this.env2SchemaExists = false;
     this.env2TableExists = false;
@@ -4434,7 +4434,7 @@ class CompareConfigTool extends BaseTool {
     this.rawenv2 = { connection: null };
     this.rawSql = "";
     this.rawPrimaryKey = "";
-    this.rawMaxRows = 100;
+    this.rawMaxRows = 500;
 
     // Clear results for ALL modes
     this.results["schema-table"] = null;
@@ -5735,7 +5735,7 @@ class CompareConfigTool extends BaseTool {
       table: null,
       sql: "",
       whereClause: "",
-      maxRows: 100,
+      maxRows: 500,
       file: null,
       parsedData: null,
       data: null,

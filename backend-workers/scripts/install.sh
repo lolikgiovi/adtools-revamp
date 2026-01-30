@@ -55,7 +55,8 @@ DEFAULT_DIR="$HOME/Documents"
 printf "%b\n" "${YELLOW}Where would you like to install AD Tools?${NC}"
 printf "%b\n" "  Default location: ${GREEN}$DEFAULT_DIR${NC}"
 printf "%b"   "  Press Enter to use default, or type a custom path (e.g., /Users/yourname/Apps): "
-read -r CUSTOM_DIR
+# Read from /dev/tty to get user input even when script is piped (curl | bash)
+read -r CUSTOM_DIR </dev/tty
 
 if [[ -z "$CUSTOM_DIR" ]]; then
   INSTALL_DIR="$DEFAULT_DIR"
