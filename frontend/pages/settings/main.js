@@ -277,7 +277,8 @@ class SettingsPage {
             this.eventBus?.emit?.("update:forced", { policy, unsupported: false, manifest });
             const ok = await performUpdate(
               (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
-              (stage) => this.eventBus?.emit?.("update:stage", { stage })
+              (stage) => this.eventBus?.emit?.("update:stage", { stage }),
+              policy.channel
             );
             if (!ok) {
               this.eventBus?.emit?.("update:error", { message: "Update not available or install failed" });

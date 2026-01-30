@@ -479,6 +479,10 @@ body.global-search-open {
 
 /* Update UI (banner + modal) */
 .update-banner {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 300;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -486,20 +490,22 @@ body.global-search-open {
   border: 1px solid hsl(var(--border));
   border-radius: 0.75rem;
   padding: 0.5rem 0.75rem;
-  max-width: 450px;
+  width: max-content;
+  max-width: 540px;
+  margin-top: 0.25rem;
+  box-shadow: 0 4px 12px hsl(var(--shadow, 0 0% 0%) / 0.1);
 }
 
 .update-banner-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .update-banner-label {
   color: hsl(var(--text-secondary));
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .update-banner-actions {
@@ -536,12 +542,6 @@ body.global-search-open {
 .update-banner-stage {
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
-}
-
-.update-banner-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .update-banner-toggle {

@@ -51,6 +51,7 @@
 
 /* Header actions (right side) */
 .header-actions {
+  position: relative;
   margin-left: auto;
   display: flex;
   align-items: center;

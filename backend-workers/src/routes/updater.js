@@ -18,7 +18,14 @@ export async function handleManifestRequest(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
-    const key = `update/${channelFile}`;
+    // Dynamic channel routing: manifest.json reads X-Update-Channel header (default: stable)
+    let key;
+    if (channelFile === "manifest.json") {
+      const channel = (request.headers.get("X-Update-Channel") || "stable").toLowerCase().replace(/[^a-z]/g, "") || "stable";
+      key = `update/${channel}.json`;
+    } else {
+      key = `update/${channelFile}`;
+    }
     const head = await env.UPDATES?.head(key);
     if (!head) {
       return new Response(JSON.stringify({ ok: false, error: "Manifest not found", key }), {

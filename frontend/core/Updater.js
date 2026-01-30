@@ -152,7 +152,7 @@ export async function checkUpdate(opts = {}) {
   }
 }
 
-export async function performUpdate(progressCb, stageCb) {
+export async function performUpdate(progressCb, stageCb, channel) {
   const setStage = (s) => {
     try {
       stageCb && stageCb(s);
@@ -173,7 +173,10 @@ export async function performUpdate(progressCb, stageCb) {
     const updater = await import(/* @vite-ignore */ "@tauri-apps/plugin-updater");
     if (updater && typeof updater.check === "function") {
       setStage("checking");
-      const update = await updater.check();
+      const ch = channel || getChannelFromSettings();
+      const update = await updater.check({
+        headers: { "X-Update-Channel": ch },
+      });
       if (!update?.available) {
         setStage("uptodate");
         return false;
@@ -257,7 +260,8 @@ export function setupAutoUpdate(options = {}) {
       console.log("Forced update enforced");
       const ok = await performUpdate(
         (loaded, total) => emit("update:progress", { loaded, total }),
-        (stage) => emit("update:stage", { stage })
+        (stage) => emit("update:stage", { stage }),
+        policy.channel
       );
       if (!ok) emit("update:error", { message: "Update not available or install failed" });
       return ok;
