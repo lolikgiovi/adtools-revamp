@@ -268,7 +268,38 @@ export class MergeSqlService {
    */
   static extractWhereClause(selectStatement) {
     const match = selectStatement.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
-    return match ? match[1].trim() : null;
+    if (!match) return null;
+
+    const whereClause = match[1].trim();
+
+    // Skip timestamp-based verification patterns (e.g., updated_time >= SYSDATE - INTERVAL '5' MINUTE)
+    if (this.isTimestampVerificationClause(whereClause)) {
+      return null;
+    }
+
+    return whereClause;
+  }
+
+  /**
+   * Check if a WHERE clause is a timestamp verification pattern that should be excluded
+   * @param {string} whereClause
+   * @returns {boolean}
+   */
+  static isTimestampVerificationClause(whereClause) {
+    const upperClause = whereClause.toUpperCase();
+
+    // Patterns to detect timestamp verification clauses
+    const timestampPatterns = [
+      /SYSDATE\s*-\s*INTERVAL/i,
+      /UPDATED_TIME\s*>=?\s*SYSDATE/i,
+      /CREATED_TIME\s*>=?\s*SYSDATE/i,
+      /UPDATE_TIME\s*>=?\s*SYSDATE/i,
+      /CREATE_TIME\s*>=?\s*SYSDATE/i,
+      /UPDATED_AT\s*>=?\s*SYSDATE/i,
+      /CREATED_AT\s*>=?\s*SYSDATE/i,
+    ];
+
+    return timestampPatterns.some((pattern) => pattern.test(whereClause));
   }
 
   /**
@@ -331,7 +362,7 @@ export class MergeSqlService {
       }
     }
 
-    // Build select SQL
+    // Build select SQL - summary SELECT * statement + original statements (excluding timestamp verification ones)
     const selectLines = [];
     let selectGroupCount = 0;
 
@@ -345,7 +376,7 @@ export class MergeSqlService {
       if (group.isStandard) {
         selectLines.push(`-- ${group.groupKey}`);
 
-        // Collect WHERE clauses from all SELECT statements in this group
+        // Collect WHERE clauses from all SELECT statements in this group (excluding timestamp verification)
         const whereClauses = [];
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
@@ -354,6 +385,7 @@ export class MergeSqlService {
           }
         }
 
+        // Output the summary SELECT statement first
         if (whereClauses.length > 0) {
           const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
           selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
@@ -361,18 +393,31 @@ export class MergeSqlService {
           selectLines.push(`SELECT * FROM ${group.groupKey};`);
         }
 
+        // Output original SELECT statements (excluding timestamp verification ones)
         for (const entry of group.entries) {
-          if (entry.selectStatements.length === 0) continue;
+          const validStatements = entry.selectStatements.filter((stmt) => {
+            const whereClause = stmt.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
+            if (!whereClause) return true; // Keep statements without WHERE
+            return !this.isTimestampVerificationClause(whereClause[1].trim());
+          });
+
+          if (validStatements.length === 0) continue;
+
           selectLines.push(`-- ${entry.subHeader}`);
-          for (const stmt of entry.selectStatements) {
+          for (const stmt of validStatements) {
             selectLines.push(stmt);
             selectLines.push("");
           }
         }
       } else {
+        // Non-standard files: output the original SELECT statements (excluding timestamp verification)
         selectLines.push(`-- ${group.groupKey}`);
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
+            const whereClause = stmt.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
+            if (whereClause && this.isTimestampVerificationClause(whereClause[1].trim())) {
+              continue; // Skip timestamp verification statements
+            }
             selectLines.push(stmt);
             selectLines.push("");
           }

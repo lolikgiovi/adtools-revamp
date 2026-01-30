@@ -102,6 +102,16 @@
   color: hsl(var(--muted-foreground));
 }
 
+.file-count-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  margin-left: auto;
+}
+
 .sort-btn {
   font-size: 0.7rem;
   padding: 0.25rem 0.5rem;
@@ -320,6 +330,19 @@
 .result-tab svg {
   width: 14px;
   height: 14px;
+}
+
+.result-tab-action {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.result-tab-action:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
 }
 
 /* Insights Panel */
