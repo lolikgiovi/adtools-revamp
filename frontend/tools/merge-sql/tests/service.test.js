@@ -436,7 +436,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.mergedSql).toContain("-- OTHER.TABLE_NAME");
     });
 
-    it("SELECT output includes SELECT * FROM SCHEMA.TABLE for standard filenames", () => {
+    it("SELECT output includes SELECT * FROM SCHEMA.TABLE with concatenated WHERE for standard filenames", () => {
       const parsedFiles = [
         {
           dmlStatements: [],
@@ -448,7 +448,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       expect(result.selectSql).toContain("-- CONFIG.APP_CONFIG");
-      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
       expect(result.selectSql).toContain("-- SQUAD1 - FEATURE1");
     });
 
@@ -491,7 +491,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       // DML: non-standard group has filename header, no sub-header
       expect(result.mergedSql).toContain("-- custom_file.sql");
 
-      // SELECT: standard group has auto-generated SELECT * FROM
+      // SELECT: standard group has auto-generated SELECT * FROM (no WHERE since original has no WHERE)
       expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
       // SELECT: non-standard group does NOT have auto-generated SELECT
       expect(result.selectSql).toContain("-- custom_file.sql");
@@ -527,6 +527,330 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       expect(result.mergedSql).toContain("INSERT INTO T1");
       expect(result.selectSql).toBe("");
+    });
+
+    it("returns report with statementCounts and nonSystemAuthors", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.report).toBeDefined();
+      expect(result.report.statementCounts).toBeInstanceOf(Array);
+      expect(result.report.nonSystemAuthors).toBeInstanceOf(Array);
+    });
+  });
+
+  describe("analyzeStatements", () => {
+    it("counts INSERT/MERGE/UPDATE correctly across multiple files", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);",
+            "MERGE INTO SCHEMA.TABLE_A t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+        {
+          dmlStatements: [
+            "UPDATE SCHEMA.TABLE_A SET c = 2 WHERE id = 1;",
+            "INSERT INTO SCHEMA.TABLE_B (c) VALUES (3);",
+          ],
+          selectStatements: [],
+          fileName: "file2.sql",
+        },
+      ];
+
+      const result = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(result).toHaveLength(2);
+
+      const tableA = result.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_A");
+      expect(tableA.insert).toBe(1);
+      expect(tableA.merge).toBe(1);
+      expect(tableA.update).toBe(1);
+      expect(tableA.total).toBe(3);
+
+      const tableB = result.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_B");
+      expect(tableB.insert).toBe(1);
+      expect(tableB.merge).toBe(0);
+      expect(tableB.update).toBe(0);
+      expect(tableB.total).toBe(1);
+    });
+
+    it("groups by table name case-insensitively", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO Schema.Table_A (c) VALUES (1);",
+            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].insert).toBe(2);
+    });
+
+    it("handles empty input", () => {
+      const result = MergeSqlService.analyzeStatements([]);
+      expect(result).toEqual([]);
+    });
+
+    it("handles mixed statement types for same table", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO T1 (c) VALUES (1);",
+            "MERGE INTO T1 t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+            "UPDATE T1 SET c = 2 WHERE id = 1;",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].insert).toBe(1);
+      expect(result[0].merge).toBe(1);
+      expect(result[0].update).toBe(1);
+      expect(result[0].total).toBe(3);
+    });
+
+    it("strips column list parentheses from table name", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A(col1, col2) VALUES (1, 2);"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].table).toBe("SCHEMA.TABLE_A");
+    });
+
+    it("sorts output alphabetically by table name", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO Z_TABLE (c) VALUES (1);",
+            "INSERT INTO A_TABLE (c) VALUES (2);",
+            "INSERT INTO M_TABLE (c) VALUES (3);",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(result[0].table).toBe("A_TABLE");
+      expect(result[1].table).toBe("M_TABLE");
+      expect(result[2].table).toBe("Z_TABLE");
+    });
+  });
+
+  describe("detectNonSystemAuthors", () => {
+    it("detects non-SYSTEM value in UPDATE SET clause", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE SET CREATED_BY = 'ADMIN', col1 = 'x' WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fileName).toBe("file1.sql");
+      expect(result[0].field).toBe("CREATED_BY");
+      expect(result[0].value).toBe("ADMIN");
+    });
+
+    it("detects non-SYSTEM value in MERGE SET clause", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "MERGE INTO SCHEMA.TABLE t USING DUAL ON (1=0) WHEN MATCHED THEN UPDATE SET UPDATED_BY = 'john' WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].field).toBe("UPDATED_BY");
+      expect(result[0].value).toBe("john");
+    });
+
+    it("detects non-SYSTEM value in INSERT VALUES (positional)", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE (col1, CREATED_BY, col2) VALUES ('x', 'ADMIN', 'y');"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].fileName).toBe("file1.sql");
+      expect(result[0].field).toBe("CREATED_BY");
+      expect(result[0].value).toBe("ADMIN");
+    });
+
+    it("ignores SYSTEM values (case-insensitive)", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "UPDATE SCHEMA.TABLE SET CREATED_BY = 'SYSTEM' WHERE id = 1;",
+            "UPDATE SCHEMA.TABLE SET UPDATED_BY = 'system' WHERE id = 2;",
+            "INSERT INTO SCHEMA.TABLE (CREATED_BY) VALUES ('System');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("returns empty array when all values are SYSTEM", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO T1 (CREATED_BY, UPDATED_BY) VALUES ('SYSTEM', 'SYSTEM');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toEqual([]);
+    });
+
+    it("handles files without CREATED_BY/UPDATED_BY", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO T1 (col1, col2) VALUES ('a', 'b');"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectNonSystemAuthors(parsedFiles);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("extractWhereClause", () => {
+    it("extracts simple WHERE clause", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT col1 FROM TABLE WHERE id = 1 AND status = 'ACTIVE';"
+      );
+
+      expect(result).toBe("id = 1 AND status = 'ACTIVE'");
+    });
+
+    it("extracts multiline WHERE clause", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT col1\nFROM TABLE\nWHERE id = 1\nAND status = 'ACTIVE';"
+      );
+
+      expect(result).toBe("id = 1\nAND status = 'ACTIVE'");
+    });
+
+    it("returns null for SELECT without WHERE", () => {
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE;");
+
+      expect(result).toBeNull();
+    });
+
+    it("strips trailing semicolon", () => {
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE id = 1;");
+
+      expect(result).toBe("id = 1");
+    });
+  });
+
+  describe("modified SELECT output with WHERE concatenation", () => {
+    it("SELECT * includes concatenated WHERE clauses from grouped selects", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col2 FROM CONFIG.APP_CONFIG WHERE name = 'test';"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain(
+        "SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (name = 'test');"
+      );
+    });
+
+    it("falls back to SELECT * FROM TABLE when no WHERE clauses exist", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+    });
+
+    it("handles mix of SELECTs with and without WHERE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 5;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Should have WHERE because at least one select has a WHERE clause
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 5);");
     });
   });
 });

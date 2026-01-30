@@ -174,7 +174,7 @@ export async function loadState() {
   }
 }
 
-export async function saveResults(mergedSql, selectSql, duplicates) {
+export async function saveResults(mergedSql, selectSql, duplicates, report) {
   if (!isIndexedDBAvailable()) return;
 
   try {
@@ -182,13 +182,19 @@ export async function saveResults(mergedSql, selectSql, duplicates) {
     const tx = db.transaction(STORES.RESULTS, "readwrite");
     const store = tx.objectStore(STORES.RESULTS);
 
-    await store.put({
+    const data = {
       key: "results",
       mergedSql,
       selectSql,
       duplicates,
       updatedAt: Date.now(),
-    });
+    };
+
+    if (report) {
+      data.report = report;
+    }
+
+    await store.put(data);
 
     await new Promise((resolve, reject) => {
       tx.oncomplete = resolve;

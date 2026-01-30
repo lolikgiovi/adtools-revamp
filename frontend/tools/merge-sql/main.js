@@ -112,6 +112,7 @@ export class MergeSqlTool extends BaseTool {
         mergedSql: results.mergedSql || "",
         selectSql: results.selectSql || "",
         duplicates: results.duplicates || [],
+        report: results.report || null,
       };
 
       if (this.mergedEditor && results.mergedSql) {
@@ -139,7 +140,8 @@ export class MergeSqlTool extends BaseTool {
       const mergedSql = this.mergedEditor?.getValue() || "";
       const selectSql = this.selectEditor?.getValue() || "";
       const duplicates = this.result?.duplicates || [];
-      IndexedDBManager.saveResults(mergedSql, selectSql, duplicates);
+      const report = this.result?.report || null;
+      IndexedDBManager.saveResults(mergedSql, selectSql, duplicates, report);
     }, 1000);
   }
 
@@ -173,6 +175,9 @@ export class MergeSqlTool extends BaseTool {
     const viewDuplicatesBtn = document.getElementById("merge-sql-view-duplicates");
     const closeDuplicatesBtn = document.getElementById("merge-sql-close-duplicates");
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
+    const viewReportBtn = document.getElementById("merge-sql-view-report");
+    const closeReportBtn = document.getElementById("merge-sql-close-report");
+    const reportCloseBtn = document.getElementById("merge-sql-report-close-btn");
     const folderNameInput = document.getElementById("merge-sql-folder-name");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
@@ -190,6 +195,9 @@ export class MergeSqlTool extends BaseTool {
     if (viewDuplicatesBtn) viewDuplicatesBtn.addEventListener("click", () => this.showDuplicatesModal());
     if (closeDuplicatesBtn) closeDuplicatesBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
+    if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.showReportModal());
+    if (closeReportBtn) closeReportBtn.addEventListener("click", () => this.hideReportModal());
+    if (reportCloseBtn) reportCloseBtn.addEventListener("click", () => this.hideReportModal());
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
 
     if (resultTabs) {
@@ -324,11 +332,12 @@ export class MergeSqlTool extends BaseTool {
         this.selectEditor.setValue(this.result.selectSql);
       }
 
-      await IndexedDBManager.saveResults(this.result.mergedSql, this.result.selectSql, this.result.duplicates);
+      await IndexedDBManager.saveResults(this.result.mergedSql, this.result.selectSql, this.result.duplicates, this.result.report);
 
       this.showResult();
       this.updateDuplicatesInsight();
       this.showSuccess("SQL files merged successfully!");
+      this.showReportModal();
     } catch (error) {
       console.error("Merge failed:", error);
       this.showError(`Failed to merge files: ${error.message}`);
@@ -444,15 +453,33 @@ export class MergeSqlTool extends BaseTool {
   updateDuplicatesInsight() {
     const insights = document.getElementById("merge-sql-insights");
     const duplicatesText = document.getElementById("merge-sql-duplicates-text");
+    const viewDuplicatesBtn = document.getElementById("merge-sql-view-duplicates");
+    const viewReportBtn = document.getElementById("merge-sql-view-report");
 
-    if (!this.result || this.result.duplicates.length === 0) {
+    const hasDuplicates = this.result && this.result.duplicates.length > 0;
+    const hasReport = this.result && this.result.report;
+
+    if (!hasDuplicates && !hasReport) {
       if (insights) insights.style.display = "none";
       return;
     }
 
     if (insights) insights.style.display = "flex";
-    if (duplicatesText) {
-      duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
+
+    if (hasDuplicates) {
+      if (duplicatesText) {
+        duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
+      }
+      if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
+    } else {
+      if (duplicatesText) duplicatesText.textContent = "";
+      if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "none";
+    }
+
+    if (hasReport) {
+      if (viewReportBtn) viewReportBtn.style.display = "";
+    } else {
+      if (viewReportBtn) viewReportBtn.style.display = "none";
     }
   }
 
@@ -488,6 +515,68 @@ export class MergeSqlTool extends BaseTool {
 
   hideDuplicatesModal() {
     const modal = document.getElementById("merge-sql-duplicates-modal");
+    if (modal) modal.style.display = "none";
+  }
+
+  showReportModal() {
+    const modal = document.getElementById("merge-sql-report-modal");
+    const statementsContainer = document.getElementById("merge-sql-report-statements");
+    const authorsContainer = document.getElementById("merge-sql-report-authors");
+
+    if (!this.result?.report) return;
+
+    const { statementCounts, nonSystemAuthors } = this.result.report;
+
+    // Render statement counts table
+    if (statementsContainer) {
+      if (statementCounts.length > 0) {
+        let tableHtml = `<table class="report-table">
+          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+          <tbody>`;
+        for (const row of statementCounts) {
+          tableHtml += `<tr>
+            <td>${this.escapeHtml(row.table)}</td>
+            <td>${row.insert}</td>
+            <td>${row.merge}</td>
+            <td>${row.update}</td>
+            <td>${row.total}</td>
+          </tr>`;
+        }
+        tableHtml += `</tbody></table>`;
+        statementsContainer.innerHTML = tableHtml;
+      } else {
+        statementsContainer.innerHTML = `<div class="report-success">No DML statements found</div>`;
+      }
+    }
+
+    // Render non-system authors
+    if (authorsContainer) {
+      if (nonSystemAuthors.length > 0) {
+        let authorsHtml = "";
+        for (const item of nonSystemAuthors) {
+          authorsHtml += `<div class="report-warning-item">
+            <span class="report-file-tag">${this.escapeHtml(item.fileName)}</span>
+            <span class="report-field-label">${this.escapeHtml(item.field)}</span>
+            <span class="report-value">${this.escapeHtml(item.value)}</span>
+          </div>`;
+        }
+        authorsContainer.innerHTML = authorsHtml;
+      } else {
+        authorsContainer.innerHTML = `<div class="report-success">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          No issues found — all CREATED_BY/UPDATED_BY values are SYSTEM
+        </div>`;
+      }
+    }
+
+    if (modal) modal.style.display = "flex";
+  }
+
+  hideReportModal() {
+    const modal = document.getElementById("merge-sql-report-modal");
     if (modal) modal.style.display = "none";
   }
 

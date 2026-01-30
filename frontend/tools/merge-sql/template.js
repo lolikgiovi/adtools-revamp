@@ -155,6 +155,7 @@ export const MergeSqlTemplate = /* html */ `
           <span class="insight-text" id="merge-sql-duplicates-text"></span>
         </div>
         <button class="btn btn-ghost btn-xs" id="merge-sql-view-duplicates">View Details</button>
+        <button class="btn btn-ghost btn-xs" id="merge-sql-view-report" style="display: none;">View Report</button>
       </div>
 
       <!-- Result Content -->
@@ -200,6 +201,34 @@ export const MergeSqlTemplate = /* html */ `
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" id="merge-sql-duplicates-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Modal -->
+  <div class="modal-overlay" id="merge-sql-report-modal" style="display: none;">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3>Merge Report</h3>
+        <button class="btn btn-ghost btn-sm btn-close-modal" id="merge-sql-close-report">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="report-section">
+          <h4>Statement Summary</h4>
+          <div id="merge-sql-report-statements"></div>
+        </div>
+        <div class="report-section">
+          <h4>Non-SYSTEM Authors</h4>
+          <div id="merge-sql-report-authors"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="merge-sql-report-close-btn">Close</button>
       </div>
     </div>
   </div>
