@@ -345,14 +345,16 @@ Meanwhile, `fetchTableMetadataViaSidecar()` (`service.js:325`) already queries `
 | **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells | **Done** |
 | **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload | **Done** |
 | **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip | **Done** |
-| **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs | |
-| **P3** | B9 | `cursor.outputtypehandler` for row conversion | Small | Low | Faster Python serialization | |
+| **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs | **Done** |
+| **P3** | B9 | `cursor.outputtypehandler` for row conversion | Small | Low | Faster Python serialization | **Done** |
 
 **~~B10 should be implemented first~~** ✅ Done — "Load Data" now fetches only metadata for oracle-table mode; actual `SELECT` is deferred to "Compare" with only the user-selected columns.
 
 **~~P0 items B1–B3 are interdependent~~** ✅ Done — all three applied together. Sidecar uses `run_in_executor` with a 4-worker thread pool, pool max raised to 5, and all frontend fetch sites use `Promise.all` (4 locations including bulk query with `Promise.allSettled`).
 
 **~~P1 items B4–B5~~** ✅ Done — All 4 `compareDatasets()` call sites (Excel, Oracle Table, Raw SQL, Unified) now use `DiffWorkerManager` to run diffs on a Web Worker, keeping the UI responsive with progress reporting. `computeAdaptiveDiff()` now runs `Diff.diffChars()` once and reuses the result for both ratio calculation and segment generation.
+
+**~~P3 items B8–B9~~** ✅ Done — Query results are cached in IndexedDB with SHA-256 keys and 5-minute TTL (max 20 entries, LRU eviction). The sidecar now uses `outputtypehandler` to convert CLOB/DATE/TIMESTAMP at the oracledb C level, avoiding Python loop overhead.
 
 ---
 

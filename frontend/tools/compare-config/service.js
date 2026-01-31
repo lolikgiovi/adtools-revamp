@@ -9,6 +9,11 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getOracleSidecarClient, OracleSidecarError } from "./lib/oracle-sidecar-client.js";
+import {
+  generateQueryCacheKey,
+  getQueryCache,
+  setQueryCache,
+} from './lib/indexed-db-manager.js';
 
 export class CompareConfigService {
   // NOTE: checkOracleClientReady, primeOracleClient, and debugOracleSetup
@@ -352,9 +357,12 @@ export class CompareConfigService {
    * @param {string[]} [request.fields] - Fields to select (table mode)
    * @param {string} [request.sql] - SQL query (raw-sql mode)
    * @param {number} [request.max_rows] - Maximum rows to fetch
+   * @param {Object} [options] - Additional options
+   * @param {boolean} [options.bypassCache=false] - Skip cache lookup and force fresh query
    * @returns {Promise<{headers: string[], rows: Object[], row_count: number, source_name: string}>}
    */
-  static async fetchOracleDataViaSidecar(request) {
+  static async fetchOracleDataViaSidecar(request, options = {}) {
+    const { bypassCache = false } = options;
     const { connection_name, config, mode, owner, table_name, where_clause, fields, sql, max_rows = 1000 } = request;
 
     let querySql;
@@ -372,6 +380,23 @@ export class CompareConfigService {
       sourceName = `${owner}.${table_name}`;
     }
 
+    // Generate cache key
+    const cacheKey = await generateQueryCacheKey(
+      connection_name,
+      config.connect_string,
+      querySql,
+      max_rows
+    );
+
+    // Check cache first (unless bypassed)
+    if (!bypassCache) {
+      const cached = await getQueryCache(cacheKey);
+      if (cached) {
+        console.debug('[QueryCache] HIT:', cacheKey.slice(0, 16));
+        return cached;
+      }
+    }
+
     // Use /query (array format) instead of /query-dict — smaller JSON payload
     const result = await this.queryViaSidecar(connection_name, config, querySql, max_rows);
 
@@ -379,12 +404,19 @@ export class CompareConfigService {
     const columns = result.columns;
     const rows = result.rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])));
 
-    return {
+    const response = {
       headers: columns,
       rows,
       row_count: result.row_count,
       source_name: sourceName,
     };
+
+    // Cache the result
+    setQueryCache(cacheKey, response).catch((err) => {
+      console.warn('[QueryCache] Failed to cache:', err);
+    });
+
+    return response;
   }
 
   /**

@@ -193,6 +193,14 @@ class PoolManager:
 # Global pool manager
 pool_manager = PoolManager()
 
+
+def output_type_handler(cursor, metadata):
+    """Let oracledb handle type conversion at the C level."""
+    if metadata.type_code == oracledb.DB_TYPE_CLOB:
+        return cursor.var(str, arraysize=cursor.arraysize)
+    if metadata.type_code in (oracledb.DB_TYPE_DATE, oracledb.DB_TYPE_TIMESTAMP):
+        return cursor.var(str, arraysize=cursor.arraysize)
+
 # Thread pool for offloading blocking DB operations from the asyncio event loop
 _db_executor = ThreadPoolExecutor(max_workers=4)
 
@@ -307,6 +315,7 @@ def _execute_query_sync(request: QueryRequest, as_dict: bool = False):
     pool = pool_manager.get_pool(request.connection)
 
     with pool.acquire() as conn:
+        conn.outputtypehandler = output_type_handler
         cursor = conn.cursor()
         cursor.arraysize = 500
         cursor.execute(request.sql)

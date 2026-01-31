@@ -12,7 +12,7 @@
  * Database configuration
  */
 const DB_NAME = 'CompareConfigDB';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 /**
  * Object store names
@@ -26,6 +26,7 @@ export const STORES = {
   COMPARISON_HISTORY: 'comparisonHistory',
   UNIFIED_EXCEL_FILES: 'unifiedExcelFiles', // Phase 2: For unified compare Excel files
   TOOL_STATE: 'toolState', // For persisting large comparison results
+  QUERY_CACHE: 'queryCache', // B8: Query result caching
 };
 
 /**
@@ -116,6 +117,12 @@ function openDatabase() {
       // Create toolState store (for persisting large comparison results)
       if (!db.objectStoreNames.contains(STORES.TOOL_STATE)) {
         db.createObjectStore(STORES.TOOL_STATE, { keyPath: 'id' });
+      }
+
+      // Create queryCache store (B8: Query result caching)
+      if (!db.objectStoreNames.contains(STORES.QUERY_CACHE)) {
+        const queryCacheStore = db.createObjectStore(STORES.QUERY_CACHE, { keyPath: 'cacheKey' });
+        queryCacheStore.createIndex('expiresAt', 'expiresAt', { unique: false });
       }
     };
   });
@@ -753,6 +760,7 @@ export async function clearAllData() {
       STORES.RAW_SQL_PREFS,
       STORES.COMPARISON_HISTORY,
       STORES.UNIFIED_EXCEL_FILES,
+      STORES.QUERY_CACHE,
     ];
 
     const transaction = db.transaction(storeNames, 'readwrite');
@@ -781,6 +789,7 @@ export async function getStorageStats() {
     STORES.RAW_SQL_PREFS,
     STORES.COMPARISON_HISTORY,
     STORES.UNIFIED_EXCEL_FILES,
+    STORES.QUERY_CACHE,
   ];
 
   for (const storeName of storeNames) {
@@ -844,6 +853,123 @@ export async function loadToolState() {
  */
 export async function clearToolState() {
   await withStore(STORES.TOOL_STATE, 'readwrite', (store) => store.delete(TOOL_STATE_ID));
+}
+
+// =============================================================================
+// Query Cache Store Operations (B8: Query result caching)
+// =============================================================================
+
+const QUERY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const QUERY_CACHE_MAX_ENTRIES = 20;
+
+/**
+ * Generates a cache key from query parameters using SHA-256
+ * @param {string} connectionName
+ * @param {string} connectString
+ * @param {string} sql
+ * @param {number} maxRows
+ * @returns {Promise<string>} SHA-256 hash as hex string
+ */
+export async function generateQueryCacheKey(connectionName, connectString, sql, maxRows) {
+  const input = `${connectionName}|${connectString}|${sql}|${maxRows}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Gets a cached query result if not expired
+ * @param {string} cacheKey
+ * @returns {Promise<Object|null>} Cached result or null if not found/expired
+ */
+export async function getQueryCache(cacheKey) {
+  const entry = await withStore(STORES.QUERY_CACHE, 'readonly', (store) => store.get(cacheKey));
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    // Expired - delete asynchronously and return null
+    deleteQueryCache(cacheKey).catch(() => {});
+    return null;
+  }
+  return entry.result;
+}
+
+/**
+ * Saves a query result to cache
+ * @param {string} cacheKey
+ * @param {Object} result - Query result to cache
+ * @param {number} [ttlMs] - TTL in milliseconds (default: 5 minutes)
+ * @returns {Promise<void>}
+ */
+export async function setQueryCache(cacheKey, result, ttlMs = QUERY_CACHE_TTL_MS) {
+  const record = {
+    cacheKey,
+    result,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + ttlMs,
+  };
+  await withStore(STORES.QUERY_CACHE, 'readwrite', (store) => store.put(record));
+  // Prune old entries if over limit
+  pruneQueryCache().catch(() => {});
+}
+
+/**
+ * Deletes a cached query result
+ * @param {string} cacheKey
+ * @returns {Promise<void>}
+ */
+export async function deleteQueryCache(cacheKey) {
+  return withStore(STORES.QUERY_CACHE, 'readwrite', (store) => store.delete(cacheKey));
+}
+
+/**
+ * Clears all cached query results
+ * @returns {Promise<void>}
+ */
+export async function clearQueryCache() {
+  return withStore(STORES.QUERY_CACHE, 'readwrite', (store) => store.clear());
+}
+
+/**
+ * Prunes expired and excess cache entries (LRU-style, keeps newest)
+ * @returns {Promise<number>} Number of entries deleted
+ */
+export async function pruneQueryCache() {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES.QUERY_CACHE, 'readwrite');
+    const store = transaction.objectStore(STORES.QUERY_CACHE);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const entries = request.result;
+      const now = Date.now();
+      let deleted = 0;
+
+      // Delete expired entries
+      const expired = entries.filter(e => now > e.expiresAt);
+      for (const entry of expired) {
+        store.delete(entry.cacheKey);
+        deleted++;
+      }
+
+      // If still over max, delete oldest by createdAt
+      const valid = entries.filter(e => now <= e.expiresAt);
+      if (valid.length > QUERY_CACHE_MAX_ENTRIES) {
+        valid.sort((a, b) => a.createdAt - b.createdAt);
+        const toDelete = valid.slice(0, valid.length - QUERY_CACHE_MAX_ENTRIES);
+        for (const entry of toDelete) {
+          store.delete(entry.cacheKey);
+          deleted++;
+        }
+      }
+
+      transaction.oncomplete = () => resolve(deleted);
+    };
+
+    request.onerror = () => reject(request.error);
+  });
 }
 
 // =============================================================================
@@ -917,4 +1043,12 @@ export default {
   saveToolState,
   loadToolState,
   clearToolState,
+
+  // Query cache (B8: Query result caching)
+  generateQueryCacheKey,
+  getQueryCache,
+  setQueryCache,
+  deleteQueryCache,
+  clearQueryCache,
+  pruneQueryCache,
 };
