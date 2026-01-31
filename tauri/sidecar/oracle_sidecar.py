@@ -63,6 +63,10 @@ class QueryRequest(BaseModel):
     max_rows: Optional[int] = 1000
 
 
+class BatchQueryRequest(BaseModel):
+    queries: list[QueryRequest]
+
+
 class QueryResponse(BaseModel):
     columns: list[str]
     rows: list[list[Any]]
@@ -370,6 +374,26 @@ async def execute_query_dict(request: QueryRequest):
     except Exception as e:
         logger.exception("Query execution failed")
         raise HTTPException(status_code=500, detail={"code": 0, "message": str(e)})
+
+
+@app.post("/query-batch")
+async def execute_batch(request: BatchQueryRequest):
+    """Execute multiple queries in parallel, return all results."""
+    loop = asyncio.get_event_loop()
+    tasks = [
+        loop.run_in_executor(_db_executor, _execute_query_sync, q, False)
+        for q in request.queries
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    response = []
+    for r in results:
+        if isinstance(r, Exception):
+            response.append({"error": str(r)})
+        else:
+            response.append(r)
+
+    return {"results": response}
 
 
 @app.get("/pools")

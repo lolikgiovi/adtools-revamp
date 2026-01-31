@@ -343,8 +343,8 @@ Meanwhile, `fetchTableMetadataViaSidecar()` (`service.js:325`) already queries `
 | **P0** | B3 | Increase `POOL_MAX` to 5 | Trivial | Critical | Enables parallel connections | **Done** |
 | **P1** | B4 | Use `DiffWorkerManager` for diffing | Small | High | UI stays responsive | **Done** |
 | **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells | **Done** |
-| **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload | |
-| **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip | |
+| **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload | **Done** |
+| **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip | **Done** |
 | **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs | |
 | **P3** | B9 | `cursor.outputtypehandler` for row conversion | Small | Low | Faster Python serialization | |
 

@@ -279,6 +279,26 @@ export class OracleSidecarClient {
   }
 
   /**
+   * Execute multiple queries in a single HTTP request (parallel execution on sidecar).
+   * @param {Array<{connection: Object, sql: string, max_rows?: number}>} queries
+   * @returns {Promise<{results: Array<{columns: string[], rows: any[][], row_count: number, execution_time_ms: number} | {error: string}>}>}
+   */
+  async queryBatch(queries) {
+    const response = await fetch(`${this._baseUrl}/query-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new OracleSidecarError(error.detail || error);
+    }
+
+    return response.json();
+  }
+
+  /**
    * List active connection pools (for debugging)
    */
   async listPools() {

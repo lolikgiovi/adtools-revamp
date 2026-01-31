@@ -341,6 +341,7 @@ export class CompareConfigService {
 
   /**
    * Fetch Oracle data via sidecar (compatible with existing fetchOracleData signature)
+   * Uses /query (array format) for smaller payload, converts to dicts client-side.
    * @param {Object} request - Fetch data request
    * @param {string} request.connection_name - Connection name (for credential lookup)
    * @param {Object} request.config - Connection configuration { name, connect_string }
@@ -371,14 +372,55 @@ export class CompareConfigService {
       sourceName = `${owner}.${table_name}`;
     }
 
-    const result = await this.queryAsDictViaSidecar(connection_name, config, querySql, max_rows);
+    // Use /query (array format) instead of /query-dict — smaller JSON payload
+    const result = await this.queryViaSidecar(connection_name, config, querySql, max_rows);
+
+    // Convert to dicts client-side (fast in JS, avoids repeated column names in JSON)
+    const columns = result.columns;
+    const rows = result.rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])));
 
     return {
-      headers: result.columns,
-      rows: result.rows,
+      headers: columns,
+      rows,
       row_count: result.row_count,
       source_name: sourceName,
     };
+  }
+
+  /**
+   * Execute multiple queries in a single HTTP request via sidecar batch endpoint.
+   * Queries run in parallel on the sidecar and results are returned together.
+   * @param {Array<{connection_name: string, config: Object, sql: string, max_rows?: number}>} queries
+   * @returns {Promise<Array<{columns: string[], rows: Object[], row_count: number, error?: string}>>}
+   */
+  static async queryBatchViaSidecar(queries) {
+    await this.ensureSidecarStarted();
+    const client = getOracleSidecarClient();
+
+    // Build query requests with resolved credentials
+    const queryRequests = await Promise.all(
+      queries.map(async ({ connection_name, config, sql, max_rows = 1000 }) => {
+        const connection = await this.buildSidecarConnection(connection_name, config);
+        return { connection, sql, max_rows };
+      })
+    );
+
+    const batchResult = await client.queryBatch(queryRequests);
+
+    // Convert array rows to dict rows client-side for each result
+    return batchResult.results.map((result) => {
+      if (result.error) {
+        return { error: result.error, columns: [], rows: [], row_count: 0 };
+      }
+      const columns = result.columns;
+      const rows = result.rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])));
+      return {
+        columns,
+        rows,
+        row_count: result.row_count,
+        execution_time_ms: result.execution_time_ms,
+      };
+    });
   }
 }
 
