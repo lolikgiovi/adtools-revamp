@@ -19,7 +19,8 @@ import * as FileMatcher from "./lib/file-matcher.js";
 import { ExcelComparator } from "./lib/excel-comparator.js";
 import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
-import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
+import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
+import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
 import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
 import {
   syncPkFieldsToCompareFields,
@@ -2233,15 +2234,19 @@ class CompareConfigTool extends BaseTool {
     this.updateProgressStep("compare", "active", "Comparing records...");
 
     try {
-      // Import diff engine
-      const { compareDatasets } = await import("./lib/diff-engine.js");
+      // Run diff on Web Worker to keep UI responsive
       const { convertToViewFormat } = await import("./lib/diff-adapter.js");
+      const workerManager = getDiffWorkerManager();
 
-      const jsResult = compareDatasets(refParsedData.rows, compParsedData.rows, {
+      const jsResult = await workerManager.compareDatasets(refParsedData.rows, compParsedData.rows, {
         keyColumns: selectedPkFields,
         fields: selectedFields,
         normalize: dataComparison === "normalized",
         matchMode: rowMatching,
+        onProgress: (progress) => {
+          this.updateProgressStep("compare", "active",
+            `Comparing records... ${progress.percent}%`);
+        },
       });
 
       const viewResult = convertToViewFormat(jsResult, {
@@ -2806,12 +2811,17 @@ class CompareConfigTool extends BaseTool {
       this.updateProgressStep("fetch", "done", `${this.schema}.${this.table}`);
       this.updateProgressStep("compare", "active", "Comparing records...");
 
-      // Step 3: Compare using JS diff engine
-      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+      // Step 3: Compare using Web Worker for UI responsiveness
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(dataEnv1.rows, dataEnv2.rows, {
         keyColumns: pkColumns,
         fields: this.selectedFields || dataEnv1.headers,
         normalize: false,
         matchMode: "key",
+        onProgress: (progress) => {
+          this.updateProgressStep("compare", "active",
+            `Comparing records... ${progress.percent}%`);
+        },
       });
 
       console.log("[Compare] JS diff result:", jsResult.summary);
@@ -2982,8 +2992,9 @@ class CompareConfigTool extends BaseTool {
       const pkColumns = primaryKeyFields.length > 0 ? primaryKeyFields : dataEnv1.headers.length > 0 ? [dataEnv1.headers[0]] : [];
       console.log("[Compare] Using PK columns:", pkColumns);
 
-      // Step 3: Compare using JS diff engine
-      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+      // Step 3: Compare using Web Worker for UI responsiveness
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(dataEnv1.rows, dataEnv2.rows, {
         keyColumns: pkColumns,
         fields: dataEnv1.headers,
         normalize: false,
@@ -7679,11 +7690,16 @@ class CompareConfigTool extends BaseTool {
       console.log("[DEBUG] rowsA sample (first row):", rowsA[0]);
       console.log("[DEBUG] rowsB sample (first row):", rowsB[0]);
 
-      const jsResult = compareDatasets(rowsA, rowsB, {
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(rowsA, rowsB, {
         keyColumns: pkFields,
         fields: compareFields,
         normalize: dataComparison === "normalized",
         matchMode: rowMatching,
+        onProgress: (progress) => {
+          this.updateProgressStep("compare", "active",
+            `Comparing records... ${progress.percent}%`);
+        },
       });
 
       console.log("[DEBUG] jsResult.summary:", jsResult.summary);

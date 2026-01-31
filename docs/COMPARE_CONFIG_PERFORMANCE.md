@@ -341,8 +341,8 @@ Meanwhile, `fetchTableMetadataViaSidecar()` (`service.js:325`) already queries `
 | **P0** | B1 | Parallel Oracle fetches (`Promise.all`) | Small | Critical | ~2x on fetch phase | **Done** |
 | **P0** | B2 | `run_in_executor()` in sidecar endpoints | Small | Critical | Unblocks parallel fetches | **Done** |
 | **P0** | B3 | Increase `POOL_MAX` to 5 | Trivial | Critical | Enables parallel connections | **Done** |
-| **P1** | B4 | Use `DiffWorkerManager` for diffing | Small | High | UI stays responsive | |
-| **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells | |
+| **P1** | B4 | Use `DiffWorkerManager` for diffing | Small | High | UI stays responsive | **Done** |
+| **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells | **Done** |
 | **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload | |
 | **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip | |
 | **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs | |
@@ -351,6 +351,8 @@ Meanwhile, `fetchTableMetadataViaSidecar()` (`service.js:325`) already queries `
 **~~B10 should be implemented first~~** ✅ Done — "Load Data" now fetches only metadata for oracle-table mode; actual `SELECT` is deferred to "Compare" with only the user-selected columns.
 
 **~~P0 items B1–B3 are interdependent~~** ✅ Done — all three applied together. Sidecar uses `run_in_executor` with a 4-worker thread pool, pool max raised to 5, and all frontend fetch sites use `Promise.all` (4 locations including bulk query with `Promise.allSettled`).
+
+**~~P1 items B4–B5~~** ✅ Done — All 4 `compareDatasets()` call sites (Excel, Oracle Table, Raw SQL, Unified) now use `DiffWorkerManager` to run diffs on a Web Worker, keeping the UI responsive with progress reporting. `computeAdaptiveDiff()` now runs `Diff.diffChars()` once and reuses the result for both ratio calculation and segment generation.
 
 ---
 
