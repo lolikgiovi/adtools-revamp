@@ -346,25 +346,16 @@ export function canStartUnifiedComparison(unified) {
 export function getUnifiedProgressSteps() {
   return [
     { id: 'source-a', label: 'Loading Source A data', defaultDetail: '—' },
-    { id: 'validate-b', label: 'Validating Source B', defaultDetail: '—' },
     { id: 'source-b', label: 'Loading Source B data', defaultDetail: '—' },
     { id: 'reconcile', label: 'Reconciling fields', defaultDetail: '—' },
   ];
 }
 
 /**
- * Determines which steps to show based on comparison mode.
- * For Oracle vs Oracle, all 4 steps are shown.
- * For other modes, the "Validating Source B" step is hidden.
- *
- * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode
+ * Returns the step IDs to show (all steps are always visible now).
  * @returns {string[]} Array of step IDs to show
  */
-export function getVisibleStepsForMode(mode) {
-  if (mode === 'oracle-oracle') {
-    return ['source-a', 'validate-b', 'source-b', 'reconcile'];
-  }
-  // For mixed or excel-excel modes, skip validation step
+export function getVisibleStepsForMode() {
   return ['source-a', 'source-b', 'reconcile'];
 }
 

@@ -31,7 +31,6 @@ import {
   getResetBehaviorForSourceType,
   createResetSourceState,
   getComparisonMode,
-  getVisibleStepsForMode,
   UnifiedErrorType,
   getActionableErrorMessage,
   parseOracleError,
@@ -3453,99 +3452,18 @@ class CompareConfigTool extends BaseTool {
   hideLoading() {
     const loadingState = document.getElementById("loading-state");
     if (loadingState) loadingState.style.display = "none";
-    // Also hide progress overlay
-    this.hideProgress();
   }
 
   /**
-   * Shows the progress overlay with connection details
-   */
-  showProgress(title = "Comparing Configurations") {
-    const overlay = document.getElementById("progress-overlay");
-    const titleEl = document.getElementById("progress-title");
-
-    if (titleEl) titleEl.textContent = title;
-    if (overlay) overlay.style.display = "flex";
-
-    // Reset all steps to pending
-    this.resetProgressSteps();
-  }
-
-  /**
-   * Hides the progress overlay
-   */
-  hideProgress() {
-    const overlay = document.getElementById("progress-overlay");
-    if (overlay) overlay.style.display = "none";
-  }
-
-  /**
-   * Updates a progress step's state and detail
-   * @param {string} stepId - One of: env1, env2, fetch, compare
-   * @param {string} state - One of: pending, active, done, error
-   * @param {string} detail - Detail text to show
-   */
-  updateProgressStep(stepId, state, detail = "") {
-    const stepEl = document.getElementById(`step-${stepId}`);
-    if (!stepEl) return;
-
-    const iconEl = stepEl.querySelector(".step-icon");
-    const detailEl = document.getElementById(`step-${stepId}-detail`);
-
-    // Update icon based on state
-    if (iconEl) {
-      iconEl.className = `step-icon ${state}`;
-      switch (state) {
-        case "pending":
-          iconEl.textContent = "○";
-          break;
-        case "active":
-          iconEl.textContent = "◉";
-          break;
-        case "done":
-          iconEl.textContent = "✓";
-          break;
-        case "error":
-          iconEl.textContent = "✕";
-          break;
-      }
-    }
-
-    // Update detail text
-    if (detailEl && detail) {
-      detailEl.textContent = detail;
-    }
-  }
-
-  /**
-   * Resets all progress steps to pending state
-   */
-  resetProgressSteps() {
-    ["env1", "env2", "fetch", "compare"].forEach((stepId) => {
-      this.updateProgressStep(stepId, "pending", "—");
-    });
-  }
-
-  /**
-   * Shows the unified progress overlay with dynamic steps based on comparison mode
+   * Shows the unified progress overlay
    * @param {string} title - Title for the overlay
-   * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode - Comparison mode
    */
-  showUnifiedProgress(title = "Loading Data", mode = null) {
+  showUnifiedProgress(title = "Loading Data") {
     const overlay = document.getElementById("unified-progress-overlay");
     const titleEl = document.getElementById("unified-progress-title");
 
     if (titleEl) titleEl.textContent = title;
     if (overlay) overlay.style.display = "flex";
-
-    // Configure visible steps based on mode
-    const visibleSteps = getVisibleStepsForMode(mode);
-
-    // Show/hide validate-b step based on mode
-    const validateBStep = document.getElementById("unified-step-validate-b");
-    if (validateBStep) {
-      validateBStep.style.display = visibleSteps.includes("validate-b") ? "flex" : "none";
-    }
 
     // Reset all unified steps to pending
     this.resetUnifiedProgressSteps();
@@ -3561,7 +3479,7 @@ class CompareConfigTool extends BaseTool {
 
   /**
    * Updates a unified progress step's state and detail
-   * @param {string} stepId - One of: source-a, validate-b, source-b, reconcile
+   * @param {string} stepId - One of: source-a, source-b, reconcile
    * @param {string} state - One of: pending, active, done, error
    * @param {string} detail - Detail text to show
    */
@@ -3601,8 +3519,78 @@ class CompareConfigTool extends BaseTool {
    * Resets all unified progress steps to pending state
    */
   resetUnifiedProgressSteps() {
-    ["source-a", "validate-b", "source-b", "reconcile"].forEach((stepId) => {
+    ["source-a", "source-b", "reconcile"].forEach((stepId) => {
       this.updateUnifiedProgressStep(stepId, "pending", "—");
+    });
+  }
+
+  /**
+   * Shows the compare progress overlay
+   * @param {string} title - Title for the overlay
+   */
+  showCompareProgress(title = "Comparing Data") {
+    const overlay = document.getElementById("compare-progress-overlay");
+    const titleEl = document.getElementById("compare-progress-title");
+
+    if (titleEl) titleEl.textContent = title;
+    if (overlay) overlay.style.display = "flex";
+
+    this.resetCompareProgressSteps();
+  }
+
+  /**
+   * Hides the compare progress overlay
+   */
+  hideCompareProgress() {
+    const overlay = document.getElementById("compare-progress-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+
+  /**
+   * Updates a compare progress step's state and detail
+   * @param {string} stepId - One of: fetch-a, fetch-b, compare
+   * @param {string} state - One of: pending, active, done, error, skipped
+   * @param {string} detail - Detail text to show
+   */
+  updateCompareProgressStep(stepId, state, detail = "") {
+    const stepEl = document.getElementById(`compare-step-${stepId}`);
+    if (!stepEl) return;
+
+    const iconEl = stepEl.querySelector(".step-icon");
+    const detailEl = document.getElementById(`compare-step-${stepId}-detail`);
+
+    if (iconEl) {
+      iconEl.className = `step-icon ${state}`;
+      switch (state) {
+        case "pending":
+          iconEl.textContent = "○";
+          break;
+        case "active":
+          iconEl.textContent = "◉";
+          break;
+        case "done":
+          iconEl.textContent = "✓";
+          break;
+        case "error":
+          iconEl.textContent = "✕";
+          break;
+        case "skipped":
+          iconEl.textContent = "–";
+          break;
+      }
+    }
+
+    if (detailEl && detail) {
+      detailEl.textContent = detail;
+    }
+  }
+
+  /**
+   * Resets all compare progress steps to pending state
+   */
+  resetCompareProgressSteps() {
+    ["fetch-a", "fetch-b", "compare"].forEach((stepId) => {
+      this.updateCompareProgressStep(stepId, "pending", "—");
     });
   }
 
@@ -6886,7 +6874,7 @@ class CompareConfigTool extends BaseTool {
     const isSchemaFirstA = this.unified.sourceA.type === "oracle" && this.unified.sourceA.queryMode === "table";
     const isSchemaFirstB = this.unified.sourceB.type === "oracle" && this.unified.sourceB.queryMode === "table";
 
-    this.showUnifiedProgress("Loading Data", comparisonMode);
+    this.showUnifiedProgress("Loading Data");
     this.updateUnifiedProgressStep("source-a", "active", isSchemaFirstA ? "Loading schema..." : "Loading...");
     this.updateUnifiedProgressStep("source-b", "active", isSchemaFirstB ? "Loading schema..." : "Loading...");
 
@@ -7610,64 +7598,62 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    this.showProgress("Comparing Data");
+    this.showCompareProgress("Comparing Data");
 
     try {
       // Fetch actual data for schema-first sources (only the selected columns)
       const needsFetchA = sourceA.schemaLoaded && !sourceA.dataLoaded;
       const needsFetchB = sourceB.schemaLoaded && !sourceB.dataLoaded;
 
-      if (needsFetchA || needsFetchB) {
-        this.updateProgressStep("compare", "active", "Fetching data...");
-        const fieldsToFetch = [...new Set([...selectedPkFields, ...selectedCompareFields])];
+      // Map selected field names to source-specific names via commonMapped
+      const fieldsToFetch = [...new Set([...selectedPkFields, ...selectedCompareFields])];
+      const mapFieldsForSource = (sourceLabel) => {
+        if (!fields.commonMapped?.length) return fieldsToFetch;
+        return fieldsToFetch.map((f) => {
+          const mapped = fields.commonMapped.find((m) => m.sourceA === f || m.normalized === f);
+          return mapped ? mapped[sourceLabel] : f;
+        });
+      };
 
-        // Map selected field names to source-specific names via commonMapped
-        const mapFieldsForSource = (sourceLabel) => {
-          if (!fields.commonMapped?.length) return fieldsToFetch;
-          return fieldsToFetch.map((f) => {
-            const mapped = fields.commonMapped.find((m) => m.sourceA === f || m.normalized === f);
-            return mapped ? mapped[sourceLabel] : f;
-          });
-        };
-
-        const fetchPromises = [];
-        if (needsFetchA) {
-          fetchPromises.push(
-            UnifiedDataService.fetchData({
-              type: SourceType.ORACLE_TABLE,
-              connection: sourceA.connection,
-              schema: sourceA.schema,
-              table: sourceA.table,
-              whereClause: sourceA.whereClause,
-              maxRows: sourceA.maxRows,
-              fields: mapFieldsForSource("sourceA"),
-            }).then((data) => {
-              this.unified.sourceA.data = data;
-              this.unified.sourceA.dataLoaded = true;
-            }),
-          );
-        }
-        if (needsFetchB) {
-          fetchPromises.push(
-            UnifiedDataService.fetchData({
-              type: SourceType.ORACLE_TABLE,
-              connection: sourceB.connection,
-              schema: sourceB.schema,
-              table: sourceB.table,
-              whereClause: sourceB.whereClause,
-              maxRows: sourceB.maxRows,
-              fields: mapFieldsForSource("sourceB"),
-            }).then((data) => {
-              this.unified.sourceB.data = data;
-              this.unified.sourceB.dataLoaded = true;
-            }),
-          );
-        }
-
-        await Promise.all(fetchPromises);
+      // Fetch Source A
+      if (needsFetchA) {
+        this.updateCompareProgressStep("fetch-a", "active", "Querying...");
+        const dataA = await UnifiedDataService.fetchData({
+          type: SourceType.ORACLE_TABLE,
+          connection: sourceA.connection,
+          schema: sourceA.schema,
+          table: sourceA.table,
+          whereClause: sourceA.whereClause,
+          maxRows: sourceA.maxRows,
+          fields: mapFieldsForSource("sourceA"),
+        });
+        this.unified.sourceA.data = dataA;
+        this.unified.sourceA.dataLoaded = true;
+        this.updateCompareProgressStep("fetch-a", "done", `${dataA.rows.length} rows`);
+      } else {
+        this.updateCompareProgressStep("fetch-a", "done", "Already loaded");
       }
 
-      this.updateProgressStep("compare", "active", "Comparing records...");
+      // Fetch Source B
+      if (needsFetchB) {
+        this.updateCompareProgressStep("fetch-b", "active", "Querying...");
+        const dataB = await UnifiedDataService.fetchData({
+          type: SourceType.ORACLE_TABLE,
+          connection: sourceB.connection,
+          schema: sourceB.schema,
+          table: sourceB.table,
+          whereClause: sourceB.whereClause,
+          maxRows: sourceB.maxRows,
+          fields: mapFieldsForSource("sourceB"),
+        });
+        this.unified.sourceB.data = dataB;
+        this.unified.sourceB.dataLoaded = true;
+        this.updateCompareProgressStep("fetch-b", "done", `${dataB.rows.length} rows`);
+      } else {
+        this.updateCompareProgressStep("fetch-b", "done", "Already loaded");
+      }
+
+      this.updateCompareProgressStep("compare", "active", "Comparing records...");
 
       const { commonMapped } = fields;
       let rowsA = sourceA.data.rows;
@@ -7697,8 +7683,7 @@ class CompareConfigTool extends BaseTool {
         normalize: dataComparison === "normalized",
         matchMode: rowMatching,
         onProgress: (progress) => {
-          this.updateProgressStep("compare", "active",
-            `Comparing records... ${progress.percent}%`);
+          this.updateCompareProgressStep("compare", "active", `${progress.percent}%`);
         },
       });
 
@@ -7721,7 +7706,7 @@ class CompareConfigTool extends BaseTool {
         compareFields: compareFields,
       };
 
-      this.updateProgressStep("compare", "done", `${viewResult.rows.length} records compared`);
+      this.updateCompareProgressStep("compare", "done", `${viewResult.rows.length} records`);
 
       // Store results
       this.results["unified"] = viewResult;
@@ -7729,7 +7714,7 @@ class CompareConfigTool extends BaseTool {
       this.unified.currentStep = 3;
 
       await new Promise((r) => setTimeout(r, 400));
-      this.hideProgress();
+      this.hideCompareProgress();
       this.showResults();
 
       this.eventBus.emit("comparison:complete", viewResult);
@@ -7763,7 +7748,9 @@ class CompareConfigTool extends BaseTool {
       });
     } catch (error) {
       console.error("Unified comparison failed:", error);
-      this.hideProgress();
+      this.updateCompareProgressStep("compare", "error", error.message || "Failed");
+      await new Promise((r) => setTimeout(r, 800));
+      this.hideCompareProgress();
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Comparison failed: ${error.message || error}`,
