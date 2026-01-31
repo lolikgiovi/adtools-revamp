@@ -5946,6 +5946,9 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].schema = null;
     this.unified[sourceKey].table = null;
 
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
+
     // Reset table dropdown
     const tableInput = document.getElementById(`${prefix}-table-search`);
     const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
@@ -6156,6 +6159,9 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
+
     const tableInput = document.getElementById(`${prefix}-table-search`);
     const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
 
@@ -6343,6 +6349,9 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].dataLoaded = false;
     this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
+
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
 
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
