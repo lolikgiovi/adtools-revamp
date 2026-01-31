@@ -464,28 +464,38 @@ export class MergeSqlTool extends BaseTool {
     const viewReportBtn = document.getElementById("merge-sql-view-report");
 
     const hasDuplicates = this.result && this.result.duplicates.length > 0;
+    const hasDangerous = this.result?.report?.dangerousStatements?.length > 0;
     const hasReport = this.result && this.result.report;
 
-    // Only show insight panel if there are actual duplicates
-    if (!hasDuplicates) {
+    // Show insight panel if there are duplicates or dangerous statements
+    if (!hasDuplicates && !hasDangerous) {
       if (insights) insights.style.display = "none";
       return;
     }
 
     if (insights) {
       insights.style.display = "flex";
-      insights.classList.add("insights-warning");
+      insights.classList.remove("insights-warning", "insights-danger");
+      insights.classList.add(hasDangerous ? "insights-danger" : "insights-warning");
+    }
+
+    const messages = [];
+    if (hasDuplicates) {
+      messages.push(`${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"}`);
+    }
+    if (hasDangerous) {
+      messages.push(`${this.result.report.dangerousStatements.length} dangerous statement${this.result.report.dangerousStatements.length === 1 ? "" : "s"}`);
     }
 
     if (insightTitle) {
-      insightTitle.textContent = "Duplicate Queries Detected";
+      insightTitle.textContent = hasDangerous ? "Issues Detected" : "Duplicate Queries Detected";
     }
 
     if (duplicatesText) {
-      duplicatesText.textContent = `${this.result.duplicates.length} duplicate DML ${this.result.duplicates.length === 1 ? "query" : "queries"} found across files`;
+      duplicatesText.textContent = `${messages.join(", ")} detected`;
     }
 
-    if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
+    if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = hasDuplicates ? "" : "none";
 
     if (hasReport && viewReportBtn) {
       viewReportBtn.style.display = "";
@@ -529,18 +539,45 @@ export class MergeSqlTool extends BaseTool {
 
   showReportModal() {
     const modal = document.getElementById("merge-sql-report-modal");
+    const dangerousContainer = document.getElementById("merge-sql-report-dangerous");
     const statementsContainer = document.getElementById("merge-sql-report-statements");
+    const squadsContainer = document.getElementById("merge-sql-report-squads");
+    const featuresContainer = document.getElementById("merge-sql-report-features");
     const authorsContainer = document.getElementById("merge-sql-report-authors");
 
     if (!this.result?.report) return;
 
-    const { statementCounts, nonSystemAuthors } = this.result.report;
+    const { statementCounts, squadCounts, featureCounts, nonSystemAuthors, dangerousStatements } = this.result.report;
+
+    // Render dangerous statements
+    if (dangerousContainer) {
+      if (dangerousStatements && dangerousStatements.length > 0) {
+        let dangerousHtml = "";
+        for (const item of dangerousStatements) {
+          const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
+          dangerousHtml += `<div class="report-danger-item">
+            <span class="report-file-tag">${this.escapeHtml(item.fileName)}</span>
+            <span class="report-type-badge report-type-badge--${item.type === "DELETE" ? "delete" : "update-no-where"}">${typeLabel}</span>
+            <pre class="report-danger-statement">${this.escapeHtml(item.statement.slice(0, 300))}${item.statement.length > 300 ? "..." : ""}</pre>
+          </div>`;
+        }
+        dangerousContainer.innerHTML = dangerousHtml;
+      } else {
+        dangerousContainer.innerHTML = `<div class="report-success">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          No dangerous statements found
+        </div>`;
+      }
+    }
 
     // Render statement counts table
     if (statementsContainer) {
       if (statementCounts.length > 0) {
         let tableHtml = `<table class="report-table">
-          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of statementCounts) {
           tableHtml += `<tr>
@@ -548,6 +585,7 @@ export class MergeSqlTool extends BaseTool {
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
+            <td>${row.delete}</td>
             <td>${row.total}</td>
           </tr>`;
         }
@@ -555,6 +593,52 @@ export class MergeSqlTool extends BaseTool {
         statementsContainer.innerHTML = tableHtml;
       } else {
         statementsContainer.innerHTML = `<div class="report-success">No DML statements found</div>`;
+      }
+    }
+
+    // Render per-squad summary table
+    if (squadsContainer) {
+      if (squadCounts && squadCounts.length > 0) {
+        let squadsHtml = `<table class="report-table">
+          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <tbody>`;
+        for (const row of squadCounts) {
+          squadsHtml += `<tr>
+            <td>${this.escapeHtml(row.squad)}</td>
+            <td>${row.insert}</td>
+            <td>${row.merge}</td>
+            <td>${row.update}</td>
+            <td>${row.delete}</td>
+            <td>${row.total}</td>
+          </tr>`;
+        }
+        squadsHtml += `</tbody></table>`;
+        squadsContainer.innerHTML = squadsHtml;
+      } else {
+        squadsContainer.innerHTML = `<div class="report-success">No squad metadata found in file names</div>`;
+      }
+    }
+
+    // Render per-feature summary table
+    if (featuresContainer) {
+      if (featureCounts && featureCounts.length > 0) {
+        let featuresHtml = `<table class="report-table">
+          <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <tbody>`;
+        for (const row of featureCounts) {
+          featuresHtml += `<tr>
+            <td>${this.escapeHtml(row.feature)}</td>
+            <td>${row.insert}</td>
+            <td>${row.merge}</td>
+            <td>${row.update}</td>
+            <td>${row.delete}</td>
+            <td>${row.total}</td>
+          </tr>`;
+        }
+        featuresHtml += `</tbody></table>`;
+        featuresContainer.innerHTML = featuresHtml;
+      } else {
+        featuresContainer.innerHTML = `<div class="report-success">No feature metadata found in file names</div>`;
       }
     }
 

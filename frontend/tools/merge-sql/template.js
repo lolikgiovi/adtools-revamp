@@ -230,8 +230,20 @@ export const MergeSqlTemplate = /* html */ `
       </div>
       <div class="modal-body">
         <div class="report-section">
+          <h4>Dangerous Statements</h4>
+          <div id="merge-sql-report-dangerous"></div>
+        </div>
+        <div class="report-section">
           <h4>Statement Summary</h4>
           <div id="merge-sql-report-statements"></div>
+        </div>
+        <div class="report-section">
+          <h4>Per-Squad Summary</h4>
+          <div id="merge-sql-report-squads"></div>
+        </div>
+        <div class="report-section">
+          <h4>Per-Feature Summary</h4>
+          <div id="merge-sql-report-features"></div>
         </div>
         <div class="report-section">
           <h4>Non-SYSTEM Authors</h4>

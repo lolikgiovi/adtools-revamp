@@ -55,6 +55,10 @@ export class MergeSqlService {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
+        } else if (upperLine.startsWith("DELETE FROM") || upperLine.startsWith("DELETE ")) {
+          inStatement = true;
+          statementType = "dml";
+          currentStatement = [line];
         } else if (this.isValidSelectStatement(upperLine)) {
           inStatement = true;
           statementType = "select";
@@ -120,14 +124,53 @@ export class MergeSqlService {
   }
 
   /**
-   * Analyze DML statements and count by type and target table
+   * Detect dangerous DML statements: DELETE statements and UPDATE without WHERE
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
-   * @returns {Array<{ table: string, insert: number, merge: number, update: number, total: number }>}
+   * @returns {Array<{ fileName: string, type: 'DELETE' | 'UPDATE_NO_WHERE', statement: string }>}
    */
-  static analyzeStatements(parsedFiles) {
-    const tableMap = new Map(); // lowercase key -> { displayName, insert, merge, update }
+  static detectDangerousStatements(parsedFiles) {
+    const results = [];
 
     for (const file of parsedFiles) {
+      for (const stmt of file.dmlStatements) {
+        const upperStmt = stmt.trimStart().toUpperCase();
+
+        if (upperStmt.startsWith("DELETE")) {
+          results.push({
+            fileName: file.fileName,
+            type: "DELETE",
+            statement: stmt,
+          });
+        } else if (upperStmt.startsWith("UPDATE")) {
+          if (!/\bWHERE\b/i.test(stmt)) {
+            results.push({
+              fileName: file.fileName,
+              type: "UPDATE_NO_WHERE",
+              statement: stmt,
+            });
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Analyze DML statements and count by type and target table, squad, and feature
+   * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
+   * @returns {{ tableCounts: Array<{ table: string, insert: number, merge: number, update: number, delete: number, total: number }>, squadCounts: Array<{ squad: string, insert: number, merge: number, update: number, delete: number, total: number }>, featureCounts: Array<{ feature: string, insert: number, merge: number, update: number, delete: number, total: number }> }}
+   */
+  static analyzeStatements(parsedFiles) {
+    const tableMap = new Map();
+    const squadMap = new Map();
+    const featureMap = new Map();
+
+    for (const file of parsedFiles) {
+      const parsed = this.parseFileName(file.fileName);
+      const squad = parsed ? parsed.squadName : null;
+      const feature = parsed ? parsed.featureName : null;
+
       for (const stmt of file.dmlStatements) {
         const upperStmt = stmt.trimStart().toUpperCase();
         let type = null;
@@ -145,6 +188,10 @@ export class MergeSqlService {
           type = "update";
           const match = stmt.match(/UPDATE\s+(\S+)/i);
           if (match) table = match[1];
+        } else if (upperStmt.startsWith("DELETE")) {
+          type = "delete";
+          const match = stmt.match(/DELETE\s+FROM\s+(\S+)/i) || stmt.match(/DELETE\s+(\S+)/i);
+          if (match) table = match[1];
         }
 
         if (!type || !table) continue;
@@ -153,23 +200,67 @@ export class MergeSqlService {
         const parenIdx = table.indexOf("(");
         if (parenIdx !== -1) table = table.substring(0, parenIdx);
 
+        // Per-table counts
         const key = table.toUpperCase();
         if (!tableMap.has(key)) {
-          tableMap.set(key, { displayName: table, insert: 0, merge: 0, update: 0 });
+          tableMap.set(key, { displayName: table, insert: 0, merge: 0, update: 0, delete: 0 });
         }
         tableMap.get(key)[type]++;
+
+        // Per-squad counts
+        if (squad) {
+          const squadKey = squad.toUpperCase();
+          if (!squadMap.has(squadKey)) {
+            squadMap.set(squadKey, { displayName: squad, insert: 0, merge: 0, update: 0, delete: 0 });
+          }
+          squadMap.get(squadKey)[type]++;
+        }
+
+        // Per-feature counts
+        if (feature) {
+          const featureKey = feature.toUpperCase();
+          if (!featureMap.has(featureKey)) {
+            featureMap.set(featureKey, { displayName: feature, insert: 0, merge: 0, update: 0, delete: 0 });
+          }
+          featureMap.get(featureKey)[type]++;
+        }
       }
     }
 
-    return Array.from(tableMap.values())
+    const tableCounts = Array.from(tableMap.values())
       .map((entry) => ({
         table: entry.displayName,
         insert: entry.insert,
         merge: entry.merge,
         update: entry.update,
-        total: entry.insert + entry.merge + entry.update,
+        delete: entry.delete,
+        total: entry.insert + entry.merge + entry.update + entry.delete,
       }))
       .sort((a, b) => a.table.toUpperCase().localeCompare(b.table.toUpperCase()));
+
+    const squadCounts = Array.from(squadMap.values())
+      .map((entry) => ({
+        squad: entry.displayName,
+        insert: entry.insert,
+        merge: entry.merge,
+        update: entry.update,
+        delete: entry.delete,
+        total: entry.insert + entry.merge + entry.update + entry.delete,
+      }))
+      .sort((a, b) => a.squad.toUpperCase().localeCompare(b.squad.toUpperCase()));
+
+    const featureCounts = Array.from(featureMap.values())
+      .map((entry) => ({
+        feature: entry.displayName,
+        insert: entry.insert,
+        merge: entry.merge,
+        update: entry.update,
+        delete: entry.delete,
+        total: entry.insert + entry.merge + entry.update + entry.delete,
+      }))
+      .sort((a, b) => a.feature.toUpperCase().localeCompare(b.feature.toUpperCase()));
+
+    return { tableCounts, squadCounts, featureCounts };
   }
 
   /**
@@ -303,6 +394,15 @@ export class MergeSqlService {
   }
 
   /**
+   * Check if a SELECT statement contains a FETCH FIRST clause
+   * @param {string} selectStatement
+   * @returns {boolean}
+   */
+  static isFetchFirstStatement(selectStatement) {
+    return /\bFETCH\s+FIRST\b/i.test(selectStatement);
+  }
+
+  /**
    * Merge multiple parsed files into combined output
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
    * @returns {{ mergedSql: string, selectSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
@@ -376,10 +476,11 @@ export class MergeSqlService {
       if (group.isStandard) {
         selectLines.push(`-- ${group.groupKey}`);
 
-        // Collect WHERE clauses from all SELECT statements in this group (excluding timestamp verification)
+        // Collect WHERE clauses from all SELECT statements in this group (excluding timestamp verification and FETCH FIRST)
         const whereClauses = [];
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
+            if (this.isFetchFirstStatement(stmt)) continue;
             const where = this.extractWhereClause(stmt);
             if (where) whereClauses.push(where);
           }
@@ -393,9 +494,10 @@ export class MergeSqlService {
           selectLines.push(`SELECT * FROM ${group.groupKey};`);
         }
 
-        // Output original SELECT statements (excluding timestamp verification ones)
+        // Output original SELECT statements (excluding timestamp verification and FETCH FIRST)
         for (const entry of group.entries) {
           const validStatements = entry.selectStatements.filter((stmt) => {
+            if (this.isFetchFirstStatement(stmt)) return false;
             const whereClause = stmt.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
             if (!whereClause) return true; // Keep statements without WHERE
             return !this.isTimestampVerificationClause(whereClause[1].trim());
@@ -410,10 +512,11 @@ export class MergeSqlService {
           }
         }
       } else {
-        // Non-standard files: output the original SELECT statements (excluding timestamp verification)
+        // Non-standard files: output the original SELECT statements (excluding timestamp verification and FETCH FIRST)
         selectLines.push(`-- ${group.groupKey}`);
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
+            if (this.isFetchFirstStatement(stmt)) continue;
             const whereClause = stmt.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
             if (whereClause && this.isTimestampVerificationClause(whereClause[1].trim())) {
               continue; // Skip timestamp verification statements
@@ -425,13 +528,18 @@ export class MergeSqlService {
       }
     }
 
+    const analysis = this.analyzeStatements(parsedFiles);
+
     return {
       mergedSql: dmlLines.join("\n").trim(),
       selectSql: selectLines.join("\n").trim(),
       duplicates,
       report: {
-        statementCounts: this.analyzeStatements(parsedFiles),
+        statementCounts: analysis.tableCounts,
+        squadCounts: analysis.squadCounts,
+        featureCounts: analysis.featureCounts,
         nonSystemAuthors: this.detectNonSystemAuthors(parsedFiles),
+        dangerousStatements: this.detectDangerousStatements(parsedFiles),
       },
     };
   }

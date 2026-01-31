@@ -529,7 +529,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.selectSql).toBe("");
     });
 
-    it("returns report with statementCounts and nonSystemAuthors", () => {
+    it("returns report with statementCounts, squadCounts, featureCounts, nonSystemAuthors, and dangerousStatements", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -542,7 +542,10 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       expect(result.report).toBeDefined();
       expect(result.report.statementCounts).toBeInstanceOf(Array);
+      expect(result.report.squadCounts).toBeInstanceOf(Array);
+      expect(result.report.featureCounts).toBeInstanceOf(Array);
       expect(result.report.nonSystemAuthors).toBeInstanceOf(Array);
+      expect(result.report.dangerousStatements).toBeInstanceOf(Array);
     });
   });
 
@@ -567,17 +570,17 @@ SELECT * FROM SCHEMA.TABLE3;`;
         },
       ];
 
-      const result = MergeSqlService.analyzeStatements(parsedFiles);
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
 
-      expect(result).toHaveLength(2);
+      expect(tableCounts).toHaveLength(2);
 
-      const tableA = result.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_A");
+      const tableA = tableCounts.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_A");
       expect(tableA.insert).toBe(1);
       expect(tableA.merge).toBe(1);
       expect(tableA.update).toBe(1);
       expect(tableA.total).toBe(3);
 
-      const tableB = result.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_B");
+      const tableB = tableCounts.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_B");
       expect(tableB.insert).toBe(1);
       expect(tableB.merge).toBe(0);
       expect(tableB.update).toBe(0);
@@ -596,15 +599,17 @@ SELECT * FROM SCHEMA.TABLE3;`;
         },
       ];
 
-      const result = MergeSqlService.analyzeStatements(parsedFiles);
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
 
-      expect(result).toHaveLength(1);
-      expect(result[0].insert).toBe(2);
+      expect(tableCounts).toHaveLength(1);
+      expect(tableCounts[0].insert).toBe(2);
     });
 
     it("handles empty input", () => {
       const result = MergeSqlService.analyzeStatements([]);
-      expect(result).toEqual([]);
+      expect(result.tableCounts).toEqual([]);
+      expect(result.squadCounts).toEqual([]);
+      expect(result.featureCounts).toEqual([]);
     });
 
     it("handles mixed statement types for same table", () => {
@@ -620,13 +625,13 @@ SELECT * FROM SCHEMA.TABLE3;`;
         },
       ];
 
-      const result = MergeSqlService.analyzeStatements(parsedFiles);
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
 
-      expect(result).toHaveLength(1);
-      expect(result[0].insert).toBe(1);
-      expect(result[0].merge).toBe(1);
-      expect(result[0].update).toBe(1);
-      expect(result[0].total).toBe(3);
+      expect(tableCounts).toHaveLength(1);
+      expect(tableCounts[0].insert).toBe(1);
+      expect(tableCounts[0].merge).toBe(1);
+      expect(tableCounts[0].update).toBe(1);
+      expect(tableCounts[0].total).toBe(3);
     });
 
     it("strips column list parentheses from table name", () => {
@@ -638,10 +643,10 @@ SELECT * FROM SCHEMA.TABLE3;`;
         },
       ];
 
-      const result = MergeSqlService.analyzeStatements(parsedFiles);
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
 
-      expect(result).toHaveLength(1);
-      expect(result[0].table).toBe("SCHEMA.TABLE_A");
+      expect(tableCounts).toHaveLength(1);
+      expect(tableCounts[0].table).toBe("SCHEMA.TABLE_A");
     });
 
     it("sorts output alphabetically by table name", () => {
@@ -657,11 +662,108 @@ SELECT * FROM SCHEMA.TABLE3;`;
         },
       ];
 
-      const result = MergeSqlService.analyzeStatements(parsedFiles);
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
 
-      expect(result[0].table).toBe("A_TABLE");
-      expect(result[1].table).toBe("M_TABLE");
-      expect(result[2].table).toBe("Z_TABLE");
+      expect(tableCounts[0].table).toBe("A_TABLE");
+      expect(tableCounts[1].table).toBe("M_TABLE");
+      expect(tableCounts[2].table).toBe("Z_TABLE");
+    });
+
+    it("counts DELETE statements in per-table breakdown", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "DELETE FROM SCHEMA.TABLE_A WHERE id = 1;",
+            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const { tableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(tableCounts).toHaveLength(1);
+      expect(tableCounts[0].delete).toBe(1);
+      expect(tableCounts[0].insert).toBe(1);
+      expect(tableCounts[0].total).toBe(2);
+    });
+
+    it("returns squadCounts grouped by squad from file names", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE_B SET c = 2 WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_B (ALPHA)[FEATURE2].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_C (c) VALUES (3);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_C (BETA)[FEATURE3].sql",
+        },
+      ];
+
+      const { squadCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(squadCounts).toHaveLength(2);
+      const alpha = squadCounts.find((s) => s.squad === "ALPHA");
+      expect(alpha.insert).toBe(1);
+      expect(alpha.update).toBe(1);
+      expect(alpha.total).toBe(2);
+
+      const beta = squadCounts.find((s) => s.squad === "BETA");
+      expect(beta.insert).toBe(1);
+      expect(beta.total).toBe(1);
+    });
+
+    it("returns featureCounts grouped by feature from file names", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);",
+            "MERGE INTO SCHEMA.TABLE_A t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (SQUAD1)[MY_FEATURE].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_B (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_B (SQUAD2)[OTHER_FEATURE].sql",
+        },
+      ];
+
+      const { featureCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(featureCounts).toHaveLength(2);
+      const myFeature = featureCounts.find((f) => f.feature === "MY_FEATURE");
+      expect(myFeature.insert).toBe(1);
+      expect(myFeature.merge).toBe(1);
+      expect(myFeature.total).toBe(2);
+
+      const otherFeature = featureCounts.find((f) => f.feature === "OTHER_FEATURE");
+      expect(otherFeature.insert).toBe(1);
+      expect(otherFeature.total).toBe(1);
+    });
+
+    it("excludes non-standard file names from squad/feature counts", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO T1 (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const { squadCounts, featureCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(squadCounts).toHaveLength(0);
+      expect(featureCounts).toHaveLength(0);
     });
   });
 
@@ -959,6 +1061,226 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       // Non-standard files should keep their original SELECT statements
       expect(result.selectSql).toContain("SELECT * FROM SOME_TABLE WHERE id = 1;");
+    });
+  });
+
+  describe("parseFile DELETE extraction", () => {
+    it("extracts DELETE FROM statements as DML", () => {
+      const content = `SET DEFINE OFF;
+
+DELETE FROM SCHEMA.TABLE_NAME WHERE id = 1;
+
+SELECT * FROM SCHEMA.TABLE_NAME;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("DELETE FROM");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("extracts DELETE (without FROM) statements as DML", () => {
+      const content = `DELETE SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("DELETE");
+    });
+
+    it("handles multiple DELETE statements in one file", () => {
+      const content = `DELETE FROM T1 WHERE id = 1;
+
+DELETE FROM T2 WHERE id = 2;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(2);
+    });
+  });
+
+  describe("detectDangerousStatements", () => {
+    it("flags DELETE statements", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["DELETE FROM SCHEMA.TABLE_A WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("DELETE");
+      expect(result[0].fileName).toBe("file1.sql");
+      expect(result[0].statement).toContain("DELETE FROM");
+    });
+
+    it("flags UPDATE without WHERE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE_A SET col1 = 'value';"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("UPDATE_NO_WHERE");
+      expect(result[0].fileName).toBe("file1.sql");
+    });
+
+    it("does not flag UPDATE with WHERE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE_A SET col1 = 'value' WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("does not flag INSERT or MERGE statements", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO T1 (c) VALUES (1);",
+            "MERGE INTO T1 t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("detects multiple dangerous statements across files", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["DELETE FROM T1 WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+        {
+          dmlStatements: ["UPDATE T2 SET col = 'x';"],
+          selectStatements: [],
+          fileName: "file2.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].type).toBe("DELETE");
+      expect(result[1].type).toBe("UPDATE_NO_WHERE");
+    });
+  });
+
+  describe("isFetchFirstStatement", () => {
+    it("returns true for FETCH FIRST N ROWS ONLY", () => {
+      expect(
+        MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 ORDER BY id FETCH FIRST 10 ROWS ONLY;")
+      ).toBe(true);
+    });
+
+    it("returns true for fetch first (case insensitive)", () => {
+      expect(
+        MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 fetch first 5 rows only;")
+      ).toBe(true);
+    });
+
+    it("returns false for normal SELECT statements", () => {
+      expect(MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 WHERE id = 1;")).toBe(false);
+    });
+
+    it("returns false for SELECT without FETCH FIRST", () => {
+      expect(MergeSqlService.isFetchFirstStatement("SELECT col1, col2 FROM T1;")).toBe(false);
+    });
+  });
+
+  describe("FETCH FIRST filtering in mergeFiles", () => {
+    it("excludes FETCH FIRST SELECT from WHERE clause concatenation", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;",
+            "SELECT * FROM CONFIG.APP_CONFIG WHERE status = 'A' FETCH FIRST 10 ROWS ONLY;",
+          ],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Summary should only include WHERE from the non-FETCH FIRST statement
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
+      expect(result.selectSql).not.toContain("FETCH FIRST");
+    });
+
+    it("excludes FETCH FIRST SELECT from individual SELECT output", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;",
+            "SELECT * FROM CONFIG.APP_CONFIG FETCH FIRST 5 ROWS ONLY;",
+          ],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;");
+      expect(result.selectSql).not.toContain("FETCH FIRST");
+    });
+
+    it("excludes FETCH FIRST SELECT from non-standard file output", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT * FROM T1;",
+            "SELECT * FROM T1 FETCH FIRST 10 ROWS ONLY;",
+          ],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("SELECT * FROM T1;");
+      expect(result.selectSql).not.toContain("FETCH FIRST");
+    });
+
+    it("dangerousStatements are included in mergeFiles report", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "DELETE FROM T1 WHERE id = 1;",
+            "UPDATE T2 SET col = 'x';",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.report.dangerousStatements).toHaveLength(2);
+      expect(result.report.dangerousStatements[0].type).toBe("DELETE");
+      expect(result.report.dangerousStatements[1].type).toBe("UPDATE_NO_WHERE");
     });
   });
 });

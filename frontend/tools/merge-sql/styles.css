@@ -615,6 +615,73 @@
   color: hsl(var(--destructive));
 }
 
+.report-danger-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--destructive) / 0.08);
+  border: 1px solid hsl(var(--destructive) / 0.2);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+
+.report-danger-item:last-child {
+  margin-bottom: 0;
+}
+
+.report-danger-statement {
+  width: 100%;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.75rem;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0.5rem 0.75rem;
+  max-height: 100px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.report-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  flex-shrink: 0;
+}
+
+.report-type-badge--delete {
+  background: hsl(var(--destructive) / 0.15);
+  color: hsl(var(--destructive));
+}
+
+.report-type-badge--update-no-where {
+  background: hsl(var(--warning) / 0.15);
+  color: hsl(var(--warning));
+}
+
+/* Insights panel danger variant */
+.insights-panel.insights-danger {
+  background: hsl(var(--destructive) / 0.1);
+  border-bottom: 1px solid hsl(var(--destructive) / 0.3);
+}
+
+.insights-danger .insight-icon {
+  color: hsl(var(--destructive));
+}
+
+.insights-danger .insight-title {
+  color: hsl(var(--destructive));
+}
+
 .report-success {
   display: flex;
   align-items: center;
