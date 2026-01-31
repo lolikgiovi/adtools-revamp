@@ -921,6 +921,38 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       expect(result).toBeNull();
     });
+
+    it("strips trailing ORDER BY from WHERE clause", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT * FROM TABLE WHERE id IN ('a', 'b') ORDER BY updated_time ASC;"
+      );
+
+      expect(result).toBe("id IN ('a', 'b')");
+    });
+
+    it("strips trailing GROUP BY from WHERE clause", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT col, COUNT(*) FROM TABLE WHERE status = 'ACTIVE' GROUP BY col;"
+      );
+
+      expect(result).toBe("status = 'ACTIVE'");
+    });
+
+    it("strips trailing FETCH FIRST from WHERE clause", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT * FROM TABLE WHERE id = 1 FETCH FIRST 10 ROWS ONLY;"
+      );
+
+      expect(result).toBe("id = 1");
+    });
+
+    it("strips ORDER BY + FETCH FIRST combined", () => {
+      const result = MergeSqlService.extractWhereClause(
+        "SELECT * FROM TABLE WHERE id = 1 ORDER BY name ASC FETCH FIRST 5 ROWS ONLY;"
+      );
+
+      expect(result).toBe("id = 1");
+    });
   });
 
   describe("isTimestampVerificationClause", () => {
@@ -1024,6 +1056,29 @@ SELECT * FROM SCHEMA.TABLE3;`;
       // Should contain subheaders for individual entries
       expect(result.selectSql).toContain("SQUAD1 - FEATURE1");
       expect(result.selectSql).toContain("SQUAD2 - FEATURE2");
+    });
+
+    it("strips ORDER BY from WHERE clauses before concatenation", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM SYSTEM_SUPPORT.SERVICE WHERE id IN ('a', 'b') ORDER BY updated_time ASC;"],
+          fileName: "SYSTEM_SUPPORT.SERVICE (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT * FROM SYSTEM_SUPPORT.SERVICE WHERE service_code IN ('x', 'y') ORDER BY updated_time ASC;"],
+          fileName: "SYSTEM_SUPPORT.SERVICE (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // WHERE clauses should NOT contain ORDER BY
+      expect(result.selectSql).toContain(
+        "SELECT * FROM SYSTEM_SUPPORT.SERVICE WHERE (id IN ('a', 'b')) OR (service_code IN ('x', 'y'));"
+      );
+      expect(result.selectSql).not.toMatch(/WHERE\s*\([^)]*ORDER BY/i);
     });
 
     it("excludes timestamp verification SELECT statements from output", () => {

@@ -361,7 +361,13 @@ export class MergeSqlService {
     const match = selectStatement.match(/\bWHERE\b\s+([\s\S]+?)\s*;?\s*$/i);
     if (!match) return null;
 
-    const whereClause = match[1].trim();
+    // Strip trailing SQL clauses that follow WHERE conditions
+    const whereClause = match[1]
+      .replace(/\s+ORDER\s+BY\b[\s\S]*$/i, "")
+      .replace(/\s+GROUP\s+BY\b[\s\S]*$/i, "")
+      .replace(/\s+HAVING\b[\s\S]*$/i, "")
+      .replace(/\s+FETCH\s+FIRST\b[\s\S]*$/i, "")
+      .trim();
 
     // Skip timestamp-based verification patterns (e.g., updated_time >= SYSDATE - INTERVAL '5' MINUTE)
     if (this.isTimestampVerificationClause(whereClause)) {
