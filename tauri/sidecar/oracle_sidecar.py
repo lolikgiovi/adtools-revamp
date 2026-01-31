@@ -13,6 +13,8 @@ import atexit
 import logging
 import signal
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from threading import Lock
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 POOL_MIN = 1
-POOL_MAX = 2
+POOL_MAX = 5
 POOL_INCREMENT = 1
 POOL_TIMEOUT = 120  # Close idle connections after 2 minutes
 POOL_GETMODE = oracledb.POOL_GETMODE_WAIT
@@ -187,6 +189,9 @@ class PoolManager:
 # Global pool manager
 pool_manager = PoolManager()
 
+# Thread pool for offloading blocking DB operations from the asyncio event loop
+_db_executor = ThreadPoolExecutor(max_workers=4)
+
 
 # =============================================================================
 # Oracle Error Handling
@@ -280,56 +285,65 @@ async def test_connection(request: TestConnectionRequest):
         raise HTTPException(status_code=500, detail={"code": 0, "message": str(e)})
 
 
+def _convert_value(val):
+    """Convert a single DB cell value to a JSON-safe type."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float, str, bool)):
+        return val
+    if isinstance(val, datetime):
+        return val.isoformat()
+    return str(val)
+
+
+def _execute_query_sync(request: QueryRequest, as_dict: bool = False):
+    """Synchronous query execution — runs in thread pool to avoid blocking the event loop."""
+    start_time = time.perf_counter()
+
+    pool = pool_manager.get_pool(request.connection)
+
+    with pool.acquire() as conn:
+        cursor = conn.cursor()
+        cursor.arraysize = 500
+        cursor.execute(request.sql)
+
+        columns = [col[0] for col in cursor.description] if cursor.description else []
+
+        if request.max_rows:
+            rows = cursor.fetchmany(request.max_rows)
+        else:
+            rows = cursor.fetchall()
+
+        if as_dict:
+            result_rows = [
+                {columns[i]: _convert_value(val) for i, val in enumerate(row)}
+                for row in rows
+            ]
+        else:
+            result_rows = [
+                [_convert_value(val) for val in row]
+                for row in rows
+            ]
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+        return {
+            "columns": columns,
+            "rows": result_rows,
+            "row_count": len(result_rows),
+            "execution_time_ms": round(elapsed_ms, 2),
+        }
+
+
 @app.post("/query", response_model=QueryResponse)
 async def execute_query(request: QueryRequest):
     """Execute a SQL query and return results."""
-    import time
-    start_time = time.perf_counter()
-
     try:
-        pool = pool_manager.get_pool(request.connection)
-
-        with pool.acquire() as conn:
-            cursor = conn.cursor()
-
-            # Set array size for better performance with large result sets
-            cursor.arraysize = 500
-
-            cursor.execute(request.sql)
-
-            # Get column names
-            columns = [col[0] for col in cursor.description] if cursor.description else []
-
-            # Fetch rows with limit
-            if request.max_rows:
-                rows = cursor.fetchmany(request.max_rows)
-            else:
-                rows = cursor.fetchall()
-
-            # Convert to list of lists (handle special types)
-            result_rows = []
-            for row in rows:
-                result_row = []
-                for val in row:
-                    if val is None:
-                        result_row.append(None)
-                    elif isinstance(val, (int, float, str, bool)):
-                        result_row.append(val)
-                    elif isinstance(val, datetime):
-                        result_row.append(val.isoformat())
-                    else:
-                        result_row.append(str(val))
-                result_rows.append(result_row)
-
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
-
-            return QueryResponse(
-                columns=columns,
-                rows=result_rows,
-                row_count=len(result_rows),
-                execution_time_ms=round(elapsed_ms, 2)
-            )
-
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _db_executor, _execute_query_sync, request, False
+        )
+        return QueryResponse(**result)
     except oracledb.Error as e:
         error = oracle_error_to_response(e)
         raise HTTPException(status_code=400, detail=error.model_dump())
@@ -344,49 +358,12 @@ async def execute_query_dict(request: QueryRequest):
     Execute a SQL query and return results as list of dictionaries.
     More convenient for frontend consumption.
     """
-    import time
-    start_time = time.perf_counter()
-
     try:
-        pool = pool_manager.get_pool(request.connection)
-
-        with pool.acquire() as conn:
-            cursor = conn.cursor()
-            cursor.arraysize = 500
-            cursor.execute(request.sql)
-
-            columns = [col[0] for col in cursor.description] if cursor.description else []
-
-            if request.max_rows:
-                rows = cursor.fetchmany(request.max_rows)
-            else:
-                rows = cursor.fetchall()
-
-            # Convert to list of dicts
-            result_rows = []
-            for row in rows:
-                row_dict = {}
-                for i, val in enumerate(row):
-                    col_name = columns[i]
-                    if val is None:
-                        row_dict[col_name] = None
-                    elif isinstance(val, (int, float, str, bool)):
-                        row_dict[col_name] = val
-                    elif isinstance(val, datetime):
-                        row_dict[col_name] = val.isoformat()
-                    else:
-                        row_dict[col_name] = str(val)
-                result_rows.append(row_dict)
-
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
-
-            return {
-                "columns": columns,
-                "rows": result_rows,
-                "row_count": len(result_rows),
-                "execution_time_ms": round(elapsed_ms, 2)
-            }
-
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _db_executor, _execute_query_sync, request, True
+        )
+        return result
     except oracledb.Error as e:
         error = oracle_error_to_response(e)
         raise HTTPException(status_code=400, detail=error.model_dump())

@@ -83,6 +83,7 @@ class CompareConfigTool extends BaseTool {
         // Fetched data (normalized)
         data: null, // { headers: [], rows: [], metadata: {} }
         dataLoaded: false,
+        schemaLoaded: false, // true when schema metadata has been fetched (oracle-table mode)
       },
 
       // Source B (Comparator)
@@ -102,6 +103,7 @@ class CompareConfigTool extends BaseTool {
         parsedData: null,
         data: null,
         dataLoaded: false,
+        schemaLoaded: false,
       },
 
       // Field reconciliation (computed when both sources have data)
@@ -2772,35 +2774,32 @@ class CompareConfigTool extends BaseTool {
       console.log("[Compare] PK columns:", pkColumns);
       console.log("[Compare] Selected fields:", this.selectedFields);
 
-      // Step 1: Fetch data from Environment 1
+      // Fetch data from both environments in parallel
       console.log("[Compare] Fetching data from env1:", this.env1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.env1.connection.name,
-        config: this.env1.connection,
-        mode: "table",
-        owner: this.schema,
-        table_name: this.table,
-        where_clause: this.whereClause || null,
-        fields: this.selectedFields || [],
-        max_rows: this.maxRows || 500,
-      });
-      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
-
-      // Update progress - env1 fetch done, start env2
-      this.updateProgressStep("fetch", "active", `Fetching from ${this.env2.connection.name}...`);
-
-      // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching data from env2:", this.env2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.env2.connection.name,
-        config: this.env2.connection,
-        mode: "table",
-        owner: this.schema,
-        table_name: this.table,
-        where_clause: this.whereClause || null,
-        fields: this.selectedFields || [],
-        max_rows: this.maxRows || 500,
-      });
+      const [dataEnv1, dataEnv2] = await Promise.all([
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.env1.connection.name,
+          config: this.env1.connection,
+          mode: "table",
+          owner: this.schema,
+          table_name: this.table,
+          where_clause: this.whereClause || null,
+          fields: this.selectedFields || [],
+          max_rows: this.maxRows || 500,
+        }),
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.env2.connection.name,
+          config: this.env2.connection,
+          mode: "table",
+          owner: this.schema,
+          table_name: this.table,
+          where_clause: this.whereClause || null,
+          fields: this.selectedFields || [],
+          max_rows: this.maxRows || 500,
+        }),
+      ]);
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows");
 
       // Update to compare step
@@ -2957,26 +2956,26 @@ class CompareConfigTool extends BaseTool {
       console.log("[Compare] SQL query:", cleanSql.substring(0, 100) + (cleanSql.length > 100 ? "..." : ""));
       console.log("[Compare] PK fields:", primaryKeyFields);
 
-      // Step 1: Fetch data from Environment 1
+      // Fetch data from both environments in parallel
       console.log("[Compare] Fetching raw SQL data from env1:", this.rawenv1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.rawenv1.connection.name,
-        config: this.rawenv1.connection,
-        mode: "raw-sql",
-        sql: cleanSql,
-        max_rows: this.rawMaxRows,
-      });
-      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows, headers:", dataEnv1.headers);
-
-      // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching raw SQL data from env2:", this.rawenv2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.rawenv2.connection.name,
-        config: this.rawenv2.connection,
-        mode: "raw-sql",
-        sql: cleanSql,
-        max_rows: this.rawMaxRows,
-      });
+      const [dataEnv1, dataEnv2] = await Promise.all([
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.rawenv1.connection.name,
+          config: this.rawenv1.connection,
+          mode: "raw-sql",
+          sql: cleanSql,
+          max_rows: this.rawMaxRows,
+        }),
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.rawenv2.connection.name,
+          config: this.rawenv2.connection,
+          mode: "raw-sql",
+          sql: cleanSql,
+          max_rows: this.rawMaxRows,
+        }),
+      ]);
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows, headers:", dataEnv1.headers);
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows, headers:", dataEnv2.headers);
 
       // Determine primary key columns (use provided or default to first column)
@@ -5737,6 +5736,7 @@ class CompareConfigTool extends BaseTool {
       parsedData: null,
       data: null,
       dataLoaded: false,
+      schemaLoaded: false,
     };
   }
 
@@ -5753,6 +5753,7 @@ class CompareConfigTool extends BaseTool {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
     this.unified[sourceKey].type = type;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     this.updateUnifiedSourceConfigVisibility(source);
@@ -5901,14 +5902,15 @@ class CompareConfigTool extends BaseTool {
 
     if (oracleConfig) oracleConfig.style.display = type === "oracle" ? "flex" : "none";
     if (excelConfig) excelConfig.style.display = type === "excel" ? "block" : "none";
-    if (preview) preview.style.display = this.unified[sourceKey].dataLoaded ? "block" : "none";
+    const isLoaded = this.unified[sourceKey].dataLoaded || this.unified[sourceKey].schemaLoaded;
+    if (preview) preview.style.display = isLoaded ? "block" : "none";
 
     // Manage status visibility and text
     const status = document.getElementById(`${prefix}-status`);
     if (status) {
       if (type) {
         status.style.display = "inline-flex";
-        if (!this.unified[sourceKey].dataLoaded) {
+        if (!isLoaded) {
           status.textContent = "Not loaded";
           status.className = "source-status";
         } else {
@@ -5940,6 +5942,7 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].connection = connection;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
     this.unified[sourceKey].schema = null;
     this.unified[sourceKey].table = null;
@@ -6126,6 +6129,7 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].queryMode = mode;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     const tableConfig = document.getElementById(`${prefix}-table-config`);
@@ -6150,6 +6154,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].schema = schema;
     this.unified[sourceKey].table = null;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     const tableInput = document.getElementById(`${prefix}-table-search`);
@@ -6337,6 +6342,7 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].table = table;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     this.updateUnifiedLoadButtonState();
@@ -6381,6 +6387,7 @@ class CompareConfigTool extends BaseTool {
 
     // Reset data loaded state since files changed
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
     this.unified[sourceKey].parsedData = null;
 
@@ -6439,6 +6446,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].file = null;
     this.unified[sourceKey].parsedData = null;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     // Update UI
@@ -6761,6 +6769,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].file = file.file; // For backward compat
     this.unified[sourceKey].parsedData = null; // Will be parsed on load
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     // Update input display
@@ -6862,19 +6871,37 @@ class CompareConfigTool extends BaseTool {
     // Hide any previous error banner
     this.hideUnifiedErrorBanner();
 
+    // Determine if each source can use schema-first (oracle-table only)
+    const isSchemaFirstA = this.unified.sourceA.type === "oracle" && this.unified.sourceA.queryMode === "table";
+    const isSchemaFirstB = this.unified.sourceB.type === "oracle" && this.unified.sourceB.queryMode === "table";
+
     this.showUnifiedProgress("Loading Data", comparisonMode);
-    this.updateUnifiedProgressStep("source-a", "active", "Loading...");
+    this.updateUnifiedProgressStep("source-a", "active", isSchemaFirstA ? "Loading schema..." : "Loading...");
+    this.updateUnifiedProgressStep("source-b", "active", isSchemaFirstB ? "Loading schema..." : "Loading...");
 
     try {
-      // Load Source A
-      const dataA = await this.fetchUnifiedSourceData("A");
+      // Load both sources in parallel (schema for oracle-table, full data for others)
+      const [dataA, dataB] = await Promise.all([
+        isSchemaFirstA ? this.fetchUnifiedSourceSchema("A") : this.fetchUnifiedSourceData("A"),
+        isSchemaFirstB ? this.fetchUnifiedSourceSchema("B") : this.fetchUnifiedSourceData("B"),
+      ]);
+
       this.unified.sourceA.data = dataA;
-      this.unified.sourceA.dataLoaded = true;
-      this.updateUnifiedProgressStep("source-a", "done", `${dataA.metadata.rowCount} rows loaded`);
+      this.unified.sourceA.dataLoaded = !isSchemaFirstA;
+      this.unified.sourceA.schemaLoaded = true;
+      this.updateUnifiedProgressStep("source-a", "done",
+        isSchemaFirstA ? `${dataA.metadata.columnCount} columns` : `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
 
-      // Track empty Source A (warning only — comparison continues with single-side data)
-      const sourceAEmpty = dataA.metadata.rowCount === 0;
+      this.unified.sourceB.data = dataB;
+      this.unified.sourceB.dataLoaded = !isSchemaFirstB;
+      this.unified.sourceB.schemaLoaded = true;
+      this.updateUnifiedProgressStep("source-b", "done",
+        isSchemaFirstB ? `${dataB.metadata.columnCount} columns` : `${dataB.metadata.rowCount} rows loaded`);
+      this.updateUnifiedSourcePreview("B");
+
+      // Track empty sources — only for fully loaded sources (schema-first defers to Compare)
+      const sourceAEmpty = !isSchemaFirstA && dataA.metadata.rowCount === 0;
       if (sourceAEmpty) {
         this.eventBus.emit("notification:show", {
           type: "warning",
@@ -6882,16 +6909,7 @@ class CompareConfigTool extends BaseTool {
         });
       }
 
-      // Load Source B
-      this.updateUnifiedProgressStep("source-b", "active", "Loading...");
-      const dataB = await this.fetchUnifiedSourceData("B");
-      this.unified.sourceB.data = dataB;
-      this.unified.sourceB.dataLoaded = true;
-      this.updateUnifiedProgressStep("source-b", "done", `${dataB.metadata.rowCount} rows loaded`);
-      this.updateUnifiedSourcePreview("B");
-
-      // Check for empty data — block only when BOTH sources return 0 rows
-      const sourceBEmpty = dataB.metadata.rowCount === 0;
+      const sourceBEmpty = !isSchemaFirstB && dataB.metadata.rowCount === 0;
 
       if (sourceAEmpty && sourceBEmpty) {
         this.updateUnifiedProgressStep("reconcile", "error", "Both sources returned no data");
@@ -7168,6 +7186,37 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Fetch only table schema (column metadata) for an oracle-table source.
+   * Returns a lightweight dataset with headers but no rows — used by the
+   * schema-first approach (B10) so "Load Data" is near-instant.
+   */
+  async fetchUnifiedSourceSchema(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const config = this.unified[sourceKey];
+
+    const metadata = await CompareConfigService.fetchTableMetadataViaSidecar(
+      config.connection.name,
+      { name: config.connection.name, connect_string: config.connection.connect_string },
+      config.schema,
+      config.table,
+    );
+
+    return {
+      headers: metadata.columns.map((c) => c.name),
+      rows: [],
+      metadata: {
+        sourceName: `(${config.connection.name}) ${config.schema}.${config.table}`,
+        rowCount: null, // unknown until Compare
+        columnCount: metadata.columns.length,
+        sourceType: SourceType.ORACLE_TABLE,
+        connectionName: config.connection.name,
+        schema: config.schema,
+        table: config.table,
+      },
+    };
+  }
+
+  /**
    * Update the source preview after data is loaded
    */
   updateUnifiedSourcePreview(source) {
@@ -7182,7 +7231,9 @@ class CompareConfigTool extends BaseTool {
     if (preview && data) {
       preview.style.display = "block";
       if (stats) {
-        stats.textContent = `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`;
+        stats.textContent = data.metadata.rowCount != null
+          ? `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`
+          : `${data.metadata.columnCount} columns (schema only)`;
       }
     }
 
@@ -7549,9 +7600,64 @@ class CompareConfigTool extends BaseTool {
     }
 
     this.showProgress("Comparing Data");
-    this.updateProgressStep("compare", "active", "Comparing records...");
 
     try {
+      // Fetch actual data for schema-first sources (only the selected columns)
+      const needsFetchA = sourceA.schemaLoaded && !sourceA.dataLoaded;
+      const needsFetchB = sourceB.schemaLoaded && !sourceB.dataLoaded;
+
+      if (needsFetchA || needsFetchB) {
+        this.updateProgressStep("compare", "active", "Fetching data...");
+        const fieldsToFetch = [...new Set([...selectedPkFields, ...selectedCompareFields])];
+
+        // Map selected field names to source-specific names via commonMapped
+        const mapFieldsForSource = (sourceLabel) => {
+          if (!fields.commonMapped?.length) return fieldsToFetch;
+          return fieldsToFetch.map((f) => {
+            const mapped = fields.commonMapped.find((m) => m.sourceA === f || m.normalized === f);
+            return mapped ? mapped[sourceLabel] : f;
+          });
+        };
+
+        const fetchPromises = [];
+        if (needsFetchA) {
+          fetchPromises.push(
+            UnifiedDataService.fetchData({
+              type: SourceType.ORACLE_TABLE,
+              connection: sourceA.connection,
+              schema: sourceA.schema,
+              table: sourceA.table,
+              whereClause: sourceA.whereClause,
+              maxRows: sourceA.maxRows,
+              fields: mapFieldsForSource("sourceA"),
+            }).then((data) => {
+              this.unified.sourceA.data = data;
+              this.unified.sourceA.dataLoaded = true;
+            }),
+          );
+        }
+        if (needsFetchB) {
+          fetchPromises.push(
+            UnifiedDataService.fetchData({
+              type: SourceType.ORACLE_TABLE,
+              connection: sourceB.connection,
+              schema: sourceB.schema,
+              table: sourceB.table,
+              whereClause: sourceB.whereClause,
+              maxRows: sourceB.maxRows,
+              fields: mapFieldsForSource("sourceB"),
+            }).then((data) => {
+              this.unified.sourceB.data = data;
+              this.unified.sourceB.dataLoaded = true;
+            }),
+          );
+        }
+
+        await Promise.all(fetchPromises);
+      }
+
+      this.updateProgressStep("compare", "active", "Comparing records...");
+
       const { commonMapped } = fields;
       let rowsA = sourceA.data.rows;
       let rowsB = sourceB.data.rows;
@@ -7931,30 +8037,34 @@ class CompareConfigTool extends BaseTool {
     let sourceAError = null;
     let sourceBError = null;
 
-    // Fetch from Source A
-    try {
-      sourceAResult = await CompareConfigService.fetchOracleDataViaSidecar({
+    // Fetch from both sources in parallel
+    const [settledA, settledB] = await Promise.allSettled([
+      CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: sourceAConnection.name,
         config: sourceAConnection,
         mode: "raw-sql",
         sql: sql,
         max_rows: maxRows,
-      });
-    } catch (error) {
-      sourceAError = this.extractOracleErrorMessage(error);
-    }
-
-    // Fetch from Source B
-    try {
-      sourceBResult = await CompareConfigService.fetchOracleDataViaSidecar({
+      }),
+      CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: sourceBConnection.name,
         config: sourceBConnection,
         mode: "raw-sql",
         sql: sql,
         max_rows: maxRows,
-      });
-    } catch (error) {
-      sourceBError = this.extractOracleErrorMessage(error);
+      }),
+    ]);
+
+    if (settledA.status === "fulfilled") {
+      sourceAResult = settledA.value;
+    } else {
+      sourceAError = this.extractOracleErrorMessage(settledA.reason);
+    }
+
+    if (settledB.status === "fulfilled") {
+      sourceBResult = settledB.value;
+    } else {
+      sourceBError = this.extractOracleErrorMessage(settledB.reason);
     }
 
     // If either source had an error, return error status

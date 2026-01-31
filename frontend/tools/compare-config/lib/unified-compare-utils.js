@@ -317,6 +317,7 @@ export function createResetSourceState(sourceType, existingExcelFiles = []) {
     // Data
     data: null,
     dataLoaded: false,
+    schemaLoaded: false,
   };
 }
 

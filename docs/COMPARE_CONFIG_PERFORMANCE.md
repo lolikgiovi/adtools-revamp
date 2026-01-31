@@ -9,7 +9,9 @@
 ## Table of Contents
 
 1. [Architecture Overview](#1-architecture-overview)
-2. [Current Data Flow](#2-current-data-flow)
+2. [Data Flow](#2-data-flow)
+   - [2a. Current Flow](#2a-current-flow-oracle--by-table-mode)
+   - [2b. Proposed Flow (Schema-First)](#2b-proposed-flow-schema-first-approach-for-oracle--by-table-mode)
 3. [Identified Bottlenecks](#3-identified-bottlenecks)
    - [B1: Sequential Oracle Fetches](#b1-sequential-oracle-fetches-critical)
    - [B2: Python Sidecar Blocks the Event Loop](#b2-python-sidecar-blocks-the-event-loop-critical)
@@ -20,6 +22,7 @@
    - [B7: No Batch Query Endpoint](#b7-no-batch-query-endpoint-medium)
    - [B8: No Query Result Caching](#b8-no-query-result-caching-low-medium)
    - [B9: Python Row Conversion Loop](#b9-python-row-conversion-loop-low)
+   - [B10: Premature Full Data Fetch (SELECT *)](#b10-premature-full-data-fetch-select--in-table-mode--high)
 4. [Enhancement Priority Matrix](#4-enhancement-priority-matrix)
 5. [Detailed Fixes](#5-detailed-fixes)
 6. [Expected Outcome](#6-expected-outcome)
@@ -63,30 +66,66 @@
 
 ## 2. Current Data Flow
 
-A typical Oracle-vs-Oracle comparison follows this sequence:
+### 2a. Current Flow (Oracle — By Table mode)
 
 ```
-User clicks "Compare"
+User clicks "Load Data"
   │
   ├─ 1. Validate source configs
   │
-  ├─ 2. Fetch Source A  ──► HTTP POST /query-dict ──► sidecar ──► Oracle (BLOCKS)
-  │     await ...
+  ├─ 2. Fetch Source A  ──► SELECT * FROM schema.table  ──► sidecar ──► Oracle (BLOCKS)
+  │     await ... (fetches ALL columns, ALL rows up to max_rows)
   │
-  ├─ 3. Fetch Source B  ──► HTTP POST /query-dict ──► sidecar ──► Oracle (BLOCKS)
-  │     await ...
+  ├─ 3. Fetch Source B  ──► SELECT * FROM schema.table  ──► sidecar ──► Oracle (BLOCKS)
+  │     await ... (fetches ALL columns, ALL rows up to max_rows)
   │
-  ├─ 4. compareDatasets()  ◄── runs on MAIN THREAD
+  ├─ 4. Reconcile columns between Source A and Source B
+  │
+  └─ 5. Show field selection UI (user picks PK + comparison fields)
+
+User clicks "Compare"
+  │
+  ├─ 6. compareDatasets()  ◄── runs on MAIN THREAD
   │     ├─ buildKeyMaps()          O(n)
   │     ├─ iterate all keys        O(n × fields)
   │     │   └─ computeAdaptiveDiff per differing cell
   │     │       └─ Diff.diffChars() — may run TWICE per cell
   │     └─ sort results            O(n log n)
   │
-  └─ 5. Render results (GridView / MasterDetail / VerticalCard)
+  └─ 7. Render results (GridView / MasterDetail / VerticalCard)
 ```
 
-Steps 2–3 are **sequential**. Step 4 is **synchronous on the main thread**.
+Steps 2–3 fetch **all columns** via `SELECT *`, even though the user will only compare a subset. Steps 2–3 are **sequential**. Step 6 is **synchronous on the main thread**.
+
+### 2b. Proposed Flow (Schema-First approach for Oracle — By Table mode)
+
+```
+User clicks "Load Data"
+  │
+  ├─ 1. Validate source configs
+  │
+  ├─ 2. Fetch Source A schema  ──► SELECT column_name, data_type, nullable
+  │     FROM all_tab_columns  (~milliseconds, metadata only)
+  │
+  ├─ 3. Fetch Source B schema  (same, ~milliseconds)
+  │
+  ├─ 4. Reconcile columns between Source A and Source B
+  │
+  └─ 5. Show field selection UI (user picks PK + comparison fields)
+
+User clicks "Compare"
+  │
+  ├─ 6. Fetch Source A  ──► SELECT pk, field1, field2 FROM schema.table
+  │     (only selected columns)
+  │
+  ├─ 7. Fetch Source B  (same, only selected columns)
+  │
+  ├─ 8. compareDatasets()
+  │
+  └─ 9. Render results
+```
+
+**Key change**: "Load Data" fetches **only table metadata** (column names/types). The actual data fetch is deferred to "Compare" and uses a targeted `SELECT` with only the PK and comparison fields. This eliminates wasted bandwidth, memory, and DB work for unused columns.
 
 ---
 
@@ -260,25 +299,185 @@ Pure Python iteration with `isinstance()` checks on every cell. For 10,000 rows 
 
 ---
 
+### B10: Premature Full Data Fetch (`SELECT *`) in Table Mode — HIGH
+
+**Location**: `unified-data-service.js:114` (passes `fields: null`), `service.js:368` (builds `SELECT *`)
+
+In Oracle — By Table mode, `loadUnifiedData()` fetches **all rows with all columns** before the user has selected which fields to compare:
+
+```js
+// unified-data-service.js — fields is always null on initial load
+const request = {
+  ...
+  fields: config.fields || null,   // ← null → SELECT *
+  max_rows: config.maxRows || 1000,
+};
+
+// service.js — builds SELECT *
+const fieldList = fields && fields.length > 0 ? fields.join(", ") : "*";
+querySql = `SELECT ${fieldList} FROM ${owner}.${table_name}${whereClause}`;
+```
+
+For a table with 50 columns where the user only needs to compare 5, **90% of the fetched data is discarded**. The unused columns consume:
+
+- **Oracle server resources**: Full table scan or wide index access instead of narrow index-only scan
+- **Network bandwidth**: 10× more data transferred through sidecar JSON responses
+- **Browser memory**: Row objects carry all 50 fields until comparison completes
+- **Sidecar CPU**: Type conversion for every cell in every unused column (see B9)
+
+Meanwhile, `fetchTableMetadataViaSidecar()` (`service.js:325`) already queries `all_tab_columns` and returns column names, types, and nullability in ~milliseconds — but is **never called** in the unified comparison flow.
+
+**Impact**: Proportional to `(total_columns - compared_columns) / total_columns`. For wide tables (20–100+ columns), this is the single largest source of wasted work. Also makes the "Load Data" step feel slow when it could be near-instant.
+
+> **Note**: This optimization applies **only** to `oracle-table` mode. For `oracle-sql` mode, columns aren't known until the query runs. For `excel` mode, the file is already local.
+
+---
+
 ## 4. Enhancement Priority Matrix
 
-| Priority | ID | Enhancement | Effort | Impact | Estimated Speedup |
-|:--------:|:--:|-------------|:------:|:------:|:------:|
-| **P0** | B1 | Parallel Oracle fetches (`Promise.all`) | Small | Critical | ~2x on fetch phase |
-| **P0** | B2 | `run_in_executor()` in sidecar endpoints | Small | Critical | Unblocks parallel fetches |
-| **P0** | B3 | Increase `POOL_MAX` to 5 | Trivial | Critical | Enables parallel connections |
-| **P1** | B4 | Use `DiffWorkerManager` for diffing | Small | High | UI stays responsive |
-| **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells |
-| **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload |
-| **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip |
-| **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs |
-| **P3** | B9 | `cursor.outputtypehandler` for row conversion | Small | Low | Faster Python serialization |
+| Priority | ID | Enhancement | Effort | Impact | Estimated Speedup | Status |
+|:--------:|:--:|-------------|:------:|:------:|:------:|:------:|
+| **P0** | B10 | Schema-first approach — defer data fetch until after field selection | Medium | Critical | Near-instant "Load Data"; fetch only needed columns | **Done** |
+| **P0** | B1 | Parallel Oracle fetches (`Promise.all`) | Small | Critical | ~2x on fetch phase | **Done** |
+| **P0** | B2 | `run_in_executor()` in sidecar endpoints | Small | Critical | Unblocks parallel fetches | **Done** |
+| **P0** | B3 | Increase `POOL_MAX` to 5 | Trivial | Critical | Enables parallel connections | **Done** |
+| **P1** | B4 | Use `DiffWorkerManager` for diffing | Small | High | UI stays responsive | |
+| **P1** | B5 | Fix double `diffChars()` computation | Small | Medium | ~2x for diff phase on changed cells | |
+| **P2** | B6 | Use `/query` array format + client-side dict conversion | Small | Medium | ~30–50% less JSON payload | |
+| **P2** | B7 | Add `/query-batch` endpoint | Medium | Medium | Eliminates extra HTTP round-trip | |
+| **P3** | B8 | Query result caching in IndexedDB | Medium | Low-Med | Instant on re-runs | |
+| **P3** | B9 | `cursor.outputtypehandler` for row conversion | Small | Low | Faster Python serialization | |
 
-**P0 items are interdependent** — all three must be applied together for the parallel fetch speedup to take effect.
+**~~B10 should be implemented first~~** ✅ Done — "Load Data" now fetches only metadata for oracle-table mode; actual `SELECT` is deferred to "Compare" with only the user-selected columns.
+
+**~~P0 items B1–B3 are interdependent~~** ✅ Done — all three applied together. Sidecar uses `run_in_executor` with a 4-worker thread pool, pool max raised to 5, and all frontend fetch sites use `Promise.all` (4 locations including bulk query with `Promise.allSettled`).
 
 ---
 
 ## 5. Detailed Fixes
+
+### Fix B10 — Schema-First Approach (Defer Data Fetch to Compare)
+
+**Goal**: "Load Data" fetches only table metadata; actual row data is fetched at "Compare" time with only the selected columns.
+
+**Scope**: Oracle — By Table mode only. Oracle SQL and Excel modes are unchanged.
+
+#### Step 1: `loadUnifiedData()` — fetch schema instead of data
+
+**File**: `main.js`
+
+For Oracle Table sources, replace the data fetch with a metadata fetch:
+
+```js
+// BEFORE — fetches all rows with SELECT *
+const dataA = await this.fetchUnifiedSourceData("A");
+this.unified.sourceA.data = dataA;
+
+// AFTER — fetches schema only (column names, types, nullability)
+if (config.type === "oracle" && config.queryMode === "table") {
+  const metadata = await CompareConfigService.fetchTableMetadataViaSidecar(
+    config.connection.name, config.connection, config.schema, config.table
+  );
+  // Build a lightweight dataset with headers only (no rows)
+  this.unified.sourceA.schema = metadata.columns;  // [{name, data_type, nullable}]
+  this.unified.sourceA.data = {
+    headers: metadata.columns.map(c => c.name),
+    rows: [],
+    metadata: {
+      sourceName: `(${config.connection.name}) ${config.schema}.${config.table}`,
+      rowCount: null,  // unknown until Compare
+      columnCount: metadata.columns.length,
+      sourceType: 'oracle-table',
+    },
+  };
+  this.unified.sourceA.dataLoaded = false;  // data not yet loaded, only schema
+  this.unified.sourceA.schemaLoaded = true;
+} else {
+  // Excel / Oracle SQL — fetch full data as before
+  const dataA = await this.fetchUnifiedSourceData("A");
+  this.unified.sourceA.data = dataA;
+  this.unified.sourceA.dataLoaded = true;
+}
+```
+
+Repeat for Source B. The reconciliation UI is then driven by the headers from the schema, not from fetched data.
+
+#### Step 2: `executeUnifiedComparison()` — fetch data with selected fields
+
+**File**: `main.js`
+
+Before running the diff, fetch the actual data using only the selected columns:
+
+```js
+async executeUnifiedComparison() {
+  const { selectedPkFields, selectedCompareFields } = this.unified;
+  const fieldsToFetch = [...new Set([...selectedPkFields, ...selectedCompareFields])];
+
+  // Fetch data for Oracle Table sources that only have schema loaded
+  for (const sourceKey of ["sourceA", "sourceB"]) {
+    const config = this.unified[sourceKey];
+    if (config.schemaLoaded && !config.dataLoaded) {
+      const sourceConfig = {
+        type: SourceType.ORACLE_TABLE,
+        connection: config.connection,
+        schema: config.schema,
+        table: config.table,
+        whereClause: config.whereClause,
+        maxRows: config.maxRows,
+        fields: fieldsToFetch,  // ← only the needed columns
+      };
+      const data = await UnifiedDataService.fetchData(sourceConfig);
+      this.unified[sourceKey].data = data;
+      this.unified[sourceKey].dataLoaded = true;
+    }
+  }
+
+  // ... proceed with comparison as before
+}
+```
+
+#### Step 3: `fetchOracleTableData()` — pass fields through
+
+**File**: `unified-data-service.js`
+
+The `fields` parameter is already supported but always passed as `null`. Pass it through:
+
+```js
+const request = {
+  ...
+  fields: config.fields || null,  // now populated with selected columns
+  ...
+};
+```
+
+No change needed — just ensure the caller passes `fields` in the config.
+
+#### Step 4: `fetchOracleDataViaSidecar()` — already handles field lists
+
+**File**: `service.js`
+
+The existing logic already builds `SELECT field1, field2 FROM ...` when `fields` is non-empty:
+
+```js
+const fieldList = fields && fields.length > 0 ? fields.join(", ") : "*";
+```
+
+No change needed.
+
+#### Step 5: UI adjustments
+
+- "Load Data" button label/progress should say "Loading schema..." instead of "Loading..." for Oracle Table sources
+- Source preview after schema load should show column count instead of row count (rows are unknown)
+- "Compare" button progress should show "Fetching data..." before "Comparing..."
+- The field selection UI works identically — it receives headers from the schema instead of from fetched data
+
+#### Scope exclusions
+
+- **Oracle SQL mode**: Unchanged. The query must run to discover columns.
+- **Excel mode**: Unchanged. The file is local and must be parsed to discover columns.
+- **Mixed mode** (Oracle Table + Excel): The Oracle side uses schema-first; the Excel side loads fully. Reconciliation works the same since both produce `headers`.
+
+---
 
 ### Fix B1 — Parallel Oracle Fetches
 
@@ -604,22 +803,42 @@ This moves type conversion from Python loops into the oracledb driver's C layer.
 ### Before (Current State)
 
 ```
-Fetch A:   ████████░░░░░░░░  3.0 s
-Fetch B:   ░░░░░░░░████████  3.0 s  (waits for A)
-Diff:      ░░░░░░░░░░░░░░░░██████  2.0 s  (blocks UI)
-Total:     ════════════════════════  8.0 s
-UI frozen during diff phase.
+"Load Data":
+  Schema A:  (not fetched separately)
+  Schema B:  (not fetched separately)
+  Fetch A:   ████████░░░░░░░░  3.0 s   SELECT * (all 50 columns)
+  Fetch B:   ░░░░░░░░████████  3.0 s   SELECT * (all 50 columns, waits for A)
+  Reconcile: ░░░░░░░░░░░░░░░░█  0.1 s
+  Total:     ═════════════════  6.1 s
+
+User selects 5 fields... (45 columns fetched for nothing)
+
+"Compare":
+  Diff:      ██████  2.0 s  (blocks UI)
+  Total:     ══════  2.0 s
+
+Overall:   8.1 s, UI frozen during diff.
 ```
 
-### After (P0 + P1 Applied)
+### After (B10 + B1–B3 + P1 Applied)
 
 ```
-Fetch A:   ████████░░░░░░░░  3.0 s  ─┐
-Fetch B:   ████████░░░░░░░░  3.0 s  ─┤ parallel
-                                      │
-Diff:      ░░░░░░░░████░░░░  1.0 s  ◄┘ (worker thread, no double-diff)
-Total:     ════════════════   4.0 s
-UI responsive throughout.
+"Load Data":
+  Schema A:  █  0.05 s  ─┐
+  Schema B:  █  0.05 s  ─┤ parallel metadata queries
+  Reconcile: █  0.01 s  ◄┘
+  Total:     ═  ~0.1 s   (near-instant)
+
+User selects 5 fields...
+
+"Compare":
+  Fetch A:   ████░░░░  1.5 s  ─┐  SELECT pk, f1, f2, f3, f4 (5 columns only)
+  Fetch B:   ████░░░░  1.5 s  ─┤  parallel fetches
+                                │
+  Diff:      ░░░░██░░  0.5 s  ◄┘  (worker thread, fewer fields to compare)
+  Total:     ════════   2.0 s
+
+Overall:   ~2.1 s, UI responsive throughout.
 ```
 
-**~50% reduction in wall-clock time** for the most common operation (Oracle-vs-Oracle comparison), with the UI remaining fully responsive during the diff phase.
+**~75% reduction in wall-clock time** for Oracle — By Table comparisons on wide tables. "Load Data" drops from ~6 s to ~0.1 s. The data fetch at "Compare" time is faster because it transfers only the needed columns, and the diff processes fewer fields.
