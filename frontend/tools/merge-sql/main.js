@@ -592,7 +592,7 @@ export class MergeSqlTool extends BaseTool {
     // All Tables Summary (with sticky header)
     if (statementsContainer) {
       if (statementCounts.length > 0) {
-        let tableHtml = `<h4>All Tables Summary</h4><table class="report-table report-table-sticky">
+        let tableHtml = `<h4 class="report-section-header-sticky">All Tables Summary</h4><table class="report-table report-table-sticky">
           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of statementCounts) {

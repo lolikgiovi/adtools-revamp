@@ -621,6 +621,10 @@
 }
 
 /* Sticky table header for Summary tab */
+.report-table-sticky {
+  position: relative;
+}
+
 .report-table-sticky thead {
   position: sticky;
   top: 0;
@@ -630,6 +634,20 @@
 .report-table-sticky thead th {
   background: hsl(var(--card));
   box-shadow: 0 1px 0 hsl(var(--border));
+}
+
+/* Sticky section header */
+.report-section-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+  background: hsl(var(--card));
+  margin: 0 -1.5rem;
+  padding: 0.75rem 1.5rem 0.5rem;
+}
+
+.report-section-header-sticky + .report-table-sticky thead {
+  top: 2.25rem;
 }
 
 .report-table th:not(:first-child) {
