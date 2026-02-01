@@ -114,6 +114,16 @@ export class QuickQueryUI {
         }
       } catch (_) {}
 
+      // Tauri-only: swap "Import Default Schema" for "Import from Oracle Env"
+      try {
+        if (isTauri()) {
+          const importDefaultBtn = document.getElementById("importDefaultSchema");
+          const importOracleBtn = document.getElementById("importFromOracleEnv");
+          if (importDefaultBtn) importDefaultBtn.style.display = "none";
+          if (importOracleBtn) importOracleBtn.style.display = "";
+        }
+      } catch (_) {}
+
       this.clearError();
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
@@ -203,6 +213,27 @@ export class QuickQueryUI {
       clearAllSchemasButton: document.getElementById("clearAllSchemas"),
       importSchemasButton: document.getElementById("importSchemas"),
       importDefaultSchemaButton: document.getElementById("importDefaultSchema"),
+      importFromOracleEnvButton: document.getElementById("importFromOracleEnv"),
+
+      // Oracle Env Import overlay elements
+      oracleEnvOverlay: document.getElementById("oracleEnvOverlay"),
+      oracleEnvModal: document.getElementById("oracleEnvModal"),
+      oracleEnvConnection: document.getElementById("oracleEnvConnection"),
+      oracleEnvStep1: document.getElementById("oracleEnvStep1"),
+      oracleEnvStep2: document.getElementById("oracleEnvStep2"),
+      oracleEnvSchemaList: document.getElementById("oracleEnvSchemaList"),
+      oracleEnvSchemaCount: document.getElementById("oracleEnvSchemaCount"),
+      oracleEnvProgress: document.getElementById("oracleEnvProgress"),
+      oracleEnvProgressBar: document.getElementById("oracleEnvProgressBar"),
+      oracleEnvProgressText: document.getElementById("oracleEnvProgressText"),
+      oracleEnvError: document.getElementById("oracleEnvError"),
+      oracleEnvError2: document.getElementById("oracleEnvError2"),
+      oracleEnvNext: document.getElementById("oracleEnvNext"),
+      oracleEnvBack: document.getElementById("oracleEnvBack"),
+      oracleEnvCancel: document.getElementById("oracleEnvCancel"),
+      closeOracleEnvModalButton: document.getElementById("closeOracleEnvModal"),
+      oracleEnvSelectAll: document.getElementById("oracleEnvSelectAll"),
+      oracleEnvDeselectAll: document.getElementById("oracleEnvDeselectAll"),
 
       // Container elements
       tableSearchContainer: null,
@@ -404,6 +435,36 @@ export class QuickQueryUI {
             this._closeHtmlMinifyOverlay(false);
           }
         },
+      },
+
+      // Oracle Env Import overlay
+      importFromOracleEnvButton: {
+        click: () => this.handleImportFromOracleEnv(),
+      },
+      closeOracleEnvModalButton: {
+        click: () => this.closeOracleEnvOverlay(),
+      },
+      oracleEnvOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.oracleEnvOverlay) {
+            this.closeOracleEnvOverlay();
+          }
+        },
+      },
+      oracleEnvNext: {
+        click: () => this.handleOracleEnvNext(),
+      },
+      oracleEnvBack: {
+        click: () => this.handleOracleEnvBack(),
+      },
+      oracleEnvCancel: {
+        click: () => this.closeOracleEnvOverlay(),
+      },
+      oracleEnvSelectAll: {
+        click: () => this.toggleOracleEnvSchemas(true),
+      },
+      oracleEnvDeselectAll: {
+        click: () => this.toggleOracleEnvSchemas(false),
       },
     };
 
@@ -2033,6 +2094,212 @@ export class QuickQueryUI {
         });
       }
     }
+  }
+
+  // ===== Oracle Env Import =====
+
+  async handleImportFromOracleEnv() {
+    if (!this._OracleEnvImportService) {
+      const mod = await import("./services/OracleEnvImportService.js");
+      this._OracleEnvImportService = mod.OracleEnvImportService;
+    }
+
+    const connections = this._OracleEnvImportService.loadConnections();
+    if (connections.length === 0) {
+      this.showError("No Oracle connections configured. Go to Settings > Oracle Connections.");
+      return;
+    }
+
+    // Populate dropdown
+    const select = this.elements.oracleEnvConnection;
+    select.innerHTML = connections.map((c) => `<option value="${c.name}">${c.name} (${c.connect_string})</option>`).join("");
+
+    // Reset to step 1
+    this._oracleEnvStep = 1;
+    this._oracleEnvConnections = connections;
+    this.elements.oracleEnvStep1.classList.remove("hidden");
+    this.elements.oracleEnvStep2.classList.add("hidden");
+    this.elements.oracleEnvBack.classList.add("hidden");
+    this.elements.oracleEnvNext.textContent = "Connect";
+    this.elements.oracleEnvNext.disabled = false;
+    this.hideOracleEnvError();
+    this.hideOracleEnvProgress();
+
+    // Show overlay
+    this.elements.oracleEnvOverlay.classList.remove("hidden");
+    this.elements.oracleEnvModal.classList.remove("hidden");
+  }
+
+  async handleOracleEnvNext() {
+    const svc = this._OracleEnvImportService;
+    if (!svc) return;
+
+    if (this._oracleEnvStep === 1) {
+      // Step 1 -> Step 2: Connect and fetch schemas
+      const selectedName = this.elements.oracleEnvConnection.value;
+      const config = this._oracleEnvConnections.find((c) => c.name === selectedName);
+      if (!config) return;
+
+      this._oracleEnvSelectedConfig = { name: selectedName, config };
+      this.elements.oracleEnvNext.disabled = true;
+      this.hideOracleEnvError();
+
+      try {
+        this.showOracleEnvProgress("Starting Oracle sidecar...", 10);
+        const started = await svc.ensureSidecarStarted();
+        if (!started) {
+          throw new Error("Oracle sidecar is not responding. Check that the sidecar is configured correctly.");
+        }
+
+        this.showOracleEnvProgress("Fetching schemas...", 40);
+        const schemas = await svc.fetchSchemas(selectedName, config);
+
+        if (schemas.length === 0) {
+          throw new Error("No schemas found (after filtering system schemas).");
+        }
+
+        this.hideOracleEnvProgress();
+        this.populateOracleEnvSchemas(schemas);
+
+        // Transition to step 2
+        this._oracleEnvStep = 2;
+        this.elements.oracleEnvStep1.classList.add("hidden");
+        this.elements.oracleEnvStep2.classList.remove("hidden");
+        this.elements.oracleEnvBack.classList.remove("hidden");
+        this.elements.oracleEnvNext.textContent = "Import";
+        this.elements.oracleEnvNext.disabled = false;
+      } catch (err) {
+        this.hideOracleEnvProgress();
+        this.showOracleEnvError(err.message || String(err));
+        this.elements.oracleEnvNext.disabled = false;
+      }
+    } else if (this._oracleEnvStep === 2) {
+      // Step 2 -> Import
+      const selectedSchemas = this.getSelectedOracleEnvSchemas();
+      if (selectedSchemas.length === 0) {
+        this.showOracleEnvError("Please select at least one schema.", 2);
+        return;
+      }
+
+      const { name, config } = this._oracleEnvSelectedConfig;
+      this.elements.oracleEnvNext.disabled = true;
+      this.elements.oracleEnvBack.disabled = true;
+      this.hideOracleEnvError();
+
+      try {
+        const payload = await svc.fetchAllMetadata(name, config, selectedSchemas, (msg, pct) => {
+          this.showOracleEnvProgress(msg, pct);
+        });
+
+        this.showOracleEnvProgress("Importing into storage...", 90);
+        const count = await importSchemasPayload(payload, this.storageService);
+
+        this.hideOracleEnvProgress();
+        this.closeOracleEnvOverlay();
+
+        if (!count) {
+          this.showError("No table schemas were imported. The selected schemas may be empty.");
+          return;
+        }
+
+        await this.updateSavedSchemasList();
+        this.showSuccess(`Successfully imported ${count} table schemas from Oracle`);
+        setTimeout(() => this.clearError(), 4000);
+      } catch (err) {
+        this.hideOracleEnvProgress();
+        this.showOracleEnvError(`Import failed: ${err.message || String(err)}`, 2);
+        this.elements.oracleEnvNext.disabled = false;
+        this.elements.oracleEnvBack.disabled = false;
+      }
+    }
+  }
+
+  handleOracleEnvBack() {
+    this._oracleEnvStep = 1;
+    this.elements.oracleEnvStep1.classList.remove("hidden");
+    this.elements.oracleEnvStep2.classList.add("hidden");
+    this.elements.oracleEnvBack.classList.add("hidden");
+    this.elements.oracleEnvNext.textContent = "Connect";
+    this.elements.oracleEnvNext.disabled = false;
+    this.hideOracleEnvError();
+    this.hideOracleEnvProgress();
+  }
+
+  populateOracleEnvSchemas(schemas) {
+    const list = this.elements.oracleEnvSchemaList;
+    list.innerHTML = schemas
+      .map(
+        (s) => `<label class="qq-oracle-schema-item">
+        <input type="checkbox" value="${s}" checked>
+        <span>${s}</span>
+      </label>`,
+      )
+      .join("");
+
+    // Listen for checkbox changes to update count
+    list.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => this.updateOracleEnvSchemaCount());
+    });
+    this.updateOracleEnvSchemaCount();
+  }
+
+  getSelectedOracleEnvSchemas() {
+    const checkboxes = this.elements.oracleEnvSchemaList.querySelectorAll("input[type=checkbox]:checked");
+    return Array.from(checkboxes).map((cb) => cb.value);
+  }
+
+  toggleOracleEnvSchemas(selectAll) {
+    this.elements.oracleEnvSchemaList.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.checked = selectAll;
+    });
+    this.updateOracleEnvSchemaCount();
+  }
+
+  updateOracleEnvSchemaCount() {
+    const total = this.elements.oracleEnvSchemaList.querySelectorAll("input[type=checkbox]").length;
+    const selected = this.elements.oracleEnvSchemaList.querySelectorAll("input[type=checkbox]:checked").length;
+    this.elements.oracleEnvSchemaCount.textContent = `${selected} of ${total} schemas selected`;
+  }
+
+  showOracleEnvProgress(message, percent) {
+    this.elements.oracleEnvProgress.classList.remove("hidden");
+    this.elements.oracleEnvProgressBar.style.width = `${percent}%`;
+    this.elements.oracleEnvProgressText.textContent = message;
+  }
+
+  hideOracleEnvProgress() {
+    this.elements.oracleEnvProgress.classList.add("hidden");
+    this.elements.oracleEnvProgressBar.style.width = "0%";
+  }
+
+  /**
+   * @param {string} msg
+   * @param {1|2} [step=1] - Which step's error element to use
+   */
+  showOracleEnvError(msg, step = 1) {
+    const el = step === 2 ? this.elements.oracleEnvError2 : this.elements.oracleEnvError;
+    if (el) {
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+  }
+
+  hideOracleEnvError() {
+    if (this.elements.oracleEnvError) {
+      this.elements.oracleEnvError.textContent = "";
+      this.elements.oracleEnvError.classList.add("hidden");
+    }
+    if (this.elements.oracleEnvError2) {
+      this.elements.oracleEnvError2.textContent = "";
+      this.elements.oracleEnvError2.classList.add("hidden");
+    }
+  }
+
+  closeOracleEnvOverlay() {
+    this.elements.oracleEnvOverlay.classList.add("hidden");
+    this.elements.oracleEnvModal.classList.add("hidden");
+    this.hideOracleEnvProgress();
+    this.hideOracleEnvError();
   }
 
   setupTableNameSearch() {

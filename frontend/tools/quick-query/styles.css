@@ -1646,3 +1646,41 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ===== Oracle Env Import Modal ===== */
+.qq-oracle-env-content {
+  width: min(520px, 92vw);
+  max-height: 80vh;
+}
+
+.qq-oracle-schema-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.qq-oracle-schema-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+}
+
+.qq-oracle-schema-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.qq-oracle-schema-item:hover {
+  background: hsl(var(--muted));
+}
+
+.qq-oracle-schema-item + .qq-oracle-schema-item {
+  border-top: 1px solid hsl(var(--border));
+}

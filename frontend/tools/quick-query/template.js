@@ -91,6 +91,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <h3>Saved Schemas</h3>
             <div class="schema-modal-header-actions">
                 <button id="importDefaultSchema" class="btn btn-primary btn-sm">Import Default Schema</button>
+                <button id="importFromOracleEnv" class="btn btn-primary btn-sm" style="display:none;">Import from Oracle Env</button>
                 <button id="clearAllSchemas" class="btn btn-primary btn-sm">Clear All</button>
                 <button id="exportSchemas" class="btn btn-primary btn-sm">Export</button>
                 <button id="importSchemas" class="btn btn-primary btn-sm">Import</button>
@@ -263,6 +264,51 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="qq-modal-footer">
             <button id="confirmExcelImport" class="btn btn-primary">Choose File</button>
             <button id="cancelExcelImport" class="btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Oracle Env Import Modal -->
+<div id="oracleEnvOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="oracleEnvModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="oracleEnvTitle">
+    <div class="qq-modal-content qq-oracle-env-content">
+        <div class="qq-modal-header">
+            <h3 id="oracleEnvTitle">Import from Oracle Env</h3>
+            <button id="closeOracleEnvModal" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+
+        <!-- Step 1: Pick connection -->
+        <div id="oracleEnvStep1" class="qq-modal-body">
+            <label for="oracleEnvConnection" style="font-size:0.85rem;color:hsl(var(--muted-foreground));">Oracle Connection:</label>
+            <select id="oracleEnvConnection" class="qq-input" style="width:100%;"></select>
+            <div id="oracleEnvError" class="hidden" style="color:hsl(var(--destructive));font-size:12px;margin-top:4px;"></div>
+        </div>
+
+        <!-- Step 2: Pick schemas -->
+        <div id="oracleEnvStep2" class="qq-modal-body hidden">
+            <div class="qq-oracle-schema-header">
+                <span id="oracleEnvSchemaCount" style="font-size:0.85rem;color:hsl(var(--muted-foreground));">0 of 0 schemas selected</span>
+                <div style="display:flex;gap:6px;">
+                    <button id="oracleEnvSelectAll" class="btn btn-outline btn-xs">Select All</button>
+                    <button id="oracleEnvDeselectAll" class="btn btn-outline btn-xs">Deselect All</button>
+                </div>
+            </div>
+            <div id="oracleEnvSchemaList" class="qq-oracle-schema-list"></div>
+            <div id="oracleEnvError2" class="hidden" style="color:hsl(var(--destructive));font-size:12px;margin-top:4px;"></div>
+        </div>
+
+        <!-- Progress bar -->
+        <div id="oracleEnvProgress" class="qq-progress hidden" style="margin:0 16px 12px 16px;">
+            <div class="qq-progress-bar-container">
+                <div id="oracleEnvProgressBar" class="qq-progress-bar" style="width:0%"></div>
+            </div>
+            <span id="oracleEnvProgressText" class="qq-progress-text">Connecting...</span>
+        </div>
+
+        <div class="qq-modal-footer">
+            <button id="oracleEnvBack" class="btn hidden">Back</button>
+            <button id="oracleEnvNext" class="btn btn-primary">Connect</button>
+            <button id="oracleEnvCancel" class="btn">Cancel</button>
         </div>
     </div>
 </div>`;
