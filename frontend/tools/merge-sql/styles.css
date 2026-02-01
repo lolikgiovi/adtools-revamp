@@ -332,19 +332,6 @@
   height: 14px;
 }
 
-.result-tab-action {
-  margin-left: auto;
-  font-size: 0.75rem;
-  padding: 0.375rem 0.625rem;
-  color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-}
-
-.result-tab-action:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--muted) / 0.5);
-}
-
 /* Insights Panel */
 .insights-panel {
   display: flex;
@@ -511,8 +498,42 @@
 }
 
 /* ============================================
-   REPORT MODAL
+   REPORT INLINE TAB
    ============================================ */
+
+.report-content {
+  overflow-y: auto;
+  height: 100%;
+  padding: 1.5rem;
+}
+
+.report-squad-group {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.1);
+}
+
+.report-squad-group:last-child {
+  margin-bottom: 0;
+}
+
+.report-table-total td {
+  font-weight: 600;
+  border-top: 2px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+}
+
+.report-squad-group h5 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0 0 0.5rem 0;
+  padding: 0.375rem 0.75rem;
+  background: hsl(var(--muted) / 0.4);
+  border-radius: calc(var(--radius) - 2px);
+}
 
 .report-section {
   margin-bottom: 1.5rem;

@@ -176,9 +176,6 @@ export class MergeSqlTool extends BaseTool {
     const closeDuplicatesBtn = document.getElementById("merge-sql-close-duplicates");
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
     const viewReportBtn = document.getElementById("merge-sql-view-report");
-    const reportBtn = document.getElementById("merge-sql-report-btn");
-    const closeReportBtn = document.getElementById("merge-sql-close-report");
-    const reportCloseBtn = document.getElementById("merge-sql-report-close-btn");
     const folderNameInput = document.getElementById("merge-sql-folder-name");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
@@ -196,10 +193,7 @@ export class MergeSqlTool extends BaseTool {
     if (viewDuplicatesBtn) viewDuplicatesBtn.addEventListener("click", () => this.showDuplicatesModal());
     if (closeDuplicatesBtn) closeDuplicatesBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
-    if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.showReportModal());
-    if (reportBtn) reportBtn.addEventListener("click", () => this.showReportModal());
-    if (closeReportBtn) closeReportBtn.addEventListener("click", () => this.hideReportModal());
-    if (reportCloseBtn) reportCloseBtn.addEventListener("click", () => this.hideReportModal());
+    if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.handleTabSwitch("report"));
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
 
     if (resultTabs) {
@@ -285,14 +279,18 @@ export class MergeSqlTool extends BaseTool {
 
     const mergedContent = document.getElementById("merge-sql-merged-content");
     const selectContent = document.getElementById("merge-sql-select-content");
+    const reportContent = document.getElementById("merge-sql-report-content");
 
     if (mergedContent) mergedContent.classList.toggle("active", tab === "merged");
     if (selectContent) selectContent.classList.toggle("active", tab === "select");
+    if (reportContent) reportContent.classList.toggle("active", tab === "report");
 
     if (tab === "merged" && this.mergedEditor) {
       this.mergedEditor.layout();
     } else if (tab === "select" && this.selectEditor) {
       this.selectEditor.layout();
+    } else if (tab === "report") {
+      this.renderReport();
     }
   }
 
@@ -339,7 +337,7 @@ export class MergeSqlTool extends BaseTool {
       this.showResult();
       this.updateDuplicatesInsight();
       this.showSuccess("SQL files merged successfully!");
-      this.showReportModal();
+      this.handleTabSwitch("report");
     } catch (error) {
       console.error("Merge failed:", error);
       this.showError(`Failed to merge files: ${error.message}`);
@@ -434,12 +432,10 @@ export class MergeSqlTool extends BaseTool {
     const emptyState = document.getElementById("merge-sql-result-empty");
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
-    const reportBtn = document.getElementById("merge-sql-report-btn");
 
     if (emptyState) emptyState.style.display = "none";
     if (resultActions) resultActions.classList.add("visible");
     if (clearBtn) clearBtn.style.display = "block";
-    if (reportBtn) reportBtn.style.display = "";
   }
 
   hideResult() {
@@ -447,13 +443,11 @@ export class MergeSqlTool extends BaseTool {
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
     const insights = document.getElementById("merge-sql-insights");
-    const reportBtn = document.getElementById("merge-sql-report-btn");
 
     if (emptyState) emptyState.style.display = "flex";
     if (resultActions) resultActions.classList.remove("visible");
     if (clearBtn) clearBtn.style.display = "none";
     if (insights) insights.style.display = "none";
-    if (reportBtn) reportBtn.style.display = "none";
   }
 
   updateDuplicatesInsight() {
@@ -537,22 +531,22 @@ export class MergeSqlTool extends BaseTool {
     if (modal) modal.style.display = "none";
   }
 
-  showReportModal() {
-    const modal = document.getElementById("merge-sql-report-modal");
+  renderReport() {
     const dangerousContainer = document.getElementById("merge-sql-report-dangerous");
     const statementsContainer = document.getElementById("merge-sql-report-statements");
+    const tableSquadsContainer = document.getElementById("merge-sql-report-table-squads");
     const squadsContainer = document.getElementById("merge-sql-report-squads");
     const featuresContainer = document.getElementById("merge-sql-report-features");
     const authorsContainer = document.getElementById("merge-sql-report-authors");
 
     if (!this.result?.report) return;
 
-    const { statementCounts, squadCounts, featureCounts, nonSystemAuthors, dangerousStatements } = this.result.report;
+    const { statementCounts, squadCounts, featureCounts, tableSquadCounts, nonSystemAuthors, dangerousStatements } = this.result.report;
 
-    // Render dangerous statements
+    // Section 1: Dangerous statements
     if (dangerousContainer) {
       if (dangerousStatements && dangerousStatements.length > 0) {
-        let dangerousHtml = "";
+        let dangerousHtml = `<h4>Dangerous Statements</h4>`;
         for (const item of dangerousStatements) {
           const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
           dangerousHtml += `<div class="report-danger-item">
@@ -563,7 +557,7 @@ export class MergeSqlTool extends BaseTool {
         }
         dangerousContainer.innerHTML = dangerousHtml;
       } else {
-        dangerousContainer.innerHTML = `<div class="report-success">
+        dangerousContainer.innerHTML = `<h4>Dangerous Statements</h4><div class="report-success">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -573,10 +567,10 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // Render statement counts table
+    // Section 2: All Tables Summary
     if (statementsContainer) {
       if (statementCounts.length > 0) {
-        let tableHtml = `<table class="report-table">
+        let tableHtml = `<h4>All Tables Summary</h4><table class="report-table">
           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of statementCounts) {
@@ -592,14 +586,61 @@ export class MergeSqlTool extends BaseTool {
         tableHtml += `</tbody></table>`;
         statementsContainer.innerHTML = tableHtml;
       } else {
-        statementsContainer.innerHTML = `<div class="report-success">No DML statements found</div>`;
+        statementsContainer.innerHTML = `<h4>All Tables Summary</h4><div class="report-success">No DML statements found</div>`;
       }
     }
 
-    // Render per-squad summary table
+    // Section 3: All Tables + Squad Summary
+    if (tableSquadsContainer) {
+      if (tableSquadCounts && tableSquadCounts.length > 0) {
+        let html = `<h4>All Tables + Squad Summary</h4>`;
+        // Group by table
+        const tableGroups = new Map();
+        for (const row of tableSquadCounts) {
+          const key = row.table.toUpperCase();
+          if (!tableGroups.has(key)) tableGroups.set(key, []);
+          tableGroups.get(key).push(row);
+        }
+        for (const [, rows] of tableGroups) {
+          html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
+            <table class="report-table">
+              <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <tbody>`;
+          const totals = { insert: 0, merge: 0, update: 0, delete: 0, total: 0 };
+          for (const row of rows) {
+            totals.insert += row.insert;
+            totals.merge += row.merge;
+            totals.update += row.update;
+            totals.delete += row.delete;
+            totals.total += row.total;
+            html += `<tr>
+              <td>${this.escapeHtml(row.squad)}</td>
+              <td>${row.insert}</td>
+              <td>${row.merge}</td>
+              <td>${row.update}</td>
+              <td>${row.delete}</td>
+              <td>${row.total}</td>
+            </tr>`;
+          }
+          html += `</tbody><tfoot><tr class="report-table-total">
+            <td>Total</td>
+            <td>${totals.insert}</td>
+            <td>${totals.merge}</td>
+            <td>${totals.update}</td>
+            <td>${totals.delete}</td>
+            <td>${totals.total}</td>
+          </tr></tfoot></table></div>`;
+        }
+        tableSquadsContainer.innerHTML = html;
+      } else {
+        tableSquadsContainer.innerHTML = `<h4>All Tables + Squad Summary</h4><div class="report-success">No table+squad data found</div>`;
+      }
+    }
+
+    // Section 4: Per-Squad Summary
     if (squadsContainer) {
       if (squadCounts && squadCounts.length > 0) {
-        let squadsHtml = `<table class="report-table">
+        let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table">
           <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of squadCounts) {
@@ -615,37 +656,78 @@ export class MergeSqlTool extends BaseTool {
         squadsHtml += `</tbody></table>`;
         squadsContainer.innerHTML = squadsHtml;
       } else {
-        squadsContainer.innerHTML = `<div class="report-success">No squad metadata found in file names</div>`;
+        squadsContainer.innerHTML = `<h4>Per-Squad Summary</h4><div class="report-success">No squad metadata found in file names</div>`;
       }
     }
 
-    // Render per-feature summary table
+    // Section 5: Per-Feature Summary (Grouped by Squad)
     if (featuresContainer) {
       if (featureCounts && featureCounts.length > 0) {
-        let featuresHtml = `<table class="report-table">
-          <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-          <tbody>`;
+        // Group features by squad
+        const squadGroups = new Map();
+        const noSquadFeatures = [];
         for (const row of featureCounts) {
-          featuresHtml += `<tr>
-            <td>${this.escapeHtml(row.feature)}</td>
-            <td>${row.insert}</td>
-            <td>${row.merge}</td>
-            <td>${row.update}</td>
-            <td>${row.delete}</td>
-            <td>${row.total}</td>
-          </tr>`;
+          if (row.squad) {
+            const key = row.squad.toUpperCase();
+            if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, features: [] });
+            squadGroups.get(key).features.push(row);
+          } else {
+            noSquadFeatures.push(row);
+          }
         }
-        featuresHtml += `</tbody></table>`;
+
+        let featuresHtml = `<h4>Per-Feature Summary</h4>`;
+
+        // Sort squad groups alphabetically
+        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+        for (const key of sortedSquadKeys) {
+          const group = squadGroups.get(key);
+          featuresHtml += `<div class="report-squad-group"><h5>${this.escapeHtml(group.displayName)}</h5>
+            <table class="report-table">
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <tbody>`;
+          for (const row of group.features) {
+            featuresHtml += `<tr>
+              <td>${this.escapeHtml(row.feature)}</td>
+              <td>${row.insert}</td>
+              <td>${row.merge}</td>
+              <td>${row.update}</td>
+              <td>${row.delete}</td>
+              <td>${row.total}</td>
+            </tr>`;
+          }
+          featuresHtml += `</tbody></table></div>`;
+        }
+
+        // Render features without squad
+        if (noSquadFeatures.length > 0) {
+          featuresHtml += `<div class="report-squad-group"><h5>Other</h5>
+            <table class="report-table">
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <tbody>`;
+          for (const row of noSquadFeatures) {
+            featuresHtml += `<tr>
+              <td>${this.escapeHtml(row.feature)}</td>
+              <td>${row.insert}</td>
+              <td>${row.merge}</td>
+              <td>${row.update}</td>
+              <td>${row.delete}</td>
+              <td>${row.total}</td>
+            </tr>`;
+          }
+          featuresHtml += `</tbody></table></div>`;
+        }
+
         featuresContainer.innerHTML = featuresHtml;
       } else {
-        featuresContainer.innerHTML = `<div class="report-success">No feature metadata found in file names</div>`;
+        featuresContainer.innerHTML = `<h4>Per-Feature Summary</h4><div class="report-success">No feature metadata found in file names</div>`;
       }
     }
 
-    // Render non-system authors
+    // Section 6: Non-SYSTEM Authors
     if (authorsContainer) {
       if (nonSystemAuthors.length > 0) {
-        let authorsHtml = "";
+        let authorsHtml = `<h4>Non-SYSTEM Authors</h4>`;
         for (const item of nonSystemAuthors) {
           authorsHtml += `<div class="report-warning-item">
             <span class="report-file-tag">${this.escapeHtml(item.fileName)}</span>
@@ -655,7 +737,7 @@ export class MergeSqlTool extends BaseTool {
         }
         authorsContainer.innerHTML = authorsHtml;
       } else {
-        authorsContainer.innerHTML = `<div class="report-success">
+        authorsContainer.innerHTML = `<h4>Non-SYSTEM Authors</h4><div class="report-success">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -664,13 +746,6 @@ export class MergeSqlTool extends BaseTool {
         </div>`;
       }
     }
-
-    if (modal) modal.style.display = "flex";
-  }
-
-  hideReportModal() {
-    const modal = document.getElementById("merge-sql-report-modal");
-    if (modal) modal.style.display = "none";
   }
 
   escapeHtml(str) {

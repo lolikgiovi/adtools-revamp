@@ -529,7 +529,7 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.selectSql).toBe("");
     });
 
-    it("returns report with statementCounts, squadCounts, featureCounts, nonSystemAuthors, and dangerousStatements", () => {
+    it("returns report with statementCounts, squadCounts, featureCounts, tableSquadCounts, nonSystemAuthors, and dangerousStatements", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -544,8 +544,17 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.report.statementCounts).toBeInstanceOf(Array);
       expect(result.report.squadCounts).toBeInstanceOf(Array);
       expect(result.report.featureCounts).toBeInstanceOf(Array);
+      expect(result.report.tableSquadCounts).toBeInstanceOf(Array);
       expect(result.report.nonSystemAuthors).toBeInstanceOf(Array);
       expect(result.report.dangerousStatements).toBeInstanceOf(Array);
+
+      // Verify featureCounts entries have squad field
+      expect(result.report.featureCounts[0].squad).toBe("SQUAD1");
+
+      // Verify tableSquadCounts has correct data
+      expect(result.report.tableSquadCounts).toHaveLength(1);
+      expect(result.report.tableSquadCounts[0].table.toUpperCase()).toBe("CONFIG.APP_CONFIG");
+      expect(result.report.tableSquadCounts[0].squad).toBe("SQUAD1");
     });
   });
 
@@ -764,6 +773,121 @@ SELECT * FROM SCHEMA.TABLE3;`;
 
       expect(squadCounts).toHaveLength(0);
       expect(featureCounts).toHaveLength(0);
+    });
+
+    it("returns tableSquadCounts with per-table per-squad breakdown", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);",
+            "UPDATE SCHEMA.TABLE_A SET c = 3 WHERE id = 1;",
+          ],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (BETA)[FEATURE2].sql",
+        },
+        {
+          dmlStatements: ["MERGE INTO SCHEMA.TABLE_B t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('x');"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_B (ALPHA)[FEATURE3].sql",
+        },
+      ];
+
+      const { tableSquadCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(tableSquadCounts).toHaveLength(3);
+
+      const tableAAlpha = tableSquadCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA"
+      );
+      expect(tableAAlpha).toBeDefined();
+      expect(tableAAlpha.insert).toBe(1);
+      expect(tableAAlpha.total).toBe(1);
+
+      const tableABeta = tableSquadCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA"
+      );
+      expect(tableABeta).toBeDefined();
+      expect(tableABeta.insert).toBe(1);
+      expect(tableABeta.update).toBe(1);
+      expect(tableABeta.total).toBe(2);
+
+      const tableBAlpha = tableSquadCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_B" && r.squad.toUpperCase() === "ALPHA"
+      );
+      expect(tableBAlpha).toBeDefined();
+      expect(tableBAlpha.merge).toBe(1);
+      expect(tableBAlpha.total).toBe(1);
+    });
+
+    it("returns empty tableSquadCounts for non-standard file names", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO T1 (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "custom_file.sql",
+        },
+      ];
+
+      const { tableSquadCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(tableSquadCounts).toHaveLength(0);
+    });
+
+    it("sorts tableSquadCounts by table then squad", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO Z_TABLE (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.Z_TABLE (BETA)[F1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO A_TABLE (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "SCHEMA.A_TABLE (BETA)[F2].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO A_TABLE (c) VALUES (3);"],
+          selectStatements: [],
+          fileName: "SCHEMA.A_TABLE (ALPHA)[F3].sql",
+        },
+      ];
+
+      const { tableSquadCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(tableSquadCounts[0].table.toUpperCase()).toContain("A_TABLE");
+      expect(tableSquadCounts[0].squad.toUpperCase()).toBe("ALPHA");
+      expect(tableSquadCounts[1].table.toUpperCase()).toContain("A_TABLE");
+      expect(tableSquadCounts[1].squad.toUpperCase()).toBe("BETA");
+      expect(tableSquadCounts[2].table.toUpperCase()).toContain("Z_TABLE");
+    });
+
+    it("includes squad field in featureCounts entries", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[MY_FEATURE].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_B (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_B (BETA)[OTHER_FEATURE].sql",
+        },
+      ];
+
+      const { featureCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(featureCounts).toHaveLength(2);
+      const myFeature = featureCounts.find((f) => f.feature === "MY_FEATURE");
+      expect(myFeature.squad).toBe("ALPHA");
+
+      const otherFeature = featureCounts.find((f) => f.feature === "OTHER_FEATURE");
+      expect(otherFeature.squad).toBe("BETA");
     });
   });
 
