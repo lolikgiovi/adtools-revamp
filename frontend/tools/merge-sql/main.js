@@ -203,6 +203,13 @@ export class MergeSqlTool extends BaseTool {
       });
     }
 
+    const reportSubtabs = document.getElementById("merge-sql-report-subtabs");
+    if (reportSubtabs) {
+      reportSubtabs.addEventListener("click", (e) => {
+        const subtab = e.target.closest(".report-subtab");
+        if (subtab) this.handleReportSubtabSwitch(subtab.dataset.subtab);
+      });
+    }
   }
 
   handleFileSelect(e) {
@@ -292,6 +299,20 @@ export class MergeSqlTool extends BaseTool {
     } else if (tab === "report") {
       this.renderReport();
     }
+  }
+
+  handleReportSubtabSwitch(subtab) {
+    const subtabs = document.querySelectorAll(".report-subtab");
+    subtabs.forEach((t) => t.classList.remove("active"));
+    document.querySelector(`.report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+
+    const summaryContent = document.getElementById("merge-sql-report-summary");
+    const tableDetailContent = document.getElementById("merge-sql-report-table-detail");
+    const squadDetailContent = document.getElementById("merge-sql-report-squad-detail");
+
+    if (summaryContent) summaryContent.classList.toggle("active", subtab === "summary");
+    if (tableDetailContent) tableDetailContent.classList.toggle("active", subtab === "table-detail");
+    if (squadDetailContent) squadDetailContent.classList.toggle("active", subtab === "squad-detail");
   }
 
   async handleMerge() {
@@ -532,18 +553,23 @@ export class MergeSqlTool extends BaseTool {
   }
 
   renderReport() {
+    if (!this.result?.report) return;
+
+    this.renderSummaryTab();
+    this.renderTableDetailTab();
+    this.renderSquadDetailTab();
+  }
+
+  renderSummaryTab() {
     const dangerousContainer = document.getElementById("merge-sql-report-dangerous");
     const statementsContainer = document.getElementById("merge-sql-report-statements");
-    const tableSquadsContainer = document.getElementById("merge-sql-report-table-squads");
     const squadsContainer = document.getElementById("merge-sql-report-squads");
     const featuresContainer = document.getElementById("merge-sql-report-features");
     const authorsContainer = document.getElementById("merge-sql-report-authors");
 
-    if (!this.result?.report) return;
+    const { statementCounts, squadCounts, featureCounts, nonSystemAuthors, dangerousStatements } = this.result.report;
 
-    const { statementCounts, squadCounts, featureCounts, tableSquadCounts, nonSystemAuthors, dangerousStatements } = this.result.report;
-
-    // Section 1: Dangerous statements
+    // Dangerous statements (hidden when empty)
     if (dangerousContainer) {
       if (dangerousStatements && dangerousStatements.length > 0) {
         let dangerousHtml = `<h4>Dangerous Statements</h4>`;
@@ -556,21 +582,17 @@ export class MergeSqlTool extends BaseTool {
           </div>`;
         }
         dangerousContainer.innerHTML = dangerousHtml;
+        dangerousContainer.style.display = "";
       } else {
-        dangerousContainer.innerHTML = `<h4>Dangerous Statements</h4><div class="report-success">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          No dangerous statements found
-        </div>`;
+        dangerousContainer.innerHTML = "";
+        dangerousContainer.style.display = "none";
       }
     }
 
-    // Section 2: All Tables Summary
+    // All Tables Summary (with sticky header)
     if (statementsContainer) {
       if (statementCounts.length > 0) {
-        let tableHtml = `<h4>All Tables Summary</h4><table class="report-table">
+        let tableHtml = `<h4>All Tables Summary</h4><table class="report-table report-table-sticky">
           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of statementCounts) {
@@ -590,57 +612,10 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // Section 3: All Tables + Squad Summary
-    if (tableSquadsContainer) {
-      if (tableSquadCounts && tableSquadCounts.length > 0) {
-        let html = `<h4>All Tables + Squad Summary</h4>`;
-        // Group by table
-        const tableGroups = new Map();
-        for (const row of tableSquadCounts) {
-          const key = row.table.toUpperCase();
-          if (!tableGroups.has(key)) tableGroups.set(key, []);
-          tableGroups.get(key).push(row);
-        }
-        for (const [, rows] of tableGroups) {
-          html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
-            <table class="report-table">
-              <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-              <tbody>`;
-          const totals = { insert: 0, merge: 0, update: 0, delete: 0, total: 0 };
-          for (const row of rows) {
-            totals.insert += row.insert;
-            totals.merge += row.merge;
-            totals.update += row.update;
-            totals.delete += row.delete;
-            totals.total += row.total;
-            html += `<tr>
-              <td>${this.escapeHtml(row.squad)}</td>
-              <td>${row.insert}</td>
-              <td>${row.merge}</td>
-              <td>${row.update}</td>
-              <td>${row.delete}</td>
-              <td>${row.total}</td>
-            </tr>`;
-          }
-          html += `</tbody><tfoot><tr class="report-table-total">
-            <td>Total</td>
-            <td>${totals.insert}</td>
-            <td>${totals.merge}</td>
-            <td>${totals.update}</td>
-            <td>${totals.delete}</td>
-            <td>${totals.total}</td>
-          </tr></tfoot></table></div>`;
-        }
-        tableSquadsContainer.innerHTML = html;
-      } else {
-        tableSquadsContainer.innerHTML = `<h4>All Tables + Squad Summary</h4><div class="report-success">No table+squad data found</div>`;
-      }
-    }
-
-    // Section 4: Per-Squad Summary
+    // Per-Squad Summary
     if (squadsContainer) {
       if (squadCounts && squadCounts.length > 0) {
-        let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table">
+        let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table report-table-sticky">
           <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of squadCounts) {
@@ -660,10 +635,9 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // Section 5: Per-Feature Summary (Grouped by Squad)
+    // Per-Feature Summary (Grouped by Squad)
     if (featuresContainer) {
       if (featureCounts && featureCounts.length > 0) {
-        // Group features by squad
         const squadGroups = new Map();
         const noSquadFeatures = [];
         for (const row of featureCounts) {
@@ -677,8 +651,6 @@ export class MergeSqlTool extends BaseTool {
         }
 
         let featuresHtml = `<h4>Per-Feature Summary</h4>`;
-
-        // Sort squad groups alphabetically
         const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
         for (const key of sortedSquadKeys) {
           const group = squadGroups.get(key);
@@ -699,7 +671,6 @@ export class MergeSqlTool extends BaseTool {
           featuresHtml += `</tbody></table></div>`;
         }
 
-        // Render features without squad
         if (noSquadFeatures.length > 0) {
           featuresHtml += `<div class="report-squad-group"><h5>Other</h5>
             <table class="report-table">
@@ -724,7 +695,7 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // Section 6: Non-SYSTEM Authors
+    // Non-SYSTEM Authors
     if (authorsContainer) {
       if (nonSystemAuthors.length > 0) {
         let authorsHtml = `<h4>Non-SYSTEM Authors</h4>`;
@@ -746,6 +717,186 @@ export class MergeSqlTool extends BaseTool {
         </div>`;
       }
     }
+  }
+
+  renderTableDetailTab() {
+    const tableSquadsContainer = document.getElementById("merge-sql-report-table-squads");
+    const { tableSquadCounts, tableSquadFeatureCounts } = this.result.report;
+
+    if (!tableSquadsContainer) return;
+
+    if (!tableSquadCounts || tableSquadCounts.length === 0) {
+      tableSquadsContainer.innerHTML = `<h4>Table Detail</h4><div class="report-success">No table+squad data found</div>`;
+      return;
+    }
+
+    // Build feature lookup: table|squad -> features[]
+    const featureLookup = new Map();
+    if (tableSquadFeatureCounts) {
+      for (const row of tableSquadFeatureCounts) {
+        const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+        if (!featureLookup.has(key)) featureLookup.set(key, []);
+        featureLookup.get(key).push(row);
+      }
+    }
+
+    // Group by table
+    const tableGroups = new Map();
+    for (const row of tableSquadCounts) {
+      const key = row.table.toUpperCase();
+      if (!tableGroups.has(key)) tableGroups.set(key, []);
+      tableGroups.get(key).push(row);
+    }
+
+    let html = `<h4>Table Detail</h4>`;
+    let rowIndex = 0;
+
+    for (const [tableKey, rows] of tableGroups) {
+      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
+        <table class="report-table report-table-expandable">
+          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <tbody>`;
+
+      const totals = { insert: 0, merge: 0, update: 0, delete: 0, total: 0 };
+      for (const row of rows) {
+        totals.insert += row.insert;
+        totals.merge += row.merge;
+        totals.update += row.update;
+        totals.delete += row.delete;
+        totals.total += row.total;
+
+        const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+        const features = featureLookup.get(featureKey) || [];
+        const rowId = `table-detail-row-${rowIndex++}`;
+
+        html += `<tr class="row-expandable" data-row-id="${rowId}">
+          <td>
+            <span class="row-expand-icon">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+            ${this.escapeHtml(row.squad)}
+          </td>
+          <td>${row.insert}</td>
+          <td>${row.merge}</td>
+          <td>${row.update}</td>
+          <td>${row.delete}</td>
+          <td>${row.total}</td>
+        </tr>
+        <tr class="row-feature-details" id="${rowId}">
+          <td colspan="6">
+            <div class="feature-details-content">`;
+
+        if (features.length > 0) {
+          for (const f of features) {
+            const featureName = f.feature || "Feature not Mentioned";
+            html += `<div class="feature-item">
+              <span class="${f.feature ? "feature-name" : "feature-not-mentioned"}">${this.escapeHtml(featureName)}</span>
+              <span>— ${f.total} statement${f.total !== 1 ? "s" : ""}</span>
+            </div>`;
+          }
+        } else {
+          html += `<div class="feature-item"><span class="feature-not-mentioned">Feature not Mentioned</span></div>`;
+        }
+
+        html += `</div></td></tr>`;
+      }
+
+      html += `</tbody><tfoot><tr class="report-table-total">
+        <td>Total</td>
+        <td>${totals.insert}</td>
+        <td>${totals.merge}</td>
+        <td>${totals.update}</td>
+        <td>${totals.delete}</td>
+        <td>${totals.total}</td>
+      </tr></tfoot></table></div>`;
+    }
+
+    tableSquadsContainer.innerHTML = html;
+    this.bindTableDetailEvents();
+  }
+
+  bindTableDetailEvents() {
+    const expandableRows = document.querySelectorAll(".report-table-expandable .row-expandable");
+    expandableRows.forEach((row) => {
+      row.addEventListener("click", () => {
+        const rowId = row.dataset.rowId;
+        const detailRow = document.getElementById(rowId);
+        if (detailRow) {
+          row.classList.toggle("expanded");
+          detailRow.classList.toggle("visible");
+        }
+      });
+    });
+  }
+
+  renderSquadDetailTab() {
+    const squadTablesContainer = document.getElementById("merge-sql-report-squad-tables");
+    const { squadTableCounts, squadCounts } = this.result.report;
+
+    if (!squadTablesContainer) return;
+
+    if (!squadTableCounts || squadTableCounts.length === 0) {
+      squadTablesContainer.innerHTML = `<h4>Squad Detail</h4><div class="report-success">No squad data found</div>`;
+      return;
+    }
+
+    // Group by squad
+    const squadGroups = new Map();
+    for (const row of squadTableCounts) {
+      const key = row.squad.toUpperCase();
+      if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, tables: [] });
+      squadGroups.get(key).tables.push(row);
+    }
+
+    // Get squad totals from squadCounts
+    const squadTotals = new Map();
+    if (squadCounts) {
+      for (const s of squadCounts) {
+        squadTotals.set(s.squad.toUpperCase(), s);
+      }
+    }
+
+    let html = `<h4>Squad Detail</h4>`;
+    const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+
+    for (const key of sortedSquadKeys) {
+      const group = squadGroups.get(key);
+      const totals = squadTotals.get(key) || { total: 0 };
+      const tableCount = group.tables.length;
+
+      html += `<div class="squad-detail-group">
+        <div class="squad-detail-header">
+          <h5>${this.escapeHtml(group.displayName)}</h5>
+          <div class="squad-detail-stats">
+            <span class="squad-detail-stat">
+              <span class="squad-detail-stat-value">${tableCount}</span> table${tableCount !== 1 ? "s" : ""}
+            </span>
+            <span class="squad-detail-stat">
+              <span class="squad-detail-stat-value">${totals.total}</span> statement${totals.total !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+        <table class="report-table">
+          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <tbody>`;
+
+      for (const row of group.tables) {
+        html += `<tr>
+          <td>${this.escapeHtml(row.table)}</td>
+          <td>${row.insert}</td>
+          <td>${row.merge}</td>
+          <td>${row.update}</td>
+          <td>${row.delete}</td>
+          <td>${row.total}</td>
+        </tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+    }
+
+    squadTablesContainer.innerHTML = html;
   }
 
   escapeHtml(str) {

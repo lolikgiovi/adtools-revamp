@@ -201,6 +201,8 @@ export class MergeSqlService {
     const squadMap = new Map();
     const featureMap = new Map();
     const tableSquadMap = new Map();
+    const tableSquadFeatureMap = new Map();
+    const squadTableMap = new Map();
 
     for (const file of parsedFiles) {
       const parsed = this.parseFileName(file.fileName);
@@ -259,6 +261,29 @@ export class MergeSqlService {
             tableSquadMap.set(tableSquadKey, { table, squad, insert: 0, merge: 0, update: 0, delete: 0 });
           }
           tableSquadMap.get(tableSquadKey)[type]++;
+
+          // Per-table+squad+feature counts (for expandable Table Detail)
+          const featureName = feature || null;
+          const tableSquadFeatureKey = `${key}|${squad.toUpperCase()}|${(featureName || "").toUpperCase()}`;
+          if (!tableSquadFeatureMap.has(tableSquadFeatureKey)) {
+            tableSquadFeatureMap.set(tableSquadFeatureKey, {
+              table,
+              squad,
+              feature: featureName,
+              insert: 0,
+              merge: 0,
+              update: 0,
+              delete: 0,
+            });
+          }
+          tableSquadFeatureMap.get(tableSquadFeatureKey)[type]++;
+
+          // Per-squad+table counts (for Squad Detail tab)
+          const squadTableKey = `${squad.toUpperCase()}|${key}`;
+          if (!squadTableMap.has(squadTableKey)) {
+            squadTableMap.set(squadTableKey, { squad, table, insert: 0, merge: 0, update: 0, delete: 0 });
+          }
+          squadTableMap.get(squadTableKey)[type]++;
         }
 
         // Per-feature counts
@@ -322,7 +347,42 @@ export class MergeSqlService {
         return a.squad.toUpperCase().localeCompare(b.squad.toUpperCase());
       });
 
-    return { tableCounts, squadCounts, featureCounts, tableSquadCounts };
+    const tableSquadFeatureCounts = Array.from(tableSquadFeatureMap.values())
+      .map((entry) => ({
+        table: entry.table,
+        squad: entry.squad,
+        feature: entry.feature,
+        insert: entry.insert,
+        merge: entry.merge,
+        update: entry.update,
+        delete: entry.delete,
+        total: entry.insert + entry.merge + entry.update + entry.delete,
+      }))
+      .sort((a, b) => {
+        const tableCompare = a.table.toUpperCase().localeCompare(b.table.toUpperCase());
+        if (tableCompare !== 0) return tableCompare;
+        const squadCompare = a.squad.toUpperCase().localeCompare(b.squad.toUpperCase());
+        if (squadCompare !== 0) return squadCompare;
+        return (a.feature || "").toUpperCase().localeCompare((b.feature || "").toUpperCase());
+      });
+
+    const squadTableCounts = Array.from(squadTableMap.values())
+      .map((entry) => ({
+        squad: entry.squad,
+        table: entry.table,
+        insert: entry.insert,
+        merge: entry.merge,
+        update: entry.update,
+        delete: entry.delete,
+        total: entry.insert + entry.merge + entry.update + entry.delete,
+      }))
+      .sort((a, b) => {
+        const squadCompare = a.squad.toUpperCase().localeCompare(b.squad.toUpperCase());
+        if (squadCompare !== 0) return squadCompare;
+        return a.table.toUpperCase().localeCompare(b.table.toUpperCase());
+      });
+
+    return { tableCounts, squadCounts, featureCounts, tableSquadCounts, tableSquadFeatureCounts, squadTableCounts };
   }
 
   /**
@@ -607,6 +667,8 @@ export class MergeSqlService {
         squadCounts: analysis.squadCounts,
         featureCounts: analysis.featureCounts,
         tableSquadCounts: analysis.tableSquadCounts,
+        tableSquadFeatureCounts: analysis.tableSquadFeatureCounts,
+        squadTableCounts: analysis.squadTableCounts,
         nonSystemAuthors: this.detectNonSystemAuthors(parsedFiles),
         dangerousStatements: this.detectDangerousStatements(parsedFiles),
       },

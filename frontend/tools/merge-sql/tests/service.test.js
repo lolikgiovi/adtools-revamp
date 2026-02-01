@@ -1143,6 +1143,91 @@ SELECT * FROM SCHEMA.CONFIG;`;
       const otherFeature = featureCounts.find((f) => f.feature === "OTHER_FEATURE");
       expect(otherFeature.squad).toBe("BETA");
     });
+
+    it("returns tableSquadFeatureCounts with table+squad+feature breakdown", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[FEATURE2].sql",
+        },
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE_A SET c = 3 WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (BETA)[FEATURE3].sql",
+        },
+      ];
+
+      const { tableSquadFeatureCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(tableSquadFeatureCounts.length).toBeGreaterThanOrEqual(3);
+
+      const alphaFeature1 = tableSquadFeatureCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE1"
+      );
+      expect(alphaFeature1).toBeDefined();
+      expect(alphaFeature1.insert).toBe(1);
+      expect(alphaFeature1.total).toBe(1);
+
+      const alphaFeature2 = tableSquadFeatureCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE2"
+      );
+      expect(alphaFeature2).toBeDefined();
+      expect(alphaFeature2.insert).toBe(1);
+
+      const betaFeature3 = tableSquadFeatureCounts.find(
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA" && r.feature === "FEATURE3"
+      );
+      expect(betaFeature3).toBeDefined();
+      expect(betaFeature3.update).toBe(1);
+    });
+
+    it("returns squadTableCounts with squad+table breakdown", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_A (ALPHA)[F1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_B (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_B (ALPHA)[F2].sql",
+        },
+        {
+          dmlStatements: ["UPDATE SCHEMA.TABLE_C SET c = 3 WHERE id = 1;"],
+          selectStatements: [],
+          fileName: "SCHEMA.TABLE_C (BETA)[F3].sql",
+        },
+      ];
+
+      const { squadTableCounts } = MergeSqlService.analyzeStatements(parsedFiles);
+
+      expect(squadTableCounts.length).toBe(3);
+
+      const alphaTableA = squadTableCounts.find(
+        (r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_A"
+      );
+      expect(alphaTableA).toBeDefined();
+      expect(alphaTableA.insert).toBe(1);
+
+      const alphaTableB = squadTableCounts.find(
+        (r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_B"
+      );
+      expect(alphaTableB).toBeDefined();
+      expect(alphaTableB.insert).toBe(1);
+
+      const betaTableC = squadTableCounts.find(
+        (r) => r.squad.toUpperCase() === "BETA" && r.table.toUpperCase() === "SCHEMA.TABLE_C"
+      );
+      expect(betaTableC).toBeDefined();
+      expect(betaTableC.update).toBe(1);
+    });
   });
 
   describe("detectNonSystemAuthors", () => {
