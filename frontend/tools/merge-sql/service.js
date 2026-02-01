@@ -25,6 +25,7 @@ export class MergeSqlService {
     let currentStatement = [];
     let inStatement = false;
     let statementType = null; // 'dml' or 'select'
+    let inSingleQuote = false; // Track if we're inside a single-quoted string
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -47,29 +48,39 @@ export class MergeSqlService {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
+          inSingleQuote = false;
         } else if (upperLine.startsWith("INSERT INTO") || upperLine.startsWith("INSERT ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
+          inSingleQuote = false;
         } else if (upperLine.startsWith("UPDATE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
+          inSingleQuote = false;
         } else if (upperLine.startsWith("DELETE FROM") || upperLine.startsWith("DELETE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
+          inSingleQuote = false;
         } else if (this.isValidSelectStatement(upperLine)) {
           inStatement = true;
           statementType = "select";
           currentStatement = [line];
+          inSingleQuote = false;
         }
       } else {
         currentStatement.push(line);
       }
 
-      // Detect statement end (semicolon at end of line)
-      if (inStatement && trimmedLine.endsWith(";")) {
+      // Update quote state for this line (track whether we're inside a string literal)
+      if (inStatement) {
+        inSingleQuote = this.updateQuoteState(line, inSingleQuote);
+      }
+
+      // Detect statement end (semicolon at end of line, but only if not inside a string)
+      if (inStatement && trimmedLine.endsWith(";") && !inSingleQuote) {
         const statement = currentStatement.join("\n").trim();
 
         if (statementType === "dml") {
@@ -81,6 +92,7 @@ export class MergeSqlService {
         currentStatement = [];
         inStatement = false;
         statementType = null;
+        inSingleQuote = false;
       }
     }
 
@@ -97,6 +109,29 @@ export class MergeSqlService {
     }
 
     return result;
+  }
+
+  /**
+   * Update quote state based on a line of text
+   * Counts single quotes to determine if we end inside a string literal
+   * Handles escaped quotes ('') in Oracle SQL
+   * @param {string} line - Line of text
+   * @param {boolean} currentlyInQuote - Whether we're currently inside a quote
+   * @returns {boolean} - Whether we're inside a quote after processing this line
+   */
+  static updateQuoteState(line, currentlyInQuote) {
+    let inQuote = currentlyInQuote;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === "'") {
+        // Check for escaped quote ('')
+        if (i + 1 < line.length && line[i + 1] === "'") {
+          i++; // Skip the escaped quote pair
+          continue;
+        }
+        inQuote = !inQuote;
+      }
+    }
+    return inQuote;
   }
 
   /**

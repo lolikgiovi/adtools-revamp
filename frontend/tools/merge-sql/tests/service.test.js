@@ -105,6 +105,260 @@ SELECT * FROM SCHEMA.TABLE3;`;
       expect(result.dmlStatements).toHaveLength(3);
       expect(result.selectStatements).toHaveLength(3);
     });
+
+    it("handles multiline HTML inside to_clob with semicolons", () => {
+      const content = `SET DEFINE OFF;
+
+MERGE INTO SCHEMA.TABLE_NAME t
+USING (SELECT 1 id, to_clob('<html>
+<head>
+  <style>
+    body { color: red; }
+  </style>
+</head>
+<body>
+  <p>Hello; world;</p>
+</body>
+</html>') html_content FROM DUAL) s
+ON (t.id = s.id)
+WHEN MATCHED THEN UPDATE SET t.html_content = s.html_content
+WHEN NOT MATCHED THEN INSERT (id, html_content) VALUES (s.id, s.html_content);
+
+SELECT * FROM SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("MERGE INTO");
+      expect(result.dmlStatements[0]).toContain("<html>");
+      expect(result.dmlStatements[0]).toContain("</html>");
+      expect(result.dmlStatements[0]).toContain("Hello; world;");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("handles escaped quotes inside strings", () => {
+      const content = `INSERT INTO SCHEMA.TABLE_NAME (col1, col2)
+VALUES ('It''s a test', 'another; value');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("It''s a test");
+    });
+
+    it("handles semicolons inside string literals across multiple lines", () => {
+      const content = `UPDATE SCHEMA.CONFIG
+SET content = 'line1;
+line2;
+line3;'
+WHERE id = 1;
+
+SELECT * FROM SCHEMA.CONFIG;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("line1;");
+      expect(result.dmlStatements[0]).toContain("line2;");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("handles multiple to_clob calls with HTML in same statement", () => {
+      const content = `MERGE INTO SCHEMA.EMAIL_TEMPLATE t
+USING (SELECT 1 id,
+  to_clob('<div>Header;</div>') header_html,
+  to_clob('<div>Footer;</div>') footer_html
+FROM DUAL) s
+ON (t.id = s.id)
+WHEN MATCHED THEN UPDATE SET t.header = s.header_html, t.footer = s.footer_html
+WHEN NOT MATCHED THEN INSERT (id, header, footer) VALUES (s.id, s.header_html, s.footer_html);`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("Header;</div>");
+      expect(result.dmlStatements[0]).toContain("Footer;</div>");
+    });
+
+    it("handles complex HTML with CSS containing semicolons", () => {
+      const content = `INSERT INTO SCHEMA.TEMPLATE (id, content)
+VALUES (1, to_clob('<style>
+  body { font-family: Arial; color: #333; }
+  .header { background: #007bff; padding: 20px; }
+  .btn { border: 1px solid #ccc; margin: 10px; }
+</style>
+<div class="header">Title</div>'));`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("font-family: Arial;");
+      expect(result.dmlStatements[0]).toContain("padding: 20px;");
+    });
+
+    it("handles JavaScript code inside HTML with semicolons", () => {
+      const content = `MERGE INTO SCHEMA.SCRIPT_CONFIG t
+USING (SELECT 'init' code, to_clob('<script>
+  var x = 1;
+  var y = 2;
+  console.log(x + y);
+</script>') script FROM DUAL) s
+ON (t.code = s.code)
+WHEN MATCHED THEN UPDATE SET t.script = s.script
+WHEN NOT MATCHED THEN INSERT (code, script) VALUES (s.code, s.script);`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("var x = 1;");
+      expect(result.dmlStatements[0]).toContain("console.log(x + y);");
+    });
+
+    it("handles multiple statements where one has multiline string", () => {
+      const content = `INSERT INTO T1 (col) VALUES ('simple');
+
+UPDATE T2 SET content = 'multi;
+line;
+content;'
+WHERE id = 1;
+
+INSERT INTO T3 (col) VALUES ('after multiline');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(3);
+      expect(result.dmlStatements[0]).toContain("simple");
+      expect(result.dmlStatements[1]).toContain("multi;");
+      expect(result.dmlStatements[1]).toContain("line;");
+      expect(result.dmlStatements[2]).toContain("after multiline");
+    });
+
+    it("handles deeply nested HTML structure with semicolons at various levels", () => {
+      const content = `MERGE INTO SCHEMA.PAGE t
+USING (SELECT 1 id, to_clob('<div>
+  <ul>
+    <li style="color: red;">Item 1;</li>
+    <li style="color: blue;">Item 2;</li>
+    <li>
+      <span>Nested; content;</span>
+    </li>
+  </ul>
+</div>') html FROM DUAL) s
+ON (t.id = s.id)
+WHEN MATCHED THEN UPDATE SET t.html = s.html
+WHEN NOT MATCHED THEN INSERT (id, html) VALUES (s.id, s.html);`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("Item 1;</li>");
+      expect(result.dmlStatements[0]).toContain("Nested; content;");
+    });
+
+    it("handles string ending with semicolon on its own line", () => {
+      const content = `INSERT INTO SCHEMA.CONFIG (id, val)
+VALUES (1, 'value ending with semicolon on next line
+;');
+
+SELECT * FROM SCHEMA.CONFIG;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("handles consecutive escaped quotes with semicolons", () => {
+      const content = `INSERT INTO SCHEMA.TABLE (col)
+VALUES ('It''s here; and there''s more;');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("It''s here; and there''s more;");
+    });
+
+    it("handles empty string followed by semicolon-containing string", () => {
+      const content = `INSERT INTO SCHEMA.TABLE (col1, col2)
+VALUES ('', 'has; semicolons;');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("has; semicolons;");
+    });
+
+    it("handles line that is just a closing quote and semicolon", () => {
+      const content = `UPDATE SCHEMA.CONFIG
+SET content = 'multiline
+content
+here
+';
+
+SELECT * FROM SCHEMA.CONFIG;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.selectStatements).toHaveLength(1);
+    });
+  });
+
+  describe("updateQuoteState", () => {
+    it("detects entering a string literal", () => {
+      expect(MergeSqlService.updateQuoteState("text 'start of string", false)).toBe(true);
+    });
+
+    it("detects exiting a string literal", () => {
+      expect(MergeSqlService.updateQuoteState("end of string'", true)).toBe(false);
+    });
+
+    it("handles escaped quotes", () => {
+      expect(MergeSqlService.updateQuoteState("It''s fine", true)).toBe(true);
+    });
+
+    it("handles line with no quotes", () => {
+      expect(MergeSqlService.updateQuoteState("no quotes here", false)).toBe(false);
+      expect(MergeSqlService.updateQuoteState("still inside string", true)).toBe(true);
+    });
+
+    it("handles multiple quotes on same line", () => {
+      expect(MergeSqlService.updateQuoteState("'open' and 'close'", false)).toBe(false);
+      expect(MergeSqlService.updateQuoteState("'open' then 'still open", false)).toBe(true);
+    });
+
+    it("handles triple escaped quotes", () => {
+      expect(MergeSqlService.updateQuoteState("'''", false)).toBe(true);
+      expect(MergeSqlService.updateQuoteState("text'''more", false)).toBe(true);
+    });
+
+    it("handles quadruple escaped quotes (two escaped quotes)", () => {
+      expect(MergeSqlService.updateQuoteState("''''", false)).toBe(false);
+    });
+
+    it("handles empty string literal", () => {
+      expect(MergeSqlService.updateQuoteState("''", false)).toBe(false);
+    });
+
+    it("handles line with only whitespace inside string", () => {
+      expect(MergeSqlService.updateQuoteState("   ", true)).toBe(true);
+    });
+
+    it("handles quote at start of line", () => {
+      expect(MergeSqlService.updateQuoteState("'starts here", false)).toBe(true);
+    });
+
+    it("handles quote at end of line", () => {
+      expect(MergeSqlService.updateQuoteState("ends here'", false)).toBe(true);
+      expect(MergeSqlService.updateQuoteState("ends here'", true)).toBe(false);
+    });
+
+    it("handles alternating quotes and escaped quotes", () => {
+      // 'val''ue' = open quote, val, escaped quote, ue, close quote -> ends outside
+      expect(MergeSqlService.updateQuoteState("'val''ue'", false)).toBe(false);
+      // 'it''s a ''test''' = open, it, escaped, s a, escaped, test, escaped, close -> ends outside
+      expect(MergeSqlService.updateQuoteState("'it''s a ''test'''", false)).toBe(false);
+    });
   });
 
   describe("isValidSelectStatement", () => {
