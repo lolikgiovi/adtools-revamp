@@ -620,34 +620,85 @@
   border-bottom: 1px solid hsl(var(--border));
 }
 
-/* Sticky table header for Summary tab */
-.report-table-sticky {
-  position: relative;
-}
-
-.report-table-sticky thead {
+/* Sticky combined header (title + table header) */
+.report-sticky-header {
   position: sticky;
   top: 0;
   z-index: 10;
-}
-
-.report-table-sticky thead th {
   background: hsl(var(--card));
-  box-shadow: 0 1px 0 hsl(var(--border));
+  margin: 0 -1.5rem 0;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
-/* Sticky section header */
-.report-section-header-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 11;
+.report-sticky-header::before {
+  content: "";
+  position: absolute;
+  top: -100px;
+  left: 0;
+  right: 0;
+  height: 100px;
   background: hsl(var(--card));
-  margin: 0 -1.5rem;
-  padding: 0.75rem 1.5rem 0.5rem;
 }
 
-.report-section-header-sticky + .report-table-sticky thead {
-  top: 2.25rem;
+.report-sticky-header h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+  padding: 0.75rem 0 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.report-sticky-header-columns {
+  display: flex;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0;
+}
+
+.report-sticky-header-columns > span {
+  padding: 0 0.75rem;
+}
+
+.report-sticky-header-columns > span:first-child {
+  flex: 1;
+  text-align: left;
+  padding-left: 0;
+}
+
+.report-sticky-header-columns > span:not(:first-child) {
+  width: 80px;
+  text-align: center;
+}
+
+/* Table without header (used with sticky header) */
+.report-table-no-header {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.report-table-no-header td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground));
+}
+
+.report-table-no-header td:first-child {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.report-table-no-header td:not(:first-child) {
+  width: 80px;
+  text-align: center;
+}
+
+.report-table-no-header tr:last-child td {
+  border-bottom: none;
 }
 
 .report-table th:not(:first-child) {
