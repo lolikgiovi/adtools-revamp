@@ -13,7 +13,7 @@ use tauri_plugin_shell::ShellExt;
 
 const SIDECAR_PORT: u16 = 21522;
 const SIDECAR_NAME: &str = "oracle-sidecar";
-const STARTUP_TIMEOUT_MS: u64 = 10000;
+const STARTUP_TIMEOUT_MS: u64 = 30000;
 const HEALTH_CHECK_INTERVAL_MS: u64 = 100;
 
 /// Kill any process occupying the sidecar port.

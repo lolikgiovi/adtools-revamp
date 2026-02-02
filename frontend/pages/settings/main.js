@@ -4,6 +4,7 @@ import { SettingsService } from "./service.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
+import { getOracleSidecarClient } from "../../tools/compare-config/lib/oracle-sidecar-client.js";
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -661,8 +662,9 @@ class SettingsPage {
 
         try {
           const connName = name || "test";
-          // Try sidecar first (preferred)
+          // Try sidecar first (preferred) — ensure it's running
           try {
+            await getOracleSidecarClient().ensureStarted();
             const response = await fetch("http://127.0.0.1:21522/test-connection", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -740,7 +742,8 @@ class SettingsPage {
 
             // Test connection via sidecar or Tauri backend
             try {
-              // Try sidecar first (preferred)
+              // Try sidecar first (preferred) — ensure it's running
+              await getOracleSidecarClient().ensureStarted();
               const response = await fetch("http://127.0.0.1:21522/test-connection", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

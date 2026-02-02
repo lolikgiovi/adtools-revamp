@@ -87,15 +87,6 @@ pub fn run() {
         let _ = window.set_zoom(ZOOM_DEFAULT);
       }
 
-      // Auto-start Oracle sidecar in the background
-      let app_handle = app.handle().clone();
-      tauri::async_runtime::spawn(async move {
-        match oracle_sidecar::start_oracle_sidecar(app_handle).await {
-          Ok(msg) => log::info!("Oracle sidecar auto-start: {}", msg),
-          Err(e) => log::warn!("Oracle sidecar auto-start failed (will retry on demand): {}", e),
-        }
-      });
-
       Ok(())
     })
     .on_window_event(|window, event| {
