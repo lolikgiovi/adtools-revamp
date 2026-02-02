@@ -570,7 +570,10 @@ export class MergeSqlService {
       dmlGroupCount++;
 
       if (group.isStandard) {
+        dmlLines.push(`--====================================================================================================`);
         dmlLines.push(`-- ${group.groupKey}`);
+        dmlLines.push(`--====================================================================================================`);
+        dmlLines.push("");
         for (const entry of group.entries) {
           if (entry.dmlStatements.length === 0) continue;
           dmlLines.push(`-- ${entry.subHeader}`);
@@ -580,7 +583,10 @@ export class MergeSqlService {
           }
         }
       } else {
+        dmlLines.push(`--====================================================================================================`);
         dmlLines.push(`-- ${group.groupKey}`);
+        dmlLines.push(`--====================================================================================================`);
+        dmlLines.push("");
         for (const entry of group.entries) {
           for (const stmt of entry.dmlStatements) {
             dmlLines.push(stmt);
@@ -602,7 +608,20 @@ export class MergeSqlService {
       selectGroupCount++;
 
       if (group.isStandard) {
+        selectLines.push(`--====================================================================================================`);
         selectLines.push(`-- ${group.groupKey}`);
+        selectLines.push(`--====================================================================================================`);
+        selectLines.push("");
+
+        // Count unique squads in this group
+        const uniqueSquads = new Set();
+        for (const entry of group.entries) {
+          if (entry.subHeader) {
+            const squadName = entry.subHeader.split(" - ")[0];
+            uniqueSquads.add(squadName);
+          }
+        }
+        const hasMultipleSquads = uniqueSquads.size > 1;
 
         // Collect WHERE clauses from all SELECT statements in this group (excluding timestamp verification and FETCH FIRST)
         const whereClauses = [];
@@ -614,12 +633,14 @@ export class MergeSqlService {
           }
         }
 
-        // Output the summary SELECT statement first
-        if (whereClauses.length > 0) {
-          const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
-          selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
-        } else {
-          selectLines.push(`SELECT * FROM ${group.groupKey};`);
+        // Output the summary SELECT statement first (only if multiple squads)
+        if (hasMultipleSquads) {
+          if (whereClauses.length > 0) {
+            const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
+            selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
+          } else {
+            selectLines.push(`SELECT * FROM ${group.groupKey};`);
+          }
         }
 
         // Output original SELECT statements (excluding timestamp verification and FETCH FIRST)
@@ -641,7 +662,10 @@ export class MergeSqlService {
         }
       } else {
         // Non-standard files: output the original SELECT statements (excluding timestamp verification and FETCH FIRST)
+        selectLines.push(`--====================================================================================================`);
         selectLines.push(`-- ${group.groupKey}`);
+        selectLines.push(`--====================================================================================================`);
+        selectLines.push("");
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
             if (this.isFetchFirstStatement(stmt)) continue;

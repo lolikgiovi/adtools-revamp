@@ -690,7 +690,32 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.mergedSql).toContain("-- OTHER.TABLE_NAME");
     });
 
-    it("SELECT output includes SELECT * FROM SCHEMA.TABLE with concatenated WHERE for standard filenames", () => {
+    it("SELECT output includes SELECT * FROM SCHEMA.TABLE with concatenated WHERE for standard filenames with multiple squads", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col2 FROM CONFIG.APP_CONFIG WHERE id = 2;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain(
+        "--====================================================================================================",
+      );
+      expect(result.selectSql).toContain("-- CONFIG.APP_CONFIG");
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (id = 2);");
+      expect(result.selectSql).toContain("-- SQUAD1 - FEATURE1");
+      expect(result.selectSql).toContain("-- SQUAD2 - FEATURE2");
+    });
+
+    it("SELECT output does NOT include merged SELECT when only one squad for a table", () => {
       const parsedFiles = [
         {
           dmlStatements: [],
@@ -701,9 +726,12 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
+      expect(result.selectSql).toContain(
+        "--====================================================================================================",
+      );
       expect(result.selectSql).toContain("-- CONFIG.APP_CONFIG");
-      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
       expect(result.selectSql).toContain("-- SQUAD1 - FEATURE1");
+      expect(result.selectSql).not.toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
     });
 
     it("SELECT output does NOT include auto-generated SELECT for non-standard filenames", () => {
@@ -739,14 +767,18 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      // DML: standard group has schema.table header + sub-header
+      // DML: standard group has schema.table header + sub-header with box format
+      expect(result.mergedSql).toContain(
+        "--====================================================================================================",
+      );
       expect(result.mergedSql).toContain("-- CONFIG.APP_CONFIG");
       expect(result.mergedSql).toContain("-- SQUAD1 - FEATURE1");
       // DML: non-standard group has filename header, no sub-header
       expect(result.mergedSql).toContain("-- custom_file.sql");
 
-      // SELECT: standard group has auto-generated SELECT * FROM (no WHERE since original has no WHERE)
-      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+      // SELECT: standard group with only one squad does NOT have auto-generated SELECT * FROM
+      expect(result.selectSql).not.toContain("SELECT * FROM CONFIG.APP_CONFIG;");
+      expect(result.selectSql).toContain("SELECT col1 FROM CONFIG.APP_CONFIG;");
       // SELECT: non-standard group does NOT have auto-generated SELECT
       expect(result.selectSql).toContain("-- custom_file.sql");
     });
@@ -824,10 +856,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
           fileName: "file1.sql",
         },
         {
-          dmlStatements: [
-            "UPDATE SCHEMA.TABLE_A SET c = 2 WHERE id = 1;",
-            "INSERT INTO SCHEMA.TABLE_B (c) VALUES (3);",
-          ],
+          dmlStatements: ["UPDATE SCHEMA.TABLE_A SET c = 2 WHERE id = 1;", "INSERT INTO SCHEMA.TABLE_B (c) VALUES (3);"],
           selectStatements: [],
           fileName: "file2.sql",
         },
@@ -853,10 +882,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
     it("groups by table name case-insensitively", () => {
       const parsedFiles = [
         {
-          dmlStatements: [
-            "INSERT INTO Schema.Table_A (c) VALUES (1);",
-            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);",
-          ],
+          dmlStatements: ["INSERT INTO Schema.Table_A (c) VALUES (1);", "INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);"],
           selectStatements: [],
           fileName: "file1.sql",
         },
@@ -935,10 +961,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
     it("counts DELETE statements in per-table breakdown", () => {
       const parsedFiles = [
         {
-          dmlStatements: [
-            "DELETE FROM SCHEMA.TABLE_A WHERE id = 1;",
-            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);",
-          ],
+          dmlStatements: ["DELETE FROM SCHEMA.TABLE_A WHERE id = 1;", "INSERT INTO SCHEMA.TABLE_A (c) VALUES (1);"],
           selectStatements: [],
           fileName: "file1.sql",
         },
@@ -1037,10 +1060,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
           fileName: "SCHEMA.TABLE_A (ALPHA)[FEATURE1].sql",
         },
         {
-          dmlStatements: [
-            "INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);",
-            "UPDATE SCHEMA.TABLE_A SET c = 3 WHERE id = 1;",
-          ],
+          dmlStatements: ["INSERT INTO SCHEMA.TABLE_A (c) VALUES (2);", "UPDATE SCHEMA.TABLE_A SET c = 3 WHERE id = 1;"],
           selectStatements: [],
           fileName: "SCHEMA.TABLE_A (BETA)[FEATURE2].sql",
         },
@@ -1055,24 +1075,18 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       expect(tableSquadCounts).toHaveLength(3);
 
-      const tableAAlpha = tableSquadCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA"
-      );
+      const tableAAlpha = tableSquadCounts.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA");
       expect(tableAAlpha).toBeDefined();
       expect(tableAAlpha.insert).toBe(1);
       expect(tableAAlpha.total).toBe(1);
 
-      const tableABeta = tableSquadCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA"
-      );
+      const tableABeta = tableSquadCounts.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA");
       expect(tableABeta).toBeDefined();
       expect(tableABeta.insert).toBe(1);
       expect(tableABeta.update).toBe(1);
       expect(tableABeta.total).toBe(2);
 
-      const tableBAlpha = tableSquadCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_B" && r.squad.toUpperCase() === "ALPHA"
-      );
+      const tableBAlpha = tableSquadCounts.find((r) => r.table.toUpperCase() === "SCHEMA.TABLE_B" && r.squad.toUpperCase() === "ALPHA");
       expect(tableBAlpha).toBeDefined();
       expect(tableBAlpha.merge).toBe(1);
       expect(tableBAlpha.total).toBe(1);
@@ -1168,20 +1182,20 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(tableSquadFeatureCounts.length).toBeGreaterThanOrEqual(3);
 
       const alphaFeature1 = tableSquadFeatureCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE1"
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE1",
       );
       expect(alphaFeature1).toBeDefined();
       expect(alphaFeature1.insert).toBe(1);
       expect(alphaFeature1.total).toBe(1);
 
       const alphaFeature2 = tableSquadFeatureCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE2"
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "ALPHA" && r.feature === "FEATURE2",
       );
       expect(alphaFeature2).toBeDefined();
       expect(alphaFeature2.insert).toBe(1);
 
       const betaFeature3 = tableSquadFeatureCounts.find(
-        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA" && r.feature === "FEATURE3"
+        (r) => r.table.toUpperCase() === "SCHEMA.TABLE_A" && r.squad.toUpperCase() === "BETA" && r.feature === "FEATURE3",
       );
       expect(betaFeature3).toBeDefined();
       expect(betaFeature3.update).toBe(1);
@@ -1210,21 +1224,15 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       expect(squadTableCounts.length).toBe(3);
 
-      const alphaTableA = squadTableCounts.find(
-        (r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_A"
-      );
+      const alphaTableA = squadTableCounts.find((r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_A");
       expect(alphaTableA).toBeDefined();
       expect(alphaTableA.insert).toBe(1);
 
-      const alphaTableB = squadTableCounts.find(
-        (r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_B"
-      );
+      const alphaTableB = squadTableCounts.find((r) => r.squad.toUpperCase() === "ALPHA" && r.table.toUpperCase() === "SCHEMA.TABLE_B");
       expect(alphaTableB).toBeDefined();
       expect(alphaTableB.insert).toBe(1);
 
-      const betaTableC = squadTableCounts.find(
-        (r) => r.squad.toUpperCase() === "BETA" && r.table.toUpperCase() === "SCHEMA.TABLE_C"
-      );
+      const betaTableC = squadTableCounts.find((r) => r.squad.toUpperCase() === "BETA" && r.table.toUpperCase() === "SCHEMA.TABLE_C");
       expect(betaTableC).toBeDefined();
       expect(betaTableC.update).toBe(1);
     });
@@ -1304,9 +1312,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
     it("returns empty array when all values are SYSTEM", () => {
       const parsedFiles = [
         {
-          dmlStatements: [
-            "INSERT INTO T1 (CREATED_BY, UPDATED_BY) VALUES ('SYSTEM', 'SYSTEM');",
-          ],
+          dmlStatements: ["INSERT INTO T1 (CREATED_BY, UPDATED_BY) VALUES ('SYSTEM', 'SYSTEM');"],
           selectStatements: [],
           fileName: "file1.sql",
         },
@@ -1334,17 +1340,13 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
   describe("extractWhereClause", () => {
     it("extracts simple WHERE clause", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT col1 FROM TABLE WHERE id = 1 AND status = 'ACTIVE';"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT col1 FROM TABLE WHERE id = 1 AND status = 'ACTIVE';");
 
       expect(result).toBe("id = 1 AND status = 'ACTIVE'");
     });
 
     it("extracts multiline WHERE clause", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT col1\nFROM TABLE\nWHERE id = 1\nAND status = 'ACTIVE';"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT col1\nFROM TABLE\nWHERE id = 1\nAND status = 'ACTIVE';");
 
       expect(result).toBe("id = 1\nAND status = 'ACTIVE'");
     });
@@ -1363,56 +1365,44 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
     it("returns null for timestamp verification clauses with SYSDATE - INTERVAL", () => {
       const result = MergeSqlService.extractWhereClause(
-        "SELECT field_name FROM schema_name.table_name WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;"
+        "SELECT field_name FROM schema_name.table_name WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;",
       );
 
       expect(result).toBeNull();
     });
 
     it("returns null for UPDATED_TIME >= SYSDATE patterns", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT * FROM TABLE WHERE UPDATED_TIME >= SYSDATE - INTERVAL '10' MINUTE;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE UPDATED_TIME >= SYSDATE - INTERVAL '10' MINUTE;");
 
       expect(result).toBeNull();
     });
 
     it("returns null for CREATED_TIME >= SYSDATE patterns", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT * FROM TABLE WHERE CREATED_TIME >= SYSDATE - INTERVAL '1' HOUR;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE CREATED_TIME >= SYSDATE - INTERVAL '1' HOUR;");
 
       expect(result).toBeNull();
     });
 
     it("strips trailing ORDER BY from WHERE clause", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT * FROM TABLE WHERE id IN ('a', 'b') ORDER BY updated_time ASC;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE id IN ('a', 'b') ORDER BY updated_time ASC;");
 
       expect(result).toBe("id IN ('a', 'b')");
     });
 
     it("strips trailing GROUP BY from WHERE clause", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT col, COUNT(*) FROM TABLE WHERE status = 'ACTIVE' GROUP BY col;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT col, COUNT(*) FROM TABLE WHERE status = 'ACTIVE' GROUP BY col;");
 
       expect(result).toBe("status = 'ACTIVE'");
     });
 
     it("strips trailing FETCH FIRST from WHERE clause", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT * FROM TABLE WHERE id = 1 FETCH FIRST 10 ROWS ONLY;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE id = 1 FETCH FIRST 10 ROWS ONLY;");
 
       expect(result).toBe("id = 1");
     });
 
     it("strips ORDER BY + FETCH FIRST combined", () => {
-      const result = MergeSqlService.extractWhereClause(
-        "SELECT * FROM TABLE WHERE id = 1 ORDER BY name ASC FETCH FIRST 5 ROWS ONLY;"
-      );
+      const result = MergeSqlService.extractWhereClause("SELECT * FROM TABLE WHERE id = 1 ORDER BY name ASC FETCH FIRST 5 ROWS ONLY;");
 
       expect(result).toBe("id = 1");
     });
@@ -1420,9 +1410,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
   describe("isTimestampVerificationClause", () => {
     it("returns true for SYSDATE - INTERVAL pattern", () => {
-      expect(
-        MergeSqlService.isTimestampVerificationClause("updated_time >= SYSDATE - INTERVAL '5' MINUTE")
-      ).toBe(true);
+      expect(MergeSqlService.isTimestampVerificationClause("updated_time >= SYSDATE - INTERVAL '5' MINUTE")).toBe(true);
     });
 
     it("returns true for various timestamp field names", () => {
@@ -1456,9 +1444,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      expect(result.selectSql).toContain(
-        "SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (name = 'test');"
-      );
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (name = 'test');");
     });
 
     it("falls back to SELECT * FROM TABLE when no WHERE clauses exist", () => {
@@ -1538,9 +1524,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       // WHERE clauses should NOT contain ORDER BY
-      expect(result.selectSql).toContain(
-        "SELECT * FROM SYSTEM_SUPPORT.SERVICE WHERE (id IN ('a', 'b')) OR (service_code IN ('x', 'y'));"
-      );
+      expect(result.selectSql).toContain("SELECT * FROM SYSTEM_SUPPORT.SERVICE WHERE (id IN ('a', 'b')) OR (service_code IN ('x', 'y'));");
       expect(result.selectSql).not.toMatch(/WHERE\s*\([^)]*ORDER BY/i);
     });
 
@@ -1554,12 +1538,17 @@ SELECT * FROM SCHEMA.CONFIG;`;
           ],
           fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
         },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col2 FROM CONFIG.APP_CONFIG WHERE id = 2;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
       ];
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      // Should have the summary SELECT * without the timestamp clause
-      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
+      // Should have the summary SELECT * without the timestamp clause (multiple squads)
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (id = 2);");
       // Should contain the valid SELECT statement
       expect(result.selectSql).toContain("SELECT col1 FROM CONFIG.APP_CONFIG WHERE id = 1;");
       // Should NOT contain the timestamp verification SELECT statement
@@ -1706,15 +1695,11 @@ DELETE FROM T2 WHERE id = 2;`;
 
   describe("isFetchFirstStatement", () => {
     it("returns true for FETCH FIRST N ROWS ONLY", () => {
-      expect(
-        MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 ORDER BY id FETCH FIRST 10 ROWS ONLY;")
-      ).toBe(true);
+      expect(MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 ORDER BY id FETCH FIRST 10 ROWS ONLY;")).toBe(true);
     });
 
     it("returns true for fetch first (case insensitive)", () => {
-      expect(
-        MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 fetch first 5 rows only;")
-      ).toBe(true);
+      expect(MergeSqlService.isFetchFirstStatement("SELECT * FROM T1 fetch first 5 rows only;")).toBe(true);
     });
 
     it("returns false for normal SELECT statements", () => {
@@ -1737,12 +1722,17 @@ DELETE FROM T2 WHERE id = 2;`;
           ],
           fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
         },
+        {
+          dmlStatements: [],
+          selectStatements: ["SELECT col2 FROM CONFIG.APP_CONFIG WHERE id = 2;"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
       ];
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      // Summary should only include WHERE from the non-FETCH FIRST statement
-      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1);");
+      // Summary should only include WHERE from the non-FETCH FIRST statements (multiple squads)
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE (id = 1) OR (id = 2);");
       expect(result.selectSql).not.toContain("FETCH FIRST");
     });
 
@@ -1768,10 +1758,7 @@ DELETE FROM T2 WHERE id = 2;`;
       const parsedFiles = [
         {
           dmlStatements: [],
-          selectStatements: [
-            "SELECT * FROM T1;",
-            "SELECT * FROM T1 FETCH FIRST 10 ROWS ONLY;",
-          ],
+          selectStatements: ["SELECT * FROM T1;", "SELECT * FROM T1 FETCH FIRST 10 ROWS ONLY;"],
           fileName: "custom_file.sql",
         },
       ];
@@ -1785,10 +1772,7 @@ DELETE FROM T2 WHERE id = 2;`;
     it("dangerousStatements are included in mergeFiles report", () => {
       const parsedFiles = [
         {
-          dmlStatements: [
-            "DELETE FROM T1 WHERE id = 1;",
-            "UPDATE T2 SET col = 'x';",
-          ],
+          dmlStatements: ["DELETE FROM T1 WHERE id = 1;", "UPDATE T2 SET col = 'x';"],
           selectStatements: [],
           fileName: "file1.sql",
         },
