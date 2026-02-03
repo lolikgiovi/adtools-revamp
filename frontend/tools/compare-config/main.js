@@ -5808,7 +5808,7 @@ class CompareConfigTool extends BaseTool {
           <h5>Installation (macOS)</h5>
           <p>Run this command in your terminal:</p>
           <div class="code-block">
-            <code>curl -fsSL https://ad-tools.pages.dev/install.sh | bash</code>
+            <code>curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash</code>
             <button class="btn btn-ghost btn-sm btn-copy-install" title="Copy to clipboard">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -5832,7 +5832,7 @@ class CompareConfigTool extends BaseTool {
     if (copyBtn) {
       copyBtn.addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText("curl -fsSL https://ad-tools.pages.dev/install.sh | bash");
+          await navigator.clipboard.writeText("curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash");
           this.eventBus.emit("notification:show", {
             type: "success",
             message: "Install command copied to clipboard",
