@@ -1,5 +1,5 @@
--- Migration: Add idempotency index to events table
--- This prevents duplicate event inserts on retry
+-- Migration: Add performance index to events table
+-- This helps with querying events by device, feature, action, and time
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_events_idempotency 
+CREATE INDEX IF NOT EXISTS idx_events_lookup 
 ON events(device_id, feature_id, action, created_time);
