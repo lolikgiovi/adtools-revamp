@@ -19,21 +19,18 @@ import * as FileMatcher from "./lib/file-matcher.js";
 import { ExcelComparator } from "./lib/excel-comparator.js";
 import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
-import { reconcileColumns, compareDatasets, normalizeRowFields } from "./lib/diff-engine.js";
+import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
+import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
 import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
 import {
-  isSourceBFollowMode,
   syncPkFieldsToCompareFields,
   syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
-  createSourceBConfigFromSourceA,
-  getSourceBDisabledFieldsForFollowMode,
   isMixedMode,
   validateMixedModeConfig,
   getResetBehaviorForSourceType,
   createResetSourceState,
   getComparisonMode,
-  getVisibleStepsForMode,
   UnifiedErrorType,
   getActionableErrorMessage,
   parseOracleError,
@@ -77,7 +74,7 @@ class CompareConfigTool extends BaseTool {
         table: null,
         sql: "",
         whereClause: "",
-        maxRows: 100,
+        maxRows: 500,
         // Excel config (Phase 2: multi-file support)
         excelFiles: [], // Array of { id, file } - all uploaded files
         selectedExcelFile: null, // { id, file } - selected file for comparison
@@ -86,6 +83,7 @@ class CompareConfigTool extends BaseTool {
         // Fetched data (normalized)
         data: null, // { headers: [], rows: [], metadata: {} }
         dataLoaded: false,
+        schemaLoaded: false, // true when schema metadata has been fetched (oracle-table mode)
       },
 
       // Source B (Comparator)
@@ -97,7 +95,7 @@ class CompareConfigTool extends BaseTool {
         table: null,
         sql: "",
         whereClause: "",
-        maxRows: 100,
+        maxRows: 500,
         // Excel config (Phase 2: multi-file support)
         excelFiles: [], // Array of { id, file } - all uploaded files
         selectedExcelFile: null, // { id, file } - selected file for comparison
@@ -105,6 +103,7 @@ class CompareConfigTool extends BaseTool {
         parsedData: null,
         data: null,
         dataLoaded: false,
+        schemaLoaded: false,
       },
 
       // Field reconciliation (computed when both sources have data)
@@ -579,7 +578,7 @@ class CompareConfigTool extends BaseTool {
     if (maxRowsInput) {
       maxRowsInput.addEventListener("input", (e) => {
         const value = parseInt(e.target.value, 10);
-        this.maxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+        this.maxRows = isNaN(value) || value < 1 ? 500 : Math.min(value, 10000);
       });
     }
 
@@ -616,7 +615,7 @@ class CompareConfigTool extends BaseTool {
     if (rawMaxRowsInput) {
       rawMaxRowsInput.addEventListener("input", (e) => {
         const value = parseInt(e.target.value, 10);
-        this.rawMaxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+        this.rawMaxRows = isNaN(value) || value < 1 ? 500 : Math.min(value, 10000);
       });
     }
 
@@ -2234,15 +2233,19 @@ class CompareConfigTool extends BaseTool {
     this.updateProgressStep("compare", "active", "Comparing records...");
 
     try {
-      // Import diff engine
-      const { compareDatasets } = await import("./lib/diff-engine.js");
+      // Run diff on Web Worker to keep UI responsive
       const { convertToViewFormat } = await import("./lib/diff-adapter.js");
+      const workerManager = getDiffWorkerManager();
 
-      const jsResult = compareDatasets(refParsedData.rows, compParsedData.rows, {
+      const jsResult = await workerManager.compareDatasets(refParsedData.rows, compParsedData.rows, {
         keyColumns: selectedPkFields,
         fields: selectedFields,
         normalize: dataComparison === "normalized",
         matchMode: rowMatching,
+        onProgress: (progress) => {
+          this.updateProgressStep("compare", "active",
+            `Comparing records... ${progress.percent}%`);
+        },
       });
 
       const viewResult = convertToViewFormat(jsResult, {
@@ -2775,47 +2778,49 @@ class CompareConfigTool extends BaseTool {
       console.log("[Compare] PK columns:", pkColumns);
       console.log("[Compare] Selected fields:", this.selectedFields);
 
-      // Step 1: Fetch data from Environment 1
+      // Fetch data from both environments in parallel
       console.log("[Compare] Fetching data from env1:", this.env1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.env1.connection.name,
-        config: this.env1.connection,
-        mode: "table",
-        owner: this.schema,
-        table_name: this.table,
-        where_clause: this.whereClause || null,
-        fields: this.selectedFields || [],
-        max_rows: this.maxRows || 100,
-      });
-      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
-
-      // Update progress - env1 fetch done, start env2
-      this.updateProgressStep("fetch", "active", `Fetching from ${this.env2.connection.name}...`);
-
-      // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching data from env2:", this.env2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.env2.connection.name,
-        config: this.env2.connection,
-        mode: "table",
-        owner: this.schema,
-        table_name: this.table,
-        where_clause: this.whereClause || null,
-        fields: this.selectedFields || [],
-        max_rows: this.maxRows || 100,
-      });
+      const [dataEnv1, dataEnv2] = await Promise.all([
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.env1.connection.name,
+          config: this.env1.connection,
+          mode: "table",
+          owner: this.schema,
+          table_name: this.table,
+          where_clause: this.whereClause || null,
+          fields: this.selectedFields || [],
+          max_rows: this.maxRows || 500,
+        }),
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.env2.connection.name,
+          config: this.env2.connection,
+          mode: "table",
+          owner: this.schema,
+          table_name: this.table,
+          where_clause: this.whereClause || null,
+          fields: this.selectedFields || [],
+          max_rows: this.maxRows || 500,
+        }),
+      ]);
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows");
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows");
 
       // Update to compare step
       this.updateProgressStep("fetch", "done", `${this.schema}.${this.table}`);
       this.updateProgressStep("compare", "active", "Comparing records...");
 
-      // Step 3: Compare using JS diff engine
-      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+      // Step 3: Compare using Web Worker for UI responsiveness
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(dataEnv1.rows, dataEnv2.rows, {
         keyColumns: pkColumns,
         fields: this.selectedFields || dataEnv1.headers,
         normalize: false,
         matchMode: "key",
+        onProgress: (progress) => {
+          this.updateProgressStep("compare", "active",
+            `Comparing records... ${progress.percent}%`);
+        },
       });
 
       console.log("[Compare] JS diff result:", jsResult.summary);
@@ -2960,34 +2965,35 @@ class CompareConfigTool extends BaseTool {
       console.log("[Compare] SQL query:", cleanSql.substring(0, 100) + (cleanSql.length > 100 ? "..." : ""));
       console.log("[Compare] PK fields:", primaryKeyFields);
 
-      // Step 1: Fetch data from Environment 1
+      // Fetch data from both environments in parallel
       console.log("[Compare] Fetching raw SQL data from env1:", this.rawenv1.connection.name);
-      const dataEnv1 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.rawenv1.connection.name,
-        config: this.rawenv1.connection,
-        mode: "raw-sql",
-        sql: cleanSql,
-        max_rows: this.rawMaxRows,
-      });
-      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows, headers:", dataEnv1.headers);
-
-      // Step 2: Fetch data from Environment 2
       console.log("[Compare] Fetching raw SQL data from env2:", this.rawenv2.connection.name);
-      const dataEnv2 = await CompareConfigService.fetchOracleDataViaSidecar({
-        connection_name: this.rawenv2.connection.name,
-        config: this.rawenv2.connection,
-        mode: "raw-sql",
-        sql: cleanSql,
-        max_rows: this.rawMaxRows,
-      });
+      const [dataEnv1, dataEnv2] = await Promise.all([
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.rawenv1.connection.name,
+          config: this.rawenv1.connection,
+          mode: "raw-sql",
+          sql: cleanSql,
+          max_rows: this.rawMaxRows,
+        }),
+        CompareConfigService.fetchOracleDataViaSidecar({
+          connection_name: this.rawenv2.connection.name,
+          config: this.rawenv2.connection,
+          mode: "raw-sql",
+          sql: cleanSql,
+          max_rows: this.rawMaxRows,
+        }),
+      ]);
+      console.log("[Compare] Env1 data received:", dataEnv1.row_count, "rows, headers:", dataEnv1.headers);
       console.log("[Compare] Env2 data received:", dataEnv2.row_count, "rows, headers:", dataEnv2.headers);
 
       // Determine primary key columns (use provided or default to first column)
       const pkColumns = primaryKeyFields.length > 0 ? primaryKeyFields : dataEnv1.headers.length > 0 ? [dataEnv1.headers[0]] : [];
       console.log("[Compare] Using PK columns:", pkColumns);
 
-      // Step 3: Compare using JS diff engine
-      const jsResult = compareDatasets(dataEnv1.rows, dataEnv2.rows, {
+      // Step 3: Compare using Web Worker for UI responsiveness
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(dataEnv1.rows, dataEnv2.rows, {
         keyColumns: pkColumns,
         fields: dataEnv1.headers,
         normalize: false,
@@ -3446,99 +3452,18 @@ class CompareConfigTool extends BaseTool {
   hideLoading() {
     const loadingState = document.getElementById("loading-state");
     if (loadingState) loadingState.style.display = "none";
-    // Also hide progress overlay
-    this.hideProgress();
   }
 
   /**
-   * Shows the progress overlay with connection details
-   */
-  showProgress(title = "Comparing Configurations") {
-    const overlay = document.getElementById("progress-overlay");
-    const titleEl = document.getElementById("progress-title");
-
-    if (titleEl) titleEl.textContent = title;
-    if (overlay) overlay.style.display = "flex";
-
-    // Reset all steps to pending
-    this.resetProgressSteps();
-  }
-
-  /**
-   * Hides the progress overlay
-   */
-  hideProgress() {
-    const overlay = document.getElementById("progress-overlay");
-    if (overlay) overlay.style.display = "none";
-  }
-
-  /**
-   * Updates a progress step's state and detail
-   * @param {string} stepId - One of: env1, env2, fetch, compare
-   * @param {string} state - One of: pending, active, done, error
-   * @param {string} detail - Detail text to show
-   */
-  updateProgressStep(stepId, state, detail = "") {
-    const stepEl = document.getElementById(`step-${stepId}`);
-    if (!stepEl) return;
-
-    const iconEl = stepEl.querySelector(".step-icon");
-    const detailEl = document.getElementById(`step-${stepId}-detail`);
-
-    // Update icon based on state
-    if (iconEl) {
-      iconEl.className = `step-icon ${state}`;
-      switch (state) {
-        case "pending":
-          iconEl.textContent = "○";
-          break;
-        case "active":
-          iconEl.textContent = "◉";
-          break;
-        case "done":
-          iconEl.textContent = "✓";
-          break;
-        case "error":
-          iconEl.textContent = "✕";
-          break;
-      }
-    }
-
-    // Update detail text
-    if (detailEl && detail) {
-      detailEl.textContent = detail;
-    }
-  }
-
-  /**
-   * Resets all progress steps to pending state
-   */
-  resetProgressSteps() {
-    ["env1", "env2", "fetch", "compare"].forEach((stepId) => {
-      this.updateProgressStep(stepId, "pending", "—");
-    });
-  }
-
-  /**
-   * Shows the unified progress overlay with dynamic steps based on comparison mode
+   * Shows the unified progress overlay
    * @param {string} title - Title for the overlay
-   * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode - Comparison mode
    */
-  showUnifiedProgress(title = "Loading Data", mode = null) {
+  showUnifiedProgress(title = "Loading Data") {
     const overlay = document.getElementById("unified-progress-overlay");
     const titleEl = document.getElementById("unified-progress-title");
 
     if (titleEl) titleEl.textContent = title;
     if (overlay) overlay.style.display = "flex";
-
-    // Configure visible steps based on mode
-    const visibleSteps = getVisibleStepsForMode(mode);
-
-    // Show/hide validate-b step based on mode
-    const validateBStep = document.getElementById("unified-step-validate-b");
-    if (validateBStep) {
-      validateBStep.style.display = visibleSteps.includes("validate-b") ? "flex" : "none";
-    }
 
     // Reset all unified steps to pending
     this.resetUnifiedProgressSteps();
@@ -3554,7 +3479,7 @@ class CompareConfigTool extends BaseTool {
 
   /**
    * Updates a unified progress step's state and detail
-   * @param {string} stepId - One of: source-a, validate-b, source-b, reconcile
+   * @param {string} stepId - One of: source-a, source-b, reconcile
    * @param {string} state - One of: pending, active, done, error
    * @param {string} detail - Detail text to show
    */
@@ -3594,8 +3519,78 @@ class CompareConfigTool extends BaseTool {
    * Resets all unified progress steps to pending state
    */
   resetUnifiedProgressSteps() {
-    ["source-a", "validate-b", "source-b", "reconcile"].forEach((stepId) => {
+    ["source-a", "source-b", "reconcile"].forEach((stepId) => {
       this.updateUnifiedProgressStep(stepId, "pending", "—");
+    });
+  }
+
+  /**
+   * Shows the compare progress overlay
+   * @param {string} title - Title for the overlay
+   */
+  showCompareProgress(title = "Comparing Data") {
+    const overlay = document.getElementById("compare-progress-overlay");
+    const titleEl = document.getElementById("compare-progress-title");
+
+    if (titleEl) titleEl.textContent = title;
+    if (overlay) overlay.style.display = "flex";
+
+    this.resetCompareProgressSteps();
+  }
+
+  /**
+   * Hides the compare progress overlay
+   */
+  hideCompareProgress() {
+    const overlay = document.getElementById("compare-progress-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+
+  /**
+   * Updates a compare progress step's state and detail
+   * @param {string} stepId - One of: fetch-a, fetch-b, compare
+   * @param {string} state - One of: pending, active, done, error, skipped
+   * @param {string} detail - Detail text to show
+   */
+  updateCompareProgressStep(stepId, state, detail = "") {
+    const stepEl = document.getElementById(`compare-step-${stepId}`);
+    if (!stepEl) return;
+
+    const iconEl = stepEl.querySelector(".step-icon");
+    const detailEl = document.getElementById(`compare-step-${stepId}-detail`);
+
+    if (iconEl) {
+      iconEl.className = `step-icon ${state}`;
+      switch (state) {
+        case "pending":
+          iconEl.textContent = "○";
+          break;
+        case "active":
+          iconEl.textContent = "◉";
+          break;
+        case "done":
+          iconEl.textContent = "✓";
+          break;
+        case "error":
+          iconEl.textContent = "✕";
+          break;
+        case "skipped":
+          iconEl.textContent = "–";
+          break;
+      }
+    }
+
+    if (detailEl && detail) {
+      detailEl.textContent = detail;
+    }
+  }
+
+  /**
+   * Resets all compare progress steps to pending state
+   */
+  resetCompareProgressSteps() {
+    ["fetch-a", "fetch-b", "compare"].forEach((stepId) => {
+      this.updateCompareProgressStep(stepId, "pending", "—");
     });
   }
 
@@ -4424,7 +4419,7 @@ class CompareConfigTool extends BaseTool {
     this.customPrimaryKey = [];
     this.selectedFields = [];
     this.whereClause = "";
-    this.maxRows = 100;
+    this.maxRows = 500;
     this.metadata = null;
     this.env2SchemaExists = false;
     this.env2TableExists = false;
@@ -4434,7 +4429,7 @@ class CompareConfigTool extends BaseTool {
     this.rawenv2 = { connection: null };
     this.rawSql = "";
     this.rawPrimaryKey = "";
-    this.rawMaxRows = 100;
+    this.rawMaxRows = 500;
 
     // Clear results for ALL modes
     this.results["schema-table"] = null;
@@ -5735,11 +5730,12 @@ class CompareConfigTool extends BaseTool {
       table: null,
       sql: "",
       whereClause: "",
-      maxRows: 100,
+      maxRows: 500,
       file: null,
       parsedData: null,
       data: null,
       dataLoaded: false,
+      schemaLoaded: false,
     };
   }
 
@@ -5756,6 +5752,7 @@ class CompareConfigTool extends BaseTool {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
     this.unified[sourceKey].type = type;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     this.updateUnifiedSourceConfigVisibility(source);
@@ -5860,55 +5857,34 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Update Source B UI for Oracle vs Oracle "follow mode"
-   * In follow mode, Source B only shows Connection; other fields follow Source A
+   * Update Source B UI visibility based on query mode
+   * Source B now has independent configuration (no follow mode)
    */
   updateSourceBFollowModeUI() {
-    const isFollowMode = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
-
-    const disabledFields = getSourceBDisabledFieldsForFollowMode();
     const followModeNote = document.getElementById("source-b-follow-mode-note");
     const sourceBPanel = document.querySelector(".source-panel.source-b");
 
-    // Show/hide the follow mode badge
+    // Always hide the follow mode badge (deprecated)
     if (followModeNote) {
-      followModeNote.style.display = isFollowMode ? "flex" : "none";
+      followModeNote.style.display = "none";
     }
 
-    // Add/remove follow-mode-active class on source panel for visual indicator
+    // Remove follow-mode-active class
     if (sourceBPanel) {
-      sourceBPanel.classList.toggle("follow-mode-active", isFollowMode);
+      sourceBPanel.classList.remove("follow-mode-active");
     }
 
-    // Enable/disable Source B fields based on follow mode
-    for (const fieldId of disabledFields) {
-      const element = document.getElementById(fieldId);
-      if (element) {
-        element.disabled = isFollowMode;
-        // Add visual indication
-        element.closest(".form-group")?.classList.toggle("disabled-follow-mode", isFollowMode);
-      }
-    }
-
-    // Hide table/sql config sections in follow mode (only show connection)
+    // Always show Source B config fields based on current query mode
     const tableModeConfig = document.getElementById("source-b-table-config");
     const sqlModeConfig = document.getElementById("source-b-sql-config");
     const maxRowsGroup = document.getElementById("source-b-max-rows")?.closest(".form-group");
     const queryModeGroup = document.getElementById("source-b-query-mode-wrapper")?.closest(".form-group");
 
-    if (isFollowMode) {
-      if (tableModeConfig) tableModeConfig.style.display = "none";
-      if (sqlModeConfig) sqlModeConfig.style.display = "none";
-      if (maxRowsGroup) maxRowsGroup.style.display = "none";
-      if (queryModeGroup) queryModeGroup.style.display = "none";
-    } else {
-      // Restore visibility based on current query mode
-      const queryMode = this.unified.sourceB.queryMode;
-      if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
-      if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
-      if (maxRowsGroup) maxRowsGroup.style.display = "flex";
-      if (queryModeGroup) queryModeGroup.style.display = "flex";
-    }
+    const queryMode = this.unified.sourceB.queryMode;
+    if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
+    if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
+    if (maxRowsGroup) maxRowsGroup.style.display = "flex";
+    if (queryModeGroup) queryModeGroup.style.display = "flex";
   }
 
   /**
@@ -5925,14 +5901,15 @@ class CompareConfigTool extends BaseTool {
 
     if (oracleConfig) oracleConfig.style.display = type === "oracle" ? "flex" : "none";
     if (excelConfig) excelConfig.style.display = type === "excel" ? "block" : "none";
-    if (preview) preview.style.display = this.unified[sourceKey].dataLoaded ? "block" : "none";
+    const isLoaded = this.unified[sourceKey].dataLoaded || this.unified[sourceKey].schemaLoaded;
+    if (preview) preview.style.display = isLoaded ? "block" : "none";
 
     // Manage status visibility and text
     const status = document.getElementById(`${prefix}-status`);
     if (status) {
       if (type) {
         status.style.display = "inline-flex";
-        if (!this.unified[sourceKey].dataLoaded) {
+        if (!isLoaded) {
           status.textContent = "Not loaded";
           status.className = "source-status";
         } else {
@@ -5964,9 +5941,13 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].connection = connection;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
     this.unified[sourceKey].schema = null;
     this.unified[sourceKey].table = null;
+
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
 
     // Reset table dropdown
     const tableInput = document.getElementById(`${prefix}-table-search`);
@@ -6150,6 +6131,7 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].queryMode = mode;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     const tableConfig = document.getElementById(`${prefix}-table-config`);
@@ -6174,7 +6156,11 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].schema = schema;
     this.unified[sourceKey].table = null;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
+
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
 
     const tableInput = document.getElementById(`${prefix}-table-search`);
     const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
@@ -6361,7 +6347,11 @@ class CompareConfigTool extends BaseTool {
 
     this.unified[sourceKey].table = table;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
+
+    // Update UI to reflect reset state (hide preview, update status)
+    this.updateUnifiedSourceConfigVisibility(source);
 
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
@@ -6405,6 +6395,7 @@ class CompareConfigTool extends BaseTool {
 
     // Reset data loaded state since files changed
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
     this.unified[sourceKey].parsedData = null;
 
@@ -6463,6 +6454,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].file = null;
     this.unified[sourceKey].parsedData = null;
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     // Update UI
@@ -6785,6 +6777,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey].file = file.file; // For backward compat
     this.unified[sourceKey].parsedData = null; // Will be parsed on load
     this.unified[sourceKey].dataLoaded = false;
+    this.unified[sourceKey].schemaLoaded = false;
     this.unified[sourceKey].data = null;
 
     // Update input display
@@ -6841,12 +6834,7 @@ class CompareConfigTool extends BaseTool {
     if (config.type === "oracle") {
       if (!config.connection) return false;
 
-      // Phase 1.1: In Oracle vs Oracle follow mode, Source B only needs connection
-      // (schema/table/sql will be copied from Source A)
-      if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
-        return true; // Connection is enough for Source B in follow mode
-      }
-
+      // Both sources require full configuration
       if (config.queryMode === "table") {
         return !!config.schema && !!config.table;
       } else {
@@ -6871,8 +6859,8 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    // Phase 1.2: Validate Oracle vs Oracle configuration
-    const isOracleToOracle = isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type);
+    // Validate Oracle vs Oracle configuration (both sources independently)
+    const isOracleToOracle = this.unified.sourceA.type === "oracle" && this.unified.sourceB.type === "oracle";
 
     if (isOracleToOracle) {
       const validation = validateOracleToOracleConfig(this.unified.sourceA, this.unified.sourceB);
@@ -6891,19 +6879,37 @@ class CompareConfigTool extends BaseTool {
     // Hide any previous error banner
     this.hideUnifiedErrorBanner();
 
-    this.showUnifiedProgress("Loading Data", comparisonMode);
-    this.updateUnifiedProgressStep("source-a", "active", "Loading...");
+    // Determine if each source can use schema-first (oracle-table only)
+    const isSchemaFirstA = this.unified.sourceA.type === "oracle" && this.unified.sourceA.queryMode === "table";
+    const isSchemaFirstB = this.unified.sourceB.type === "oracle" && this.unified.sourceB.queryMode === "table";
+
+    this.showUnifiedProgress("Loading Data");
+    this.updateUnifiedProgressStep("source-a", "active", isSchemaFirstA ? "Loading schema..." : "Loading...");
+    this.updateUnifiedProgressStep("source-b", "active", isSchemaFirstB ? "Loading schema..." : "Loading...");
 
     try {
-      // Load Source A
-      const dataA = await this.fetchUnifiedSourceData("A");
+      // Load both sources in parallel (schema for oracle-table, full data for others)
+      const [dataA, dataB] = await Promise.all([
+        isSchemaFirstA ? this.fetchUnifiedSourceSchema("A") : this.fetchUnifiedSourceData("A"),
+        isSchemaFirstB ? this.fetchUnifiedSourceSchema("B") : this.fetchUnifiedSourceData("B"),
+      ]);
+
       this.unified.sourceA.data = dataA;
-      this.unified.sourceA.dataLoaded = true;
-      this.updateUnifiedProgressStep("source-a", "done", `${dataA.metadata.rowCount} rows loaded`);
+      this.unified.sourceA.dataLoaded = !isSchemaFirstA;
+      this.unified.sourceA.schemaLoaded = true;
+      this.updateUnifiedProgressStep("source-a", "done",
+        isSchemaFirstA ? `${dataA.metadata.columnCount} columns` : `${dataA.metadata.rowCount} rows loaded`);
       this.updateUnifiedSourcePreview("A");
 
-      // Track empty Source A (warning only — comparison continues with single-side data)
-      const sourceAEmpty = dataA.metadata.rowCount === 0;
+      this.unified.sourceB.data = dataB;
+      this.unified.sourceB.dataLoaded = !isSchemaFirstB;
+      this.unified.sourceB.schemaLoaded = true;
+      this.updateUnifiedProgressStep("source-b", "done",
+        isSchemaFirstB ? `${dataB.metadata.columnCount} columns` : `${dataB.metadata.rowCount} rows loaded`);
+      this.updateUnifiedSourcePreview("B");
+
+      // Track empty sources — only for fully loaded sources (schema-first defers to Compare)
+      const sourceAEmpty = !isSchemaFirstA && dataA.metadata.rowCount === 0;
       if (sourceAEmpty) {
         this.eventBus.emit("notification:show", {
           type: "warning",
@@ -6911,28 +6917,7 @@ class CompareConfigTool extends BaseTool {
         });
       }
 
-      // Phase 1.2: For Oracle vs Oracle, validate table exists in Source B before loading
-      if (isOracleToOracle && this.unified.sourceA.queryMode === "table") {
-        this.updateUnifiedProgressStep("validate-b", "active", "Checking table exists...");
-        const tableExists = await this.validateOracleTableExistsInSourceB();
-        if (!tableExists) {
-          this.updateUnifiedProgressStep("validate-b", "error", "Table not found");
-          this.hideUnifiedProgress();
-          return; // Error already shown by validateOracleTableExistsInSourceB
-        }
-        this.updateUnifiedProgressStep("validate-b", "done", "Table verified");
-      }
-
-      // Load Source B
-      this.updateUnifiedProgressStep("source-b", "active", "Loading...");
-      const dataB = await this.fetchUnifiedSourceData("B");
-      this.unified.sourceB.data = dataB;
-      this.unified.sourceB.dataLoaded = true;
-      this.updateUnifiedProgressStep("source-b", "done", `${dataB.metadata.rowCount} rows loaded`);
-      this.updateUnifiedSourcePreview("B");
-
-      // Check for empty data — block only when BOTH sources return 0 rows
-      const sourceBEmpty = dataB.metadata.rowCount === 0;
+      const sourceBEmpty = !isSchemaFirstB && dataB.metadata.rowCount === 0;
 
       if (sourceAEmpty && sourceBEmpty) {
         this.updateUnifiedProgressStep("reconcile", "error", "Both sources returned no data");
@@ -7175,13 +7160,7 @@ class CompareConfigTool extends BaseTool {
    */
   async fetchUnifiedSourceData(source) {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
-    let config = this.unified[sourceKey];
-
-    // Phase 1.1: In Oracle vs Oracle follow mode, Source B uses Source A's config
-    // with only the connection being different
-    if (source === "B" && isSourceBFollowMode(this.unified.sourceA.type, this.unified.sourceB.type)) {
-      config = createSourceBConfigFromSourceA(this.unified.sourceA, this.unified.sourceB.connection);
-    }
+    const config = this.unified[sourceKey];
 
     if (config.type === "oracle") {
       const sourceConfig = {
@@ -7215,6 +7194,37 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
+   * Fetch only table schema (column metadata) for an oracle-table source.
+   * Returns a lightweight dataset with headers but no rows — used by the
+   * schema-first approach (B10) so "Load Data" is near-instant.
+   */
+  async fetchUnifiedSourceSchema(source) {
+    const sourceKey = source === "A" ? "sourceA" : "sourceB";
+    const config = this.unified[sourceKey];
+
+    const metadata = await CompareConfigService.fetchTableMetadataViaSidecar(
+      config.connection.name,
+      { name: config.connection.name, connect_string: config.connection.connect_string },
+      config.schema,
+      config.table,
+    );
+
+    return {
+      headers: metadata.columns.map((c) => c.name),
+      rows: [],
+      metadata: {
+        sourceName: `(${config.connection.name}) ${config.schema}.${config.table}`,
+        rowCount: null, // unknown until Compare
+        columnCount: metadata.columns.length,
+        sourceType: SourceType.ORACLE_TABLE,
+        connectionName: config.connection.name,
+        schema: config.schema,
+        table: config.table,
+      },
+    };
+  }
+
+  /**
    * Update the source preview after data is loaded
    */
   updateUnifiedSourcePreview(source) {
@@ -7229,7 +7239,9 @@ class CompareConfigTool extends BaseTool {
     if (preview && data) {
       preview.style.display = "block";
       if (stats) {
-        stats.textContent = `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`;
+        stats.textContent = data.metadata.rowCount != null
+          ? `${data.metadata.rowCount} rows, ${data.metadata.columnCount} columns`
+          : `${data.metadata.columnCount} columns (schema only)`;
       }
     }
 
@@ -7595,10 +7607,63 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    this.showProgress("Comparing Data");
-    this.updateProgressStep("compare", "active", "Comparing records...");
+    this.showCompareProgress("Comparing Data");
 
     try {
+      // Fetch actual data for schema-first sources (only the selected columns)
+      const needsFetchA = sourceA.schemaLoaded && !sourceA.dataLoaded;
+      const needsFetchB = sourceB.schemaLoaded && !sourceB.dataLoaded;
+
+      // Map selected field names to source-specific names via commonMapped
+      const fieldsToFetch = [...new Set([...selectedPkFields, ...selectedCompareFields])];
+      const mapFieldsForSource = (sourceLabel) => {
+        if (!fields.commonMapped?.length) return fieldsToFetch;
+        return fieldsToFetch.map((f) => {
+          const mapped = fields.commonMapped.find((m) => m.sourceA === f || m.normalized === f);
+          return mapped ? mapped[sourceLabel] : f;
+        });
+      };
+
+      // Fetch Source A
+      if (needsFetchA) {
+        this.updateCompareProgressStep("fetch-a", "active", "Querying...");
+        const dataA = await UnifiedDataService.fetchData({
+          type: SourceType.ORACLE_TABLE,
+          connection: sourceA.connection,
+          schema: sourceA.schema,
+          table: sourceA.table,
+          whereClause: sourceA.whereClause,
+          maxRows: sourceA.maxRows,
+          fields: mapFieldsForSource("sourceA"),
+        });
+        this.unified.sourceA.data = dataA;
+        this.unified.sourceA.dataLoaded = true;
+        this.updateCompareProgressStep("fetch-a", "done", `${dataA.rows.length} rows`);
+      } else {
+        this.updateCompareProgressStep("fetch-a", "done", "Already loaded");
+      }
+
+      // Fetch Source B
+      if (needsFetchB) {
+        this.updateCompareProgressStep("fetch-b", "active", "Querying...");
+        const dataB = await UnifiedDataService.fetchData({
+          type: SourceType.ORACLE_TABLE,
+          connection: sourceB.connection,
+          schema: sourceB.schema,
+          table: sourceB.table,
+          whereClause: sourceB.whereClause,
+          maxRows: sourceB.maxRows,
+          fields: mapFieldsForSource("sourceB"),
+        });
+        this.unified.sourceB.data = dataB;
+        this.unified.sourceB.dataLoaded = true;
+        this.updateCompareProgressStep("fetch-b", "done", `${dataB.rows.length} rows`);
+      } else {
+        this.updateCompareProgressStep("fetch-b", "done", "Already loaded");
+      }
+
+      this.updateCompareProgressStep("compare", "active", "Comparing records...");
+
       const { commonMapped } = fields;
       let rowsA = sourceA.data.rows;
       let rowsB = sourceB.data.rows;
@@ -7620,11 +7685,15 @@ class CompareConfigTool extends BaseTool {
       console.log("[DEBUG] rowsA sample (first row):", rowsA[0]);
       console.log("[DEBUG] rowsB sample (first row):", rowsB[0]);
 
-      const jsResult = compareDatasets(rowsA, rowsB, {
+      const workerManager = getDiffWorkerManager();
+      const jsResult = await workerManager.compareDatasets(rowsA, rowsB, {
         keyColumns: pkFields,
         fields: compareFields,
         normalize: dataComparison === "normalized",
         matchMode: rowMatching,
+        onProgress: (progress) => {
+          this.updateCompareProgressStep("compare", "active", `${progress.percent}%`);
+        },
       });
 
       console.log("[DEBUG] jsResult.summary:", jsResult.summary);
@@ -7646,7 +7715,7 @@ class CompareConfigTool extends BaseTool {
         compareFields: compareFields,
       };
 
-      this.updateProgressStep("compare", "done", `${viewResult.rows.length} records compared`);
+      this.updateCompareProgressStep("compare", "done", `${viewResult.rows.length} records`);
 
       // Store results
       this.results["unified"] = viewResult;
@@ -7654,7 +7723,7 @@ class CompareConfigTool extends BaseTool {
       this.unified.currentStep = 3;
 
       await new Promise((r) => setTimeout(r, 400));
-      this.hideProgress();
+      this.hideCompareProgress();
       this.showResults();
 
       this.eventBus.emit("comparison:complete", viewResult);
@@ -7688,7 +7757,9 @@ class CompareConfigTool extends BaseTool {
       });
     } catch (error) {
       console.error("Unified comparison failed:", error);
-      this.hideProgress();
+      this.updateCompareProgressStep("compare", "error", error.message || "Failed");
+      await new Promise((r) => setTimeout(r, 800));
+      this.hideCompareProgress();
       this.eventBus.emit("notification:show", {
         type: "error",
         message: `Comparison failed: ${error.message || error}`,
@@ -7978,30 +8049,34 @@ class CompareConfigTool extends BaseTool {
     let sourceAError = null;
     let sourceBError = null;
 
-    // Fetch from Source A
-    try {
-      sourceAResult = await CompareConfigService.fetchOracleDataViaSidecar({
+    // Fetch from both sources in parallel
+    const [settledA, settledB] = await Promise.allSettled([
+      CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: sourceAConnection.name,
         config: sourceAConnection,
         mode: "raw-sql",
         sql: sql,
         max_rows: maxRows,
-      });
-    } catch (error) {
-      sourceAError = this.extractOracleErrorMessage(error);
-    }
-
-    // Fetch from Source B
-    try {
-      sourceBResult = await CompareConfigService.fetchOracleDataViaSidecar({
+      }),
+      CompareConfigService.fetchOracleDataViaSidecar({
         connection_name: sourceBConnection.name,
         config: sourceBConnection,
         mode: "raw-sql",
         sql: sql,
         max_rows: maxRows,
-      });
-    } catch (error) {
-      sourceBError = this.extractOracleErrorMessage(error);
+      }),
+    ]);
+
+    if (settledA.status === "fulfilled") {
+      sourceAResult = settledA.value;
+    } else {
+      sourceAError = this.extractOracleErrorMessage(settledA.reason);
+    }
+
+    if (settledB.status === "fulfilled") {
+      sourceBResult = settledB.value;
+    } else {
+      sourceBError = this.extractOracleErrorMessage(settledB.reason);
     }
 
     // If either source had an error, return error status

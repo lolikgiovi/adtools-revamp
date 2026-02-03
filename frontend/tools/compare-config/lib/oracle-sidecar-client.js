@@ -20,6 +20,7 @@
 
 const SIDECAR_PORT = 21522;
 const SIDECAR_BASE_URL = `http://127.0.0.1:${SIDECAR_PORT}`;
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Sidecar status enum
@@ -47,6 +48,24 @@ export class OracleSidecarClient {
     this._started = false;
     this._status = SidecarStatus.STOPPED;
     this._statusListeners = [];
+    this._idleTimer = null;
+  }
+
+  /**
+   * Reset the idle auto-shutdown timer.
+   * After IDLE_TIMEOUT_MS of inactivity the sidecar is stopped automatically.
+   * @private
+   */
+  _resetIdleTimer() {
+    if (this._idleTimer) {
+      clearTimeout(this._idleTimer);
+    }
+    this._idleTimer = setTimeout(() => {
+      if (this._status === SidecarStatus.READY) {
+        console.log("[OracleSidecar] Idle timeout reached, stopping sidecar");
+        this.stop();
+      }
+    }, IDLE_TIMEOUT_MS);
   }
 
   /**
@@ -98,6 +117,7 @@ export class OracleSidecarClient {
         await tauriInvoke("start_oracle_sidecar");
         this._started = true;
         this._setStatus(SidecarStatus.READY);
+        this._resetIdleTimer();
         return true;
       } catch (error) {
         console.warn("Failed to start Oracle sidecar via Tauri:", error);
@@ -111,6 +131,7 @@ export class OracleSidecarClient {
       console.log("Oracle sidecar is running (started manually)");
       this._started = true;
       this._setStatus(SidecarStatus.READY);
+      this._resetIdleTimer();
       return true;
     }
 
@@ -129,7 +150,10 @@ export class OracleSidecarClient {
     if (this._status === SidecarStatus.READY) {
       // Verify it's still responding
       const healthy = await this.healthCheck();
-      if (healthy) return true;
+      if (healthy) {
+        this._resetIdleTimer();
+        return true;
+      }
     }
 
     return this.start();
@@ -139,6 +163,10 @@ export class OracleSidecarClient {
    * Stop the sidecar process (Tauri only)
    */
   async stop() {
+    if (this._idleTimer) {
+      clearTimeout(this._idleTimer);
+      this._idleTimer = null;
+    }
     if (isTauri()) {
       const { invoke } = await import("@tauri-apps/api/core");
       try {
@@ -229,7 +257,9 @@ export class OracleSidecarClient {
       throw new OracleSidecarError(error.detail || error);
     }
 
-    return response.json();
+    const result = await response.json();
+    this._resetIdleTimer();
+    return result;
   }
 
   /**
@@ -252,7 +282,9 @@ export class OracleSidecarClient {
       throw new OracleSidecarError(error.detail || error);
     }
 
-    return response.json();
+    const result = await response.json();
+    this._resetIdleTimer();
+    return result;
   }
 
   /**
@@ -275,7 +307,31 @@ export class OracleSidecarClient {
       throw new OracleSidecarError(error.detail || error);
     }
 
-    return response.json();
+    const result = await response.json();
+    this._resetIdleTimer();
+    return result;
+  }
+
+  /**
+   * Execute multiple queries in a single HTTP request (parallel execution on sidecar).
+   * @param {Array<{connection: Object, sql: string, max_rows?: number}>} queries
+   * @returns {Promise<{results: Array<{columns: string[], rows: any[][], row_count: number, execution_time_ms: number} | {error: string}>}>}
+   */
+  async queryBatch(queries) {
+    const response = await fetch(`${this._baseUrl}/query-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new OracleSidecarError(error.detail || error);
+    }
+
+    const result = await response.json();
+    this._resetIdleTimer();
+    return result;
   }
 
   /**

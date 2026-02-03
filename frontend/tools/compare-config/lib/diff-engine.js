@@ -144,6 +144,8 @@ export function computeWordDiff(oldStr, newStr) {
 
 /**
  * Compute adaptive diff - uses threshold to decide granularity
+ * Runs Diff.diffChars() once and reuses the result for both ratio calculation
+ * and segment generation, avoiding redundant computation.
  * @param {string} oldStr
  * @param {string} newStr
  * @param {Object} options
@@ -164,8 +166,20 @@ export function computeAdaptiveDiff(oldStr, newStr, options = {}) {
     };
   }
 
-  // Calculate change ratio
-  const changeRatio = calculateChangeRatio(oldVal, newVal);
+  // Run diffChars ONCE — reuse for both ratio and segments
+  const diffParts = Diff.diffChars(oldVal, newVal);
+
+  // Calculate change ratio from the same diff result
+  let changedChars = 0;
+  let totalChars = 0;
+  for (const part of diffParts) {
+    const len = part.value.length;
+    if (part.added || part.removed) {
+      changedChars += len;
+    }
+    totalChars += len;
+  }
+  const changeRatio = totalChars > 0 ? changedChars / totalChars : 0;
 
   if (changeRatio > threshold) {
     // More than threshold% different - show cell-level only
@@ -178,12 +192,15 @@ export function computeAdaptiveDiff(oldStr, newStr, options = {}) {
       segments: null
     };
   } else {
-    // Less than threshold% different - show character-level diff
+    // Less than threshold% different - reuse diffParts for character-level segments
     return {
       type: 'char-diff',
       changed: true,
       changeRatio,
-      segments: computeCharDiff(oldVal, newVal)
+      segments: diffParts.map(part => ({
+        type: part.added ? DiffType.INSERT : part.removed ? DiffType.DELETE : DiffType.EQUAL,
+        value: part.value,
+      })),
     };
   }
 }

@@ -9,6 +9,11 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getOracleSidecarClient, OracleSidecarError } from "./lib/oracle-sidecar-client.js";
+import {
+  generateQueryCacheKey,
+  getQueryCache,
+  setQueryCache,
+} from './lib/indexed-db-manager.js';
 
 export class CompareConfigService {
   // NOTE: checkOracleClientReady, primeOracleClient, and debugOracleSetup
@@ -341,6 +346,7 @@ export class CompareConfigService {
 
   /**
    * Fetch Oracle data via sidecar (compatible with existing fetchOracleData signature)
+   * Uses /query (array format) for smaller payload, converts to dicts client-side.
    * @param {Object} request - Fetch data request
    * @param {string} request.connection_name - Connection name (for credential lookup)
    * @param {Object} request.config - Connection configuration { name, connect_string }
@@ -351,9 +357,12 @@ export class CompareConfigService {
    * @param {string[]} [request.fields] - Fields to select (table mode)
    * @param {string} [request.sql] - SQL query (raw-sql mode)
    * @param {number} [request.max_rows] - Maximum rows to fetch
+   * @param {Object} [options] - Additional options
+   * @param {boolean} [options.bypassCache=false] - Skip cache lookup and force fresh query
    * @returns {Promise<{headers: string[], rows: Object[], row_count: number, source_name: string}>}
    */
-  static async fetchOracleDataViaSidecar(request) {
+  static async fetchOracleDataViaSidecar(request, options = {}) {
+    const { bypassCache = false } = options;
     const { connection_name, config, mode, owner, table_name, where_clause, fields, sql, max_rows = 1000 } = request;
 
     let querySql;
@@ -371,14 +380,79 @@ export class CompareConfigService {
       sourceName = `${owner}.${table_name}`;
     }
 
-    const result = await this.queryAsDictViaSidecar(connection_name, config, querySql, max_rows);
+    // Generate cache key
+    const cacheKey = await generateQueryCacheKey(
+      connection_name,
+      config.connect_string,
+      querySql,
+      max_rows
+    );
 
-    return {
-      headers: result.columns,
-      rows: result.rows,
+    // Check cache first (unless bypassed)
+    if (!bypassCache) {
+      const cached = await getQueryCache(cacheKey);
+      if (cached) {
+        console.debug('[QueryCache] HIT:', cacheKey.slice(0, 16));
+        return cached;
+      }
+    }
+
+    // Use /query (array format) instead of /query-dict — smaller JSON payload
+    const result = await this.queryViaSidecar(connection_name, config, querySql, max_rows);
+
+    // Convert to dicts client-side (fast in JS, avoids repeated column names in JSON)
+    const columns = result.columns;
+    const rows = result.rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])));
+
+    const response = {
+      headers: columns,
+      rows,
       row_count: result.row_count,
       source_name: sourceName,
     };
+
+    // Cache the result
+    setQueryCache(cacheKey, response).catch((err) => {
+      console.warn('[QueryCache] Failed to cache:', err);
+    });
+
+    return response;
+  }
+
+  /**
+   * Execute multiple queries in a single HTTP request via sidecar batch endpoint.
+   * Queries run in parallel on the sidecar and results are returned together.
+   * @param {Array<{connection_name: string, config: Object, sql: string, max_rows?: number}>} queries
+   * @returns {Promise<Array<{columns: string[], rows: Object[], row_count: number, error?: string}>>}
+   */
+  static async queryBatchViaSidecar(queries) {
+    await this.ensureSidecarStarted();
+    const client = getOracleSidecarClient();
+
+    // Build query requests with resolved credentials
+    const queryRequests = await Promise.all(
+      queries.map(async ({ connection_name, config, sql, max_rows = 1000 }) => {
+        const connection = await this.buildSidecarConnection(connection_name, config);
+        return { connection, sql, max_rows };
+      })
+    );
+
+    const batchResult = await client.queryBatch(queryRequests);
+
+    // Convert array rows to dict rows client-side for each result
+    return batchResult.results.map((result) => {
+      if (result.error) {
+        return { error: result.error, columns: [], rows: [], row_count: 0 };
+      }
+      const columns = result.columns;
+      const rows = result.rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])));
+      return {
+        columns,
+        rows,
+        row_count: result.row_count,
+        execution_time_ms: result.execution_time_ms,
+      };
+    });
   }
 }
 

@@ -59,8 +59,9 @@ describe('UnifiedCompareUtils', () => {
   });
 
   describe('isSourceBFollowMode', () => {
-    it('returns true for Oracle vs Oracle', () => {
-      expect(isSourceBFollowMode('oracle', 'oracle')).toBe(true);
+    // Note: Follow mode is deprecated - Source B now has independent configuration
+    it('returns false for Oracle vs Oracle (follow mode deprecated)', () => {
+      expect(isSourceBFollowMode('oracle', 'oracle')).toBe(false);
     });
 
     it('returns false for Oracle vs Excel', () => {
@@ -621,7 +622,7 @@ describe('UnifiedCompareUtils', () => {
       expect(result.table).toBeNull();
       expect(result.sql).toBe('');
       expect(result.whereClause).toBe('');
-      expect(result.maxRows).toBe(100);
+      expect(result.maxRows).toBe(500);
     });
 
     it('clears Excel selection but keeps files', () => {
@@ -772,15 +773,15 @@ describe('UnifiedCompareUtils', () => {
   });
 
   describe('getUnifiedProgressSteps', () => {
-    it('returns 4 progress steps', () => {
+    it('returns 3 progress steps', () => {
       const steps = getUnifiedProgressSteps();
-      expect(steps).toHaveLength(4);
+      expect(steps).toHaveLength(3);
     });
 
     it('returns steps with correct IDs', () => {
       const steps = getUnifiedProgressSteps();
       const ids = steps.map((s) => s.id);
-      expect(ids).toEqual(['source-a', 'validate-b', 'source-b', 'reconcile']);
+      expect(ids).toEqual(['source-a', 'source-b', 'reconcile']);
     });
 
     it('each step has id, label, and defaultDetail', () => {
@@ -798,38 +799,14 @@ describe('UnifiedCompareUtils', () => {
     it('returns correct labels for each step', () => {
       const steps = getUnifiedProgressSteps();
       expect(steps[0].label).toBe('Loading Source A data');
-      expect(steps[1].label).toBe('Validating Source B');
-      expect(steps[2].label).toBe('Loading Source B data');
-      expect(steps[3].label).toBe('Reconciling fields');
+      expect(steps[1].label).toBe('Loading Source B data');
+      expect(steps[2].label).toBe('Reconciling fields');
     });
   });
 
   describe('getVisibleStepsForMode', () => {
-    it('returns all 4 steps for oracle-oracle mode', () => {
-      const steps = getVisibleStepsForMode('oracle-oracle');
-      expect(steps).toEqual(['source-a', 'validate-b', 'source-b', 'reconcile']);
-    });
-
-    it('returns 3 steps (no validate-b) for oracle-excel mode', () => {
-      const steps = getVisibleStepsForMode('oracle-excel');
-      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
-      expect(steps).not.toContain('validate-b');
-    });
-
-    it('returns 3 steps (no validate-b) for excel-oracle mode', () => {
-      const steps = getVisibleStepsForMode('excel-oracle');
-      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
-      expect(steps).not.toContain('validate-b');
-    });
-
-    it('returns 3 steps (no validate-b) for excel-excel mode', () => {
-      const steps = getVisibleStepsForMode('excel-excel');
-      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
-      expect(steps).not.toContain('validate-b');
-    });
-
-    it('returns 3 steps for null mode', () => {
-      const steps = getVisibleStepsForMode(null);
+    it('returns 3 steps for all modes', () => {
+      const steps = getVisibleStepsForMode();
       expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
     });
   });
@@ -837,10 +814,6 @@ describe('UnifiedCompareUtils', () => {
   describe('getStepLabel', () => {
     it('returns correct label for source-a step', () => {
       expect(getStepLabel('source-a')).toBe('Loading Source A data');
-    });
-
-    it('returns correct label for validate-b step', () => {
-      expect(getStepLabel('validate-b')).toBe('Validating Source B');
     });
 
     it('returns correct label for source-b step', () => {
@@ -1099,7 +1072,8 @@ describe('UnifiedCompareUtils', () => {
       expect(result.message).toContain('Select a file');
     });
 
-    it('returns null for Source B in Oracle-Oracle follow mode with just connection', () => {
+    it('returns info message for Source B in Oracle-Oracle mode without schema (no follow mode)', () => {
+      // Follow mode is deprecated - Source B requires full configuration
       const config = {
         type: 'oracle',
         connection: { name: 'PROD' },
@@ -1109,7 +1083,8 @@ describe('UnifiedCompareUtils', () => {
       };
       const otherConfig = { type: 'oracle' };
       const result = validateSourceConfig(config, 'B', otherConfig);
-      expect(result).toBeNull();
+      expect(result).not.toBeNull();
+      expect(result.message).toContain('schema');
     });
 
     it('returns null when type is null', () => {

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -86,15 +87,6 @@ pub fn run() {
       if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_zoom(ZOOM_DEFAULT);
       }
-
-      // Auto-start Oracle sidecar in the background
-      let app_handle = app.handle().clone();
-      tauri::async_runtime::spawn(async move {
-        match oracle_sidecar::start_oracle_sidecar(app_handle).await {
-          Ok(msg) => log::info!("Oracle sidecar auto-start: {}", msg),
-          Err(e) => log::warn!("Oracle sidecar auto-start failed (will retry on demand): {}", e),
-        }
-      });
 
       Ok(())
     })
@@ -248,9 +240,10 @@ const UNIFIED_KEYCHAIN_KEY: &str = "secrets";
 struct UnifiedSecrets {
     jenkins_token: Option<String>,
     confluence_pat: Option<String>,
+    oracle_credentials: Option<HashMap<String, oracle::CredentialEntry>>,
 }
 
-fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
+pub(crate) fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
     let entry = Entry::new(UNIFIED_KEYCHAIN_SERVICE, UNIFIED_KEYCHAIN_KEY).map_err(|e| e.to_string())?;
     match entry.get_password() {
         Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse secrets: {}", e)),
@@ -263,7 +256,7 @@ fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
     }
 }
 
-fn save_unified_secrets(secrets: &UnifiedSecrets) -> Result<(), String> {
+pub(crate) fn save_unified_secrets(secrets: &UnifiedSecrets) -> Result<(), String> {
     let entry = Entry::new(UNIFIED_KEYCHAIN_SERVICE, UNIFIED_KEYCHAIN_KEY).map_err(|e| e.to_string())?;
     let json_str = serde_json::to_string(secrets).map_err(|e| format!("Failed to serialize secrets: {}", e))?;
     entry.set_password(&json_str).map_err(|e| e.to_string())
@@ -273,7 +266,9 @@ fn save_unified_secrets(secrets: &UnifiedSecrets) -> Result<(), String> {
 struct MigrationResult {
     migrated_jenkins: bool,
     migrated_confluence: bool,
+    migrated_oracle: bool,
     already_unified: bool,
+    already_has_oracle: bool,
     no_credentials: bool,
 }
 
@@ -282,11 +277,14 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     let mut secrets = load_unified_secrets()?;
     let had_jenkins = secrets.jenkins_token.is_some();
     let had_confluence = secrets.confluence_pat.is_some();
+    let had_oracle = secrets.oracle_credentials.as_ref().map_or(false, |m| !m.is_empty());
 
     let mut migrated_jenkins = false;
     let mut migrated_confluence = false;
+    let mut migrated_oracle = false;
     let mut found_old_jenkins = false;
     let mut found_old_confluence = false;
+    let mut found_old_oracle = false;
 
     // Try migrating Jenkins token if not already in unified
     if secrets.jenkins_token.is_none() && !username.is_empty() {
@@ -310,8 +308,23 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
         }
     }
 
+    // Try migrating Oracle credentials if not already in unified
+    if !had_oracle {
+        if let Ok(entry) = Entry::new(oracle::ORACLE_KEYCHAIN_SERVICE, oracle::CREDENTIALS_ACCOUNT) {
+            if let Ok(json_str) = entry.get_password() {
+                if let Ok(creds) = serde_json::from_str::<HashMap<String, oracle::CredentialEntry>>(&json_str) {
+                    if !creds.is_empty() {
+                        secrets.oracle_credentials = Some(creds);
+                        migrated_oracle = true;
+                        found_old_oracle = true;
+                    }
+                }
+            }
+        }
+    }
+
     // Save if anything changed
-    if migrated_jenkins || migrated_confluence {
+    if migrated_jenkins || migrated_confluence || migrated_oracle {
         save_unified_secrets(&secrets)?;
 
         // Delete old entries after successful migration
@@ -325,15 +338,23 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
                 let _ = entry.delete_password();
             }
         }
+        if migrated_oracle {
+            if let Ok(entry) = Entry::new(oracle::ORACLE_KEYCHAIN_SERVICE, oracle::CREDENTIALS_ACCOUNT) {
+                let _ = entry.delete_password();
+            }
+        }
     }
 
     // no_credentials = true if there's nothing in unified AND nothing was found in old locations
-    let no_credentials = !had_jenkins && !had_confluence && !found_old_jenkins && !found_old_confluence;
+    let no_credentials = !had_jenkins && !had_confluence && !had_oracle
+        && !found_old_jenkins && !found_old_confluence && !found_old_oracle;
 
     Ok(MigrationResult {
         migrated_jenkins,
         migrated_confluence,
+        migrated_oracle,
         already_unified: had_jenkins || had_confluence,
+        already_has_oracle: had_oracle,
         no_credentials,
     })
 }

@@ -5,7 +5,6 @@
 //! sidecar (oracledb thin mode). This module retains credential management,
 //! Rust-based Oracle client support (with `oracle` feature), and export functions.
 
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -17,7 +16,7 @@ use oracle::sql_type::OracleType;
 #[cfg(feature = "oracle")]
 use oracle::Connection;
 
-const ORACLE_KEYCHAIN_SERVICE: &str = "ad-tools:oracle";
+pub(crate) const ORACLE_KEYCHAIN_SERVICE: &str = "ad-tools:oracle";
 
 // ============================================================================
 // Error Types
@@ -427,49 +426,32 @@ pub fn create_connection(_connect_string: &str, _username: &str, _password: &str
 //
 // Structure: { "envName": { "username": "...", "password": "..." }, ... }
 
-const CREDENTIALS_ACCOUNT: &str = "oracle-credentials";
+pub(crate) const CREDENTIALS_ACCOUNT: &str = "oracle-credentials";
 
 /// In-memory cache of credentials to minimize keychain reads
 static CREDENTIALS_CACHE: OnceLock<Mutex<Option<HashMap<String, CredentialEntry>>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CredentialEntry {
-    username: String,
-    password: String,
+pub(crate) struct CredentialEntry {
+    pub(crate) username: String,
+    pub(crate) password: String,
 }
 
 fn get_cache() -> &'static Mutex<Option<HashMap<String, CredentialEntry>>> {
     CREDENTIALS_CACHE.get_or_init(|| Mutex::new(None))
 }
 
-/// Load all credentials from keychain into cache (single keychain read)
+/// Load all credentials from unified keychain secrets
 fn load_credentials_from_keychain() -> Result<HashMap<String, CredentialEntry>, String> {
-    let entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, CREDENTIALS_ACCOUNT)
-        .map_err(|e| format!("Failed to access keychain: {}", e))?;
-
-    match entry.get_password() {
-        Ok(json_str) => {
-            serde_json::from_str(&json_str)
-                .map_err(|e| format!("Failed to parse credentials: {}", e))
-        }
-        Err(keyring::Error::NoEntry) => {
-            // No credentials stored yet - return empty map
-            Ok(HashMap::new())
-        }
-        Err(e) => Err(format!("Failed to read keychain: {}", e)),
-    }
+    let secrets = crate::load_unified_secrets()?;
+    Ok(secrets.oracle_credentials.unwrap_or_default())
 }
 
-/// Save all credentials to keychain (single keychain write)
+/// Save all credentials to unified keychain secrets
 fn save_credentials_to_keychain(creds: &HashMap<String, CredentialEntry>) -> Result<(), String> {
-    let entry = Entry::new(ORACLE_KEYCHAIN_SERVICE, CREDENTIALS_ACCOUNT)
-        .map_err(|e| format!("Failed to access keychain: {}", e))?;
-
-    let json_str = serde_json::to_string(creds)
-        .map_err(|e| format!("Failed to serialize credentials: {}", e))?;
-
-    entry.set_password(&json_str)
-        .map_err(|e| format!("Failed to save to keychain: {}", e))
+    let mut secrets = crate::load_unified_secrets()?;
+    secrets.oracle_credentials = Some(creds.clone());
+    crate::save_unified_secrets(&secrets)
 }
 
 /// Get credentials map, loading from keychain if not cached

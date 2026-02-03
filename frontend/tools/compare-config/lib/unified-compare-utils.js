@@ -19,9 +19,11 @@ export function getComparisonMode(sourceAType, sourceBType) {
  * @param {string|null} sourceAType
  * @param {string|null} sourceBType
  * @returns {boolean}
+ * @deprecated Source B now has independent configuration - this always returns false
  */
 export function isSourceBFollowMode(sourceAType, sourceBType) {
-  return sourceAType === 'oracle' && sourceBType === 'oracle';
+  // Phase 2: Source B has independent configuration, no longer follows Source A
+  return false;
 }
 
 /**
@@ -48,8 +50,37 @@ export function syncPkFieldsToCompareFields(selectedPkFields, selectedCompareFie
 }
 
 /**
+ * Validates a single Oracle source configuration.
+ * @param {Object} config - Source configuration
+ * @param {string} label - 'A' or 'B' for error messages
+ * @returns {{valid: boolean, error?: string}}
+ */
+function validateSingleOracleConfig(config, label) {
+  if (!config.connection) {
+    return { valid: false, error: `Source ${label} connection is required` };
+  }
+
+  if (config.queryMode === 'table') {
+    if (!config.schema) {
+      return { valid: false, error: `Source ${label} schema is required` };
+    }
+    if (!config.table) {
+      return { valid: false, error: `Source ${label} table is required` };
+    }
+  }
+
+  if (config.queryMode === 'sql') {
+    if (!config.sql || config.sql.trim().length === 0) {
+      return { valid: false, error: `Source ${label} SQL query is required` };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
  * Validates Oracle vs Oracle configuration before loading data.
- * Checks if Source B should be able to query the same schema.table as Source A.
+ * Both sources are validated independently.
  *
  * @param {Object} sourceAConfig - Source A configuration
  * @param {Object} sourceBConfig - Source B configuration
@@ -61,31 +92,16 @@ export function validateOracleToOracleConfig(sourceAConfig, sourceBConfig) {
     return { valid: false, error: 'Both sources must be Oracle for Oracle vs Oracle mode' };
   }
 
-  // Source A must have connection
-  if (!sourceAConfig.connection) {
-    return { valid: false, error: 'Source A connection is required' };
+  // Validate Source A
+  const sourceAValidation = validateSingleOracleConfig(sourceAConfig, 'A');
+  if (!sourceAValidation.valid) {
+    return sourceAValidation;
   }
 
-  // Source B must have connection
-  if (!sourceBConfig.connection) {
-    return { valid: false, error: 'Source B connection is required' };
-  }
-
-  // For table mode, Source A must have schema and table
-  if (sourceAConfig.queryMode === 'table') {
-    if (!sourceAConfig.schema) {
-      return { valid: false, error: 'Source A schema is required' };
-    }
-    if (!sourceAConfig.table) {
-      return { valid: false, error: 'Source A table is required' };
-    }
-  }
-
-  // For SQL mode, Source A must have SQL
-  if (sourceAConfig.queryMode === 'sql') {
-    if (!sourceAConfig.sql || sourceAConfig.sql.trim().length === 0) {
-      return { valid: false, error: 'Source A SQL query is required' };
-    }
+  // Validate Source B independently
+  const sourceBValidation = validateSingleOracleConfig(sourceBConfig, 'B');
+  if (!sourceBValidation.valid) {
+    return sourceBValidation;
   }
 
   return { valid: true };
@@ -292,7 +308,7 @@ export function createResetSourceState(sourceType, existingExcelFiles = []) {
     table: null,
     sql: '',
     whereClause: '',
-    maxRows: 100,
+    maxRows: 500,
     // Excel-specific
     excelFiles: behavior.keepCachedFiles ? existingExcelFiles : [],
     selectedExcelFile: null,
@@ -301,6 +317,7 @@ export function createResetSourceState(sourceType, existingExcelFiles = []) {
     // Data
     data: null,
     dataLoaded: false,
+    schemaLoaded: false,
   };
 }
 
@@ -329,25 +346,16 @@ export function canStartUnifiedComparison(unified) {
 export function getUnifiedProgressSteps() {
   return [
     { id: 'source-a', label: 'Loading Source A data', defaultDetail: '—' },
-    { id: 'validate-b', label: 'Validating Source B', defaultDetail: '—' },
     { id: 'source-b', label: 'Loading Source B data', defaultDetail: '—' },
     { id: 'reconcile', label: 'Reconciling fields', defaultDetail: '—' },
   ];
 }
 
 /**
- * Determines which steps to show based on comparison mode.
- * For Oracle vs Oracle, all 4 steps are shown.
- * For other modes, the "Validating Source B" step is hidden.
- *
- * @param {'oracle-oracle'|'oracle-excel'|'excel-oracle'|'excel-excel'|null} mode
+ * Returns the step IDs to show (all steps are always visible now).
  * @returns {string[]} Array of step IDs to show
  */
-export function getVisibleStepsForMode(mode) {
-  if (mode === 'oracle-oracle') {
-    return ['source-a', 'validate-b', 'source-b', 'reconcile'];
-  }
-  // For mixed or excel-excel modes, skip validation step
+export function getVisibleStepsForMode() {
   return ['source-a', 'source-b', 'reconcile'];
 }
 
@@ -524,11 +532,7 @@ export function validateSourceConfig(config, source, otherSourceConfig = null) {
       };
     }
 
-    // For Source B in follow mode, connection is enough
-    if (source === 'B' && otherSourceConfig?.type === 'oracle') {
-      return null; // Valid in follow mode
-    }
-
+    // Both sources require full configuration (no follow mode)
     if (config.queryMode === 'table') {
       if (!config.schema) {
         return {

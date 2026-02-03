@@ -177,7 +177,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>
                                 <input type="text" id="source-a-where" class="form-input"
-                                       placeholder="STATUS = 'ACTIVE' AND ID > 100">
+                                       placeholder="STATUS = 'ACTIVE' AND ID > 100"
+                                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                                 <span class="form-hint">Condition only, without WHERE keyword. Use AND/OR to combine.</span>
                             </div>
                         </div>
@@ -354,7 +355,8 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group">
                                 <label>WHERE Clause (optional)</label>
                                 <input type="text" id="source-b-where" class="form-input"
-                                       placeholder="STATUS = 'ACTIVE' AND ID > 100">
+                                       placeholder="STATUS = 'ACTIVE' AND ID > 100"
+                                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                                 <span class="form-hint">Condition only, without WHERE keyword. Use AND/OR to combine.</span>
                             </div>
                         </div>
@@ -597,7 +599,7 @@ export const CompareConfigTemplate = /* html */ `
             </div>
         </div>
 
-        <!-- Progress Overlay -->
+        <!-- Load Data Progress Overlay -->
         <div id="unified-progress-overlay" class="progress-overlay" style="display: none;">
             <div class="progress-card">
                 <div class="progress-header">
@@ -608,29 +610,55 @@ export const CompareConfigTemplate = /* html */ `
                     <div class="progress-step" id="unified-step-source-a">
                         <div class="step-icon pending">○</div>
                         <div class="step-content">
-                            <div class="step-label">Loading Source A data</div>
+                            <div class="step-label">Loading Source A table fields</div>
                             <div class="step-detail" id="unified-step-source-a-detail">—</div>
-                        </div>
-                    </div>
-                    <div class="progress-step" id="unified-step-validate-b" style="display: none;">
-                        <div class="step-icon pending">○</div>
-                        <div class="step-content">
-                            <div class="step-label">Validating Source B</div>
-                            <div class="step-detail" id="unified-step-validate-b-detail">—</div>
                         </div>
                     </div>
                     <div class="progress-step" id="unified-step-source-b">
                         <div class="step-icon pending">○</div>
                         <div class="step-content">
-                            <div class="step-label">Loading Source B data</div>
+                            <div class="step-label">Loading Source B table fields</div>
                             <div class="step-detail" id="unified-step-source-b-detail">—</div>
                         </div>
                     </div>
                     <div class="progress-step" id="unified-step-reconcile">
                         <div class="step-icon pending">○</div>
                         <div class="step-content">
-                            <div class="step-label">Reconciling fields</div>
+                            <div class="step-label">Reconciling table fields</div>
                             <div class="step-detail" id="unified-step-reconcile-detail">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compare Data Progress Overlay -->
+        <div id="compare-progress-overlay" class="progress-overlay" style="display: none;">
+            <div class="progress-card">
+                <div class="progress-header">
+                    <div class="progress-spinner"></div>
+                    <h3 id="compare-progress-title">Comparing Data</h3>
+                </div>
+                <div class="progress-steps" id="compare-progress-steps">
+                    <div class="progress-step" id="compare-step-fetch-a">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Fetching Source A data</div>
+                            <div class="step-detail" id="compare-step-fetch-a-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="compare-step-fetch-b">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Fetching Source B data</div>
+                            <div class="step-detail" id="compare-step-fetch-b-detail">—</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="compare-step-compare">
+                        <div class="step-icon pending">○</div>
+                        <div class="step-content">
+                            <div class="step-label">Comparing records</div>
+                            <div class="step-detail" id="compare-step-compare-detail">—</div>
                         </div>
                     </div>
                 </div>

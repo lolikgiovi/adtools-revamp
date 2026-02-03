@@ -73,4 +73,5 @@ tauri/binaries/oracle-sidecar-*
 .DS_Store
 backend-workers/.dev.vars
 venv-x64/
+venv/
 tauri/gen/schemas/capabilities.json

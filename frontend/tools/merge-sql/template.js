@@ -114,7 +114,7 @@ export const MergeSqlTemplate = /* html */ `
             </svg>
             Select SQL
           </button>
-          <button class="btn btn-ghost btn-xs result-tab-action" id="merge-sql-report-btn" title="View Merge Report" style="display: none;">
+          <button class="result-tab" data-tab="report">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
@@ -191,6 +191,61 @@ export const MergeSqlTemplate = /* html */ `
         <div class="result-tab-content" id="merge-sql-select-content">
           <div class="monaco-editor-container" id="merge-sql-select-editor"></div>
         </div>
+
+        <!-- Report Tab Content -->
+        <div class="result-tab-content" id="merge-sql-report-content">
+          <!-- Report Sub-tabs -->
+          <div class="report-subtabs" id="merge-sql-report-subtabs">
+            <button class="report-subtab active" data-subtab="summary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
+              </svg>
+              Summary
+            </button>
+            <button class="report-subtab" data-subtab="table-detail">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="9" y1="21" x2="9" y2="9"></line>
+              </svg>
+              Table Detail
+            </button>
+            <button class="report-subtab" data-subtab="squad-detail">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              Squad Detail
+            </button>
+          </div>
+
+          <!-- Summary Sub-tab Content -->
+          <div class="report-subtab-content active" id="merge-sql-report-summary">
+            <div class="report-content">
+              <div class="report-section" id="merge-sql-report-dangerous"></div>
+              <div class="report-section" id="merge-sql-report-statements"></div>
+              <div class="report-section" id="merge-sql-report-squads"></div>
+              <div class="report-section" id="merge-sql-report-features"></div>
+              <div class="report-section" id="merge-sql-report-authors"></div>
+            </div>
+          </div>
+
+          <!-- Table Detail Sub-tab Content -->
+          <div class="report-subtab-content" id="merge-sql-report-table-detail">
+            <div class="report-content">
+              <div class="report-section" id="merge-sql-report-table-squads"></div>
+            </div>
+          </div>
+
+          <!-- Squad Detail Sub-tab Content -->
+          <div class="report-subtab-content" id="merge-sql-report-squad-detail">
+            <div class="report-content">
+              <div class="report-section" id="merge-sql-report-squad-tables"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -216,32 +271,5 @@ export const MergeSqlTemplate = /* html */ `
     </div>
   </div>
 
-  <!-- Report Modal -->
-  <div class="modal-overlay" id="merge-sql-report-modal" style="display: none;">
-    <div class="modal-content modal-lg">
-      <div class="modal-header">
-        <h3>Merge Report</h3>
-        <button class="btn btn-ghost btn-sm btn-close-modal" id="merge-sql-close-report">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="report-section">
-          <h4>Statement Summary</h4>
-          <div id="merge-sql-report-statements"></div>
-        </div>
-        <div class="report-section">
-          <h4>Non-SYSTEM Authors</h4>
-          <div id="merge-sql-report-authors"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" id="merge-sql-report-close-btn">Close</button>
-      </div>
-    </div>
-  </div>
 </div>
 `;
