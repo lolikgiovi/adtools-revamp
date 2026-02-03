@@ -5832,7 +5832,7 @@ class CompareConfigTool extends BaseTool {
     if (copyBtn) {
       copyBtn.addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText("curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash");
+          await navigator.clipboard.writeText('curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash');
           this.eventBus.emit("notification:show", {
             type: "success",
             message: "Install command copied to clipboard",
