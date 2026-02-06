@@ -47,6 +47,8 @@ const SYSTEM_SCHEMAS = [
   "REMOTE_SCHEDULER_AGENT",
 ];
 
+const SKIPPED_TABLES = ["FLYWAY_SCHEMA_HISTORY"];
+
 export class OracleEnvImportService {
   /**
    * Load saved Oracle connections from localStorage.
@@ -105,24 +107,58 @@ export class OracleEnvImportService {
   }
 
   /**
+   * Fetch tables for the selected schemas (excluding system/skipped tables).
+   * @param {string} name - Connection name
+   * @param {{ name: string, connect_string: string }} config
+   * @param {string[]} schemaNames - Selected schema names
+   * @returns {Promise<{ schema: string, table: string }[]>}
+   */
+  static async fetchTables(name, config, schemaNames) {
+    const client = getOracleSidecarClient();
+    const connection = await this.buildConnection(name, config);
+    const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
+    const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
+    const sql = `SELECT OWNER, TABLE_NAME FROM ALL_TABLES WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList}) ORDER BY OWNER, TABLE_NAME`;
+    const result = await client.query({ connection, sql, max_rows: 100000 });
+    return result.rows.map((row) => ({ schema: row[0], table: row[1] }));
+  }
+
+  /**
    * Fetch full table metadata (columns + PKs) for the selected schemas.
    * @param {string} name - Connection name
    * @param {{ name: string, connect_string: string }} config
    * @param {string[]} schemaNames - Selected schema names
    * @param {(message: string, percent: number) => void} [onProgress]
+   * @param {{ schema: string, table: string }[]} [selectedTables] - Optional filter to specific tables
    * @returns {Promise<Object>} Canonical payload { schema: { tables: { table: { columns, pk } } } }
    */
-  static async fetchAllMetadata(name, config, schemaNames, onProgress) {
+  static async fetchAllMetadata(name, config, schemaNames, onProgress, selectedTables) {
     const client = getOracleSidecarClient();
     const connection = await this.buildConnection(name, config);
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
 
     if (onProgress) onProgress("Fetching column metadata...", 20);
 
+    const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
+
+    // Build optional table filter when specific tables are selected
+    let tableFilter = "";
+    if (selectedTables && selectedTables.length > 0) {
+      const grouped = {};
+      for (const { schema, table } of selectedTables) {
+        if (!grouped[schema]) grouped[schema] = [];
+        grouped[schema].push(`'${table.replace(/'/g, "''")}'`);
+      }
+      const clauses = Object.entries(grouped).map(
+        ([schema, tables]) => `(OWNER = '${schema.replace(/'/g, "''")}' AND TABLE_NAME IN (${tables.join(",")}))`
+      );
+      tableFilter = ` AND (${clauses.join(" OR ")})`;
+    }
+
     const columnsSql = `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
        DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
 FROM ALL_TAB_COLUMNS
-WHERE OWNER IN (${inList})
+WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList})${tableFilter}
 ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
 
     const columnsResult = await client.query({ connection, sql: columnsSql, max_rows: 100000 });
@@ -132,7 +168,7 @@ ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
     const pkSql = `SELECT cons.OWNER, cons.TABLE_NAME, cc.COLUMN_NAME, cc.POSITION
 FROM ALL_CONSTRAINTS cons
 JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
-WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P'
+WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND cons.TABLE_NAME NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
 ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
 
     const pkResult = await client.query({ connection, sql: pkSql, max_rows: 100000 });

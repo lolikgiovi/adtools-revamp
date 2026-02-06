@@ -1684,3 +1684,47 @@
 .qq-oracle-schema-item + .qq-oracle-schema-item {
   border-top: 1px solid hsl(var(--border));
 }
+
+.qq-oracle-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.qq-oracle-table-list {
+  max-height: 350px;
+  overflow-y: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+}
+
+.qq-oracle-table-group-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.qq-oracle-table-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 28px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.qq-oracle-table-item:hover {
+  background: hsl(var(--muted));
+}
+
+.qq-oracle-table-item + .qq-oracle-table-item {
+  border-top: 1px solid hsl(var(--border));
+}

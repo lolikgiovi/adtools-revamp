@@ -297,6 +297,19 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <div id="oracleEnvError2" class="hidden" style="color:hsl(var(--destructive));font-size:12px;margin-top:4px;"></div>
         </div>
 
+        <!-- Step 3: Pick tables -->
+        <div id="oracleEnvStep3" class="qq-modal-body hidden">
+            <div class="qq-oracle-table-header">
+                <span id="oracleEnvTableCount" style="font-size:0.85rem;color:hsl(var(--muted-foreground));">0 of 0 tables selected</span>
+                <div style="display:flex;gap:6px;">
+                    <button id="oracleEnvTableSelectAll" class="btn btn-outline btn-xs">Select All</button>
+                    <button id="oracleEnvTableDeselectAll" class="btn btn-outline btn-xs">Deselect All</button>
+                </div>
+            </div>
+            <div id="oracleEnvTableList" class="qq-oracle-table-list"></div>
+            <div id="oracleEnvError3" class="hidden" style="color:hsl(var(--destructive));font-size:12px;margin-top:4px;"></div>
+        </div>
+
         <!-- Progress bar -->
         <div id="oracleEnvProgress" class="qq-progress hidden" style="margin:0 16px 12px 16px;">
             <div class="qq-progress-bar-container">

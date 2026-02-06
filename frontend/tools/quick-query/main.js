@@ -234,6 +234,12 @@ export class QuickQueryUI {
       closeOracleEnvModalButton: document.getElementById("closeOracleEnvModal"),
       oracleEnvSelectAll: document.getElementById("oracleEnvSelectAll"),
       oracleEnvDeselectAll: document.getElementById("oracleEnvDeselectAll"),
+      oracleEnvStep3: document.getElementById("oracleEnvStep3"),
+      oracleEnvTableList: document.getElementById("oracleEnvTableList"),
+      oracleEnvTableCount: document.getElementById("oracleEnvTableCount"),
+      oracleEnvTableSelectAll: document.getElementById("oracleEnvTableSelectAll"),
+      oracleEnvTableDeselectAll: document.getElementById("oracleEnvTableDeselectAll"),
+      oracleEnvError3: document.getElementById("oracleEnvError3"),
 
       // Container elements
       tableSearchContainer: null,
@@ -465,6 +471,12 @@ export class QuickQueryUI {
       },
       oracleEnvDeselectAll: {
         click: () => this.toggleOracleEnvSchemas(false),
+      },
+      oracleEnvTableSelectAll: {
+        click: () => this.toggleOracleEnvTables(true),
+      },
+      oracleEnvTableDeselectAll: {
+        click: () => this.toggleOracleEnvTables(false),
       },
     };
 
@@ -2119,6 +2131,7 @@ export class QuickQueryUI {
     this._oracleEnvConnections = connections;
     this.elements.oracleEnvStep1.classList.remove("hidden");
     this.elements.oracleEnvStep2.classList.add("hidden");
+    this.elements.oracleEnvStep3.classList.add("hidden");
     this.elements.oracleEnvBack.classList.add("hidden");
     this.elements.oracleEnvNext.textContent = "Connect";
     this.elements.oracleEnvNext.disabled = false;
@@ -2166,7 +2179,7 @@ export class QuickQueryUI {
         this.elements.oracleEnvStep1.classList.add("hidden");
         this.elements.oracleEnvStep2.classList.remove("hidden");
         this.elements.oracleEnvBack.classList.remove("hidden");
-        this.elements.oracleEnvNext.textContent = "Import";
+        this.elements.oracleEnvNext.textContent = "Next";
         this.elements.oracleEnvNext.disabled = false;
       } catch (err) {
         this.hideOracleEnvProgress();
@@ -2174,7 +2187,7 @@ export class QuickQueryUI {
         this.elements.oracleEnvNext.disabled = false;
       }
     } else if (this._oracleEnvStep === 2) {
-      // Step 2 -> Import
+      // Step 2 -> Step 3: Validate schemas, fetch tables
       const selectedSchemas = this.getSelectedOracleEnvSchemas();
       if (selectedSchemas.length === 0) {
         this.showOracleEnvError("Please select at least one schema.", 2);
@@ -2183,13 +2196,49 @@ export class QuickQueryUI {
 
       const { name, config } = this._oracleEnvSelectedConfig;
       this.elements.oracleEnvNext.disabled = true;
+      this.hideOracleEnvError();
+
+      try {
+        this.showOracleEnvProgress("Fetching tables...", 40);
+        const tables = await svc.fetchTables(name, config, selectedSchemas);
+
+        if (tables.length === 0) {
+          throw new Error("No tables found in the selected schemas.");
+        }
+
+        this.hideOracleEnvProgress();
+        this.populateOracleEnvTables(tables);
+
+        // Transition to step 3
+        this._oracleEnvStep = 3;
+        this._oracleEnvSelectedSchemas = selectedSchemas;
+        this.elements.oracleEnvStep2.classList.add("hidden");
+        this.elements.oracleEnvStep3.classList.remove("hidden");
+        this.elements.oracleEnvNext.textContent = "Import";
+        this.elements.oracleEnvNext.disabled = false;
+      } catch (err) {
+        this.hideOracleEnvProgress();
+        this.showOracleEnvError(err.message || String(err), 2);
+        this.elements.oracleEnvNext.disabled = false;
+      }
+    } else if (this._oracleEnvStep === 3) {
+      // Step 3 -> Import with selected tables
+      const selectedTables = this.getSelectedOracleEnvTables();
+      if (selectedTables.length === 0) {
+        this.showOracleEnvError("Please select at least one table.", 3);
+        return;
+      }
+
+      const { name, config } = this._oracleEnvSelectedConfig;
+      const selectedSchemas = this._oracleEnvSelectedSchemas;
+      this.elements.oracleEnvNext.disabled = true;
       this.elements.oracleEnvBack.disabled = true;
       this.hideOracleEnvError();
 
       try {
         const payload = await svc.fetchAllMetadata(name, config, selectedSchemas, (msg, pct) => {
           this.showOracleEnvProgress(msg, pct);
-        });
+        }, selectedTables);
 
         this.showOracleEnvProgress("Importing into storage...", 90);
         const count = await importSchemasPayload(payload, this.storageService);
@@ -2207,7 +2256,7 @@ export class QuickQueryUI {
         setTimeout(() => this.clearError(), 4000);
       } catch (err) {
         this.hideOracleEnvProgress();
-        this.showOracleEnvError(`Import failed: ${err.message || String(err)}`, 2);
+        this.showOracleEnvError(`Import failed: ${err.message || String(err)}`, 3);
         this.elements.oracleEnvNext.disabled = false;
         this.elements.oracleEnvBack.disabled = false;
       }
@@ -2215,12 +2264,22 @@ export class QuickQueryUI {
   }
 
   handleOracleEnvBack() {
-    this._oracleEnvStep = 1;
-    this.elements.oracleEnvStep1.classList.remove("hidden");
-    this.elements.oracleEnvStep2.classList.add("hidden");
-    this.elements.oracleEnvBack.classList.add("hidden");
-    this.elements.oracleEnvNext.textContent = "Connect";
-    this.elements.oracleEnvNext.disabled = false;
+    if (this._oracleEnvStep === 3) {
+      // Step 3 -> Step 2
+      this._oracleEnvStep = 2;
+      this.elements.oracleEnvStep3.classList.add("hidden");
+      this.elements.oracleEnvStep2.classList.remove("hidden");
+      this.elements.oracleEnvNext.textContent = "Next";
+      this.elements.oracleEnvNext.disabled = false;
+    } else {
+      // Step 2 -> Step 1
+      this._oracleEnvStep = 1;
+      this.elements.oracleEnvStep2.classList.add("hidden");
+      this.elements.oracleEnvStep1.classList.remove("hidden");
+      this.elements.oracleEnvBack.classList.add("hidden");
+      this.elements.oracleEnvNext.textContent = "Connect";
+      this.elements.oracleEnvNext.disabled = false;
+    }
     this.hideOracleEnvError();
     this.hideOracleEnvProgress();
   }
@@ -2261,6 +2320,51 @@ export class QuickQueryUI {
     this.elements.oracleEnvSchemaCount.textContent = `${selected} of ${total} schemas selected`;
   }
 
+  populateOracleEnvTables(tables) {
+    const list = this.elements.oracleEnvTableList;
+    // Group tables by schema
+    const grouped = {};
+    for (const { schema, table } of tables) {
+      if (!grouped[schema]) grouped[schema] = [];
+      grouped[schema].push(table);
+    }
+
+    let html = "";
+    for (const [schema, tableNames] of Object.entries(grouped)) {
+      html += `<div class="qq-oracle-table-group-heading">${schema}</div>`;
+      for (const t of tableNames) {
+        html += `<label class="qq-oracle-table-item">
+          <input type="checkbox" data-schema="${schema}" value="${t}" checked>
+          <span>${t}</span>
+        </label>`;
+      }
+    }
+    list.innerHTML = html;
+
+    list.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => this.updateOracleEnvTableCount());
+    });
+    this.updateOracleEnvTableCount();
+  }
+
+  getSelectedOracleEnvTables() {
+    const checkboxes = this.elements.oracleEnvTableList.querySelectorAll("input[type=checkbox]:checked");
+    return Array.from(checkboxes).map((cb) => ({ schema: cb.dataset.schema, table: cb.value }));
+  }
+
+  toggleOracleEnvTables(selectAll) {
+    this.elements.oracleEnvTableList.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.checked = selectAll;
+    });
+    this.updateOracleEnvTableCount();
+  }
+
+  updateOracleEnvTableCount() {
+    const total = this.elements.oracleEnvTableList.querySelectorAll("input[type=checkbox]").length;
+    const selected = this.elements.oracleEnvTableList.querySelectorAll("input[type=checkbox]:checked").length;
+    this.elements.oracleEnvTableCount.textContent = `${selected} of ${total} tables selected`;
+  }
+
   showOracleEnvProgress(message, percent) {
     this.elements.oracleEnvProgress.classList.remove("hidden");
     this.elements.oracleEnvProgressBar.style.width = `${percent}%`;
@@ -2274,10 +2378,10 @@ export class QuickQueryUI {
 
   /**
    * @param {string} msg
-   * @param {1|2} [step=1] - Which step's error element to use
+   * @param {1|2|3} [step=1] - Which step's error element to use
    */
   showOracleEnvError(msg, step = 1) {
-    const el = step === 2 ? this.elements.oracleEnvError2 : this.elements.oracleEnvError;
+    const el = step === 3 ? this.elements.oracleEnvError3 : step === 2 ? this.elements.oracleEnvError2 : this.elements.oracleEnvError;
     if (el) {
       el.textContent = msg;
       el.classList.remove("hidden");
@@ -2292,6 +2396,10 @@ export class QuickQueryUI {
     if (this.elements.oracleEnvError2) {
       this.elements.oracleEnvError2.textContent = "";
       this.elements.oracleEnvError2.classList.add("hidden");
+    }
+    if (this.elements.oracleEnvError3) {
+      this.elements.oracleEnvError3.textContent = "";
+      this.elements.oracleEnvError3.classList.add("hidden");
     }
   }
 
