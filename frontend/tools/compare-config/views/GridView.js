@@ -345,10 +345,8 @@ export class GridView {
    * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
   renderCellPair(v1, v2, hasV1, hasV2, isDifferent, diffInfo = null) {
-    const rawVal1 = hasV1 ? this.formatValue(v1) : "";
-    const rawVal2 = hasV2 ? this.formatValue(v2) : "";
-    const val1 = this.formatCellDisplay(rawVal1);
-    const val2 = this.formatCellDisplay(rawVal2);
+    const val1 = hasV1 ? this.formatValue(v1) : "";
+    const val2 = hasV2 ? this.formatValue(v2) : "";
 
     let c1Class = "val-cell env-1";
     let c2Class = "val-cell env-2";
