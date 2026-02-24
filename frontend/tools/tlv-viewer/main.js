@@ -204,13 +204,14 @@ class TLVViewer extends BaseTool {
     const treeList = container.querySelector("#tlv-tree-list");
     const jsonOutput = container.querySelector("#tlv-json-output");
     const tableBody = container.querySelector("#tlv-table-body");
+    const jsonPanel = container.querySelector("#tlv-json-panel");
 
     if (treeList) {
-      treeList.innerHTML = "";
       treeList.classList.add("tlv-empty-state");
-      treeList.textContent = "Parse TLV to view nested nodes.";
+      treeList.innerHTML = this.getEmptyTreeMarkup("No TLV parsed yet", 'Paste a payload and press "Parse TLV" to inspect nodes.');
     }
     if (jsonOutput) jsonOutput.textContent = "";
+    if (jsonPanel) jsonPanel.open = false;
     if (tableBody) {
       tableBody.innerHTML = `
         <tr class="tlv-empty-row">
@@ -222,7 +223,7 @@ class TLVViewer extends BaseTool {
 
   buildTreeMarkup(nodes) {
     if (!nodes || nodes.length === 0) {
-      return `<div class="tlv-empty-state">No TLV nodes found.</div>`;
+      return this.getEmptyTreeMarkup("No TLV nodes found", "This payload does not contain parseable TLV nodes.");
     }
 
     const renderLevel = (items) => {
@@ -231,6 +232,7 @@ class TLVViewer extends BaseTool {
           ${items
             .map((node) => {
               const preview = node.valuePreview ? `Preview: "${this.escapeHtml(node.valuePreview)}"` : "Preview: (binary)";
+              const valueHex = this.formatHexPreview(node.valueHex, 64);
               return `
                 <li class="tlv-tree-node">
                   <div class="tlv-tree-node-header">
@@ -241,6 +243,7 @@ class TLVViewer extends BaseTool {
                     <span class="tlv-tree-offset">@${node.offset}</span>
                   </div>
                   <div class="tlv-tree-node-meta">${preview}</div>
+                  <div class="tlv-tree-node-hex">Value: ${this.escapeHtml(valueHex || "(empty)")}</div>
                   ${node.children && node.children.length > 0 ? renderLevel(node.children) : ""}
                 </li>
               `;
@@ -265,8 +268,8 @@ class TLVViewer extends BaseTool {
     return rows
       .map((row) => {
         const preview = row.valuePreview ? this.escapeHtml(row.valuePreview) : "(binary)";
-        const valueHexShort = row.valueHex.length > 80 ? `${row.valueHex.slice(0, 80)} ...` : row.valueHex;
-        const rawHexShort = row.rawHex.length > 80 ? `${row.rawHex.slice(0, 80)} ...` : row.rawHex;
+        const valueHexShort = this.formatHexPreview(row.valueHex, 80);
+        const rawHexShort = this.formatHexPreview(row.rawHex, 80);
         const depthPad = row.depth * 12;
 
         return `
@@ -301,8 +304,8 @@ class TLVViewer extends BaseTool {
     const treePane = container.querySelector("#tlv-tree-view");
     const tablePane = container.querySelector("#tlv-table-view");
 
-    if (treePane) treePane.style.display = view === "tree" ? "grid" : "none";
-    if (tablePane) tablePane.style.display = view === "table" ? "block" : "none";
+    if (treePane) treePane.style.display = view === "tree" ? "flex" : "none";
+    if (tablePane) tablePane.style.display = view === "table" ? "flex" : "none";
 
     container.querySelectorAll(".tlv-view-tabs .tab-button").forEach((button) => {
       button.classList.toggle("active", button.getAttribute("data-view") === view);
@@ -393,6 +396,24 @@ class TLVViewer extends BaseTool {
       ].join("\t")
     );
     return [header, ...lines].join("\n");
+  }
+
+  getEmptyTreeMarkup(title, subtitle) {
+    return `
+      <div class="tlv-empty-title">${this.escapeHtml(title)}</div>
+      <div class="tlv-empty-subtitle">${this.escapeHtml(subtitle)}</div>
+      <ol class="tlv-empty-steps">
+        <li>Choose mode (Hex, Base64, or UTF-8/Text).</li>
+        <li>Paste payload data into the input panel.</li>
+        <li>Press Parse TLV, then switch between tree and table.</li>
+      </ol>
+    `;
+  }
+
+  formatHexPreview(value, maxChars = 80) {
+    const text = String(value || "");
+    if (!text) return "";
+    return text.length > maxChars ? `${text.slice(0, maxChars)} ...` : text;
   }
 
   escapeHtml(value) {
