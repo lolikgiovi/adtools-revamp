@@ -9,7 +9,7 @@ class TLVViewer extends BaseTool {
     super({
       id: "tlv-viewer",
       name: "TLV Viewer",
-      description: "Parse TLV payloads with tree and table views",
+      description: "Parse QRIS & BER-TLV payloads with tree and table views",
       icon: "tlv",
       category: "general",
       eventBus,
@@ -20,7 +20,7 @@ class TLVViewer extends BaseTool {
     this.persistTimer = null;
     this.storageKeys = {
       input: "tool:tlv-viewer:input",
-      mode: "tool:tlv-viewer:mode",
+      format: "tool:tlv-viewer:format",
       view: "tool:tlv-viewer:view",
     };
   }
@@ -48,289 +48,341 @@ class TLVViewer extends BaseTool {
   }
 
   bindToolEvents() {
-    const container = this.container;
-    if (!container) return;
+    const c = this.container;
+    if (!c) return;
 
-    container.querySelector("#tlv-parse-btn")?.addEventListener("click", () => this.parseCurrentInput());
-    container.querySelector("#tlv-paste-btn")?.addEventListener("click", () => this.handlePaste());
-    container.querySelector("#tlv-sample-btn")?.addEventListener("click", () => this.applySample());
-    container.querySelector("#tlv-clear-btn")?.addEventListener("click", () => this.clearInputAndOutput());
-    container.querySelector("#tlv-copy-output-btn")?.addEventListener("click", () => this.copyCurrentOutput());
+    c.querySelector("#tlv-parse-btn")?.addEventListener("click", () => this.parseCurrentInput());
+    c.querySelector("#tlv-paste-btn")?.addEventListener("click", () => this.handlePaste());
+    c.querySelector("#tlv-sample-btn")?.addEventListener("click", () => this.applySample("qris"));
+    c.querySelector("#tlv-sample-ber-btn")?.addEventListener("click", () => this.applySample("ber"));
+    c.querySelector("#tlv-clear-btn")?.addEventListener("click", () => this.clearAll());
+    c.querySelector("#tlv-copy-output-btn")?.addEventListener("click", () => this.copyCurrentOutput());
 
-    const inputEl = container.querySelector("#tlv-input");
+    const inputEl = c.querySelector("#tlv-input");
     if (inputEl) {
       inputEl.addEventListener("input", () => this.persistInputDebounced());
-      inputEl.addEventListener("keydown", (event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-          event.preventDefault();
+      inputEl.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
           this.parseCurrentInput();
         }
       });
     }
 
-    const modeEl = container.querySelector("#tlv-input-mode");
-    if (modeEl) {
-      modeEl.addEventListener("change", () => {
-        this.persistValue(this.storageKeys.mode, modeEl.value);
-        if ((this.container.querySelector("#tlv-input")?.value || "").trim()) {
-          this.parseCurrentInput();
-        }
+    const formatEl = c.querySelector("#tlv-format");
+    if (formatEl) {
+      formatEl.addEventListener("change", () => {
+        this.persistValue(this.storageKeys.format, formatEl.value);
+        if ((c.querySelector("#tlv-input")?.value || "").trim()) this.parseCurrentInput();
       });
     }
 
-    container.querySelectorAll(".tlv-view-tabs .tab-button").forEach((button) => {
-      button.addEventListener("click", () => {
-        const view = button.getAttribute("data-view");
+    c.querySelectorAll(".tlv-view-tabs .tab-button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const view = btn.getAttribute("data-view");
         if (view) this.applyView(view);
       });
     });
   }
 
   restoreState() {
-    const container = this.container;
-    if (!container) return;
-
-    const inputEl = container.querySelector("#tlv-input");
-    const modeEl = container.querySelector("#tlv-input-mode");
+    const c = this.container;
+    if (!c) return;
 
     try {
-      const savedMode = localStorage.getItem(this.storageKeys.mode);
+      const savedFormat = localStorage.getItem(this.storageKeys.format);
       const savedInput = localStorage.getItem(this.storageKeys.input);
       const savedView = localStorage.getItem(this.storageKeys.view);
 
-      if (savedMode && modeEl && ["hex", "base64", "utf8"].includes(savedMode)) {
-        modeEl.value = savedMode;
+      if (savedFormat && c.querySelector("#tlv-format")) {
+        c.querySelector("#tlv-format").value = savedFormat;
       }
-
-      if (savedInput && inputEl) {
-        inputEl.value = savedInput;
+      if (savedInput && c.querySelector("#tlv-input")) {
+        c.querySelector("#tlv-input").value = savedInput;
       }
-
       if (savedView && ["tree", "table"].includes(savedView)) {
         this.currentView = savedView;
       }
     } catch (_) {}
 
-    if ((inputEl?.value || "").trim()) {
+    if ((c.querySelector("#tlv-input")?.value || "").trim()) {
       this.parseCurrentInput();
     } else {
-      this.renderEmptyOutput();
+      this.renderEmpty();
     }
   }
 
   persistInputDebounced() {
     const input = this.container?.querySelector("#tlv-input")?.value || "";
     if (this.persistTimer) clearTimeout(this.persistTimer);
-
-    this.persistTimer = setTimeout(() => {
-      this.persistValue(this.storageKeys.input, input);
-    }, 250);
+    this.persistTimer = setTimeout(() => this.persistValue(this.storageKeys.input, input), 250);
   }
 
   persistValue(key, value) {
-    try {
-      localStorage.setItem(key, value || "");
-    } catch (_) {}
+    try { localStorage.setItem(key, value || ""); } catch (_) {}
   }
 
-  parseCurrentInput() {
-    const container = this.container;
-    if (!container) return;
+  // ── Parsing ───────────────────────────────────────────────────────────
 
-    const inputEl = container.querySelector("#tlv-input");
-    const modeEl = container.querySelector("#tlv-input-mode");
-    const input = inputEl?.value || "";
-    const inputMode = modeEl?.value || "hex";
+  parseCurrentInput() {
+    const c = this.container;
+    if (!c) return;
+
+    const input = c.querySelector("#tlv-input")?.value || "";
+    const format = c.querySelector("#tlv-format")?.value || "auto";
 
     if (!input.trim()) {
       this.lastResult = null;
-      this.renderEmptyOutput();
-      this.showInlineError("Input is empty. Paste or type TLV payload first.");
+      this.renderEmpty();
+      this.showError("Input is empty.");
       this.updateCopyButton();
       return;
     }
 
     try {
-      const result = TLVViewerService.parse(input, inputMode);
+      const result = TLVViewerService.parse(input, format);
       this.lastResult = result;
-      this.clearInlineError();
+      this.clearError();
       this.renderResult(result);
       this.updateCopyButton();
       UsageTracker.trackFeature("tlv-viewer", "parse");
-      UsageTracker.trackEvent("tlv-viewer", "parse", {
-        mode: inputMode,
-        bytes: result.summary.byteLength,
-        nodes: result.summary.nodeCount,
-      });
+      UsageTracker.trackEvent("tlv-viewer", "parse", { format: result.format, nodes: result.summary.nodeCount });
     } catch (error) {
       this.lastResult = null;
-      this.renderEmptyOutput();
-      this.showInlineError(error?.message || "Failed to parse TLV payload.");
+      this.renderEmpty();
+      this.showError(error?.message || "Failed to parse TLV payload.");
       this.updateCopyButton();
-      UsageTracker.trackEvent("tlv-viewer", "parse_error", UsageTracker.enrichErrorMeta(error, { mode: inputMode }));
+      UsageTracker.trackEvent("tlv-viewer", "parse_error", UsageTracker.enrichErrorMeta(error, { format }));
     }
   }
 
+  // ── Rendering ─────────────────────────────────────────────────────────
+
   renderResult(result) {
-    const container = this.container;
-    if (!container) return;
+    const c = this.container;
+    if (!c) return;
 
-    container.querySelector("#tlv-summary-bytes").textContent = String(result.summary.byteLength);
-    container.querySelector("#tlv-summary-nodes").textContent = String(result.summary.nodeCount);
-    container.querySelector("#tlv-summary-top").textContent = String(result.summary.topLevelCount);
-    container.querySelector("#tlv-summary-depth").textContent = String(result.summary.maxDepth);
+    this.renderSummary(result);
+    this.renderCrc(result);
+    this.renderTableHead(result.format);
 
-    const treeList = container.querySelector("#tlv-tree-list");
-    const jsonOutput = container.querySelector("#tlv-json-output");
-    const tableBody = container.querySelector("#tlv-table-body");
+    const treeList = c.querySelector("#tlv-tree-list");
+    const jsonOutput = c.querySelector("#tlv-json-output");
+    const tableBody = c.querySelector("#tlv-table-body");
 
     if (treeList) {
       treeList.classList.remove("tlv-empty-state");
-      treeList.innerHTML = this.buildTreeMarkup(result.nodes);
+      treeList.innerHTML = this.buildTreeMarkup(result.nodes, result.format);
     }
     if (jsonOutput) jsonOutput.textContent = JSON.stringify(result.jsonTree, null, 2);
-    if (tableBody) tableBody.innerHTML = this.buildTableRows(result.rows);
+    if (tableBody) tableBody.innerHTML = this.buildTableRows(result.rows, result.format);
   }
 
-  renderEmptyOutput() {
-    const container = this.container;
-    if (!container) return;
+  renderEmpty() {
+    const c = this.container;
+    if (!c) return;
 
-    container.querySelector("#tlv-summary-bytes").textContent = "0";
-    container.querySelector("#tlv-summary-nodes").textContent = "0";
-    container.querySelector("#tlv-summary-top").textContent = "0";
-    container.querySelector("#tlv-summary-depth").textContent = "0";
+    c.querySelector("#tlv-summary-bar").textContent = "";
+    this.hideCrc();
 
-    const treeList = container.querySelector("#tlv-tree-list");
-    const jsonOutput = container.querySelector("#tlv-json-output");
-    const tableBody = container.querySelector("#tlv-table-body");
-    const jsonPanel = container.querySelector("#tlv-json-panel");
-
+    const treeList = c.querySelector("#tlv-tree-list");
     if (treeList) {
       treeList.classList.add("tlv-empty-state");
-      treeList.innerHTML = this.getEmptyTreeMarkup("No TLV parsed yet", 'Paste a payload and press "Parse TLV" to inspect nodes.');
+      treeList.innerHTML = `<div class="tlv-empty-msg">Paste a QRIS string or TLV payload and press Parse.</div>`;
     }
+
+    const jsonOutput = c.querySelector("#tlv-json-output");
+    const jsonPanel = c.querySelector("#tlv-json-panel");
     if (jsonOutput) jsonOutput.textContent = "";
     if (jsonPanel) jsonPanel.open = false;
-    if (tableBody) {
-      tableBody.innerHTML = `
-        <tr class="tlv-empty-row">
-          <td colspan="10">Parse TLV to populate rows.</td>
-        </tr>
-      `;
+
+    const tableBody = c.querySelector("#tlv-table-body");
+    if (tableBody) tableBody.innerHTML = `<tr class="tlv-empty-row"><td colspan="10">Parse TLV to populate table.</td></tr>`;
+  }
+
+  renderSummary(result) {
+    const bar = this.container?.querySelector("#tlv-summary-bar");
+    if (!bar) return;
+
+    const s = result.summary;
+    if (result.format === "qris") {
+      bar.textContent = `${s.charLength} chars · ${s.nodeCount} fields · depth ${s.maxDepth}`;
+    } else {
+      bar.textContent = `${s.byteLength} bytes · ${s.nodeCount} nodes · depth ${s.maxDepth}`;
     }
   }
 
-  buildTreeMarkup(nodes) {
-    if (!nodes || nodes.length === 0) {
-      return this.getEmptyTreeMarkup("No TLV nodes found", "This payload does not contain parseable TLV nodes.");
+  renderCrc(result) {
+    const bar = this.container?.querySelector("#tlv-crc-bar");
+    if (!bar) return;
+
+    if (result.format !== "qris" || !result.crc) {
+      this.hideCrc();
+      return;
     }
 
-    const renderLevel = (items) => {
-      return `
-        <ul class="tlv-tree-level">
-          ${items
-            .map((node) => {
-              const preview = node.valuePreview ? `Preview: "${this.escapeHtml(node.valuePreview)}"` : "Preview: (binary)";
-              const valueHex = this.formatHexPreview(node.valueHex, 64);
-              return `
-                <li class="tlv-tree-node">
-                  <div class="tlv-tree-node-header">
-                    <span class="tlv-tree-tag">${this.escapeHtml(node.tag)}</span>
-                    <span class="tlv-tree-chip">${this.escapeHtml(node.tagClass)}</span>
-                    <span class="tlv-tree-chip">${node.constructed ? "Constructed" : "Primitive"}</span>
-                    <span class="tlv-tree-len">Len ${node.length}</span>
-                    <span class="tlv-tree-offset">@${node.offset}</span>
-                  </div>
-                  <div class="tlv-tree-node-meta">${preview}</div>
-                  <div class="tlv-tree-node-hex">Value: ${this.escapeHtml(valueHex || "(empty)")}</div>
-                  ${node.children && node.children.length > 0 ? renderLevel(node.children) : ""}
-                </li>
-              `;
-            })
-            .join("")}
-        </ul>
-      `;
-    };
+    bar.style.display = "block";
+    bar.className = "tlv-crc-bar";
+
+    if (!result.crc.present) {
+      bar.classList.add("crc-missing");
+      bar.textContent = "CRC tag (63) not found in payload";
+    } else if (result.crc.valid) {
+      bar.classList.add("crc-valid");
+      bar.textContent = `CRC valid (${result.crc.actual})`;
+    } else {
+      bar.classList.add("crc-invalid");
+      bar.textContent = `CRC mismatch — expected ${result.crc.expected}, got ${result.crc.actual}`;
+    }
+  }
+
+  hideCrc() {
+    const bar = this.container?.querySelector("#tlv-crc-bar");
+    if (bar) { bar.style.display = "none"; bar.textContent = ""; }
+  }
+
+  renderTableHead(format) {
+    const head = this.container?.querySelector("#tlv-table-head");
+    if (!head) return;
+
+    if (format === "qris") {
+      head.innerHTML = `<tr><th>#</th><th>Tag</th><th>Name</th><th>Len</th><th>Value</th></tr>`;
+    } else {
+      head.innerHTML = `<tr><th>#</th><th>Depth</th><th>Offset</th><th>Class</th><th>Tag</th><th>C</th><th>Len</th><th>Preview</th><th>Value (Hex)</th></tr>`;
+    }
+  }
+
+  // ── Tree markup ───────────────────────────────────────────────────────
+
+  buildTreeMarkup(nodes, format) {
+    if (!nodes || nodes.length === 0) {
+      return `<div class="tlv-empty-msg">No TLV nodes found.</div>`;
+    }
+
+    const renderLevel = (items) => `
+      <ul class="tlv-tree-level">
+        ${items.map((node) => format === "qris" ? this.qrisTreeNode(node, renderLevel) : this.berTreeNode(node, renderLevel)).join("")}
+      </ul>
+    `;
 
     return renderLevel(nodes);
   }
 
-  buildTableRows(rows) {
-    if (!rows || rows.length === 0) {
+  qrisTreeNode(node, renderLevel) {
+    const name = node.tagName ? `<span class="tlv-tree-name">${this.esc(node.tagName)}</span>` : "";
+    const annotation = node.annotation ? ` <span class="tlv-tree-annotation">(${this.esc(node.annotation)})</span>` : "";
+
+    if (node.constructed) {
       return `
-        <tr class="tlv-empty-row">
-          <td colspan="10">No rows to show.</td>
-        </tr>
+        <li class="tlv-tree-node">
+          <div class="tlv-tree-node-header">
+            <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${name}
+          </div>
+          ${node.children && node.children.length > 0 ? renderLevel(node.children) : ""}
+        </li>
       `;
     }
 
-    return rows
-      .map((row) => {
-        const preview = row.valuePreview ? this.escapeHtml(row.valuePreview) : "(binary)";
-        const valueHexShort = this.formatHexPreview(row.valueHex, 80);
-        const rawHexShort = this.formatHexPreview(row.rawHex, 80);
-        const depthPad = row.depth * 12;
-
-        return `
-          <tr>
-            <td>${row.rowIndex}</td>
-            <td>${row.depth}</td>
-            <td>${row.offset}</td>
-            <td>${this.escapeHtml(row.tagClass)}</td>
-            <td class="tlv-mono">
-              <span class="tlv-depth-mark" style="margin-left:${depthPad}px"></span>${this.escapeHtml(row.tag)}
-            </td>
-            <td>${row.constructed ? "Y" : "N"}</td>
-            <td>${row.length}</td>
-            <td>${preview}</td>
-            <td class="tlv-mono">${this.escapeHtml(valueHexShort)}</td>
-            <td class="tlv-mono">${this.escapeHtml(rawHexShort)}</td>
-          </tr>
-        `;
-      })
-      .join("");
+    // Primitive: show value inline on the same line
+    const display = node.value.length > 80 ? node.value.slice(0, 80) + "..." : node.value;
+    return `
+      <li class="tlv-tree-node">
+        <div class="tlv-tree-node-header">
+          <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${name}
+          <span class="tlv-tree-inline-value">${this.esc(display)}</span>${annotation}
+        </div>
+      </li>
+    `;
   }
+
+  berTreeNode(node, renderLevel) {
+    const chip = `<span class="tlv-tree-chip">${this.esc(node.tagClass)}</span>`;
+    const meta = `<span class="tlv-tree-meta">${node.length}B @${node.offset}</span>`;
+
+    if (node.constructed) {
+      return `
+        <li class="tlv-tree-node">
+          <div class="tlv-tree-node-header">
+            <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${chip} ${meta}
+          </div>
+          ${node.children && node.children.length > 0 ? renderLevel(node.children) : ""}
+        </li>
+      `;
+    }
+
+    const hex = this.trimHex(node.valueHex, 60);
+    const preview = node.valuePreview ? ` <span class="tlv-tree-name">"${this.esc(node.valuePreview)}"</span>` : "";
+    return `
+      <li class="tlv-tree-node">
+        <div class="tlv-tree-node-header">
+          <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${chip}
+          <span class="tlv-tree-inline-value">${this.esc(hex || "(empty)")}</span>${preview} ${meta}
+        </div>
+      </li>
+    `;
+  }
+
+  // ── Table rows ────────────────────────────────────────────────────────
+
+  buildTableRows(rows, format) {
+    if (!rows || rows.length === 0) {
+      return `<tr class="tlv-empty-row"><td colspan="10">No rows.</td></tr>`;
+    }
+    return rows.map((r) => format === "qris" ? this.qrisTableRow(r) : this.berTableRow(r)).join("");
+  }
+
+  qrisTableRow(row) {
+    const indent = `<span class="tlv-depth-indent"></span>`.repeat(row.depth);
+    const value = row.value.length > 100 ? row.value.slice(0, 100) + "..." : row.value;
+    const annotation = row.annotation ? ` <span class="tlv-tree-annotation">(${this.esc(row.annotation)})</span>` : "";
+    return `
+      <tr>
+        <td>${row.rowIndex}</td>
+        <td class="tlv-mono">${indent}${this.esc(row.tag)}</td>
+        <td>${this.esc(row.tagName || "")}</td>
+        <td>${row.length}</td>
+        <td>${row.constructed ? "(template)" : this.esc(value)}${annotation}</td>
+      </tr>
+    `;
+  }
+
+  berTableRow(row) {
+    const indent = `<span class="tlv-depth-indent"></span>`.repeat(row.depth);
+    const hex = this.trimHex(row.valueHex, 60);
+    return `
+      <tr>
+        <td>${row.rowIndex}</td>
+        <td>${row.depth}</td>
+        <td>${row.offset}</td>
+        <td>${this.esc(row.tagClass)}</td>
+        <td class="tlv-mono">${indent}${this.esc(row.tag)}</td>
+        <td>${row.constructed ? "Y" : "N"}</td>
+        <td>${row.length}</td>
+        <td>${this.esc(row.valuePreview || "")}</td>
+        <td class="tlv-mono">${this.esc(hex)}</td>
+      </tr>
+    `;
+  }
+
+  // ── View switching ────────────────────────────────────────────────────
 
   applyView(view) {
     if (!["tree", "table"].includes(view)) return;
-
     this.currentView = view;
     this.persistValue(this.storageKeys.view, view);
 
-    const container = this.container;
-    if (!container) return;
+    const c = this.container;
+    if (!c) return;
 
-    const treePane = container.querySelector("#tlv-tree-view");
-    const tablePane = container.querySelector("#tlv-table-view");
+    c.querySelector("#tlv-tree-view").style.display = view === "tree" ? "flex" : "none";
+    c.querySelector("#tlv-table-view").style.display = view === "table" ? "flex" : "none";
 
-    if (treePane) treePane.style.display = view === "tree" ? "flex" : "none";
-    if (tablePane) tablePane.style.display = view === "table" ? "flex" : "none";
-
-    container.querySelectorAll(".tlv-view-tabs .tab-button").forEach((button) => {
-      button.classList.toggle("active", button.getAttribute("data-view") === view);
+    c.querySelectorAll(".tlv-view-tabs .tab-button").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-view") === view);
     });
   }
 
-  showInlineError(message) {
-    const errorEl = this.container?.querySelector("#tlv-error");
-    if (!errorEl) return;
-    errorEl.textContent = message;
-    errorEl.style.display = "block";
-  }
-
-  clearInlineError() {
-    const errorEl = this.container?.querySelector("#tlv-error");
-    if (!errorEl) return;
-    errorEl.textContent = "";
-    errorEl.style.display = "none";
-  }
-
-  updateCopyButton() {
-    const copyBtn = this.container?.querySelector("#tlv-copy-output-btn");
-    if (!copyBtn) return;
-    copyBtn.disabled = !this.lastResult;
-  }
+  // ── Actions ───────────────────────────────────────────────────────────
 
   async handlePaste() {
     try {
@@ -345,26 +397,31 @@ class TLVViewer extends BaseTool {
     }
   }
 
-  applySample() {
-    const samplePayload = "6F0E8407A0000000031010A503500141";
+  applySample(type) {
     const inputEl = this.container?.querySelector("#tlv-input");
-    const modeEl = this.container?.querySelector("#tlv-input-mode");
-    if (!inputEl || !modeEl) return;
+    const formatEl = this.container?.querySelector("#tlv-format");
+    if (!inputEl || !formatEl) return;
 
-    inputEl.value = samplePayload;
-    modeEl.value = "hex";
-    this.persistValue(this.storageKeys.mode, "hex");
+    if (type === "qris") {
+      inputEl.value = TLVViewerService.buildQrisSample();
+      formatEl.value = "qris";
+    } else {
+      inputEl.value = "6F0E8407A0000000031010A503500141";
+      formatEl.value = "ber-hex";
+    }
+
+    this.persistValue(this.storageKeys.format, formatEl.value);
     this.persistInputDebounced();
     this.parseCurrentInput();
   }
 
-  clearInputAndOutput() {
+  clearAll() {
     const inputEl = this.container?.querySelector("#tlv-input");
     if (inputEl) inputEl.value = "";
     this.persistValue(this.storageKeys.input, "");
     this.lastResult = null;
-    this.clearInlineError();
-    this.renderEmptyOutput();
+    this.clearError();
+    this.renderEmpty();
     this.updateCopyButton();
   }
 
@@ -373,56 +430,54 @@ class TLVViewer extends BaseTool {
 
     const text =
       this.currentView === "table"
-        ? this.buildTableCopyText(this.lastResult.rows)
+        ? this.buildTableCopyText(this.lastResult.rows, this.lastResult.format)
         : JSON.stringify(this.lastResult.jsonTree, null, 2);
 
     await this.copyToClipboard(text);
   }
 
-  buildTableCopyText(rows) {
-    const header = ["row", "depth", "offset", "class", "tag", "constructed", "length", "preview", "value_hex", "raw_hex"].join("\t");
-    const lines = rows.map((row) =>
-      [
-        row.rowIndex,
-        row.depth,
-        row.offset,
-        row.tagClass,
-        row.tag,
-        row.constructed ? "Y" : "N",
-        row.length,
-        row.valuePreview || "",
-        row.valueHex,
-        row.rawHex,
-      ].join("\t")
+  buildTableCopyText(rows, format) {
+    if (format === "qris") {
+      const header = ["#", "tag", "name", "length", "value"].join("\t");
+      const lines = rows.map((r) => [r.rowIndex, r.tag, r.tagName || "", r.length, r.constructed ? "(template)" : r.value].join("\t"));
+      return [header, ...lines].join("\n");
+    }
+
+    const header = ["#", "depth", "offset", "class", "tag", "constructed", "length", "preview", "value_hex"].join("\t");
+    const lines = rows.map((r) =>
+      [r.rowIndex, r.depth, r.offset, r.tagClass, r.tag, r.constructed ? "Y" : "N", r.length, r.valuePreview || "", r.valueHex].join("\t")
     );
     return [header, ...lines].join("\n");
   }
 
-  getEmptyTreeMarkup(title, subtitle) {
-    return `
-      <div class="tlv-empty-title">${this.escapeHtml(title)}</div>
-      <div class="tlv-empty-subtitle">${this.escapeHtml(subtitle)}</div>
-      <ol class="tlv-empty-steps">
-        <li>Choose mode (Hex, Base64, or UTF-8/Text).</li>
-        <li>Paste payload data into the input panel.</li>
-        <li>Press Parse TLV, then switch between tree and table.</li>
-      </ol>
-    `;
+  // ── UI helpers ────────────────────────────────────────────────────────
+
+  showError(message) {
+    const el = this.container?.querySelector("#tlv-error");
+    if (!el) return;
+    el.textContent = message;
+    el.style.display = "block";
   }
 
-  formatHexPreview(value, maxChars = 80) {
-    const text = String(value || "");
-    if (!text) return "";
-    return text.length > maxChars ? `${text.slice(0, maxChars)} ...` : text;
+  clearError() {
+    const el = this.container?.querySelector("#tlv-error");
+    if (!el) return;
+    el.textContent = "";
+    el.style.display = "none";
   }
 
-  escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+  updateCopyButton() {
+    const btn = this.container?.querySelector("#tlv-copy-output-btn");
+    if (btn) btn.disabled = !this.lastResult;
+  }
+
+  esc(value) {
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  trimHex(value, max = 80) {
+    const s = String(value || "");
+    return s.length > max ? s.slice(0, max) + " ..." : s;
   }
 }
 
