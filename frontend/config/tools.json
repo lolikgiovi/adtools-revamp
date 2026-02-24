@@ -49,6 +49,16 @@
       "order": 30
     },
     {
+      "id": "tlv-viewer",
+      "name": "TLV Viewer",
+      "category": "general",
+      "icon": "tlv",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 35
+    },
+    {
       "id": "qr-tools",
       "name": "QR Tools",
       "category": "general",
