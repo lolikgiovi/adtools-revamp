@@ -9,9 +9,6 @@
  * - Graceful shutdown
  */
 
-// Worker script URL - will be resolved by Vite
-const WORKER_SCRIPT_URL = new URL('./diff-worker.js', import.meta.url);
-
 // Default timeout: 2 minutes
 const DEFAULT_TIMEOUT_MS = 120000;
 
@@ -65,7 +62,8 @@ export class DiffWorkerManager {
 
     this.initPromise = new Promise((resolve, reject) => {
       try {
-        this.worker = new Worker(WORKER_SCRIPT_URL, { type: 'module' });
+        // URL must be inline for Vite to detect and bundle the worker
+        this.worker = new Worker(new URL('./diff-worker.js', import.meta.url), { type: 'module' });
 
         // Handle messages from worker
         this.worker.onmessage = (event) => this.handleMessage(event);
