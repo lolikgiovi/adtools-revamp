@@ -38,6 +38,7 @@ export const TLVViewerTemplate = /* html */ `
         <div class="tabs-container tlv-view-tabs">
           <button class="tab-button active" data-view="tree">Tree</button>
           <button class="tab-button" data-view="table">Table</button>
+          <button class="tab-button" data-view="json">JSON</button>
         </div>
         <div id="tlv-summary-bar" class="tlv-summary-bar"></div>
       </div>
@@ -51,11 +52,6 @@ export const TLVViewerTemplate = /* html */ `
       <div id="tlv-tree-list" class="tlv-tree-list tlv-empty-state">
         <div class="tlv-empty-msg">Paste a QRIS string or TLV payload and press Parse.</div>
       </div>
-
-      <details id="tlv-json-panel" class="tlv-json-panel">
-        <summary>JSON</summary>
-        <pre id="tlv-json-output" class="tlv-json-output"></pre>
-      </details>
     </div>
 
     <div id="tlv-table-view" class="tlv-view-pane" style="display: none;">
@@ -77,6 +73,10 @@ export const TLVViewerTemplate = /* html */ `
           </tbody>
         </table>
       </div>
+    </div>
+
+    <div id="tlv-json-view" class="tlv-view-pane" style="display: none;">
+      <pre id="tlv-json-output" class="tlv-json-output tlv-json-full"></pre>
     </div>
   </section>
 </div>

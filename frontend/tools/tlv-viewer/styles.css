@@ -131,7 +131,7 @@
 }
 
 .tlv-view-tabs .tab-button {
-  border-radius: calc(var(--radius) - 4px);
+  border-radius: 0;
   padding: 0.3rem 0.6rem;
   font-size: 0.75rem;
 }
@@ -222,7 +222,7 @@
 
 /* Top-level nodes get separators */
 .tlv-tree-list > .tlv-tree-level > .tlv-tree-node {
-  padding: 0.4rem 0;
+  padding: 0.45rem 0;
   border-bottom: 1px solid hsl(var(--border) / 0.4);
 }
 
@@ -230,16 +230,26 @@
   border-bottom: none;
 }
 
-/* Nested levels */
+/* Nested levels — strong visual indent */
 .tlv-tree-level .tlv-tree-level {
-  padding-left: 1rem;
-  margin-top: 0.2rem;
-  margin-left: 0.3rem;
-  border-left: 2px solid hsl(var(--primary) / 0.18);
+  padding-left: 1.25rem;
+  margin-top: 0.25rem;
+  margin-left: 0.2rem;
+  border-left: 2px solid hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.03);
+  border-radius: 0 4px 4px 0;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+/* Deeper nesting gets progressively tinted */
+.tlv-tree-level .tlv-tree-level .tlv-tree-level {
+  background: hsl(var(--primary) / 0.06);
+  border-left-color: hsl(var(--primary) / 0.45);
 }
 
 .tlv-tree-node {
-  padding: 0.12rem 0;
+  padding: 0.15rem 0;
 }
 
 .tlv-tree-node-header {
@@ -260,6 +270,12 @@
   background: hsl(var(--primary) / 0.1);
   color: hsl(var(--foreground));
   flex-shrink: 0;
+}
+
+/* Constructed (parent) tag gets a bolder badge */
+.tlv-tree-node-constructed > .tlv-tree-node-header > .tlv-tree-tag {
+  background: hsl(var(--primary) / 0.2);
+  border-color: hsl(var(--primary) / 0.5);
 }
 
 .tlv-tree-name {
@@ -303,35 +319,24 @@
   padding: 0.04rem 0.28rem;
 }
 
-/* ── JSON panel ────────────────────────────────────────────────────────── */
-
-.tlv-json-panel {
-  border: 1px solid var(--tlv-border);
-  border-radius: calc(var(--radius) - 3px);
-  background: hsl(var(--background) / 0.5);
-  overflow: hidden;
-}
-
-.tlv-json-panel summary {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.72rem;
-  color: var(--tlv-muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-.tlv-json-panel[open] summary {
-  border-bottom: 1px solid var(--tlv-border);
-}
+/* ── JSON view ─────────────────────────────────────────────────────────── */
 
 .tlv-json-output {
   margin: 0;
   padding: 0.6rem;
-  max-height: 250px;
   overflow: auto;
   font-size: 0.72rem;
   line-height: 1.4;
   font-family: var(--tlv-mono);
+  color: hsl(var(--foreground) / 0.9);
+}
+
+.tlv-json-full {
+  border: 1px solid var(--tlv-border);
+  border-radius: calc(var(--radius) - 3px);
+  background: hsl(var(--background) / 0.6);
+  min-height: 200px;
+  flex: 1;
 }
 
 /* ── Table view ────────────────────────────────────────────────────────── */
@@ -394,7 +399,10 @@
 
 .tlv-table .tlv-depth-indent {
   display: inline-block;
-  width: 0.8rem;
+  width: 1rem;
+  height: 0.65rem;
+  margin-right: 2px;
+  border-left: 2px solid hsl(var(--primary) / 0.35);
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */

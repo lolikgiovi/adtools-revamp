@@ -100,7 +100,7 @@ class TLVViewer extends BaseTool {
       if (savedInput && c.querySelector("#tlv-input")) {
         c.querySelector("#tlv-input").value = savedInput;
       }
-      if (savedView && ["tree", "table"].includes(savedView)) {
+      if (savedView && ["tree", "table", "json"].includes(savedView)) {
         this.currentView = savedView;
       }
     } catch (_) {}
@@ -192,9 +192,7 @@ class TLVViewer extends BaseTool {
     }
 
     const jsonOutput = c.querySelector("#tlv-json-output");
-    const jsonPanel = c.querySelector("#tlv-json-panel");
     if (jsonOutput) jsonOutput.textContent = "";
-    if (jsonPanel) jsonPanel.open = false;
 
     const tableBody = c.querySelector("#tlv-table-body");
     if (tableBody) tableBody.innerHTML = `<tr class="tlv-empty-row"><td colspan="10">Parse TLV to populate table.</td></tr>`;
@@ -274,7 +272,7 @@ class TLVViewer extends BaseTool {
 
     if (node.constructed) {
       return `
-        <li class="tlv-tree-node">
+        <li class="tlv-tree-node tlv-tree-node-constructed">
           <div class="tlv-tree-node-header">
             <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${name}
           </div>
@@ -301,7 +299,7 @@ class TLVViewer extends BaseTool {
 
     if (node.constructed) {
       return `
-        <li class="tlv-tree-node">
+        <li class="tlv-tree-node tlv-tree-node-constructed">
           <div class="tlv-tree-node-header">
             <span class="tlv-tree-tag">${this.esc(node.tag)}</span> ${chip} ${meta}
           </div>
@@ -367,7 +365,7 @@ class TLVViewer extends BaseTool {
   // ── View switching ────────────────────────────────────────────────────
 
   applyView(view) {
-    if (!["tree", "table"].includes(view)) return;
+    if (!["tree", "table", "json"].includes(view)) return;
     this.currentView = view;
     this.persistValue(this.storageKeys.view, view);
 
@@ -376,6 +374,7 @@ class TLVViewer extends BaseTool {
 
     c.querySelector("#tlv-tree-view").style.display = view === "tree" ? "flex" : "none";
     c.querySelector("#tlv-table-view").style.display = view === "table" ? "flex" : "none";
+    c.querySelector("#tlv-json-view").style.display = view === "json" ? "flex" : "none";
 
     c.querySelectorAll(".tlv-view-tabs .tab-button").forEach((btn) => {
       btn.classList.toggle("active", btn.getAttribute("data-view") === view);
@@ -428,10 +427,12 @@ class TLVViewer extends BaseTool {
   async copyCurrentOutput() {
     if (!this.lastResult) return;
 
-    const text =
-      this.currentView === "table"
-        ? this.buildTableCopyText(this.lastResult.rows, this.lastResult.format)
-        : JSON.stringify(this.lastResult.jsonTree, null, 2);
+    let text;
+    if (this.currentView === "table") {
+      text = this.buildTableCopyText(this.lastResult.rows, this.lastResult.format);
+    } else {
+      text = JSON.stringify(this.lastResult.jsonTree, null, 2);
+    }
 
     await this.copyToClipboard(text);
   }
