@@ -95,6 +95,235 @@ const QRIS_LANGUAGE_SUBTAGS = {
 
 const CURRENCY_CODES = { "360": "IDR", "840": "USD", "702": "SGD", "458": "MYR", "764": "THB", "608": "PHP", "704": "VND" };
 
+// Merchant Category Codes (ISO 18245)
+const MCC_CODES = {
+  "0000": "Not Applicable",
+  "1520": "General Contractors",
+  "4111": "Local/Suburban Transportation",
+  "4121": "Taxicabs/Limousines",
+  "4131": "Bus Lines",
+  "4214": "Motor Freight/Trucking",
+  "4411": "Cruise Lines",
+  "4511": "Airlines",
+  "4722": "Travel Agencies",
+  "4784": "Tolls/Bridge Fees",
+  "4812": "Telecommunication Equipment",
+  "4814": "Telecommunication Services",
+  "4816": "Computer Network/IT Services",
+  "4829": "Wire Transfer/Money Orders",
+  "4899": "Cable/Pay TV",
+  "4900": "Utilities",
+  "5111": "Stationery/Office Supplies",
+  "5137": "Uniforms/Commercial Clothing",
+  "5139": "Commercial Footwear",
+  "5169": "Chemicals/Allied Products",
+  "5172": "Petroleum Products",
+  "5192": "Books/Periodicals/Newspapers",
+  "5193": "Florists",
+  "5200": "Home Supply Warehouses",
+  "5211": "Building Materials/Lumber",
+  "5261": "Nurseries/Lawn & Garden",
+  "5300": "General Wholesale",
+  "5311": "Department Stores",
+  "5331": "Variety Stores",
+  "5399": "General Merchandise",
+  "5411": "Grocery Stores/Supermarkets",
+  "5422": "Freezer/Locker Meat Provisioners",
+  "5441": "Candy/Nut/Confectionery",
+  "5451": "Dairy Products",
+  "5462": "Bakeries",
+  "5499": "Misc Food Stores",
+  "5511": "Auto Dealers (New & Used)",
+  "5521": "Auto Dealers (Used Only)",
+  "5531": "Auto/Home Supply Stores",
+  "5532": "Automotive Tire Stores",
+  "5533": "Automotive Parts/Accessories",
+  "5541": "Gas Stations",
+  "5542": "Fuel Dispenser/Automated",
+  "5611": "Men's/Boys' Clothing",
+  "5621": "Women's Ready-to-Wear",
+  "5631": "Women's Accessories",
+  "5641": "Children's/Infants' Wear",
+  "5651": "Family Clothing",
+  "5661": "Shoe Stores",
+  "5691": "Men's/Women's Clothing",
+  "5699": "Misc Apparel/Accessories",
+  "5712": "Furniture/Home Furnishings",
+  "5713": "Floor Covering",
+  "5714": "Drapery/Window Coverings",
+  "5718": "Fireplace/Accessories",
+  "5719": "Misc Home Furnishings",
+  "5722": "Household Appliances",
+  "5732": "Electronics Stores",
+  "5733": "Music Stores/Instruments",
+  "5734": "Computer Software Stores",
+  "5735": "Record Stores",
+  "5811": "Caterers",
+  "5812": "Eating Places/Restaurants",
+  "5813": "Bars/Taverns/Nightclubs",
+  "5814": "Fast Food Restaurants",
+  "5815": "Digital Goods: Media",
+  "5816": "Digital Goods: Games",
+  "5817": "Digital Goods: Applications",
+  "5818": "Digital Goods: Large Volume",
+  "5912": "Drug Stores/Pharmacies",
+  "5921": "Package Stores/Beer/Wine/Liquor",
+  "5931": "Used Merchandise/Secondhand",
+  "5941": "Sporting Goods",
+  "5942": "Book Stores",
+  "5943": "Stationery Stores",
+  "5944": "Jewelry/Watches/Clocks",
+  "5945": "Hobby/Toy/Game Shops",
+  "5946": "Camera/Photographic Supply",
+  "5947": "Gift/Card/Novelty/Souvenir",
+  "5948": "Luggage/Leather Goods",
+  "5949": "Sewing/Needlework/Fabric",
+  "5950": "Glassware/Crystal",
+  "5960": "Direct Marketing: Insurance",
+  "5963": "Door-to-Door Sales",
+  "5964": "Direct Marketing: Catalog",
+  "5965": "Direct Marketing: Combination",
+  "5966": "Direct Marketing: Outbound Telemarketing",
+  "5967": "Direct Marketing: Inbound Teleservices",
+  "5968": "Direct Marketing: Subscriptions",
+  "5969": "Direct Marketing: Other",
+  "5970": "Artist Supply/Craft Shops",
+  "5971": "Art Dealers/Galleries",
+  "5972": "Stamp/Coin Stores",
+  "5973": "Religious Goods",
+  "5975": "Hearing Aids",
+  "5976": "Orthopedic Goods/Prosthetics",
+  "5977": "Cosmetic Stores",
+  "5978": "Typewriter Stores",
+  "5983": "Fuel Dealers",
+  "5992": "Florists",
+  "5993": "Cigar/Tobacco Stores",
+  "5994": "News Dealers/Newsstands",
+  "5995": "Pet Shops/Food/Supplies",
+  "5996": "Swimming Pools",
+  "5997": "Electric Razor Stores",
+  "5998": "Tent/Awning Shops",
+  "5999": "Misc Specialty Retail",
+  "6010": "Financial Institutions: Cash",
+  "6011": "Automated Cash Disbursements",
+  "6012": "Financial Institutions: Merchandise",
+  "6051": "Non-Financial Institutions: Foreign Currency/Money Orders",
+  "6211": "Security Brokers/Dealers",
+  "6300": "Insurance Sales/Underwriting",
+  "6513": "Real Estate Agents/Rentals",
+  "7011": "Hotels/Motels/Resorts",
+  "7032": "Sporting/Recreation Camps",
+  "7033": "Trailer Parks/Campgrounds",
+  "7210": "Laundry/Cleaning/Garment",
+  "7211": "Laundry Services: Family/Commercial",
+  "7216": "Dry Cleaners",
+  "7217": "Carpet/Upholstery Cleaning",
+  "7221": "Photographic Studios",
+  "7230": "Beauty/Barber Shops",
+  "7251": "Shoe Repair/Hat Cleaning",
+  "7261": "Funeral Services/Crematories",
+  "7273": "Dating/Escort Services",
+  "7276": "Tax Preparation Services",
+  "7277": "Counseling Services",
+  "7278": "Buying/Shopping Services",
+  "7296": "Clothing Rental",
+  "7297": "Massage Parlors",
+  "7298": "Health/Beauty Spas",
+  "7299": "Misc Personal Services",
+  "7311": "Advertising Services",
+  "7321": "Consumer Credit Reporting",
+  "7333": "Commercial Photography/Art/Graphics",
+  "7338": "Quick Copy/Reproduction",
+  "7339": "Stenographic/Secretarial Services",
+  "7342": "Exterminating/Disinfecting",
+  "7349": "Cleaning/Maintenance/Janitorial",
+  "7361": "Employment/Temp Agencies",
+  "7372": "Computer Programming/Data Processing",
+  "7375": "Information Retrieval Services",
+  "7379": "Computer Repair",
+  "7392": "Management/Consulting/PR",
+  "7393": "Detective/Protective/Security",
+  "7394": "Equipment Rental/Leasing",
+  "7395": "Photo Developing",
+  "7399": "Misc Business Services",
+  "7512": "Car Rental Agencies",
+  "7513": "Truck/Utility Trailer Rentals",
+  "7519": "Motor Home/RV Rentals",
+  "7523": "Parking Lots/Garages",
+  "7531": "Auto Body Repair",
+  "7534": "Tire Retreading/Repair",
+  "7535": "Auto Paint Shops",
+  "7538": "Auto Service Shops",
+  "7542": "Car Washes",
+  "7549": "Towing Services",
+  "7622": "Electronics Repair",
+  "7623": "A/C, Refrigeration Repair",
+  "7629": "Appliance Repair",
+  "7631": "Watch/Clock/Jewelry Repair",
+  "7641": "Furniture Repair/Refinishing",
+  "7692": "Welding Repair",
+  "7699": "Misc Repair Shops",
+  "7800": "Government-Owned Lotteries",
+  "7801": "Government-Licensed Online Casinos",
+  "7802": "Government-Licensed Horse/Dog Racing",
+  "7829": "Motion Picture/Video Distribution",
+  "7832": "Motion Picture Theaters",
+  "7841": "Video Tape Rental",
+  "7911": "Dance Studios/Schools",
+  "7922": "Theatrical Producers",
+  "7929": "Bands/Orchestras/Entertainers",
+  "7932": "Billiard/Pool",
+  "7933": "Bowling Alleys",
+  "7941": "Commercial Sports/Athletic Fields",
+  "7991": "Tourist Attractions/Exhibits",
+  "7992": "Golf Courses (Public)",
+  "7993": "Video Amusement Game Supplies",
+  "7994": "Video Game Arcades",
+  "7995": "Betting/Casino Gambling",
+  "7996": "Amusement Parks/Carnivals",
+  "7997": "Country Clubs/Membership",
+  "7998": "Aquariums/Seaquariums",
+  "7999": "Misc Recreation Services",
+  "8011": "Doctors",
+  "8021": "Dentists/Orthodontists",
+  "8031": "Osteopaths",
+  "8041": "Chiropractors",
+  "8042": "Optometrists/Ophthalmologists",
+  "8043": "Opticians/Optical Goods",
+  "8049": "Podiatrists/Chiropodists",
+  "8050": "Nursing/Personal Care Facilities",
+  "8062": "Hospitals",
+  "8071": "Medical/Dental Labs",
+  "8099": "Medical Services/Health Practitioners",
+  "8111": "Legal Services/Attorneys",
+  "8211": "Schools/Educational Services",
+  "8220": "Colleges/Universities",
+  "8241": "Correspondence Schools",
+  "8244": "Business/Secretarial Schools",
+  "8249": "Trade/Vocational Schools",
+  "8299": "Schools/Educational Services (Other)",
+  "8351": "Child Care Services",
+  "8398": "Charitable/Social Service Orgs",
+  "8641": "Civic/Social/Fraternal Associations",
+  "8651": "Political Organizations",
+  "8661": "Religious Organizations",
+  "8675": "Automobile Associations",
+  "8699": "Membership Organizations (Other)",
+  "8734": "Testing Laboratories",
+  "8911": "Architectural/Engineering/Surveying",
+  "8931": "Accounting/Auditing/Bookkeeping",
+  "8999": "Professional Services (Other)",
+  "9211": "Court Costs/Fines",
+  "9222": "Fines",
+  "9223": "Bail/Bond Payments",
+  "9311": "Tax Payments",
+  "9399": "Government Services (Other)",
+  "9402": "Postal Services: Government Only",
+  "9405": "Intra-Government Purchases",
+};
+
+const QRIS_MANDATORY_TAGS = ["00", "52", "53", "58", "59", "60", "63"];
+
 function getQrisTagName(tag, parentTag) {
   if (!parentTag) return QRIS_ROOT_TAGS[tag] || null;
 
@@ -111,6 +340,7 @@ function getQrisValueAnnotation(tag, value) {
     if (value === "11") return "Static";
     if (value === "12") return "Dynamic";
   }
+  if (tag === "52" && MCC_CODES[value]) return MCC_CODES[value];
   if (tag === "53" && CURRENCY_CODES[value]) return CURRENCY_CODES[value];
   if (tag === "55") {
     if (value === "01") return "Tip prompted";
@@ -241,6 +471,55 @@ function toQrisJsonTree(nodes) {
   });
 }
 
+function validateQrisPayload(nodes) {
+  const issues = [];
+  const tagMap = {};
+  for (const node of nodes) {
+    tagMap[node.tag] = node.value;
+  }
+
+  for (const tag of QRIS_MANDATORY_TAGS) {
+    if (!(tag in tagMap)) {
+      const name = QRIS_ROOT_TAGS[tag] || tag;
+      issues.push({ level: "error", message: `Missing mandatory tag ${tag} (${name}).` });
+    }
+  }
+
+  if ("00" in tagMap && tagMap["00"] !== "01") {
+    issues.push({ level: "error", message: `Tag 00 (Payload Format Indicator) must be "01", got "${tagMap["00"]}".` });
+  }
+
+  if ("01" in tagMap && tagMap["01"] !== "11" && tagMap["01"] !== "12") {
+    issues.push({ level: "error", message: `Tag 01 (Point of Initiation Method) must be "11" or "12", got "${tagMap["01"]}".` });
+  }
+
+  if (!("01" in tagMap)) {
+    issues.push({ level: "warn", message: "Tag 01 (Point of Initiation Method) is missing. It is recommended by EMVCo." });
+  }
+
+  const hasMerchantAccount = nodes.some((n) => {
+    const num = parseInt(n.tag, 10);
+    return num >= 26 && num <= 51;
+  });
+  if (!hasMerchantAccount) {
+    issues.push({ level: "warn", message: "No Merchant Account Information tags (26-51) found." });
+  }
+
+  if ("52" in tagMap && !MCC_CODES[tagMap["52"]]) {
+    issues.push({ level: "warn", message: `Tag 52 (Merchant Category Code) value "${tagMap["52"]}" is not a recognized MCC.` });
+  }
+
+  if ("53" in tagMap && !CURRENCY_CODES[tagMap["53"]]) {
+    issues.push({ level: "warn", message: `Tag 53 (Transaction Currency) value "${tagMap["53"]}" is not a recognized currency code.` });
+  }
+
+  if ("58" in tagMap && tagMap["58"].length !== 2) {
+    issues.push({ level: "warn", message: `Tag 58 (Country Code) should be 2 characters, got "${tagMap["58"]}" (${tagMap["58"].length} chars).` });
+  }
+
+  return issues;
+}
+
 function parseQris(input) {
   const text = String(input || "").trim();
   if (!text) throw new Error("Input is empty.");
@@ -250,6 +529,7 @@ function parseQris(input) {
   const state = { nextRowIndex: 1, rows: [] };
   const nodes = parseEmvQrNodes(text, 0, text.length, 0, state, null);
   const maxDepth = state.rows.reduce((d, r) => Math.max(d, r.depth), 0);
+  const validation = validateQrisPayload(nodes);
 
   return {
     format: "qris",
@@ -257,6 +537,7 @@ function parseQris(input) {
     rows: state.rows,
     jsonTree: toQrisJsonTree(nodes),
     crc,
+    validation,
     summary: {
       charLength: text.length,
       nodeCount: state.rows.length,
@@ -523,6 +804,7 @@ export const TLVViewerService = {
   parseBerTlv,
   detectFormat,
   validateQrisCrc,
+  validateQrisPayload,
   crcCCITT,
   buildQrisSample,
 };

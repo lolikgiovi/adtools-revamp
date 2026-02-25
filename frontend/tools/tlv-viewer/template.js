@@ -48,7 +48,10 @@ export const TLVViewerTemplate = /* html */ `
       <button class="btn btn-secondary btn-sm" id="tlv-copy-output-btn" disabled>Copy</button>
     </div>
 
-    <div id="tlv-crc-bar" class="tlv-crc-bar" style="display: none;"></div>
+    <div id="tlv-status-bar" class="tlv-status-bar" style="display: none;">
+      <span id="tlv-crc-bar" class="tlv-crc-status"></span>
+      <span id="tlv-validation-bar" class="tlv-validation-status"></span>
+    </div>
     <div id="tlv-error" class="tlv-error" style="display: none;"></div>
 
     <div id="tlv-tree-view" class="tlv-view-pane">

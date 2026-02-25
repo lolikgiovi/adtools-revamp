@@ -164,6 +164,7 @@ class TLVViewer extends BaseTool {
 
     this.renderSummary(result);
     this.renderCrc(result);
+    this.renderValidation(result);
     this.renderTableHead(result.format);
 
     const treeList = c.querySelector("#tlv-tree-list");
@@ -183,7 +184,7 @@ class TLVViewer extends BaseTool {
     if (!c) return;
 
     c.querySelector("#tlv-summary-bar").textContent = "";
-    this.hideCrc();
+    this.hideStatusBar();
 
     const treeList = c.querySelector("#tlv-tree-list");
     if (treeList) {
@@ -211,32 +212,61 @@ class TLVViewer extends BaseTool {
   }
 
   renderCrc(result) {
-    const bar = this.container?.querySelector("#tlv-crc-bar");
-    if (!bar) return;
+    const crc = this.container?.querySelector("#tlv-crc-bar");
+    if (!crc) return;
 
     if (result.format !== "qris" || !result.crc) {
-      this.hideCrc();
+      crc.className = "tlv-crc-status";
+      crc.textContent = "";
       return;
     }
 
-    bar.style.display = "block";
-    bar.className = "tlv-crc-bar";
+    crc.className = "tlv-crc-status";
 
     if (!result.crc.present) {
-      bar.classList.add("crc-missing");
-      bar.textContent = "CRC tag (63) not found in payload";
+      crc.classList.add("crc-missing");
+      crc.textContent = "CRC tag (63) not found";
     } else if (result.crc.valid) {
-      bar.classList.add("crc-valid");
-      bar.textContent = `CRC valid (${result.crc.actual})`;
+      crc.classList.add("crc-valid");
+      crc.textContent = `✓ CRC valid (${result.crc.actual})`;
     } else {
-      bar.classList.add("crc-invalid");
-      bar.textContent = `CRC mismatch — expected ${result.crc.expected}, got ${result.crc.actual}`;
+      crc.classList.add("crc-invalid");
+      crc.textContent = `✗ CRC mismatch — expected ${result.crc.expected}, got ${result.crc.actual}`;
     }
   }
 
-  hideCrc() {
-    const bar = this.container?.querySelector("#tlv-crc-bar");
-    if (bar) { bar.style.display = "none"; bar.textContent = ""; }
+  renderValidation(result) {
+    const bar = this.container?.querySelector("#tlv-validation-bar");
+    const statusBar = this.container?.querySelector("#tlv-status-bar");
+    if (!bar || !statusBar) return;
+
+    if (result.format !== "qris" || !result.validation) {
+      bar.innerHTML = "";
+      statusBar.style.display = "none";
+      return;
+    }
+
+    statusBar.style.display = "flex";
+
+    if (result.validation.length === 0) {
+      bar.innerHTML = `<span class="tlv-validation-ok">· ✓ All mandatory tags present</span>`;
+      return;
+    }
+
+    bar.innerHTML = result.validation.map((v) => {
+      const cls = v.level === "error" ? "validation-error" : "validation-warn";
+      const icon = v.level === "error" ? "✗" : "⚠";
+      return `<span class="tlv-validation-item ${cls}"><span class="tlv-validation-icon">${icon}</span> ${this.esc(v.message)}</span>`;
+    }).join("");
+  }
+
+  hideStatusBar() {
+    const statusBar = this.container?.querySelector("#tlv-status-bar");
+    if (statusBar) { statusBar.style.display = "none"; }
+    const crc = this.container?.querySelector("#tlv-crc-bar");
+    if (crc) { crc.className = "tlv-crc-status"; crc.textContent = ""; }
+    const val = this.container?.querySelector("#tlv-validation-bar");
+    if (val) { val.innerHTML = ""; }
   }
 
   renderTableHead(format) {

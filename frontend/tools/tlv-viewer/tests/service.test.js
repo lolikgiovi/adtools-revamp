@@ -372,6 +372,16 @@ describe("TLVViewerService", () => {
       expect(result.nodes[0].annotation).toBe("Dynamic");
     });
 
+    it("annotates MCC code", () => {
+      const result = TLVViewerService.parseQris(tlv("52", "5411"));
+      expect(result.nodes[0].annotation).toBe("Grocery Stores/Supermarkets");
+    });
+
+    it("annotates MCC code for restaurants", () => {
+      const result = TLVViewerService.parseQris(tlv("52", "5812"));
+      expect(result.nodes[0].annotation).toBe("Eating Places/Restaurants");
+    });
+
     it("annotates IDR currency", () => {
       const result = TLVViewerService.parseQris(tlv("53", "360"));
       expect(result.nodes[0].annotation).toBe("IDR");
@@ -467,6 +477,79 @@ describe("TLVViewerService", () => {
 
     it("throws for incomplete TLV (only tag, no length)", () => {
       expect(() => TLVViewerService.parseQris("00020100")).toThrow();
+    });
+
+    // ── QRIS Validation ─────────────────────────────────────────────────
+
+    it("returns no validation issues for a complete valid QRIS", () => {
+      const merchant = tlv("00", "ID.CO.BRI.WWW") + tlv("01", "936000200000001234") + tlv("03", "UME");
+      const input = withCrc(
+        tlv("00", "01") +
+        tlv("01", "11") +
+        tlv("26", merchant) +
+        tlv("52", "5411") +
+        tlv("53", "360") +
+        tlv("58", "ID") +
+        tlv("59", "TOKO MAKMUR") +
+        tlv("60", "YOGYAKARTA")
+      );
+      const result = TLVViewerService.parseQris(input);
+      expect(result.validation).toEqual([]);
+    });
+
+    it("reports missing mandatory tags", () => {
+      const result = TLVViewerService.parseQris(tlv("00", "01"));
+      const errors = result.validation.filter((v) => v.level === "error");
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((v) => v.message.includes("52"))).toBe(true);
+      expect(errors.some((v) => v.message.includes("53"))).toBe(true);
+      expect(errors.some((v) => v.message.includes("58"))).toBe(true);
+      expect(errors.some((v) => v.message.includes("59"))).toBe(true);
+      expect(errors.some((v) => v.message.includes("60"))).toBe(true);
+      expect(errors.some((v) => v.message.includes("63"))).toBe(true);
+    });
+
+    it("warns when tag 01 is missing", () => {
+      const result = TLVViewerService.parseQris(tlv("00", "01"));
+      const warns = result.validation.filter((v) => v.level === "warn");
+      expect(warns.some((v) => v.message.includes("Tag 01"))).toBe(true);
+    });
+
+    it("errors when tag 01 has invalid value", () => {
+      const result = TLVViewerService.parseQris(tlv("00", "01") + tlv("01", "99"));
+      expect(result.validation.some((v) => v.level === "error" && v.message.includes('"11" or "12"'))).toBe(true);
+    });
+
+    it("warns on unknown MCC code", () => {
+      const merchant = tlv("00", "ID.CO.BRI.WWW") + tlv("01", "936000200000001234") + tlv("03", "UME");
+      const input = withCrc(
+        tlv("00", "01") + tlv("01", "11") + tlv("26", merchant) +
+        tlv("52", "9999") + tlv("53", "360") + tlv("58", "ID") +
+        tlv("59", "TEST") + tlv("60", "JAKARTA")
+      );
+      const result = TLVViewerService.parseQris(input);
+      expect(result.validation.some((v) => v.level === "warn" && v.message.includes("9999"))).toBe(true);
+    });
+
+    it("warns on unknown currency code", () => {
+      const merchant = tlv("00", "ID.CO.BRI.WWW") + tlv("01", "936000200000001234") + tlv("03", "UME");
+      const input = withCrc(
+        tlv("00", "01") + tlv("01", "11") + tlv("26", merchant) +
+        tlv("52", "5411") + tlv("53", "000") + tlv("58", "ID") +
+        tlv("59", "TEST") + tlv("60", "JAKARTA")
+      );
+      const result = TLVViewerService.parseQris(input);
+      expect(result.validation.some((v) => v.level === "warn" && v.message.includes("000"))).toBe(true);
+    });
+
+    it("warns when no merchant account tags exist", () => {
+      const input = withCrc(
+        tlv("00", "01") + tlv("01", "11") +
+        tlv("52", "5411") + tlv("53", "360") + tlv("58", "ID") +
+        tlv("59", "TEST") + tlv("60", "JAKARTA")
+      );
+      const result = TLVViewerService.parseQris(input);
+      expect(result.validation.some((v) => v.level === "warn" && v.message.includes("26-51"))).toBe(true);
     });
 
     // ── Auto-detection ──────────────────────────────────────────────────

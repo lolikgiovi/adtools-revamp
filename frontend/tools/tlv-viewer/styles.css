@@ -157,27 +157,56 @@
   white-space: nowrap;
 }
 
-/* ── CRC bar ───────────────────────────────────────────────────────────── */
+/* ── Status bar (CRC + Validation) ─────────────────────────────────────── */
 
-.tlv-crc-bar {
+.tlv-status-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
   padding: 0.4rem 0.75rem;
   font-size: 0.76rem;
   border-bottom: 1px solid var(--tlv-border);
+  flex-wrap: wrap;
 }
 
-.tlv-crc-bar.crc-valid {
-  background: hsl(142 71% 45% / 0.12);
+.tlv-status-bar .tlv-crc-status.crc-valid {
   color: hsl(142 71% 55%);
 }
 
-.tlv-crc-bar.crc-invalid {
-  background: hsl(var(--destructive) / 0.12);
+.tlv-status-bar .tlv-crc-status.crc-invalid {
   color: hsl(var(--destructive));
 }
 
-.tlv-crc-bar.crc-missing {
-  background: hsl(45 93% 47% / 0.12);
+.tlv-status-bar .tlv-crc-status.crc-missing {
   color: hsl(45 93% 58%);
+}
+
+.tlv-status-bar .tlv-validation-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tlv-validation-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.tlv-validation-icon {
+  flex-shrink: 0;
+}
+
+.tlv-validation-item.validation-error {
+  color: hsl(var(--destructive));
+}
+
+.tlv-validation-item.validation-warn {
+  color: hsl(45 93% 58%);
+}
+
+.tlv-validation-ok {
+  color: hsl(142 71% 55%);
 }
 
 /* ── Error ─────────────────────────────────────────────────────────────── */
