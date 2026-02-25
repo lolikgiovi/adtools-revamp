@@ -343,6 +343,10 @@ class MasterLockeyService {
       const pageIdParam = url.searchParams.get("pageId");
       if (pageIdParam) return pageIdParam;
 
+      // Match /spaces/SPACE/pages/PAGEID/... format
+      const spacePagesMatch = url.pathname.match(/\/spaces\/[^/]+\/pages\/(\d+)/);
+      if (spacePagesMatch) return spacePagesMatch[1];
+
       // For short links /x/xxxxx, the ID is base64 encoded - not supported for now
       // For display links, we'd need to search - not supported for now
     } catch (_) {
