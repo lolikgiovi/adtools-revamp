@@ -112,7 +112,7 @@ describe('LocalStorageService (separated schema/data)', () => {
   });
 
   it('handles quota exceeded error on save', () => {
-    const spy = vi.spyOn(window.localStorage.__proto__, 'setItem');
+    const spy = vi.spyOn(localStorage, 'setItem');
     spy.mockImplementation(() => {
       const err = new Error('QuotaExceededError');
       err.name = 'QuotaExceededError';
