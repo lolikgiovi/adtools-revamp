@@ -231,7 +231,7 @@ class TLVViewer extends BaseTool {
       crc.textContent = `✓ CRC valid (${result.crc.actual})`;
     } else {
       crc.classList.add("crc-invalid");
-      crc.textContent = `✗ CRC mismatch — expected ${result.crc.expected}, got ${result.crc.actual}`;
+      crc.textContent = `✗ CRC invalid — payload computes to ${result.crc.expected} (CRC-CCITT 0xFFFF), but tag 63 contains ${result.crc.actual}. The payload may have been modified after the CRC was generated.`;
     }
   }
 
