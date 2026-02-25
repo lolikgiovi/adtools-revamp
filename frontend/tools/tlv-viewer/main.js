@@ -298,7 +298,7 @@ class TLVViewer extends BaseTool {
 
   qrisTreeNode(node, renderLevel) {
     const name = node.tagName ? `<span class="tlv-tree-name">${this.esc(node.tagName)}</span>` : "";
-    const annotation = node.annotation ? ` <span class="tlv-tree-annotation">(${this.esc(node.annotation)})</span>` : "";
+    const annotation = node.annotation ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(node.tag, node.annotation)})</span>` : "";
 
     if (node.constructed) {
       return `
@@ -362,7 +362,7 @@ class TLVViewer extends BaseTool {
   qrisTableRow(row) {
     const indent = `<span class="tlv-depth-indent"></span>`.repeat(row.depth);
     const value = row.value.length > 100 ? row.value.slice(0, 100) + "..." : row.value;
-    const annotation = row.annotation ? ` <span class="tlv-tree-annotation">(${this.esc(row.annotation)})</span>` : "";
+    const annotation = row.annotation ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(row.tag, row.annotation)})</span>` : "";
     return `
       <tr>
         <td>${row.rowIndex}</td>
@@ -500,6 +500,13 @@ class TLVViewer extends BaseTool {
   updateCopyButton() {
     const btn = this.container?.querySelector("#tlv-copy-output-btn");
     if (btn) btn.disabled = !this.lastResult;
+  }
+
+  formatAnnotation(tag, annotation) {
+    if (tag === "52") {
+      return `${this.esc(annotation)} - based on <a href="https://www.iso.org/standard/33365.html" target="_blank" rel="noopener noreferrer">ISO 18245</a>`;
+    }
+    return this.esc(annotation);
   }
 
   esc(value) {

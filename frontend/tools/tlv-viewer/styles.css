@@ -354,6 +354,15 @@
   color: hsl(var(--primary));
 }
 
+.tlv-tree-annotation a {
+  color: inherit;
+  text-decoration: underline dotted;
+}
+
+.tlv-tree-annotation a:hover {
+  text-decoration: underline solid;
+}
+
 .tlv-tree-meta {
   font-size: 0.66rem;
   color: hsl(var(--foreground) / 0.3);
