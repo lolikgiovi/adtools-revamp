@@ -6,6 +6,7 @@ import { UUIDGenerator } from "./tools/uuid-generator/main.js";
 import { JSONTools } from "./tools/json-tools/main.js";
 import { QRTools } from "./tools/qr-tools/main.js";
 import { Base64Tools } from "./tools/base64-tools/main.js";
+import { TLVViewer } from "./tools/tlv-viewer/main.js";
 import { EventBus } from "./core/EventBus.js";
 import { Router } from "./core/Router.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -249,6 +250,10 @@ class App {
     // Register Base64 Tools
     const base64Tools = new Base64Tools(this.eventBus);
     this.registerTool(base64Tools);
+
+    // Register TLV Viewer
+    const tlvViewer = new TLVViewer(this.eventBus);
+    this.registerTool(tlvViewer);
 
     // Register QR Tools
     const qrTools = new QRTools(this.eventBus);

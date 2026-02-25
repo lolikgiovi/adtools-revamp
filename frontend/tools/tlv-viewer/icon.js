@@ -1,0 +1,7 @@
+export function getIconSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <path d="M7 8h10M7 12h6M7 16h10" />
+    <circle cx="17" cy="12" r="2" fill="currentColor" stroke="none" />
+  </svg>`;
+}
