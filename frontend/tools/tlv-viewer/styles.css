@@ -103,6 +103,21 @@
   color: var(--tlv-muted);
 }
 
+.tlv-spec-reference {
+  font-size: 0.68rem;
+  color: var(--tlv-muted);
+  padding: 0.35rem 0.75rem 0.55rem;
+}
+
+.tlv-spec-reference a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+}
+
+.tlv-spec-reference a:hover {
+  text-decoration: underline;
+}
+
 /* ── Output panel ──────────────────────────────────────────────────────── */
 
 .tlv-output-header {

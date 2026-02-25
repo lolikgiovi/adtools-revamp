@@ -30,6 +30,9 @@ export const TLVViewerTemplate = /* html */ `
       </div>
       <span class="tlv-shortcut-hint">Ctrl/Cmd + Enter to parse</span>
     </div>
+    <div class="tlv-spec-reference">
+      QRIS tags per <a href="https://www.emvco.com/emv-technologies/qrcodes/" target="_blank" rel="noopener noreferrer">EMVCo QRCPS Merchant-Presented Mode</a> spec
+    </div>
   </section>
 
   <section class="tlv-panel tlv-output-panel">
