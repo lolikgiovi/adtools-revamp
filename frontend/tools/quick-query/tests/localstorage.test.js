@@ -112,13 +112,14 @@ describe('LocalStorageService (separated schema/data)', () => {
   });
 
   it('handles quota exceeded error on save', () => {
-    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = () => {
       const err = new Error('QuotaExceededError');
       err.name = 'QuotaExceededError';
       throw err;
-    });
+    };
     const ok = svc.saveSchema('inhouse_forex.rate_tiering', sampleSchemaArray(), sampleDataArray());
     expect(ok).toBe(false);
-    spy.mockRestore();
+    localStorage.setItem = originalSetItem;
   });
 });
