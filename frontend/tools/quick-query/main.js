@@ -269,6 +269,9 @@ export class QuickQueryUI {
       confirmExcelImportButton: document.getElementById("confirmExcelImport"),
       cancelExcelImportButton: document.getElementById("cancelExcelImport"),
 
+      // Default SYSDATE toggle
+      defaultSysdateToggle: document.getElementById("defaultSysdate"),
+
       // HTML Minify overlay elements
       htmlMinifyOverlay: document.getElementById("htmlMinifyOverlay"),
       htmlMinifyFieldList: document.getElementById("htmlMinifyFieldList"),
@@ -759,11 +762,13 @@ export class QuickQueryUI {
         }
       }
 
+      const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked };
+
       // Check if we should use the worker (1000+ rows)
       if (this.queryWorkerService.shouldUseWorker(inputData)) {
-        this._generateQueryAsync(tableName, queryType, schemaData, inputData);
+        this._generateQueryAsync(tableName, queryType, schemaData, inputData, options);
       } else {
-        this._generateQuerySync(tableName, queryType, schemaData, inputData);
+        this._generateQuerySync(tableName, queryType, schemaData, inputData, options);
       }
     } catch (error) {
       this.showError(error.message);
@@ -774,9 +779,9 @@ export class QuickQueryUI {
   /**
    * Synchronous query generation for small datasets (< 1000 rows)
    */
-  _generateQuerySync(tableName, queryType, schemaData, inputData) {
+  _generateQuerySync(tableName, queryType, schemaData, inputData, options = {}) {
     try {
-      const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles);
+      const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles, options);
 
       this.editor.setValue(query);
       this.clearError();
@@ -797,7 +802,7 @@ export class QuickQueryUI {
   /**
    * Asynchronous query generation using Web Worker for large datasets (1000+ rows)
    */
-  async _generateQueryAsync(tableName, queryType, schemaData, inputData) {
+  async _generateQueryAsync(tableName, queryType, schemaData, inputData, options = {}) {
     const rowCount = inputData.length - 1; // Exclude header
 
     // Increment request ID to track this specific generation request
@@ -814,6 +819,7 @@ export class QuickQueryUI {
         schemaData,
         inputData,
         this.processedFiles,
+        options,
         (percent, message) => {
           // Only update progress if this is still the current request
           if (currentReqId === this._genReqId) {

@@ -73,7 +73,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
                 <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
-                <p class="tip-text"><i class="tip-icon">💡</i> Tip: Enter 'max' for _id fields to enable auto-increment functionality</p>
+                <label class="switch sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
+                    <input type="checkbox" id="defaultSysdate" checked />
+                    <span class="slider"></span>
+                </label>
+                <span class="sysdate-toggle-label">Default SYSDATE</span>
             </div>
             <div id="excelImportInfo" class="excel-import-info hidden">
                 <span class="excel-import-icon">📊</span>

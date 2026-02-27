@@ -11,13 +11,13 @@ const schemaValidationService = new SchemaValidationService();
 /**
  * Process data in chunks and post progress updates
  */
-function generateQueryWithProgress(tableName, queryType, schemaData, inputData, attachments) {
+function generateQueryWithProgress(tableName, queryType, schemaData, inputData, attachments, options) {
   // Validate first
   schemaValidationService.validateSchema(schemaData);
   schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
   // Generate query (QueryGenerationService already optimized with Array.join)
-  const sql = queryService.generateQuery(tableName, queryType, schemaData, inputData, attachments);
+  const sql = queryService.generateQuery(tableName, queryType, schemaData, inputData, attachments, options);
 
   return sql;
 }
@@ -34,7 +34,7 @@ self.onmessage = async (e) => {
 
   try {
     if (type === "generate") {
-      const { tableName, queryType, schemaData, inputData, attachments } = payload;
+      const { tableName, queryType, schemaData, inputData, attachments, options } = payload;
 
       // Post initial progress
       self.postMessage({
@@ -45,7 +45,7 @@ self.onmessage = async (e) => {
       });
 
       // Generate the SQL
-      const sql = generateQueryWithProgress(tableName, queryType, schemaData, inputData, attachments || []);
+      const sql = generateQueryWithProgress(tableName, queryType, schemaData, inputData, attachments || [], options || {});
 
       // Post progress before duplicate detection
       self.postMessage({

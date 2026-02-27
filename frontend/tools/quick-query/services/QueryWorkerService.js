@@ -87,7 +87,7 @@ export class QueryWorkerService {
    * @param {Function} onProgress - Callback for progress updates (percent, message)
    * @returns {Promise<{sql: string, duplicateResult: object, rowCount: number}>}
    */
-  generateQuery(tableName, queryType, schemaData, inputData, attachments = [], onProgress = null) {
+  generateQuery(tableName, queryType, schemaData, inputData, attachments = [], options = {}, onProgress = null) {
     return new Promise((resolve, reject) => {
       const worker = this._ensureWorker();
       const requestId = ++this.requestCounter;
@@ -103,6 +103,7 @@ export class QueryWorkerService {
           schemaData,
           inputData,
           attachments,
+          options,
         },
       });
     });

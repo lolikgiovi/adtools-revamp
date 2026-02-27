@@ -14,7 +14,7 @@ export class ValueProcessorService {
     return String(value);
   }
 
-  processValue(value, dataType, nullable, fieldName, tableName, queryType = null) {
+  processValue(value, dataType, nullable, fieldName, tableName, queryType = null, options = {}) {
     // Constants
     const AUDIT_FIELDS = {
       time: ["created_time", "updated_time"],
@@ -23,7 +23,10 @@ export class ValueProcessorService {
 
     // Handle audit fields
     if (AUDIT_FIELDS.time.includes(fieldName.toLowerCase())) {
-      return "SYSDATE"; // for data integrity, return sysdate to log the time of the query
+      if (options.defaultSysdate !== false) {
+        return "SYSDATE";
+      }
+      // Fall through to normal value processing
     }
 
     if (AUDIT_FIELDS.by.includes(fieldName.toLowerCase())) {

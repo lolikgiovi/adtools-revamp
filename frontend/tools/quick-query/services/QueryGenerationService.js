@@ -221,7 +221,7 @@ export class QueryGenerationService {
     };
   }
 
-  generateQuery(tableName, queryType, schemaData, inputData, attachments) {
+  generateQuery(tableName, queryType, schemaData, inputData, attachments, options = {}) {
     // 0. Validate table name to prevent SQL injection
     this.validateOracleIdentifier(tableName, "table name");
 
@@ -284,7 +284,7 @@ export class QueryGenerationService {
             // Return formatted object
             return {
               fieldName,
-              formattedValue: this.ValueProcessorService.processValue(value, dataType, nullable, fieldName, tableName, queryType),
+              formattedValue: this.ValueProcessorService.processValue(value, dataType, nullable, fieldName, tableName, queryType, options),
             };
           } catch (fieldError) {
             // Convert column index to Excel-style letter (A, B, ..., Z, AA, AB, ...)
