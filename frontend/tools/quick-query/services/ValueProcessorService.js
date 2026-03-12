@@ -68,7 +68,7 @@ export class ValueProcessorService {
 
     // Increment value (max + 1)
     if (
-      (fieldName === "config_id" && upperDataType === "NUMBER") || // specific for config_id
+      (fieldName.toLowerCase() === "config_id" && upperDataType === "NUMBER") || // specific for config_id
       (upperDataType.startsWith("NUMBER") && lowerStrValue.includes("max")) // any number fields containing "max" phrase
     ) {
       return `(SELECT NVL(MAX(${fieldName})+1, 1) FROM ${tableName})`;
@@ -83,7 +83,7 @@ export class ValueProcessorService {
     }
 
     // System config ID
-    if (fieldName === "system_config_id" && lowerStrValue === "max") {
+    if (fieldName.toLowerCase() === "system_config_id" && lowerStrValue === "max") {
       return `(SELECT MAX(CAST(${fieldName} AS INT))+1 FROM ${tableName})`;
     }
 

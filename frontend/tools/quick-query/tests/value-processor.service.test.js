@@ -56,6 +56,28 @@ describe("ValueProcessorService", () => {
     });
   });
 
+  describe("processValue - max auto-increment", () => {
+    it('should generate SELECT MAX subquery for NUMBER field with "max" value', () => {
+      const result = service.processValue("max", "NUMBER", "No", "ID", "my_table");
+      expect(result).toBe("(SELECT NVL(MAX(ID)+1, 1) FROM my_table)");
+    });
+
+    it("should generate SELECT MAX subquery for config_id NUMBER field regardless of value", () => {
+      const result = service.processValue("anything", "NUMBER", "No", "CONFIG_ID", "my_table");
+      expect(result).toBe("(SELECT NVL(MAX(CONFIG_ID)+1, 1) FROM my_table)");
+    });
+
+    it("should generate CAST-based SELECT MAX for system_config_id VARCHAR2 with max", () => {
+      const result = service.processValue("max", "VARCHAR2(36)", "No", "SYSTEM_CONFIG_ID", "my_table");
+      expect(result).toBe("(SELECT MAX(CAST(SYSTEM_CONFIG_ID AS INT))+1 FROM my_table)");
+    });
+
+    it("should handle case-insensitive field names for system_config_id", () => {
+      const result = service.processValue("max", "VARCHAR2(36)", "No", "system_config_id", "my_table");
+      expect(result).toBe("(SELECT MAX(CAST(system_config_id AS INT))+1 FROM my_table)");
+    });
+  });
+
   describe("processValue - NUMBER", () => {
     it("should parse numbers with thousands separators (10,000,000)", () => {
       const result = service.processValue("10,000,000", "NUMBER", "Yes", "amount", "test_table");
