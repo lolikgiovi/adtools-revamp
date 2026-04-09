@@ -483,6 +483,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       expect(result.mergedSql).toBe("SET DEFINE OFF;");
       expect(result.selectSql).toBe("");
+      expect(result.validationSql).toBe("");
       expect(result.duplicates).toHaveLength(0);
     });
   });
@@ -1863,6 +1864,147 @@ DELETE FROM T2 WHERE id = 2;`;
       expect(result.report.dangerousStatements).toHaveLength(2);
       expect(result.report.dangerousStatements[0].type).toBe("DELETE");
       expect(result.report.dangerousStatements[1].type).toBe("UPDATE_NO_WHERE");
+    });
+  });
+
+  describe("Validation SQL output", () => {
+    it("builds validation SQL for MERGE with single-key multi-row source", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `MERGE INTO CONFIG.APP_CONFIG tgt
+USING (
+  SELECT 'alpha' id FROM DUAL
+  UNION ALL
+  SELECT 'beta' id FROM DUAL
+) src
+ON (tgt.id = src.id)
+WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
+          ],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG WHERE id IN ('alpha', 'beta');"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("'CONFIG.APP_CONFIG' AS table_name");
+      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql).toContain("FROM CONFIG.APP_CONFIG");
+      expect(result.validationSql).toContain("WHERE id IN ('alpha', 'beta')");
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE id IN ('alpha', 'beta');");
+    });
+
+    it("builds validation SQL for MERGE with composite keys", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `MERGE INTO CONFIG.APP_CONFIG tgt
+USING (
+  SELECT 1 id, 'A' category FROM DUAL
+  UNION ALL
+  SELECT 2 id, 'B' category FROM DUAL
+) src
+ON (tgt.id = src.id AND tgt.category = src.category)
+WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
+          ],
+          selectStatements: [],
+          fileName: "composite-merge.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql).toContain("WHERE (id = 1 AND category = 'A') OR (id = 2 AND category = 'B')");
+    });
+
+    it("groups validation SQL by table and sums row_in_query across INSERT statements", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO CASA.CONFIG (parameter_key, parameter_value) VALUES ('minimum.balance.tier.one', '100000');",
+            `INSERT INTO CASA.CONFIG (parameter_key, parameter_value)
+SELECT 'minimum.balance.tier.two' parameter_key, '200000' parameter_value FROM DUAL
+UNION ALL
+SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM DUAL;`,
+          ],
+          selectStatements: [],
+          fileName: "insert-config.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("'CASA.CONFIG' AS table_name");
+      expect(result.validationSql).toContain("3 AS row_in_query");
+      expect(result.validationSql).not.toContain("1 AS row_in_query");
+      expect(result.validationSql).not.toContain("2 AS row_in_query");
+      expect((result.validationSql.match(/'CASA\.CONFIG' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).not.toContain("UNION ALL");
+      expect(result.validationSql).toContain(
+        "WHERE (parameter_key = 'minimum.balance.tier.one' AND parameter_value = '100000') OR (parameter_key = 'minimum.balance.tier.two' AND parameter_value = '200000') OR (parameter_key = 'minimum.balance.tier.three' AND parameter_value = '300000')"
+      );
+    });
+
+    it("groups validation SQL by table for exact UPDATE and DELETE predicates", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "UPDATE SYSTEM_SUPPORT.SERVICE SET status = 'A' WHERE service_id IN ('svc-1', 'svc-2');",
+            "DELETE FROM SYSTEM_SUPPORT.SERVICE WHERE service_code = 'legacy-a' OR service_code = 'legacy-b';",
+          ],
+          selectStatements: [],
+          fileName: "service-dml.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("4 AS row_in_query");
+      expect(result.validationSql).toContain("WHERE service_id IN ('svc-1', 'svc-2')");
+      expect(result.validationSql).toContain("OR service_code IN ('legacy-a', 'legacy-b')");
+      expect((result.validationSql.match(/'SYSTEM_SUPPORT\.SERVICE' AS table_name/g) || [])).toHaveLength(1);
+    });
+
+    it("adds skip comments for unsupported validation inference", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "UPDATE CONFIG.APP_CONFIG SET value = 'x' WHERE UPPER(parameter_key) = 'ABC';",
+            "MERGE INTO CONFIG.APP_CONFIG tgt USING DUAL ON (1 = 0) WHEN MATCHED THEN UPDATE SET tgt.value = 'x';",
+          ],
+          selectStatements: [],
+          fileName: "unsupported.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("-- Skipped UPDATE on CONFIG.APP_CONFIG in unsupported.sql: unsupported WHERE shape");
+      expect(result.validationSql).toContain("-- Skipped MERGE on CONFIG.APP_CONFIG in unsupported.sql: unsupported USING clause");
+    });
+
+    it("renders validation SQL as a UNION ALL query only across different tables", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO T1 (id) VALUES (1);",
+            "UPDATE T1 SET status = 'A' WHERE id = 9;",
+            "UPDATE T2 SET status = 'A' WHERE id = 9;",
+          ],
+          selectStatements: [],
+          fileName: "multi.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("UNION ALL");
+      expect((result.validationSql.match(/'T1' AS table_name/g) || [])).toHaveLength(1);
+      expect((result.validationSql.match(/'T2' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql.trim().endsWith(";")).toBe(true);
     });
   });
 });

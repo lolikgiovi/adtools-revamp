@@ -466,9 +466,27 @@ export class MergeSqlService {
   static splitParenAware(str) {
     const parts = [];
     let depth = 0;
+    let inQuote = false;
     let current = "";
 
-    for (const ch of str) {
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch === "'") {
+        current += ch;
+        if (i + 1 < str.length && str[i + 1] === "'") {
+          current += str[i + 1];
+          i++;
+          continue;
+        }
+        inQuote = !inQuote;
+        continue;
+      }
+
+      if (inQuote) {
+        current += ch;
+        continue;
+      }
+
       if (ch === "(") {
         depth++;
         current += ch;
@@ -484,6 +502,908 @@ export class MergeSqlService {
     }
     if (current) parts.push(current);
     return parts;
+  }
+
+  /**
+   * Remove a trailing semicolon from a statement.
+   * @param {string} statement
+   * @returns {string}
+   */
+  static stripTrailingSemicolon(statement) {
+    return String(statement || "").replace(/;\s*$/, "").trim();
+  }
+
+  /**
+   * Extract target table name from a DML statement.
+   * @param {string} statement
+   * @returns {string|null}
+   */
+  static extractTargetTableName(statement) {
+    const trimmed = String(statement || "").trimStart();
+    let table = null;
+
+    if (/^INSERT\b/i.test(trimmed)) {
+      table = trimmed.match(/INSERT\s+INTO\s+(\S+)/i)?.[1] || null;
+    } else if (/^MERGE\b/i.test(trimmed)) {
+      table = trimmed.match(/MERGE\s+INTO\s+(\S+)/i)?.[1] || trimmed.match(/MERGE\s+(\S+)/i)?.[1] || null;
+    } else if (/^UPDATE\b/i.test(trimmed)) {
+      table = trimmed.match(/UPDATE\s+(\S+)/i)?.[1] || null;
+    } else if (/^DELETE\b/i.test(trimmed)) {
+      table = trimmed.match(/DELETE\s+FROM\s+(\S+)/i)?.[1] || trimmed.match(/DELETE\s+(\S+)/i)?.[1] || null;
+    }
+
+    if (!table) return null;
+
+    const parenIdx = table.indexOf("(");
+    return parenIdx === -1 ? table : table.slice(0, parenIdx);
+  }
+
+  /**
+   * Find the matching closing parenthesis starting at the given open index.
+   * @param {string} text
+   * @param {number} openIndex
+   * @returns {number}
+   */
+  static findMatchingParen(text, openIndex) {
+    let depth = 0;
+    let inQuote = false;
+
+    for (let i = openIndex; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "'") {
+        if (i + 1 < text.length && text[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        inQuote = !inQuote;
+        continue;
+      }
+
+      if (inQuote) continue;
+
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * Trim outer parentheses that wrap the full expression.
+   * @param {string} value
+   * @returns {string}
+   */
+  static trimOuterParentheses(value) {
+    let current = String(value || "").trim();
+
+    while (current.startsWith("(") && current.endsWith(")")) {
+      const closingIndex = this.findMatchingParen(current, 0);
+      if (closingIndex !== current.length - 1) break;
+      current = current.slice(1, -1).trim();
+    }
+
+    return current;
+  }
+
+  /**
+   * Check if a character is a keyword boundary.
+   * @param {string} ch
+   * @returns {boolean}
+   */
+  static isKeywordBoundaryChar(ch) {
+    return !ch || !/[A-Za-z0-9_$#]/.test(ch);
+  }
+
+  /**
+   * Match a sequence of SQL keywords with flexible whitespace.
+   * @param {string} upperText
+   * @param {number} start
+   * @param {string[]} words
+   * @returns {number|null}
+   */
+  static matchKeywordSequenceAt(upperText, start, words) {
+    const before = start === 0 ? "" : upperText[start - 1];
+    if (!this.isKeywordBoundaryChar(before)) {
+      return null;
+    }
+
+    let index = start;
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      if (!upperText.startsWith(word, index)) {
+        return null;
+      }
+      index += word.length;
+
+      if (i < words.length - 1) {
+        const whitespaceMatch = upperText.slice(index).match(/^\s+/);
+        if (!whitespaceMatch) {
+          return null;
+        }
+        index += whitespaceMatch[0].length;
+      }
+    }
+
+    const after = upperText[index] || "";
+    return this.isKeywordBoundaryChar(after) ? index - start : null;
+  }
+
+  /**
+   * Split SQL text by a top-level keyword sequence.
+   * @param {string} text
+   * @param {string[]} words
+   * @returns {string[]}
+   */
+  static splitTopLevelByKeywordSequence(text, words) {
+    const parts = [];
+    const upperText = text.toUpperCase();
+    let start = 0;
+    let depth = 0;
+    let inQuote = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "'") {
+        if (i + 1 < text.length && text[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        inQuote = !inQuote;
+        continue;
+      }
+
+      if (inQuote) continue;
+
+      if (ch === "(") {
+        depth++;
+        continue;
+      }
+      if (ch === ")") {
+        depth = Math.max(0, depth - 1);
+        continue;
+      }
+
+      if (depth === 0) {
+        const matchLength = this.matchKeywordSequenceAt(upperText, i, words);
+        if (matchLength) {
+          parts.push(text.slice(start, i).trim());
+          i += matchLength - 1;
+          start = i + 1;
+        }
+      }
+    }
+
+    const tail = text.slice(start).trim();
+    if (tail) parts.push(tail);
+    return parts;
+  }
+
+  /**
+   * Parse a simple column reference such as alias.column or column.
+   * @param {string} value
+   * @returns {{ alias: string|null, column: string }|null}
+   */
+  static parseSimpleColumnReference(value) {
+    const trimmed = this.trimOuterParentheses(value);
+    const match = trimmed.match(/^(?:(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*)\.)?(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*)$/);
+    if (!match) return null;
+
+    const dotIndex = trimmed.lastIndexOf(".");
+    if (dotIndex === -1) {
+      return { alias: null, column: trimmed };
+    }
+
+    return {
+      alias: trimmed.slice(0, dotIndex).trim(),
+      column: trimmed.slice(dotIndex + 1).trim(),
+    };
+  }
+
+  /**
+   * Parse a supported literal value.
+   * @param {string} value
+   * @returns {{ sql: string, isNull: boolean }|null}
+   */
+  static parseLiteralValue(value) {
+    const trimmed = this.trimOuterParentheses(String(value || "").trim());
+    if (!trimmed) return null;
+
+    if (/^NULL$/i.test(trimmed)) {
+      return { sql: "NULL", isNull: true };
+    }
+
+    if (/^[+-]?\d+(?:\.\d+)?$/i.test(trimmed)) {
+      return { sql: trimmed, isNull: false };
+    }
+
+    if (/^'(?:''|[\s\S])*'$/.test(trimmed)) {
+      return { sql: trimmed, isNull: false };
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse an aliased SELECT field expression.
+   * @param {string} fieldText
+   * @returns {{ expression: string, alias: string }|null}
+   */
+  static parseSelectField(fieldText) {
+    const trimmed = String(fieldText || "").trim();
+    if (!trimmed) return null;
+
+    const asMatch = trimmed.match(/^([\s\S]+?)\s+AS\s+("[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*)$/i);
+    if (asMatch) {
+      return {
+        expression: asMatch[1].trim(),
+        alias: asMatch[2].trim(),
+      };
+    }
+
+    const plainMatch = trimmed.match(/^([\s\S]+?)\s+("[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*)$/);
+    if (plainMatch) {
+      return {
+        expression: plainMatch[1].trim(),
+        alias: plainMatch[2].trim(),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse inline SELECT ... FROM DUAL [UNION ALL ...] rows.
+   * @param {string} sql
+   * @returns {Array<Record<string, string>>|null}
+   */
+  static parseInlineDualSelectRows(sql) {
+    const segments = this.splitTopLevelByKeywordSequence(String(sql || "").trim(), ["UNION", "ALL"]);
+    if (segments.length === 0) return null;
+
+    const rows = [];
+    for (const segment of segments) {
+      const trimmed = this.stripTrailingSemicolon(segment);
+      const match = trimmed.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+DUAL\s*$/i);
+      if (!match) return null;
+
+      const fields = this.splitParenAware(match[1]);
+      if (fields.length === 0) return null;
+
+      const row = {};
+      for (const field of fields) {
+        const parsedField = this.parseSelectField(field);
+        if (!parsedField) return null;
+        row[parsedField.alias.toUpperCase()] = parsedField.expression;
+      }
+      rows.push(row);
+    }
+
+    return rows;
+  }
+
+  /**
+   * Convert literal column/value pairs into predicate rows.
+   * @param {string[]} columns
+   * @param {string[]} values
+   * @returns {{ rows: Array<Array<{ column: string, valueSql: string|null }>>, rowCount: number, reason?: string }|null}
+   */
+  static buildPredicateRowsFromColumnsAndValues(columns, values) {
+    if (!Array.isArray(columns) || columns.length === 0 || columns.length !== values.length) {
+      return null;
+    }
+
+    const row = [];
+    for (let i = 0; i < columns.length; i++) {
+      const column = columns[i].trim();
+      const literal = this.parseLiteralValue(values[i]);
+      if (!column || !literal) {
+        return {
+          rows: [],
+          rowCount: 0,
+          reason: "contains non-literal source values",
+        };
+      }
+
+      row.push({
+        column,
+        valueSql: literal.isNull ? null : literal.sql,
+      });
+    }
+
+    return {
+      rows: this.dedupePredicateRows([row]),
+      rowCount: 1,
+    };
+  }
+
+  /**
+   * Deduplicate predicate rows without changing row_in_query semantics.
+   * @param {Array<Array<{ column: string, valueSql: string|null }>>} rows
+   * @returns {Array<Array<{ column: string, valueSql: string|null }>>}
+   */
+  static dedupePredicateRows(rows) {
+    const seen = new Set();
+    const deduped = [];
+
+    for (const row of rows) {
+      const key = row
+        .map((condition) => `${condition.column.toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
+        .sort()
+        .join("|");
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(row);
+    }
+
+    return deduped;
+  }
+
+  /**
+   * Render a single predicate condition.
+   * @param {{ column: string, valueSql: string|null }} condition
+   * @returns {string}
+   */
+  static renderPredicateCondition(condition) {
+    return condition.valueSql === null ? `${condition.column} IS NULL` : `${condition.column} = ${condition.valueSql}`;
+  }
+
+  /**
+   * Render predicate rows into a WHERE clause body.
+   * @param {Array<Array<{ column: string, valueSql: string|null }>>} rows
+   * @returns {string|null}
+   */
+  static renderPredicateRows(rows) {
+    if (!rows || rows.length === 0) return null;
+
+    const singleColumnRows = rows.every((row) => row.length === 1 && row[0].valueSql !== null);
+    const singleColumnName = singleColumnRows ? rows[0][0].column : null;
+    const sameColumn = singleColumnRows && rows.every((row) => row[0].column.toUpperCase() === singleColumnName.toUpperCase());
+
+    if (sameColumn) {
+      if (rows.length === 1) {
+        return this.renderPredicateCondition(rows[0][0]);
+      }
+      const values = rows.map((row) => row[0].valueSql);
+      return `${singleColumnName} IN (${values.join(", ")})`;
+    }
+
+    const singleConditionGroups = new Map();
+    const renderedParts = [];
+
+    for (const row of rows) {
+      if (row.length !== 1) {
+        const body = row.map((condition) => this.renderPredicateCondition(condition)).join(" AND ");
+        renderedParts.push(`(${body})`);
+        continue;
+      }
+
+      const condition = row[0];
+      const key = condition.column.toUpperCase();
+      if (!singleConditionGroups.has(key)) {
+        singleConditionGroups.set(key, {
+          column: condition.column,
+          values: [],
+        });
+      }
+
+      singleConditionGroups.get(key).values.push(condition.valueSql);
+    }
+
+    for (const group of singleConditionGroups.values()) {
+      const nonNullValues = group.values.filter((value) => value !== null);
+      const hasNull = group.values.some((value) => value === null);
+      const groupParts = [];
+
+      if (nonNullValues.length === 1) {
+        groupParts.push(`${group.column} = ${nonNullValues[0]}`);
+      } else if (nonNullValues.length > 1) {
+        groupParts.push(`${group.column} IN (${nonNullValues.join(", ")})`);
+      }
+
+      if (hasNull) {
+        groupParts.push(`${group.column} IS NULL`);
+      }
+
+      if (groupParts.length === 1) {
+        renderedParts.push(groupParts[0]);
+      } else if (groupParts.length > 1) {
+        renderedParts.push(`(${groupParts.join(" OR ")})`);
+      }
+    }
+
+    return renderedParts.join(" OR ");
+  }
+
+  /**
+   * Parse an atomic exact predicate condition.
+   * @param {string} conditionText
+   * @returns {{ column: string, values: Array<string|null> }|null}
+   */
+  static parseAtomicPredicateCondition(conditionText) {
+    const trimmed = this.trimOuterParentheses(conditionText);
+    if (!trimmed) return null;
+
+    const isNullMatch = trimmed.match(/^(.+?)\s+IS\s+NULL$/i);
+    if (isNullMatch) {
+      const columnRef = this.parseSimpleColumnReference(isNullMatch[1]);
+      if (!columnRef) return null;
+      return { column: columnRef.column, values: [null] };
+    }
+
+    const inMatch = trimmed.match(/^(.+?)\s+IN\s*\(([\s\S]+)\)$/i);
+    if (inMatch) {
+      const columnRef = this.parseSimpleColumnReference(inMatch[1]);
+      if (!columnRef) return null;
+
+      const rawValues = this.splitParenAware(inMatch[2]).map((value) => value.trim()).filter(Boolean);
+      if (rawValues.length === 0) return null;
+
+      const parsedValues = [];
+      for (const rawValue of rawValues) {
+        const literal = this.parseLiteralValue(rawValue);
+        if (!literal) return null;
+        parsedValues.push(literal.isNull ? null : literal.sql);
+      }
+
+      return { column: columnRef.column, values: parsedValues };
+    }
+
+    const equalsMatch = trimmed.match(/^(.+?)\s*=\s*([\s\S]+)$/);
+    if (!equalsMatch) return null;
+
+    const leftRef = this.parseSimpleColumnReference(equalsMatch[1]);
+    const rightRef = this.parseSimpleColumnReference(equalsMatch[2]);
+    const leftLiteral = this.parseLiteralValue(equalsMatch[1]);
+    const rightLiteral = this.parseLiteralValue(equalsMatch[2]);
+
+    if (leftRef && rightLiteral) {
+      return { column: leftRef.column, values: [rightLiteral.isNull ? null : rightLiteral.sql] };
+    }
+    if (rightRef && leftLiteral) {
+      return { column: rightRef.column, values: [leftLiteral.isNull ? null : leftLiteral.sql] };
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse a WHERE clause into exact predicate rows.
+   * @param {string} whereClause
+   * @returns {{ rows: Array<Array<{ column: string, valueSql: string|null }>>, rowCount: number, reason?: string }|null}
+   */
+  static parseExactPredicateRows(whereClause) {
+    const normalized = this.trimOuterParentheses(this.stripTrailingSemicolon(whereClause));
+    if (!normalized) {
+      return { rows: [], rowCount: 0, reason: "missing WHERE clause" };
+    }
+
+    const orGroups = this.splitTopLevelByKeywordSequence(normalized, ["OR"]);
+    if (orGroups.length === 0) {
+      return { rows: [], rowCount: 0, reason: "unsupported WHERE shape" };
+    }
+
+    const rows = [];
+    for (const group of orGroups) {
+      const andConditions = this.splitTopLevelByKeywordSequence(this.trimOuterParentheses(group), ["AND"]);
+      if (andConditions.length === 0) {
+        return { rows: [], rowCount: 0, reason: "unsupported WHERE shape" };
+      }
+
+      let rowVariants = [[]];
+      for (const conditionText of andConditions) {
+        const parsedCondition = this.parseAtomicPredicateCondition(conditionText);
+        if (!parsedCondition) {
+          return { rows: [], rowCount: 0, reason: "unsupported WHERE shape" };
+        }
+
+        const nextVariants = [];
+        for (const variant of rowVariants) {
+          for (const valueSql of parsedCondition.values) {
+            nextVariants.push([
+              ...variant,
+              {
+                column: parsedCondition.column,
+                valueSql,
+              },
+            ]);
+          }
+        }
+        rowVariants = nextVariants;
+      }
+
+      rows.push(...rowVariants);
+    }
+
+    const dedupedRows = this.dedupePredicateRows(rows);
+    return {
+      rows: dedupedRows,
+      rowCount: dedupedRows.length,
+    };
+  }
+
+  /**
+   * Extract the inline USING subquery content from a MERGE statement.
+   * @param {string} statement
+   * @returns {{ targetAlias: string|null, sourceAlias: string|null, usingContent: string, onClause: string }|null}
+   */
+  static extractMergeUsingContent(statement) {
+    const mergeMatch = String(statement || "").match(/MERGE\s+INTO\s+\S+(?:\s+("[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*))?\s+USING\b/i);
+    if (!mergeMatch) return null;
+
+    const usingMatch = /\bUSING\b/i.exec(statement);
+    if (!usingMatch) return null;
+
+    const openParenIndex = statement.indexOf("(", usingMatch.index);
+    if (openParenIndex === -1) return null;
+
+    const closeParenIndex = this.findMatchingParen(statement, openParenIndex);
+    if (closeParenIndex === -1) return null;
+
+    const afterUsing = statement.slice(closeParenIndex + 1);
+    const afterUsingMatch = afterUsing.match(/^\s*("[^"]+"|[A-Za-z_][A-Za-z0-9_$#]*)?\s*ON\s*\(/i);
+    if (!afterUsingMatch) return null;
+
+    const onKeywordMatch = /\bON\s*\(/i.exec(afterUsing);
+    if (!onKeywordMatch) return null;
+    const onOpenParenIndex = closeParenIndex + 1 + onKeywordMatch.index + onKeywordMatch[0].lastIndexOf("(");
+    const onCloseParenIndex = this.findMatchingParen(statement, onOpenParenIndex);
+    if (onCloseParenIndex === -1) return null;
+
+    return {
+      targetAlias: mergeMatch[1] ? mergeMatch[1].trim() : null,
+      sourceAlias: afterUsingMatch[1] ? afterUsingMatch[1].trim() : null,
+      usingContent: statement.slice(openParenIndex + 1, closeParenIndex).trim(),
+      onClause: statement.slice(onOpenParenIndex + 1, onCloseParenIndex).trim(),
+    };
+  }
+
+  /**
+   * Build validation data for a MERGE statement.
+   * @param {string} statement
+   * @param {string} tableName
+   * @returns {{ tableName: string, rowInQuery: number, whereClause: string, predicateRows: Array<Array<{ column: string, valueSql: string|null }>> }|{ reason: string }}
+   */
+  static buildMergeValidationEntry(statement, tableName) {
+    const mergeInfo = this.extractMergeUsingContent(statement);
+    if (!mergeInfo) {
+      return { reason: "unsupported USING clause" };
+    }
+
+    const sourceRows = this.parseInlineDualSelectRows(mergeInfo.usingContent);
+    if (!sourceRows || sourceRows.length === 0) {
+      return { reason: "unsupported USING source rows" };
+    }
+
+    const onConditions = this.splitTopLevelByKeywordSequence(mergeInfo.onClause, ["AND"]);
+    if (onConditions.length === 0) {
+      return { reason: "unsupported ON clause" };
+    }
+
+    const mappings = [];
+    for (const conditionText of onConditions) {
+      const equalityMatch = this.trimOuterParentheses(conditionText).match(/^(.+?)\s*=\s*([\s\S]+)$/);
+      if (!equalityMatch) {
+        return { reason: "unsupported ON clause" };
+      }
+
+      const leftRef = this.parseSimpleColumnReference(equalityMatch[1]);
+      const rightRef = this.parseSimpleColumnReference(equalityMatch[2]);
+      if (!leftRef || !rightRef) {
+        return { reason: "unsupported ON clause" };
+      }
+
+      let targetRef = null;
+      let sourceRef = null;
+      const leftAlias = leftRef.alias ? leftRef.alias.toUpperCase() : null;
+      const rightAlias = rightRef.alias ? rightRef.alias.toUpperCase() : null;
+      const targetAlias = mergeInfo.targetAlias ? mergeInfo.targetAlias.toUpperCase() : null;
+      const sourceAlias = mergeInfo.sourceAlias ? mergeInfo.sourceAlias.toUpperCase() : null;
+
+      if (targetAlias && leftAlias === targetAlias) {
+        targetRef = leftRef;
+        sourceRef = rightRef;
+      } else if (targetAlias && rightAlias === targetAlias) {
+        targetRef = rightRef;
+        sourceRef = leftRef;
+      } else if (sourceAlias && leftAlias === sourceAlias) {
+        targetRef = rightRef;
+        sourceRef = leftRef;
+      } else if (sourceAlias && rightAlias === sourceAlias) {
+        targetRef = leftRef;
+        sourceRef = rightRef;
+      } else if (leftRef.alias === null && sourceAlias && rightAlias === sourceAlias) {
+        targetRef = leftRef;
+        sourceRef = rightRef;
+      } else if (rightRef.alias === null && sourceAlias && leftAlias === sourceAlias) {
+        targetRef = rightRef;
+        sourceRef = leftRef;
+      } else if (leftRef.alias === null && targetAlias && rightRef.alias === null) {
+        return { reason: "ambiguous ON clause aliases" };
+      } else {
+        return { reason: "unsupported ON clause" };
+      }
+
+      mappings.push({
+        targetColumn: targetRef.column,
+        sourceColumn: sourceRef.column,
+      });
+    }
+
+    const predicateRows = [];
+    for (const sourceRow of sourceRows) {
+      const rowConditions = [];
+      for (const mapping of mappings) {
+        const sourceExpression = sourceRow[mapping.sourceColumn.toUpperCase()];
+        const literal = this.parseLiteralValue(sourceExpression);
+        if (!literal) {
+          return { reason: "contains non-literal source values" };
+        }
+
+        rowConditions.push({
+          column: mapping.targetColumn,
+          valueSql: literal.isNull ? null : literal.sql,
+        });
+      }
+      predicateRows.push(rowConditions);
+    }
+
+    const dedupedPredicateRows = this.dedupePredicateRows(predicateRows);
+    const whereClause = this.renderPredicateRows(dedupedPredicateRows);
+    if (!whereClause) {
+      return { reason: "unable to infer exact predicate" };
+    }
+
+    return {
+      tableName,
+      rowInQuery: sourceRows.length,
+      whereClause,
+      predicateRows: dedupedPredicateRows,
+    };
+  }
+
+  /**
+   * Build validation data for an INSERT statement.
+   * @param {string} statement
+   * @param {string} tableName
+   * @returns {{ tableName: string, rowInQuery: number, whereClause: string, predicateRows: Array<Array<{ column: string, valueSql: string|null }>> }|{ reason: string }}
+   */
+  static buildInsertValidationEntry(statement, tableName) {
+    const insertMatch = this.stripTrailingSemicolon(statement).match(/INSERT\s+INTO\s+\S+\s*\(([\s\S]+?)\)\s*([\s\S]+)$/i);
+    if (!insertMatch) {
+      return { reason: "unsupported INSERT shape" };
+    }
+
+    const columns = this.splitParenAware(insertMatch[1]).map((column) => column.trim()).filter(Boolean);
+    if (columns.length === 0) {
+      return { reason: "missing INSERT columns" };
+    }
+
+    const sourceSql = insertMatch[2].trim();
+    let rowsResult = null;
+    let rowInQuery = 0;
+
+    if (/^VALUES\s*\(/i.test(sourceSql)) {
+      const openParenIndex = sourceSql.indexOf("(");
+      const closeParenIndex = this.findMatchingParen(sourceSql, openParenIndex);
+      if (openParenIndex === -1 || closeParenIndex === -1) {
+        return { reason: "unsupported VALUES clause" };
+      }
+
+      const values = this.splitParenAware(sourceSql.slice(openParenIndex + 1, closeParenIndex)).map((value) => value.trim());
+      rowsResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
+      rowInQuery = 1;
+    } else if (/^SELECT\b/i.test(sourceSql)) {
+      const sourceRows = this.parseInlineDualSelectRows(sourceSql);
+      if (!sourceRows || sourceRows.length === 0) {
+        return { reason: "unsupported INSERT source rows" };
+      }
+
+      const predicateRows = [];
+      for (const sourceRow of sourceRows) {
+        const values = [];
+        for (const column of columns) {
+          const expression = sourceRow[column.toUpperCase()];
+          if (typeof expression === "undefined") {
+            return { reason: "INSERT source columns do not align" };
+          }
+          values.push(expression);
+        }
+
+        const rowResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
+        if (!rowResult || rowResult.reason) {
+          return { reason: rowResult?.reason || "contains non-literal source values" };
+        }
+        predicateRows.push(...rowResult.rows);
+      }
+
+      rowsResult = {
+        rows: this.dedupePredicateRows(predicateRows),
+        rowCount: sourceRows.length,
+      };
+      rowInQuery = sourceRows.length;
+    } else {
+      return { reason: "unsupported INSERT source" };
+    }
+
+    if (!rowsResult || rowsResult.reason) {
+      return { reason: rowsResult?.reason || "unable to infer exact predicate" };
+    }
+
+    const whereClause = this.renderPredicateRows(rowsResult.rows);
+    if (!whereClause) {
+      return { reason: "unable to infer exact predicate" };
+    }
+
+    return {
+      tableName,
+      rowInQuery,
+      whereClause,
+      predicateRows: rowsResult.rows,
+    };
+  }
+
+  /**
+   * Build validation data for an UPDATE or DELETE statement.
+   * @param {string} statement
+   * @param {string} tableName
+   * @returns {{ tableName: string, rowInQuery: number, whereClause: string, predicateRows: Array<Array<{ column: string, valueSql: string|null }>> }|{ reason: string }}
+   */
+  static buildUpdateDeleteValidationEntry(statement, tableName) {
+    const whereMatch = this.stripTrailingSemicolon(statement).match(/\bWHERE\b\s+([\s\S]+)$/i);
+    if (!whereMatch) {
+      return { reason: "missing WHERE clause" };
+    }
+
+    const parsedRows = this.parseExactPredicateRows(whereMatch[1]);
+    if (!parsedRows || parsedRows.reason || parsedRows.rows.length === 0) {
+      return { reason: parsedRows?.reason || "unsupported WHERE shape" };
+    }
+
+    const whereClause = this.renderPredicateRows(parsedRows.rows);
+    if (!whereClause) {
+      return { reason: "unable to infer exact predicate" };
+    }
+
+    return {
+      tableName,
+      rowInQuery: parsedRows.rowCount,
+      whereClause,
+      predicateRows: parsedRows.rows,
+    };
+  }
+
+  /**
+   * Render a validation SELECT block.
+   * @param {{ tableName: string, rowInQuery: number, whereClause: string }} entry
+   * @returns {string}
+   */
+  static renderValidationSelect(entry) {
+    return [
+      "SELECT",
+      `  '${entry.tableName}' AS table_name,`,
+      `  ${entry.rowInQuery} AS row_in_query,`,
+      "  COUNT(*) AS row_in_table",
+      `FROM ${entry.tableName}`,
+      `WHERE ${entry.whereClause}`,
+    ].join("\n");
+  }
+
+  /**
+   * Group validation entries by table for a higher-level summary.
+   * @param {Array<{ tableName: string, rowInQuery: number, whereClause: string, predicateRows: Array<Array<{ column: string, valueSql: string|null }>> }>} entries
+   * @returns {Array<{ tableName: string, rowInQuery: number, whereClause: string, predicateRows: Array<Array<{ column: string, valueSql: string|null }>> }>}
+   */
+  static groupValidationEntries(entries) {
+    const grouped = new Map();
+
+    for (const entry of entries) {
+      const key = entry.tableName.toUpperCase();
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          tableName: entry.tableName,
+          rowInQuery: 0,
+          predicateRows: [],
+        });
+      }
+
+      const current = grouped.get(key);
+      current.rowInQuery += entry.rowInQuery;
+      current.predicateRows.push(...(entry.predicateRows || []));
+    }
+
+    return Array.from(grouped.values()).map((entry) => {
+      const predicateRows = this.dedupePredicateRows(entry.predicateRows);
+      return {
+        tableName: entry.tableName,
+        rowInQuery: entry.rowInQuery,
+        predicateRows,
+        whereClause: this.renderPredicateRows(predicateRows),
+      };
+    });
+  }
+
+  /**
+   * Build a validation result or skip reason for a DML statement.
+   * @param {string} statement
+   * @param {string} fileName
+   * @returns {{ entry: { tableName: string, rowInQuery: number, whereClause: string } | null, comment: string | null }}
+   */
+  static buildValidationEntry(statement, fileName) {
+    const trimmed = String(statement || "").trimStart();
+    const statementType = trimmed.match(/^(MERGE|INSERT|UPDATE|DELETE)\b/i)?.[1]?.toUpperCase() || "DML";
+    const tableName = this.extractTargetTableName(trimmed);
+
+    if (!tableName) {
+      return {
+        entry: null,
+        comment: `-- Skipped ${statementType} in ${fileName}: unable to determine target table`,
+      };
+    }
+
+    let result = null;
+    if (statementType === "MERGE") {
+      result = this.buildMergeValidationEntry(trimmed, tableName);
+    } else if (statementType === "INSERT") {
+      result = this.buildInsertValidationEntry(trimmed, tableName);
+    } else if (statementType === "UPDATE" || statementType === "DELETE") {
+      result = this.buildUpdateDeleteValidationEntry(trimmed, tableName);
+    }
+
+    if (!result || result.reason) {
+      return {
+        entry: null,
+        comment: `-- Skipped ${statementType} on ${tableName} in ${fileName}: ${result?.reason || "unsupported statement shape"}`,
+      };
+    }
+
+    return {
+      entry: result,
+      comment: null,
+    };
+  }
+
+  /**
+   * Build the Validation SQL output from parsed files.
+   * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
+   * @returns {string}
+   */
+  static buildValidationSql(parsedFiles) {
+    const comments = [];
+    const entries = [];
+
+    for (const file of parsedFiles) {
+      for (const statement of file.dmlStatements) {
+        const result = this.buildValidationEntry(statement, file.fileName);
+        if (result.comment) {
+          comments.push(result.comment);
+        }
+        if (result.entry) {
+          entries.push(result.entry);
+        }
+      }
+    }
+
+    const lines = [];
+    if (comments.length > 0) {
+      lines.push(...comments);
+    }
+
+    if (entries.length > 0) {
+      if (lines.length > 0) lines.push("");
+      const groupedEntries = this.groupValidationEntries(entries).filter((entry) => entry.whereClause);
+      lines.push(`${groupedEntries.map((entry) => this.renderValidationSelect(entry)).join("\nUNION ALL\n")};`);
+    } else if (lines.length === 0) {
+      return "";
+    }
+
+    return lines.join("\n").trim();
   }
 
   /**
@@ -545,7 +1465,7 @@ export class MergeSqlService {
   /**
    * Merge multiple parsed files into combined output
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
-   * @returns {{ mergedSql: string, selectSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
+   * @returns {{ mergedSql: string, selectSql: string, validationSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
    */
   static mergeFiles(parsedFiles) {
     // Duplicate detection (runs before grouping, unchanged logic)
@@ -691,11 +1611,13 @@ export class MergeSqlService {
       }
     }
 
+    const validationSql = this.buildValidationSql(parsedFiles);
     const analysis = this.analyzeStatements(parsedFiles);
 
     return {
       mergedSql: dmlLines.join("\n").trim(),
       selectSql: selectLines.join("\n").trim(),
+      validationSql,
       duplicates,
       report: {
         statementCounts: analysis.tableCounts,

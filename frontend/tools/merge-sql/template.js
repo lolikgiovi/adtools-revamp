@@ -114,6 +114,17 @@ export const MergeSqlTemplate = /* html */ `
             </svg>
             Select SQL
           </button>
+          <button class="result-tab" data-tab="validation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12h6"></path>
+              <path d="M12 9v6"></path>
+              <path d="M3 5h18"></path>
+              <path d="M3 12h4"></path>
+              <path d="M17 12h4"></path>
+              <path d="M3 19h18"></path>
+            </svg>
+            Validation SQL
+          </button>
           <button class="result-tab" data-tab="report">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -190,6 +201,11 @@ export const MergeSqlTemplate = /* html */ `
         <!-- Select Tab Content -->
         <div class="result-tab-content" id="merge-sql-select-content">
           <div class="monaco-editor-container" id="merge-sql-select-editor"></div>
+        </div>
+
+        <!-- Validation Tab Content -->
+        <div class="result-tab-content" id="merge-sql-validation-content">
+          <div class="monaco-editor-container" id="merge-sql-validation-editor"></div>
         </div>
 
         <!-- Report Tab Content -->
