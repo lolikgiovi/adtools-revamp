@@ -3,6 +3,18 @@
  * Handles SQL file parsing, merging, and deduplication logic
  */
 
+const MERGE_SQL_SQUAD_NAMES_STORAGE_KEY = "config.mergeSql.squadNames";
+const DEFAULT_MERGE_SQL_SQUAD_NAMES = [
+  "capella",
+  "betelgeuse",
+  "sirius",
+  "bellatrix",
+  "phoebe",
+  "regulus",
+  "canopus",
+  "antares",
+];
+
 export class MergeSqlService {
   /**
    * Parse SQL file content and extract DML statements and SELECT statements
@@ -616,9 +628,8 @@ export class MergeSqlService {
         // Count unique squads in this group
         const uniqueSquads = new Set();
         for (const entry of group.entries) {
-          if (entry.subHeader) {
-            const squadName = entry.subHeader.split(" - ")[0];
-            uniqueSquads.add(squadName);
+          if (entry.squadName) {
+            uniqueSquads.add(entry.squadName);
           }
         }
         const hasMultipleSquads = uniqueSquads.size > 1;
@@ -709,12 +720,78 @@ export class MergeSqlService {
   }
 
   /**
+   * Load configured squad names from localStorage or fall back to defaults.
+   * @returns {string[]}
+   */
+  static getConfiguredSquadNames() {
+    const defaults = [...DEFAULT_MERGE_SQL_SQUAD_NAMES];
+
+    try {
+      if (typeof localStorage === "undefined") {
+        return defaults;
+      }
+
+      const raw = localStorage.getItem(MERGE_SQL_SQUAD_NAMES_STORAGE_KEY);
+      if (!raw) {
+        return defaults;
+      }
+
+      const parsed = JSON.parse(raw);
+      const normalized = this.normalizeSquadNames(parsed);
+      return normalized.length > 0 ? normalized : defaults;
+    } catch {
+      return defaults;
+    }
+  }
+
+  /**
+   * Normalize squad names into a unique trimmed list.
+   * @param {unknown} squadNames
+   * @returns {string[]}
+   */
+  static normalizeSquadNames(squadNames) {
+    if (!Array.isArray(squadNames)) {
+      return [];
+    }
+
+    const seen = new Set();
+    const normalized = [];
+
+    for (const squadName of squadNames) {
+      const cleaned = String(squadName ?? "").trim();
+      if (!cleaned) continue;
+
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push(cleaned);
+    }
+
+    return normalized;
+  }
+
+  /**
    * Parse file name to extract metadata
    * Format: SCHEMA_NAME.TABLE_NAME (SQUAD_NAME)[FEATURE_NAME]
    * @param {string} fileName
    * @returns {{ schemaName: string, tableName: string, squadName: string, featureName: string } | null}
    */
   static parseFileName(fileName) {
+    const strict = this.parseStrictFileName(fileName);
+    if (strict) {
+      return strict;
+    }
+
+    return this.parseRelaxedFileName(fileName);
+  }
+
+  /**
+   * Strict parser for standard file names.
+   * Format: SCHEMA_NAME.TABLE_NAME (SQUAD_NAME)[FEATURE_NAME]
+   * @param {string} fileName
+   * @returns {{ schemaName: string, tableName: string, squadName: string, featureName: string } | null}
+   */
+  static parseStrictFileName(fileName) {
     // Remove .sql extension
     const baseName = fileName.replace(/\.sql$/i, "");
 
@@ -731,55 +808,145 @@ export class MergeSqlService {
       };
     }
 
-    // Fallback: just return the base name
     return null;
   }
 
   /**
-   * Build adjacent groups from parsed files, grouping consecutive files by SCHEMA.TABLE.
-   * Non-adjacent files with the same SCHEMA.TABLE are NOT merged into the same group.
+   * Relaxed parser for filenames that start with SCHEMA.TABLE and contain a known squad token.
+   * @param {string} fileName
+   * @param {string[]} squadNames
+   * @returns {{ schemaName: string, tableName: string, squadName: string, featureName: string | null } | null}
+   */
+  static parseRelaxedFileName(fileName, squadNames = this.getConfiguredSquadNames()) {
+    const baseName = fileName.replace(/\.sql$/i, "").trim();
+    const prefixMatch = baseName.match(/^([A-Za-z0-9_$#]+)\.([A-Za-z0-9_$#]+)([\s\S]*)$/);
+
+    if (!prefixMatch) {
+      return null;
+    }
+
+    const [, schemaName, tableName, remainder] = prefixMatch;
+    if (!remainder || !remainder.trim()) {
+      return null;
+    }
+
+    const squadMatch = this.findKnownSquadInText(remainder, squadNames);
+    if (!squadMatch) {
+      return null;
+    }
+
+    return {
+      schemaName: schemaName.trim(),
+      tableName: tableName.trim(),
+      squadName: squadMatch.squadName,
+      featureName: this.extractRelaxedFeatureName(remainder, squadMatch),
+    };
+  }
+
+  /**
+   * Find a known squad token in a string using exact token matching.
+   * @param {string} text
+   * @param {string[]} squadNames
+   * @returns {{ squadName: string, start: number, end: number } | null}
+   */
+  static findKnownSquadInText(text, squadNames) {
+    const candidates = this.normalizeSquadNames(squadNames).sort((a, b) => b.length - a.length);
+
+    for (const squadName of candidates) {
+      const escaped = squadName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(^|[^A-Za-z0-9_-])(${escaped})(?=$|[^A-Za-z0-9_-])`, "i");
+      const match = regex.exec(text);
+
+      if (!match) continue;
+
+      const prefixLength = match[1]?.length || 0;
+      const start = (match.index ?? 0) + prefixLength;
+      const matchedText = match[2] || squadName;
+
+      return {
+        squadName: matchedText,
+        start,
+        end: start + matchedText.length,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract feature name from the suffix that follows the detected squad token.
+   * @param {string} remainder
+   * @param {{ start: number, end: number }} squadMatch
+   * @returns {string|null}
+   */
+  static extractRelaxedFeatureName(remainder, squadMatch) {
+    const suffix = remainder.slice(squadMatch.end);
+    const cleaned = suffix.replace(/^[\s\-_\[\]\(\)]+/, "").replace(/[\s\-_\[\]\(\)]+$/, "").trim();
+    return cleaned || null;
+  }
+
+  /**
+   * Build groups from parsed files.
+   * Files that resolve to SCHEMA.TABLE are globally grouped by table regardless of adjacency.
+   * Files that do not resolve keep the legacy adjacent grouping by raw filename.
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
-   * @returns {Array<{ groupKey: string, isStandard: boolean, entries: Array<{ subHeader: string|null, dmlStatements: string[], selectStatements: string[] }> }>}
+   * @returns {Array<{ groupKey: string, isStandard: boolean, entries: Array<{ subHeader: string|null, squadName: string|null, featureName: string|null, dmlStatements: string[], selectStatements: string[] }> }>}
    */
   static buildAdjacentGroups(parsedFiles) {
     const groups = [];
+    const standardGroupMap = new Map();
 
     for (const file of parsedFiles) {
       const parsed = this.parseFileName(file.fileName);
-      let groupKey;
-      let subHeader;
-      let isStandard;
-
       if (parsed) {
-        groupKey = `${parsed.schemaName}.${parsed.tableName}`;
-        subHeader = `${parsed.squadName} - ${parsed.featureName}`;
-        isStandard = true;
-      } else {
-        groupKey = file.fileName;
-        subHeader = null;
-        isStandard = false;
-      }
+        const groupKey = `${parsed.schemaName}.${parsed.tableName}`;
+        const subHeader = parsed.featureName ? `${parsed.squadName} - ${parsed.featureName}` : parsed.squadName;
+        let group = standardGroupMap.get(groupKey);
 
-      const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+        if (!group) {
+          group = {
+            groupKey,
+            isStandard: true,
+            entries: [],
+          };
+          standardGroupMap.set(groupKey, group);
+          groups.push(group);
+        }
 
-      if (lastGroup && lastGroup.groupKey === groupKey) {
-        lastGroup.entries.push({
+        group.entries.push({
           subHeader,
+          squadName: parsed.squadName,
+          featureName: parsed.featureName || null,
           dmlStatements: file.dmlStatements,
           selectStatements: file.selectStatements,
         });
       } else {
-        groups.push({
-          groupKey,
-          isStandard,
-          entries: [
-            {
-              subHeader,
-              dmlStatements: file.dmlStatements,
-              selectStatements: file.selectStatements,
-            },
-          ],
-        });
+        const groupKey = file.fileName;
+        const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+
+        if (lastGroup && !lastGroup.isStandard && lastGroup.groupKey === groupKey) {
+          lastGroup.entries.push({
+            subHeader: null,
+            squadName: null,
+            featureName: null,
+            dmlStatements: file.dmlStatements,
+            selectStatements: file.selectStatements,
+          });
+        } else {
+          groups.push({
+            groupKey,
+            isStandard: false,
+            entries: [
+              {
+                subHeader: null,
+                squadName: null,
+                featureName: null,
+                dmlStatements: file.dmlStatements,
+                selectStatements: file.selectStatements,
+              },
+            ],
+          });
+        }
       }
     }
 

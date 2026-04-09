@@ -65,6 +65,9 @@ class SettingsService {
       if (type === "kvlist" || type === "oracle-connections") {
         return Array.isArray(defaultValue) ? defaultValue : [];
       }
+      if (type === "string-list") {
+        return Array.isArray(defaultValue) ? defaultValue : [];
+      }
       return defaultValue;
     }
     try {
@@ -78,6 +81,14 @@ class SettingsService {
           try {
             const val = JSON.parse(raw);
             return Array.isArray(val) ? val : [];
+          } catch (_) {
+            return [];
+          }
+        }
+        case "string-list": {
+          try {
+            const val = JSON.parse(raw);
+            return Array.isArray(val) ? val.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
           } catch (_) {
             return [];
           }
@@ -108,6 +119,13 @@ class SettingsService {
       case "kvlist":
       case "oracle-connections":
         storeVal = JSON.stringify(Array.isArray(value) ? value : []);
+        break;
+      case "string-list":
+        storeVal = JSON.stringify(
+          Array.isArray(value)
+            ? value.map((item) => String(item ?? "").trim()).filter(Boolean)
+            : [],
+        );
         break;
       case "date":
       case "time":
@@ -162,6 +180,16 @@ class SettingsService {
         }
         return { valid: true };
       }
+      case "string-list": {
+        const rows = Array.isArray(value) ? value : [];
+        for (const item of rows) {
+          if (!item) continue;
+          if (!/^[A-Za-z0-9_-]+$/.test(String(item))) {
+            return { valid: false, message: "Each squad name must be a single token using letters, numbers, _ or -" };
+          }
+        }
+        return { valid: true };
+      }
       case "secret":
       case "string": {
         if (typeof rules.minLength === "number" && String(value).length < rules.minLength)
@@ -211,6 +239,11 @@ class SettingsService {
               <button type="button" class="btn kv-add" data-action="kv-add">Add</button>
             </div>
           </div>
+        `;
+      }
+      case "string-list": {
+        return `
+          <textarea class="setting-input setting-textarea setting-list-input" rows="6" placeholder="One squad name per line" aria-label="${item.label}"></textarea>
         `;
       }
       case "secret": {

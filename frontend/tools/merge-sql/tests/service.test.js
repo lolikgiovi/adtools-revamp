@@ -1,10 +1,20 @@
 /**
  * Unit tests for MergeSqlService
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MergeSqlService } from "../service.js";
 
+const SQUAD_STORAGE_KEY = "config.mergeSql.squadNames";
+
 describe("MergeSqlService", () => {
+  beforeEach(() => {
+    localStorage.removeItem(SQUAD_STORAGE_KEY);
+  });
+
+  afterEach(() => {
+    localStorage.removeItem(SQUAD_STORAGE_KEY);
+  });
+
   describe("parseFile", () => {
     it("extracts MERGE INTO statements", () => {
       const content = `SET DEFINE OFF;
@@ -517,6 +527,45 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.squadName).toBe("SQUAD NAME");
       expect(result.featureName).toBe("FEATURE NAME");
     });
+
+    it("parses relaxed file name format using default squad names", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ANTARES - LIVIN_CARE_REVAMP.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.schemaName).toBe("LIVIN_CARE");
+      expect(result.tableName).toBe("MILESTONE_CONFIG_CIS");
+      expect(result.squadName).toBe("ANTARES");
+      expect(result.featureName).toBe("LIVIN_CARE_REVAMP");
+    });
+
+    it("matches relaxed squad names case-insensitively", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - antares - revamp.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.squadName).toBe("antares");
+    });
+
+    it("does not match squad names as substrings inside larger tokens", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - antar esplus - feature.sql");
+      expect(result).toBeNull();
+    });
+
+    it("uses custom configured squad names for relaxed parsing", () => {
+      localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(["orion", "rigel"]));
+
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ORION - REVAMP.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.squadName).toBe("ORION");
+    });
+
+    it("falls back to non-standard parsing when squad token is unknown", () => {
+      localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(["orion", "rigel"]));
+
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ANTARES - REVAMP.sql");
+
+      expect(result).toBeNull();
+    });
   });
 
   describe("sortFiles", () => {
@@ -588,7 +637,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result[0].entries[1].subHeader).toBe("SQUAD2 - FEATURE2");
     });
 
-    it("does NOT merge non-adjacent files with same SCHEMA.TABLE", () => {
+    it("globally merges non-adjacent files with same SCHEMA.TABLE", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -609,10 +658,12 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       const result = MergeSqlService.buildAdjacentGroups(parsedFiles);
 
-      expect(result).toHaveLength(3);
+      expect(result).toHaveLength(2);
       expect(result[0].groupKey).toBe("CONFIG.APP_CONFIG");
+      expect(result[0].entries).toHaveLength(2);
+      expect(result[0].entries[0].subHeader).toBe("SQUAD1 - FEATURE1");
+      expect(result[0].entries[1].subHeader).toBe("SQUAD2 - FEATURE2");
       expect(result[1].groupKey).toBe("OTHER.TABLE");
-      expect(result[2].groupKey).toBe("CONFIG.APP_CONFIG");
     });
 
     it("non-standard filenames form individual groups", () => {
@@ -664,7 +715,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.mergedSql).toContain("SET DEFINE OFF;");
     });
 
-    it("non-adjacent same-table files produce separate group headers", () => {
+    it("non-adjacent same-table files produce a single group header", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -686,8 +737,37 @@ SELECT * FROM SCHEMA.CONFIG;`;
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       const headerMatches = result.mergedSql.match(/-- CONFIG\.APP_CONFIG\n/g);
-      expect(headerMatches).toHaveLength(2);
+      expect(headerMatches).toHaveLength(1);
       expect(result.mergedSql).toContain("-- OTHER.TABLE_NAME");
+    });
+
+    it("keeps the table group positioned at its first occurrence while preserving file order within the group", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO OTHER.TABLE_NAME (c) VALUES (9);"],
+          selectStatements: [],
+          fileName: "OTHER.TABLE_NAME (SQUADX)[FEATUREX].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+      const configIndex = result.mergedSql.indexOf("-- CONFIG.APP_CONFIG");
+      const otherIndex = result.mergedSql.indexOf("-- OTHER.TABLE_NAME");
+      const squad1Index = result.mergedSql.indexOf("-- SQUAD1 - FEATURE1");
+      const squad2Index = result.mergedSql.indexOf("-- SQUAD2 - FEATURE2");
+
+      expect(configIndex).toBeLessThan(otherIndex);
+      expect(squad1Index).toBeLessThan(squad2Index);
     });
 
     it("SELECT output includes SELECT * FROM SCHEMA.TABLE with concatenated WHERE for standard filenames with multiple squads", () => {
