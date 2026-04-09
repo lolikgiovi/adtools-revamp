@@ -2033,5 +2033,32 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
       expect(result.validationSql).toContain("2 AS expectation");
       expect(result.validationSql.trim().endsWith(";")).toBe(true);
     });
+
+    it("builds validation SQL directly from merged SQL text", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO USER_LIMIT.LIMIT_SERVICE tgt
+USING (
+  SELECT 1 AS limit_service_id,
+    'deposito-loan-early-settlement' AS service_code
+  FROM DUAL
+) src
+ON (tgt.limit_service_id = src.limit_service_id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.service_code = src.service_code
+WHEN NOT MATCHED THEN INSERT (limit_service_id, service_code)
+VALUES (src.limit_service_id, src.service_code);
+
+--====================================================================================================
+-- USER_LIMIT.LIMIT_SERVICE
+--====================================================================================================`;
+
+      const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+
+      expect(validationSql).toContain("'USER_LIMIT.LIMIT_SERVICE' AS table_name");
+      expect(validationSql).toContain("1 AS expectation");
+      expect(validationSql).toContain("WHERE limit_service_id = 1");
+      expect(validationSql).toContain("END AS result");
+    });
   });
 });

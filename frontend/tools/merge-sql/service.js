@@ -1415,6 +1415,21 @@ export class MergeSqlService {
   }
 
   /**
+   * Build Validation SQL directly from merged SQL editor content.
+   * This supports cases where users manually edit the merged SQL instead of regenerating from files.
+   * @param {string} mergedSql
+   * @returns {string}
+   */
+  static buildValidationSqlFromMergedSql(mergedSql) {
+    if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
+      return "";
+    }
+
+    const parsed = this.parseFile(mergedSql, "MERGED.sql");
+    return this.buildValidationSql([parsed]);
+  }
+
+  /**
    * Extract the WHERE clause from a SELECT statement
    * @param {string} selectStatement
    * @returns {string|null}

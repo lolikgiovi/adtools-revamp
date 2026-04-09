@@ -137,6 +137,15 @@ export const MergeSqlTemplate = /* html */ `
           </button>
         </div>
         <div class="result-actions" id="merge-sql-result-actions">
+          <button class="btn btn-ghost btn-xs" id="merge-sql-refresh-validation-btn" title="Generate Validation SQL from current Merged SQL">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+            </svg>
+            Refresh Validation
+          </button>
           <button class="btn btn-ghost btn-xs" id="merge-sql-copy-btn" title="Copy">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>

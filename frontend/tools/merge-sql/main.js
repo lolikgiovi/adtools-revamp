@@ -181,6 +181,7 @@ export class MergeSqlTool extends BaseTool {
     const folderInput = document.getElementById("merge-sql-folder-input");
     const mergeBtn = document.getElementById("merge-sql-btn");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
+    const refreshValidationBtn = document.getElementById("merge-sql-refresh-validation-btn");
     const copyBtn = document.getElementById("merge-sql-copy-btn");
     const downloadBtn = document.getElementById("merge-sql-download-btn");
     const downloadAllBtn = document.getElementById("merge-sql-download-all-btn");
@@ -200,6 +201,7 @@ export class MergeSqlTool extends BaseTool {
     if (folderInput) folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
     if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
     if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
+    if (refreshValidationBtn) refreshValidationBtn.addEventListener("click", () => this.handleRefreshValidation());
     if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
     if (downloadBtn) downloadBtn.addEventListener("click", () => this.handleDownload());
     if (downloadAllBtn) downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
@@ -415,6 +417,39 @@ export class MergeSqlTool extends BaseTool {
     this.hideResult();
     await IndexedDBManager.clearAll();
     this.updateUI();
+  }
+
+  async handleRefreshValidation() {
+    const mergedSql = this.mergedEditor?.getValue() || "";
+    if (!mergedSql.trim()) {
+      this.showError("No merged SQL available to generate validation");
+      return;
+    }
+
+    const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+    if (this.validationEditor) {
+      this.validationEditor.setValue(validationSql);
+    }
+
+    this.result = {
+      mergedSql,
+      selectSql: this.selectEditor?.getValue() || this.result?.selectSql || "",
+      validationSql,
+      duplicates: this.result?.duplicates || [],
+      report: this.result?.report || null,
+    };
+
+    await IndexedDBManager.saveResults(
+      this.result.mergedSql,
+      this.result.selectSql,
+      this.result.validationSql,
+      this.result.duplicates,
+      this.result.report
+    );
+
+    this.showResult();
+    this.handleTabSwitch("validation");
+    this.showSuccess("Validation SQL refreshed from current Merged SQL");
   }
 
   getCurrentEditor() {
