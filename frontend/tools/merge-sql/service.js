@@ -16,6 +16,8 @@ const DEFAULT_MERGE_SQL_SQUAD_NAMES = [
 ];
 
 export class MergeSqlService {
+  static SELECT_FILTERED_NOTE = "-- No select statement get since the where clause is not by specific key";
+
   /**
    * Parse SQL file content and extract DML statements and SELECT statements
    * @param {string} content - SQL file content
@@ -1550,6 +1552,7 @@ export class MergeSqlService {
         selectLines.push(`-- ${group.groupKey}`);
         selectLines.push(`--====================================================================================================`);
         selectLines.push("");
+        let hasRenderedSelectContent = false;
 
         // Count unique squads in this group
         const uniqueSquads = new Set();
@@ -1575,8 +1578,10 @@ export class MergeSqlService {
           if (whereClauses.length > 0) {
             const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
             selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
+            hasRenderedSelectContent = true;
           } else {
             selectLines.push(`SELECT * FROM ${group.groupKey};`);
+            hasRenderedSelectContent = true;
           }
         }
 
@@ -1595,7 +1600,12 @@ export class MergeSqlService {
           for (const stmt of validStatements) {
             selectLines.push(stmt);
             selectLines.push("");
+            hasRenderedSelectContent = true;
           }
+        }
+
+        if (!hasRenderedSelectContent) {
+          selectLines.push(this.SELECT_FILTERED_NOTE);
         }
       } else {
         // Non-standard files: output the original SELECT statements (excluding timestamp verification and FETCH FIRST)
@@ -1603,6 +1613,7 @@ export class MergeSqlService {
         selectLines.push(`-- ${group.groupKey}`);
         selectLines.push(`--====================================================================================================`);
         selectLines.push("");
+        let hasRenderedSelectContent = false;
         for (const entry of group.entries) {
           for (const stmt of entry.selectStatements) {
             if (this.isFetchFirstStatement(stmt)) continue;
@@ -1612,7 +1623,12 @@ export class MergeSqlService {
             }
             selectLines.push(stmt);
             selectLines.push("");
+            hasRenderedSelectContent = true;
           }
+        }
+
+        if (!hasRenderedSelectContent) {
+          selectLines.push(this.SELECT_FILTERED_NOTE);
         }
       }
     }

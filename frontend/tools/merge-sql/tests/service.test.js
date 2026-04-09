@@ -1865,6 +1865,26 @@ DELETE FROM T2 WHERE id = 2;`;
       expect(result.report.dangerousStatements[0].type).toBe("DELETE");
       expect(result.report.dangerousStatements[1].type).toBe("UPDATE_NO_WHERE");
     });
+
+    it("shows a fallback note when all standard-file SELECT statements are filtered out", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT * FROM USER_LIMIT.LIMIT_SERVICE ORDER BY updated_time DESC FETCH FIRST 1 ROWS ONLY;",
+            "SELECT limit_service_id, updated_time FROM USER_LIMIT.LIMIT_SERVICE WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;",
+          ],
+          fileName: "USER_LIMIT.LIMIT_SERVICE (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("-- USER_LIMIT.LIMIT_SERVICE");
+      expect(result.selectSql).toContain("-- No select statement get since the where clause is not by specific key");
+      expect(result.selectSql).not.toContain("FETCH FIRST 1 ROWS ONLY");
+      expect(result.selectSql).not.toContain("updated_time >= SYSDATE - INTERVAL");
+    });
   });
 
   describe("Validation SQL output", () => {
