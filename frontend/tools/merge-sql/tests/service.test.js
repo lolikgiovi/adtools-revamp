@@ -1889,7 +1889,12 @@ WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       expect(result.validationSql).toContain("'CONFIG.APP_CONFIG' AS table_name");
-      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql).toContain("COUNT(*) AS row_in_table,");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 2 THEN 'MATCH'");
+      expect(result.validationSql).toContain("WHEN COUNT(*) > 2 THEN '+' || TO_CHAR(COUNT(*) - 2)");
+      expect(result.validationSql).toContain("ELSE '-' || TO_CHAR(2 - COUNT(*))");
+      expect(result.validationSql).toContain("END AS result");
       expect(result.validationSql).toContain("FROM CONFIG.APP_CONFIG");
       expect(result.validationSql).toContain("WHERE id IN ('alpha', 'beta')");
       expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE id IN ('alpha', 'beta');");
@@ -1915,11 +1920,11 @@ WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql).toContain("2 AS expectation");
       expect(result.validationSql).toContain("WHERE (id = 1 AND category = 'A') OR (id = 2 AND category = 'B')");
     });
 
-    it("groups validation SQL by table and sums row_in_query across INSERT statements", () => {
+    it("groups validation SQL by table and sums expectation across INSERT statements", () => {
       const parsedFiles = [
         {
           dmlStatements: [
@@ -1937,7 +1942,8 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       expect(result.validationSql).toContain("'CASA.CONFIG' AS table_name");
-      expect(result.validationSql).toContain("3 AS row_in_query");
+      expect(result.validationSql).toContain("3 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 3 THEN 'MATCH'");
       expect(result.validationSql).not.toContain("1 AS row_in_query");
       expect(result.validationSql).not.toContain("2 AS row_in_query");
       expect((result.validationSql.match(/'CASA\.CONFIG' AS table_name/g) || [])).toHaveLength(1);
@@ -1961,7 +1967,8 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
 
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
-      expect(result.validationSql).toContain("4 AS row_in_query");
+      expect(result.validationSql).toContain("4 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 4 THEN 'MATCH'");
       expect(result.validationSql).toContain("WHERE service_id IN ('svc-1', 'svc-2')");
       expect(result.validationSql).toContain("OR service_code IN ('legacy-a', 'legacy-b')");
       expect((result.validationSql.match(/'SYSTEM_SUPPORT\.SERVICE' AS table_name/g) || [])).toHaveLength(1);
@@ -2003,7 +2010,7 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
       expect(result.validationSql).toContain("UNION ALL");
       expect((result.validationSql.match(/'T1' AS table_name/g) || [])).toHaveLength(1);
       expect((result.validationSql.match(/'T2' AS table_name/g) || [])).toHaveLength(1);
-      expect(result.validationSql).toContain("2 AS row_in_query");
+      expect(result.validationSql).toContain("2 AS expectation");
       expect(result.validationSql.trim().endsWith(";")).toBe(true);
     });
   });

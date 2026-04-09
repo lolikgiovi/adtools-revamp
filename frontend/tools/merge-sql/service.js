@@ -1285,11 +1285,17 @@ export class MergeSqlService {
    * @returns {string}
    */
   static renderValidationSelect(entry) {
+    const rowInQuery = entry.rowInQuery;
     return [
       "SELECT",
       `  '${entry.tableName}' AS table_name,`,
-      `  ${entry.rowInQuery} AS row_in_query,`,
-      "  COUNT(*) AS row_in_table",
+      `  ${rowInQuery} AS expectation,`,
+      "  COUNT(*) AS row_in_table,",
+      `  CASE`,
+      `    WHEN COUNT(*) = ${rowInQuery} THEN 'MATCH'`,
+      `    WHEN COUNT(*) > ${rowInQuery} THEN '+' || TO_CHAR(COUNT(*) - ${rowInQuery})`,
+      `    ELSE '-' || TO_CHAR(${rowInQuery} - COUNT(*))`,
+      `  END AS result`,
       `FROM ${entry.tableName}`,
       `WHERE ${entry.whereClause}`,
     ].join("\n");
