@@ -180,6 +180,7 @@ export class MergeSqlTool extends BaseTool {
     const fileInput = document.getElementById("merge-sql-file-input");
     const folderInput = document.getElementById("merge-sql-folder-input");
     const mergeBtn = document.getElementById("merge-sql-btn");
+    const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
     const refreshValidationBtn = document.getElementById("merge-sql-refresh-validation-btn");
     const copyBtn = document.getElementById("merge-sql-copy-btn");
@@ -200,6 +201,7 @@ export class MergeSqlTool extends BaseTool {
     if (fileInput) fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
     if (folderInput) folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
     if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
+    if (clearFilesBtn) clearFilesBtn.addEventListener("click", () => this.handleClearFilesOnly());
     if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
     if (refreshValidationBtn) refreshValidationBtn.addEventListener("click", () => this.handleRefreshValidation());
     if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
@@ -417,6 +419,17 @@ export class MergeSqlTool extends BaseTool {
     this.hideResult();
     await IndexedDBManager.clearAll();
     this.updateUI();
+  }
+
+  async handleClearFilesOnly() {
+    if (this.files.length === 0) {
+      return;
+    }
+
+    this.files = [];
+    this.saveFilesToIndexedDB();
+    this.updateUI();
+    this.showSuccess("Files cleared. Current SQL results are kept.");
   }
 
   async handleRefreshValidation() {
@@ -1003,6 +1016,14 @@ export class MergeSqlTool extends BaseTool {
     this.updateMergeButton();
     this.updateSortButtons();
     this.updateFileCount();
+    this.updateClearFilesButton();
+  }
+
+  updateClearFilesButton() {
+    const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
+    if (!clearFilesBtn) return;
+
+    clearFilesBtn.style.display = this.files.length > 0 ? "block" : "none";
   }
 
   updateFileCount() {

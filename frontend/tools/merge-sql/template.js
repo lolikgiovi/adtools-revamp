@@ -90,6 +90,9 @@ export const MergeSqlTemplate = /* html */ `
           </svg>
           MERGE SQLs
         </button>
+        <button class="btn btn-ghost" id="merge-sql-clear-files-btn" style="display: none;">
+          Clear Files Only
+        </button>
         <button class="btn btn-ghost" id="merge-sql-clear-btn" style="display: none;">
           Clear All
         </button>
