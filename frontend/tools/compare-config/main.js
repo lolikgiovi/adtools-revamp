@@ -7,6 +7,7 @@ import { CompareConfigService } from "./service.js";
 import { CompareConfigTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
+import "./styles.css";
 import { VerticalCardView } from "./views/VerticalCardView.js";
 import { MasterDetailView } from "./views/MasterDetailView.js";
 import { GridView } from "./views/GridView.js";

@@ -257,23 +257,36 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
 ];
 
 const KV_KEY = "analytics-dashboard-config";
+const CACHE_TTL_MS = 60 * 1000;
+let tabConfigCache = null;
+const dashboardQueryCache = new Map();
 
 /**
  * Get tab configs from KV or fallback to defaults
  * Returns { source: 'kv' | 'defaults', tabs: [] }
  */
 async function getTabConfigs(env) {
+  const now = Date.now();
+  if (tabConfigCache && tabConfigCache.expiresAt > now) {
+    return tabConfigCache.value;
+  }
+
+  let value = { source: "defaults", tabs: DEFAULT_TABS };
   try {
     if (env.adtools) {
       const stored = await env.adtools.get(KV_KEY, "json");
       if (stored && Array.isArray(stored) && stored.length > 0) {
-        return { source: "kv", tabs: stored };
+        value = { source: "kv", tabs: stored };
       }
     }
   } catch (err) {
     console.error("Error reading tab configs from KV:", err);
   }
-  return { source: "defaults", tabs: DEFAULT_TABS };
+  tabConfigCache = {
+    expiresAt: now + CACHE_TTL_MS,
+    value,
+  };
+  return value;
 }
 
 /**
@@ -401,11 +414,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       });
     }
 
-    const result = await env.DB.prepare(tab.query).all();
-
-    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
-    });
+    return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 500,
@@ -418,43 +427,60 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 export const handleStatsTools = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "tools") || DEFAULT_TABS[0];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsDaily = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "daily") || DEFAULT_TABS[1];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsDevices = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "devices") || DEFAULT_TABS[2];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsEvents = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "events") || DEFAULT_TABS[3];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsQuickQuery = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "quick-query") || DEFAULT_TABS[4];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsQuickQueryErrors = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "quick-query-errors") || DEFAULT_TABS[5];
-  return executeQuery(env, tab.query);
+  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 /**
  * Helper to execute a query and return response
  */
-async function executeQuery(env, query) {
+function getCachedDashboardQueryBody(cacheKey) {
+  const cached = dashboardQueryCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    dashboardQueryCache.delete(cacheKey);
+    return null;
+  }
+  return cached.body;
+}
+
+function setCachedDashboardQueryBody(cacheKey, body) {
+  dashboardQueryCache.set(cacheKey, {
+    body,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+}
+
+async function executeQuery(env, cacheKey, query) {
   try {
     if (!env.DB) {
       return new Response(JSON.stringify({ ok: false, error: "Database not available" }), {
@@ -463,9 +489,18 @@ async function executeQuery(env, query) {
       });
     }
 
-    const result = await env.DB.prepare(query).all();
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
 
-    return new Response(JSON.stringify({ ok: true, data: result.results || [] }), {
+    const result = await env.DB.prepare(query).all();
+    const body = JSON.stringify({ ok: true, data: result.results || [] });
+    setCachedDashboardQueryBody(cacheKey, body);
+
+    return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {

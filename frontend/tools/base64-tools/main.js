@@ -6,6 +6,7 @@ import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { isTauri } from "../../core/Runtime.js";
 import JSZip from "jszip";
+import "./styles.css";
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {

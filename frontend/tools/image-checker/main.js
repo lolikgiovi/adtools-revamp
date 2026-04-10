@@ -3,6 +3,7 @@ import { ImageCheckerService, BaseUrlService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
+import "./styles.css";
 
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {

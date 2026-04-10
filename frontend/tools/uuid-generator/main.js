@@ -2,6 +2,7 @@ import { UUIDGeneratorTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import "./styles.css";
 
 class UUIDGenerator extends BaseTool {
   constructor(eventBus) {

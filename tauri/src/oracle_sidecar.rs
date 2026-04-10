@@ -5,7 +5,7 @@
 //! Oracle Instant Client to be bundled with the app.
 
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
@@ -15,6 +15,7 @@ const SIDECAR_PORT: u16 = 21522;
 const SIDECAR_NAME: &str = "oracle-sidecar";
 const STARTUP_TIMEOUT_MS: u64 = 30000;
 const HEALTH_CHECK_INTERVAL_MS: u64 = 100;
+static SIDECAR_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// Kill any process occupying the sidecar port.
 /// Used on startup (orphan cleanup) and on app close (ensure cleanup).
@@ -164,15 +165,23 @@ pub fn get_oracle_sidecar_url() -> String {
 async fn check_sidecar_health() -> bool {
     let url = format!("http://127.0.0.1:{}/health", SIDECAR_PORT);
 
-    match reqwest::Client::new()
+    match sidecar_http_client()
         .get(&url)
-        .timeout(Duration::from_secs(2))
         .send()
         .await
     {
         Ok(response) => response.status().is_success(),
         Err(_) => false,
     }
+}
+
+fn sidecar_http_client() -> &'static reqwest::Client {
+    SIDECAR_HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .expect("failed to build sidecar health client")
+    })
 }
 
 #[cfg(test)]

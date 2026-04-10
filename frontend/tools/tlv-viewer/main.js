@@ -3,6 +3,7 @@ import { TLVViewerService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import "./styles.css";
 
 class TLVViewer extends BaseTool {
   constructor(eventBus) {

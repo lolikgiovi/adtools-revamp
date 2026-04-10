@@ -10,6 +10,7 @@ import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { isTauri } from "../../core/Runtime.js";
+import "./styles.css";
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {

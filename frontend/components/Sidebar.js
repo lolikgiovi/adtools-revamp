@@ -35,6 +35,7 @@ class Sidebar {
     this.setupToggle();
     this.initializeAccessibility();
     this.setupMenuButtons();
+    this.renderTools();
     this.renderMenuGroups();
 
     // Set initial state - start with sidebar expanded on desktop
@@ -334,7 +335,8 @@ class Sidebar {
    * @param {BaseTool} tool - Tool instance
    */
   addTool(tool) {
-    const metadata = tool.getMetadata();
+    const metadata = typeof tool?.getMetadata === "function" ? tool.getMetadata() : tool;
+    if (!metadata?.id) return;
     this.tools.push(metadata);
     this.renderTools();
   }

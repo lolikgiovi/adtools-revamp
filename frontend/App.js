@@ -2,37 +2,16 @@
  * App - Main application class
  * Initializes and coordinates all components
  */
-import { UUIDGenerator } from "./tools/uuid-generator/main.js";
-import { JSONTools } from "./tools/json-tools/main.js";
-import { QRTools } from "./tools/qr-tools/main.js";
-import { Base64Tools } from "./tools/base64-tools/main.js";
-import { TLVViewer } from "./tools/tlv-viewer/main.js";
 import { EventBus } from "./core/EventBus.js";
 import { Router } from "./core/Router.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { ThemeManager } from "./core/ThemeManager.js";
-import { QuickQuery } from "./tools/quick-query/main.js";
-import { HTMLTemplateTool } from "./tools/html-editor/main.js";
-import { SettingsPage } from "./pages/settings/main.js";
-import { AboutPage } from "./pages/about/main.js";
 import { GlobalSearch } from "./components/GlobalSearch.js";
-import { getIconSvg as getSettingsIconSvg } from "./pages/settings/icon.js";
-import { getIconSvg as getAboutIconSvg } from "./pages/about/icon.js";
-import { getIconSvg as getSignoutIconSvg } from "./pages/signout/icon.js";
 import toolsConfig from "./config/tools.json";
+import { getIconSvg } from "./config/iconRegistry.js";
+import { buildToolDefinitions, getToolDefinition, getToolDefinitionsList } from "./config/toolDefinitions.js";
 import { UsageTracker } from "./core/UsageTracker.js";
-import { AnalyticsSender } from "./core/AnalyticsSender.js";
-import { SplunkVTLEditor } from "./tools/splunk-template/main.js";
-import { SQLInClauseTool } from "./tools/sql-in-clause/main.js";
-import { CheckImageTool } from "./tools/image-checker/main.js";
-import { JenkinsRunner } from "./tools/run-query/main.js";
-import { RunBatch } from "./tools/run-batch/main.js";
-import { MasterLockey } from "./tools/master-lockey/main.js";
-import { CompareConfigTool } from "./tools/compare-config/main.js";
-import { MergeSqlTool } from "./tools/merge-sql/main.js";
-import { RegisterPage } from "./pages/register/main.js";
-import { AnalyticsDashboardPage } from "./pages/analytics-dashboard/main.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
@@ -41,11 +20,13 @@ class App {
   constructor() {
     this.eventBus = new EventBus();
     this.router = new Router(this.eventBus);
+    this.toolDefinitions = new Map();
     this.sidebar = null;
     this.tools = new Map();
+    this.pendingToolLoads = new Map();
+    this.pageComponents = new Map();
     this.currentTool = null;
     this.mainContent = null;
-    this.iconRegistry = new Map();
     this.toolsConfigMap = new Map();
     this.categoriesConfigMap = new Map();
     // Temporary store for route navigation data payloads
@@ -68,6 +49,7 @@ class App {
     this.setupDOM();
     this.buildToolsConfigMap();
     this.buildCategoriesConfigMap();
+    this.buildToolDefinitions();
     // Dev: speed up analytics batch interval for quicker feedback
     if (import.meta?.env?.DEV) {
       try {
@@ -98,8 +80,6 @@ class App {
       const username = localStorage.getItem("user.username");
       if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
     } catch (_) {}
-    this.registerTools();
-    this.buildIconRegistry();
     this.setupRoutes();
 
     // Build global search index after routes/tools are ready
@@ -170,6 +150,10 @@ class App {
     }
   }
 
+  buildToolDefinitions() {
+    this.toolDefinitions = buildToolDefinitions(toolsConfig?.tools || []);
+  }
+
   /**
    * Initialize core components
    */
@@ -179,6 +163,7 @@ class App {
       eventBus: this.eventBus,
       router: this.router,
       getIcon: this.getToolIcon.bind(this),
+      tools: this.getToolDefinitions(),
       menuConfig: this.buildMenuConfig(),
       toolsConfigMap: this.toolsConfigMap,
       categoriesMap: this.categoriesConfigMap,
@@ -206,122 +191,9 @@ class App {
     this.setupNotifications();
   }
 
-  /** Build icon registry from registered tools */
-  buildIconRegistry() {
-    this.iconRegistry.clear();
-    this.tools.forEach((tool) => {
-      const md = tool.getMetadata();
-      if (typeof tool.getIconSvg === "function" && md.icon) {
-        this.iconRegistry.set(md.icon, () => tool.getIconSvg());
-      }
-    });
-    // Page and action icons
-    this.iconRegistry.set("settings", () => getSettingsIconSvg());
-    this.iconRegistry.set("about", () => getAboutIconSvg());
-    this.iconRegistry.set("signout", () => getSignoutIconSvg());
-  }
-
-  /** Get SVG icon by alias, preferring tool-provided icon */
+  /** Get SVG icon by alias from the shell registry */
   getToolIcon(iconName) {
-    const provider = this.iconRegistry.get(iconName);
-    if (provider) {
-      try {
-        return provider();
-      } catch (e) {
-        // fallback below
-      }
-    }
-    // Fallback to sidebar's built-in icons
-    return this.sidebar?.getToolIcon(iconName);
-  }
-
-  /**
-   * Register all tools
-   */
-  registerTools() {
-    // Register UUID Generator
-    const uuidGenerator = new UUIDGenerator(this.eventBus);
-    this.registerTool(uuidGenerator);
-
-    // Register JSON Tools
-    const jsonTools = new JSONTools(this.eventBus);
-    this.registerTool(jsonTools);
-
-    // Register Base64 Tools
-    const base64Tools = new Base64Tools(this.eventBus);
-    this.registerTool(base64Tools);
-
-    // Register TLV Viewer
-    const tlvViewer = new TLVViewer(this.eventBus);
-    this.registerTool(tlvViewer);
-
-    // Register QR Tools
-    const qrTools = new QRTools(this.eventBus);
-    this.registerTool(qrTools);
-
-    // Register Quick Query
-    const quickQuery = new QuickQuery(this.eventBus);
-    this.registerTool(quickQuery);
-
-    // Register HTML Template
-    const htmlTemplate = new HTMLTemplateTool(this.eventBus);
-    this.registerTool(htmlTemplate);
-
-    // Register Splunk VTL Editor
-    const splunkVtl = new SplunkVTLEditor(this.eventBus);
-    this.registerTool(splunkVtl);
-
-    // Register SQL IN Clause
-    const sqlInClause = new SQLInClauseTool(this.eventBus);
-    this.registerTool(sqlInClause);
-
-    // Register Check Image
-    const checkImage = new CheckImageTool(this.eventBus);
-    this.registerTool(checkImage);
-
-    // Register Jenkins Runner
-    const jenkinsRunner = new JenkinsRunner(this.eventBus);
-    this.registerTool(jenkinsRunner);
-
-    // Register Run Batch
-    const runBatch = new RunBatch(this.eventBus);
-    this.registerTool(runBatch);
-
-    // Register Master Lockey
-    const masterLockey = new MasterLockey(this.eventBus);
-    this.registerTool(masterLockey);
-
-    // Register Compare Config
-    const compareConfig = new CompareConfigTool(this.eventBus);
-    this.registerTool(compareConfig);
-
-    // Register Merge SQL
-    const mergeSql = new MergeSqlTool(this.eventBus);
-    this.registerTool(mergeSql);
-
-    // Add more tools here as they are implemented
-  }
-
-  /**
-   * Register a tool
-   * @param {BaseTool} tool - Tool instance
-   */
-  registerTool(tool) {
-    // Apply config overrides before registering
-    const cfg = this.toolsConfigMap.get(tool.id);
-    if (cfg) {
-      if (typeof cfg.name === "string") tool.name = cfg.name;
-      if (typeof cfg.icon === "string") tool.icon = cfg.icon;
-      if (typeof cfg.category === "string") tool.category = cfg.category;
-      tool.__config = cfg;
-    }
-
-    this.tools.set(tool.id, tool);
-
-    // Notify sidebar about new tool
-    this.eventBus.emit("tool:registered", { tool });
-
-    console.log(`Tool registered: ${tool.name}`);
+    return getIconSvg(iconName) || this.sidebar?.getToolIcon(iconName);
   }
 
   /**
@@ -334,10 +206,14 @@ class App {
     });
 
     // Tool routes
-    this.tools.forEach((tool, toolId) => {
-      this.router.register(toolId, (ctx) => {
+    this.toolDefinitions.forEach((definition, toolId) => {
+      this.router.register(toolId, () => {
         const data = this._routeData?.[toolId] || null;
-        this.showTool(toolId, data);
+        this.showTool(toolId, data).catch((error) => {
+          console.error(`Failed to show tool ${toolId}:`, error);
+          this.showNotification(`Failed to load ${definition.name}`, "error", 2500);
+          this.router.navigate("home");
+        });
         // Clear one-time data after consumption to avoid stale injections
         if (data) this._routeData[toolId] = null;
       });
@@ -345,25 +221,32 @@ class App {
 
     // Settings route
     this.router.register("settings", () => {
-      this.showSettings();
+      this.showSettings().catch((error) => {
+        console.error("Failed to show settings page:", error);
+      });
     });
 
     // About route
     this.router.register("about", () => {
-      this.showAbout();
+      this.showAbout().catch((error) => {
+        console.error("Failed to show about page:", error);
+      });
     });
 
     // Feedback route removed
 
     // Register route for onboarding
     this.router.register("register", () => {
-      const registerPage = new RegisterPage({ eventBus: this.eventBus });
-      registerPage.mount(this.mainContent);
+      this.showRegister().catch((error) => {
+        console.error("Failed to show register page:", error);
+      });
     });
 
     // Analytics dashboard (no sidebar entry, direct URL access only)
     this.router.register("analytics-dashboard", () => {
-      this.showAnalyticsDashboard();
+      this.showAnalyticsDashboard().catch((error) => {
+        console.error("Failed to show analytics dashboard:", error);
+      });
     });
 
     // Set default route based on registration state
@@ -380,30 +263,19 @@ class App {
       return;
     }
     this.updateBreadcrumb("Home", true);
-
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
+    this.clearCurrentTool();
 
     const runtimeIsTauri = isTauri();
     if (!runtimeIsTauri && !this._runtimeRetryHome) {
       this._runtimeRetryHome = true;
       setTimeout(() => this.showHome(), 150);
     }
-    const eligibleTools = Array.from(this.tools.values()).filter((tool) => {
-      const cfg = this.toolsConfigMap.get(tool.id);
-      const enabled = cfg ? cfg.enabled !== false : true;
-      const showOnHome = cfg ? cfg.showOnHome !== false : true;
-      const requiresTauriOk = cfg && cfg.requiresTauri ? runtimeIsTauri : true;
-      return enabled && showOnHome && requiresTauriOk;
-    });
+    const eligibleTools = this.getVisibleToolDefinitions({ runtimeIsTauri, forHome: true });
 
-    const grouped = eligibleTools.reduce((acc, tool) => {
-      const md = tool.getMetadata();
-      const cat = categorizeTool(md);
+    const grouped = eligibleTools.reduce((acc, definition) => {
+      const cat = categorizeTool(definition);
       if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(tool);
+      acc[cat].push(definition);
       return acc;
     }, {});
 
@@ -415,20 +287,15 @@ class App {
       .flatMap((catId) => {
         const toolsInCat = grouped[catId] || [];
         return toolsInCat
-          .sort((a, b) => {
-            const ca = this.toolsConfigMap.get(a.id)?.order ?? 0;
-            const cb = this.toolsConfigMap.get(b.id)?.order ?? 0;
-            return ca - cb;
-          })
-          .map((tool) => {
-            const metadata = tool.getMetadata();
+          .sort((a, b) => a.order - b.order)
+          .map((definition) => {
             return `
-              <div class="tool-card" data-tool="${metadata.id}" onclick="app.navigateToTool('${metadata.id}')">
+              <div class="tool-card" data-tool="${definition.id}" onclick="app.navigateToTool('${definition.id}')">
                 <div class="tool-card-icon">
-                  ${this.getToolIcon(metadata.icon)}
+                  ${this.getToolIcon(definition.icon)}
                 </div>
-                <h3 class="tool-card-title">${metadata.name}</h3>
-                <p class="tool-card-description">${metadata.description}</p>
+                <h3 class="tool-card-title">${definition.name}</h3>
+                <p class="tool-card-description">${definition.description}</p>
               </div>
             `;
           });
@@ -450,22 +317,21 @@ class App {
     this.eventBus.emit("page:changed", { page: "home" });
   }
 
-  showTool(toolId, routeData = null) {
+  async showTool(toolId, routeData = null) {
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
     }
-    const tool = this.tools.get(toolId);
+    const definition = this.getToolDefinition(toolId);
 
-    if (!tool) {
+    if (!definition) {
       console.error(`Tool not found: ${toolId}`);
       this.router.navigate("home");
       return;
     }
 
     // Runtime gate: respect requiresTauri
-    const cfg = this.toolsConfigMap.get(tool.id);
-    if (cfg && cfg.requiresTauri && !isTauri()) {
+    if (definition.requiresTauri && !isTauri()) {
       this.eventBus.emit("notification:error", {
         message: "This tool requires the desktop app (Tauri) and is hidden in the browser.",
         type: "error",
@@ -474,11 +340,15 @@ class App {
       return;
     }
 
-    this.updateBreadcrumb(tool.name);
-
-    if (this.currentTool && this.currentTool !== tool) {
-      this.currentTool.deactivate();
+    if (this.currentTool && this.currentTool.id !== toolId) {
+      this.clearCurrentTool();
     }
+    this.renderLoadingState({
+      title: definition.name,
+      message: "Loading tool and preparing the interface.",
+    });
+    const tool = await this.ensureToolLoaded(toolId);
+    this.updateBreadcrumb(definition.name);
 
     this.currentTool = tool;
     tool.activate();
@@ -493,64 +363,65 @@ class App {
       } catch (_) {}
     }
 
-    this.eventBus.emit("page:changed", { page: "tool", toolId });
+    this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
   }
 
   showSettings() {
-    // Update breadcrumb for settings
-    this.updateBreadcrumb("Settings");
-
-    // Ensure no tool is active
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
-
-    if (this.mainContent) {
-      const settingsPage = new SettingsPage({ eventBus: this.eventBus, themeManager: this.themeManager });
-      settingsPage.mount(this.mainContent);
-    }
-
-    // Emit page change
-    this.eventBus.emit("page:changed", { page: "settings" });
+    return this.showShellPage({
+      pageId: "settings",
+      title: "Settings",
+      eventName: "settings",
+      loader: () => import("./pages/settings/main.js").then((module) => module.SettingsPage),
+      createOptions: () => ({ eventBus: this.eventBus, themeManager: this.themeManager }),
+    });
   }
 
   showAbout() {
-    // Update breadcrumb for about
-    this.updateBreadcrumb("About");
-
-    // Ensure no tool is active
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
-
-    if (this.mainContent) {
-      const aboutPage = new AboutPage({ eventBus: this.eventBus });
-      aboutPage.mount(this.mainContent);
-    }
-
-    // Emit page change
-    this.eventBus.emit("page:changed", { page: "about" });
+    return this.showShellPage({
+      pageId: "about",
+      title: "About",
+      eventName: "about",
+      loader: () => import("./pages/about/main.js").then((module) => module.AboutPage),
+      createOptions: () => ({ eventBus: this.eventBus }),
+    });
   }
 
   showAnalyticsDashboard() {
-    // Update breadcrumb for analytics dashboard
-    this.updateBreadcrumb("Analytics Dashboard");
+    return this.showShellPage({
+      pageId: "analytics-dashboard",
+      title: "Analytics Dashboard",
+      eventName: "analytics-dashboard",
+      loader: () => import("./pages/analytics-dashboard/main.js").then((module) => module.AnalyticsDashboardPage),
+      createOptions: () => ({ eventBus: this.eventBus }),
+    });
+  }
 
-    // Ensure no tool is active
-    if (this.currentTool) {
-      this.currentTool.deactivate();
-      this.currentTool = null;
-    }
+  showRegister() {
+    return this.showShellPage({
+      pageId: "register",
+      title: "Register",
+      eventName: "register",
+      loader: () => import("./pages/register/main.js").then((module) => module.RegisterPage),
+      createOptions: () => ({ eventBus: this.eventBus }),
+    });
+  }
 
+  async showShellPage({ pageId, title, eventName, loader, createOptions }) {
+    // Update breadcrumb for settings
+    this.updateBreadcrumb(title);
+    this.clearCurrentTool();
+    this.renderLoadingState({
+      title,
+      message: "Loading page content.",
+    });
+
+    const PageClass = await this.loadPageComponent(pageId, loader);
     if (this.mainContent) {
-      const dashboardPage = new AnalyticsDashboardPage({ eventBus: this.eventBus });
-      dashboardPage.mount(this.mainContent);
+      const page = new PageClass(createOptions?.() || {});
+      page.mount(this.mainContent);
     }
 
-    // Emit page change
-    this.eventBus.emit("page:changed", { page: "analytics-dashboard" });
+    this.eventBus.emit("page:changed", { page: eventName, title });
   }
 
   // Feedback page removed
@@ -1027,6 +898,76 @@ class App {
     return this.currentTool;
   }
 
+  getToolDefinitions() {
+    return getToolDefinitionsList(this.toolDefinitions);
+  }
+
+  getToolDefinition(toolId) {
+    return getToolDefinition(this.toolDefinitions, toolId);
+  }
+
+  getToolNameById(toolId) {
+    return this.getToolDefinition(toolId)?.name || this.tools.get(toolId)?.name || toolId;
+  }
+
+  getVisibleToolDefinitions({ runtimeIsTauri = isTauri(), forHome = false } = {}) {
+    return this.getToolDefinitions()
+      .filter((definition) => {
+        if (!definition.enabled) return false;
+        if (forHome && !definition.showOnHome) return false;
+        if (!forHome && !definition.showInSidebar) return false;
+        if (definition.requiresTauri && !runtimeIsTauri) return false;
+        return true;
+      })
+      .sort((a, b) => a.order - b.order);
+  }
+
+  async ensureToolLoaded(toolId) {
+    const existing = this.tools.get(toolId);
+    if (existing) return existing;
+
+    const pending = this.pendingToolLoads.get(toolId);
+    if (pending) return pending;
+
+    const definition = this.getToolDefinition(toolId);
+    if (!definition) {
+      throw new Error(`Unknown tool: ${toolId}`);
+    }
+
+    const loadPromise = definition
+      .load()
+      .then((contract) => {
+        const tool = this.createToolInstance(definition, contract);
+        this.tools.set(toolId, tool);
+        return tool;
+      })
+      .finally(() => {
+        this.pendingToolLoads.delete(toolId);
+      });
+
+    this.pendingToolLoads.set(toolId, loadPromise);
+    return loadPromise;
+  }
+
+  createToolInstance(definition, contract) {
+    if (contract?.createTool && typeof contract.createTool === "function") {
+      return contract.createTool(this.eventBus);
+    }
+    if (contract?.ToolClass) {
+      return new contract.ToolClass(this.eventBus);
+    }
+    throw new Error(`Invalid tool contract for ${definition.id}`);
+  }
+
+  async loadPageComponent(pageId, loader) {
+    if (this.pageComponents.has(pageId)) {
+      return this.pageComponents.get(pageId);
+    }
+    const PageClass = await loader();
+    this.pageComponents.set(pageId, PageClass);
+    return PageClass;
+  }
+
   /**
    * Get all registered tools
    * @returns {Map} Map of tool instances
@@ -1055,6 +996,7 @@ class App {
     // Deactivate current tool
     if (this.currentTool) {
       this.currentTool.deactivate();
+      this.currentTool.unmount();
     }
 
     console.log("AD Tools app destroyed");
@@ -1092,15 +1034,14 @@ class App {
     // Feedback removed from global search
 
     // Tools
-    this.tools.forEach((tool) => {
-      const md = tool.getMetadata();
+    this.getVisibleToolDefinitions().forEach((definition) => {
       items.push({
-        id: md.id,
-        name: md.name,
-        description: md.description || "",
-        route: md.id,
+        id: definition.id,
+        name: definition.name,
+        description: definition.description || "",
+        route: definition.id,
         type: "tool",
-        icon: md.icon || null,
+        icon: definition.icon || null,
       });
     });
 
@@ -1129,7 +1070,7 @@ class App {
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([id, count]) => {
-        const name = this.tools.get(id)?.name || id;
+        const name = this.getToolNameById(id);
         return `
           <div class="usage-feature-row">
             <span class="usage-feature-name">${name}</span>
@@ -1205,7 +1146,10 @@ class App {
 
     // Initial runtime set + delayed re-check to handle late Tauri init
     applyRuntime();
-    setTimeout(applyRuntime, 200);
+    setTimeout(() => {
+      applyRuntime();
+      this.updateGlobalSearchIndex();
+    }, 200);
 
     // Wire reload behavior
     if (reloadBtn) {
@@ -1229,6 +1173,28 @@ class App {
         }
       });
     }
+  }
+
+  clearCurrentTool() {
+    if (!this.currentTool) return;
+    this.currentTool.deactivate();
+    this.currentTool.unmount();
+    this.currentTool = null;
+  }
+
+  renderLoadingState({ title = "Loading", message = "Preparing the interface." } = {}) {
+    if (!this.mainContent) return;
+    this.mainContent.innerHTML = /*html*/ `
+      <div class="shell-loading" role="status" aria-live="polite" aria-busy="true">
+        <div class="shell-loading-card">
+          <div class="shell-loading-spinner" aria-hidden="true">
+            <span class="shell-loading-ring"></span>
+          </div>
+          <h2 class="shell-loading-title">${this.#escapeHtml(title)}</h2>
+          <p class="shell-loading-message">${this.#escapeHtml(message)}</p>
+        </div>
+      </div>
+    `;
   }
 }
 

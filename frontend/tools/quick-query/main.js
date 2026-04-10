@@ -20,6 +20,7 @@ import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import JSZip from "jszip";
 import MinifyWorker from "../html-editor/minify.worker.js?worker";
+import "./styles.css";
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {

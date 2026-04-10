@@ -63,10 +63,12 @@ class Breadcrumb {
   updateBreadcrumb(pageData = {}) {
     if (!this.currentPageElement) return;
 
-    const { page, toolId } = pageData;
+    const { page, toolId, title } = pageData;
 
     if (page === "home" || !page) {
       this.currentPageElement.textContent = "Home";
+    } else if (title) {
+      this.currentPageElement.textContent = title;
     } else if (page === "tool" && toolId) {
       const toolName = this.getToolName(toolId);
       this.currentPageElement.textContent = toolName;
@@ -86,16 +88,7 @@ class Breadcrumb {
    */
   getToolName(toolId) {
     if (!this.app) return toolId;
-
-    const tools = this.app.getTools();
-    const tool = tools.get(toolId);
-
-    if (tool) {
-      const metadata = tool.getMetadata();
-      return metadata.name;
-    }
-
-    return toolId;
+    return this.app.getToolNameById(toolId);
   }
 
   /**
