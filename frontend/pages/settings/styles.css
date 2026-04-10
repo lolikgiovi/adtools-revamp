@@ -132,6 +132,13 @@
   box-shadow: 0 0 0 2px hsl(var(--ring) / 0.3);
 }
 
+.setting-textarea {
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
 .setting-control {
   display: inline-flex;
   align-items: center;
@@ -255,6 +262,22 @@
 
 .kv-add.btn {
   padding: 0.25rem 0.5rem;
+}
+
+.string-list-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.string-list-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
 }
 
 /* Secret value display masking already handled in JS using dots */

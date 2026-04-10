@@ -90,6 +90,9 @@ export const MergeSqlTemplate = /* html */ `
           </svg>
           MERGE SQLs
         </button>
+        <button class="btn btn-ghost" id="merge-sql-clear-files-btn" style="display: none;">
+          Clear Files Only
+        </button>
         <button class="btn btn-ghost" id="merge-sql-clear-btn" style="display: none;">
           Clear All
         </button>
@@ -114,6 +117,17 @@ export const MergeSqlTemplate = /* html */ `
             </svg>
             Select SQL
           </button>
+          <button class="result-tab" data-tab="validation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12h6"></path>
+              <path d="M12 9v6"></path>
+              <path d="M3 5h18"></path>
+              <path d="M3 12h4"></path>
+              <path d="M17 12h4"></path>
+              <path d="M3 19h18"></path>
+            </svg>
+            Validation SQL
+          </button>
           <button class="result-tab" data-tab="report">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -126,6 +140,15 @@ export const MergeSqlTemplate = /* html */ `
           </button>
         </div>
         <div class="result-actions" id="merge-sql-result-actions">
+          <button class="btn btn-ghost btn-xs" id="merge-sql-refresh-validation-btn" title="Generate Validation SQL from current Merged SQL">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+            </svg>
+            Refresh Validation
+          </button>
           <button class="btn btn-ghost btn-xs" id="merge-sql-copy-btn" title="Copy">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -190,6 +213,11 @@ export const MergeSqlTemplate = /* html */ `
         <!-- Select Tab Content -->
         <div class="result-tab-content" id="merge-sql-select-content">
           <div class="monaco-editor-container" id="merge-sql-select-editor"></div>
+        </div>
+
+        <!-- Validation Tab Content -->
+        <div class="result-tab-content" id="merge-sql-validation-content">
+          <div class="monaco-editor-container" id="merge-sql-validation-editor"></div>
         </div>
 
         <!-- Report Tab Content -->

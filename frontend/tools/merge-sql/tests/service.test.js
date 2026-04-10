@@ -1,10 +1,20 @@
 /**
  * Unit tests for MergeSqlService
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MergeSqlService } from "../service.js";
 
+const SQUAD_STORAGE_KEY = "config.mergeSql.squadNames";
+
 describe("MergeSqlService", () => {
+  beforeEach(() => {
+    localStorage.removeItem(SQUAD_STORAGE_KEY);
+  });
+
+  afterEach(() => {
+    localStorage.removeItem(SQUAD_STORAGE_KEY);
+  });
+
   describe("parseFile", () => {
     it("extracts MERGE INTO statements", () => {
       const content = `SET DEFINE OFF;
@@ -473,6 +483,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       expect(result.mergedSql).toBe("SET DEFINE OFF;");
       expect(result.selectSql).toBe("");
+      expect(result.validationSql).toBe("");
       expect(result.duplicates).toHaveLength(0);
     });
   });
@@ -516,6 +527,45 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result).not.toBeNull();
       expect(result.squadName).toBe("SQUAD NAME");
       expect(result.featureName).toBe("FEATURE NAME");
+    });
+
+    it("parses relaxed file name format using default squad names", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ANTARES - LIVIN_CARE_REVAMP.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.schemaName).toBe("LIVIN_CARE");
+      expect(result.tableName).toBe("MILESTONE_CONFIG_CIS");
+      expect(result.squadName).toBe("ANTARES");
+      expect(result.featureName).toBe("LIVIN_CARE_REVAMP");
+    });
+
+    it("matches relaxed squad names case-insensitively", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - antares - revamp.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.squadName).toBe("antares");
+    });
+
+    it("does not match squad names as substrings inside larger tokens", () => {
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - antar esplus - feature.sql");
+      expect(result).toBeNull();
+    });
+
+    it("uses custom configured squad names for relaxed parsing", () => {
+      localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(["orion", "rigel"]));
+
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ORION - REVAMP.sql");
+
+      expect(result).not.toBeNull();
+      expect(result.squadName).toBe("ORION");
+    });
+
+    it("falls back to non-standard parsing when squad token is unknown", () => {
+      localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(["orion", "rigel"]));
+
+      const result = MergeSqlService.parseFileName("LIVIN_CARE.MILESTONE_CONFIG_CIS - ANTARES - REVAMP.sql");
+
+      expect(result).toBeNull();
     });
   });
 
@@ -588,7 +638,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result[0].entries[1].subHeader).toBe("SQUAD2 - FEATURE2");
     });
 
-    it("does NOT merge non-adjacent files with same SCHEMA.TABLE", () => {
+    it("globally merges non-adjacent files with same SCHEMA.TABLE", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -609,10 +659,12 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
       const result = MergeSqlService.buildAdjacentGroups(parsedFiles);
 
-      expect(result).toHaveLength(3);
+      expect(result).toHaveLength(2);
       expect(result[0].groupKey).toBe("CONFIG.APP_CONFIG");
+      expect(result[0].entries).toHaveLength(2);
+      expect(result[0].entries[0].subHeader).toBe("SQUAD1 - FEATURE1");
+      expect(result[0].entries[1].subHeader).toBe("SQUAD2 - FEATURE2");
       expect(result[1].groupKey).toBe("OTHER.TABLE");
-      expect(result[2].groupKey).toBe("CONFIG.APP_CONFIG");
     });
 
     it("non-standard filenames form individual groups", () => {
@@ -664,7 +716,7 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.mergedSql).toContain("SET DEFINE OFF;");
     });
 
-    it("non-adjacent same-table files produce separate group headers", () => {
+    it("non-adjacent same-table files produce a single group header", () => {
       const parsedFiles = [
         {
           dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
@@ -686,8 +738,37 @@ SELECT * FROM SCHEMA.CONFIG;`;
       const result = MergeSqlService.mergeFiles(parsedFiles);
 
       const headerMatches = result.mergedSql.match(/-- CONFIG\.APP_CONFIG\n/g);
-      expect(headerMatches).toHaveLength(2);
+      expect(headerMatches).toHaveLength(1);
       expect(result.mergedSql).toContain("-- OTHER.TABLE_NAME");
+    });
+
+    it("keeps the table group positioned at its first occurrence while preserving file order within the group", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (1);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO OTHER.TABLE_NAME (c) VALUES (9);"],
+          selectStatements: [],
+          fileName: "OTHER.TABLE_NAME (SQUADX)[FEATUREX].sql",
+        },
+        {
+          dmlStatements: ["INSERT INTO CONFIG.APP_CONFIG (c) VALUES (2);"],
+          selectStatements: [],
+          fileName: "CONFIG.APP_CONFIG (SQUAD2)[FEATURE2].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+      const configIndex = result.mergedSql.indexOf("-- CONFIG.APP_CONFIG");
+      const otherIndex = result.mergedSql.indexOf("-- OTHER.TABLE_NAME");
+      const squad1Index = result.mergedSql.indexOf("-- SQUAD1 - FEATURE1");
+      const squad2Index = result.mergedSql.indexOf("-- SQUAD2 - FEATURE2");
+
+      expect(configIndex).toBeLessThan(otherIndex);
+      expect(squad1Index).toBeLessThan(squad2Index);
     });
 
     it("SELECT output includes SELECT * FROM SCHEMA.TABLE with concatenated WHERE for standard filenames with multiple squads", () => {
@@ -1783,6 +1864,201 @@ DELETE FROM T2 WHERE id = 2;`;
       expect(result.report.dangerousStatements).toHaveLength(2);
       expect(result.report.dangerousStatements[0].type).toBe("DELETE");
       expect(result.report.dangerousStatements[1].type).toBe("UPDATE_NO_WHERE");
+    });
+
+    it("shows a fallback note when all standard-file SELECT statements are filtered out", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [],
+          selectStatements: [
+            "SELECT * FROM USER_LIMIT.LIMIT_SERVICE ORDER BY updated_time DESC FETCH FIRST 1 ROWS ONLY;",
+            "SELECT limit_service_id, updated_time FROM USER_LIMIT.LIMIT_SERVICE WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;",
+          ],
+          fileName: "USER_LIMIT.LIMIT_SERVICE (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.selectSql).toContain("-- USER_LIMIT.LIMIT_SERVICE");
+      expect(result.selectSql).toContain("-- No select statement get since the where clause is not by specific key");
+      expect(result.selectSql).not.toContain("FETCH FIRST 1 ROWS ONLY");
+      expect(result.selectSql).not.toContain("updated_time >= SYSDATE - INTERVAL");
+    });
+  });
+
+  describe("Validation SQL output", () => {
+    it("builds validation SQL for MERGE with single-key multi-row source", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `MERGE INTO CONFIG.APP_CONFIG tgt
+USING (
+  SELECT 'alpha' id FROM DUAL
+  UNION ALL
+  SELECT 'beta' id FROM DUAL
+) src
+ON (tgt.id = src.id)
+WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
+          ],
+          selectStatements: ["SELECT * FROM CONFIG.APP_CONFIG WHERE id IN ('alpha', 'beta');"],
+          fileName: "CONFIG.APP_CONFIG (SQUAD1)[FEATURE1].sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("'CONFIG.APP_CONFIG' AS table_name");
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql).toContain("COUNT(*) AS row_in_table,");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 2 THEN 'MATCH'");
+      expect(result.validationSql).toContain("WHEN COUNT(*) > 2 THEN '+' || TO_CHAR(COUNT(*) - 2)");
+      expect(result.validationSql).toContain("ELSE '-' || TO_CHAR(2 - COUNT(*))");
+      expect(result.validationSql).toContain("END AS result");
+      expect(result.validationSql).toContain("FROM CONFIG.APP_CONFIG");
+      expect(result.validationSql).toContain("WHERE id IN ('alpha', 'beta')");
+      expect(result.selectSql).toContain("SELECT * FROM CONFIG.APP_CONFIG WHERE id IN ('alpha', 'beta');");
+    });
+
+    it("builds validation SQL for MERGE with composite keys", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `MERGE INTO CONFIG.APP_CONFIG tgt
+USING (
+  SELECT 1 id, 'A' category FROM DUAL
+  UNION ALL
+  SELECT 2 id, 'B' category FROM DUAL
+) src
+ON (tgt.id = src.id AND tgt.category = src.category)
+WHEN MATCHED THEN UPDATE SET tgt.updated_by = 'SYSTEM';`,
+          ],
+          selectStatements: [],
+          fileName: "composite-merge.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql).toContain("WHERE (id = 1 AND category = 'A') OR (id = 2 AND category = 'B')");
+    });
+
+    it("groups validation SQL by table and sums expectation across INSERT statements", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO CASA.CONFIG (parameter_key, parameter_value) VALUES ('minimum.balance.tier.one', '100000');",
+            `INSERT INTO CASA.CONFIG (parameter_key, parameter_value)
+SELECT 'minimum.balance.tier.two' parameter_key, '200000' parameter_value FROM DUAL
+UNION ALL
+SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM DUAL;`,
+          ],
+          selectStatements: [],
+          fileName: "insert-config.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("'CASA.CONFIG' AS table_name");
+      expect(result.validationSql).toContain("3 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 3 THEN 'MATCH'");
+      expect(result.validationSql).not.toContain("1 AS row_in_query");
+      expect(result.validationSql).not.toContain("2 AS row_in_query");
+      expect((result.validationSql.match(/'CASA\.CONFIG' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).not.toContain("UNION ALL");
+      expect(result.validationSql).toContain(
+        "WHERE (parameter_key = 'minimum.balance.tier.one' AND parameter_value = '100000') OR (parameter_key = 'minimum.balance.tier.two' AND parameter_value = '200000') OR (parameter_key = 'minimum.balance.tier.three' AND parameter_value = '300000')"
+      );
+    });
+
+    it("groups validation SQL by table for exact UPDATE and DELETE predicates", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "UPDATE SYSTEM_SUPPORT.SERVICE SET status = 'A' WHERE service_id IN ('svc-1', 'svc-2');",
+            "DELETE FROM SYSTEM_SUPPORT.SERVICE WHERE service_code = 'legacy-a' OR service_code = 'legacy-b';",
+          ],
+          selectStatements: [],
+          fileName: "service-dml.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("4 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 4 THEN 'MATCH'");
+      expect(result.validationSql).toContain("WHERE service_id IN ('svc-1', 'svc-2')");
+      expect(result.validationSql).toContain("OR service_code IN ('legacy-a', 'legacy-b')");
+      expect((result.validationSql.match(/'SYSTEM_SUPPORT\.SERVICE' AS table_name/g) || [])).toHaveLength(1);
+    });
+
+    it("adds skip comments for unsupported validation inference", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "UPDATE CONFIG.APP_CONFIG SET value = 'x' WHERE UPPER(parameter_key) = 'ABC';",
+            "MERGE INTO CONFIG.APP_CONFIG tgt USING DUAL ON (1 = 0) WHEN MATCHED THEN UPDATE SET tgt.value = 'x';",
+          ],
+          selectStatements: [],
+          fileName: "unsupported.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("-- Skipped UPDATE on CONFIG.APP_CONFIG in unsupported.sql: unsupported WHERE shape");
+      expect(result.validationSql).toContain("-- Skipped MERGE on CONFIG.APP_CONFIG in unsupported.sql: unsupported USING clause");
+    });
+
+    it("renders validation SQL as a UNION ALL query only across different tables", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO T1 (id) VALUES (1);",
+            "UPDATE T1 SET status = 'A' WHERE id = 9;",
+            "UPDATE T2 SET status = 'A' WHERE id = 9;",
+          ],
+          selectStatements: [],
+          fileName: "multi.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("UNION ALL");
+      expect((result.validationSql.match(/'T1' AS table_name/g) || [])).toHaveLength(1);
+      expect((result.validationSql.match(/'T2' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql.trim().endsWith(";")).toBe(true);
+    });
+
+    it("builds validation SQL directly from merged SQL text", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO USER_LIMIT.LIMIT_SERVICE tgt
+USING (
+  SELECT 1 AS limit_service_id,
+    'deposito-loan-early-settlement' AS service_code
+  FROM DUAL
+) src
+ON (tgt.limit_service_id = src.limit_service_id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.service_code = src.service_code
+WHEN NOT MATCHED THEN INSERT (limit_service_id, service_code)
+VALUES (src.limit_service_id, src.service_code);
+
+--====================================================================================================
+-- USER_LIMIT.LIMIT_SERVICE
+--====================================================================================================`;
+
+      const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+
+      expect(validationSql).toContain("'USER_LIMIT.LIMIT_SERVICE' AS table_name");
+      expect(validationSql).toContain("1 AS expectation");
+      expect(validationSql).toContain("WHERE limit_service_id = 1");
+      expect(validationSql).toContain("END AS result");
     });
   });
 });

@@ -26,6 +26,7 @@ export class MergeSqlTool extends BaseTool {
     this.sortOrder = "asc";
     this.mergedEditor = null;
     this.selectEditor = null;
+    this.validationEditor = null;
     this.currentTab = "merged";
     this.result = null;
     this.draggedItem = null;
@@ -59,11 +60,16 @@ export class MergeSqlTool extends BaseTool {
       this.selectEditor.dispose();
       this.selectEditor = null;
     }
+    if (this.validationEditor) {
+      this.validationEditor.dispose();
+      this.validationEditor = null;
+    }
   }
 
   initMonaco() {
     const mergedContainer = document.getElementById("merge-sql-merged-editor");
     const selectContainer = document.getElementById("merge-sql-select-editor");
+    const validationContainer = document.getElementById("merge-sql-validation-editor");
 
     const editorOptions = {
       fontSize: 13,
@@ -83,6 +89,11 @@ export class MergeSqlTool extends BaseTool {
     if (selectContainer) {
       this.selectEditor = createOracleEditor(selectContainer, editorOptions);
       this.selectEditor.onDidChangeModelContent(() => this.debounceSaveResults());
+    }
+
+    if (validationContainer) {
+      this.validationEditor = createOracleEditor(validationContainer, editorOptions);
+      this.validationEditor.onDidChangeModelContent(() => this.debounceSaveResults());
     }
   }
 
@@ -111,6 +122,7 @@ export class MergeSqlTool extends BaseTool {
       this.result = {
         mergedSql: results.mergedSql || "",
         selectSql: results.selectSql || "",
+        validationSql: results.validationSql || "",
         duplicates: results.duplicates || [],
         report: results.report || null,
       };
@@ -121,8 +133,11 @@ export class MergeSqlTool extends BaseTool {
       if (this.selectEditor && results.selectSql) {
         this.selectEditor.setValue(results.selectSql);
       }
+      if (this.validationEditor && results.validationSql) {
+        this.validationEditor.setValue(results.validationSql);
+      }
 
-      if (results.mergedSql || results.selectSql) {
+      if (results.mergedSql || results.selectSql || results.validationSql) {
         this.showResult();
         this.updateDuplicatesInsight();
       }
@@ -139,9 +154,10 @@ export class MergeSqlTool extends BaseTool {
     this.saveDebounceTimer = setTimeout(() => {
       const mergedSql = this.mergedEditor?.getValue() || "";
       const selectSql = this.selectEditor?.getValue() || "";
+      const validationSql = this.validationEditor?.getValue() || "";
       const duplicates = this.result?.duplicates || [];
       const report = this.result?.report || null;
-      IndexedDBManager.saveResults(mergedSql, selectSql, duplicates, report);
+      IndexedDBManager.saveResults(mergedSql, selectSql, validationSql, duplicates, report);
     }, 1000);
   }
 
@@ -164,7 +180,9 @@ export class MergeSqlTool extends BaseTool {
     const fileInput = document.getElementById("merge-sql-file-input");
     const folderInput = document.getElementById("merge-sql-folder-input");
     const mergeBtn = document.getElementById("merge-sql-btn");
+    const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
+    const refreshValidationBtn = document.getElementById("merge-sql-refresh-validation-btn");
     const copyBtn = document.getElementById("merge-sql-copy-btn");
     const downloadBtn = document.getElementById("merge-sql-download-btn");
     const downloadAllBtn = document.getElementById("merge-sql-download-all-btn");
@@ -183,7 +201,9 @@ export class MergeSqlTool extends BaseTool {
     if (fileInput) fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
     if (folderInput) folderInput.addEventListener("change", (e) => this.handleFolderSelect(e));
     if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
+    if (clearFilesBtn) clearFilesBtn.addEventListener("click", () => this.handleClearFilesOnly());
     if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
+    if (refreshValidationBtn) refreshValidationBtn.addEventListener("click", () => this.handleRefreshValidation());
     if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
     if (downloadBtn) downloadBtn.addEventListener("click", () => this.handleDownload());
     if (downloadAllBtn) downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
@@ -286,16 +306,20 @@ export class MergeSqlTool extends BaseTool {
 
     const mergedContent = document.getElementById("merge-sql-merged-content");
     const selectContent = document.getElementById("merge-sql-select-content");
+    const validationContent = document.getElementById("merge-sql-validation-content");
     const reportContent = document.getElementById("merge-sql-report-content");
 
     if (mergedContent) mergedContent.classList.toggle("active", tab === "merged");
     if (selectContent) selectContent.classList.toggle("active", tab === "select");
+    if (validationContent) validationContent.classList.toggle("active", tab === "validation");
     if (reportContent) reportContent.classList.toggle("active", tab === "report");
 
     if (tab === "merged" && this.mergedEditor) {
       this.mergedEditor.layout();
     } else if (tab === "select" && this.selectEditor) {
       this.selectEditor.layout();
+    } else if (tab === "validation" && this.validationEditor) {
+      this.validationEditor.layout();
     } else if (tab === "report") {
       this.renderReport();
     }
@@ -352,8 +376,17 @@ export class MergeSqlTool extends BaseTool {
       if (this.selectEditor) {
         this.selectEditor.setValue(this.result.selectSql);
       }
+      if (this.validationEditor) {
+        this.validationEditor.setValue(this.result.validationSql || "");
+      }
 
-      await IndexedDBManager.saveResults(this.result.mergedSql, this.result.selectSql, this.result.duplicates, this.result.report);
+      await IndexedDBManager.saveResults(
+        this.result.mergedSql,
+        this.result.selectSql,
+        this.result.validationSql || "",
+        this.result.duplicates,
+        this.result.report
+      );
 
       this.showResult();
       this.updateDuplicatesInsight();
@@ -382,13 +415,72 @@ export class MergeSqlTool extends BaseTool {
     this.result = null;
     if (this.mergedEditor) this.mergedEditor.setValue("");
     if (this.selectEditor) this.selectEditor.setValue("");
+    if (this.validationEditor) this.validationEditor.setValue("");
     this.hideResult();
     await IndexedDBManager.clearAll();
     this.updateUI();
   }
 
+  async handleClearFilesOnly() {
+    if (this.files.length === 0) {
+      return;
+    }
+
+    this.files = [];
+    this.saveFilesToIndexedDB();
+    this.updateUI();
+    this.showSuccess("Files cleared. Current SQL results are kept.");
+  }
+
+  async handleRefreshValidation() {
+    const mergedSql = this.mergedEditor?.getValue() || "";
+    if (!mergedSql.trim()) {
+      this.showError("No merged SQL available to generate validation");
+      return;
+    }
+
+    const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+    if (this.validationEditor) {
+      this.validationEditor.setValue(validationSql);
+    }
+
+    this.result = {
+      mergedSql,
+      selectSql: this.selectEditor?.getValue() || this.result?.selectSql || "",
+      validationSql,
+      duplicates: this.result?.duplicates || [],
+      report: this.result?.report || null,
+    };
+
+    await IndexedDBManager.saveResults(
+      this.result.mergedSql,
+      this.result.selectSql,
+      this.result.validationSql,
+      this.result.duplicates,
+      this.result.report
+    );
+
+    this.showResult();
+    this.handleTabSwitch("validation");
+    this.showSuccess("Validation SQL refreshed from current Merged SQL");
+  }
+
+  getCurrentEditor() {
+    if (this.currentTab === "merged") return this.mergedEditor;
+    if (this.currentTab === "select") return this.selectEditor;
+    if (this.currentTab === "validation") return this.validationEditor;
+    return null;
+  }
+
+  getCurrentDownloadSuffix() {
+    if (this.currentTab === "merged") return "-MERGED.sql";
+    if (this.currentTab === "select") return "-SELECT.sql";
+    if (this.currentTab === "validation") return "-VALIDATION.sql";
+    return null;
+  }
+
   handleCopy() {
-    const editor = this.currentTab === "merged" ? this.mergedEditor : this.selectEditor;
+    const editor = this.getCurrentEditor();
     if (editor) {
       const content = editor.getValue();
       this.copyToClipboard(content);
@@ -397,10 +489,11 @@ export class MergeSqlTool extends BaseTool {
 
   handleDownload() {
     const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
-    const suffix = this.currentTab === "merged" ? "-MERGED.sql" : "-SELECT.sql";
-    const fileName = `${folderName}${suffix}`;
+    const suffix = this.getCurrentDownloadSuffix();
+    if (!suffix) return;
 
-    const editor = this.currentTab === "merged" ? this.mergedEditor : this.selectEditor;
+    const fileName = `${folderName}${suffix}`;
+    const editor = this.getCurrentEditor();
     if (editor) {
       const content = editor.getValue();
       if (content) {
@@ -428,6 +521,14 @@ export class MergeSqlTool extends BaseTool {
         if (selectContent) {
           this.downloadFile(`${folderName}-SELECT.sql`, selectContent);
           downloadedFiles.push("SELECT");
+        }
+      }
+
+      if (this.validationEditor) {
+        const validationContent = this.validationEditor.getValue();
+        if (validationContent) {
+          this.downloadFile(`${folderName}-VALIDATION.sql`, validationContent);
+          downloadedFiles.push("VALIDATION");
         }
       }
 
@@ -915,6 +1016,14 @@ export class MergeSqlTool extends BaseTool {
     this.updateMergeButton();
     this.updateSortButtons();
     this.updateFileCount();
+    this.updateClearFilesButton();
+  }
+
+  updateClearFilesButton() {
+    const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
+    if (!clearFilesBtn) return;
+
+    clearFilesBtn.style.display = this.files.length > 0 ? "block" : "none";
   }
 
   updateFileCount() {

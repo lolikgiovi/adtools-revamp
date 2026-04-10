@@ -174,7 +174,7 @@ export async function loadState() {
   }
 }
 
-export async function saveResults(mergedSql, selectSql, duplicates, report) {
+export async function saveResults(mergedSql, selectSql, validationSql, duplicates, report) {
   if (!isIndexedDBAvailable()) return;
 
   try {
@@ -186,6 +186,7 @@ export async function saveResults(mergedSql, selectSql, duplicates, report) {
       key: "results",
       mergedSql,
       selectSql,
+      validationSql,
       duplicates,
       updatedAt: Date.now(),
     };

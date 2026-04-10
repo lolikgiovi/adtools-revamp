@@ -121,6 +121,23 @@
           "description": "Add environment ➝ lockey domain URL pairs for Master Lockey tool."
         },
         {
+          "key": "config.mergeSql.squadNames",
+          "storageKey": "config.mergeSql.squadNames",
+          "label": "Merge SQL Squad Names",
+          "type": "string-list",
+          "default": [
+            "capella",
+            "betelgeuse",
+            "sirius",
+            "bellatrix",
+            "phoebe",
+            "regulus",
+            "canopus",
+            "antares"
+          ],
+          "description": "Known squad tokens used by Merge SQL relaxed filename parsing. Enter one squad name per line."
+        },
+        {
           "key": "config.jenkins.url",
           "storageKey": "config.jenkins.url",
           "label": "Jenkins URL",

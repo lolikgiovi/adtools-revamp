@@ -835,6 +835,8 @@ class SettingsPage {
       displayValue = current ? "••••••••" : "—";
     } else if (item.type === "kvlist") {
       displayValue = this.#kvPreviewHTML(Array.isArray(current) ? current : []);
+    } else if (item.type === "string-list") {
+      displayValue = this.#stringListPreviewHTML(Array.isArray(current) ? current : []);
     } else {
       displayValue = this.formatValueForDisplay(current, item.type);
     }
@@ -1005,6 +1007,8 @@ class SettingsPage {
           display = stored ? "••••••••" : "—";
         } else if (item.type === "kvlist") {
           display = this.#kvPreviewHTML(Array.isArray(stored) ? stored : []);
+        } else if (item.type === "string-list") {
+          display = this.#stringListPreviewHTML(Array.isArray(stored) ? stored : []);
         } else {
           display = this.formatValueForDisplay(stored, item.type);
         }
@@ -1052,6 +1056,9 @@ class SettingsPage {
         }
         break;
       }
+      case "string-list":
+        inputOrContainer.value = Array.isArray(value) ? value.join("\n") : "";
+        break;
       default:
         inputOrContainer.value = value ?? "";
         break;
@@ -1075,6 +1082,12 @@ class SettingsPage {
         });
         return result;
       }
+      case "string-list":
+        return inputOrContainer.value
+          .split(/\r?\n/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .filter((item, index, arr) => arr.findIndex((entry) => entry.toLowerCase() === item.toLowerCase()) === index);
       default:
         return inputOrContainer.value;
     }
@@ -1086,6 +1099,10 @@ class SettingsPage {
       if (arr.length === 0) return "(Empty, add new one)";
       // non-empty handled via kv preview to avoid [object Object]
       return this.#kvPreviewHTML(arr);
+    }
+    if (type === "string-list") {
+      const arr = Array.isArray(value) ? value : [];
+      return this.#stringListPreviewHTML(arr);
     }
     if (value === undefined || value === null || value === "") return "—";
     switch (type) {
@@ -1120,6 +1137,17 @@ class SettingsPage {
             .join("")}
         </tbody>
       </table>
+    `;
+  }
+
+  #stringListPreviewHTML(values) {
+    if (!values || values.length === 0) return "(Empty, add new one)";
+    const esc = (s) =>
+      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    return `
+      <div class="string-list-preview">
+        ${values.map((value) => `<span class="string-list-chip">${esc(value)}</span>`).join("")}
+      </div>
     `;
   }
 
