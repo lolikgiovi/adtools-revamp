@@ -698,12 +698,12 @@ export class MergeSqlService {
 
     const dotIndex = trimmed.lastIndexOf(".");
     if (dotIndex === -1) {
-      return { alias: null, column: trimmed };
+      return { alias: null, column: trimmed.replace(/^"|"$/g, "") };
     }
 
     return {
       alias: trimmed.slice(0, dotIndex).trim(),
-      column: trimmed.slice(dotIndex + 1).trim(),
+      column: trimmed.slice(dotIndex + 1).trim().replace(/^"|"$/g, ""),
     };
   }
 
@@ -835,7 +835,7 @@ export class MergeSqlService {
 
     for (const row of rows) {
       const key = row
-        .map((condition) => `${condition.column.toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
+        .map((condition) => `${condition.column.replace(/^"|"$/g, "").toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
         .sort()
         .join("|");
 
@@ -961,15 +961,15 @@ export class MergeSqlService {
     if (!equalsMatch) return null;
 
     const leftRef = this.parseSimpleColumnReference(equalsMatch[1]);
-    const rightRef = this.parseSimpleColumnReference(equalsMatch[2]);
-    const leftLiteral = this.parseLiteralValue(equalsMatch[1]);
-    const rightLiteral = this.parseLiteralValue(equalsMatch[2]);
-
-    if (leftRef && rightLiteral) {
-      return { column: leftRef.column, values: [rightLiteral.isNull ? null : rightLiteral.sql] };
+    if (leftRef) {
+      const rightLiteral = this.parseLiteralValue(equalsMatch[2]);
+      if (rightLiteral) return { column: leftRef.column, values: [rightLiteral.isNull ? null : rightLiteral.sql] };
     }
-    if (rightRef && leftLiteral) {
-      return { column: rightRef.column, values: [leftLiteral.isNull ? null : leftLiteral.sql] };
+
+    const rightRef = this.parseSimpleColumnReference(equalsMatch[2]);
+    if (rightRef) {
+      const leftLiteral = this.parseLiteralValue(equalsMatch[1]);
+      if (leftLiteral) return { column: rightRef.column, values: [leftLiteral.isNull ? null : leftLiteral.sql] };
     }
 
     return null;
@@ -1018,6 +1018,10 @@ export class MergeSqlService {
           }
         }
         rowVariants = nextVariants;
+
+        if (rowVariants.length > 500) {
+          return { rows: [], rowCount: 0, reason: "WHERE predicate produces too many variants to validate" };
+        }
       }
 
       rows.push(...rowVariants);
@@ -1460,9 +1464,6 @@ export class MergeSqlService {
    * @returns {boolean}
    */
   static isTimestampVerificationClause(whereClause) {
-    const upperClause = whereClause.toUpperCase();
-
-    // Patterns to detect timestamp verification clauses
     const timestampPatterns = [
       /SYSDATE\s*-\s*INTERVAL/i,
       /UPDATED_TIME\s*>=?\s*SYSDATE/i,

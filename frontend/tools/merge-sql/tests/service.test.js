@@ -2034,6 +2034,44 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
       expect(result.validationSql.trim().endsWith(";")).toBe(true);
     });
 
+    it("deduplicates predicate rows where one uses a quoted column name and another does not", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `UPDATE T1 SET status = 'A' WHERE "id" = 1;`,
+            `UPDATE T1 SET status = 'B' WHERE id = 2;`,
+            `UPDATE T1 SET status = 'C' WHERE "id" = 2;`,
+          ],
+          selectStatements: [],
+          fileName: "quoted.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Three statements, but id=2 appears twice (quoted and unquoted) — should be deduped to WHERE id IN (1, 2)
+      expect((result.validationSql.match(/'T1' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).toMatch(/WHERE\s+"?id"?\s+IN\s+\(1,\s*2\)/);
+    });
+
+    it("skips UPDATE with WHERE clause producing too many variants", () => {
+      const inList = Array.from({ length: 30 }, (_, i) => i + 1).join(", ");
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `UPDATE T1 SET v = 1 WHERE col1 IN (${inList}) AND col2 IN (${inList});`,
+          ],
+          selectStatements: [],
+          fileName: "large.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("-- Skipped UPDATE on T1");
+      expect(result.validationSql).toContain("too many variants");
+    });
+
     it("builds validation SQL directly from merged SQL text", () => {
       const mergedSql = `SET DEFINE OFF;
 
