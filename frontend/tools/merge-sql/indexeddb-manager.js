@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = "MergeSqlDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORES = {
   FILES: "files",
@@ -143,6 +143,7 @@ export async function saveState(state) {
       sortOrder: state.sortOrder,
       folderName: state.folderName,
       currentTab: state.currentTab,
+      inputMode: state.inputMode || "files",
       updatedAt: Date.now(),
     });
 
@@ -174,7 +175,7 @@ export async function loadState() {
   }
 }
 
-export async function saveResults(mergedSql, selectSql, validationSql, duplicates, report) {
+export async function saveResults(mergedSql, selectSql, validationSql, duplicates, report, inputSql) {
   if (!isIndexedDBAvailable()) return;
 
   try {
@@ -193,6 +194,10 @@ export async function saveResults(mergedSql, selectSql, validationSql, duplicate
 
     if (report) {
       data.report = report;
+    }
+
+    if (inputSql !== undefined) {
+      data.inputSql = inputSql;
     }
 
     await store.put(data);

@@ -34,6 +34,50 @@
    LEFT PANEL - FILE LIST
    ============================================ */
 
+.mode-toggle-bar {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+}
+
+.mode-toggle-btn {
+  flex: 1;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-toggle-btn:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.mode-toggle-btn.active {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.mode-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.input-editor-container {
+  flex: 1;
+  min-height: 0;
+}
+
 .merge-sql-left-panel {
   display: flex;
   flex-direction: column;
@@ -422,17 +466,110 @@
   border-radius: 0;
 }
 
+/* Generated SQL Sub-tabs */
+.generated-sql-subtab-content {
+  display: none;
+  height: 100%;
+  overflow: hidden;
+}
+
+.generated-sql-subtab-content.active {
+  display: block;
+}
+
+.generated-sql-subtab-content .monaco-editor-container {
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Validation SQL tab (SQL mode) */
+#merge-sql-validation-tab-content .monaco-editor-container {
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Report tab content - full height */
+#merge-sql-report-content {
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#merge-sql-report-content.result-tab-content.active {
+  display: flex;
+}
+
+/* Generated SQL tab content - full height */
+#merge-sql-generated-content {
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#merge-sql-generated-content.result-tab-content.active {
+  display: flex;
+}
+
+/* Validation SQL tab content - full height */
+#merge-sql-validation-tab-content {
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#merge-sql-validation-tab-content.result-tab-content.active {
+  display: flex;
+}
+
 /* Result Actions - in header */
 .result-actions {
   display: none;
   align-items: center;
-  justify-content: flex-end;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .result-actions.visible {
   display: flex;
+}
+
+.result-actions .report-subtabs,
+.result-actions .generated-sql-subtabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.result-actions .report-subtab,
+.result-actions .generated-sql-subtab {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.result-actions .report-subtab:hover,
+.result-actions .generated-sql-subtab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.result-actions .report-subtab.active,
+.result-actions .generated-sql-subtab.active {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.result-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .result-actions .btn {
@@ -512,47 +649,9 @@
    ============================================ */
 
 /* Report Sub-tabs */
-.report-subtabs {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--muted) / 0.2);
-}
-
-.report-subtab {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: calc(var(--radius) - 2px);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.report-subtab:hover {
-  color: hsl(var(--foreground));
-  background: hsl(var(--muted) / 0.5);
-}
-
-.report-subtab.active {
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.1);
-  border-color: hsl(var(--primary) / 0.3);
-}
-
-.report-subtab svg {
-  flex-shrink: 0;
-}
-
 .report-subtab-content {
   display: none;
-  height: calc(100% - 52px);
+  height: 100%;
   overflow: hidden;
 }
 

@@ -1424,6 +1424,37 @@ export class MergeSqlService {
    * @param {string} mergedSql
    * @returns {string}
    */
+  static buildReportFromMergedSql(mergedSql) {
+    if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
+      return {
+        statementCounts: [],
+        squadCounts: [],
+        featureCounts: [],
+        tableSquadCounts: [],
+        tableSquadFeatureCounts: [],
+        squadTableCounts: [],
+        dangerousStatements: [],
+        nonSystemAuthors: [],
+      };
+    }
+
+    const parsed = this.parseFile(mergedSql, "MERGED.sql");
+    const analysis = this.analyzeStatements([parsed]);
+    const dangerousStatements = this.detectDangerousStatements([parsed]);
+    const nonSystemAuthors = this.detectNonSystemAuthors([parsed]);
+
+    return {
+      statementCounts: analysis.tableCounts,
+      squadCounts: analysis.squadCounts,
+      featureCounts: analysis.featureCounts,
+      tableSquadCounts: analysis.tableSquadCounts,
+      tableSquadFeatureCounts: analysis.tableSquadFeatureCounts,
+      squadTableCounts: analysis.squadTableCounts,
+      dangerousStatements,
+      nonSystemAuthors,
+    };
+  }
+
   static buildValidationSqlFromMergedSql(mergedSql) {
     if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
       return "";

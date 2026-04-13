@@ -27,7 +27,11 @@ export class MergeSqlTool extends BaseTool {
     this.mergedEditor = null;
     this.selectEditor = null;
     this.validationEditor = null;
-    this.currentTab = "merged";
+    this.inputEditor = null;
+    this.validationSqlEditor = null;
+    this.inputMode = "files";
+    this.currentTab = "report";
+    this.currentSubtab = "merged";
     this.result = null;
     this.draggedItem = null;
     this.saveDebounceTimer = null;
@@ -43,6 +47,7 @@ export class MergeSqlTool extends BaseTool {
 
   async onMount() {
     this.initMonaco();
+    this.renderResultTabs();
     this.bindEvents();
     await this.loadFromIndexedDB();
     this.updateUI();
@@ -64,12 +69,22 @@ export class MergeSqlTool extends BaseTool {
       this.validationEditor.dispose();
       this.validationEditor = null;
     }
+    if (this.inputEditor) {
+      this.inputEditor.dispose();
+      this.inputEditor = null;
+    }
+    if (this.validationSqlEditor) {
+      this.validationSqlEditor.dispose();
+      this.validationSqlEditor = null;
+    }
   }
 
   initMonaco() {
     const mergedContainer = document.getElementById("merge-sql-merged-editor");
     const selectContainer = document.getElementById("merge-sql-select-editor");
     const validationContainer = document.getElementById("merge-sql-validation-editor");
+    const inputContainer = document.getElementById("merge-sql-input-editor");
+    const validationSqlContainer = document.getElementById("merge-sql-validation-sql-editor");
 
     const editorOptions = {
       fontSize: 13,
@@ -79,6 +94,11 @@ export class MergeSqlTool extends BaseTool {
       automaticLayout: true,
       readOnly: false,
       padding: { top: 12, bottom: 12 },
+    };
+
+    const readOnlyOptions = {
+      ...editorOptions,
+      readOnly: true,
     };
 
     if (mergedContainer) {
@@ -95,6 +115,15 @@ export class MergeSqlTool extends BaseTool {
       this.validationEditor = createOracleEditor(validationContainer, editorOptions);
       this.validationEditor.onDidChangeModelContent(() => this.debounceSaveResults());
     }
+
+    if (inputContainer) {
+      this.inputEditor = createOracleEditor(inputContainer, editorOptions);
+      this.inputEditor.onDidChangeModelContent(() => this.debounceSaveResults());
+    }
+
+    if (validationSqlContainer) {
+      this.validationSqlEditor = createOracleEditor(validationSqlContainer, readOnlyOptions);
+    }
   }
 
   async loadFromIndexedDB() {
@@ -110,11 +139,16 @@ export class MergeSqlTool extends BaseTool {
 
     if (state) {
       this.sortOrder = state.sortOrder || "asc";
-      this.currentTab = state.currentTab || "merged";
+      this.currentTab = state.currentTab || "report";
+      this.currentSubtab = state.currentSubtab || "merged";
 
       const folderNameInput = document.getElementById("merge-sql-folder-name");
       if (folderNameInput && state.folderName) {
         folderNameInput.value = state.folderName;
+      }
+
+      if (state.inputMode) {
+        this.switchInputMode(state.inputMode);
       }
     }
 
@@ -136,8 +170,11 @@ export class MergeSqlTool extends BaseTool {
       if (this.validationEditor && results.validationSql) {
         this.validationEditor.setValue(results.validationSql);
       }
+      if (this.inputEditor && results.inputSql) {
+        this.inputEditor.setValue(results.inputSql);
+      }
 
-      if (results.mergedSql || results.selectSql || results.validationSql) {
+      if (results.mergedSql || results.selectSql || results.validationSql || results.inputSql) {
         this.showResult();
         this.updateDuplicatesInsight();
       }
@@ -157,7 +194,8 @@ export class MergeSqlTool extends BaseTool {
       const validationSql = this.validationEditor?.getValue() || "";
       const duplicates = this.result?.duplicates || [];
       const report = this.result?.report || null;
-      IndexedDBManager.saveResults(mergedSql, selectSql, validationSql, duplicates, report);
+      const inputSql = this.inputEditor?.getValue() || "";
+      IndexedDBManager.saveResults(mergedSql, selectSql, validationSql, duplicates, report, inputSql);
     }, 1000);
   }
 
@@ -167,6 +205,8 @@ export class MergeSqlTool extends BaseTool {
       sortOrder: this.sortOrder,
       folderName,
       currentTab: this.currentTab,
+      currentSubtab: this.currentSubtab,
+      inputMode: this.inputMode,
     });
   }
 
@@ -182,7 +222,7 @@ export class MergeSqlTool extends BaseTool {
     const mergeBtn = document.getElementById("merge-sql-btn");
     const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
-    const refreshValidationBtn = document.getElementById("merge-sql-refresh-validation-btn");
+    const refreshValidationBtn = null;
     const copyBtn = document.getElementById("merge-sql-copy-btn");
     const downloadBtn = document.getElementById("merge-sql-download-btn");
     const downloadAllBtn = document.getElementById("merge-sql-download-all-btn");
@@ -195,6 +235,9 @@ export class MergeSqlTool extends BaseTool {
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
     const viewReportBtn = document.getElementById("merge-sql-view-report");
     const folderNameInput = document.getElementById("merge-sql-folder-name");
+    const modeToggle = document.getElementById("merge-sql-mode-toggle");
+    const sqlRefreshBtn = document.getElementById("merge-sql-sql-refresh-btn");
+    const sqlClearBtn = document.getElementById("merge-sql-sql-clear-btn");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
     if (addFolderBtn) addFolderBtn.addEventListener("click", () => folderInput?.click());
@@ -203,7 +246,6 @@ export class MergeSqlTool extends BaseTool {
     if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
     if (clearFilesBtn) clearFilesBtn.addEventListener("click", () => this.handleClearFilesOnly());
     if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
-    if (refreshValidationBtn) refreshValidationBtn.addEventListener("click", () => this.handleRefreshValidation());
     if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
     if (downloadBtn) downloadBtn.addEventListener("click", () => this.handleDownload());
     if (downloadAllBtn) downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
@@ -215,6 +257,17 @@ export class MergeSqlTool extends BaseTool {
     if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.handleTabSwitch("report"));
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
+    if (sqlRefreshBtn) sqlRefreshBtn.addEventListener("click", () => this.handleSqlModeRefresh());
+    if (sqlClearBtn) sqlClearBtn.addEventListener("click", () => this.handleSqlModeClear());
+
+    if (modeToggle) {
+      modeToggle.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-toggle-btn");
+        if (btn && btn.dataset.mode) {
+          this.switchInputMode(btn.dataset.mode);
+        }
+      });
+    }
 
     if (resultTabs) {
       resultTabs.addEventListener("click", (e) => {
@@ -228,6 +281,14 @@ export class MergeSqlTool extends BaseTool {
       reportSubtabs.addEventListener("click", (e) => {
         const subtab = e.target.closest(".report-subtab");
         if (subtab) this.handleReportSubtabSwitch(subtab.dataset.subtab);
+      });
+    }
+
+    const generatedSubtabs = document.getElementById("merge-sql-generated-subtabs");
+    if (generatedSubtabs) {
+      generatedSubtabs.addEventListener("click", (e) => {
+        const subtab = e.target.closest(".generated-sql-subtab");
+        if (subtab) this.handleGeneratedSubtabSwitch(subtab.dataset.subtab);
       });
     }
   }
@@ -296,6 +357,67 @@ export class MergeSqlTool extends BaseTool {
     if (this.sortOrder === "manual") sortManualBtn?.classList.add("active");
   }
 
+  switchInputMode(mode) {
+    if (this.inputMode === mode) return;
+    this.inputMode = mode;
+    this.saveStateToIndexedDB();
+
+    const filesSection = document.getElementById("merge-sql-input-files");
+    const sqlSection = document.getElementById("merge-sql-input-sql");
+    const toggleBtns = document.querySelectorAll("#merge-sql-mode-toggle .mode-toggle-btn");
+
+    toggleBtns.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
+
+    if (filesSection) filesSection.style.display = mode === "files" ? "" : "none";
+    if (sqlSection) sqlSection.style.display = mode === "sql" ? "" : "none";
+
+    this.renderResultTabs();
+
+    this.currentTab = "report";
+    this.handleTabSwitch("report");
+  }
+
+  renderResultTabs() {
+    const tabsContainer = document.getElementById("merge-sql-result-tabs");
+    if (!tabsContainer) return;
+
+    if (this.inputMode === "files") {
+      tabsContainer.innerHTML = `
+        <button class="result-tab active" data-tab="report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
+          </svg>
+          Report
+        </button>
+        <button class="result-tab" data-tab="generated">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          Generated SQL
+        </button>
+      `;
+    } else {
+      tabsContainer.innerHTML = `
+        <button class="result-tab active" data-tab="report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
+          </svg>
+          Report
+        </button>
+        <button class="result-tab" data-tab="validation-sql">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13l5.93-4L15 7h4a2 2 0 0 1 2 2v2"></path>
+            <path d="M14 21l-5.93-4L9 17H5a2 2 0 0 1-2-2v-2"></path>
+          </svg>
+          Validation SQL
+        </button>
+      `;
+    }
+  }
+
   handleTabSwitch(tab) {
     this.currentTab = tab;
     this.saveStateToIndexedDB();
@@ -304,24 +426,58 @@ export class MergeSqlTool extends BaseTool {
     tabs.forEach((t) => t.classList.remove("active"));
     document.querySelector(`.result-tab[data-tab="${tab}"]`)?.classList.add("active");
 
-    const mergedContent = document.getElementById("merge-sql-merged-content");
-    const selectContent = document.getElementById("merge-sql-select-content");
-    const validationContent = document.getElementById("merge-sql-validation-content");
     const reportContent = document.getElementById("merge-sql-report-content");
+    const generatedContent = document.getElementById("merge-sql-generated-content");
+    const validationTabContent = document.getElementById("merge-sql-validation-tab-content");
+    const reportSubtabs = document.getElementById("merge-sql-report-subtabs");
+    const generatedSubtabs = document.getElementById("merge-sql-generated-subtabs");
 
-    if (mergedContent) mergedContent.classList.toggle("active", tab === "merged");
-    if (selectContent) selectContent.classList.toggle("active", tab === "select");
-    if (validationContent) validationContent.classList.toggle("active", tab === "validation");
     if (reportContent) reportContent.classList.toggle("active", tab === "report");
+    if (generatedContent) generatedContent.classList.toggle("active", tab === "generated");
+    if (validationTabContent) validationTabContent.classList.toggle("active", tab === "validation-sql");
 
-    if (tab === "merged" && this.mergedEditor) {
-      this.mergedEditor.layout();
-    } else if (tab === "select" && this.selectEditor) {
-      this.selectEditor.layout();
-    } else if (tab === "validation" && this.validationEditor) {
-      this.validationEditor.layout();
-    } else if (tab === "report") {
+    if (reportSubtabs) reportSubtabs.style.display = tab === "report" ? "" : "none";
+    if (generatedSubtabs) generatedSubtabs.style.display = tab === "generated" ? "" : "none";
+
+    if (tab === "report") {
       this.renderReport();
+    } else if (tab === "generated") {
+      if (this.currentSubtab === "merged" && this.mergedEditor) {
+        setTimeout(() => this.mergedEditor.layout(), 0);
+      } else if (this.currentSubtab === "select" && this.selectEditor) {
+        setTimeout(() => this.selectEditor.layout(), 0);
+      } else if (this.currentSubtab === "validation" && this.validationEditor) {
+        setTimeout(() => this.validationEditor.layout(), 0);
+      }
+    } else if (tab === "validation-sql") {
+      if (this.validationSqlEditor) {
+        setTimeout(() => this.validationSqlEditor.layout(), 0);
+      }
+    }
+  }
+
+  handleGeneratedSubtabSwitch(subtab) {
+    this.currentSubtab = subtab;
+    this.saveStateToIndexedDB();
+
+    const subtabs = document.querySelectorAll(".generated-sql-subtab");
+    subtabs.forEach((t) => t.classList.remove("active"));
+    document.querySelector(`.generated-sql-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+
+    const mergedSubtab = document.getElementById("merge-sql-merged-subtab");
+    const selectSubtab = document.getElementById("merge-sql-select-subtab");
+    const validationSubtab = document.getElementById("merge-sql-validation-subtab");
+
+    if (mergedSubtab) mergedSubtab.classList.toggle("active", subtab === "merged");
+    if (selectSubtab) selectSubtab.classList.toggle("active", subtab === "select");
+    if (validationSubtab) validationSubtab.classList.toggle("active", subtab === "validation");
+
+    if (subtab === "merged" && this.mergedEditor) {
+      setTimeout(() => this.mergedEditor.layout(), 0);
+    } else if (subtab === "select" && this.selectEditor) {
+      setTimeout(() => this.selectEditor.layout(), 0);
+    } else if (subtab === "validation" && this.validationEditor) {
+      setTimeout(() => this.validationEditor.layout(), 0);
     }
   }
 
@@ -385,7 +541,8 @@ export class MergeSqlTool extends BaseTool {
         this.result.selectSql,
         this.result.validationSql || "",
         this.result.duplicates,
-        this.result.report
+        this.result.report,
+        this.inputEditor?.getValue() || ""
       );
 
       this.showResult();
@@ -416,6 +573,8 @@ export class MergeSqlTool extends BaseTool {
     if (this.mergedEditor) this.mergedEditor.setValue("");
     if (this.selectEditor) this.selectEditor.setValue("");
     if (this.validationEditor) this.validationEditor.setValue("");
+    if (this.inputEditor) this.inputEditor.setValue("");
+    if (this.validationSqlEditor) this.validationSqlEditor.setValue("");
     this.hideResult();
     await IndexedDBManager.clearAll();
     this.updateUI();
@@ -457,26 +616,102 @@ export class MergeSqlTool extends BaseTool {
       this.result.selectSql,
       this.result.validationSql,
       this.result.duplicates,
-      this.result.report
+      this.result.report,
+      this.inputEditor?.getValue() || ""
     );
 
     this.showResult();
-    this.handleTabSwitch("validation");
+    this.currentSubtab = "validation";
+    this.handleGeneratedSubtabSwitch("validation");
+    this.handleTabSwitch("generated");
     this.showSuccess("Validation SQL refreshed from current Merged SQL");
   }
 
+  async handleSqlModeRefresh() {
+    const mergedSql = this.inputEditor?.getValue() || "";
+    if (!mergedSql.trim()) {
+      this.showError("No merged SQL to process");
+      return;
+    }
+
+    const sqlRefreshBtn = document.getElementById("merge-sql-sql-refresh-btn");
+    if (sqlRefreshBtn) {
+      sqlRefreshBtn.disabled = true;
+    }
+
+    try {
+      const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+      if (this.validationSqlEditor) {
+        this.validationSqlEditor.setValue(validationSql);
+      }
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      this.result = {
+        mergedSql,
+        selectSql: "",
+        validationSql,
+        duplicates: [],
+        report,
+      };
+
+      await IndexedDBManager.saveResults(
+        mergedSql,
+        "",
+        validationSql,
+        [],
+        report,
+        mergedSql
+      );
+
+      this.showResult();
+      this.updateDuplicatesInsight();
+      this.handleTabSwitch("report");
+      this.showSuccess("Report and Validation SQL generated from merged SQL");
+    } catch (error) {
+      console.error("SQL mode refresh failed:", error);
+      this.showError(`Failed to process merged SQL: ${error.message}`);
+    } finally {
+      if (sqlRefreshBtn) {
+        sqlRefreshBtn.disabled = false;
+      }
+    }
+  }
+
+  handleSqlModeClear() {
+    if (this.inputEditor) this.inputEditor.setValue("");
+    if (this.validationSqlEditor) this.validationSqlEditor.setValue("");
+    this.result = null;
+    this.hideResult();
+    this.debounceSaveResults();
+  }
+
   getCurrentEditor() {
-    if (this.currentTab === "merged") return this.mergedEditor;
-    if (this.currentTab === "select") return this.selectEditor;
-    if (this.currentTab === "validation") return this.validationEditor;
-    return null;
+    if (this.inputMode === "files") {
+      if (this.currentTab === "generated") {
+        if (this.currentSubtab === "merged") return this.mergedEditor;
+        if (this.currentSubtab === "select") return this.selectEditor;
+        if (this.currentSubtab === "validation") return this.validationEditor;
+      }
+      return null;
+    } else {
+      if (this.currentTab === "validation-sql") return this.validationSqlEditor;
+      return null;
+    }
   }
 
   getCurrentDownloadSuffix() {
-    if (this.currentTab === "merged") return "-MERGED.sql";
-    if (this.currentTab === "select") return "-SELECT.sql";
-    if (this.currentTab === "validation") return "-VALIDATION.sql";
-    return null;
+    if (this.inputMode === "files") {
+      if (this.currentTab === "generated") {
+        if (this.currentSubtab === "merged") return "-MERGED.sql";
+        if (this.currentSubtab === "select") return "-SELECT.sql";
+        if (this.currentSubtab === "validation") return "-VALIDATION.sql";
+      }
+      return null;
+    } else {
+      if (this.currentTab === "validation-sql") return "-VALIDATION.sql";
+      return null;
+    }
   }
 
   handleCopy() {

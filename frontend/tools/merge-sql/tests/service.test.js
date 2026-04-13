@@ -2099,4 +2099,84 @@ VALUES (src.limit_service_id, src.service_code);
       expect(validationSql).toContain("END AS result");
     });
   });
+
+  describe("buildReportFromMergedSql", () => {
+    it("returns empty report for null input", () => {
+      const report = MergeSqlService.buildReportFromMergedSql(null);
+      expect(report.statementCounts).toEqual([]);
+      expect(report.squadCounts).toEqual([]);
+      expect(report.featureCounts).toEqual([]);
+      expect(report.dangerousStatements).toEqual([]);
+      expect(report.nonSystemAuthors).toEqual([]);
+    });
+
+    it("returns empty report for empty string", () => {
+      const report = MergeSqlService.buildReportFromMergedSql("  ");
+      expect(report.statementCounts).toEqual([]);
+    });
+
+    it("parses merged SQL and returns statement counts", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO USER_LIMIT.LIMIT_SERVICE tgt
+USING (
+  SELECT 1 AS limit_service_id,
+    'deposito-loan-early-settlement' AS service_code
+  FROM DUAL
+) src
+ON (tgt.limit_service_id = src.limit_service_id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.service_code = src.service_code
+WHEN NOT MATCHED THEN INSERT (limit_service_id, service_code)
+VALUES (src.limit_service_id, src.service_code);
+
+--====================================================================================================
+-- USER_LIMIT.LIMIT_SERVICE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.statementCounts.length).toBeGreaterThan(0);
+      const limitRow = report.statementCounts.find((r) => r.table === "USER_LIMIT.LIMIT_SERVICE");
+      expect(limitRow).toBeDefined();
+      expect(limitRow.merge).toBe(1);
+    });
+
+    it("detects dangerous statements in merged SQL", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+DELETE FROM SOME_TABLE WHERE id = 1;
+
+--====================================================================================================
+-- SOME_TABLE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.dangerousStatements.length).toBeGreaterThan(0);
+      expect(report.dangerousStatements[0].type).toBe("DELETE");
+    });
+
+    it("detects non-SYSTEM authors in merged SQL", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO MY_TABLE tgt
+USING (
+  SELECT 1 AS id FROM DUAL
+) src
+ON (tgt.id = src.id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.UPDATED_BY = 'John'
+WHEN NOT MATCHED THEN INSERT (id, CREATED_BY)
+VALUES (1, 'John');
+
+--====================================================================================================
+-- MY_TABLE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.nonSystemAuthors.length).toBeGreaterThan(0);
+    });
+  });
 });
