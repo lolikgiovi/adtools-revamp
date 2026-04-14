@@ -1946,8 +1946,8 @@ export class MergeSqlService {
 
   static extractTableNameForSort(fileName) {
     const parsed = this.parseFileName(fileName);
-    if (parsed && parsed.tableName) {
-      return parsed.tableName;
+    if (parsed && parsed.schemaName && parsed.tableName) {
+      return `${parsed.schemaName}.${parsed.tableName}`;
     }
     return fileName.replace(/\.sql$/i, "");
   }
