@@ -57,19 +57,19 @@ export const MergeSqlTemplate = /* html */ `
 
         <div class="sort-controls">
           <span class="sort-label">Sort:</span>
-          <button class="btn btn-ghost btn-xs sort-btn active" id="merge-sql-sort-asc" title="Sort A-Z">
+          <button class="btn btn-ghost btn-xs sort-btn active" id="merge-sql-sort-asc" title="Sort by table name A-Z">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12l7-7 7 7"/>
             </svg>
             A-Z
           </button>
-          <button class="btn btn-ghost btn-xs sort-btn" id="merge-sql-sort-desc" title="Sort Z-A">
+          <button class="btn btn-ghost btn-xs sort-btn" id="merge-sql-sort-desc" title="Sort by table name Z-A">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 19V5M5 12l7 7 7-7"/>
             </svg>
             Z-A
           </button>
-          <button class="btn btn-ghost btn-xs sort-btn" id="merge-sql-sort-manual" title="Manual order (drag to reorder)">
+          <button class="btn btn-ghost btn-xs sort-btn" id="merge-sql-sort-manual" title="Drag table groups to reorder">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="4" y1="6" x2="20" y2="6"></line>
               <line x1="4" y1="12" x2="20" y2="12"></line>

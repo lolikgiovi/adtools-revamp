@@ -571,33 +571,66 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
   describe("sortFiles", () => {
     const files = [
-      { id: "1", file: {}, name: "c_file.sql" },
-      { id: "2", file: {}, name: "a_file.sql" },
-      { id: "3", file: {}, name: "b_file.sql" },
+      { id: "1", file: {}, name: "SCHEMA.BBB_table (squad1)[feat1].sql" },
+      { id: "2", file: {}, name: "SCHEMA.AAA_table (squad2)[feat2].sql" },
+      { id: "3", file: {}, name: "SCHEMA.AAA_table (squad1)[feat3].sql" },
+      { id: "4", file: {}, name: "SCHEMA.CCC_table (squad3)[feat4].sql" },
     ];
 
-    it("sorts ascending", () => {
+    it("sorts ascending by table name, then by filename", () => {
       const result = MergeSqlService.sortFiles(files, "asc");
+
+      expect(result[0].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[2].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+      expect(result[3].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+    });
+
+    it("sorts descending by table name, then by filename within groups", () => {
+      const result = MergeSqlService.sortFiles(files, "desc");
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[3].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+    });
+
+    it("sorts by manual tableOrder when order is manual", () => {
+      const tableOrder = ["CCC_table", "AAA_table", "BBB_table"];
+      const result = MergeSqlService.sortFiles(files, "manual", tableOrder);
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[3].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+    });
+
+    it("appends tables not in tableOrder at the end in manual mode", () => {
+      const filesWithExtra = [
+        ...files,
+        { id: "5", file: {}, name: "SCHEMA.DDD_table (squad1)[feat5].sql" },
+      ];
+      const tableOrder = ["CCC_table", "AAA_table"];
+      const result = MergeSqlService.sortFiles(filesWithExtra, "manual", tableOrder);
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[3].name).toContain("BBB_table");
+      expect(result[4].name).toContain("DDD_table");
+    });
+
+    it("sorts unparsed filenames by their raw name", () => {
+      const plainFiles = [
+        { id: "1", file: {}, name: "c_file.sql" },
+        { id: "2", file: {}, name: "a_file.sql" },
+        { id: "3", file: {}, name: "b_file.sql" },
+      ];
+      const result = MergeSqlService.sortFiles(plainFiles, "asc");
 
       expect(result[0].name).toBe("a_file.sql");
       expect(result[1].name).toBe("b_file.sql");
       expect(result[2].name).toBe("c_file.sql");
-    });
-
-    it("sorts descending", () => {
-      const result = MergeSqlService.sortFiles(files, "desc");
-
-      expect(result[0].name).toBe("c_file.sql");
-      expect(result[1].name).toBe("b_file.sql");
-      expect(result[2].name).toBe("a_file.sql");
-    });
-
-    it("returns original order for manual", () => {
-      const result = MergeSqlService.sortFiles(files, "manual");
-
-      expect(result[0].name).toBe("c_file.sql");
-      expect(result[1].name).toBe("a_file.sql");
-      expect(result[2].name).toBe("b_file.sql");
     });
 
     it("does not mutate original array", () => {
@@ -605,6 +638,55 @@ SELECT * FROM SCHEMA.CONFIG;`;
       MergeSqlService.sortFiles(files, "asc");
 
       expect(files[0].name).toBe(original[0].name);
+    });
+  });
+
+  describe("extractTableNameForSort", () => {
+    it("extracts table name from standard filename", () => {
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA.MY_TABLE (squad1)[feat1].sql")).toBe("MY_TABLE");
+    });
+
+    it("falls back to filename without extension for non-standard filenames", () => {
+      expect(MergeSqlService.extractTableNameForSort("random_file.sql")).toBe("random_file");
+    });
+
+    it("handles filename without extension", () => {
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA.TABLE (squad)[feat]")).toBe("TABLE");
+    });
+  });
+
+  describe("groupFilesByTable", () => {
+    it("groups files by table name", () => {
+      const files = [
+        { id: "1", file: {}, name: "SCHEMA.AAA (squad1)[feat1].sql" },
+        { id: "2", file: {}, name: "SCHEMA.BBB (squad2)[feat2].sql" },
+        { id: "3", file: {}, name: "SCHEMA.AAA (squad3)[feat3].sql" },
+      ];
+      const groups = MergeSqlService.groupFilesByTable(files);
+
+      expect(groups.has("AAA")).toBe(true);
+      expect(groups.has("BBB")).toBe(true);
+      expect(groups.get("AAA")).toHaveLength(2);
+      expect(groups.get("BBB")).toHaveLength(1);
+    });
+
+    it("sorts files within each group alphabetically", () => {
+      const files = [
+        { id: "1", file: {}, name: "SCHEMA.AAA (squad3)[feat3].sql" },
+        { id: "2", file: {}, name: "SCHEMA.AAA (squad1)[feat1].sql" },
+        { id: "3", file: {}, name: "SCHEMA.AAA (squad2)[feat2].sql" },
+      ];
+      const groups = MergeSqlService.groupFilesByTable(files);
+      const aaaFiles = groups.get("AAA");
+
+      expect(aaaFiles[0].name).toBe("SCHEMA.AAA (squad1)[feat1].sql");
+      expect(aaaFiles[1].name).toBe("SCHEMA.AAA (squad2)[feat2].sql");
+      expect(aaaFiles[2].name).toBe("SCHEMA.AAA (squad3)[feat3].sql");
+    });
+
+    it("returns empty map for empty files", () => {
+      const groups = MergeSqlService.groupFilesByTable([]);
+      expect(groups.size).toBe(0);
     });
   });
 

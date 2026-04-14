@@ -144,6 +144,9 @@ export async function saveState(state) {
       folderName: state.folderName,
       currentTab: state.currentTab,
       inputMode: state.inputMode || "files",
+      tableOrder: state.tableOrder || [],
+      collapsedTables: state.collapsedTables || [],
+      expandedTables: state.expandedTables || [],
       updatedAt: Date.now(),
     });
 

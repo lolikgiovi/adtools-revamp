@@ -1944,24 +1944,57 @@ export class MergeSqlService {
     return groups;
   }
 
-  /**
-   * Sort files by name
-   * @param {Array<{ id: string, file: File, name: string }>} files
-   * @param {'asc' | 'desc' | 'manual'} order
-   * @returns {Array<{ id: string, file: File, name: string }>}
-   */
-  static sortFiles(files, order) {
-    if (order === "manual") {
-      return files;
+  static extractTableNameForSort(fileName) {
+    const parsed = this.parseFileName(fileName);
+    if (parsed && parsed.tableName) {
+      return parsed.tableName;
+    }
+    return fileName.replace(/\.sql$/i, "");
+  }
+
+  static groupFilesByTable(files) {
+    const groups = new Map();
+    for (const file of files) {
+      const tableName = this.extractTableNameForSort(file.name);
+      if (!groups.has(tableName)) {
+        groups.set(tableName, []);
+      }
+      groups.get(tableName).push(file);
+    }
+    for (const [, fileGroup] of groups) {
+      fileGroup.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    }
+    return groups;
+  }
+
+  static sortFiles(files, order, tableOrder) {
+    const groups = this.groupFilesByTable(files);
+
+    let sortedTableNames;
+    if (order === "manual" && tableOrder && tableOrder.length > 0) {
+      const orderedSet = new Set(tableOrder);
+      const allTableNames = [...groups.keys()];
+      sortedTableNames = tableOrder.filter((t) => orderedSet.has(t) && groups.has(t));
+      for (const t of allTableNames) {
+        if (!sortedTableNames.includes(t)) {
+          sortedTableNames.push(t);
+        }
+      }
+    } else {
+      sortedTableNames = [...groups.keys()].sort((a, b) => {
+        const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+        return order === "desc" ? -cmp : cmp;
+      });
     }
 
-    const sorted = [...files].sort((a, b) => {
-      const nameA = a.name.toLowerCase();
-      const nameB = b.name.toLowerCase();
-      return order === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-    });
-
-    return sorted;
+    const result = [];
+    for (const tableName of sortedTableNames) {
+      const fileGroup = groups.get(tableName);
+      if (fileGroup) {
+        result.push(...fileGroup);
+      }
+    }
+    return result;
   }
 
   /**

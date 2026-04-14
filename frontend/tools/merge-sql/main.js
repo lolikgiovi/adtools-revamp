@@ -24,6 +24,8 @@ export class MergeSqlTool extends BaseTool {
 
     this.files = [];
     this.sortOrder = "asc";
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.mergedEditor = null;
     this.selectEditor = null;
     this.validationEditor = null;
@@ -33,7 +35,8 @@ export class MergeSqlTool extends BaseTool {
     this.currentTab = "report";
     this.currentSubtab = "merged";
     this.result = null;
-    this.draggedItem = null;
+    this.draggedCard = null;
+    this.dragCardStartY = null;
     this.saveDebounceTimer = null;
   }
 
@@ -138,9 +141,20 @@ export class MergeSqlTool extends BaseTool {
     }
 
     if (state) {
-      this.sortOrder = state.sortOrder || "asc";
+      if (state.sortOrder === "manual") {
+        this.sortOrder = "asc";
+      } else {
+        this.sortOrder = state.sortOrder || "asc";
+      }
       this.currentTab = state.currentTab || "report";
       this.currentSubtab = state.currentSubtab || "merged";
+
+      if (state.tableOrder && Array.isArray(state.tableOrder)) {
+        this.tableOrder = state.tableOrder;
+      }
+      if (state.expandedTables && Array.isArray(state.expandedTables)) {
+        this.expandedTables = new Set(state.expandedTables);
+      }
 
       const folderNameInput = document.getElementById("merge-sql-folder-name");
       if (folderNameInput && state.folderName) {
@@ -207,6 +221,8 @@ export class MergeSqlTool extends BaseTool {
       currentTab: this.currentTab,
       currentSubtab: this.currentSubtab,
       inputMode: this.inputMode,
+      tableOrder: this.tableOrder,
+      expandedTables: [...this.expandedTables],
     });
   }
 
@@ -313,11 +329,18 @@ export class MergeSqlTool extends BaseTool {
       const exists = this.files.some((f) => f.name === file.name && f.file.size === file.size);
       if (exists) continue;
 
-      this.files.push({
+      const newFile = {
         id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         file,
         name: file.name,
-      });
+      };
+
+      this.files.push(newFile);
+
+      const tableName = MergeSqlService.extractTableNameForSort(newFile.name);
+      if (!this.tableOrder.includes(tableName)) {
+        this.tableOrder.push(tableName);
+      }
     }
 
     this.applySorting();
@@ -326,12 +349,29 @@ export class MergeSqlTool extends BaseTool {
   }
 
   removeFile(fileId) {
+    const file = this.files.find((f) => f.id === fileId);
     this.files = this.files.filter((f) => f.id !== fileId);
+
+    if (file) {
+      const tableName = MergeSqlService.extractTableNameForSort(file.name);
+      const stillExists = this.files.some((f) => MergeSqlService.extractTableNameForSort(f.name) === tableName);
+      if (!stillExists) {
+        this.tableOrder = this.tableOrder.filter((t) => t !== tableName);
+        this.expandedTables.delete(tableName);
+      }
+    }
+
+    this.applySorting();
     this.saveFilesToIndexedDB();
+    this.saveStateToIndexedDB();
     this.updateUI();
   }
 
   handleSort(order) {
+    if (order === "manual" && this.sortOrder !== "manual") {
+      const groups = MergeSqlService.groupFilesByTable(this.files);
+      this.tableOrder = [...groups.keys()];
+    }
     this.sortOrder = order;
     this.applySorting();
     this.updateSortButtons();
@@ -340,9 +380,7 @@ export class MergeSqlTool extends BaseTool {
   }
 
   applySorting() {
-    if (this.sortOrder !== "manual") {
-      this.files = MergeSqlService.sortFiles(this.files, this.sortOrder);
-    }
+    this.files = MergeSqlService.sortFiles(this.files, this.sortOrder, this.tableOrder);
   }
 
   updateSortButtons() {
@@ -569,6 +607,8 @@ export class MergeSqlTool extends BaseTool {
 
   async handleClearAll() {
     this.files = [];
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.result = null;
     if (this.mergedEditor) this.mergedEditor.setValue("");
     if (this.selectEditor) this.selectEditor.setValue("");
@@ -586,6 +626,8 @@ export class MergeSqlTool extends BaseTool {
     }
 
     this.files = [];
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.saveFilesToIndexedDB();
     this.updateUI();
     this.showSuccess("Files cleared. Current SQL results are kept.");
@@ -1286,13 +1328,22 @@ export class MergeSqlTool extends BaseTool {
     if (emptyState) emptyState.style.display = "none";
 
     const isManual = this.sortOrder === "manual";
-    let html = "";
-    for (let i = 0; i < this.files.length; i++) {
-      const file = this.files[i];
+    const groups = MergeSqlService.groupFilesByTable(this.files);
 
-      html += `
-        <div class="file-item${isManual ? " draggable-item" : ""}" ${isManual ? 'draggable="true"' : ""} data-id="${file.id}" data-index="${i}">
-          <div class="drag-handle" style="${isManual ? "" : "display: none;"}">
+    const sortedTableNames = this.getSortedTableNames(groups);
+
+    let html = "";
+    for (const tableName of sortedTableNames) {
+      const fileGroup = groups.get(tableName);
+      if (!fileGroup || fileGroup.length === 0) continue;
+
+      const isExpanded = this.expandedTables.has(tableName);
+
+      html += `<div class="table-card${isManual ? " table-card-draggable" : ""}" data-table-name="${this.escapeHtml(tableName)}">`;
+
+      html += `<div class="table-card-header">`;
+      if (isManual) {
+        html += `<div class="table-card-drag-handle">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="9" cy="5" r="1"></circle>
               <circle cx="9" cy="12" r="1"></circle>
@@ -1301,30 +1352,73 @@ export class MergeSqlTool extends BaseTool {
               <circle cx="15" cy="12" r="1"></circle>
               <circle cx="15" cy="19" r="1"></circle>
             </svg>
-          </div>
-          <div class="file-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-          </div>
-          <div class="file-info">
-            <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
-          </div>
-          <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-      `;
+          </div>`;
+      }
+      html += `<button class="table-card-toggle" data-table-name="${this.escapeHtml(tableName)}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-chevron${isExpanded ? "" : " toggle-chevron-collapsed"}">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>`;
+      html += `<span class="table-card-title">${this.escapeHtml(tableName)}</span>`;
+      html += `<span class="table-card-count">${fileGroup.length} file${fileGroup.length !== 1 ? "s" : ""}</span>`;
+      html += `</div>`;
+
+      html += `<div class="table-card-body${isExpanded ? "" : " table-card-body-collapsed"}">`;
+      for (const file of fileGroup) {
+        html += `<div class="file-item" data-id="${file.id}">
+            <div class="file-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <div class="file-info">
+              <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
+            </div>
+            <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>`;
+      }
+      html += `</div></div>`;
     }
 
     if (fileItems) {
       fileItems.innerHTML = html;
       this.bindFileItemEvents();
+      this.bindCardEvents();
+
+      if (isManual) {
+        this.bindCardDragEvents();
+      }
     }
+  }
+
+  getSortedTableNames(groups) {
+    const allNames = [...groups.keys()];
+    if (this.sortOrder === "manual" && this.tableOrder.length > 0) {
+      const ordered = [];
+      const seen = new Set();
+      for (const name of this.tableOrder) {
+        if (groups.has(name) && !seen.has(name)) {
+          ordered.push(name);
+          seen.add(name);
+        }
+      }
+      for (const name of allNames) {
+        if (!seen.has(name)) {
+          ordered.push(name);
+        }
+      }
+      return ordered;
+    }
+    return allNames.sort((a, b) => {
+      const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+      return this.sortOrder === "desc" ? -cmp : cmp;
+    });
   }
 
   bindFileItemEvents() {
@@ -1342,74 +1436,100 @@ export class MergeSqlTool extends BaseTool {
           this.removeFile(fileId);
         });
       }
+    });
+  }
 
-      if (this.sortOrder === "manual") {
-        const dragHandle = item.querySelector(".drag-handle");
-        if (dragHandle) {
-          dragHandle.addEventListener("mousedown", (e) => this.handleDragStart(e, item));
+  bindCardEvents() {
+    const toggles = document.querySelectorAll("#merge-sql-file-items .table-card-toggle");
+    toggles.forEach((toggle) => {
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tableName = toggle.dataset.tableName;
+        if (this.expandedTables.has(tableName)) {
+          this.expandedTables.delete(tableName);
+        } else {
+          this.expandedTables.add(tableName);
         }
-      }
+        this.saveStateToIndexedDB();
+        this.renderFileList();
+      });
+    });
+  }
+
+  bindCardDragEvents() {
+    const container = document.getElementById("merge-sql-file-items");
+    if (!container) return;
+
+    const dragHandles = container.querySelectorAll(".table-card-drag-handle");
+    dragHandles.forEach((handle) => {
+      handle.addEventListener("mousedown", (e) => this.handleCardDragStart(e));
     });
 
-    if (this.sortOrder === "manual" && fileItemsContainer) {
-      fileItemsContainer.addEventListener("mousemove", (e) => this.handleDragMove(e));
-      fileItemsContainer.addEventListener("mouseup", (e) => this.handleDragEnd(e));
-      fileItemsContainer.addEventListener("mouseleave", (e) => this.handleDragEnd(e));
-    }
+    container.addEventListener("mousemove", (e) => this.handleCardDragMove(e));
+    container.addEventListener("mouseup", (e) => this.handleCardDragEnd(e));
+    container.addEventListener("mouseleave", (e) => this.handleCardDragEnd(e));
   }
 
-  handleDragStart(e, item) {
+  handleCardDragStart(e) {
     e.preventDefault();
-    this.draggedItem = item;
-    this.dragStartY = e.clientY;
-    this.draggedItemRect = item.getBoundingClientRect();
-    item.classList.add("dragging");
+    const card = e.target.closest(".table-card");
+    if (!card) return;
+
+    this.draggedCard = card;
+    this.dragCardStartY = e.clientY;
+    card.classList.add("dragging");
   }
 
-  handleDragMove(e) {
-    if (!this.draggedItem) return;
+  handleCardDragMove(e) {
+    if (!this.draggedCard) return;
 
-    const fileItemsContainer = document.getElementById("merge-sql-file-items");
-    const fileItems = fileItemsContainer?.querySelectorAll(".file-item:not(.dragging)");
+    const container = document.getElementById("merge-sql-file-items");
+    const cards = container?.querySelectorAll(".table-card:not(.dragging)");
 
-    if (!fileItems) return;
+    if (!cards) return;
 
-    fileItems.forEach((item) => item.classList.remove("drag-over"));
+    cards.forEach((card) => card.classList.remove("drag-over"));
 
-    for (const item of fileItems) {
-      const rect = item.getBoundingClientRect();
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
 
-      if (e.clientY < midY + rect.height / 2 && e.clientY > midY - rect.height / 2) {
-        item.classList.add("drag-over");
+      if (e.clientY > rect.top && e.clientY < rect.bottom) {
+        card.classList.add("drag-over");
         break;
       }
     }
   }
 
-  handleDragEnd(e) {
-    if (!this.draggedItem) return;
+  handleCardDragEnd(e) {
+    if (!this.draggedCard) return;
 
-    const fileItemsContainer = document.getElementById("merge-sql-file-items");
-    const dragOverItem = fileItemsContainer?.querySelector(".file-item.drag-over");
+    const container = document.getElementById("merge-sql-file-items");
+    const dragOverCard = container?.querySelector(".table-card.drag-over");
 
-    if (dragOverItem && dragOverItem !== this.draggedItem) {
-      const draggedId = this.draggedItem.dataset.id;
-      const targetId = dragOverItem.dataset.id;
+    if (dragOverCard && dragOverCard !== this.draggedCard) {
+      const draggedTableName = this.draggedCard.dataset.tableName;
+      const targetTableName = dragOverCard.dataset.tableName;
 
-      const draggedIndex = this.files.findIndex((f) => f.id === draggedId);
-      const targetIndex = this.files.findIndex((f) => f.id === targetId);
+      const draggedIdx = this.tableOrder.indexOf(draggedTableName);
+      const targetIdx = this.tableOrder.indexOf(targetTableName);
 
-      if (draggedIndex !== -1 && targetIndex !== -1) {
-        const [draggedFile] = this.files.splice(draggedIndex, 1);
-        this.files.splice(targetIndex, 0, draggedFile);
-        this.saveFilesToIndexedDB();
+      if (draggedIdx !== -1 && targetIdx !== -1) {
+        this.tableOrder.splice(draggedIdx, 1);
+        this.tableOrder.splice(targetIdx, 0, draggedTableName);
+      } else if (draggedIdx !== -1) {
+        this.tableOrder.splice(draggedIdx, 1);
+        this.tableOrder.push(draggedTableName);
       }
+
+      this.applySorting();
+      this.saveStateToIndexedDB();
+      this.saveFilesToIndexedDB();
     }
 
-    this.draggedItem.classList.remove("dragging");
-    fileItemsContainer?.querySelectorAll(".file-item").forEach((el) => el.classList.remove("drag-over"));
-    this.draggedItem = null;
+    this.draggedCard.classList.remove("dragging");
+    container?.querySelectorAll(".table-card").forEach((el) => el.classList.remove("drag-over"));
+    this.draggedCard = null;
     this.renderFileList();
   }
 
