@@ -597,6 +597,18 @@
   flex-shrink: 0;
 }
 
+.merge-sql-report-actions-buttons {
+  display: none;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.merge-sql-report-actions-buttons.visible {
+  display: flex;
+}
+
 .merge-sql-result-actions .btn {
   font-size: 0.75rem;
   padding: 0.375rem 0.625rem;

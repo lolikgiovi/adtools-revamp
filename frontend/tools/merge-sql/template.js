@@ -113,7 +113,6 @@ export const MergeSqlTemplate = /* html */ `
       <!-- SQL Mode -->
       <div class="mode-section" id="merge-sql-input-sql" style="display: none;">
         <div class="panel-header">
-          <h3>Merged SQL</h3>
         </div>
         <div class="input-editor-container" id="merge-sql-input-editor"></div>
         <div class="merge-action">
@@ -154,6 +153,31 @@ export const MergeSqlTemplate = /* html */ `
               Squad Detail
             </button>
           </div>
+          <div class="merge-sql-report-actions-buttons" id="merge-sql-report-actions-buttons">
+            <button class="btn btn-ghost btn-xs" id="merge-sql-copy-report-text-btn" title="Copy report as text for WhatsApp">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy as Text
+            </button>
+            <button class="btn btn-ghost btn-xs" id="merge-sql-copy-report-image-btn" title="Copy report as image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              Copy as Image
+            </button>
+            <button class="btn btn-ghost btn-xs" id="merge-sql-download-report-image-btn" title="Download report as image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download Image
+            </button>
+          </div>
           <div class="merge-sql-generated-sql-subtabs" id="merge-sql-generated-subtabs" style="display: none;">
             <button class="merge-sql-generated-sql-subtab active" data-subtab="merged">
               Merged SQL
@@ -165,7 +189,7 @@ export const MergeSqlTemplate = /* html */ `
               Validation SQL
             </button>
           </div>
-          <div class="merge-sql-result-actions-buttons">
+          <div class="merge-sql-result-actions-buttons" style="display:none;">
             <button class="btn btn-ghost btn-xs" id="merge-sql-copy-btn" title="Copy">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>

@@ -10,6 +10,7 @@ import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
 import { createOracleEditor } from "../../core/MonacoOracle.js";
 import * as IndexedDBManager from "./indexeddb-manager.js";
+import html2canvas from "html2canvas";
 
 export class MergeSqlTool extends BaseTool {
   constructor(eventBus) {
@@ -254,6 +255,9 @@ export class MergeSqlTool extends BaseTool {
     const modeToggle = document.getElementById("merge-sql-mode-toggle");
     const sqlRefreshBtn = document.getElementById("merge-sql-sql-refresh-btn");
     const sqlClearBtn = document.getElementById("merge-sql-sql-clear-btn");
+    const copyReportTextBtn = document.getElementById("merge-sql-copy-report-text-btn");
+    const copyReportImageBtn = document.getElementById("merge-sql-copy-report-image-btn");
+    const downloadReportImageBtn = document.getElementById("merge-sql-download-report-image-btn");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
     if (addFolderBtn) addFolderBtn.addEventListener("click", () => folderInput?.click());
@@ -275,6 +279,9 @@ export class MergeSqlTool extends BaseTool {
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
     if (sqlRefreshBtn) sqlRefreshBtn.addEventListener("click", () => this.handleSqlModeRefresh());
     if (sqlClearBtn) sqlClearBtn.addEventListener("click", () => this.handleSqlModeClear());
+    if (copyReportTextBtn) copyReportTextBtn.addEventListener("click", () => this.handleCopyReportText());
+    if (copyReportImageBtn) copyReportImageBtn.addEventListener("click", () => this.handleCopyReportImage());
+    if (downloadReportImageBtn) downloadReportImageBtn.addEventListener("click", () => this.handleDownloadReportImage());
 
     if (modeToggle) {
       modeToggle.addEventListener("click", (e) => {
@@ -458,6 +465,21 @@ export class MergeSqlTool extends BaseTool {
 
   handleTabSwitch(tab) {
     this.currentTab = tab;
+
+    if (tab === "report") {
+      const validSubtabs = ["summary", "table-detail", "squad-detail"];
+      if (!validSubtabs.includes(this.currentSubtab)) {
+        this.currentSubtab = "summary";
+      }
+    } else if (tab === "generated") {
+      const validSubtabs = ["merged", "select", "validation"];
+      if (!validSubtabs.includes(this.currentSubtab)) {
+        this.currentSubtab = "merged";
+      }
+    } else if (tab === "validation-sql") {
+      this.currentSubtab = "validation-sql";
+    }
+
     this.saveStateToIndexedDB();
 
     const tabs = document.querySelectorAll(".merge-sql-result-tab");
@@ -467,15 +489,24 @@ export class MergeSqlTool extends BaseTool {
     const reportContent = document.getElementById("merge-sql-report-content");
     const generatedContent = document.getElementById("merge-sql-generated-content");
     const validationTabContent = document.getElementById("merge-sql-validation-tab-content");
-    const reportSubtabs = document.getElementById("merge-sql-report-subtabs");
-    const generatedSubtabs = document.getElementById("merge-sql-generated-subtabs");
+    const reportSubtabsEl = document.getElementById("merge-sql-report-subtabs");
+    const generatedSubtabsEl = document.getElementById("merge-sql-generated-subtabs");
 
     if (reportContent) reportContent.classList.toggle("active", tab === "report");
     if (generatedContent) generatedContent.classList.toggle("active", tab === "generated");
     if (validationTabContent) validationTabContent.classList.toggle("active", tab === "validation-sql");
 
-    if (reportSubtabs) reportSubtabs.style.display = tab === "report" ? "" : "none";
-    if (generatedSubtabs) generatedSubtabs.style.display = tab === "generated" ? "" : "none";
+    if (reportSubtabsEl) reportSubtabsEl.style.display = tab === "report" ? "" : "none";
+    if (generatedSubtabsEl) generatedSubtabsEl.style.display = tab === "generated" ? "" : "none";
+
+    const resultActionsButtons = document.querySelector(".merge-sql-result-actions-buttons");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
+    if (resultActionsButtons) {
+      resultActionsButtons.style.display = tab === "report" ? "none" : "";
+    }
+    if (reportActionsButtons) {
+      reportActionsButtons.classList.toggle("visible", tab === "report");
+    }
 
     if (tab === "report") {
       this.renderReport();
@@ -520,6 +551,9 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleReportSubtabSwitch(subtab) {
+    this.currentSubtab = subtab;
+    this.saveStateToIndexedDB();
+
     const subtabs = document.querySelectorAll(".merge-sql-report-subtab");
     subtabs.forEach((t) => t.classList.remove("active"));
     document.querySelector(`.merge-sql-report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
@@ -831,10 +865,12 @@ export class MergeSqlTool extends BaseTool {
     const emptyState = document.getElementById("merge-sql-result-empty");
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
 
     if (emptyState) emptyState.style.display = "none";
     if (resultActions) resultActions.classList.add("visible");
     if (clearBtn) clearBtn.style.display = "block";
+    if (reportActionsButtons) reportActionsButtons.classList.toggle("visible", this.currentTab === "report");
   }
 
   hideResult() {
@@ -842,11 +878,13 @@ export class MergeSqlTool extends BaseTool {
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
     const insights = document.getElementById("merge-sql-insights");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
 
     if (emptyState) emptyState.style.display = "flex";
     if (resultActions) resultActions.classList.remove("visible");
     if (clearBtn) clearBtn.style.display = "none";
     if (insights) insights.style.display = "none";
+    if (reportActionsButtons) reportActionsButtons.classList.remove("visible");
   }
 
   updateDuplicatesInsight() {
@@ -973,7 +1011,7 @@ export class MergeSqlTool extends BaseTool {
         let tableHtml = `<div class="report-sticky-header">
           <h4>All Tables Summary</h4>
           <div class="report-sticky-header-columns">
-            <span>Table</span><span>INSERT</span><span>MERGE</span><span>UPDATE</span><span>DELETE</span><span>Total</span>
+            <span>Table</span><span>INSERT</span><span>MERGE</span><span>UPDATE</span><span>Total</span>
           </div>
         </div>
         <table class="report-table report-table-no-header">
@@ -984,7 +1022,6 @@ export class MergeSqlTool extends BaseTool {
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
-            <td>${row.delete}</td>
             <td>${row.total}</td>
           </tr>`;
         }
@@ -999,7 +1036,7 @@ export class MergeSqlTool extends BaseTool {
     if (squadsContainer) {
       if (squadCounts && squadCounts.length > 0) {
         let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table report-table-sticky">
-          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of squadCounts) {
           squadsHtml += `<tr>
@@ -1007,7 +1044,6 @@ export class MergeSqlTool extends BaseTool {
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
-            <td>${row.delete}</td>
             <td>${row.total}</td>
           </tr>`;
         }
@@ -1039,7 +1075,7 @@ export class MergeSqlTool extends BaseTool {
           const group = squadGroups.get(key);
           featuresHtml += `<div class="report-squad-group"><h5>${this.escapeHtml(group.displayName)}</h5>
             <table class="report-table">
-              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
               <tbody>`;
           for (const row of group.features) {
             featuresHtml += `<tr>
@@ -1047,7 +1083,6 @@ export class MergeSqlTool extends BaseTool {
               <td>${row.insert}</td>
               <td>${row.merge}</td>
               <td>${row.update}</td>
-              <td>${row.delete}</td>
               <td>${row.total}</td>
             </tr>`;
           }
@@ -1057,7 +1092,7 @@ export class MergeSqlTool extends BaseTool {
         if (noSquadFeatures.length > 0) {
           featuresHtml += `<div class="report-squad-group"><h5>Other</h5>
             <table class="report-table">
-              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
               <tbody>`;
           for (const row of noSquadFeatures) {
             featuresHtml += `<tr>
@@ -1065,7 +1100,6 @@ export class MergeSqlTool extends BaseTool {
               <td>${row.insert}</td>
               <td>${row.merge}</td>
               <td>${row.update}</td>
-              <td>${row.delete}</td>
               <td>${row.total}</td>
             </tr>`;
           }
@@ -1136,16 +1170,15 @@ export class MergeSqlTool extends BaseTool {
 
     for (const [tableKey, rows] of tableGroups) {
       html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
-        <table class="report-table report-table-expandable">
-          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-          <tbody>`;
+<table class="report-table report-table-expandable">
+           <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+           <tbody>`;
 
-      const totals = { insert: 0, merge: 0, update: 0, delete: 0, total: 0 };
+      const totals = { insert: 0, merge: 0, update: 0, total: 0 };
       for (const row of rows) {
         totals.insert += row.insert;
         totals.merge += row.merge;
         totals.update += row.update;
-        totals.delete += row.delete;
         totals.total += row.total;
 
         const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
@@ -1161,14 +1194,13 @@ export class MergeSqlTool extends BaseTool {
             </span>
             ${this.escapeHtml(row.squad)}
           </td>
-          <td>${row.insert}</td>
-          <td>${row.merge}</td>
-          <td>${row.update}</td>
-          <td>${row.delete}</td>
-          <td>${row.total}</td>
-        </tr>
-        <tr class="row-feature-details" id="${rowId}">
-          <td colspan="6">
+<td>${row.insert}</td>
+           <td>${row.merge}</td>
+           <td>${row.update}</td>
+           <td>${row.total}</td>
+         </tr>
+         <tr class="row-feature-details" id="${rowId}">
+           <td colspan="5">
             <div class="feature-details-content">`;
 
         if (features.length > 0) {
@@ -1191,7 +1223,6 @@ export class MergeSqlTool extends BaseTool {
         <td>${totals.insert}</td>
         <td>${totals.merge}</td>
         <td>${totals.update}</td>
-        <td>${totals.delete}</td>
         <td>${totals.total}</td>
       </tr></tfoot></table></div>`;
     }
@@ -1261,9 +1292,9 @@ export class MergeSqlTool extends BaseTool {
             </span>
           </div>
         </div>
-        <table class="report-table">
-          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-          <tbody>`;
+<table class="report-table">
+           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+           <tbody>`;
 
       for (const row of group.tables) {
         html += `<tr>
@@ -1271,7 +1302,6 @@ export class MergeSqlTool extends BaseTool {
           <td>${row.insert}</td>
           <td>${row.merge}</td>
           <td>${row.update}</td>
-          <td>${row.delete}</td>
           <td>${row.total}</td>
         </tr>`;
       }
@@ -1537,6 +1567,291 @@ export class MergeSqlTool extends BaseTool {
     const mergeBtn = document.getElementById("merge-sql-btn");
     if (mergeBtn) {
       mergeBtn.disabled = this.files.length === 0;
+    }
+  }
+
+  formatReportAsText() {
+    if (!this.result?.report) return "No report data available.";
+
+    const report = this.result.report;
+    const lines = [];
+
+    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
+      ? this.currentSubtab
+      : "summary";
+
+    if (subtab === "summary") {
+      lines.push("📊 *Merge SQL Report — Summary*");
+      lines.push("");
+
+      if (report.dangerousStatements && report.dangerousStatements.length > 0) {
+        lines.push("⚠️ *Dangerous Statements*");
+        for (const item of report.dangerousStatements) {
+          const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
+          lines.push(`*${item.fileName}* [${typeLabel}]`);
+          lines.push(`\`${item.statement.slice(0, 200)}${item.statement.length > 200 ? "..." : ""}\``);
+        }
+        lines.push("");
+      }
+
+      if (report.statementCounts && report.statementCounts.length > 0) {
+        lines.push(`📋 *All Tables Summary* (${report.statementCounts.length} table${report.statementCounts.length !== 1 ? "s" : ""})`);
+        lines.push("");
+        for (const row of report.statementCounts) {
+          lines.push(`*${row.table}*`);
+          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
+          lines.push("");
+        }
+      }
+
+      if (report.squadCounts && report.squadCounts.length > 0) {
+        lines.push("📋 *Per-Squad Summary*");
+        lines.push("");
+        for (const row of report.squadCounts) {
+          lines.push(`*${row.squad}* — ${row.total} statement${row.total !== 1 ? "s" : ""}`);
+          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
+          lines.push("");
+        }
+      }
+
+      if (report.featureCounts && report.featureCounts.length > 0) {
+        lines.push("📋 *Per-Feature Summary*");
+        lines.push("");
+        const squadGroups = new Map();
+        const noSquadFeatures = [];
+        for (const row of report.featureCounts) {
+          if (row.squad) {
+            const key = row.squad.toUpperCase();
+            if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, features: [] });
+            squadGroups.get(key).features.push(row);
+          } else {
+            noSquadFeatures.push(row);
+          }
+        }
+        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+        for (const key of sortedSquadKeys) {
+          const group = squadGroups.get(key);
+          lines.push(`*${group.displayName}*`);
+          for (const row of group.features) {
+            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+        if (noSquadFeatures.length > 0) {
+          lines.push("*Other*");
+          for (const row of noSquadFeatures) {
+            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+      }
+
+      if (report.nonSystemAuthors && report.nonSystemAuthors.length > 0) {
+        lines.push("⚠️ *Non-SYSTEM Authors*");
+        for (const item of report.nonSystemAuthors) {
+          lines.push(`${item.fileName} — ${item.field}: ${item.value}`);
+        }
+        lines.push("");
+      } else {
+        lines.push("✅ *Non-SYSTEM Authors* — All values are SYSTEM");
+        lines.push("");
+      }
+
+    } else if (subtab === "table-detail") {
+      lines.push("📊 *Merge SQL Report — Table Detail*");
+      lines.push("");
+
+      if (report.tableSquadCounts && report.tableSquadCounts.length > 0) {
+        const featureLookup = new Map();
+        if (report.tableSquadFeatureCounts) {
+          for (const row of report.tableSquadFeatureCounts) {
+            const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+            if (!featureLookup.has(key)) featureLookup.set(key, []);
+            featureLookup.get(key).push(row);
+          }
+        }
+
+        const tableGroups = new Map();
+        for (const row of report.tableSquadCounts) {
+          const key = row.table.toUpperCase();
+          if (!tableGroups.has(key)) tableGroups.set(key, []);
+          tableGroups.get(key).push(row);
+        }
+
+        for (const [tableKey, rows] of tableGroups) {
+          lines.push(`*${rows[0].table}*`);
+          const totals = { insert: 0, merge: 0, update: 0, total: 0 };
+          for (const row of rows) {
+            totals.insert += row.insert;
+            totals.merge += row.merge;
+            totals.update += row.update;
+            totals.total += row.total;
+            lines.push(`${row.squad} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+
+            const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+            const features = featureLookup.get(featureKey) || [];
+            for (const f of features) {
+              const featureName = f.feature || "Feature not Mentioned";
+              lines.push(`  ${featureName} — ${f.total} statement${f.total !== 1 ? "s" : ""}`);
+            }
+          }
+          lines.push(`_Total: INS: ${totals.insert} | MRG: ${totals.merge} | UPD: ${totals.update} | Tot: ${totals.total}_`);
+          lines.push("");
+        }
+      } else {
+        lines.push("No table+squad data found");
+      }
+
+    } else if (subtab === "squad-detail") {
+      lines.push("📊 *Merge SQL Report — Squad Detail*");
+      lines.push("");
+
+      if (report.squadTableCounts && report.squadTableCounts.length > 0) {
+        const squadGroups = new Map();
+        for (const row of report.squadTableCounts) {
+          const key = row.squad.toUpperCase();
+          if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, tables: [] });
+          squadGroups.get(key).tables.push(row);
+        }
+
+        const squadTotals = new Map();
+        if (report.squadCounts) {
+          for (const s of report.squadCounts) {
+            squadTotals.set(s.squad.toUpperCase(), s);
+          }
+        }
+
+        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+        for (const key of sortedSquadKeys) {
+          const group = squadGroups.get(key);
+          const totals = squadTotals.get(key) || { total: 0 };
+          const tableCount = group.tables.length;
+
+          lines.push(`*${group.displayName}* — ${tableCount} table${tableCount !== 1 ? "s" : ""}, ${totals.total} statement${totals.total !== 1 ? "s" : ""}`);
+          for (const row of group.tables) {
+            lines.push(`${row.table} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+      } else {
+        lines.push("No squad data found");
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  async handleCopyReportText() {
+    if (!this.result?.report) {
+      this.showError("No report data to copy");
+      return;
+    }
+    const text = this.formatReportAsText();
+    await this.copyToClipboard(text);
+  }
+
+  getActiveReportElement() {
+    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
+      ? this.currentSubtab
+      : "summary";
+    if (subtab === "summary") {
+      return document.getElementById("merge-sql-report-summary");
+    } else if (subtab === "table-detail") {
+      return document.getElementById("merge-sql-report-table-detail");
+    } else if (subtab === "squad-detail") {
+      return document.getElementById("merge-sql-report-squad-detail");
+    }
+    return document.getElementById("merge-sql-report-summary");
+  }
+
+  async captureReportImage() {
+    const el = this.getActiveReportElement();
+    if (!el) {
+      this.showError("No report content to capture");
+      return null;
+    }
+
+    const reportContent = el.querySelector(".report-content") || el;
+
+    const previouslyCollapsed = reportContent.querySelectorAll(".row-feature-details");
+    previouslyCollapsed.forEach((row) => row.classList.add("temp-visible", "visible"));
+    const expandableRows = reportContent.querySelectorAll(".row-expandable");
+    expandableRows.forEach((row) => row.classList.add("temp-expanded", "expanded"));
+
+    try {
+      const canvas = await html2canvas(reportContent, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      return canvas;
+    } finally {
+      previouslyCollapsed.forEach((row) => {
+        row.classList.remove("temp-visible", "visible");
+      });
+      expandableRows.forEach((row) => {
+        row.classList.remove("temp-expanded", "expanded");
+      });
+    }
+  }
+
+  async handleCopyReportImage() {
+    if (!this.result?.report) {
+      this.showError("No report data to capture");
+      return;
+    }
+
+    try {
+      const canvas = await this.captureReportImage();
+      if (!canvas) return;
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          this.showError("Failed to generate image");
+          return;
+        }
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob }),
+          ]);
+          this.showSuccess("Report image copied to clipboard!");
+        } catch (clipboardError) {
+          console.error("Clipboard image write failed:", clipboardError);
+          this.showError("Failed to copy image to clipboard. Try Download instead.");
+        }
+      }, "image/png");
+    } catch (error) {
+      console.error("Image capture failed:", error);
+      this.showError("Failed to capture report image");
+    }
+  }
+
+  async handleDownloadReportImage() {
+    if (!this.result?.report) {
+      this.showError("No report data to download");
+      return;
+    }
+
+    try {
+      const canvas = await this.captureReportImage();
+      if (!canvas) return;
+
+      const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
+      const subtabLabel = this.currentSubtab === "table-detail" ? "TableDetail"
+        : this.currentSubtab === "squad-detail" ? "SquadDetail" : "Summary";
+      const fileName = `${folderName}-Report-${subtabLabel}.png`;
+
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = canvas.toDataURL("image/png");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      this.showSuccess(`Downloaded ${fileName}`);
+    } catch (error) {
+      console.error("Image download failed:", error);
+      this.showError("Failed to download report image");
     }
   }
 }
