@@ -1778,12 +1778,20 @@ export class MergeSqlTool extends BaseTool {
     const expandableRows = reportContent.querySelectorAll(".row-expandable");
     expandableRows.forEach((row) => row.classList.add("temp-expanded", "expanded"));
 
+    const originalOverflow = reportContent.style.overflow;
+    const originalHeight = reportContent.style.height;
+    const originalMaxHeight = reportContent.style.maxHeight;
+    reportContent.style.overflow = "visible";
+    reportContent.style.height = "auto";
+    reportContent.style.maxHeight = "none";
+
     try {
       const canvas = await html2canvas(reportContent, {
         backgroundColor: "#ffffff",
         scale: 2,
         useCORS: true,
         logging: false,
+        windowWidth: reportContent.scrollWidth,
       });
       return canvas;
     } finally {
@@ -1793,6 +1801,9 @@ export class MergeSqlTool extends BaseTool {
       expandableRows.forEach((row) => {
         row.classList.remove("temp-expanded", "expanded");
       });
+      reportContent.style.overflow = originalOverflow;
+      reportContent.style.height = originalHeight;
+      reportContent.style.maxHeight = originalMaxHeight;
     }
   }
 
