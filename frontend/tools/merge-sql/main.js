@@ -271,7 +271,7 @@ export class MergeSqlTool extends BaseTool {
 
     if (resultTabs) {
       resultTabs.addEventListener("click", (e) => {
-        const tab = e.target.closest(".result-tab");
+        const tab = e.target.closest(".merge-sql-result-tab");
         if (tab) this.handleTabSwitch(tab.dataset.tab);
       });
     }
@@ -279,7 +279,7 @@ export class MergeSqlTool extends BaseTool {
     const reportSubtabs = document.getElementById("merge-sql-report-subtabs");
     if (reportSubtabs) {
       reportSubtabs.addEventListener("click", (e) => {
-        const subtab = e.target.closest(".report-subtab");
+        const subtab = e.target.closest(".merge-sql-report-subtab");
         if (subtab) this.handleReportSubtabSwitch(subtab.dataset.subtab);
       });
     }
@@ -287,7 +287,7 @@ export class MergeSqlTool extends BaseTool {
     const generatedSubtabs = document.getElementById("merge-sql-generated-subtabs");
     if (generatedSubtabs) {
       generatedSubtabs.addEventListener("click", (e) => {
-        const subtab = e.target.closest(".generated-sql-subtab");
+        const subtab = e.target.closest(".merge-sql-generated-sql-subtab");
         if (subtab) this.handleGeneratedSubtabSwitch(subtab.dataset.subtab);
       });
     }
@@ -380,18 +380,18 @@ export class MergeSqlTool extends BaseTool {
   }
 
   renderResultTabs() {
-    const tabsContainer = document.getElementById("merge-sql-result-tabs");
-    if (!tabsContainer) return;
+    const tabsLeft = document.getElementById("merge-sql-result-tabs-left");
+    if (!tabsLeft) return;
 
     if (this.inputMode === "files") {
-      tabsContainer.innerHTML = `
-        <button class="result-tab active" data-tab="report">
+      tabsLeft.innerHTML = `
+        <button class="tab-button merge-sql-result-tab active" data-tab="report">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
           </svg>
           Report
         </button>
-        <button class="result-tab" data-tab="generated">
+        <button class="tab-button merge-sql-result-tab" data-tab="generated">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="16 18 22 12 16 6"></polyline>
             <polyline points="8 6 2 12 8 18"></polyline>
@@ -400,14 +400,14 @@ export class MergeSqlTool extends BaseTool {
         </button>
       `;
     } else {
-      tabsContainer.innerHTML = `
-        <button class="result-tab active" data-tab="report">
+      tabsLeft.innerHTML = `
+        <button class="tab-button merge-sql-result-tab active" data-tab="report">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
           </svg>
           Report
         </button>
-        <button class="result-tab" data-tab="validation-sql">
+        <button class="tab-button merge-sql-result-tab" data-tab="validation-sql">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M10 13l5.93-4L15 7h4a2 2 0 0 1 2 2v2"></path>
             <path d="M14 21l-5.93-4L9 17H5a2 2 0 0 1-2-2v-2"></path>
@@ -422,9 +422,9 @@ export class MergeSqlTool extends BaseTool {
     this.currentTab = tab;
     this.saveStateToIndexedDB();
 
-    const tabs = document.querySelectorAll(".result-tab");
+    const tabs = document.querySelectorAll(".merge-sql-result-tab");
     tabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.result-tab[data-tab="${tab}"]`)?.classList.add("active");
+    document.querySelector(`.merge-sql-result-tab[data-tab="${tab}"]`)?.classList.add("active");
 
     const reportContent = document.getElementById("merge-sql-report-content");
     const generatedContent = document.getElementById("merge-sql-generated-content");
@@ -460,9 +460,9 @@ export class MergeSqlTool extends BaseTool {
     this.currentSubtab = subtab;
     this.saveStateToIndexedDB();
 
-    const subtabs = document.querySelectorAll(".generated-sql-subtab");
+    const subtabs = document.querySelectorAll(".merge-sql-generated-sql-subtab");
     subtabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.generated-sql-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+    document.querySelector(`.merge-sql-generated-sql-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
 
     const mergedSubtab = document.getElementById("merge-sql-merged-subtab");
     const selectSubtab = document.getElementById("merge-sql-select-subtab");
@@ -482,9 +482,9 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleReportSubtabSwitch(subtab) {
-    const subtabs = document.querySelectorAll(".report-subtab");
+    const subtabs = document.querySelectorAll(".merge-sql-report-subtab");
     subtabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+    document.querySelector(`.merge-sql-report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
 
     const summaryContent = document.getElementById("merge-sql-report-summary");
     const tableDetailContent = document.getElementById("merge-sql-report-table-detail");

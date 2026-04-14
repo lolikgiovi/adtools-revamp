@@ -6,18 +6,22 @@
 export const MergeSqlTemplate = /* html */ `
 <div class="merge-sql-container tool-container">
   <div class="merge-sql-layout">
-    <!-- Left Panel -->
-    <div class="merge-sql-left-panel">
+    <!-- Left Column -->
+    <div class="merge-sql-left-col">
       <!-- Mode Toggle -->
-      <div class="mode-toggle-bar" id="merge-sql-mode-toggle">
-        <button class="mode-toggle-btn active" data-mode="files">Files</button>
-        <button class="mode-toggle-btn" data-mode="sql">Modified Merged SQL</button>
+      <div class="tabs-container mode-toggle-bar" id="merge-sql-mode-toggle">
+        <div class="tabs-left">
+          <button class="tab-button mode-toggle-btn active" data-mode="files">Files</button>
+          <button class="tab-button mode-toggle-btn" data-mode="sql">Modified Merged SQL</button>
+        </div>
       </div>
+
+      <!-- Left Panel -->
+      <div class="merge-sql-left-panel">
 
       <!-- Files Mode -->
       <div class="mode-section" id="merge-sql-input-files">
         <div class="panel-header">
-          <h3>SQL Files</h3>
           <div class="panel-actions">
             <button class="btn btn-ghost btn-xs" id="merge-sql-add-files" title="Add SQL files">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -35,6 +39,13 @@ export const MergeSqlTemplate = /* html */ `
                 <line x1="9" y1="14" x2="15" y2="14"></line>
               </svg>
               Add Folder
+            </button>
+            <button class="btn btn-ghost btn-xs" id="merge-sql-clear-files-btn" style="display: none;" title="Clear Files">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Clear Files
             </button>
           </div>
         </div>
@@ -93,9 +104,6 @@ export const MergeSqlTemplate = /* html */ `
             </svg>
             MERGE SQLs
           </button>
-          <button class="btn btn-ghost" id="merge-sql-clear-files-btn" style="display: none;">
-            Clear Files Only
-          </button>
           <button class="btn btn-ghost" id="merge-sql-clear-btn" style="display: none;">
             Clear All
           </button>
@@ -124,37 +132,40 @@ export const MergeSqlTemplate = /* html */ `
         </div>
       </div>
     </div>
+    </div>
 
-    <!-- Right Panel: Result -->
-    <div class="merge-sql-right-panel">
-      <div class="panel-header">
-        <div class="result-tabs" id="merge-sql-result-tabs">
+    <!-- Right Column -->
+    <div class="merge-sql-right-col">
+      <div class="merge-sql-result-tabs tabs-container" id="merge-sql-result-tabs">
+        <div class="tabs-left" id="merge-sql-result-tabs-left">
           <!-- Tabs injected dynamically by mode -->
         </div>
-        <div class="result-actions" id="merge-sql-result-actions">
-          <div class="report-subtabs" id="merge-sql-report-subtabs">
-            <button class="report-subtab active" data-subtab="summary">
+      </div>
+      <div class="merge-sql-right-panel">
+        <div class="merge-sql-result-actions" id="merge-sql-result-actions">
+          <div class="merge-sql-report-subtabs" id="merge-sql-report-subtabs">
+            <button class="merge-sql-report-subtab active" data-subtab="summary">
               Summary
             </button>
-            <button class="report-subtab" data-subtab="table-detail">
+            <button class="merge-sql-report-subtab" data-subtab="table-detail">
               Table Detail
             </button>
-            <button class="report-subtab" data-subtab="squad-detail">
+            <button class="merge-sql-report-subtab" data-subtab="squad-detail">
               Squad Detail
             </button>
           </div>
-          <div class="generated-sql-subtabs" id="merge-sql-generated-subtabs" style="display: none;">
-            <button class="generated-sql-subtab active" data-subtab="merged">
+          <div class="merge-sql-generated-sql-subtabs" id="merge-sql-generated-subtabs" style="display: none;">
+            <button class="merge-sql-generated-sql-subtab active" data-subtab="merged">
               Merged SQL
             </button>
-            <button class="generated-sql-subtab" data-subtab="select">
+            <button class="merge-sql-generated-sql-subtab" data-subtab="select">
               Select SQL
             </button>
-            <button class="generated-sql-subtab" data-subtab="validation">
+            <button class="merge-sql-generated-sql-subtab" data-subtab="validation">
               Validation SQL
             </button>
           </div>
-          <div class="result-actions-buttons">
+          <div class="merge-sql-result-actions-buttons">
             <button class="btn btn-ghost btn-xs" id="merge-sql-copy-btn" title="Copy">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -179,7 +190,6 @@ export const MergeSqlTemplate = /* html */ `
             </button>
           </div>
         </div>
-      </div>
 
       <!-- Insights Panel -->
       <div class="insights-panel insights-warning" id="merge-sql-insights" style="display: none;">
@@ -199,8 +209,8 @@ export const MergeSqlTemplate = /* html */ `
       </div>
 
       <!-- Result Content -->
-      <div class="result-content" id="merge-sql-result-content">
-        <div class="result-empty" id="merge-sql-result-empty">
+      <div class="merge-sql-result-content" id="merge-sql-result-content">
+        <div class="merge-sql-result-empty" id="merge-sql-result-empty">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -212,8 +222,8 @@ export const MergeSqlTemplate = /* html */ `
         </div>
 
         <!-- Report Tab Content -->
-        <div class="result-tab-content" id="merge-sql-report-content" data-mode="both">
-          <div class="report-subtab-content active" id="merge-sql-report-summary">
+        <div class="merge-sql-tab-content" id="merge-sql-report-content" data-mode="both">
+          <div class="merge-sql-report-subtab-content active" id="merge-sql-report-summary">
             <div class="report-content">
               <div class="report-section" id="merge-sql-report-dangerous"></div>
               <div class="report-section" id="merge-sql-report-statements"></div>
@@ -223,13 +233,13 @@ export const MergeSqlTemplate = /* html */ `
             </div>
           </div>
 
-          <div class="report-subtab-content" id="merge-sql-report-table-detail">
+          <div class="merge-sql-report-subtab-content" id="merge-sql-report-table-detail">
             <div class="report-content">
               <div class="report-section" id="merge-sql-report-table-squads"></div>
             </div>
           </div>
 
-          <div class="report-subtab-content" id="merge-sql-report-squad-detail">
+          <div class="merge-sql-report-subtab-content" id="merge-sql-report-squad-detail">
             <div class="report-content">
               <div class="report-section" id="merge-sql-report-squad-tables"></div>
             </div>
@@ -237,23 +247,24 @@ export const MergeSqlTemplate = /* html */ `
         </div>
 
         <!-- Generated SQL Tab Content (Files mode) -->
-        <div class="result-tab-content" id="merge-sql-generated-content" data-mode="files">
-          <div class="generated-sql-subtab-content active" id="merge-sql-merged-subtab">
+        <div class="merge-sql-tab-content" id="merge-sql-generated-content" data-mode="files">
+          <div class="merge-sql-generated-sql-subtab-content active" id="merge-sql-merged-subtab">
             <div class="monaco-editor-container" id="merge-sql-merged-editor"></div>
           </div>
-          <div class="generated-sql-subtab-content" id="merge-sql-select-subtab">
+          <div class="merge-sql-generated-sql-subtab-content" id="merge-sql-select-subtab">
             <div class="monaco-editor-container" id="merge-sql-select-editor"></div>
           </div>
-          <div class="generated-sql-subtab-content" id="merge-sql-validation-subtab">
+          <div class="merge-sql-generated-sql-subtab-content" id="merge-sql-validation-subtab">
             <div class="monaco-editor-container" id="merge-sql-validation-editor"></div>
           </div>
         </div>
 
         <!-- Validation SQL Tab Content (SQL mode) -->
-        <div class="result-tab-content" id="merge-sql-validation-tab-content" data-mode="sql">
+        <div class="merge-sql-tab-content" id="merge-sql-validation-tab-content" data-mode="sql">
           <div class="monaco-editor-container" id="merge-sql-validation-sql-editor"></div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 
