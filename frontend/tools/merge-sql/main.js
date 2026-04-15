@@ -520,7 +520,7 @@ export class MergeSqlTool extends BaseTool {
     this.currentTab = tab;
 
     if (tab === "report") {
-      const validSubtabs = ["summary", "table-detail", "squad-detail"];
+      const validSubtabs = ["summary", "table-detail"];
       if (!validSubtabs.includes(this.currentSubtab)) {
         this.currentSubtab = "summary";
       }
@@ -631,11 +631,9 @@ export class MergeSqlTool extends BaseTool {
 
     const summaryContent = document.getElementById("merge-sql-report-summary");
     const tableDetailContent = document.getElementById("merge-sql-report-table-detail");
-    const squadDetailContent = document.getElementById("merge-sql-report-squad-detail");
 
     if (summaryContent) summaryContent.classList.toggle("active", subtab === "summary");
     if (tableDetailContent) tableDetailContent.classList.toggle("active", subtab === "table-detail");
-    if (squadDetailContent) squadDetailContent.classList.toggle("active", subtab === "squad-detail");
   }
 
   // ─── File Editor Methods ────────────────────────────────────────────────────
@@ -1325,7 +1323,6 @@ export class MergeSqlTool extends BaseTool {
 
     this.renderSummaryTab();
     this.renderTableDetailTab();
-    this.renderSquadDetailTab();
   }
 
   renderSummaryTab() {
@@ -1385,26 +1382,9 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // Per-Squad Summary
+    // Per-Squad Summary — full squad detail
     if (squadsContainer) {
-      if (squadCounts && squadCounts.length > 0) {
-        let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table report-table-sticky">
-          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
-          <tbody>`;
-        for (const row of squadCounts) {
-          squadsHtml += `<tr>
-            <td>${this.escapeHtml(row.squad)}</td>
-            <td>${row.insert}</td>
-            <td>${row.merge}</td>
-            <td>${row.update}</td>
-            <td>${row.total}</td>
-          </tr>`;
-        }
-        squadsHtml += `</tbody></table>`;
-        squadsContainer.innerHTML = squadsHtml;
-      } else {
-        squadsContainer.innerHTML = `<h4>Per-Squad Summary</h4><div class="report-success">No squad metadata found in file names</div>`;
-      }
+      squadsContainer.innerHTML = this.buildSquadDetailHtml("Per-Squad Summary");
     }
 
     // Per-Feature Summary (Grouped by Squad)
@@ -1598,15 +1578,11 @@ export class MergeSqlTool extends BaseTool {
     });
   }
 
-  renderSquadDetailTab() {
-    const squadTablesContainer = document.getElementById("merge-sql-report-squad-tables");
+  buildSquadDetailHtml(title = "Squad Detail") {
     const { squadTableCounts, squadCounts } = this.result.report;
 
-    if (!squadTablesContainer) return;
-
     if (!squadTableCounts || squadTableCounts.length === 0) {
-      squadTablesContainer.innerHTML = `<h4>Squad Detail</h4><div class="report-success">No squad data found</div>`;
-      return;
+      return `<h4>${title}</h4><div class="report-success">No squad data found</div>`;
     }
 
     // Group by squad
@@ -1625,7 +1601,7 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    let html = `<h4>Squad Detail</h4>`;
+    let html = `<h4>${title}</h4>`;
     const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
 
     for (const key of sortedSquadKeys) {
@@ -1645,9 +1621,9 @@ export class MergeSqlTool extends BaseTool {
             </span>
           </div>
         </div>
-<table class="report-table">
-           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
-           <tbody>`;
+        <table class="report-table">
+          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+          <tbody>`;
 
       for (const row of group.tables) {
         html += `<tr>
@@ -1662,7 +1638,7 @@ export class MergeSqlTool extends BaseTool {
       html += `</tbody></table></div>`;
     }
 
-    squadTablesContainer.innerHTML = html;
+    return html;
   }
 
   escapeHtml(str) {
@@ -1945,9 +1921,7 @@ export class MergeSqlTool extends BaseTool {
     const report = this.result.report;
     const lines = [];
 
-    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
-      ? this.currentSubtab
-      : "summary";
+    const subtab = this.currentSubtab === "table-detail" ? "table-detail" : "summary";
 
     if (subtab === "summary") {
       lines.push("📊 *Merge SQL Report — Summary*");
@@ -2071,40 +2045,6 @@ export class MergeSqlTool extends BaseTool {
         lines.push("No table+squad data found");
       }
 
-    } else if (subtab === "squad-detail") {
-      lines.push("📊 *Merge SQL Report — Squad Detail*");
-      lines.push("");
-
-      if (report.squadTableCounts && report.squadTableCounts.length > 0) {
-        const squadGroups = new Map();
-        for (const row of report.squadTableCounts) {
-          const key = row.squad.toUpperCase();
-          if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, tables: [] });
-          squadGroups.get(key).tables.push(row);
-        }
-
-        const squadTotals = new Map();
-        if (report.squadCounts) {
-          for (const s of report.squadCounts) {
-            squadTotals.set(s.squad.toUpperCase(), s);
-          }
-        }
-
-        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
-        for (const key of sortedSquadKeys) {
-          const group = squadGroups.get(key);
-          const totals = squadTotals.get(key) || { total: 0 };
-          const tableCount = group.tables.length;
-
-          lines.push(`*${group.displayName}* — ${tableCount} table${tableCount !== 1 ? "s" : ""}, ${totals.total} statement${totals.total !== 1 ? "s" : ""}`);
-          for (const row of group.tables) {
-            lines.push(`${row.table.toUpperCase()} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
-          }
-          lines.push("");
-        }
-      } else {
-        lines.push("No squad data found");
-      }
     }
 
     return lines.join("\n");
@@ -2120,15 +2060,8 @@ export class MergeSqlTool extends BaseTool {
   }
 
   getActiveReportElement() {
-    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
-      ? this.currentSubtab
-      : "summary";
-    if (subtab === "summary") {
-      return document.getElementById("merge-sql-report-summary");
-    } else if (subtab === "table-detail") {
+    if (this.currentSubtab === "table-detail") {
       return document.getElementById("merge-sql-report-table-detail");
-    } else if (subtab === "squad-detail") {
-      return document.getElementById("merge-sql-report-squad-detail");
     }
     return document.getElementById("merge-sql-report-summary");
   }
@@ -2154,13 +2087,21 @@ export class MergeSqlTool extends BaseTool {
     reportContent.style.height = "auto";
     reportContent.style.maxHeight = "none";
 
+    const computedBg = window.getComputedStyle(reportContent).backgroundColor;
+    const bgColor = (computedBg && computedBg !== "rgba(0, 0, 0, 0)") ? computedBg : "#ffffff";
+
     try {
       const canvas = await html2canvas(reportContent, {
-        backgroundColor: "#ffffff",
+        backgroundColor: bgColor,
         scale: 2,
         useCORS: true,
         logging: false,
         windowWidth: reportContent.scrollWidth,
+        onclone: (clonedDoc) => {
+          clonedDoc.documentElement.className = document.documentElement.className;
+          const dataTheme = document.documentElement.getAttribute("data-theme");
+          if (dataTheme) clonedDoc.documentElement.setAttribute("data-theme", dataTheme);
+        },
       });
       return canvas;
     } finally {
@@ -2192,9 +2133,11 @@ export class MergeSqlTool extends BaseTool {
           return;
         }
         try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ "image/png": blob }),
-          ]);
+          const { Image } = await import("@tauri-apps/api/image");
+          const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+          const pngBytes = new Uint8Array(await blob.arrayBuffer());
+          const tauriImage = await Image.fromBytes(pngBytes);
+          await writeImage(tauriImage);
           this.showSuccess("Report image copied to clipboard!");
         } catch (clipboardError) {
           console.error("Clipboard image write failed:", clipboardError);
@@ -2218,17 +2161,34 @@ export class MergeSqlTool extends BaseTool {
       if (!canvas) return;
 
       const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
-      const subtabLabel = this.currentSubtab === "table-detail" ? "TableDetail"
-        : this.currentSubtab === "squad-detail" ? "SquadDetail" : "Summary";
+      const subtabLabel = this.currentSubtab === "table-detail" ? "TableDetail" : "Summary";
       const fileName = `${folderName}-Report-${subtabLabel}.png`;
 
-      const link = document.createElement("a");
-      link.download = fileName;
-      link.href = canvas.toDataURL("image/png");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      this.showSuccess(`Downloaded ${fileName}`);
+      await new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            this.showError("Failed to generate image");
+            resolve();
+            return;
+          }
+          try {
+            const { save } = await import("@tauri-apps/plugin-dialog");
+            const { writeFile } = await import("@tauri-apps/plugin-fs");
+            const savePath = await save({
+              filters: [{ name: "PNG Image", extensions: ["png"] }],
+              defaultPath: fileName,
+            });
+            if (savePath) {
+              await writeFile(savePath, new Uint8Array(await blob.arrayBuffer()));
+              this.showSuccess(`Downloaded ${fileName}`);
+            }
+          } catch (saveError) {
+            console.error("Image save failed:", saveError);
+            this.showError("Failed to save report image");
+          }
+          resolve();
+        }, "image/png");
+      });
     } catch (error) {
       console.error("Image download failed:", error);
       this.showError("Failed to download report image");

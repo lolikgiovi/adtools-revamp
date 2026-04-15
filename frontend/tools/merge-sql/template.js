@@ -149,9 +149,6 @@ export const MergeSqlTemplate = /* html */ `
             <button class="merge-sql-report-subtab" data-subtab="table-detail">
               Table Detail
             </button>
-            <button class="merge-sql-report-subtab" data-subtab="squad-detail">
-              Squad Detail
-            </button>
           </div>
           <div class="merge-sql-report-actions-buttons" id="merge-sql-report-actions-buttons">
             <button class="btn btn-ghost btn-xs" id="merge-sql-copy-report-text-btn" title="Copy report as text for WhatsApp">
@@ -263,11 +260,6 @@ export const MergeSqlTemplate = /* html */ `
             </div>
           </div>
 
-          <div class="merge-sql-report-subtab-content" id="merge-sql-report-squad-detail">
-            <div class="report-content">
-              <div class="report-section" id="merge-sql-report-squad-tables"></div>
-            </div>
-          </div>
         </div>
 
         <!-- Generated SQL Tab Content (Files mode) -->
