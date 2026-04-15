@@ -191,6 +191,27 @@
   opacity: 1 !important;
 }
 
+/* Split button */
+.split-btn {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-btn .split-btn-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.split-btn .split-btn-chevron {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding-left: 7px;
+  padding-right: 7px;
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
 /* Quick Query buttons use btn-primary btn-sm from global system */
 /* Local overrides removed - now inheriting from global styles.css */
 
@@ -1564,6 +1585,107 @@
 .qq-example-table td {
   background: hsl(var(--card));
   color: hsl(var(--muted-foreground));
+}
+
+/* Download As Overlay */
+.download-as-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.download-as-overlay.hidden {
+  display: none;
+}
+
+.download-as-modal {
+  background: hsl(var(--background));
+  border-radius: 8px;
+  width: 92%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.download-as-modal-header {
+  padding: 16px;
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.download-as-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.download-as-modal-header .overlay-close-button {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+}
+
+.download-as-modal-content {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.download-as-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.download-as-field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.download-as-field input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.download-as-field input[type="text"]:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+}
+
+.download-as-filename-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.download-as-filename-row input[type="text"] {
+  flex: 1;
+}
+
+.download-as-modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid hsl(var(--border));
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* HTML Minify Overlay */
