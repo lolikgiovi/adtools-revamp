@@ -1342,10 +1342,11 @@ export class MergeSqlTool extends BaseTool {
       if (dangerousStatements && dangerousStatements.length > 0) {
         let dangerousHtml = `<h4>Dangerous Statements</h4>`;
         for (const item of dangerousStatements) {
-          const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
+          const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
+          const badgeClass = item.type === "DELETE" || item.type === "MERGE_DELETE" ? "delete" : "update-no-where";
           dangerousHtml += `<div class="report-danger-item">
             <span class="report-file-tag">${this.escapeHtml(item.fileName)}</span>
-            <span class="report-type-badge report-type-badge--${item.type === "DELETE" ? "delete" : "update-no-where"}">${typeLabel}</span>
+            <span class="report-type-badge report-type-badge--${badgeClass}">${typeLabel}</span>
             <pre class="report-danger-statement">${this.escapeHtml(item.statement.slice(0, 300))}${item.statement.length > 300 ? "..." : ""}</pre>
           </div>`;
         }
@@ -1955,7 +1956,7 @@ export class MergeSqlTool extends BaseTool {
       if (report.dangerousStatements && report.dangerousStatements.length > 0) {
         lines.push("⚠️ *Dangerous Statements*");
         for (const item of report.dangerousStatements) {
-          const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
+          const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
           lines.push(`*${item.fileName}* [${typeLabel}]`);
           lines.push(`\`${item.statement.slice(0, 200)}${item.statement.length > 200 ? "..." : ""}\``);
         }

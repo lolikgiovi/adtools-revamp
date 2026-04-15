@@ -312,6 +312,118 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.dmlStatements).toHaveLength(1);
       expect(result.selectStatements).toHaveLength(1);
     });
+
+    it("does not terminate statement on -- comment line ending with semicolon", () => {
+      const content = `MERGE INTO SCHEMA.TABLE_NAME t
+USING (SELECT 1 id FROM DUAL) s -- source alias;
+ON (t.id = s.id)
+WHEN MATCHED THEN UPDATE SET t.col = 'val'
+WHEN NOT MATCHED THEN INSERT (id, col) VALUES (s.id, 'val');
+
+SELECT * FROM SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("WHEN NOT MATCHED THEN INSERT");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("does not parse DML keywords inside -- line comments as statement starts", () => {
+      const content = `-- INSERT INTO fake.table (col) VALUES ('should be ignored');
+INSERT INTO SCHEMA.REAL_TABLE (col) VALUES ('real');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("REAL_TABLE");
+    });
+
+    it("ignores SQL content inside /* block comments */ between statements", () => {
+      const content = `/*
+  UPDATE SCHEMA.TABLE SET col = 1 WHERE id = 1;
+  INSERT INTO SCHEMA.TABLE (col) VALUES ('ignored');
+*/
+INSERT INTO SCHEMA.REAL_TABLE (col) VALUES ('real');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("REAL_TABLE");
+    });
+
+    it("ignores /* block comment */ inline within a statement without false termination", () => {
+      const content = `MERGE INTO SCHEMA.TABLE_NAME t
+/* join on primary key */
+USING (SELECT 1 id FROM DUAL) s
+ON (t.id = s.id)
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);
+
+SELECT * FROM SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("WHEN NOT MATCHED THEN INSERT");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("handles /* block comment closing on same line as statement start", () => {
+      const content = `/* preamble */ INSERT INTO SCHEMA.TABLE (col) VALUES ('val');
+
+SELECT * FROM SCHEMA.TABLE;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("INSERT INTO");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+  });
+
+  describe("processLineForParsing", () => {
+    it("strips -- line comment and returns effective SQL", () => {
+      const { effectiveLine, endedInQuote, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("SELECT 1 -- comment;", false, false);
+      expect(effectiveLine.trim()).toBe("SELECT 1");
+      expect(endedInQuote).toBe(false);
+      expect(endedInBlockComment).toBe(false);
+    });
+
+    it("does not strip -- inside a single-quoted string", () => {
+      const { effectiveLine, endedInQuote } =
+        MergeSqlService.processLineForParsing("SET col = 'http://example.com' -- note", false, false);
+      expect(effectiveLine).toContain("http://example.com");
+      expect(endedInQuote).toBe(false);
+    });
+
+    it("strips block comment content and reports endedInBlockComment", () => {
+      const { effectiveLine, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("/* start of block", false, false);
+      expect(effectiveLine.trim()).toBe("");
+      expect(endedInBlockComment).toBe(true);
+    });
+
+    it("resumes after block comment ends on same line", () => {
+      const { effectiveLine, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("/* comment */ INSERT INTO T", false, false);
+      expect(effectiveLine.trim()).toBe("INSERT INTO T");
+      expect(endedInBlockComment).toBe(false);
+    });
+
+    it("continues block comment across lines", () => {
+      const { effectiveLine, endedInBlockComment: stillInBlock } =
+        MergeSqlService.processLineForParsing("  middle of comment  ", false, true);
+      expect(effectiveLine.trim()).toBe("");
+      expect(stillInBlock).toBe(true);
+    });
+
+    it("does not toggle quote state for quotes inside -- comments", () => {
+      // The quote in the comment should not affect state
+      const { endedInQuote } =
+        MergeSqlService.processLineForParsing("SET col = 'val' -- it's a note", false, false);
+      expect(endedInQuote).toBe(false);
+    });
   });
 
   describe("updateQuoteState", () => {
@@ -378,9 +490,18 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(MergeSqlService.isValidSelectStatement("SELECT COUNT(*) FROM TABLE")).toBe(true);
     });
 
-    it("returns false for SELECT with +1", () => {
+    it("returns false for SELECT with )+1 sequence generator pattern", () => {
       expect(MergeSqlService.isValidSelectStatement("SELECT NVL(MAX(ID)+1, 1) FROM TABLE")).toBe(false);
       expect(MergeSqlService.isValidSelectStatement("SELECT MAX(SEQ)+1 FROM TABLE")).toBe(false);
+    });
+
+    it("returns true for SELECT with +1 in WHERE clause (not a sequence generator)", () => {
+      expect(MergeSqlService.isValidSelectStatement("SELECT * FROM TABLE WHERE COL = VAL+1")).toBe(true);
+      expect(MergeSqlService.isValidSelectStatement("SELECT * FROM TABLE WHERE ID > OFFSET+1")).toBe(true);
+    });
+
+    it("returns true for SELECT with +10 or other increments (not )+1 pattern)", () => {
+      expect(MergeSqlService.isValidSelectStatement("SELECT NVL(MAX(ID)+10, 1) FROM TABLE")).toBe(true);
     });
 
     it("returns false for subquery patterns", () => {
@@ -1848,12 +1969,47 @@ DELETE FROM T2 WHERE id = 2;`;
       expect(result).toHaveLength(0);
     });
 
-    it("does not flag INSERT or MERGE statements", () => {
+    it("does not flag MERGE without delete action", () => {
       const parsedFiles = [
         {
           dmlStatements: [
             "INSERT INTO T1 (c) VALUES (1);",
             "MERGE INTO T1 t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("flags MERGE with WHEN MATCHED THEN DELETE as MERGE_DELETE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "MERGE INTO SCHEMA.TABLE_A t USING (SELECT 1 id FROM DUAL) s ON (t.id = s.id) WHEN MATCHED THEN DELETE;",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("MERGE_DELETE");
+      expect(result[0].fileName).toBe("file1.sql");
+      expect(result[0].statement).toContain("WHEN MATCHED THEN DELETE");
+    });
+
+    it("does not flag MERGE with WHEN NOT MATCHED THEN INSERT (no delete action)", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "MERGE INTO SCHEMA.TABLE_A t USING (SELECT 1 id FROM DUAL) s ON (t.id = s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);",
           ],
           selectStatements: [],
           fileName: "file1.sql",
@@ -2183,6 +2339,43 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
 
       expect(result.validationSql).toContain("-- Skipped UPDATE on T1");
       expect(result.validationSql).toContain("too many variants");
+    });
+
+    it("builds validation SQL for multi-row INSERT VALUES with correct expectation count", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.CONFIG (id, name) VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');",
+          ],
+          selectStatements: [],
+          fileName: "multi-row.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // All 3 rows should be counted in the expectation
+      expect(result.validationSql).toContain("3 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 3 THEN 'MATCH'");
+      // Two-column insert produces composite OR predicates, not IN
+      expect(result.validationSql).toContain("(id = 1 AND name = 'alpha') OR (id = 2 AND name = 'beta') OR (id = 3 AND name = 'gamma')");
+    });
+
+    it("builds validation SQL for two-tuple INSERT VALUES", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.CONFIG (key) VALUES ('foo'), ('bar');",
+          ],
+          selectStatements: [],
+          fileName: "two-row.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql).toContain("key IN ('foo', 'bar')");
     });
 
     it("builds validation SQL directly from merged SQL text", () => {

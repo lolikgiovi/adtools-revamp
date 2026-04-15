@@ -40,61 +40,63 @@ export class MergeSqlService {
     let inStatement = false;
     let statementType = null; // 'dml' or 'select'
     let inSingleQuote = false; // Track if we're inside a single-quoted string
+    let inBlockComment = false; // Track if we're inside a /* ... */ block comment
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const trimmedLine = line.trim();
-      const upperLine = trimmedLine.toUpperCase();
+
+      // Strip -- line comments and /* */ block comment content, tracking quote state.
+      // effectiveLine is used for keyword detection and semicolon termination.
+      // The original line is always pushed to currentStatement so comments are preserved.
+      const { effectiveLine, endedInQuote, endedInBlockComment } =
+        this.processLineForParsing(line, inSingleQuote, inBlockComment);
+
+      inSingleQuote = endedInQuote;
+      inBlockComment = endedInBlockComment;
+
+      const trimmedEffective = effectiveLine.trim();
+      const upperEffective = trimmedEffective.toUpperCase();
 
       // Skip SET DEFINE OFF - we'll add this once at the beginning
-      if (upperLine === "SET DEFINE OFF;" || upperLine === "SET DEFINE OFF") {
+      if (upperEffective === "SET DEFINE OFF;" || upperEffective === "SET DEFINE OFF") {
         continue;
       }
 
-      // Skip empty lines if not in a statement
-      if (!trimmedLine && !inStatement) {
+      // Skip lines with no effective SQL content if not in a statement
+      if (!trimmedEffective && !inStatement) {
         continue;
       }
 
-      // Detect statement start
+      // Detect statement start (only when effective content is non-empty and not in a block comment)
       if (!inStatement) {
-        if (upperLine.startsWith("MERGE INTO") || upperLine.startsWith("MERGE ")) {
+        if (upperEffective.startsWith("MERGE INTO") || upperEffective.startsWith("MERGE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("INSERT INTO") || upperLine.startsWith("INSERT ")) {
+        } else if (upperEffective.startsWith("INSERT INTO") || upperEffective.startsWith("INSERT ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("UPDATE ")) {
+        } else if (upperEffective.startsWith("UPDATE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("DELETE FROM") || upperLine.startsWith("DELETE ")) {
+        } else if (upperEffective.startsWith("DELETE FROM") || upperEffective.startsWith("DELETE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (this.isValidSelectStatement(upperLine)) {
+        } else if (this.isValidSelectStatement(upperEffective)) {
           inStatement = true;
           statementType = "select";
           currentStatement = [line];
-          inSingleQuote = false;
         }
       } else {
         currentStatement.push(line);
       }
 
-      // Update quote state for this line (track whether we're inside a string literal)
-      if (inStatement) {
-        inSingleQuote = this.updateQuoteState(line, inSingleQuote);
-      }
-
-      // Detect statement end (semicolon at end of line, but only if not inside a string)
-      if (inStatement && trimmedLine.endsWith(";") && !inSingleQuote) {
+      // Detect statement end: effective content (comments stripped) ends with ";"
+      // and we are not inside a string literal
+      if (inStatement && trimmedEffective.endsWith(";") && !inSingleQuote) {
         const statement = currentStatement.join("\n").trim();
 
         if (statementType === "dml") {
@@ -106,7 +108,6 @@ export class MergeSqlService {
         currentStatement = [];
         inStatement = false;
         statementType = null;
-        inSingleQuote = false;
       }
     }
 
@@ -123,6 +124,78 @@ export class MergeSqlService {
     }
 
     return result;
+  }
+
+  /**
+   * Process a SQL line for statement parsing, stripping inline -- comments and
+   * block comment (/* ... *\/) content while respecting single-quoted strings.
+   * Returns the "effective" SQL content used for statement boundary detection and
+   * the parser state at the end of the line.
+   *
+   * The original line should still be pushed to currentStatement so that comments
+   * are preserved in the merged output; only use effectiveLine for detection logic.
+   *
+   * @param {string} line - Raw line to process
+   * @param {boolean} startInQuote - Whether we enter the line inside a quoted string
+   * @param {boolean} startInBlockComment - Whether we enter the line inside a block comment
+   * @returns {{ effectiveLine: string, endedInQuote: boolean, endedInBlockComment: boolean }}
+   */
+  static processLineForParsing(line, startInQuote, startInBlockComment) {
+    let inQuote = startInQuote;
+    let inBlockComment = startInBlockComment;
+    let effectiveContent = "";
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (inBlockComment) {
+        // Look for */ to end the block comment
+        if (ch === "*" && i + 1 < line.length && line[i + 1] === "/") {
+          i++; // skip "/"
+          inBlockComment = false;
+          effectiveContent += " "; // replace comment with a space to avoid merging tokens
+        }
+        // Inside block comment: consume but don't emit
+        continue;
+      }
+
+      if (inQuote) {
+        effectiveContent += ch;
+        if (ch === "'") {
+          // Check for Oracle escaped quote ''
+          if (i + 1 < line.length && line[i + 1] === "'") {
+            effectiveContent += line[i + 1];
+            i++; // skip second quote of the pair
+          } else {
+            inQuote = false;
+          }
+        }
+        continue;
+      }
+
+      // Outside both quote and block comment
+      if (ch === "'") {
+        inQuote = true;
+        effectiveContent += ch;
+        continue;
+      }
+
+      if (ch === "/" && i + 1 < line.length && line[i + 1] === "*") {
+        i++; // skip "*"
+        inBlockComment = true;
+        effectiveContent += " "; // replace comment with a space
+        continue;
+      }
+
+      if (ch === "-" && i + 1 < line.length && line[i + 1] === "-") {
+        // Rest of line is a line comment; stop emitting
+        break;
+      }
+
+      effectiveContent += ch;
+    }
+
+    return { effectiveLine: effectiveContent, endedInQuote: inQuote, endedInBlockComment: inBlockComment };
   }
 
   /**
@@ -159,8 +232,9 @@ export class MergeSqlService {
       return false;
     }
 
-    // Skip SELECT with +1 (typically subqueries like SELECT NVL(MAX(ID)+1, 1))
-    if (upperLine.includes("+1")) {
+    // Skip SELECT with )+1 pattern (sequence generators like SELECT NVL(MAX(ID)+1, 1))
+    // Use /\)\s*\+\s*1(?!\d)/ to avoid false-positives on WHERE col = val+1 or +10 etc.
+    if (/\)\s*\+\s*1(?!\d)/.test(upperLine)) {
       return false;
     }
 
@@ -195,6 +269,14 @@ export class MergeSqlService {
             results.push({
               fileName: file.fileName,
               type: "UPDATE_NO_WHERE",
+              statement: stmt,
+            });
+          }
+        } else if (upperStmt.startsWith("MERGE")) {
+          if (/\bWHEN\s+MATCHED\s+THEN\s+DELETE\b/i.test(stmt)) {
+            results.push({
+              fileName: file.fileName,
+              type: "MERGE_DELETE",
               statement: stmt,
             });
           }
@@ -1196,15 +1278,41 @@ export class MergeSqlService {
     let rowInQuery = 0;
 
     if (/^VALUES\s*\(/i.test(sourceSql)) {
-      const openParenIndex = sourceSql.indexOf("(");
-      const closeParenIndex = this.findMatchingParen(sourceSql, openParenIndex);
-      if (openParenIndex === -1 || closeParenIndex === -1) {
+      // Find the first '(' and iterate over all tuple groups: VALUES (a,b), (c,d), ...
+      const firstOpenIndex = sourceSql.indexOf("(");
+      if (firstOpenIndex === -1) {
         return { reason: "unsupported VALUES clause" };
       }
 
-      const values = this.splitParenAware(sourceSql.slice(openParenIndex + 1, closeParenIndex)).map((value) => value.trim());
-      rowsResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
-      rowInQuery = 1;
+      const predicateRows = [];
+      let tupleCount = 0;
+      let pos = firstOpenIndex;
+
+      while (pos !== -1 && pos < sourceSql.length) {
+        const closeParenIndex = this.findMatchingParen(sourceSql, pos);
+        if (closeParenIndex === -1) {
+          return { reason: "unsupported VALUES clause" };
+        }
+
+        const values = this.splitParenAware(sourceSql.slice(pos + 1, closeParenIndex)).map((value) => value.trim());
+        const rowResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
+        if (!rowResult || rowResult.reason) {
+          return { reason: rowResult?.reason || "contains non-literal source values" };
+        }
+        predicateRows.push(...rowResult.rows);
+        tupleCount++;
+
+        // Look for the next tuple: skip optional whitespace and comma, then find '('
+        const nextTupleMatch = sourceSql.slice(closeParenIndex + 1).match(/^\s*,\s*\(/);
+        if (!nextTupleMatch) break;
+        pos = closeParenIndex + 1 + nextTupleMatch[0].lastIndexOf("(");
+      }
+
+      rowsResult = {
+        rows: this.dedupePredicateRows(predicateRows),
+        rowCount: tupleCount,
+      };
+      rowInQuery = tupleCount;
     } else if (/^SELECT\b/i.test(sourceSql)) {
       const sourceRows = this.parseInlineDualSelectRows(sourceSql);
       if (!sourceRows || sourceRows.length === 0) {
