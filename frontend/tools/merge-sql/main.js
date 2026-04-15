@@ -9,7 +9,9 @@ import { getIconSvg } from "./icon.js";
 import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
 import { createOracleEditor } from "../../core/MonacoOracle.js";
+import * as monaco from "monaco-editor";
 import * as IndexedDBManager from "./indexeddb-manager.js";
+import html2canvas from "html2canvas";
 
 export class MergeSqlTool extends BaseTool {
   constructor(eventBus) {
@@ -24,12 +26,24 @@ export class MergeSqlTool extends BaseTool {
 
     this.files = [];
     this.sortOrder = "asc";
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.mergedEditor = null;
     this.selectEditor = null;
     this.validationEditor = null;
-    this.currentTab = "merged";
+    this.inputEditor = null;
+    this.validationSqlEditor = null;
+    this.fileEditor = null;
+    // Map<fileId, { model, lastSavedVersionId, autosaveTimer }>
+    this.fileEditorModels = new Map();
+    this.openFileIds = [];
+    this.activeEditorFileId = null;
+    this.inputMode = "files";
+    this.currentTab = "report";
+    this.currentSubtab = "merged";
     this.result = null;
-    this.draggedItem = null;
+    this.draggedCard = null;
+    this.dragCardStartY = null;
     this.saveDebounceTimer = null;
   }
 
@@ -43,6 +57,7 @@ export class MergeSqlTool extends BaseTool {
 
   async onMount() {
     this.initMonaco();
+    this.renderResultTabs();
     this.bindEvents();
     await this.loadFromIndexedDB();
     this.updateUI();
@@ -64,12 +79,32 @@ export class MergeSqlTool extends BaseTool {
       this.validationEditor.dispose();
       this.validationEditor = null;
     }
+    if (this.inputEditor) {
+      this.inputEditor.dispose();
+      this.inputEditor = null;
+    }
+    if (this.validationSqlEditor) {
+      this.validationSqlEditor.dispose();
+      this.validationSqlEditor = null;
+    }
+    // Dispose all file editor models then the editor itself
+    for (const entry of this.fileEditorModels.values()) {
+      if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+      entry.model.dispose();
+    }
+    this.fileEditorModels.clear();
+    if (this.fileEditor) {
+      this.fileEditor.dispose();
+      this.fileEditor = null;
+    }
   }
 
   initMonaco() {
     const mergedContainer = document.getElementById("merge-sql-merged-editor");
     const selectContainer = document.getElementById("merge-sql-select-editor");
     const validationContainer = document.getElementById("merge-sql-validation-editor");
+    const inputContainer = document.getElementById("merge-sql-input-editor");
+    const validationSqlContainer = document.getElementById("merge-sql-validation-sql-editor");
 
     const editorOptions = {
       fontSize: 13,
@@ -79,6 +114,11 @@ export class MergeSqlTool extends BaseTool {
       automaticLayout: true,
       readOnly: false,
       padding: { top: 12, bottom: 12 },
+    };
+
+    const readOnlyOptions = {
+      ...editorOptions,
+      readOnly: true,
     };
 
     if (mergedContainer) {
@@ -95,6 +135,19 @@ export class MergeSqlTool extends BaseTool {
       this.validationEditor = createOracleEditor(validationContainer, editorOptions);
       this.validationEditor.onDidChangeModelContent(() => this.debounceSaveResults());
     }
+
+    if (inputContainer) {
+      this.inputEditor = createOracleEditor(inputContainer, editorOptions);
+      this.inputEditor.onDidChangeModelContent(() => this.debounceSaveResults());
+    }
+
+    if (validationSqlContainer) {
+      this.validationSqlEditor = createOracleEditor(validationSqlContainer, readOnlyOptions);
+    }
+
+    // NOTE: fileEditor is intentionally NOT initialized here.
+    // It is created lazily on first file open, after the Editor tab is visible,
+    // so Monaco gets a correctly-sized container.
   }
 
   async loadFromIndexedDB() {
@@ -109,12 +162,28 @@ export class MergeSqlTool extends BaseTool {
     }
 
     if (state) {
-      this.sortOrder = state.sortOrder || "asc";
-      this.currentTab = state.currentTab || "merged";
+      if (state.sortOrder === "manual") {
+        this.sortOrder = "asc";
+      } else {
+        this.sortOrder = state.sortOrder || "asc";
+      }
+      this.currentTab = state.currentTab || "report";
+      this.currentSubtab = state.currentSubtab || "merged";
+
+      if (state.tableOrder && Array.isArray(state.tableOrder)) {
+        this.tableOrder = state.tableOrder;
+      }
+      if (state.expandedTables && Array.isArray(state.expandedTables)) {
+        this.expandedTables = new Set(state.expandedTables);
+      }
 
       const folderNameInput = document.getElementById("merge-sql-folder-name");
       if (folderNameInput && state.folderName) {
         folderNameInput.value = state.folderName;
+      }
+
+      if (state.inputMode) {
+        this.switchInputMode(state.inputMode);
       }
     }
 
@@ -136,8 +205,11 @@ export class MergeSqlTool extends BaseTool {
       if (this.validationEditor && results.validationSql) {
         this.validationEditor.setValue(results.validationSql);
       }
+      if (this.inputEditor && results.inputSql) {
+        this.inputEditor.setValue(results.inputSql);
+      }
 
-      if (results.mergedSql || results.selectSql || results.validationSql) {
+      if (results.mergedSql || results.selectSql || results.validationSql || results.inputSql) {
         this.showResult();
         this.updateDuplicatesInsight();
       }
@@ -157,7 +229,8 @@ export class MergeSqlTool extends BaseTool {
       const validationSql = this.validationEditor?.getValue() || "";
       const duplicates = this.result?.duplicates || [];
       const report = this.result?.report || null;
-      IndexedDBManager.saveResults(mergedSql, selectSql, validationSql, duplicates, report);
+      const inputSql = this.inputEditor?.getValue() || "";
+      IndexedDBManager.saveResults(mergedSql, selectSql, validationSql, duplicates, report, inputSql);
     }, 1000);
   }
 
@@ -167,6 +240,10 @@ export class MergeSqlTool extends BaseTool {
       sortOrder: this.sortOrder,
       folderName,
       currentTab: this.currentTab,
+      currentSubtab: this.currentSubtab,
+      inputMode: this.inputMode,
+      tableOrder: this.tableOrder,
+      expandedTables: [...this.expandedTables],
     });
   }
 
@@ -182,7 +259,7 @@ export class MergeSqlTool extends BaseTool {
     const mergeBtn = document.getElementById("merge-sql-btn");
     const clearFilesBtn = document.getElementById("merge-sql-clear-files-btn");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
-    const refreshValidationBtn = document.getElementById("merge-sql-refresh-validation-btn");
+    const refreshValidationBtn = null;
     const copyBtn = document.getElementById("merge-sql-copy-btn");
     const downloadBtn = document.getElementById("merge-sql-download-btn");
     const downloadAllBtn = document.getElementById("merge-sql-download-all-btn");
@@ -195,6 +272,12 @@ export class MergeSqlTool extends BaseTool {
     const duplicatesCloseBtn = document.getElementById("merge-sql-duplicates-close-btn");
     const viewReportBtn = document.getElementById("merge-sql-view-report");
     const folderNameInput = document.getElementById("merge-sql-folder-name");
+    const modeToggle = document.getElementById("merge-sql-mode-toggle");
+    const sqlRefreshBtn = document.getElementById("merge-sql-sql-refresh-btn");
+    const sqlClearBtn = document.getElementById("merge-sql-sql-clear-btn");
+    const copyReportTextBtn = document.getElementById("merge-sql-copy-report-text-btn");
+    const copyReportImageBtn = document.getElementById("merge-sql-copy-report-image-btn");
+    const downloadReportImageBtn = document.getElementById("merge-sql-download-report-image-btn");
 
     if (addFilesBtn) addFilesBtn.addEventListener("click", () => fileInput?.click());
     if (addFolderBtn) addFolderBtn.addEventListener("click", () => folderInput?.click());
@@ -203,7 +286,6 @@ export class MergeSqlTool extends BaseTool {
     if (mergeBtn) mergeBtn.addEventListener("click", () => this.handleMerge());
     if (clearFilesBtn) clearFilesBtn.addEventListener("click", () => this.handleClearFilesOnly());
     if (clearBtn) clearBtn.addEventListener("click", () => this.handleClearAll());
-    if (refreshValidationBtn) refreshValidationBtn.addEventListener("click", () => this.handleRefreshValidation());
     if (copyBtn) copyBtn.addEventListener("click", () => this.handleCopy());
     if (downloadBtn) downloadBtn.addEventListener("click", () => this.handleDownload());
     if (downloadAllBtn) downloadAllBtn.addEventListener("click", () => this.handleDownloadAll());
@@ -215,10 +297,24 @@ export class MergeSqlTool extends BaseTool {
     if (duplicatesCloseBtn) duplicatesCloseBtn.addEventListener("click", () => this.hideDuplicatesModal());
     if (viewReportBtn) viewReportBtn.addEventListener("click", () => this.handleTabSwitch("report"));
     if (folderNameInput) folderNameInput.addEventListener("input", () => this.saveStateToIndexedDB());
+    if (sqlRefreshBtn) sqlRefreshBtn.addEventListener("click", () => this.handleSqlModeRefresh());
+    if (sqlClearBtn) sqlClearBtn.addEventListener("click", () => this.handleSqlModeClear());
+    if (copyReportTextBtn) copyReportTextBtn.addEventListener("click", () => this.handleCopyReportText());
+    if (copyReportImageBtn) copyReportImageBtn.addEventListener("click", () => this.handleCopyReportImage());
+    if (downloadReportImageBtn) downloadReportImageBtn.addEventListener("click", () => this.handleDownloadReportImage());
+
+    if (modeToggle) {
+      modeToggle.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-toggle-btn");
+        if (btn && btn.dataset.mode) {
+          this.switchInputMode(btn.dataset.mode);
+        }
+      });
+    }
 
     if (resultTabs) {
       resultTabs.addEventListener("click", (e) => {
-        const tab = e.target.closest(".result-tab");
+        const tab = e.target.closest(".merge-sql-result-tab");
         if (tab) this.handleTabSwitch(tab.dataset.tab);
       });
     }
@@ -226,8 +322,36 @@ export class MergeSqlTool extends BaseTool {
     const reportSubtabs = document.getElementById("merge-sql-report-subtabs");
     if (reportSubtabs) {
       reportSubtabs.addEventListener("click", (e) => {
-        const subtab = e.target.closest(".report-subtab");
+        const subtab = e.target.closest(".merge-sql-report-subtab");
         if (subtab) this.handleReportSubtabSwitch(subtab.dataset.subtab);
+      });
+    }
+
+    const generatedSubtabs = document.getElementById("merge-sql-generated-subtabs");
+    if (generatedSubtabs) {
+      generatedSubtabs.addEventListener("click", (e) => {
+        const subtab = e.target.closest(".merge-sql-generated-sql-subtab");
+        if (subtab) this.handleGeneratedSubtabSwitch(subtab.dataset.subtab);
+      });
+    }
+
+    const editorSaveBtn = document.getElementById("merge-sql-editor-save");
+    if (editorSaveBtn) editorSaveBtn.addEventListener("click", () => this.saveActiveFile());
+
+    const editorRevertBtn = document.getElementById("merge-sql-editor-revert");
+    if (editorRevertBtn) editorRevertBtn.addEventListener("click", () => this.revertActiveFile());
+
+    const editorTabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (editorTabsEl) {
+      editorTabsEl.addEventListener("click", (e) => {
+        const closeBtn = e.target.closest(".file-editor-tab-close");
+        if (closeBtn) {
+          e.stopPropagation();
+          this.closeEditorTab(closeBtn.dataset.id);
+          return;
+        }
+        const tab = e.target.closest(".file-editor-tab");
+        if (tab) this.setActiveEditorFile(tab.dataset.id);
       });
     }
   }
@@ -252,11 +376,19 @@ export class MergeSqlTool extends BaseTool {
       const exists = this.files.some((f) => f.name === file.name && f.file.size === file.size);
       if (exists) continue;
 
-      this.files.push({
+      const newFile = {
         id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         file,
         name: file.name,
-      });
+        editedContent: null,
+      };
+
+      this.files.push(newFile);
+
+      const tableName = MergeSqlService.extractTableNameForSort(newFile.name);
+      if (!this.tableOrder.includes(tableName)) {
+        this.tableOrder.push(tableName);
+      }
     }
 
     this.applySorting();
@@ -265,12 +397,33 @@ export class MergeSqlTool extends BaseTool {
   }
 
   removeFile(fileId) {
+    // Close editor tab if open before removing
+    if (this.openFileIds.includes(fileId)) {
+      this._closeEditorTabSilent(fileId);
+    }
+    const file = this.files.find((f) => f.id === fileId);
     this.files = this.files.filter((f) => f.id !== fileId);
+
+    if (file) {
+      const tableName = MergeSqlService.extractTableNameForSort(file.name);
+      const stillExists = this.files.some((f) => MergeSqlService.extractTableNameForSort(f.name) === tableName);
+      if (!stillExists) {
+        this.tableOrder = this.tableOrder.filter((t) => t !== tableName);
+        this.expandedTables.delete(tableName);
+      }
+    }
+
+    this.applySorting();
     this.saveFilesToIndexedDB();
+    this.saveStateToIndexedDB();
     this.updateUI();
   }
 
   handleSort(order) {
+    if (order === "manual" && this.sortOrder !== "manual") {
+      const groups = MergeSqlService.groupFilesByTable(this.files);
+      this.tableOrder = [...groups.keys()];
+    }
     this.sortOrder = order;
     this.applySorting();
     this.updateSortButtons();
@@ -279,9 +432,7 @@ export class MergeSqlTool extends BaseTool {
   }
 
   applySorting() {
-    if (this.sortOrder !== "manual") {
-      this.files = MergeSqlService.sortFiles(this.files, this.sortOrder);
-    }
+    this.files = MergeSqlService.sortFiles(this.files, this.sortOrder, this.tableOrder);
   }
 
   updateSortButtons() {
@@ -296,39 +447,187 @@ export class MergeSqlTool extends BaseTool {
     if (this.sortOrder === "manual") sortManualBtn?.classList.add("active");
   }
 
-  handleTabSwitch(tab) {
-    this.currentTab = tab;
+  switchInputMode(mode) {
+    if (this.inputMode === mode) return;
+    this.inputMode = mode;
     this.saveStateToIndexedDB();
 
-    const tabs = document.querySelectorAll(".result-tab");
+    const filesSection = document.getElementById("merge-sql-input-files");
+    const sqlSection = document.getElementById("merge-sql-input-sql");
+    const toggleBtns = document.querySelectorAll("#merge-sql-mode-toggle .mode-toggle-btn");
+
+    toggleBtns.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
+
+    if (filesSection) filesSection.style.display = mode === "files" ? "" : "none";
+    if (sqlSection) sqlSection.style.display = mode === "sql" ? "" : "none";
+
+    this.renderResultTabs();
+
+    this.currentTab = "report";
+    this.handleTabSwitch("report");
+  }
+
+  renderResultTabs() {
+    const tabsLeft = document.getElementById("merge-sql-result-tabs-left");
+    if (!tabsLeft) return;
+
+    if (this.inputMode === "files") {
+      tabsLeft.innerHTML = `
+        <button class="tab-button merge-sql-result-tab active" data-tab="report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
+          </svg>
+          Report
+        </button>
+        <button class="tab-button merge-sql-result-tab" data-tab="generated">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          Generated SQL
+        </button>
+        <button class="tab-button merge-sql-result-tab" data-tab="editor">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+          </svg>
+          File Editor
+        </button>
+      `;
+    } else {
+      tabsLeft.innerHTML = `
+        <button class="tab-button merge-sql-result-tab active" data-tab="report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3zM9 3v18M21 9H3M21 15H3"/>
+          </svg>
+          Report
+        </button>
+        <button class="tab-button merge-sql-result-tab" data-tab="validation-sql">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13l5.93-4L15 7h4a2 2 0 0 1 2 2v2"></path>
+            <path d="M14 21l-5.93-4L9 17H5a2 2 0 0 1-2-2v-2"></path>
+          </svg>
+          Validation SQL
+        </button>
+      `;
+    }
+  }
+
+  handleTabSwitch(tab) {
+    const prevTab = this.currentTab;
+    this.currentTab = tab;
+
+    if (tab === "report") {
+      const validSubtabs = ["summary", "table-detail", "squad-detail"];
+      if (!validSubtabs.includes(this.currentSubtab)) {
+        this.currentSubtab = "summary";
+      }
+    } else if (tab === "generated") {
+      const validSubtabs = ["merged", "select", "validation"];
+      if (!validSubtabs.includes(this.currentSubtab)) {
+        this.currentSubtab = "merged";
+      }
+    } else if (tab === "validation-sql") {
+      this.currentSubtab = "validation-sql";
+    }
+
+    this.saveStateToIndexedDB();
+
+    const tabs = document.querySelectorAll(".merge-sql-result-tab");
     tabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.result-tab[data-tab="${tab}"]`)?.classList.add("active");
+    document.querySelector(`.merge-sql-result-tab[data-tab="${tab}"]`)?.classList.add("active");
 
-    const mergedContent = document.getElementById("merge-sql-merged-content");
-    const selectContent = document.getElementById("merge-sql-select-content");
-    const validationContent = document.getElementById("merge-sql-validation-content");
     const reportContent = document.getElementById("merge-sql-report-content");
+    const generatedContent = document.getElementById("merge-sql-generated-content");
+    const validationTabContent = document.getElementById("merge-sql-validation-tab-content");
+    const editorContent = document.getElementById("merge-sql-editor-content");
+    const reportSubtabsEl = document.getElementById("merge-sql-report-subtabs");
+    const generatedSubtabsEl = document.getElementById("merge-sql-generated-subtabs");
 
-    if (mergedContent) mergedContent.classList.toggle("active", tab === "merged");
-    if (selectContent) selectContent.classList.toggle("active", tab === "select");
-    if (validationContent) validationContent.classList.toggle("active", tab === "validation");
     if (reportContent) reportContent.classList.toggle("active", tab === "report");
+    if (generatedContent) generatedContent.classList.toggle("active", tab === "generated");
+    if (validationTabContent) validationTabContent.classList.toggle("active", tab === "validation-sql");
+    if (editorContent) editorContent.classList.toggle("active", tab === "editor");
 
-    if (tab === "merged" && this.mergedEditor) {
-      this.mergedEditor.layout();
-    } else if (tab === "select" && this.selectEditor) {
-      this.selectEditor.layout();
-    } else if (tab === "validation" && this.validationEditor) {
-      this.validationEditor.layout();
-    } else if (tab === "report") {
+    if (reportSubtabsEl) reportSubtabsEl.style.display = tab === "report" ? "" : "none";
+    if (generatedSubtabsEl) generatedSubtabsEl.style.display = tab === "generated" ? "" : "none";
+
+    const resultActionsButtons = document.querySelector(".merge-sql-result-actions-buttons");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
+    if (resultActionsButtons) {
+      resultActionsButtons.style.display = tab === "report" || tab === "editor" ? "none" : "";
+    }
+    if (reportActionsButtons) {
+      reportActionsButtons.classList.toggle("visible", tab === "report");
+    }
+
+    if (tab === "report") {
       this.renderReport();
+    } else if (tab === "generated") {
+      if (this.currentSubtab === "merged" && this.mergedEditor) {
+        setTimeout(() => this.mergedEditor.layout(), 0);
+      } else if (this.currentSubtab === "select" && this.selectEditor) {
+        setTimeout(() => this.selectEditor.layout(), 0);
+      } else if (this.currentSubtab === "validation" && this.validationEditor) {
+        setTimeout(() => this.validationEditor.layout(), 0);
+      }
+    } else if (tab === "validation-sql") {
+      if (this.validationSqlEditor) {
+        setTimeout(() => this.validationSqlEditor.layout(), 0);
+      }
+    } else if (tab === "editor") {
+      if (this.fileEditor && this.activeEditorFileId) {
+        setTimeout(() => this.fileEditor.layout(), 50);
+      }
+    }
+
+    // Editor tab needs the result content area clear of the empty-state overlay.
+    // Other tabs rely on the empty state to signal "no results yet".
+    const resultEmptyEl = document.getElementById("merge-sql-result-empty");
+    if (resultEmptyEl) {
+      if (tab === "editor") {
+        resultEmptyEl.style.display = "none";
+      } else if (prevTab === "editor" && !this.result) {
+        // Restore placeholder when leaving editor with no merge results
+        resultEmptyEl.style.display = "";
+      }
+    }
+  }
+
+  handleGeneratedSubtabSwitch(subtab) {
+    this.currentSubtab = subtab;
+    this.saveStateToIndexedDB();
+
+    const subtabs = document.querySelectorAll(".merge-sql-generated-sql-subtab");
+    subtabs.forEach((t) => t.classList.remove("active"));
+    document.querySelector(`.merge-sql-generated-sql-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+
+    const mergedSubtab = document.getElementById("merge-sql-merged-subtab");
+    const selectSubtab = document.getElementById("merge-sql-select-subtab");
+    const validationSubtab = document.getElementById("merge-sql-validation-subtab");
+
+    if (mergedSubtab) mergedSubtab.classList.toggle("active", subtab === "merged");
+    if (selectSubtab) selectSubtab.classList.toggle("active", subtab === "select");
+    if (validationSubtab) validationSubtab.classList.toggle("active", subtab === "validation");
+
+    if (subtab === "merged" && this.mergedEditor) {
+      setTimeout(() => this.mergedEditor.layout(), 0);
+    } else if (subtab === "select" && this.selectEditor) {
+      setTimeout(() => this.selectEditor.layout(), 0);
+    } else if (subtab === "validation" && this.validationEditor) {
+      setTimeout(() => this.validationEditor.layout(), 0);
     }
   }
 
   handleReportSubtabSwitch(subtab) {
-    const subtabs = document.querySelectorAll(".report-subtab");
+    this.currentSubtab = subtab;
+    this.saveStateToIndexedDB();
+
+    const subtabs = document.querySelectorAll(".merge-sql-report-subtab");
     subtabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
+    document.querySelector(`.merge-sql-report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
 
     const summaryContent = document.getElementById("merge-sql-report-summary");
     const tableDetailContent = document.getElementById("merge-sql-report-table-detail");
@@ -338,6 +637,284 @@ export class MergeSqlTool extends BaseTool {
     if (tableDetailContent) tableDetailContent.classList.toggle("active", subtab === "table-detail");
     if (squadDetailContent) squadDetailContent.classList.toggle("active", subtab === "squad-detail");
   }
+
+  // ─── File Editor Methods ────────────────────────────────────────────────────
+
+  /**
+   * Lazily creates the Monaco file editor on first use.
+   * Must be called AFTER the Editor tab pane is visible so Monaco gets real dimensions.
+   */
+  _initFileEditor() {
+    if (this.fileEditor) return;
+    const container = document.getElementById("merge-sql-file-editor");
+    if (!container) return;
+
+    // Make the container visible before creating Monaco
+    container.style.display = "";
+
+    const editorOptions = {
+      fontSize: 13,
+      lineNumbers: "on",
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      automaticLayout: true,
+      readOnly: false,
+      padding: { top: 12, bottom: 12 },
+    };
+
+    this.fileEditor = createOracleEditor(container, editorOptions);
+    this.fileEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      this.saveActiveFile();
+    });
+    this.fileEditor.onDidChangeModelContent(() => {
+      if (this.activeEditorFileId) {
+        this._scheduleAutosave(this.activeEditorFileId);
+      }
+    });
+  }
+
+  async openFileInEditor(fileId) {
+    // If already open, just activate it
+    if (this.openFileIds.includes(fileId)) {
+      this.handleTabSwitch("editor");
+      this.setActiveEditorFile(fileId);
+      return;
+    }
+
+    const fileItem = this.files.find((f) => f.id === fileId);
+    if (!fileItem) return;
+
+    const content =
+      fileItem.editedContent !== null
+        ? fileItem.editedContent
+        : await MergeSqlService.readFileContent(fileItem.file);
+
+    // Create a Monaco model for this file
+    const model = monaco.editor.createModel(content, "oracle-dml");
+
+    this.fileEditorModels.set(fileId, {
+      model,
+      lastSavedVersionId: model.getAlternativeVersionId(),
+      autosaveTimer: null,
+    });
+
+    this.openFileIds.push(fileId);
+    this.renderEditorTabs();
+
+    // Switch tab first so the container is visible BEFORE Monaco is initialized
+    this.handleTabSwitch("editor");
+
+    // Now safe to create Monaco on a visible container
+    this._initFileEditor();
+
+    this.setActiveEditorFile(fileId);
+  }
+
+  setActiveEditorFile(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (!entry || !this.fileEditor) return;
+
+    this.activeEditorFileId = fileId;
+
+    // Show editor, hide empty state
+    const editorEl = document.getElementById("merge-sql-file-editor");
+    const emptyEl = document.getElementById("merge-sql-editor-empty");
+    const toolbarEl = document.getElementById("merge-sql-editor-toolbar");
+    if (editorEl) editorEl.style.display = "";
+    if (emptyEl) emptyEl.style.display = "none";
+    if (toolbarEl) toolbarEl.style.display = "";
+
+    this.fileEditor.setModel(entry.model);
+    setTimeout(() => this.fileEditor.layout(), 50);
+    this._updateEditorToolbar(fileId);
+    this._highlightActiveTab(fileId);
+  }
+
+  _scheduleAutosave(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (!entry) return;
+
+    const isDirty = entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId;
+    this._setTabDirty(fileId, isDirty);
+    this._updateEditorToolbar(fileId);
+
+    if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+    entry.autosaveTimer = setTimeout(() => {
+      this._persistFileEdit(fileId);
+    }, 1000);
+  }
+
+  _persistFileEdit(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    const fileItem = this.files.find((f) => f.id === fileId);
+    if (!entry || !fileItem) return;
+
+    const value = entry.model.getValue();
+    fileItem.editedContent = value;
+    entry.lastSavedVersionId = entry.model.getAlternativeVersionId();
+    entry.autosaveTimer = null;
+
+    IndexedDBManager.saveSingleFileEdit(fileId, value);
+
+    this._setTabDirty(fileId, false);
+    this._updateEditorToolbar(fileId);
+    this._updateEditorStatus("Autosaved");
+    this.renderFileList();
+  }
+
+  saveActiveFile() {
+    if (!this.activeEditorFileId) return;
+    if (this.fileEditorModels.get(this.activeEditorFileId)?.autosaveTimer) {
+      clearTimeout(this.fileEditorModels.get(this.activeEditorFileId).autosaveTimer);
+    }
+    this._persistFileEdit(this.activeEditorFileId);
+    this._updateEditorStatus("Saved");
+  }
+
+  async revertActiveFile() {
+    if (!this.activeEditorFileId) return;
+    const fileItem = this.files.find((f) => f.id === this.activeEditorFileId);
+    const entry = this.fileEditorModels.get(this.activeEditorFileId);
+    if (!fileItem || !entry) return;
+
+    const confirmed = window.confirm(
+      `Revert "${fileItem.name}" to its original content? All your edits will be lost.`
+    );
+    if (!confirmed) return;
+
+    const originalContent = await MergeSqlService.readFileContent(fileItem.file);
+
+    entry.model.setValue(originalContent);
+    fileItem.editedContent = null;
+    entry.lastSavedVersionId = entry.model.getAlternativeVersionId();
+
+    IndexedDBManager.saveSingleFileEdit(this.activeEditorFileId, null);
+
+    this._setTabDirty(this.activeEditorFileId, false);
+    this._updateEditorToolbar(this.activeEditorFileId);
+    this._updateEditorStatus("Reverted to original");
+    this.renderFileList();
+  }
+
+  closeEditorTab(fileId) {
+    // Flush any pending autosave before closing
+    const entry = this.fileEditorModels.get(fileId);
+    if (entry) {
+      if (entry.autosaveTimer) {
+        clearTimeout(entry.autosaveTimer);
+        this._persistFileEdit(fileId);
+      }
+    }
+    this._closeEditorTabSilent(fileId);
+  }
+
+  _closeEditorTabSilent(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (entry) {
+      if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+      entry.model.dispose();
+      this.fileEditorModels.delete(fileId);
+    }
+
+    const idx = this.openFileIds.indexOf(fileId);
+    if (idx !== -1) this.openFileIds.splice(idx, 1);
+
+    // Activate a neighbour or show empty state
+    if (this.activeEditorFileId === fileId) {
+      const next = this.openFileIds[idx] ?? this.openFileIds[idx - 1] ?? null;
+      this.activeEditorFileId = null;
+      if (next) {
+        this.setActiveEditorFile(next);
+      } else {
+        this._showEditorEmptyState();
+      }
+    }
+
+    this.renderEditorTabs();
+  }
+
+  _showEditorEmptyState() {
+    const editorEl = document.getElementById("merge-sql-file-editor");
+    const emptyEl = document.getElementById("merge-sql-editor-empty");
+    const toolbarEl = document.getElementById("merge-sql-editor-toolbar");
+    if (editorEl) editorEl.style.display = "none";
+    if (emptyEl) emptyEl.style.display = "";
+    if (toolbarEl) toolbarEl.style.display = "none";
+  }
+
+  renderEditorTabs() {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+
+    if (this.openFileIds.length === 0) {
+      tabsEl.innerHTML = "";
+      return;
+    }
+
+    tabsEl.innerHTML = this.openFileIds
+      .map((fileId) => {
+        const fileItem = this.files.find((f) => f.id === fileId);
+        if (!fileItem) return "";
+        const isActive = fileId === this.activeEditorFileId;
+        const entry = this.fileEditorModels.get(fileId);
+        const isDirty =
+          entry ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId : false;
+        return `<div class="file-editor-tab${isActive ? " active" : ""}${isDirty ? " dirty" : ""}" data-id="${this.escapeHtml(fileId)}">
+          <svg class="file-editor-tab-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="file-editor-tab-label" title="${this.escapeHtml(fileItem.name)}">${this.escapeHtml(fileItem.name)}</span>
+          <span class="file-editor-tab-dirty-dot"></span>
+          <button class="file-editor-tab-close" data-id="${this.escapeHtml(fileId)}" title="Close">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>`;
+      })
+      .join("");
+  }
+
+  _highlightActiveTab(fileId) {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+    tabsEl.querySelectorAll(".file-editor-tab").forEach((t) => {
+      t.classList.toggle("active", t.dataset.id === fileId);
+    });
+  }
+
+  _setTabDirty(fileId, isDirty) {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+    const tab = tabsEl.querySelector(`.file-editor-tab[data-id="${fileId}"]`);
+    if (tab) tab.classList.toggle("dirty", isDirty);
+  }
+
+  _updateEditorToolbar(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    const isDirty = entry
+      ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId
+      : false;
+    const fileItem = this.files.find((f) => f.id === fileId);
+    const hasOriginal = fileItem && fileItem.editedContent !== null;
+
+    const saveBtn = document.getElementById("merge-sql-editor-save");
+    const revertBtn = document.getElementById("merge-sql-editor-revert");
+    if (saveBtn) saveBtn.disabled = !isDirty;
+    if (revertBtn) revertBtn.disabled = !hasOriginal;
+  }
+
+  _updateEditorStatus(msg) {
+    const statusEl = document.getElementById("merge-sql-editor-status");
+    if (!statusEl) return;
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    statusEl.textContent = `${msg} · ${time}`;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
 
   async handleMerge() {
     if (this.files.length === 0) {
@@ -363,7 +940,10 @@ export class MergeSqlTool extends BaseTool {
       const parsedFiles = [];
 
       for (const fileItem of this.files) {
-        const content = await MergeSqlService.readFileContent(fileItem.file);
+        const content =
+          fileItem.editedContent !== null
+            ? fileItem.editedContent
+            : await MergeSqlService.readFileContent(fileItem.file);
         const parsed = MergeSqlService.parseFile(content, fileItem.name);
         parsedFiles.push(parsed);
       }
@@ -385,7 +965,8 @@ export class MergeSqlTool extends BaseTool {
         this.result.selectSql,
         this.result.validationSql || "",
         this.result.duplicates,
-        this.result.report
+        this.result.report,
+        this.inputEditor?.getValue() || ""
       );
 
       this.showResult();
@@ -412,10 +993,14 @@ export class MergeSqlTool extends BaseTool {
 
   async handleClearAll() {
     this.files = [];
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.result = null;
     if (this.mergedEditor) this.mergedEditor.setValue("");
     if (this.selectEditor) this.selectEditor.setValue("");
     if (this.validationEditor) this.validationEditor.setValue("");
+    if (this.inputEditor) this.inputEditor.setValue("");
+    if (this.validationSqlEditor) this.validationSqlEditor.setValue("");
     this.hideResult();
     await IndexedDBManager.clearAll();
     this.updateUI();
@@ -427,6 +1012,8 @@ export class MergeSqlTool extends BaseTool {
     }
 
     this.files = [];
+    this.tableOrder = [];
+    this.expandedTables = new Set();
     this.saveFilesToIndexedDB();
     this.updateUI();
     this.showSuccess("Files cleared. Current SQL results are kept.");
@@ -457,26 +1044,102 @@ export class MergeSqlTool extends BaseTool {
       this.result.selectSql,
       this.result.validationSql,
       this.result.duplicates,
-      this.result.report
+      this.result.report,
+      this.inputEditor?.getValue() || ""
     );
 
     this.showResult();
-    this.handleTabSwitch("validation");
+    this.currentSubtab = "validation";
+    this.handleGeneratedSubtabSwitch("validation");
+    this.handleTabSwitch("generated");
     this.showSuccess("Validation SQL refreshed from current Merged SQL");
   }
 
+  async handleSqlModeRefresh() {
+    const mergedSql = this.inputEditor?.getValue() || "";
+    if (!mergedSql.trim()) {
+      this.showError("No merged SQL to process");
+      return;
+    }
+
+    const sqlRefreshBtn = document.getElementById("merge-sql-sql-refresh-btn");
+    if (sqlRefreshBtn) {
+      sqlRefreshBtn.disabled = true;
+    }
+
+    try {
+      const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
+      if (this.validationSqlEditor) {
+        this.validationSqlEditor.setValue(validationSql);
+      }
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      this.result = {
+        mergedSql,
+        selectSql: "",
+        validationSql,
+        duplicates: [],
+        report,
+      };
+
+      await IndexedDBManager.saveResults(
+        mergedSql,
+        "",
+        validationSql,
+        [],
+        report,
+        mergedSql
+      );
+
+      this.showResult();
+      this.updateDuplicatesInsight();
+      this.handleTabSwitch("report");
+      this.showSuccess("Report and Validation SQL generated from merged SQL");
+    } catch (error) {
+      console.error("SQL mode refresh failed:", error);
+      this.showError(`Failed to process merged SQL: ${error.message}`);
+    } finally {
+      if (sqlRefreshBtn) {
+        sqlRefreshBtn.disabled = false;
+      }
+    }
+  }
+
+  handleSqlModeClear() {
+    if (this.inputEditor) this.inputEditor.setValue("");
+    if (this.validationSqlEditor) this.validationSqlEditor.setValue("");
+    this.result = null;
+    this.hideResult();
+    this.debounceSaveResults();
+  }
+
   getCurrentEditor() {
-    if (this.currentTab === "merged") return this.mergedEditor;
-    if (this.currentTab === "select") return this.selectEditor;
-    if (this.currentTab === "validation") return this.validationEditor;
-    return null;
+    if (this.inputMode === "files") {
+      if (this.currentTab === "generated") {
+        if (this.currentSubtab === "merged") return this.mergedEditor;
+        if (this.currentSubtab === "select") return this.selectEditor;
+        if (this.currentSubtab === "validation") return this.validationEditor;
+      }
+      return null;
+    } else {
+      if (this.currentTab === "validation-sql") return this.validationSqlEditor;
+      return null;
+    }
   }
 
   getCurrentDownloadSuffix() {
-    if (this.currentTab === "merged") return "-MERGED.sql";
-    if (this.currentTab === "select") return "-SELECT.sql";
-    if (this.currentTab === "validation") return "-VALIDATION.sql";
-    return null;
+    if (this.inputMode === "files") {
+      if (this.currentTab === "generated") {
+        if (this.currentSubtab === "merged") return "-MERGED.sql";
+        if (this.currentSubtab === "select") return "-SELECT.sql";
+        if (this.currentSubtab === "validation") return "-VALIDATION.sql";
+      }
+      return null;
+    } else {
+      if (this.currentTab === "validation-sql") return "-VALIDATION.sql";
+      return null;
+    }
   }
 
   handleCopy() {
@@ -554,10 +1217,12 @@ export class MergeSqlTool extends BaseTool {
     const emptyState = document.getElementById("merge-sql-result-empty");
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
 
     if (emptyState) emptyState.style.display = "none";
     if (resultActions) resultActions.classList.add("visible");
     if (clearBtn) clearBtn.style.display = "block";
+    if (reportActionsButtons) reportActionsButtons.classList.toggle("visible", this.currentTab === "report");
   }
 
   hideResult() {
@@ -565,11 +1230,13 @@ export class MergeSqlTool extends BaseTool {
     const resultActions = document.getElementById("merge-sql-result-actions");
     const clearBtn = document.getElementById("merge-sql-clear-btn");
     const insights = document.getElementById("merge-sql-insights");
+    const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
 
     if (emptyState) emptyState.style.display = "flex";
     if (resultActions) resultActions.classList.remove("visible");
     if (clearBtn) clearBtn.style.display = "none";
     if (insights) insights.style.display = "none";
+    if (reportActionsButtons) reportActionsButtons.classList.remove("visible");
   }
 
   updateDuplicatesInsight() {
@@ -675,10 +1342,11 @@ export class MergeSqlTool extends BaseTool {
       if (dangerousStatements && dangerousStatements.length > 0) {
         let dangerousHtml = `<h4>Dangerous Statements</h4>`;
         for (const item of dangerousStatements) {
-          const typeLabel = item.type === "DELETE" ? "DELETE" : "UPDATE NO WHERE";
+          const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
+          const badgeClass = item.type === "DELETE" || item.type === "MERGE_DELETE" ? "delete" : "update-no-where";
           dangerousHtml += `<div class="report-danger-item">
             <span class="report-file-tag">${this.escapeHtml(item.fileName)}</span>
-            <span class="report-type-badge report-type-badge--${item.type === "DELETE" ? "delete" : "update-no-where"}">${typeLabel}</span>
+            <span class="report-type-badge report-type-badge--${badgeClass}">${typeLabel}</span>
             <pre class="report-danger-statement">${this.escapeHtml(item.statement.slice(0, 300))}${item.statement.length > 300 ? "..." : ""}</pre>
           </div>`;
         }
@@ -696,18 +1364,17 @@ export class MergeSqlTool extends BaseTool {
         let tableHtml = `<div class="report-sticky-header">
           <h4>All Tables Summary</h4>
           <div class="report-sticky-header-columns">
-            <span>Table</span><span>INSERT</span><span>MERGE</span><span>UPDATE</span><span>DELETE</span><span>Total</span>
+            <span>Table</span><span>INSERT</span><span>MERGE</span><span>UPDATE</span><span>Total</span>
           </div>
         </div>
         <table class="report-table report-table-no-header">
           <tbody>`;
         for (const row of statementCounts) {
           tableHtml += `<tr>
-            <td>${this.escapeHtml(row.table)}</td>
+            <td>${this.escapeHtml(row.table.toUpperCase())}</td>
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
-            <td>${row.delete}</td>
             <td>${row.total}</td>
           </tr>`;
         }
@@ -722,7 +1389,7 @@ export class MergeSqlTool extends BaseTool {
     if (squadsContainer) {
       if (squadCounts && squadCounts.length > 0) {
         let squadsHtml = `<h4>Per-Squad Summary</h4><table class="report-table report-table-sticky">
-          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
           <tbody>`;
         for (const row of squadCounts) {
           squadsHtml += `<tr>
@@ -730,7 +1397,6 @@ export class MergeSqlTool extends BaseTool {
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
-            <td>${row.delete}</td>
             <td>${row.total}</td>
           </tr>`;
         }
@@ -762,7 +1428,7 @@ export class MergeSqlTool extends BaseTool {
           const group = squadGroups.get(key);
           featuresHtml += `<div class="report-squad-group"><h5>${this.escapeHtml(group.displayName)}</h5>
             <table class="report-table">
-              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
               <tbody>`;
           for (const row of group.features) {
             featuresHtml += `<tr>
@@ -770,7 +1436,6 @@ export class MergeSqlTool extends BaseTool {
               <td>${row.insert}</td>
               <td>${row.merge}</td>
               <td>${row.update}</td>
-              <td>${row.delete}</td>
               <td>${row.total}</td>
             </tr>`;
           }
@@ -780,7 +1445,7 @@ export class MergeSqlTool extends BaseTool {
         if (noSquadFeatures.length > 0) {
           featuresHtml += `<div class="report-squad-group"><h5>Other</h5>
             <table class="report-table">
-              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
+              <thead><tr><th>Feature</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
               <tbody>`;
           for (const row of noSquadFeatures) {
             featuresHtml += `<tr>
@@ -788,7 +1453,6 @@ export class MergeSqlTool extends BaseTool {
               <td>${row.insert}</td>
               <td>${row.merge}</td>
               <td>${row.update}</td>
-              <td>${row.delete}</td>
               <td>${row.total}</td>
             </tr>`;
           }
@@ -858,17 +1522,16 @@ export class MergeSqlTool extends BaseTool {
     let rowIndex = 0;
 
     for (const [tableKey, rows] of tableGroups) {
-      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
-        <table class="report-table report-table-expandable">
-          <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-          <tbody>`;
+      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table.toUpperCase())}</h5>
+<table class="report-table report-table-expandable">
+           <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+           <tbody>`;
 
-      const totals = { insert: 0, merge: 0, update: 0, delete: 0, total: 0 };
+      const totals = { insert: 0, merge: 0, update: 0, total: 0 };
       for (const row of rows) {
         totals.insert += row.insert;
         totals.merge += row.merge;
         totals.update += row.update;
-        totals.delete += row.delete;
         totals.total += row.total;
 
         const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
@@ -884,14 +1547,13 @@ export class MergeSqlTool extends BaseTool {
             </span>
             ${this.escapeHtml(row.squad)}
           </td>
-          <td>${row.insert}</td>
-          <td>${row.merge}</td>
-          <td>${row.update}</td>
-          <td>${row.delete}</td>
-          <td>${row.total}</td>
-        </tr>
-        <tr class="row-feature-details" id="${rowId}">
-          <td colspan="6">
+<td>${row.insert}</td>
+           <td>${row.merge}</td>
+           <td>${row.update}</td>
+           <td>${row.total}</td>
+         </tr>
+         <tr class="row-feature-details" id="${rowId}">
+           <td colspan="5">
             <div class="feature-details-content">`;
 
         if (features.length > 0) {
@@ -914,7 +1576,6 @@ export class MergeSqlTool extends BaseTool {
         <td>${totals.insert}</td>
         <td>${totals.merge}</td>
         <td>${totals.update}</td>
-        <td>${totals.delete}</td>
         <td>${totals.total}</td>
       </tr></tfoot></table></div>`;
     }
@@ -984,17 +1645,16 @@ export class MergeSqlTool extends BaseTool {
             </span>
           </div>
         </div>
-        <table class="report-table">
-          <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>DELETE</th><th>Total</th></tr></thead>
-          <tbody>`;
+<table class="report-table">
+           <thead><tr><th>Table</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
+           <tbody>`;
 
       for (const row of group.tables) {
         html += `<tr>
-          <td>${this.escapeHtml(row.table)}</td>
+          <td>${this.escapeHtml(row.table.toUpperCase())}</td>
           <td>${row.insert}</td>
           <td>${row.merge}</td>
           <td>${row.update}</td>
-          <td>${row.delete}</td>
           <td>${row.total}</td>
         </tr>`;
       }
@@ -1051,13 +1711,22 @@ export class MergeSqlTool extends BaseTool {
     if (emptyState) emptyState.style.display = "none";
 
     const isManual = this.sortOrder === "manual";
-    let html = "";
-    for (let i = 0; i < this.files.length; i++) {
-      const file = this.files[i];
+    const groups = MergeSqlService.groupFilesByTable(this.files);
 
-      html += `
-        <div class="file-item${isManual ? " draggable-item" : ""}" ${isManual ? 'draggable="true"' : ""} data-id="${file.id}" data-index="${i}">
-          <div class="drag-handle" style="${isManual ? "" : "display: none;"}">
+    const sortedTableNames = this.getSortedTableNames(groups);
+
+    let html = "";
+    for (const tableName of sortedTableNames) {
+      const fileGroup = groups.get(tableName);
+      if (!fileGroup || fileGroup.length === 0) continue;
+
+      const isExpanded = this.expandedTables.has(tableName);
+
+      html += `<div class="table-card${isManual ? " table-card-draggable" : ""}" data-table-name="${this.escapeHtml(tableName)}">`;
+
+      html += `<div class="table-card-header">`;
+      if (isManual) {
+        html += `<div class="table-card-drag-handle">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="9" cy="5" r="1"></circle>
               <circle cx="9" cy="12" r="1"></circle>
@@ -1066,30 +1735,80 @@ export class MergeSqlTool extends BaseTool {
               <circle cx="15" cy="12" r="1"></circle>
               <circle cx="15" cy="19" r="1"></circle>
             </svg>
-          </div>
-          <div class="file-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-          </div>
-          <div class="file-info">
-            <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
-          </div>
-          <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-      `;
+          </div>`;
+      }
+      html += `<button class="table-card-toggle" data-table-name="${this.escapeHtml(tableName)}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-chevron${isExpanded ? "" : " toggle-chevron-collapsed"}">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>`;
+      html += `<span class="table-card-title">${this.escapeHtml(tableName)}</span>`;
+      html += `<span class="table-card-count">${fileGroup.length} file${fileGroup.length !== 1 ? "s" : ""}</span>`;
+      html += `</div>`;
+
+      html += `<div class="table-card-body${isExpanded ? "" : " table-card-body-collapsed"}">`;
+      for (const file of fileGroup) {
+        const isEdited = file.editedContent !== null;
+        html += `<div class="file-item${isEdited ? " is-edited" : ""}" data-id="${file.id}">
+            <div class="file-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <div class="file-info">
+              <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
+            </div>
+            <button class="btn btn-ghost btn-xs btn-edit-file" data-id="${file.id}" title="View / Edit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+              </svg>
+            </button>
+            <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>`;
+      }
+      html += `</div></div>`;
     }
 
     if (fileItems) {
       fileItems.innerHTML = html;
       this.bindFileItemEvents();
+      this.bindCardEvents();
+
+      if (isManual) {
+        this.bindCardDragEvents();
+      }
     }
+  }
+
+  getSortedTableNames(groups) {
+    const allNames = [...groups.keys()];
+    if (this.sortOrder === "manual" && this.tableOrder.length > 0) {
+      const ordered = [];
+      const seen = new Set();
+      for (const name of this.tableOrder) {
+        if (groups.has(name) && !seen.has(name)) {
+          ordered.push(name);
+          seen.add(name);
+        }
+      }
+      for (const name of allNames) {
+        if (!seen.has(name)) {
+          ordered.push(name);
+        }
+      }
+      return ordered;
+    }
+    return allNames.sort((a, b) => {
+      const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+      return this.sortOrder === "desc" ? -cmp : cmp;
+    });
   }
 
   bindFileItemEvents() {
@@ -1099,6 +1818,15 @@ export class MergeSqlTool extends BaseTool {
     if (!fileItems) return;
 
     fileItems.forEach((item) => {
+      const editBtn = item.querySelector(".btn-edit-file");
+      if (editBtn) {
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const fileId = editBtn.dataset.id;
+          this.openFileInEditor(fileId);
+        });
+      }
+
       const removeBtn = item.querySelector(".btn-remove");
       if (removeBtn) {
         removeBtn.addEventListener("click", (e) => {
@@ -1107,74 +1835,100 @@ export class MergeSqlTool extends BaseTool {
           this.removeFile(fileId);
         });
       }
+    });
+  }
 
-      if (this.sortOrder === "manual") {
-        const dragHandle = item.querySelector(".drag-handle");
-        if (dragHandle) {
-          dragHandle.addEventListener("mousedown", (e) => this.handleDragStart(e, item));
+  bindCardEvents() {
+    const toggles = document.querySelectorAll("#merge-sql-file-items .table-card-toggle");
+    toggles.forEach((toggle) => {
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tableName = toggle.dataset.tableName;
+        if (this.expandedTables.has(tableName)) {
+          this.expandedTables.delete(tableName);
+        } else {
+          this.expandedTables.add(tableName);
         }
-      }
+        this.saveStateToIndexedDB();
+        this.renderFileList();
+      });
+    });
+  }
+
+  bindCardDragEvents() {
+    const container = document.getElementById("merge-sql-file-items");
+    if (!container) return;
+
+    const dragHandles = container.querySelectorAll(".table-card-drag-handle");
+    dragHandles.forEach((handle) => {
+      handle.addEventListener("mousedown", (e) => this.handleCardDragStart(e));
     });
 
-    if (this.sortOrder === "manual" && fileItemsContainer) {
-      fileItemsContainer.addEventListener("mousemove", (e) => this.handleDragMove(e));
-      fileItemsContainer.addEventListener("mouseup", (e) => this.handleDragEnd(e));
-      fileItemsContainer.addEventListener("mouseleave", (e) => this.handleDragEnd(e));
-    }
+    container.addEventListener("mousemove", (e) => this.handleCardDragMove(e));
+    container.addEventListener("mouseup", (e) => this.handleCardDragEnd(e));
+    container.addEventListener("mouseleave", (e) => this.handleCardDragEnd(e));
   }
 
-  handleDragStart(e, item) {
+  handleCardDragStart(e) {
     e.preventDefault();
-    this.draggedItem = item;
-    this.dragStartY = e.clientY;
-    this.draggedItemRect = item.getBoundingClientRect();
-    item.classList.add("dragging");
+    const card = e.target.closest(".table-card");
+    if (!card) return;
+
+    this.draggedCard = card;
+    this.dragCardStartY = e.clientY;
+    card.classList.add("dragging");
   }
 
-  handleDragMove(e) {
-    if (!this.draggedItem) return;
+  handleCardDragMove(e) {
+    if (!this.draggedCard) return;
 
-    const fileItemsContainer = document.getElementById("merge-sql-file-items");
-    const fileItems = fileItemsContainer?.querySelectorAll(".file-item:not(.dragging)");
+    const container = document.getElementById("merge-sql-file-items");
+    const cards = container?.querySelectorAll(".table-card:not(.dragging)");
 
-    if (!fileItems) return;
+    if (!cards) return;
 
-    fileItems.forEach((item) => item.classList.remove("drag-over"));
+    cards.forEach((card) => card.classList.remove("drag-over"));
 
-    for (const item of fileItems) {
-      const rect = item.getBoundingClientRect();
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
 
-      if (e.clientY < midY + rect.height / 2 && e.clientY > midY - rect.height / 2) {
-        item.classList.add("drag-over");
+      if (e.clientY > rect.top && e.clientY < rect.bottom) {
+        card.classList.add("drag-over");
         break;
       }
     }
   }
 
-  handleDragEnd(e) {
-    if (!this.draggedItem) return;
+  handleCardDragEnd(e) {
+    if (!this.draggedCard) return;
 
-    const fileItemsContainer = document.getElementById("merge-sql-file-items");
-    const dragOverItem = fileItemsContainer?.querySelector(".file-item.drag-over");
+    const container = document.getElementById("merge-sql-file-items");
+    const dragOverCard = container?.querySelector(".table-card.drag-over");
 
-    if (dragOverItem && dragOverItem !== this.draggedItem) {
-      const draggedId = this.draggedItem.dataset.id;
-      const targetId = dragOverItem.dataset.id;
+    if (dragOverCard && dragOverCard !== this.draggedCard) {
+      const draggedTableName = this.draggedCard.dataset.tableName;
+      const targetTableName = dragOverCard.dataset.tableName;
 
-      const draggedIndex = this.files.findIndex((f) => f.id === draggedId);
-      const targetIndex = this.files.findIndex((f) => f.id === targetId);
+      const draggedIdx = this.tableOrder.indexOf(draggedTableName);
+      const targetIdx = this.tableOrder.indexOf(targetTableName);
 
-      if (draggedIndex !== -1 && targetIndex !== -1) {
-        const [draggedFile] = this.files.splice(draggedIndex, 1);
-        this.files.splice(targetIndex, 0, draggedFile);
-        this.saveFilesToIndexedDB();
+      if (draggedIdx !== -1 && targetIdx !== -1) {
+        this.tableOrder.splice(draggedIdx, 1);
+        this.tableOrder.splice(targetIdx, 0, draggedTableName);
+      } else if (draggedIdx !== -1) {
+        this.tableOrder.splice(draggedIdx, 1);
+        this.tableOrder.push(draggedTableName);
       }
+
+      this.applySorting();
+      this.saveStateToIndexedDB();
+      this.saveFilesToIndexedDB();
     }
 
-    this.draggedItem.classList.remove("dragging");
-    fileItemsContainer?.querySelectorAll(".file-item").forEach((el) => el.classList.remove("drag-over"));
-    this.draggedItem = null;
+    this.draggedCard.classList.remove("dragging");
+    container?.querySelectorAll(".table-card").forEach((el) => el.classList.remove("drag-over"));
+    this.draggedCard = null;
     this.renderFileList();
   }
 
@@ -1182,6 +1936,302 @@ export class MergeSqlTool extends BaseTool {
     const mergeBtn = document.getElementById("merge-sql-btn");
     if (mergeBtn) {
       mergeBtn.disabled = this.files.length === 0;
+    }
+  }
+
+  formatReportAsText() {
+    if (!this.result?.report) return "No report data available.";
+
+    const report = this.result.report;
+    const lines = [];
+
+    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
+      ? this.currentSubtab
+      : "summary";
+
+    if (subtab === "summary") {
+      lines.push("📊 *Merge SQL Report — Summary*");
+      lines.push("");
+
+      if (report.dangerousStatements && report.dangerousStatements.length > 0) {
+        lines.push("⚠️ *Dangerous Statements*");
+        for (const item of report.dangerousStatements) {
+          const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
+          lines.push(`*${item.fileName}* [${typeLabel}]`);
+          lines.push(`\`${item.statement.slice(0, 200)}${item.statement.length > 200 ? "..." : ""}\``);
+        }
+        lines.push("");
+      }
+
+      if (report.statementCounts && report.statementCounts.length > 0) {
+        lines.push(`📋 *All Tables Summary* (${report.statementCounts.length} table${report.statementCounts.length !== 1 ? "s" : ""})`);
+        lines.push("");
+        for (const row of report.statementCounts) {
+          lines.push(`*${row.table.toUpperCase()}*`);
+          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
+          lines.push("");
+        }
+      }
+
+      if (report.squadCounts && report.squadCounts.length > 0) {
+        lines.push("📋 *Per-Squad Summary*");
+        lines.push("");
+        for (const row of report.squadCounts) {
+          lines.push(`*${row.squad}* — ${row.total} statement${row.total !== 1 ? "s" : ""}`);
+          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
+          lines.push("");
+        }
+      }
+
+      if (report.featureCounts && report.featureCounts.length > 0) {
+        lines.push("📋 *Per-Feature Summary*");
+        lines.push("");
+        const squadGroups = new Map();
+        const noSquadFeatures = [];
+        for (const row of report.featureCounts) {
+          if (row.squad) {
+            const key = row.squad.toUpperCase();
+            if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, features: [] });
+            squadGroups.get(key).features.push(row);
+          } else {
+            noSquadFeatures.push(row);
+          }
+        }
+        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+        for (const key of sortedSquadKeys) {
+          const group = squadGroups.get(key);
+          lines.push(`*${group.displayName}*`);
+          for (const row of group.features) {
+            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+        if (noSquadFeatures.length > 0) {
+          lines.push("*Other*");
+          for (const row of noSquadFeatures) {
+            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+      }
+
+      if (report.nonSystemAuthors && report.nonSystemAuthors.length > 0) {
+        lines.push("⚠️ *Non-SYSTEM Authors*");
+        for (const item of report.nonSystemAuthors) {
+          lines.push(`${item.fileName} — ${item.field}: ${item.value}`);
+        }
+        lines.push("");
+      } else {
+        lines.push("✅ *Non-SYSTEM Authors* — All values are SYSTEM");
+        lines.push("");
+      }
+
+    } else if (subtab === "table-detail") {
+      lines.push("📊 *Merge SQL Report — Table Detail*");
+      lines.push("");
+
+      if (report.tableSquadCounts && report.tableSquadCounts.length > 0) {
+        const featureLookup = new Map();
+        if (report.tableSquadFeatureCounts) {
+          for (const row of report.tableSquadFeatureCounts) {
+            const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+            if (!featureLookup.has(key)) featureLookup.set(key, []);
+            featureLookup.get(key).push(row);
+          }
+        }
+
+        const tableGroups = new Map();
+        for (const row of report.tableSquadCounts) {
+          const key = row.table.toUpperCase();
+          if (!tableGroups.has(key)) tableGroups.set(key, []);
+          tableGroups.get(key).push(row);
+        }
+
+        for (const [tableKey, rows] of tableGroups) {
+          lines.push(`*${rows[0].table.toUpperCase()}*`);
+          const totals = { insert: 0, merge: 0, update: 0, total: 0 };
+          for (const row of rows) {
+            totals.insert += row.insert;
+            totals.merge += row.merge;
+            totals.update += row.update;
+            totals.total += row.total;
+            lines.push(`${row.squad} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+
+            const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+            const features = featureLookup.get(featureKey) || [];
+            for (const f of features) {
+              const featureName = f.feature || "Feature not Mentioned";
+              lines.push(`  ${featureName} — ${f.total} statement${f.total !== 1 ? "s" : ""}`);
+            }
+          }
+          lines.push(`_Total: INS: ${totals.insert} | MRG: ${totals.merge} | UPD: ${totals.update} | Tot: ${totals.total}_`);
+          lines.push("");
+        }
+      } else {
+        lines.push("No table+squad data found");
+      }
+
+    } else if (subtab === "squad-detail") {
+      lines.push("📊 *Merge SQL Report — Squad Detail*");
+      lines.push("");
+
+      if (report.squadTableCounts && report.squadTableCounts.length > 0) {
+        const squadGroups = new Map();
+        for (const row of report.squadTableCounts) {
+          const key = row.squad.toUpperCase();
+          if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, tables: [] });
+          squadGroups.get(key).tables.push(row);
+        }
+
+        const squadTotals = new Map();
+        if (report.squadCounts) {
+          for (const s of report.squadCounts) {
+            squadTotals.set(s.squad.toUpperCase(), s);
+          }
+        }
+
+        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+        for (const key of sortedSquadKeys) {
+          const group = squadGroups.get(key);
+          const totals = squadTotals.get(key) || { total: 0 };
+          const tableCount = group.tables.length;
+
+          lines.push(`*${group.displayName}* — ${tableCount} table${tableCount !== 1 ? "s" : ""}, ${totals.total} statement${totals.total !== 1 ? "s" : ""}`);
+          for (const row of group.tables) {
+            lines.push(`${row.table.toUpperCase()} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          }
+          lines.push("");
+        }
+      } else {
+        lines.push("No squad data found");
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  async handleCopyReportText() {
+    if (!this.result?.report) {
+      this.showError("No report data to copy");
+      return;
+    }
+    const text = this.formatReportAsText();
+    await this.copyToClipboard(text);
+  }
+
+  getActiveReportElement() {
+    const subtab = this.currentSubtab === "table-detail" || this.currentSubtab === "squad-detail"
+      ? this.currentSubtab
+      : "summary";
+    if (subtab === "summary") {
+      return document.getElementById("merge-sql-report-summary");
+    } else if (subtab === "table-detail") {
+      return document.getElementById("merge-sql-report-table-detail");
+    } else if (subtab === "squad-detail") {
+      return document.getElementById("merge-sql-report-squad-detail");
+    }
+    return document.getElementById("merge-sql-report-summary");
+  }
+
+  async captureReportImage() {
+    const el = this.getActiveReportElement();
+    if (!el) {
+      this.showError("No report content to capture");
+      return null;
+    }
+
+    const reportContent = el.querySelector(".report-content") || el;
+
+    const previouslyCollapsed = reportContent.querySelectorAll(".row-feature-details");
+    previouslyCollapsed.forEach((row) => row.classList.add("temp-visible", "visible"));
+    const expandableRows = reportContent.querySelectorAll(".row-expandable");
+    expandableRows.forEach((row) => row.classList.add("temp-expanded", "expanded"));
+
+    const originalOverflow = reportContent.style.overflow;
+    const originalHeight = reportContent.style.height;
+    const originalMaxHeight = reportContent.style.maxHeight;
+    reportContent.style.overflow = "visible";
+    reportContent.style.height = "auto";
+    reportContent.style.maxHeight = "none";
+
+    try {
+      const canvas = await html2canvas(reportContent, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: reportContent.scrollWidth,
+      });
+      return canvas;
+    } finally {
+      previouslyCollapsed.forEach((row) => {
+        row.classList.remove("temp-visible", "visible");
+      });
+      expandableRows.forEach((row) => {
+        row.classList.remove("temp-expanded", "expanded");
+      });
+      reportContent.style.overflow = originalOverflow;
+      reportContent.style.height = originalHeight;
+      reportContent.style.maxHeight = originalMaxHeight;
+    }
+  }
+
+  async handleCopyReportImage() {
+    if (!this.result?.report) {
+      this.showError("No report data to capture");
+      return;
+    }
+
+    try {
+      const canvas = await this.captureReportImage();
+      if (!canvas) return;
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          this.showError("Failed to generate image");
+          return;
+        }
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob }),
+          ]);
+          this.showSuccess("Report image copied to clipboard!");
+        } catch (clipboardError) {
+          console.error("Clipboard image write failed:", clipboardError);
+          this.showError("Failed to copy image to clipboard. Try Download instead.");
+        }
+      }, "image/png");
+    } catch (error) {
+      console.error("Image capture failed:", error);
+      this.showError("Failed to capture report image");
+    }
+  }
+
+  async handleDownloadReportImage() {
+    if (!this.result?.report) {
+      this.showError("No report data to download");
+      return;
+    }
+
+    try {
+      const canvas = await this.captureReportImage();
+      if (!canvas) return;
+
+      const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
+      const subtabLabel = this.currentSubtab === "table-detail" ? "TableDetail"
+        : this.currentSubtab === "squad-detail" ? "SquadDetail" : "Summary";
+      const fileName = `${folderName}-Report-${subtabLabel}.png`;
+
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = canvas.toDataURL("image/png");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      this.showSuccess(`Downloaded ${fileName}`);
+    } catch (error) {
+      console.error("Image download failed:", error);
+      this.showError("Failed to download report image");
     }
   }
 }

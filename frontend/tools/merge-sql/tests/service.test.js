@@ -312,6 +312,118 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(result.dmlStatements).toHaveLength(1);
       expect(result.selectStatements).toHaveLength(1);
     });
+
+    it("does not terminate statement on -- comment line ending with semicolon", () => {
+      const content = `MERGE INTO SCHEMA.TABLE_NAME t
+USING (SELECT 1 id FROM DUAL) s -- source alias;
+ON (t.id = s.id)
+WHEN MATCHED THEN UPDATE SET t.col = 'val'
+WHEN NOT MATCHED THEN INSERT (id, col) VALUES (s.id, 'val');
+
+SELECT * FROM SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("WHEN NOT MATCHED THEN INSERT");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("does not parse DML keywords inside -- line comments as statement starts", () => {
+      const content = `-- INSERT INTO fake.table (col) VALUES ('should be ignored');
+INSERT INTO SCHEMA.REAL_TABLE (col) VALUES ('real');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("REAL_TABLE");
+    });
+
+    it("ignores SQL content inside /* block comments */ between statements", () => {
+      const content = `/*
+  UPDATE SCHEMA.TABLE SET col = 1 WHERE id = 1;
+  INSERT INTO SCHEMA.TABLE (col) VALUES ('ignored');
+*/
+INSERT INTO SCHEMA.REAL_TABLE (col) VALUES ('real');`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("REAL_TABLE");
+    });
+
+    it("ignores /* block comment */ inline within a statement without false termination", () => {
+      const content = `MERGE INTO SCHEMA.TABLE_NAME t
+/* join on primary key */
+USING (SELECT 1 id FROM DUAL) s
+ON (t.id = s.id)
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);
+
+SELECT * FROM SCHEMA.TABLE_NAME WHERE id = 1;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("WHEN NOT MATCHED THEN INSERT");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+
+    it("handles /* block comment closing on same line as statement start", () => {
+      const content = `/* preamble */ INSERT INTO SCHEMA.TABLE (col) VALUES ('val');
+
+SELECT * FROM SCHEMA.TABLE;`;
+
+      const result = MergeSqlService.parseFile(content, "test.sql");
+
+      expect(result.dmlStatements).toHaveLength(1);
+      expect(result.dmlStatements[0]).toContain("INSERT INTO");
+      expect(result.selectStatements).toHaveLength(1);
+    });
+  });
+
+  describe("processLineForParsing", () => {
+    it("strips -- line comment and returns effective SQL", () => {
+      const { effectiveLine, endedInQuote, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("SELECT 1 -- comment;", false, false);
+      expect(effectiveLine.trim()).toBe("SELECT 1");
+      expect(endedInQuote).toBe(false);
+      expect(endedInBlockComment).toBe(false);
+    });
+
+    it("does not strip -- inside a single-quoted string", () => {
+      const { effectiveLine, endedInQuote } =
+        MergeSqlService.processLineForParsing("SET col = 'http://example.com' -- note", false, false);
+      expect(effectiveLine).toContain("http://example.com");
+      expect(endedInQuote).toBe(false);
+    });
+
+    it("strips block comment content and reports endedInBlockComment", () => {
+      const { effectiveLine, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("/* start of block", false, false);
+      expect(effectiveLine.trim()).toBe("");
+      expect(endedInBlockComment).toBe(true);
+    });
+
+    it("resumes after block comment ends on same line", () => {
+      const { effectiveLine, endedInBlockComment } =
+        MergeSqlService.processLineForParsing("/* comment */ INSERT INTO T", false, false);
+      expect(effectiveLine.trim()).toBe("INSERT INTO T");
+      expect(endedInBlockComment).toBe(false);
+    });
+
+    it("continues block comment across lines", () => {
+      const { effectiveLine, endedInBlockComment: stillInBlock } =
+        MergeSqlService.processLineForParsing("  middle of comment  ", false, true);
+      expect(effectiveLine.trim()).toBe("");
+      expect(stillInBlock).toBe(true);
+    });
+
+    it("does not toggle quote state for quotes inside -- comments", () => {
+      // The quote in the comment should not affect state
+      const { endedInQuote } =
+        MergeSqlService.processLineForParsing("SET col = 'val' -- it's a note", false, false);
+      expect(endedInQuote).toBe(false);
+    });
   });
 
   describe("updateQuoteState", () => {
@@ -378,9 +490,18 @@ SELECT * FROM SCHEMA.CONFIG;`;
       expect(MergeSqlService.isValidSelectStatement("SELECT COUNT(*) FROM TABLE")).toBe(true);
     });
 
-    it("returns false for SELECT with +1", () => {
+    it("returns false for SELECT with )+1 sequence generator pattern", () => {
       expect(MergeSqlService.isValidSelectStatement("SELECT NVL(MAX(ID)+1, 1) FROM TABLE")).toBe(false);
       expect(MergeSqlService.isValidSelectStatement("SELECT MAX(SEQ)+1 FROM TABLE")).toBe(false);
+    });
+
+    it("returns true for SELECT with +1 in WHERE clause (not a sequence generator)", () => {
+      expect(MergeSqlService.isValidSelectStatement("SELECT * FROM TABLE WHERE COL = VAL+1")).toBe(true);
+      expect(MergeSqlService.isValidSelectStatement("SELECT * FROM TABLE WHERE ID > OFFSET+1")).toBe(true);
+    });
+
+    it("returns true for SELECT with +10 or other increments (not )+1 pattern)", () => {
+      expect(MergeSqlService.isValidSelectStatement("SELECT NVL(MAX(ID)+10, 1) FROM TABLE")).toBe(true);
     });
 
     it("returns false for subquery patterns", () => {
@@ -571,33 +692,79 @@ SELECT * FROM SCHEMA.CONFIG;`;
 
   describe("sortFiles", () => {
     const files = [
-      { id: "1", file: {}, name: "c_file.sql" },
-      { id: "2", file: {}, name: "a_file.sql" },
-      { id: "3", file: {}, name: "b_file.sql" },
+      { id: "1", file: {}, name: "SCHEMA.BBB_table (squad1)[feat1].sql" },
+      { id: "2", file: {}, name: "SCHEMA.AAA_table (squad2)[feat2].sql" },
+      { id: "3", file: {}, name: "SCHEMA.AAA_table (squad1)[feat3].sql" },
+      { id: "4", file: {}, name: "SCHEMA.CCC_table (squad3)[feat4].sql" },
     ];
 
-    it("sorts ascending", () => {
+    it("sorts ascending by table name, then by filename", () => {
       const result = MergeSqlService.sortFiles(files, "asc");
+
+      expect(result[0].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[2].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+      expect(result[3].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+    });
+
+    it("sorts descending by table name, then by filename within groups", () => {
+      const result = MergeSqlService.sortFiles(files, "desc");
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[3].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+    });
+
+    it("sorts by manual tableOrder when order is manual", () => {
+      const tableOrder = ["SCHEMA.CCC_table", "SCHEMA.AAA_table", "SCHEMA.BBB_table"];
+      const result = MergeSqlService.sortFiles(files, "manual", tableOrder);
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[3].name).toBe("SCHEMA.BBB_table (squad1)[feat1].sql");
+    });
+
+    it("appends tables not in tableOrder at the end in manual mode", () => {
+      const filesWithExtra = [
+        ...files,
+        { id: "5", file: {}, name: "SCHEMA.DDD_table (squad1)[feat5].sql" },
+      ];
+      const tableOrder = ["SCHEMA.CCC_table", "SCHEMA.AAA_table"];
+      const result = MergeSqlService.sortFiles(filesWithExtra, "manual", tableOrder);
+
+      expect(result[0].name).toBe("SCHEMA.CCC_table (squad3)[feat4].sql");
+      expect(result[1].name).toBe("SCHEMA.AAA_table (squad1)[feat3].sql");
+      expect(result[2].name).toBe("SCHEMA.AAA_table (squad2)[feat2].sql");
+      expect(result[3].name).toContain("BBB_table");
+      expect(result[4].name).toContain("DDD_table");
+    });
+
+    it("sorts unparsed filenames by their raw name", () => {
+      const plainFiles = [
+        { id: "1", file: {}, name: "c_file.sql" },
+        { id: "2", file: {}, name: "a_file.sql" },
+        { id: "3", file: {}, name: "b_file.sql" },
+      ];
+      const result = MergeSqlService.sortFiles(plainFiles, "asc");
 
       expect(result[0].name).toBe("a_file.sql");
       expect(result[1].name).toBe("b_file.sql");
       expect(result[2].name).toBe("c_file.sql");
     });
 
-    it("sorts descending", () => {
-      const result = MergeSqlService.sortFiles(files, "desc");
+    it("separates same table name in different schemas", () => {
+      const crossSchemaFiles = [
+        { id: "1", file: {}, name: "SCHEMA_A.MY_TABLE (squad1)[feat1].sql" },
+        { id: "2", file: {}, name: "SCHEMA_B.MY_TABLE (squad2)[feat2].sql" },
+        { id: "3", file: {}, name: "SCHEMA_A.OTHER (squad3)[feat3].sql" },
+      ];
+      const result = MergeSqlService.sortFiles(crossSchemaFiles, "asc");
 
-      expect(result[0].name).toBe("c_file.sql");
-      expect(result[1].name).toBe("b_file.sql");
-      expect(result[2].name).toBe("a_file.sql");
-    });
-
-    it("returns original order for manual", () => {
-      const result = MergeSqlService.sortFiles(files, "manual");
-
-      expect(result[0].name).toBe("c_file.sql");
-      expect(result[1].name).toBe("a_file.sql");
-      expect(result[2].name).toBe("b_file.sql");
+      expect(result[0].name).toBe("SCHEMA_A.MY_TABLE (squad1)[feat1].sql");
+      expect(result[1].name).toBe("SCHEMA_A.OTHER (squad3)[feat3].sql");
+      expect(result[2].name).toBe("SCHEMA_B.MY_TABLE (squad2)[feat2].sql");
     });
 
     it("does not mutate original array", () => {
@@ -605,6 +772,73 @@ SELECT * FROM SCHEMA.CONFIG;`;
       MergeSqlService.sortFiles(files, "asc");
 
       expect(files[0].name).toBe(original[0].name);
+    });
+  });
+
+  describe("extractTableNameForSort", () => {
+    it("extracts SCHEMA.TABLE from standard filename", () => {
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA.MY_TABLE (squad1)[feat1].sql")).toBe("SCHEMA.MY_TABLE");
+    });
+
+    it("falls back to filename without extension for non-standard filenames", () => {
+      expect(MergeSqlService.extractTableNameForSort("random_file.sql")).toBe("random_file");
+    });
+
+    it("handles filename without extension", () => {
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA.TABLE (squad)[feat]")).toBe("SCHEMA.TABLE");
+    });
+
+    it("distinguishes same table name across different schemas", () => {
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA_A.TABLE (squad)[feat].sql")).toBe("SCHEMA_A.TABLE");
+      expect(MergeSqlService.extractTableNameForSort("SCHEMA_B.TABLE (squad)[feat].sql")).toBe("SCHEMA_B.TABLE");
+    });
+  });
+
+  describe("groupFilesByTable", () => {
+    it("groups files by SCHEMA.TABLE", () => {
+      const files = [
+        { id: "1", file: {}, name: "SCHEMA.AAA (squad1)[feat1].sql" },
+        { id: "2", file: {}, name: "SCHEMA.BBB (squad2)[feat2].sql" },
+        { id: "3", file: {}, name: "SCHEMA.AAA (squad3)[feat3].sql" },
+      ];
+      const groups = MergeSqlService.groupFilesByTable(files);
+
+      expect(groups.has("SCHEMA.AAA")).toBe(true);
+      expect(groups.has("SCHEMA.BBB")).toBe(true);
+      expect(groups.get("SCHEMA.AAA")).toHaveLength(2);
+      expect(groups.get("SCHEMA.BBB")).toHaveLength(1);
+    });
+
+    it("separates same table name in different schemas", () => {
+      const files = [
+        { id: "1", file: {}, name: "SCHEMA_A.TABLE (squad1)[feat1].sql" },
+        { id: "2", file: {}, name: "SCHEMA_B.TABLE (squad2)[feat2].sql" },
+      ];
+      const groups = MergeSqlService.groupFilesByTable(files);
+
+      expect(groups.has("SCHEMA_A.TABLE")).toBe(true);
+      expect(groups.has("SCHEMA_B.TABLE")).toBe(true);
+      expect(groups.get("SCHEMA_A.TABLE")).toHaveLength(1);
+      expect(groups.get("SCHEMA_B.TABLE")).toHaveLength(1);
+    });
+
+    it("sorts files within each group alphabetically", () => {
+      const files = [
+        { id: "1", file: {}, name: "SCHEMA.AAA (squad3)[feat3].sql" },
+        { id: "2", file: {}, name: "SCHEMA.AAA (squad1)[feat1].sql" },
+        { id: "3", file: {}, name: "SCHEMA.AAA (squad2)[feat2].sql" },
+      ];
+      const groups = MergeSqlService.groupFilesByTable(files);
+      const aaaFiles = groups.get("SCHEMA.AAA");
+
+      expect(aaaFiles[0].name).toBe("SCHEMA.AAA (squad1)[feat1].sql");
+      expect(aaaFiles[1].name).toBe("SCHEMA.AAA (squad2)[feat2].sql");
+      expect(aaaFiles[2].name).toBe("SCHEMA.AAA (squad3)[feat3].sql");
+    });
+
+    it("returns empty map for empty files", () => {
+      const groups = MergeSqlService.groupFilesByTable([]);
+      expect(groups.size).toBe(0);
     });
   });
 
@@ -1735,12 +1969,47 @@ DELETE FROM T2 WHERE id = 2;`;
       expect(result).toHaveLength(0);
     });
 
-    it("does not flag INSERT or MERGE statements", () => {
+    it("does not flag MERGE without delete action", () => {
       const parsedFiles = [
         {
           dmlStatements: [
             "INSERT INTO T1 (c) VALUES (1);",
             "MERGE INTO T1 t USING DUAL ON (1=0) WHEN NOT MATCHED THEN INSERT (c) VALUES ('a');",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("flags MERGE with WHEN MATCHED THEN DELETE as MERGE_DELETE", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "MERGE INTO SCHEMA.TABLE_A t USING (SELECT 1 id FROM DUAL) s ON (t.id = s.id) WHEN MATCHED THEN DELETE;",
+          ],
+          selectStatements: [],
+          fileName: "file1.sql",
+        },
+      ];
+
+      const result = MergeSqlService.detectDangerousStatements(parsedFiles);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe("MERGE_DELETE");
+      expect(result[0].fileName).toBe("file1.sql");
+      expect(result[0].statement).toContain("WHEN MATCHED THEN DELETE");
+    });
+
+    it("does not flag MERGE with WHEN NOT MATCHED THEN INSERT (no delete action)", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "MERGE INTO SCHEMA.TABLE_A t USING (SELECT 1 id FROM DUAL) s ON (t.id = s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);",
           ],
           selectStatements: [],
           fileName: "file1.sql",
@@ -2034,6 +2303,81 @@ SELECT 'minimum.balance.tier.three' parameter_key, '300000' parameter_value FROM
       expect(result.validationSql.trim().endsWith(";")).toBe(true);
     });
 
+    it("deduplicates predicate rows where one uses a quoted column name and another does not", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `UPDATE T1 SET status = 'A' WHERE "id" = 1;`,
+            `UPDATE T1 SET status = 'B' WHERE id = 2;`,
+            `UPDATE T1 SET status = 'C' WHERE "id" = 2;`,
+          ],
+          selectStatements: [],
+          fileName: "quoted.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // Three statements, but id=2 appears twice (quoted and unquoted) — should be deduped to WHERE id IN (1, 2)
+      expect((result.validationSql.match(/'T1' AS table_name/g) || [])).toHaveLength(1);
+      expect(result.validationSql).toMatch(/WHERE\s+"?id"?\s+IN\s+\(1,\s*2\)/);
+    });
+
+    it("skips UPDATE with WHERE clause producing too many variants", () => {
+      const inList = Array.from({ length: 30 }, (_, i) => i + 1).join(", ");
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            `UPDATE T1 SET v = 1 WHERE col1 IN (${inList}) AND col2 IN (${inList});`,
+          ],
+          selectStatements: [],
+          fileName: "large.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("-- Skipped UPDATE on T1");
+      expect(result.validationSql).toContain("too many variants");
+    });
+
+    it("builds validation SQL for multi-row INSERT VALUES with correct expectation count", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.CONFIG (id, name) VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');",
+          ],
+          selectStatements: [],
+          fileName: "multi-row.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      // All 3 rows should be counted in the expectation
+      expect(result.validationSql).toContain("3 AS expectation");
+      expect(result.validationSql).toContain("WHEN COUNT(*) = 3 THEN 'MATCH'");
+      // Two-column insert produces composite OR predicates, not IN
+      expect(result.validationSql).toContain("(id = 1 AND name = 'alpha') OR (id = 2 AND name = 'beta') OR (id = 3 AND name = 'gamma')");
+    });
+
+    it("builds validation SQL for two-tuple INSERT VALUES", () => {
+      const parsedFiles = [
+        {
+          dmlStatements: [
+            "INSERT INTO SCHEMA.CONFIG (key) VALUES ('foo'), ('bar');",
+          ],
+          selectStatements: [],
+          fileName: "two-row.sql",
+        },
+      ];
+
+      const result = MergeSqlService.mergeFiles(parsedFiles);
+
+      expect(result.validationSql).toContain("2 AS expectation");
+      expect(result.validationSql).toContain("key IN ('foo', 'bar')");
+    });
+
     it("builds validation SQL directly from merged SQL text", () => {
       const mergedSql = `SET DEFINE OFF;
 
@@ -2059,6 +2403,154 @@ VALUES (src.limit_service_id, src.service_code);
       expect(validationSql).toContain("1 AS expectation");
       expect(validationSql).toContain("WHERE limit_service_id = 1");
       expect(validationSql).toContain("END AS result");
+    });
+  });
+
+  describe("buildReportFromMergedSql", () => {
+    it("returns empty report for null input", () => {
+      const report = MergeSqlService.buildReportFromMergedSql(null);
+      expect(report.statementCounts).toEqual([]);
+      expect(report.squadCounts).toEqual([]);
+      expect(report.featureCounts).toEqual([]);
+      expect(report.dangerousStatements).toEqual([]);
+      expect(report.nonSystemAuthors).toEqual([]);
+    });
+
+    it("returns empty report for empty string", () => {
+      const report = MergeSqlService.buildReportFromMergedSql("  ");
+      expect(report.statementCounts).toEqual([]);
+    });
+
+    it("parses merged SQL and returns statement counts", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO USER_LIMIT.LIMIT_SERVICE tgt
+USING (
+  SELECT 1 AS limit_service_id,
+    'deposito-loan-early-settlement' AS service_code
+  FROM DUAL
+) src
+ON (tgt.limit_service_id = src.limit_service_id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.service_code = src.service_code
+WHEN NOT MATCHED THEN INSERT (limit_service_id, service_code)
+VALUES (src.limit_service_id, src.service_code);
+
+--====================================================================================================
+-- USER_LIMIT.LIMIT_SERVICE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.statementCounts.length).toBeGreaterThan(0);
+      const limitRow = report.statementCounts.find((r) => r.table === "USER_LIMIT.LIMIT_SERVICE");
+      expect(limitRow).toBeDefined();
+      expect(limitRow.merge).toBe(1);
+    });
+
+    it("detects dangerous statements in merged SQL", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+DELETE FROM SOME_TABLE WHERE id = 1;
+
+--====================================================================================================
+-- SOME_TABLE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.dangerousStatements.length).toBeGreaterThan(0);
+      expect(report.dangerousStatements[0].type).toBe("DELETE");
+    });
+
+    it("detects non-SYSTEM authors in merged SQL", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+MERGE INTO MY_TABLE tgt
+USING (
+  SELECT 1 AS id FROM DUAL
+) src
+ON (tgt.id = src.id)
+WHEN MATCHED THEN UPDATE SET
+  tgt.UPDATED_BY = 'John'
+WHEN NOT MATCHED THEN INSERT (id, CREATED_BY)
+VALUES (1, 'John');
+
+--====================================================================================================
+-- MY_TABLE
+--====================================================================================================`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      expect(report.nonSystemAuthors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("uppercaseUnquotedTableRef", () => {
+    it("uppercases unquoted schema.table", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("my_schema.my_table")).toBe("MY_SCHEMA.MY_TABLE");
+    });
+
+    it("preserves double-quoted identifiers", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef('"MySchema"."MyTable"')).toBe('"MySchema"."MyTable"');
+    });
+
+    it("uppercases unquoted part when mixed", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef('"MySchema".my_table')).toBe('"MySchema".MY_TABLE');
+    });
+
+    it("handles a bare table name with no schema", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("my_table")).toBe("MY_TABLE");
+    });
+
+    it("handles already-uppercase input unchanged", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("SCHEMA.TABLE")).toBe("SCHEMA.TABLE");
+    });
+  });
+
+  describe("uppercaseTableNameInStatement", () => {
+    it("uppercases MERGE INTO table ref", () => {
+      const stmt = "MERGE INTO my_schema.my_table t\nUSING DUAL ON (1=0)\nWHEN NOT MATCHED THEN INSERT (id) VALUES (1);";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("MERGE INTO MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases INSERT INTO table ref", () => {
+      const stmt = "INSERT INTO my_schema.my_table (id) VALUES (1);";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("INSERT INTO MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases UPDATE table ref", () => {
+      const stmt = "UPDATE my_schema.my_table SET col = 1 WHERE id = 2;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("UPDATE MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases DELETE FROM table ref", () => {
+      const stmt = "DELETE FROM my_schema.my_table WHERE id = 1;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("DELETE FROM MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases SELECT FROM table ref", () => {
+      const stmt = "SELECT * FROM my_schema.my_table WHERE id = 1;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("FROM MY_SCHEMA.MY_TABLE");
+    });
+
+    it("does NOT uppercase UPDATE SET inside a MERGE block", () => {
+      const stmt = "MERGE INTO my_schema.my_table t\nUSING DUAL ON (1=0)\nWHEN MATCHED THEN UPDATE SET t.col = 1;";
+      const result = MergeSqlService.uppercaseTableNameInStatement(stmt);
+      expect(result).toContain("MERGE INTO MY_SCHEMA.MY_TABLE");
+      // Inner UPDATE SET should be preserved (no table ref to uppercase there)
+      expect(result).toContain("WHEN MATCHED THEN UPDATE SET");
+    });
+
+    it("preserves double-quoted identifiers in DML", () => {
+      const stmt = 'INSERT INTO "MySchema"."MyTable" (id) VALUES (1);';
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain('"MySchema"."MyTable"');
+    });
+
+    it("preserves rest of statement content after the table ref", () => {
+      const stmt = "INSERT INTO my_schema.my_table (col1, col2) VALUES ('hello', 'world');";
+      const result = MergeSqlService.uppercaseTableNameInStatement(stmt);
+      expect(result).toBe("INSERT INTO MY_SCHEMA.MY_TABLE (col1, col2) VALUES ('hello', 'world');");
     });
   });
 });

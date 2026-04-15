@@ -49,7 +49,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <div class="button-group quick-query-right-controls">
                     <button id="toggleWordWrap" class="btn btn-primary btn-sm">Word Wrap: Off</button>
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
-                    <button id="downloadSQL" class="btn btn-primary btn-sm">Download SQL</button>
+                    <div class="split-btn">
+                        <button id="downloadSQL" class="btn btn-primary btn-sm split-btn-main">Download SQL</button>
+                        <button id="downloadAs" class="btn btn-primary btn-sm split-btn-chevron" aria-label="Download As" title="Download As">&#9660;</button>
+                    </div>
                     <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
                     <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Run Query</button>
                 </div>
@@ -108,6 +111,36 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
         <div class="schema-modal-content">
             <div id="savedSchemasList"></div>
+        </div>
+    </div>
+</div>
+
+<div id="downloadAsOverlay" class="download-as-overlay hidden">
+    <div class="download-as-modal">
+        <div class="download-as-modal-header">
+            <h3>Download As</h3>
+            <button id="closeDownloadAsOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="download-as-modal-content">
+            <div class="download-as-field">
+                <label for="downloadAsSquadName">Squad Name</label>
+                <input type="text" id="downloadAsSquadName" placeholder="e.g. Platform" autocomplete="off">
+            </div>
+            <div class="download-as-field">
+                <label for="downloadAsFeatureName">Feature Name</label>
+                <input type="text" id="downloadAsFeatureName" placeholder="e.g. User Migration" autocomplete="off">
+            </div>
+            <div class="download-as-field">
+                <label for="downloadAsFilename">File Name</label>
+                <div class="download-as-filename-row">
+                    <input type="text" id="downloadAsFilename" placeholder="filename.sql" autocomplete="off">
+                    <button id="downloadAsSetDefault" class="btn btn-outline btn-sm">Set to Default</button>
+                </div>
+            </div>
+        </div>
+        <div class="download-as-modal-footer">
+            <button id="downloadAsConfirm" class="btn btn-primary">Download</button>
+            <button id="downloadAsCancel" class="btn">Cancel</button>
         </div>
     </div>
 </div>

@@ -279,6 +279,12 @@ export class QuickQueryUI {
       htmlMinifyConfirmButton: document.getElementById("htmlMinifyConfirm"),
       htmlMinifySkipButton: document.getElementById("htmlMinifySkip"),
       closeHtmlMinifyOverlayButton: document.getElementById("closeHtmlMinifyOverlay"),
+
+      // Download As overlay elements
+      downloadAsOverlay: document.getElementById("downloadAsOverlay"),
+      downloadAsSquadName: document.getElementById("downloadAsSquadName"),
+      downloadAsFeatureName: document.getElementById("downloadAsFeatureName"),
+      downloadAsFilename: document.getElementById("downloadAsFilename"),
     };
   }
 
@@ -435,6 +441,18 @@ export class QuickQueryUI {
       cancelGenerationButton: {
         click: () => this.handleCancelGeneration(),
       },
+      // Download As overlay buttons
+      downloadAs: {
+        click: () => this._openDownloadAsOverlay(),
+      },
+      downloadAsOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.downloadAsOverlay) {
+            this._closeDownloadAsOverlay();
+          }
+        },
+      },
+
       // HTML Minify overlay buttons
       closeHtmlMinifyOverlayButton: {
         click: () => this._closeHtmlMinifyOverlay(false),
@@ -1165,6 +1183,140 @@ export class QuickQueryUI {
         duration: 2500,
       });
     }
+  }
+
+  _getDownloadAsDefaultFilename() {
+    const tableNameRaw = this.elements.tableNameInput.value.trim();
+    const parts = tableNameRaw.split(".");
+    const schemaName = (parts[0] || "").toUpperCase();
+    const tableName = (parts[1] || parts[0] || "").toUpperCase();
+    const squadName = (this.elements.downloadAsSquadName.value || "").trim();
+    const featureName = (this.elements.downloadAsFeatureName.value || "").trim();
+
+    let base = schemaName && tableName && schemaName !== tableName
+      ? `${schemaName}.${tableName}`
+      : schemaName || tableName || "query";
+
+    if (squadName) base += ` (${squadName})`;
+    if (featureName) base += ` [${featureName}]`;
+    return `${base}.sql`;
+  }
+
+  _openDownloadAsOverlay() {
+    const sql = this.editor.getValue();
+    if (!sql) {
+      this.showError("No SQL to download. Please generate a query first.");
+      return;
+    }
+
+    // Restore saved squad/feature from localStorage
+    const DOWNLOAD_AS_KEY = "tool:quick-query:download-as";
+    try {
+      const saved = JSON.parse(localStorage.getItem(DOWNLOAD_AS_KEY) || "{}");
+      this.elements.downloadAsSquadName.value = saved.squadName || "";
+      this.elements.downloadAsFeatureName.value = saved.featureName || "";
+    } catch (_) {
+      this.elements.downloadAsSquadName.value = "";
+      this.elements.downloadAsFeatureName.value = "";
+    }
+
+    // Set initial filename
+    this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+
+    // Track whether the user has manually edited the filename
+    this._downloadAsFilenameEdited = false;
+
+    const overlay = this.elements.downloadAsOverlay;
+    overlay.classList.remove("hidden");
+
+    // Squad/feature name inputs update filename if not manually edited
+    const syncFilename = () => {
+      if (!this._downloadAsFilenameEdited) {
+        this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+      }
+    };
+
+    const onSquadInput = () => syncFilename();
+    const onFeatureInput = () => syncFilename();
+    const onFilenameInput = () => { this._downloadAsFilenameEdited = true; };
+
+    const closeBtn = document.getElementById("closeDownloadAsOverlay");
+    const cancelBtn = document.getElementById("downloadAsCancel");
+    const confirmBtn = document.getElementById("downloadAsConfirm");
+    const setDefaultBtn = document.getElementById("downloadAsSetDefault");
+
+    const cleanup = () => {
+      this.elements.downloadAsSquadName.removeEventListener("input", onSquadInput);
+      this.elements.downloadAsFeatureName.removeEventListener("input", onFeatureInput);
+      this.elements.downloadAsFilename.removeEventListener("input", onFilenameInput);
+      closeBtn.removeEventListener("click", onClose);
+      cancelBtn.removeEventListener("click", onClose);
+      confirmBtn.removeEventListener("click", onConfirm);
+      setDefaultBtn.removeEventListener("click", onSetDefault);
+    };
+
+    const onClose = () => {
+      cleanup();
+      this._closeDownloadAsOverlay();
+    };
+
+    const onSetDefault = () => {
+      this._downloadAsFilenameEdited = false;
+      this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+    };
+
+    const onConfirm = () => {
+      const squadName = this.elements.downloadAsSquadName.value.trim();
+      const featureName = this.elements.downloadAsFeatureName.value.trim();
+      let filename = this.elements.downloadAsFilename.value.trim();
+      if (!filename) filename = this._getDownloadAsDefaultFilename();
+
+      // Persist squad/feature to localStorage
+      const DOWNLOAD_AS_KEY = "tool:quick-query:download-as";
+      try {
+        localStorage.setItem(DOWNLOAD_AS_KEY, JSON.stringify({ squadName, featureName }));
+      } catch (_) {}
+
+      // Trigger download
+      const sql = this.editor.getValue();
+      const blob = new Blob([sql], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      UsageTracker.trackEvent("quick-query", "download_sql_as", {
+        squad_name: squadName,
+        feature_name: featureName,
+        file_size: blob.size,
+      });
+
+      if (this.eventBus) {
+        this.eventBus.emit("notification:success", {
+          message: `Downloaded as ${filename}`,
+          duration: 2500,
+        });
+      }
+
+      cleanup();
+      this._closeDownloadAsOverlay();
+    };
+
+    this.elements.downloadAsSquadName.addEventListener("input", onSquadInput);
+    this.elements.downloadAsFeatureName.addEventListener("input", onFeatureInput);
+    this.elements.downloadAsFilename.addEventListener("input", onFilenameInput);
+    closeBtn.addEventListener("click", onClose);
+    cancelBtn.addEventListener("click", onClose);
+    confirmBtn.addEventListener("click", onConfirm);
+    setDefaultBtn.addEventListener("click", onSetDefault);
+  }
+
+  _closeDownloadAsOverlay() {
+    this.elements.downloadAsOverlay.classList.add("hidden");
   }
 
   handleExecuteInJenkinsRunner() {

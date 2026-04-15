@@ -40,61 +40,63 @@ export class MergeSqlService {
     let inStatement = false;
     let statementType = null; // 'dml' or 'select'
     let inSingleQuote = false; // Track if we're inside a single-quoted string
+    let inBlockComment = false; // Track if we're inside a /* ... */ block comment
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const trimmedLine = line.trim();
-      const upperLine = trimmedLine.toUpperCase();
+
+      // Strip -- line comments and /* */ block comment content, tracking quote state.
+      // effectiveLine is used for keyword detection and semicolon termination.
+      // The original line is always pushed to currentStatement so comments are preserved.
+      const { effectiveLine, endedInQuote, endedInBlockComment } =
+        this.processLineForParsing(line, inSingleQuote, inBlockComment);
+
+      inSingleQuote = endedInQuote;
+      inBlockComment = endedInBlockComment;
+
+      const trimmedEffective = effectiveLine.trim();
+      const upperEffective = trimmedEffective.toUpperCase();
 
       // Skip SET DEFINE OFF - we'll add this once at the beginning
-      if (upperLine === "SET DEFINE OFF;" || upperLine === "SET DEFINE OFF") {
+      if (upperEffective === "SET DEFINE OFF;" || upperEffective === "SET DEFINE OFF") {
         continue;
       }
 
-      // Skip empty lines if not in a statement
-      if (!trimmedLine && !inStatement) {
+      // Skip lines with no effective SQL content if not in a statement
+      if (!trimmedEffective && !inStatement) {
         continue;
       }
 
-      // Detect statement start
+      // Detect statement start (only when effective content is non-empty and not in a block comment)
       if (!inStatement) {
-        if (upperLine.startsWith("MERGE INTO") || upperLine.startsWith("MERGE ")) {
+        if (upperEffective.startsWith("MERGE INTO") || upperEffective.startsWith("MERGE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("INSERT INTO") || upperLine.startsWith("INSERT ")) {
+        } else if (upperEffective.startsWith("INSERT INTO") || upperEffective.startsWith("INSERT ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("UPDATE ")) {
+        } else if (upperEffective.startsWith("UPDATE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (upperLine.startsWith("DELETE FROM") || upperLine.startsWith("DELETE ")) {
+        } else if (upperEffective.startsWith("DELETE FROM") || upperEffective.startsWith("DELETE ")) {
           inStatement = true;
           statementType = "dml";
           currentStatement = [line];
-          inSingleQuote = false;
-        } else if (this.isValidSelectStatement(upperLine)) {
+        } else if (this.isValidSelectStatement(upperEffective)) {
           inStatement = true;
           statementType = "select";
           currentStatement = [line];
-          inSingleQuote = false;
         }
       } else {
         currentStatement.push(line);
       }
 
-      // Update quote state for this line (track whether we're inside a string literal)
-      if (inStatement) {
-        inSingleQuote = this.updateQuoteState(line, inSingleQuote);
-      }
-
-      // Detect statement end (semicolon at end of line, but only if not inside a string)
-      if (inStatement && trimmedLine.endsWith(";") && !inSingleQuote) {
+      // Detect statement end: effective content (comments stripped) ends with ";"
+      // and we are not inside a string literal
+      if (inStatement && trimmedEffective.endsWith(";") && !inSingleQuote) {
         const statement = currentStatement.join("\n").trim();
 
         if (statementType === "dml") {
@@ -106,7 +108,6 @@ export class MergeSqlService {
         currentStatement = [];
         inStatement = false;
         statementType = null;
-        inSingleQuote = false;
       }
     }
 
@@ -123,6 +124,78 @@ export class MergeSqlService {
     }
 
     return result;
+  }
+
+  /**
+   * Process a SQL line for statement parsing, stripping inline -- comments and
+   * block comment (/* ... *\/) content while respecting single-quoted strings.
+   * Returns the "effective" SQL content used for statement boundary detection and
+   * the parser state at the end of the line.
+   *
+   * The original line should still be pushed to currentStatement so that comments
+   * are preserved in the merged output; only use effectiveLine for detection logic.
+   *
+   * @param {string} line - Raw line to process
+   * @param {boolean} startInQuote - Whether we enter the line inside a quoted string
+   * @param {boolean} startInBlockComment - Whether we enter the line inside a block comment
+   * @returns {{ effectiveLine: string, endedInQuote: boolean, endedInBlockComment: boolean }}
+   */
+  static processLineForParsing(line, startInQuote, startInBlockComment) {
+    let inQuote = startInQuote;
+    let inBlockComment = startInBlockComment;
+    let effectiveContent = "";
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (inBlockComment) {
+        // Look for */ to end the block comment
+        if (ch === "*" && i + 1 < line.length && line[i + 1] === "/") {
+          i++; // skip "/"
+          inBlockComment = false;
+          effectiveContent += " "; // replace comment with a space to avoid merging tokens
+        }
+        // Inside block comment: consume but don't emit
+        continue;
+      }
+
+      if (inQuote) {
+        effectiveContent += ch;
+        if (ch === "'") {
+          // Check for Oracle escaped quote ''
+          if (i + 1 < line.length && line[i + 1] === "'") {
+            effectiveContent += line[i + 1];
+            i++; // skip second quote of the pair
+          } else {
+            inQuote = false;
+          }
+        }
+        continue;
+      }
+
+      // Outside both quote and block comment
+      if (ch === "'") {
+        inQuote = true;
+        effectiveContent += ch;
+        continue;
+      }
+
+      if (ch === "/" && i + 1 < line.length && line[i + 1] === "*") {
+        i++; // skip "*"
+        inBlockComment = true;
+        effectiveContent += " "; // replace comment with a space
+        continue;
+      }
+
+      if (ch === "-" && i + 1 < line.length && line[i + 1] === "-") {
+        // Rest of line is a line comment; stop emitting
+        break;
+      }
+
+      effectiveContent += ch;
+    }
+
+    return { effectiveLine: effectiveContent, endedInQuote: inQuote, endedInBlockComment: inBlockComment };
   }
 
   /**
@@ -159,8 +232,9 @@ export class MergeSqlService {
       return false;
     }
 
-    // Skip SELECT with +1 (typically subqueries like SELECT NVL(MAX(ID)+1, 1))
-    if (upperLine.includes("+1")) {
+    // Skip SELECT with )+1 pattern (sequence generators like SELECT NVL(MAX(ID)+1, 1))
+    // Use /\)\s*\+\s*1(?!\d)/ to avoid false-positives on WHERE col = val+1 or +10 etc.
+    if (/\)\s*\+\s*1(?!\d)/.test(upperLine)) {
       return false;
     }
 
@@ -195,6 +269,14 @@ export class MergeSqlService {
             results.push({
               fileName: file.fileName,
               type: "UPDATE_NO_WHERE",
+              statement: stmt,
+            });
+          }
+        } else if (upperStmt.startsWith("MERGE")) {
+          if (/\bWHEN\s+MATCHED\s+THEN\s+DELETE\b/i.test(stmt)) {
+            results.push({
+              fileName: file.fileName,
+              type: "MERGE_DELETE",
               statement: stmt,
             });
           }
@@ -698,12 +780,12 @@ export class MergeSqlService {
 
     const dotIndex = trimmed.lastIndexOf(".");
     if (dotIndex === -1) {
-      return { alias: null, column: trimmed };
+      return { alias: null, column: trimmed.replace(/^"|"$/g, "") };
     }
 
     return {
       alias: trimmed.slice(0, dotIndex).trim(),
-      column: trimmed.slice(dotIndex + 1).trim(),
+      column: trimmed.slice(dotIndex + 1).trim().replace(/^"|"$/g, ""),
     };
   }
 
@@ -835,7 +917,7 @@ export class MergeSqlService {
 
     for (const row of rows) {
       const key = row
-        .map((condition) => `${condition.column.toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
+        .map((condition) => `${condition.column.replace(/^"|"$/g, "").toUpperCase()}=${condition.valueSql === null ? "NULL" : condition.valueSql}`)
         .sort()
         .join("|");
 
@@ -961,15 +1043,15 @@ export class MergeSqlService {
     if (!equalsMatch) return null;
 
     const leftRef = this.parseSimpleColumnReference(equalsMatch[1]);
-    const rightRef = this.parseSimpleColumnReference(equalsMatch[2]);
-    const leftLiteral = this.parseLiteralValue(equalsMatch[1]);
-    const rightLiteral = this.parseLiteralValue(equalsMatch[2]);
-
-    if (leftRef && rightLiteral) {
-      return { column: leftRef.column, values: [rightLiteral.isNull ? null : rightLiteral.sql] };
+    if (leftRef) {
+      const rightLiteral = this.parseLiteralValue(equalsMatch[2]);
+      if (rightLiteral) return { column: leftRef.column, values: [rightLiteral.isNull ? null : rightLiteral.sql] };
     }
-    if (rightRef && leftLiteral) {
-      return { column: rightRef.column, values: [leftLiteral.isNull ? null : leftLiteral.sql] };
+
+    const rightRef = this.parseSimpleColumnReference(equalsMatch[2]);
+    if (rightRef) {
+      const leftLiteral = this.parseLiteralValue(equalsMatch[1]);
+      if (leftLiteral) return { column: rightRef.column, values: [leftLiteral.isNull ? null : leftLiteral.sql] };
     }
 
     return null;
@@ -1018,6 +1100,10 @@ export class MergeSqlService {
           }
         }
         rowVariants = nextVariants;
+
+        if (rowVariants.length > 500) {
+          return { rows: [], rowCount: 0, reason: "WHERE predicate produces too many variants to validate" };
+        }
       }
 
       rows.push(...rowVariants);
@@ -1192,15 +1278,41 @@ export class MergeSqlService {
     let rowInQuery = 0;
 
     if (/^VALUES\s*\(/i.test(sourceSql)) {
-      const openParenIndex = sourceSql.indexOf("(");
-      const closeParenIndex = this.findMatchingParen(sourceSql, openParenIndex);
-      if (openParenIndex === -1 || closeParenIndex === -1) {
+      // Find the first '(' and iterate over all tuple groups: VALUES (a,b), (c,d), ...
+      const firstOpenIndex = sourceSql.indexOf("(");
+      if (firstOpenIndex === -1) {
         return { reason: "unsupported VALUES clause" };
       }
 
-      const values = this.splitParenAware(sourceSql.slice(openParenIndex + 1, closeParenIndex)).map((value) => value.trim());
-      rowsResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
-      rowInQuery = 1;
+      const predicateRows = [];
+      let tupleCount = 0;
+      let pos = firstOpenIndex;
+
+      while (pos !== -1 && pos < sourceSql.length) {
+        const closeParenIndex = this.findMatchingParen(sourceSql, pos);
+        if (closeParenIndex === -1) {
+          return { reason: "unsupported VALUES clause" };
+        }
+
+        const values = this.splitParenAware(sourceSql.slice(pos + 1, closeParenIndex)).map((value) => value.trim());
+        const rowResult = this.buildPredicateRowsFromColumnsAndValues(columns, values);
+        if (!rowResult || rowResult.reason) {
+          return { reason: rowResult?.reason || "contains non-literal source values" };
+        }
+        predicateRows.push(...rowResult.rows);
+        tupleCount++;
+
+        // Look for the next tuple: skip optional whitespace and comma, then find '('
+        const nextTupleMatch = sourceSql.slice(closeParenIndex + 1).match(/^\s*,\s*\(/);
+        if (!nextTupleMatch) break;
+        pos = closeParenIndex + 1 + nextTupleMatch[0].lastIndexOf("(");
+      }
+
+      rowsResult = {
+        rows: this.dedupePredicateRows(predicateRows),
+        rowCount: tupleCount,
+      };
+      rowInQuery = tupleCount;
     } else if (/^SELECT\b/i.test(sourceSql)) {
       const sourceRows = this.parseInlineDualSelectRows(sourceSql);
       if (!sourceRows || sourceRows.length === 0) {
@@ -1288,9 +1400,10 @@ export class MergeSqlService {
    */
   static renderValidationSelect(entry) {
     const rowInQuery = entry.rowInQuery;
+    const tableName = this.uppercaseUnquotedTableRef(entry.tableName);
     return [
       "SELECT",
-      `  '${entry.tableName}' AS table_name,`,
+      `  '${tableName}' AS table_name,`,
       `  ${rowInQuery} AS expectation,`,
       "  COUNT(*) AS row_in_table,",
       `  CASE`,
@@ -1298,7 +1411,7 @@ export class MergeSqlService {
       `    WHEN COUNT(*) > ${rowInQuery} THEN '+' || TO_CHAR(COUNT(*) - ${rowInQuery})`,
       `    ELSE '-' || TO_CHAR(${rowInQuery} - COUNT(*))`,
       `  END AS result`,
-      `FROM ${entry.tableName}`,
+      `FROM ${tableName}`,
       `WHERE ${entry.whereClause}`,
     ].join("\n");
   }
@@ -1420,6 +1533,37 @@ export class MergeSqlService {
    * @param {string} mergedSql
    * @returns {string}
    */
+  static buildReportFromMergedSql(mergedSql) {
+    if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
+      return {
+        statementCounts: [],
+        squadCounts: [],
+        featureCounts: [],
+        tableSquadCounts: [],
+        tableSquadFeatureCounts: [],
+        squadTableCounts: [],
+        dangerousStatements: [],
+        nonSystemAuthors: [],
+      };
+    }
+
+    const parsed = this.parseFile(mergedSql, "MERGED.sql");
+    const analysis = this.analyzeStatements([parsed]);
+    const dangerousStatements = this.detectDangerousStatements([parsed]);
+    const nonSystemAuthors = this.detectNonSystemAuthors([parsed]);
+
+    return {
+      statementCounts: analysis.tableCounts,
+      squadCounts: analysis.squadCounts,
+      featureCounts: analysis.featureCounts,
+      tableSquadCounts: analysis.tableSquadCounts,
+      tableSquadFeatureCounts: analysis.tableSquadFeatureCounts,
+      squadTableCounts: analysis.squadTableCounts,
+      dangerousStatements,
+      nonSystemAuthors,
+    };
+  }
+
   static buildValidationSqlFromMergedSql(mergedSql) {
     if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
       return "";
@@ -1460,9 +1604,6 @@ export class MergeSqlService {
    * @returns {boolean}
    */
   static isTimestampVerificationClause(whereClause) {
-    const upperClause = whereClause.toUpperCase();
-
-    // Patterns to detect timestamp verification clauses
     const timestampPatterns = [
       /SYSDATE\s*-\s*INTERVAL/i,
       /UPDATED_TIME\s*>=?\s*SYSDATE/i,
@@ -1490,6 +1631,54 @@ export class MergeSqlService {
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
    * @returns {{ mergedSql: string, selectSql: string, validationSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
    */
+  /**
+   * Uppercase the unquoted parts of a schema.table reference.
+   * Double-quoted identifiers (e.g. "MyTable") are preserved exactly.
+   * e.g. "my_schema.my_table" → "MY_SCHEMA.MY_TABLE"
+   *      '"MySchema".my_table' → '"MySchema".MY_TABLE'
+   */
+  static uppercaseUnquotedTableRef(ref) {
+    return String(ref || "")
+      .split(".")
+      .map((part) => (part.startsWith('"') && part.endsWith('"') ? part : part.toUpperCase()))
+      .join(".");
+  }
+
+  /**
+   * Uppercase the schema.table reference in a DML or SELECT statement.
+   * For DML (MERGE INTO / INSERT INTO / UPDATE / DELETE FROM): anchored to the
+   * start of the statement string so the inner "UPDATE SET" inside a MERGE block
+   * is never touched.
+   * For SELECT: replaces the first FROM <table> occurrence.
+   * Quoted identifiers are passed through uppercaseUnquotedTableRef unchanged.
+   */
+  static uppercaseTableNameInStatement(stmt) {
+    const ID = '(?:"[^"]*"|[A-Za-z_$#][A-Za-z0-9_$#]*)';
+    const TABLE_REF = `(${ID}(?:\\.${ID})*)`;
+
+    if (/^\s*SELECT\b/i.test(stmt)) {
+      return stmt.replace(
+        new RegExp(`(\\bFROM\\s+)${TABLE_REF}`, "i"),
+        (_, from, tableRef) => from + this.uppercaseUnquotedTableRef(tableRef)
+      );
+    }
+
+    const dmlPatterns = [
+      new RegExp(`^(\\s*MERGE\\s+INTO\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*INSERT\\s+INTO\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*UPDATE\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*DELETE\\s+FROM\\s+)${TABLE_REF}`, "i"),
+    ];
+
+    for (const pattern of dmlPatterns) {
+      const result = stmt.replace(pattern, (_, keyword, tableRef) =>
+        keyword + this.uppercaseUnquotedTableRef(tableRef)
+      );
+      if (result !== stmt) return result;
+    }
+    return stmt;
+  }
+
   static mergeFiles(parsedFiles) {
     // Duplicate detection (runs before grouping, unchanged logic)
     const dmlStatementFileMap = new Map();
@@ -1526,14 +1715,14 @@ export class MergeSqlService {
 
       if (group.isStandard) {
         dmlLines.push(`--====================================================================================================`);
-        dmlLines.push(`-- ${group.groupKey}`);
+        dmlLines.push(`-- ${this.uppercaseUnquotedTableRef(group.groupKey)}`);
         dmlLines.push(`--====================================================================================================`);
         dmlLines.push("");
         for (const entry of group.entries) {
           if (entry.dmlStatements.length === 0) continue;
           dmlLines.push(`-- ${entry.subHeader}`);
           for (const stmt of entry.dmlStatements) {
-            dmlLines.push(stmt);
+            dmlLines.push(this.uppercaseTableNameInStatement(stmt));
             dmlLines.push("");
           }
         }
@@ -1544,7 +1733,7 @@ export class MergeSqlService {
         dmlLines.push("");
         for (const entry of group.entries) {
           for (const stmt of entry.dmlStatements) {
-            dmlLines.push(stmt);
+            dmlLines.push(this.uppercaseTableNameInStatement(stmt));
             dmlLines.push("");
           }
         }
@@ -1564,7 +1753,7 @@ export class MergeSqlService {
 
       if (group.isStandard) {
         selectLines.push(`--====================================================================================================`);
-        selectLines.push(`-- ${group.groupKey}`);
+        selectLines.push(`-- ${this.uppercaseUnquotedTableRef(group.groupKey)}`);
         selectLines.push(`--====================================================================================================`);
         selectLines.push("");
         let hasRenderedSelectContent = false;
@@ -1592,10 +1781,10 @@ export class MergeSqlService {
         if (hasMultipleSquads) {
           if (whereClauses.length > 0) {
             const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
-            selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
+            selectLines.push(`SELECT * FROM ${this.uppercaseUnquotedTableRef(group.groupKey)} WHERE ${combined};`);
             hasRenderedSelectContent = true;
           } else {
-            selectLines.push(`SELECT * FROM ${group.groupKey};`);
+            selectLines.push(`SELECT * FROM ${this.uppercaseUnquotedTableRef(group.groupKey)};`);
             hasRenderedSelectContent = true;
           }
         }
@@ -1613,7 +1802,7 @@ export class MergeSqlService {
 
           selectLines.push(`-- ${entry.subHeader}`);
           for (const stmt of validStatements) {
-            selectLines.push(stmt);
+            selectLines.push(this.uppercaseTableNameInStatement(stmt));
             selectLines.push("");
             hasRenderedSelectContent = true;
           }
@@ -1636,7 +1825,7 @@ export class MergeSqlService {
             if (whereClause && this.isTimestampVerificationClause(whereClause[1].trim())) {
               continue; // Skip timestamp verification statements
             }
-            selectLines.push(stmt);
+            selectLines.push(this.uppercaseTableNameInStatement(stmt));
             selectLines.push("");
             hasRenderedSelectContent = true;
           }
@@ -1912,24 +2101,57 @@ export class MergeSqlService {
     return groups;
   }
 
-  /**
-   * Sort files by name
-   * @param {Array<{ id: string, file: File, name: string }>} files
-   * @param {'asc' | 'desc' | 'manual'} order
-   * @returns {Array<{ id: string, file: File, name: string }>}
-   */
-  static sortFiles(files, order) {
-    if (order === "manual") {
-      return files;
+  static extractTableNameForSort(fileName) {
+    const parsed = this.parseFileName(fileName);
+    if (parsed && parsed.schemaName && parsed.tableName) {
+      return `${parsed.schemaName}.${parsed.tableName}`;
+    }
+    return fileName.replace(/\.sql$/i, "");
+  }
+
+  static groupFilesByTable(files) {
+    const groups = new Map();
+    for (const file of files) {
+      const tableName = this.extractTableNameForSort(file.name);
+      if (!groups.has(tableName)) {
+        groups.set(tableName, []);
+      }
+      groups.get(tableName).push(file);
+    }
+    for (const [, fileGroup] of groups) {
+      fileGroup.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    }
+    return groups;
+  }
+
+  static sortFiles(files, order, tableOrder) {
+    const groups = this.groupFilesByTable(files);
+
+    let sortedTableNames;
+    if (order === "manual" && tableOrder && tableOrder.length > 0) {
+      const orderedSet = new Set(tableOrder);
+      const allTableNames = [...groups.keys()];
+      sortedTableNames = tableOrder.filter((t) => orderedSet.has(t) && groups.has(t));
+      for (const t of allTableNames) {
+        if (!sortedTableNames.includes(t)) {
+          sortedTableNames.push(t);
+        }
+      }
+    } else {
+      sortedTableNames = [...groups.keys()].sort((a, b) => {
+        const cmp = a.toLowerCase().localeCompare(b.toLowerCase());
+        return order === "desc" ? -cmp : cmp;
+      });
     }
 
-    const sorted = [...files].sort((a, b) => {
-      const nameA = a.name.toLowerCase();
-      const nameB = b.name.toLowerCase();
-      return order === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-    });
-
-    return sorted;
+    const result = [];
+    for (const tableName of sortedTableNames) {
+      const fileGroup = groups.get(tableName);
+      if (fileGroup) {
+        result.push(...fileGroup);
+      }
+    }
+    return result;
   }
 
   /**
