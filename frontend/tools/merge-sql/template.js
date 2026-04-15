@@ -287,6 +287,40 @@ export const MergeSqlTemplate = /* html */ `
         <div class="merge-sql-tab-content" id="merge-sql-validation-tab-content" data-mode="sql">
           <div class="monaco-editor-container" id="merge-sql-validation-sql-editor"></div>
         </div>
+
+        <!-- File Editor Tab Content (Files mode) -->
+        <div class="merge-sql-tab-content merge-sql-file-editor-content" id="merge-sql-editor-content" data-mode="files">
+          <div class="file-editor-tabs" id="merge-sql-editor-tabs"></div>
+          <div class="file-editor-toolbar" id="merge-sql-editor-toolbar" style="display: none;">
+            <button id="merge-sql-editor-save" class="btn btn-ghost btn-xs" disabled>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+              Save
+            </button>
+            <button id="merge-sql-editor-revert" class="btn btn-ghost btn-xs" disabled>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 .49-3.78"></path>
+              </svg>
+              Revert
+            </button>
+            <span class="file-editor-status" id="merge-sql-editor-status"></span>
+          </div>
+          <div class="monaco-editor-container" id="merge-sql-file-editor" style="display: none;"></div>
+          <div class="file-editor-empty" id="merge-sql-editor-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <p>No file open</p>
+            <span>Click the pencil icon on any file in the Files panel to open it here</span>
+          </div>
+        </div>
       </div>
     </div>
     </div>

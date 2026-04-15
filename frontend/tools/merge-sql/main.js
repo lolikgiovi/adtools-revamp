@@ -9,6 +9,7 @@ import { getIconSvg } from "./icon.js";
 import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
 import { createOracleEditor } from "../../core/MonacoOracle.js";
+import * as monaco from "monaco-editor";
 import * as IndexedDBManager from "./indexeddb-manager.js";
 import html2canvas from "html2canvas";
 
@@ -32,6 +33,11 @@ export class MergeSqlTool extends BaseTool {
     this.validationEditor = null;
     this.inputEditor = null;
     this.validationSqlEditor = null;
+    this.fileEditor = null;
+    // Map<fileId, { model, lastSavedVersionId, autosaveTimer }>
+    this.fileEditorModels = new Map();
+    this.openFileIds = [];
+    this.activeEditorFileId = null;
     this.inputMode = "files";
     this.currentTab = "report";
     this.currentSubtab = "merged";
@@ -81,6 +87,16 @@ export class MergeSqlTool extends BaseTool {
       this.validationSqlEditor.dispose();
       this.validationSqlEditor = null;
     }
+    // Dispose all file editor models then the editor itself
+    for (const entry of this.fileEditorModels.values()) {
+      if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+      entry.model.dispose();
+    }
+    this.fileEditorModels.clear();
+    if (this.fileEditor) {
+      this.fileEditor.dispose();
+      this.fileEditor = null;
+    }
   }
 
   initMonaco() {
@@ -128,6 +144,10 @@ export class MergeSqlTool extends BaseTool {
     if (validationSqlContainer) {
       this.validationSqlEditor = createOracleEditor(validationSqlContainer, readOnlyOptions);
     }
+
+    // NOTE: fileEditor is intentionally NOT initialized here.
+    // It is created lazily on first file open, after the Editor tab is visible,
+    // so Monaco gets a correctly-sized container.
   }
 
   async loadFromIndexedDB() {
@@ -314,6 +334,26 @@ export class MergeSqlTool extends BaseTool {
         if (subtab) this.handleGeneratedSubtabSwitch(subtab.dataset.subtab);
       });
     }
+
+    const editorSaveBtn = document.getElementById("merge-sql-editor-save");
+    if (editorSaveBtn) editorSaveBtn.addEventListener("click", () => this.saveActiveFile());
+
+    const editorRevertBtn = document.getElementById("merge-sql-editor-revert");
+    if (editorRevertBtn) editorRevertBtn.addEventListener("click", () => this.revertActiveFile());
+
+    const editorTabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (editorTabsEl) {
+      editorTabsEl.addEventListener("click", (e) => {
+        const closeBtn = e.target.closest(".file-editor-tab-close");
+        if (closeBtn) {
+          e.stopPropagation();
+          this.closeEditorTab(closeBtn.dataset.id);
+          return;
+        }
+        const tab = e.target.closest(".file-editor-tab");
+        if (tab) this.setActiveEditorFile(tab.dataset.id);
+      });
+    }
   }
 
   handleFileSelect(e) {
@@ -340,6 +380,7 @@ export class MergeSqlTool extends BaseTool {
         id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         file,
         name: file.name,
+        editedContent: null,
       };
 
       this.files.push(newFile);
@@ -356,6 +397,10 @@ export class MergeSqlTool extends BaseTool {
   }
 
   removeFile(fileId) {
+    // Close editor tab if open before removing
+    if (this.openFileIds.includes(fileId)) {
+      this._closeEditorTabSilent(fileId);
+    }
     const file = this.files.find((f) => f.id === fileId);
     this.files = this.files.filter((f) => f.id !== fileId);
 
@@ -443,6 +488,13 @@ export class MergeSqlTool extends BaseTool {
           </svg>
           Generated SQL
         </button>
+        <button class="tab-button merge-sql-result-tab" data-tab="editor">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+          </svg>
+          File Editor
+        </button>
       `;
     } else {
       tabsLeft.innerHTML = `
@@ -464,6 +516,7 @@ export class MergeSqlTool extends BaseTool {
   }
 
   handleTabSwitch(tab) {
+    const prevTab = this.currentTab;
     this.currentTab = tab;
 
     if (tab === "report") {
@@ -489,12 +542,14 @@ export class MergeSqlTool extends BaseTool {
     const reportContent = document.getElementById("merge-sql-report-content");
     const generatedContent = document.getElementById("merge-sql-generated-content");
     const validationTabContent = document.getElementById("merge-sql-validation-tab-content");
+    const editorContent = document.getElementById("merge-sql-editor-content");
     const reportSubtabsEl = document.getElementById("merge-sql-report-subtabs");
     const generatedSubtabsEl = document.getElementById("merge-sql-generated-subtabs");
 
     if (reportContent) reportContent.classList.toggle("active", tab === "report");
     if (generatedContent) generatedContent.classList.toggle("active", tab === "generated");
     if (validationTabContent) validationTabContent.classList.toggle("active", tab === "validation-sql");
+    if (editorContent) editorContent.classList.toggle("active", tab === "editor");
 
     if (reportSubtabsEl) reportSubtabsEl.style.display = tab === "report" ? "" : "none";
     if (generatedSubtabsEl) generatedSubtabsEl.style.display = tab === "generated" ? "" : "none";
@@ -502,7 +557,7 @@ export class MergeSqlTool extends BaseTool {
     const resultActionsButtons = document.querySelector(".merge-sql-result-actions-buttons");
     const reportActionsButtons = document.getElementById("merge-sql-report-actions-buttons");
     if (resultActionsButtons) {
-      resultActionsButtons.style.display = tab === "report" ? "none" : "";
+      resultActionsButtons.style.display = tab === "report" || tab === "editor" ? "none" : "";
     }
     if (reportActionsButtons) {
       reportActionsButtons.classList.toggle("visible", tab === "report");
@@ -521,6 +576,22 @@ export class MergeSqlTool extends BaseTool {
     } else if (tab === "validation-sql") {
       if (this.validationSqlEditor) {
         setTimeout(() => this.validationSqlEditor.layout(), 0);
+      }
+    } else if (tab === "editor") {
+      if (this.fileEditor && this.activeEditorFileId) {
+        setTimeout(() => this.fileEditor.layout(), 50);
+      }
+    }
+
+    // Editor tab needs the result content area clear of the empty-state overlay.
+    // Other tabs rely on the empty state to signal "no results yet".
+    const resultEmptyEl = document.getElementById("merge-sql-result-empty");
+    if (resultEmptyEl) {
+      if (tab === "editor") {
+        resultEmptyEl.style.display = "none";
+      } else if (prevTab === "editor" && !this.result) {
+        // Restore placeholder when leaving editor with no merge results
+        resultEmptyEl.style.display = "";
       }
     }
   }
@@ -567,6 +638,284 @@ export class MergeSqlTool extends BaseTool {
     if (squadDetailContent) squadDetailContent.classList.toggle("active", subtab === "squad-detail");
   }
 
+  // ─── File Editor Methods ────────────────────────────────────────────────────
+
+  /**
+   * Lazily creates the Monaco file editor on first use.
+   * Must be called AFTER the Editor tab pane is visible so Monaco gets real dimensions.
+   */
+  _initFileEditor() {
+    if (this.fileEditor) return;
+    const container = document.getElementById("merge-sql-file-editor");
+    if (!container) return;
+
+    // Make the container visible before creating Monaco
+    container.style.display = "";
+
+    const editorOptions = {
+      fontSize: 13,
+      lineNumbers: "on",
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      automaticLayout: true,
+      readOnly: false,
+      padding: { top: 12, bottom: 12 },
+    };
+
+    this.fileEditor = createOracleEditor(container, editorOptions);
+    this.fileEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      this.saveActiveFile();
+    });
+    this.fileEditor.onDidChangeModelContent(() => {
+      if (this.activeEditorFileId) {
+        this._scheduleAutosave(this.activeEditorFileId);
+      }
+    });
+  }
+
+  async openFileInEditor(fileId) {
+    // If already open, just activate it
+    if (this.openFileIds.includes(fileId)) {
+      this.handleTabSwitch("editor");
+      this.setActiveEditorFile(fileId);
+      return;
+    }
+
+    const fileItem = this.files.find((f) => f.id === fileId);
+    if (!fileItem) return;
+
+    const content =
+      fileItem.editedContent !== null
+        ? fileItem.editedContent
+        : await MergeSqlService.readFileContent(fileItem.file);
+
+    // Create a Monaco model for this file
+    const model = monaco.editor.createModel(content, "oracle-dml");
+
+    this.fileEditorModels.set(fileId, {
+      model,
+      lastSavedVersionId: model.getAlternativeVersionId(),
+      autosaveTimer: null,
+    });
+
+    this.openFileIds.push(fileId);
+    this.renderEditorTabs();
+
+    // Switch tab first so the container is visible BEFORE Monaco is initialized
+    this.handleTabSwitch("editor");
+
+    // Now safe to create Monaco on a visible container
+    this._initFileEditor();
+
+    this.setActiveEditorFile(fileId);
+  }
+
+  setActiveEditorFile(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (!entry || !this.fileEditor) return;
+
+    this.activeEditorFileId = fileId;
+
+    // Show editor, hide empty state
+    const editorEl = document.getElementById("merge-sql-file-editor");
+    const emptyEl = document.getElementById("merge-sql-editor-empty");
+    const toolbarEl = document.getElementById("merge-sql-editor-toolbar");
+    if (editorEl) editorEl.style.display = "";
+    if (emptyEl) emptyEl.style.display = "none";
+    if (toolbarEl) toolbarEl.style.display = "";
+
+    this.fileEditor.setModel(entry.model);
+    setTimeout(() => this.fileEditor.layout(), 50);
+    this._updateEditorToolbar(fileId);
+    this._highlightActiveTab(fileId);
+  }
+
+  _scheduleAutosave(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (!entry) return;
+
+    const isDirty = entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId;
+    this._setTabDirty(fileId, isDirty);
+    this._updateEditorToolbar(fileId);
+
+    if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+    entry.autosaveTimer = setTimeout(() => {
+      this._persistFileEdit(fileId);
+    }, 1000);
+  }
+
+  _persistFileEdit(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    const fileItem = this.files.find((f) => f.id === fileId);
+    if (!entry || !fileItem) return;
+
+    const value = entry.model.getValue();
+    fileItem.editedContent = value;
+    entry.lastSavedVersionId = entry.model.getAlternativeVersionId();
+    entry.autosaveTimer = null;
+
+    IndexedDBManager.saveSingleFileEdit(fileId, value);
+
+    this._setTabDirty(fileId, false);
+    this._updateEditorToolbar(fileId);
+    this._updateEditorStatus("Autosaved");
+    this.renderFileList();
+  }
+
+  saveActiveFile() {
+    if (!this.activeEditorFileId) return;
+    if (this.fileEditorModels.get(this.activeEditorFileId)?.autosaveTimer) {
+      clearTimeout(this.fileEditorModels.get(this.activeEditorFileId).autosaveTimer);
+    }
+    this._persistFileEdit(this.activeEditorFileId);
+    this._updateEditorStatus("Saved");
+  }
+
+  async revertActiveFile() {
+    if (!this.activeEditorFileId) return;
+    const fileItem = this.files.find((f) => f.id === this.activeEditorFileId);
+    const entry = this.fileEditorModels.get(this.activeEditorFileId);
+    if (!fileItem || !entry) return;
+
+    const confirmed = window.confirm(
+      `Revert "${fileItem.name}" to its original content? All your edits will be lost.`
+    );
+    if (!confirmed) return;
+
+    const originalContent = await MergeSqlService.readFileContent(fileItem.file);
+
+    entry.model.setValue(originalContent);
+    fileItem.editedContent = null;
+    entry.lastSavedVersionId = entry.model.getAlternativeVersionId();
+
+    IndexedDBManager.saveSingleFileEdit(this.activeEditorFileId, null);
+
+    this._setTabDirty(this.activeEditorFileId, false);
+    this._updateEditorToolbar(this.activeEditorFileId);
+    this._updateEditorStatus("Reverted to original");
+    this.renderFileList();
+  }
+
+  closeEditorTab(fileId) {
+    // Flush any pending autosave before closing
+    const entry = this.fileEditorModels.get(fileId);
+    if (entry) {
+      if (entry.autosaveTimer) {
+        clearTimeout(entry.autosaveTimer);
+        this._persistFileEdit(fileId);
+      }
+    }
+    this._closeEditorTabSilent(fileId);
+  }
+
+  _closeEditorTabSilent(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    if (entry) {
+      if (entry.autosaveTimer) clearTimeout(entry.autosaveTimer);
+      entry.model.dispose();
+      this.fileEditorModels.delete(fileId);
+    }
+
+    const idx = this.openFileIds.indexOf(fileId);
+    if (idx !== -1) this.openFileIds.splice(idx, 1);
+
+    // Activate a neighbour or show empty state
+    if (this.activeEditorFileId === fileId) {
+      const next = this.openFileIds[idx] ?? this.openFileIds[idx - 1] ?? null;
+      this.activeEditorFileId = null;
+      if (next) {
+        this.setActiveEditorFile(next);
+      } else {
+        this._showEditorEmptyState();
+      }
+    }
+
+    this.renderEditorTabs();
+  }
+
+  _showEditorEmptyState() {
+    const editorEl = document.getElementById("merge-sql-file-editor");
+    const emptyEl = document.getElementById("merge-sql-editor-empty");
+    const toolbarEl = document.getElementById("merge-sql-editor-toolbar");
+    if (editorEl) editorEl.style.display = "none";
+    if (emptyEl) emptyEl.style.display = "";
+    if (toolbarEl) toolbarEl.style.display = "none";
+  }
+
+  renderEditorTabs() {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+
+    if (this.openFileIds.length === 0) {
+      tabsEl.innerHTML = "";
+      return;
+    }
+
+    tabsEl.innerHTML = this.openFileIds
+      .map((fileId) => {
+        const fileItem = this.files.find((f) => f.id === fileId);
+        if (!fileItem) return "";
+        const isActive = fileId === this.activeEditorFileId;
+        const entry = this.fileEditorModels.get(fileId);
+        const isDirty =
+          entry ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId : false;
+        return `<div class="file-editor-tab${isActive ? " active" : ""}${isDirty ? " dirty" : ""}" data-id="${this.escapeHtml(fileId)}">
+          <svg class="file-editor-tab-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="file-editor-tab-label" title="${this.escapeHtml(fileItem.name)}">${this.escapeHtml(fileItem.name)}</span>
+          <span class="file-editor-tab-dirty-dot"></span>
+          <button class="file-editor-tab-close" data-id="${this.escapeHtml(fileId)}" title="Close">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>`;
+      })
+      .join("");
+  }
+
+  _highlightActiveTab(fileId) {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+    tabsEl.querySelectorAll(".file-editor-tab").forEach((t) => {
+      t.classList.toggle("active", t.dataset.id === fileId);
+    });
+  }
+
+  _setTabDirty(fileId, isDirty) {
+    const tabsEl = document.getElementById("merge-sql-editor-tabs");
+    if (!tabsEl) return;
+    const tab = tabsEl.querySelector(`.file-editor-tab[data-id="${fileId}"]`);
+    if (tab) tab.classList.toggle("dirty", isDirty);
+  }
+
+  _updateEditorToolbar(fileId) {
+    const entry = this.fileEditorModels.get(fileId);
+    const isDirty = entry
+      ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId
+      : false;
+    const fileItem = this.files.find((f) => f.id === fileId);
+    const hasOriginal = fileItem && fileItem.editedContent !== null;
+
+    const saveBtn = document.getElementById("merge-sql-editor-save");
+    const revertBtn = document.getElementById("merge-sql-editor-revert");
+    if (saveBtn) saveBtn.disabled = !isDirty;
+    if (revertBtn) revertBtn.disabled = !hasOriginal;
+  }
+
+  _updateEditorStatus(msg) {
+    const statusEl = document.getElementById("merge-sql-editor-status");
+    if (!statusEl) return;
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    statusEl.textContent = `${msg} · ${time}`;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   async handleMerge() {
     if (this.files.length === 0) {
       this.showError("No files to merge");
@@ -591,7 +940,10 @@ export class MergeSqlTool extends BaseTool {
       const parsedFiles = [];
 
       for (const fileItem of this.files) {
-        const content = await MergeSqlService.readFileContent(fileItem.file);
+        const content =
+          fileItem.editedContent !== null
+            ? fileItem.editedContent
+            : await MergeSqlService.readFileContent(fileItem.file);
         const parsed = MergeSqlService.parseFile(content, fileItem.name);
         parsedFiles.push(parsed);
       }
@@ -1395,7 +1747,8 @@ export class MergeSqlTool extends BaseTool {
 
       html += `<div class="table-card-body${isExpanded ? "" : " table-card-body-collapsed"}">`;
       for (const file of fileGroup) {
-        html += `<div class="file-item" data-id="${file.id}">
+        const isEdited = file.editedContent !== null;
+        html += `<div class="file-item${isEdited ? " is-edited" : ""}" data-id="${file.id}">
             <div class="file-icon">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1405,6 +1758,12 @@ export class MergeSqlTool extends BaseTool {
             <div class="file-info">
               <div class="file-name" title="${this.escapeHtml(file.name)}">${this.escapeHtml(file.name)}</div>
             </div>
+            <button class="btn btn-ghost btn-xs btn-edit-file" data-id="${file.id}" title="View / Edit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+              </svg>
+            </button>
             <button class="btn btn-ghost btn-xs btn-remove" data-id="${file.id}" title="Remove">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1458,6 +1817,15 @@ export class MergeSqlTool extends BaseTool {
     if (!fileItems) return;
 
     fileItems.forEach((item) => {
+      const editBtn = item.querySelector(".btn-edit-file");
+      if (editBtn) {
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const fileId = editBtn.dataset.id;
+          this.openFileInEditor(fileId);
+        });
+      }
+
       const removeBtn = item.querySelector(".btn-remove");
       if (removeBtn) {
         removeBtn.addEventListener("click", (e) => {

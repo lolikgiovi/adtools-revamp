@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = "MergeSqlDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const STORES = {
   FILES: "files",
@@ -73,6 +73,7 @@ export async function saveFiles(files) {
           id: fileItem.id,
           name: fileItem.name,
           content: arrayBuffer,
+          editedContent: fileItem.editedContent ?? null,
           size: fileItem.file.size,
           lastModified: fileItem.file.lastModified,
           order: index,
@@ -115,6 +116,7 @@ export async function loadFiles() {
         const files = items.map((item) => ({
           id: item.id,
           name: item.name,
+          editedContent: item.editedContent ?? null,
           file: new File([item.content], item.name, {
             type: "text/plain",
             lastModified: item.lastModified,
@@ -127,6 +129,42 @@ export async function loadFiles() {
   } catch (error) {
     console.error("[MergeSql] Failed to load files:", error);
     return [];
+  }
+}
+
+/**
+ * Updates only the editedContent field for a single file record.
+ * The original content ArrayBuffer is never touched.
+ * Pass null to clear the edit (revert to original).
+ */
+export async function saveSingleFileEdit(fileId, editedContent) {
+  if (!isIndexedDBAvailable()) return;
+
+  try {
+    const db = await openDatabase();
+
+    // Read current record
+    const existing = await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.FILES, "readonly");
+      const store = tx.objectStore(STORES.FILES);
+      const req = store.get(fileId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    if (!existing) return;
+
+    // Write back with updated editedContent only
+    const tx = db.transaction(STORES.FILES, "readwrite");
+    const store = tx.objectStore(STORES.FILES);
+    store.put({ ...existing, editedContent: editedContent ?? null });
+
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.error("[MergeSql] Failed to save file edit:", error);
   }
 }
 
