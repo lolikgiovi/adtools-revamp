@@ -22,9 +22,13 @@ AD Tools is a collection of practical utilities designed to streamline daily tas
 
 This app bundles utilities like:
 - **Quick Query** — Generate Oracle SQL queries from spreadsheet data
+- **Compare Config** — Compare data between database environments or files
 - **Jenkins Runner** — Execute Oracle SQL on Jenkins directly from your desktop
+- **Run Batch** — Trigger Jenkins batch jobs with real-time log streaming
 - **JSON Tools** — Format, validate, and manipulate JSON
 - **Base64 Tools** — Encode and decode Base64
+- **TLV Viewer** — Parse and inspect QRIS and BER-TLV payloads
+- **Merge SQL** — Merge multiple SQL files with duplicate detection
 - **And more!**
 
 ## How It Started
@@ -38,6 +42,9 @@ The app started as a static page hosted on Cloudflare Pages, and has evolved int
 | Feature | Desktop | Web |
 |---------|---------|-----|
 | Jenkins Runner | ✅ Available | ❌ Not available |
+| Run Batch | ✅ Available | ❌ Not available |
+| Compare Config (Oracle) | ✅ Available | ❌ Not available |
+| Compare Config (Excel) | ✅ Available | ✅ Available |
 | All other tools | ✅ Available | ✅ Available |
 | Auto-updates | ✅ Available | ✅ Always latest |
 | Offline access | ✅ Full support | ❌ Requires internet on the first time load|
@@ -70,6 +77,10 @@ For Jenkins integration:
 1. Navigate to your Jenkins profile → **Security** → **API Token**
 2. Click **Add new token** and copy it
 3. In AD Tools Settings, paste the token under **Jenkins Token**
+
+For Oracle database comparison (Compare Config):
+1. The Desktop app manages a Python sidecar for Oracle connectivity automatically
+2. Ensure Oracle Instant Client is available on your system
 
 ## Step 4: Import Schemas (Quick Query)
 
@@ -176,6 +187,103 @@ Click **Generate Query** to create your SQL in the editor panel.
 - 💡 Enter \`max\` for \`_id\` fields to auto-generate incremental IDs
 - 💡 Import default schemas from Settings for pre-configured tables
 - 💡 Use the file viewer to preview attached files before generation
+          `,
+        },
+        {
+          id: "compare-config",
+          title: "Compare Config",
+          content: `
+# Compare Config
+
+Compare data between Oracle database environments or Excel/CSV files to identify matching, differing, and unique rows.
+
+## Overview
+
+Compare Config supports side-by-side diffing of data from multiple sources:
+- **Oracle-to-Oracle** — Compare table data across database environments
+- **Excel-to-Excel** — Compare spreadsheet files directly
+- **Unified** — Mix Oracle and Excel sources
+
+## How to Use
+
+### 1. Select Comparison Mode
+Choose your source types (Oracle, Excel, or mixed).
+
+### 2. Configure Sources
+- For Oracle: Select connection, schema, and table; the Python sidecar manages connectivity
+- For Excel: Upload .xlsx, .xls, or .csv files, or entire folders
+
+### 3. Choose Key and Fields
+- Select primary key field(s) for row matching
+- Review detected common, unique, and mismatched columns
+
+### 4. Run Comparison
+Click **Compare** to analyze differences. Results appear in three view modes:
+- **Grid** — Summary overview with status badges
+- **Vertical Cards** — Row-by-row detail view
+- **Master-Detail** — Select a row for deep comparison
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Multi-format Export | Export results as JSON, Excel, or CSV |
+| Status Filtering | Filter by matched, differed, or unique rows |
+| Field Reconciliation | Auto-detect common/unique columns between sources |
+| Web Worker Diff | Computation runs off the main thread for performance |
+| State Persistence | Settings saved to localStorage; large results to IndexedDB |
+
+## Tips
+
+- 💡 Oracle comparison requires the Desktop app with the Python sidecar running
+- 💡 Use normalized comparison mode to ignore case and whitespace differences
+- 💡 Upload entire folders for batch Excel comparisons
+          `,
+        },
+        {
+          id: "run-batch",
+          title: "Run Batch",
+          content: `
+# Run Batch
+
+Trigger Jenkins batch jobs with real-time log streaming and configuration management.
+
+> ⚠️ **Desktop Only** — This feature requires the Desktop version of AD Tools.
+
+## Overview
+
+Run Batch allows you to:
+- Select an environment, batch name, and job name
+- Trigger Jenkins batch jobs directly
+- Stream build console output in real time
+- Save and manage named configurations
+- Track run history with success/failed status
+
+## How to Use
+
+### Run Tab
+1. Select the **Environment** from the dropdown
+2. Choose a **Batch** and **Job** name
+3. Click **Run on Jenkins** to trigger the build
+4. View real-time log output below
+
+### Saved Configs Tab
+1. Click **Save** to name the current configuration
+2. Load saved configs for quick re-runs
+3. Search and filter saved configurations
+4. Attach Confluence links per config
+5. Edit or delete saved configs
+
+### History Tab
+- View the last 50 executions
+- See timestamp, environment, batch/job name, and status
+- Quick link to open the Jenkins build page in browser
+
+## Tips
+
+- 💡 Environment and batch dropdowns are auto-populated from Jenkins
+- 💡 Confluence links can be attached to saved configs for reference
+- 💡 A confirmation modal appears before deleting saved configurations
           `,
         },
         {
@@ -332,6 +440,45 @@ Convert Base64-encoded string back to plain text or files:
           `,
         },
         {
+          id: "tlv-viewer",
+          title: "TLV Viewer",
+          content: `
+# TLV Viewer
+
+Parse and inspect Tag-Length-Value (TLV) encoded payloads, supporting QRIS payment strings and BER-TLV binary data.
+
+## Overview
+
+TLV Viewer decodes structured TLV data into interactive views:
+- **QRIS** — Indonesian Quick Response Code payment standard
+- **BER-TLV** — Basic Encoding Rules TLV (hex or auto-detected)
+
+## How to Use
+
+1. Paste your TLV payload in the **Input** area (or click **Paste** from clipboard)
+2. Select the **Format** (QRIS or BER-TLV, or use auto-detect)
+3. Click **Parse** to process the data
+4. Switch between **Tree**, **Table**, and **JSON** views
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Three View Modes | Tree, Table, and JSON output views |
+| QRIS CRC Validation | Verifies CRC-CCITT (0xFFFF) checksum automatically |
+| QRIS Mandatory Tags | Checks for required QRIS tags and reports missing ones |
+| BER-TLV Parsing | Parses class/offset/preview details for binary TLV |
+| Sample Data | Quick-load sample QRIS and BER-TLV payloads |
+| Copy Output | Copy parsed output as JSON or tab-separated text |
+
+## Tips
+
+- 💡 Use **Cmd/Ctrl + Enter** to quickly trigger parsing
+- 💡 QRIS validation reports CRC status (valid/invalid/missing) and mandatory tag errors
+- 💡 BER-TLV mode shows byte offsets and constructed vs primitive tags
+          `,
+        },
+        {
           id: "qr-tools",
           title: "QR Tools",
           content: `
@@ -374,9 +521,9 @@ Generate QR codes with custom colors.
         },
         {
           id: "sql-in-clause",
-          title: "SQL In-Clause",
+          title: "Query IN",
           content: `
-# SQL In-Clause Generator
+# Query IN Generator
 
 Generate SQL IN clauses from lists of values.
 
@@ -560,10 +707,56 @@ Manage extracted fields in a spreadsheet-like table:
           `,
         },
         {
-          id: "image-checker",
-          title: "Image Checker",
+          id: "merge-sql",
+          title: "Merge SQL",
           content: `
-# Image Checker
+# Merge SQL
+
+Merge multiple SQL files (MERGE/INSERT/UPDATE/DELETE) into combined output with duplicate detection and validation.
+
+## Overview
+
+Merge SQL processes SQL files and produces three outputs:
+- **Merged SQL** — Combined SQL statements in one file
+- **SELECT SQL** — Generated SELECT statements for verification
+- **Validation SQL** — Validation queries for data integrity
+
+## How to Use
+
+### File Upload Mode
+1. Upload .sql files or folders using the file picker
+2. Review detected tables and statements
+3. Click **Merge** to generate combined output
+4. Download individual files or all at once
+
+### SQL Text Mode
+1. Paste existing merged SQL directly into the editor
+2. Click **Process** to parse and generate reports
+3. Review and download results
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Duplicate Detection | Identifies duplicated SQL statements across files |
+| Dangerous Statement Alert | Flags DELETE, UPDATE without WHERE, and MERGE DELETE |
+| Report Tab | Shows table summary, squad/feature/author counts, and per-table breakdown |
+| File Editor | Edit individual files inline with autosave and revert |
+| Sort Modes | Ascending, descending, or manual drag-and-drop table grouping |
+| Copy Report | Copy report as text or image (via html2canvas) |
+
+## Tips
+
+- 💡 Use the **Report** tab to review a summary of all tables, squads, and dangerous statements
+- 💡 The **File Editor** tab lets you fix SQL in individual files before merging
+- 💡 State is persisted in IndexedDB — your work survives page reloads
+          `,
+        },
+        {
+          id: "check-image",
+          title: "Check Image",
+          content: `
+# Check Image
 
 Validate images by UUID or content path.
 
@@ -602,10 +795,10 @@ Check if images exist and are accessible by providing their UUIDs or content API
           `,
         },
         {
-          id: "html-editor",
-          title: "HTML Editor",
+          id: "html-template",
+          title: "HTML Template",
           content: `
-# HTML Editor
+# HTML Template
 
 HTML template editor with live preview and VTL support.
 
@@ -697,6 +890,7 @@ All data is stored locally:
 - **Settings** — Browser localStorage
 - **Templates** — Browser localStorage
 - **Schemas** — Browser localStorage
+- **Comparison Results & Merged SQL** — Browser IndexedDB (for large datasets)
 
 No data is sent to external servers except for:
 - OTP verification (email only)
@@ -711,10 +905,15 @@ No data is sent to external servers except for:
 
 ## How does Jenkins integration work?
 
-Jenkins Runner uses the Jenkins REST API to:
+**Jenkins Runner** uses the Jenkins REST API to:
 1. Trigger a parameterized build job
 2. Pass SQL as a parameter
 3. Poll for build status and logs
+
+**Run Batch** triggers Jenkins batch jobs by:
+1. Selecting environment, batch name, and job
+2. Streaming real-time build console output
+3. Saving configurations for quick re-runs
 
 Requirements:
 - Jenkins API token (not password)
