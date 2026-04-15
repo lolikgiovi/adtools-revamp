@@ -302,9 +302,9 @@
 
 .table-card-title {
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 500;
   color: hsl(var(--foreground));
-  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   flex: 1;
   min-width: 0;
   overflow: hidden;
