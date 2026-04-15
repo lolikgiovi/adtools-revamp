@@ -2292,4 +2292,72 @@ VALUES (1, 'John');
       expect(report.nonSystemAuthors.length).toBeGreaterThan(0);
     });
   });
+
+  describe("uppercaseUnquotedTableRef", () => {
+    it("uppercases unquoted schema.table", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("my_schema.my_table")).toBe("MY_SCHEMA.MY_TABLE");
+    });
+
+    it("preserves double-quoted identifiers", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef('"MySchema"."MyTable"')).toBe('"MySchema"."MyTable"');
+    });
+
+    it("uppercases unquoted part when mixed", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef('"MySchema".my_table')).toBe('"MySchema".MY_TABLE');
+    });
+
+    it("handles a bare table name with no schema", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("my_table")).toBe("MY_TABLE");
+    });
+
+    it("handles already-uppercase input unchanged", () => {
+      expect(MergeSqlService.uppercaseUnquotedTableRef("SCHEMA.TABLE")).toBe("SCHEMA.TABLE");
+    });
+  });
+
+  describe("uppercaseTableNameInStatement", () => {
+    it("uppercases MERGE INTO table ref", () => {
+      const stmt = "MERGE INTO my_schema.my_table t\nUSING DUAL ON (1=0)\nWHEN NOT MATCHED THEN INSERT (id) VALUES (1);";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("MERGE INTO MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases INSERT INTO table ref", () => {
+      const stmt = "INSERT INTO my_schema.my_table (id) VALUES (1);";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("INSERT INTO MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases UPDATE table ref", () => {
+      const stmt = "UPDATE my_schema.my_table SET col = 1 WHERE id = 2;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("UPDATE MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases DELETE FROM table ref", () => {
+      const stmt = "DELETE FROM my_schema.my_table WHERE id = 1;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("DELETE FROM MY_SCHEMA.MY_TABLE");
+    });
+
+    it("uppercases SELECT FROM table ref", () => {
+      const stmt = "SELECT * FROM my_schema.my_table WHERE id = 1;";
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain("FROM MY_SCHEMA.MY_TABLE");
+    });
+
+    it("does NOT uppercase UPDATE SET inside a MERGE block", () => {
+      const stmt = "MERGE INTO my_schema.my_table t\nUSING DUAL ON (1=0)\nWHEN MATCHED THEN UPDATE SET t.col = 1;";
+      const result = MergeSqlService.uppercaseTableNameInStatement(stmt);
+      expect(result).toContain("MERGE INTO MY_SCHEMA.MY_TABLE");
+      // Inner UPDATE SET should be preserved (no table ref to uppercase there)
+      expect(result).toContain("WHEN MATCHED THEN UPDATE SET");
+    });
+
+    it("preserves double-quoted identifiers in DML", () => {
+      const stmt = 'INSERT INTO "MySchema"."MyTable" (id) VALUES (1);';
+      expect(MergeSqlService.uppercaseTableNameInStatement(stmt)).toContain('"MySchema"."MyTable"');
+    });
+
+    it("preserves rest of statement content after the table ref", () => {
+      const stmt = "INSERT INTO my_schema.my_table (col1, col2) VALUES ('hello', 'world');";
+      const result = MergeSqlService.uppercaseTableNameInStatement(stmt);
+      expect(result).toBe("INSERT INTO MY_SCHEMA.MY_TABLE (col1, col2) VALUES ('hello', 'world');");
+    });
+  });
 });
