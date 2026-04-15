@@ -1292,9 +1292,10 @@ export class MergeSqlService {
    */
   static renderValidationSelect(entry) {
     const rowInQuery = entry.rowInQuery;
+    const tableName = this.uppercaseUnquotedTableRef(entry.tableName);
     return [
       "SELECT",
-      `  '${entry.tableName}' AS table_name,`,
+      `  '${tableName}' AS table_name,`,
       `  ${rowInQuery} AS expectation,`,
       "  COUNT(*) AS row_in_table,",
       `  CASE`,
@@ -1302,7 +1303,7 @@ export class MergeSqlService {
       `    WHEN COUNT(*) > ${rowInQuery} THEN '+' || TO_CHAR(COUNT(*) - ${rowInQuery})`,
       `    ELSE '-' || TO_CHAR(${rowInQuery} - COUNT(*))`,
       `  END AS result`,
-      `FROM ${entry.tableName}`,
+      `FROM ${tableName}`,
       `WHERE ${entry.whereClause}`,
     ].join("\n");
   }
@@ -1522,6 +1523,54 @@ export class MergeSqlService {
    * @param {Array<{ dmlStatements: string[], selectStatements: string[], fileName: string }>} parsedFiles
    * @returns {{ mergedSql: string, selectSql: string, validationSql: string, duplicates: Array<{ statement: string, files: string[] }>, report: { statementCounts: Array, nonSystemAuthors: Array } }}
    */
+  /**
+   * Uppercase the unquoted parts of a schema.table reference.
+   * Double-quoted identifiers (e.g. "MyTable") are preserved exactly.
+   * e.g. "my_schema.my_table" → "MY_SCHEMA.MY_TABLE"
+   *      '"MySchema".my_table' → '"MySchema".MY_TABLE'
+   */
+  static uppercaseUnquotedTableRef(ref) {
+    return String(ref || "")
+      .split(".")
+      .map((part) => (part.startsWith('"') && part.endsWith('"') ? part : part.toUpperCase()))
+      .join(".");
+  }
+
+  /**
+   * Uppercase the schema.table reference in a DML or SELECT statement.
+   * For DML (MERGE INTO / INSERT INTO / UPDATE / DELETE FROM): anchored to the
+   * start of the statement string so the inner "UPDATE SET" inside a MERGE block
+   * is never touched.
+   * For SELECT: replaces the first FROM <table> occurrence.
+   * Quoted identifiers are passed through uppercaseUnquotedTableRef unchanged.
+   */
+  static uppercaseTableNameInStatement(stmt) {
+    const ID = '(?:"[^"]*"|[A-Za-z_$#][A-Za-z0-9_$#]*)';
+    const TABLE_REF = `(${ID}(?:\\.${ID})*)`;
+
+    if (/^\s*SELECT\b/i.test(stmt)) {
+      return stmt.replace(
+        new RegExp(`(\\bFROM\\s+)${TABLE_REF}`, "i"),
+        (_, from, tableRef) => from + this.uppercaseUnquotedTableRef(tableRef)
+      );
+    }
+
+    const dmlPatterns = [
+      new RegExp(`^(\\s*MERGE\\s+INTO\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*INSERT\\s+INTO\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*UPDATE\\s+)${TABLE_REF}`, "i"),
+      new RegExp(`^(\\s*DELETE\\s+FROM\\s+)${TABLE_REF}`, "i"),
+    ];
+
+    for (const pattern of dmlPatterns) {
+      const result = stmt.replace(pattern, (_, keyword, tableRef) =>
+        keyword + this.uppercaseUnquotedTableRef(tableRef)
+      );
+      if (result !== stmt) return result;
+    }
+    return stmt;
+  }
+
   static mergeFiles(parsedFiles) {
     // Duplicate detection (runs before grouping, unchanged logic)
     const dmlStatementFileMap = new Map();
@@ -1558,14 +1607,14 @@ export class MergeSqlService {
 
       if (group.isStandard) {
         dmlLines.push(`--====================================================================================================`);
-        dmlLines.push(`-- ${group.groupKey}`);
+        dmlLines.push(`-- ${this.uppercaseUnquotedTableRef(group.groupKey)}`);
         dmlLines.push(`--====================================================================================================`);
         dmlLines.push("");
         for (const entry of group.entries) {
           if (entry.dmlStatements.length === 0) continue;
           dmlLines.push(`-- ${entry.subHeader}`);
           for (const stmt of entry.dmlStatements) {
-            dmlLines.push(stmt);
+            dmlLines.push(this.uppercaseTableNameInStatement(stmt));
             dmlLines.push("");
           }
         }
@@ -1576,7 +1625,7 @@ export class MergeSqlService {
         dmlLines.push("");
         for (const entry of group.entries) {
           for (const stmt of entry.dmlStatements) {
-            dmlLines.push(stmt);
+            dmlLines.push(this.uppercaseTableNameInStatement(stmt));
             dmlLines.push("");
           }
         }
@@ -1596,7 +1645,7 @@ export class MergeSqlService {
 
       if (group.isStandard) {
         selectLines.push(`--====================================================================================================`);
-        selectLines.push(`-- ${group.groupKey}`);
+        selectLines.push(`-- ${this.uppercaseUnquotedTableRef(group.groupKey)}`);
         selectLines.push(`--====================================================================================================`);
         selectLines.push("");
         let hasRenderedSelectContent = false;
@@ -1624,10 +1673,10 @@ export class MergeSqlService {
         if (hasMultipleSquads) {
           if (whereClauses.length > 0) {
             const combined = whereClauses.map((w) => `(${w})`).join(" OR ");
-            selectLines.push(`SELECT * FROM ${group.groupKey} WHERE ${combined};`);
+            selectLines.push(`SELECT * FROM ${this.uppercaseUnquotedTableRef(group.groupKey)} WHERE ${combined};`);
             hasRenderedSelectContent = true;
           } else {
-            selectLines.push(`SELECT * FROM ${group.groupKey};`);
+            selectLines.push(`SELECT * FROM ${this.uppercaseUnquotedTableRef(group.groupKey)};`);
             hasRenderedSelectContent = true;
           }
         }
@@ -1645,7 +1694,7 @@ export class MergeSqlService {
 
           selectLines.push(`-- ${entry.subHeader}`);
           for (const stmt of validStatements) {
-            selectLines.push(stmt);
+            selectLines.push(this.uppercaseTableNameInStatement(stmt));
             selectLines.push("");
             hasRenderedSelectContent = true;
           }
@@ -1668,7 +1717,7 @@ export class MergeSqlService {
             if (whereClause && this.isTimestampVerificationClause(whereClause[1].trim())) {
               continue; // Skip timestamp verification statements
             }
-            selectLines.push(stmt);
+            selectLines.push(this.uppercaseTableNameInStatement(stmt));
             selectLines.push("");
             hasRenderedSelectContent = true;
           }
