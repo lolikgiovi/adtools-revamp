@@ -1370,7 +1370,7 @@ export class MergeSqlTool extends BaseTool {
           <tbody>`;
         for (const row of statementCounts) {
           tableHtml += `<tr>
-            <td>${this.escapeHtml(row.table)}</td>
+            <td>${this.escapeHtml(row.table.toUpperCase())}</td>
             <td>${row.insert}</td>
             <td>${row.merge}</td>
             <td>${row.update}</td>
@@ -1521,7 +1521,7 @@ export class MergeSqlTool extends BaseTool {
     let rowIndex = 0;
 
     for (const [tableKey, rows] of tableGroups) {
-      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table)}</h5>
+      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table.toUpperCase())}</h5>
 <table class="report-table report-table-expandable">
            <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
            <tbody>`;
@@ -1650,7 +1650,7 @@ export class MergeSqlTool extends BaseTool {
 
       for (const row of group.tables) {
         html += `<tr>
-          <td>${this.escapeHtml(row.table)}</td>
+          <td>${this.escapeHtml(row.table.toUpperCase())}</td>
           <td>${row.insert}</td>
           <td>${row.merge}</td>
           <td>${row.update}</td>
@@ -1966,7 +1966,7 @@ export class MergeSqlTool extends BaseTool {
         lines.push(`📋 *All Tables Summary* (${report.statementCounts.length} table${report.statementCounts.length !== 1 ? "s" : ""})`);
         lines.push("");
         for (const row of report.statementCounts) {
-          lines.push(`*${row.table}*`);
+          lines.push(`*${row.table.toUpperCase()}*`);
           lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
           lines.push("");
         }
@@ -2047,7 +2047,7 @@ export class MergeSqlTool extends BaseTool {
         }
 
         for (const [tableKey, rows] of tableGroups) {
-          lines.push(`*${rows[0].table}*`);
+          lines.push(`*${rows[0].table.toUpperCase()}*`);
           const totals = { insert: 0, merge: 0, update: 0, total: 0 };
           for (const row of rows) {
             totals.insert += row.insert;
@@ -2097,7 +2097,7 @@ export class MergeSqlTool extends BaseTool {
 
           lines.push(`*${group.displayName}* — ${tableCount} table${tableCount !== 1 ? "s" : ""}, ${totals.total} statement${totals.total !== 1 ? "s" : ""}`);
           for (const row of group.tables) {
-            lines.push(`${row.table} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+            lines.push(`${row.table.toUpperCase()} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
           }
           lines.push("");
         }
