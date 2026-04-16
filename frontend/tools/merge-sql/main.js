@@ -1164,39 +1164,33 @@ export class MergeSqlTool extends BaseTool {
     }
   }
 
-  handleDownloadAll() {
+  async handleDownloadAll() {
     const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
-    const downloadedFiles = [];
+    const downloads = [];
 
     if (this.mergedEditor) {
       const mergedContent = this.mergedEditor.getValue();
-      if (mergedContent) {
-        this.downloadFile(`${folderName}-MERGED.sql`, mergedContent);
-        downloadedFiles.push("MERGED");
-      }
+      if (mergedContent) downloads.push({ name: "MERGED", fileName: `${folderName}-MERGED.sql`, content: mergedContent });
     }
 
-    setTimeout(() => {
-      if (this.selectEditor) {
-        const selectContent = this.selectEditor.getValue();
-        if (selectContent) {
-          this.downloadFile(`${folderName}-SELECT.sql`, selectContent);
-          downloadedFiles.push("SELECT");
-        }
-      }
+    if (this.selectEditor) {
+      const selectContent = this.selectEditor.getValue();
+      if (selectContent) downloads.push({ name: "SELECT", fileName: `${folderName}-SELECT.sql`, content: selectContent });
+    }
 
-      if (this.validationEditor) {
-        const validationContent = this.validationEditor.getValue();
-        if (validationContent) {
-          this.downloadFile(`${folderName}-VALIDATION.sql`, validationContent);
-          downloadedFiles.push("VALIDATION");
-        }
-      }
+    if (this.validationEditor) {
+      const validationContent = this.validationEditor.getValue();
+      if (validationContent) downloads.push({ name: "VALIDATION", fileName: `${folderName}-VALIDATION.sql`, content: validationContent });
+    }
 
-      if (downloadedFiles.length > 0) {
-        this.showSuccess(`Downloaded ${downloadedFiles.length} file${downloadedFiles.length > 1 ? "s" : ""}`);
-      }
-    }, 500);
+    for (let i = 0; i < downloads.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      this.downloadFile(downloads[i].fileName, downloads[i].content);
+    }
+
+    if (downloads.length > 0) {
+      this.showSuccess(`Downloaded ${downloads.length} file${downloads.length > 1 ? "s" : ""}`);
+    }
   }
 
   downloadFile(fileName, content) {
@@ -1208,7 +1202,7 @@ export class MergeSqlTool extends BaseTool {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   showResult() {
