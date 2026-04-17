@@ -520,10 +520,7 @@ export class MergeSqlTool extends BaseTool {
     this.currentTab = tab;
 
     if (tab === "report") {
-      const validSubtabs = ["summary", "table-detail"];
-      if (!validSubtabs.includes(this.currentSubtab)) {
-        this.currentSubtab = "summary";
-      }
+      this.currentSubtab = "summary";
     } else if (tab === "generated") {
       const validSubtabs = ["merged", "select", "validation"];
       if (!validSubtabs.includes(this.currentSubtab)) {
@@ -619,21 +616,6 @@ export class MergeSqlTool extends BaseTool {
     } else if (subtab === "validation" && this.validationEditor) {
       setTimeout(() => this.validationEditor.layout(), 0);
     }
-  }
-
-  handleReportSubtabSwitch(subtab) {
-    this.currentSubtab = subtab;
-    this.saveStateToIndexedDB();
-
-    const subtabs = document.querySelectorAll(".merge-sql-report-subtab");
-    subtabs.forEach((t) => t.classList.remove("active"));
-    document.querySelector(`.merge-sql-report-subtab[data-subtab="${subtab}"]`)?.classList.add("active");
-
-    const summaryContent = document.getElementById("merge-sql-report-summary");
-    const tableDetailContent = document.getElementById("merge-sql-report-table-detail");
-
-    if (summaryContent) summaryContent.classList.toggle("active", subtab === "summary");
-    if (tableDetailContent) tableDetailContent.classList.toggle("active", subtab === "table-detail");
   }
 
   // ─── File Editor Methods ────────────────────────────────────────────────────
@@ -1239,11 +1221,8 @@ export class MergeSqlTool extends BaseTool {
     const viewReportBtn = document.getElementById("merge-sql-view-report");
 
     const hasDuplicates = this.result && this.result.duplicates.length > 0;
-    const hasDangerous = this.result?.report?.dangerousStatements?.length > 0;
-    const hasReport = this.result && this.result.report;
 
-    // Show insight panel if there are duplicates or dangerous statements
-    if (!hasDuplicates && !hasDangerous) {
+    if (!hasDuplicates) {
       if (insights) insights.style.display = "none";
       return;
     }
@@ -1251,30 +1230,13 @@ export class MergeSqlTool extends BaseTool {
     if (insights) {
       insights.style.display = "flex";
       insights.classList.remove("insights-warning", "insights-danger");
-      insights.classList.add(hasDangerous ? "insights-danger" : "insights-warning");
+      insights.classList.add("insights-warning");
     }
 
-    const messages = [];
-    if (hasDuplicates) {
-      messages.push(`${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"}`);
-    }
-    if (hasDangerous) {
-      messages.push(`${this.result.report.dangerousStatements.length} dangerous statement${this.result.report.dangerousStatements.length === 1 ? "" : "s"}`);
-    }
-
-    if (insightTitle) {
-      insightTitle.textContent = hasDangerous ? "Issues Detected" : "Duplicate Queries Detected";
-    }
-
-    if (duplicatesText) {
-      duplicatesText.textContent = `${messages.join(", ")} detected`;
-    }
-
-    if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = hasDuplicates ? "" : "none";
-
-    if (hasReport && viewReportBtn) {
-      viewReportBtn.style.display = "";
-    }
+    if (insightTitle) insightTitle.textContent = "Duplicate Queries Detected";
+    if (duplicatesText) duplicatesText.textContent = `${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"} detected`;
+    if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
+    if (viewReportBtn) viewReportBtn.style.display = "none";
   }
 
   showDuplicatesModal() {
@@ -1316,7 +1278,6 @@ export class MergeSqlTool extends BaseTool {
     if (!this.result?.report) return;
 
     this.renderSummaryTab();
-    this.renderTableDetailTab();
   }
 
   renderSummaryTab() {
@@ -1349,28 +1310,105 @@ export class MergeSqlTool extends BaseTool {
       }
     }
 
-    // All Tables Summary (with sticky header)
+    // All Tables Summary (expandable: table → squads → features)
     if (statementsContainer) {
+      const { tableSquadCounts, tableSquadFeatureCounts } = this.result.report;
+
       if (statementCounts.length > 0) {
+        // Build squad lookup: tableKey -> squadRows[]
+        const tableSquadMap = new Map();
+        if (tableSquadCounts) {
+          for (const row of tableSquadCounts) {
+            const key = row.table.toUpperCase();
+            if (!tableSquadMap.has(key)) tableSquadMap.set(key, []);
+            tableSquadMap.get(key).push(row);
+          }
+        }
+
+        // Build feature lookup: table|squad -> features[]
+        const featureLookup = new Map();
+        if (tableSquadFeatureCounts) {
+          for (const row of tableSquadFeatureCounts) {
+            const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+            if (!featureLookup.has(key)) featureLookup.set(key, []);
+            featureLookup.get(key).push(row);
+          }
+        }
+
+        const chevron = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+
+        // Only render columns that have at least one non-zero value
+        const hasInsert = statementCounts.some((r) => (r.insert || 0) > 0);
+        const hasMerge  = statementCounts.some((r) => (r.merge  || 0) > 0);
+        const hasUpdate = statementCounts.some((r) => (r.update || 0) > 0);
+        const hasDelete = statementCounts.some((r) => (r.delete || 0) > 0);
+        const activeColCount = 1 + [hasInsert, hasMerge, hasUpdate, hasDelete].filter(Boolean).length + 1; // name + active + total
+
+        const numCells = (r) => {
+          let s = "";
+          if (hasInsert) s += `<td>${r.insert || 0}</td>`;
+          if (hasMerge)  s += `<td>${r.merge  || 0}</td>`;
+          if (hasUpdate) s += `<td>${r.update || 0}</td>`;
+          if (hasDelete) s += `<td>${r.delete || 0}</td>`;
+          s += `<td>${r.total || 0}</td>`;
+          return s;
+        };
+
+        const headerCols = `<span>Table</span>${hasInsert ? "<span>INSERT</span>" : ""}${hasMerge ? "<span>MERGE</span>" : ""}${hasUpdate ? "<span>UPDATE</span>" : ""}${hasDelete ? "<span>DELETE</span>" : ""}<span>Total</span>`;
+
         let tableHtml = `<div class="report-sticky-header">
           <h4>All Tables Summary</h4>
-          <div class="report-sticky-header-columns">
-            <span>Table</span><span>INSERT</span><span>MERGE</span><span>UPDATE</span><span>Total</span>
-          </div>
+          <div class="report-sticky-header-columns">${headerCols}</div>
         </div>
-        <table class="report-table report-table-no-header">
+        <table class="report-table report-table-no-header report-table-expandable">
           <tbody>`;
+
+        let rowIndex = 0;
         for (const row of statementCounts) {
-          tableHtml += `<tr>
-            <td>${this.escapeHtml(row.table.toUpperCase())}</td>
-            <td>${row.insert}</td>
-            <td>${row.merge}</td>
-            <td>${row.update}</td>
-            <td>${row.total}</td>
-          </tr>`;
+          const tableKey = row.table.toUpperCase();
+          const squads = tableSquadMap.get(tableKey) || [];
+          const tableGroupId = `tbl-${rowIndex++}`;
+
+          if (squads.length > 0) {
+            tableHtml += `<tr class="row-expandable row-lvl-table" data-expand-group="${tableGroupId}">
+              <td><span class="row-expand-icon">${chevron}</span>${this.escapeHtml(tableKey)}</td>
+              ${numCells(row)}
+            </tr>`;
+
+            for (const squadRow of squads) {
+              const squadGroupId = `sqd-${rowIndex++}`;
+              const featureKey = `${squadRow.table.toUpperCase()}|${squadRow.squad.toUpperCase()}`;
+              const features = featureLookup.get(featureKey) || [];
+
+              tableHtml += `<tr class="row-child row-expandable row-lvl-squad" data-parent-group="${tableGroupId}" data-expand-group="${squadGroupId}">
+                <td><span class="row-child-indent"></span><span class="row-expand-icon">${chevron}</span>${this.escapeHtml(squadRow.squad)}</td>
+                ${numCells(squadRow)}
+              </tr>`;
+
+              if (features.length > 0) {
+                for (const f of features) {
+                  tableHtml += `<tr class="row-child row-lvl-feature" data-parent-group="${squadGroupId}">
+                    <td><span class="row-child-indent"></span><span class="row-child-indent"></span><span class="row-child-indent"></span><span class="${f.feature ? "feature-name" : "feature-not-mentioned"}">${this.escapeHtml(f.feature || "Feature not Mentioned")}</span></td>
+                    ${numCells(f)}
+                  </tr>`;
+                }
+              } else {
+                tableHtml += `<tr class="row-child row-lvl-feature" data-parent-group="${squadGroupId}">
+                  <td colspan="${activeColCount}"><span class="row-child-indent"></span><span class="row-child-indent"></span><span class="row-child-indent"></span><span class="feature-not-mentioned">Feature not mentioned</span></td>
+                </tr>`;
+              }
+            }
+          } else {
+            tableHtml += `<tr class="row-lvl-table">
+              <td>${this.escapeHtml(tableKey)}</td>
+              ${numCells(row)}
+            </tr>`;
+          }
         }
+
         tableHtml += `</tbody></table>`;
         statementsContainer.innerHTML = tableHtml;
+        this.bindTableDetailEvents();
       } else {
         statementsContainer.innerHTML = `<h4>All Tables Summary</h4><div class="report-success">No DML statements found</div>`;
       }
@@ -1463,110 +1501,32 @@ export class MergeSqlTool extends BaseTool {
     }
   }
 
-  renderTableDetailTab() {
-    const tableSquadsContainer = document.getElementById("merge-sql-report-table-squads");
-    const { tableSquadCounts, tableSquadFeatureCounts } = this.result.report;
-
-    if (!tableSquadsContainer) return;
-
-    if (!tableSquadCounts || tableSquadCounts.length === 0) {
-      tableSquadsContainer.innerHTML = `<h4>Table Detail</h4><div class="report-success">No table+squad data found</div>`;
-      return;
-    }
-
-    // Build feature lookup: table|squad -> features[]
-    const featureLookup = new Map();
-    if (tableSquadFeatureCounts) {
-      for (const row of tableSquadFeatureCounts) {
-        const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
-        if (!featureLookup.has(key)) featureLookup.set(key, []);
-        featureLookup.get(key).push(row);
-      }
-    }
-
-    // Group by table
-    const tableGroups = new Map();
-    for (const row of tableSquadCounts) {
-      const key = row.table.toUpperCase();
-      if (!tableGroups.has(key)) tableGroups.set(key, []);
-      tableGroups.get(key).push(row);
-    }
-
-    let html = `<h4>Table Detail</h4>`;
-    let rowIndex = 0;
-
-    for (const [tableKey, rows] of tableGroups) {
-      html += `<div class="report-squad-group"><h5>${this.escapeHtml(rows[0].table.toUpperCase())}</h5>
-<table class="report-table report-table-expandable">
-           <thead><tr><th>Squad</th><th>INSERT</th><th>MERGE</th><th>UPDATE</th><th>Total</th></tr></thead>
-           <tbody>`;
-
-      const totals = { insert: 0, merge: 0, update: 0, total: 0 };
-      for (const row of rows) {
-        totals.insert += row.insert;
-        totals.merge += row.merge;
-        totals.update += row.update;
-        totals.total += row.total;
-
-        const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
-        const features = featureLookup.get(featureKey) || [];
-        const rowId = `table-detail-row-${rowIndex++}`;
-
-        html += `<tr class="row-expandable" data-row-id="${rowId}">
-          <td>
-            <span class="row-expand-icon">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </span>
-            ${this.escapeHtml(row.squad)}
-          </td>
-<td>${row.insert}</td>
-           <td>${row.merge}</td>
-           <td>${row.update}</td>
-           <td>${row.total}</td>
-         </tr>
-         <tr class="row-feature-details" id="${rowId}">
-           <td colspan="5">
-            <div class="feature-details-content">`;
-
-        if (features.length > 0) {
-          for (const f of features) {
-            const featureName = f.feature || "Feature not Mentioned";
-            html += `<div class="feature-item">
-              <span class="${f.feature ? "feature-name" : "feature-not-mentioned"}">${this.escapeHtml(featureName)}</span>
-              <span>— ${f.total} statement${f.total !== 1 ? "s" : ""}</span>
-            </div>`;
-          }
-        } else {
-          html += `<div class="feature-item"><span class="feature-not-mentioned">Feature not Mentioned</span></div>`;
-        }
-
-        html += `</div></td></tr>`;
-      }
-
-      html += `</tbody><tfoot><tr class="report-table-total">
-        <td>Total</td>
-        <td>${totals.insert}</td>
-        <td>${totals.merge}</td>
-        <td>${totals.update}</td>
-        <td>${totals.total}</td>
-      </tr></tfoot></table></div>`;
-    }
-
-    tableSquadsContainer.innerHTML = html;
-    this.bindTableDetailEvents();
-  }
-
   bindTableDetailEvents() {
-    const expandableRows = document.querySelectorAll(".report-table-expandable .row-expandable");
-    expandableRows.forEach((row) => {
-      row.addEventListener("click", () => {
-        const rowId = row.dataset.rowId;
-        const detailRow = document.getElementById(rowId);
-        if (detailRow) {
-          row.classList.toggle("expanded");
-          detailRow.classList.toggle("visible");
+    const container = document.querySelector("#merge-sql-report-statements .report-table-expandable");
+    if (!container) return;
+
+    container.addEventListener("click", (e) => {
+      const row = e.target.closest(".row-expandable");
+      if (!row) return;
+
+      const groupId = row.dataset.expandGroup;
+      if (!groupId) return;
+
+      const isExpanding = !row.classList.contains("expanded");
+      row.classList.toggle("expanded", isExpanding);
+
+      // Show/hide direct children
+      container.querySelectorAll(`.row-child[data-parent-group="${groupId}"]`).forEach((child) => {
+        child.classList.toggle("row-child-visible", isExpanding);
+        // When collapsing, also collapse any expanded grandchildren
+        if (!isExpanding) {
+          const childGroup = child.dataset.expandGroup;
+          if (childGroup) {
+            child.classList.remove("expanded");
+            container.querySelectorAll(`.row-child[data-parent-group="${childGroup}"]`).forEach((grandchild) => {
+              grandchild.classList.remove("row-child-visible");
+            });
+          }
         }
       });
     });
@@ -1915,130 +1875,122 @@ export class MergeSqlTool extends BaseTool {
     const report = this.result.report;
     const lines = [];
 
-    const subtab = this.currentSubtab === "table-detail" ? "table-detail" : "summary";
+    lines.push("📊 *Merge SQL Report — Summary*");
+    lines.push("");
 
-    if (subtab === "summary") {
-      lines.push("📊 *Merge SQL Report — Summary*");
+    if (report.dangerousStatements && report.dangerousStatements.length > 0) {
+      lines.push("⚠️ *Dangerous Statements*");
+      for (const item of report.dangerousStatements) {
+        const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
+        lines.push(`*${item.fileName}* [${typeLabel}]`);
+        lines.push(`\`${item.statement.slice(0, 200)}${item.statement.length > 200 ? "..." : ""}\``);
+      }
+      lines.push("");
+    }
+
+    if (report.statementCounts && report.statementCounts.length > 0) {
+      lines.push(`📋 *All Tables Summary* (${report.statementCounts.length} table${report.statementCounts.length !== 1 ? "s" : ""})`);
       lines.push("");
 
-      if (report.dangerousStatements && report.dangerousStatements.length > 0) {
-        lines.push("⚠️ *Dangerous Statements*");
-        for (const item of report.dangerousStatements) {
-          const typeLabel = item.type === "DELETE" ? "DELETE" : item.type === "MERGE_DELETE" ? "MERGE DELETE" : "UPDATE NO WHERE";
-          lines.push(`*${item.fileName}* [${typeLabel}]`);
-          lines.push(`\`${item.statement.slice(0, 200)}${item.statement.length > 200 ? "..." : ""}\``);
-        }
-        lines.push("");
-      }
-
-      if (report.statementCounts && report.statementCounts.length > 0) {
-        lines.push(`📋 *All Tables Summary* (${report.statementCounts.length} table${report.statementCounts.length !== 1 ? "s" : ""})`);
-        lines.push("");
-        for (const row of report.statementCounts) {
-          lines.push(`*${row.table.toUpperCase()}*`);
-          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
-          lines.push("");
-        }
-      }
-
-      if (report.squadCounts && report.squadCounts.length > 0) {
-        lines.push("📋 *Per-Squad Summary*");
-        lines.push("");
-        for (const row of report.squadCounts) {
-          lines.push(`*${row.squad}* — ${row.total} statement${row.total !== 1 ? "s" : ""}`);
-          lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
-          lines.push("");
-        }
-      }
-
-      if (report.featureCounts && report.featureCounts.length > 0) {
-        lines.push("📋 *Per-Feature Summary*");
-        lines.push("");
-        const squadGroups = new Map();
-        const noSquadFeatures = [];
-        for (const row of report.featureCounts) {
-          if (row.squad) {
-            const key = row.squad.toUpperCase();
-            if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, features: [] });
-            squadGroups.get(key).features.push(row);
-          } else {
-            noSquadFeatures.push(row);
-          }
-        }
-        const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
-        for (const key of sortedSquadKeys) {
-          const group = squadGroups.get(key);
-          lines.push(`*${group.displayName}*`);
-          for (const row of group.features) {
-            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
-          }
-          lines.push("");
-        }
-        if (noSquadFeatures.length > 0) {
-          lines.push("*Other*");
-          for (const row of noSquadFeatures) {
-            lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
-          }
-          lines.push("");
-        }
-      }
-
-      if (report.nonSystemAuthors && report.nonSystemAuthors.length > 0) {
-        lines.push("⚠️ *Non-SYSTEM Authors*");
-        for (const item of report.nonSystemAuthors) {
-          lines.push(`${item.fileName} — ${item.field}: ${item.value}`);
-        }
-        lines.push("");
-      } else {
-        lines.push("✅ *Non-SYSTEM Authors* — All values are SYSTEM");
-        lines.push("");
-      }
-
-    } else if (subtab === "table-detail") {
-      lines.push("📊 *Merge SQL Report — Table Detail*");
-      lines.push("");
-
-      if (report.tableSquadCounts && report.tableSquadCounts.length > 0) {
-        const featureLookup = new Map();
-        if (report.tableSquadFeatureCounts) {
-          for (const row of report.tableSquadFeatureCounts) {
-            const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
-            if (!featureLookup.has(key)) featureLookup.set(key, []);
-            featureLookup.get(key).push(row);
-          }
-        }
-
-        const tableGroups = new Map();
+      // Build squad/feature lookups for drill-down
+      const tableSquadMap = new Map();
+      if (report.tableSquadCounts) {
         for (const row of report.tableSquadCounts) {
           const key = row.table.toUpperCase();
-          if (!tableGroups.has(key)) tableGroups.set(key, []);
-          tableGroups.get(key).push(row);
+          if (!tableSquadMap.has(key)) tableSquadMap.set(key, []);
+          tableSquadMap.get(key).push(row);
         }
-
-        for (const [tableKey, rows] of tableGroups) {
-          lines.push(`*${rows[0].table.toUpperCase()}*`);
-          const totals = { insert: 0, merge: 0, update: 0, total: 0 };
-          for (const row of rows) {
-            totals.insert += row.insert;
-            totals.merge += row.merge;
-            totals.update += row.update;
-            totals.total += row.total;
-            lines.push(`${row.squad} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
-
-            const featureKey = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
-            const features = featureLookup.get(featureKey) || [];
-            for (const f of features) {
-              const featureName = f.feature || "Feature not Mentioned";
-              lines.push(`  ${featureName} — ${f.total} statement${f.total !== 1 ? "s" : ""}`);
-            }
-          }
-          lines.push(`_Total: INS: ${totals.insert} | MRG: ${totals.merge} | UPD: ${totals.update} | Tot: ${totals.total}_`);
-          lines.push("");
+      }
+      const featureLookup = new Map();
+      if (report.tableSquadFeatureCounts) {
+        for (const row of report.tableSquadFeatureCounts) {
+          const key = `${row.table.toUpperCase()}|${row.squad.toUpperCase()}`;
+          if (!featureLookup.has(key)) featureLookup.set(key, []);
+          featureLookup.get(key).push(row);
         }
-      } else {
-        lines.push("No table+squad data found");
       }
 
+      const tHasInsert = report.statementCounts.some((r) => (r.insert || 0) > 0);
+      const tHasMerge  = report.statementCounts.some((r) => (r.merge  || 0) > 0);
+      const tHasUpdate = report.statementCounts.some((r) => (r.update || 0) > 0);
+      const tHasDelete = report.statementCounts.some((r) => (r.delete || 0) > 0);
+
+      const fmtCounts = (r) => {
+        const parts = [];
+        if (tHasInsert) parts.push(`INS: ${r.insert || 0}`);
+        if (tHasMerge)  parts.push(`MRG: ${r.merge  || 0}`);
+        if (tHasUpdate) parts.push(`UPD: ${r.update || 0}`);
+        if (tHasDelete) parts.push(`DEL: ${r.delete || 0}`);
+        parts.push(`Tot: ${r.total || 0}`);
+        return parts.join(" | ");
+      };
+
+      for (const row of report.statementCounts) {
+        const tableKey = row.table.toUpperCase();
+        lines.push(`*${tableKey}* — ${fmtCounts(row)}`);
+        const squads = tableSquadMap.get(tableKey) || [];
+        for (const squadRow of squads) {
+          lines.push(`  ${squadRow.squad} → ${fmtCounts(squadRow)}`);
+          const features = featureLookup.get(`${tableKey}|${squadRow.squad.toUpperCase()}`) || [];
+          for (const f of features) {
+            lines.push(`    ${f.feature || "Feature not Mentioned"} — ${fmtCounts(f)}`);
+          }
+        }
+        lines.push("");
+      }
+    }
+
+    if (report.squadCounts && report.squadCounts.length > 0) {
+      lines.push("📋 *Per-Squad Summary*");
+      lines.push("");
+      for (const row of report.squadCounts) {
+        lines.push(`*${row.squad}* — ${row.total} statement${row.total !== 1 ? "s" : ""}`);
+        lines.push(`INSERT: ${row.insert} | MERGE: ${row.merge} | UPDATE: ${row.update} | Total: ${row.total}`);
+        lines.push("");
+      }
+    }
+
+    if (report.featureCounts && report.featureCounts.length > 0) {
+      lines.push("📋 *Per-Feature Summary*");
+      lines.push("");
+      const squadGroups = new Map();
+      const noSquadFeatures = [];
+      for (const row of report.featureCounts) {
+        if (row.squad) {
+          const key = row.squad.toUpperCase();
+          if (!squadGroups.has(key)) squadGroups.set(key, { displayName: row.squad, features: [] });
+          squadGroups.get(key).features.push(row);
+        } else {
+          noSquadFeatures.push(row);
+        }
+      }
+      const sortedSquadKeys = Array.from(squadGroups.keys()).sort();
+      for (const key of sortedSquadKeys) {
+        const group = squadGroups.get(key);
+        lines.push(`*${group.displayName}*`);
+        for (const row of group.features) {
+          lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+        }
+        lines.push("");
+      }
+      if (noSquadFeatures.length > 0) {
+        lines.push("*Other*");
+        for (const row of noSquadFeatures) {
+          lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+        }
+        lines.push("");
+      }
+    }
+
+    if (report.nonSystemAuthors && report.nonSystemAuthors.length > 0) {
+      lines.push("⚠️ *Non-SYSTEM Authors*");
+      for (const item of report.nonSystemAuthors) {
+        lines.push(`${item.fileName} — ${item.field}: ${item.value}`);
+      }
+      lines.push("");
+    } else {
+      lines.push("✅ *Non-SYSTEM Authors* — All values are SYSTEM");
+      lines.push("");
     }
 
     return lines.join("\n");
@@ -2054,9 +2006,6 @@ export class MergeSqlTool extends BaseTool {
   }
 
   getActiveReportElement() {
-    if (this.currentSubtab === "table-detail") {
-      return document.getElementById("merge-sql-report-table-detail");
-    }
     return document.getElementById("merge-sql-report-summary");
   }
 
@@ -2069,10 +2018,10 @@ export class MergeSqlTool extends BaseTool {
 
     const reportContent = el.querySelector(".report-content") || el;
 
-    const previouslyCollapsed = reportContent.querySelectorAll(".row-feature-details");
-    previouslyCollapsed.forEach((row) => row.classList.add("temp-visible", "visible"));
+    const previouslyCollapsed = reportContent.querySelectorAll(".row-child");
+    previouslyCollapsed.forEach((row) => row.classList.add("row-child-visible"));
     const expandableRows = reportContent.querySelectorAll(".row-expandable");
-    expandableRows.forEach((row) => row.classList.add("temp-expanded", "expanded"));
+    expandableRows.forEach((row) => row.classList.add("expanded"));
 
     const originalOverflow = reportContent.style.overflow;
     const originalHeight = reportContent.style.height;
@@ -2100,10 +2049,10 @@ export class MergeSqlTool extends BaseTool {
       return canvas;
     } finally {
       previouslyCollapsed.forEach((row) => {
-        row.classList.remove("temp-visible", "visible");
+        row.classList.remove("row-child-visible");
       });
       expandableRows.forEach((row) => {
-        row.classList.remove("temp-expanded", "expanded");
+        row.classList.remove("expanded");
       });
       reportContent.style.overflow = originalOverflow;
       reportContent.style.height = originalHeight;
@@ -2155,8 +2104,7 @@ export class MergeSqlTool extends BaseTool {
       if (!canvas) return;
 
       const folderName = document.getElementById("merge-sql-folder-name")?.value || "MERGED";
-      const subtabLabel = this.currentSubtab === "table-detail" ? "TableDetail" : "Summary";
-      const fileName = `${folderName}-Report-${subtabLabel}.png`;
+      const fileName = `${folderName}-Report-Summary.png`;
 
       await new Promise((resolve) => {
         canvas.toBlob(async (blob) => {

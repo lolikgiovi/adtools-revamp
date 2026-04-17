@@ -142,14 +142,6 @@ export const MergeSqlTemplate = /* html */ `
       </div>
       <div class="merge-sql-right-panel">
         <div class="merge-sql-result-actions" id="merge-sql-result-actions">
-          <div class="merge-sql-report-subtabs" id="merge-sql-report-subtabs">
-            <button class="merge-sql-report-subtab active" data-subtab="summary">
-              Summary
-            </button>
-            <button class="merge-sql-report-subtab" data-subtab="table-detail">
-              Table Detail
-            </button>
-          </div>
           <div class="merge-sql-report-actions-buttons" id="merge-sql-report-actions-buttons">
             <button class="btn btn-ghost btn-xs" id="merge-sql-copy-report-text-btn" title="Copy report as text for WhatsApp">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -251,12 +243,6 @@ export const MergeSqlTemplate = /* html */ `
               <div class="report-section" id="merge-sql-report-squads"></div>
               <div class="report-section" id="merge-sql-report-features"></div>
               <div class="report-section" id="merge-sql-report-authors"></div>
-            </div>
-          </div>
-
-          <div class="merge-sql-report-subtab-content" id="merge-sql-report-table-detail">
-            <div class="report-content">
-              <div class="report-section" id="merge-sql-report-table-squads"></div>
             </div>
           </div>
 
