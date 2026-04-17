@@ -688,8 +688,9 @@
 /* Report Sub-tabs */
 .merge-sql-report-subtab-content {
   display: none;
-  height: 100%;
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .merge-sql-report-subtab-content.active {
@@ -697,7 +698,8 @@
 }
 
 .merge-sql-report-subtab-content .report-content {
-  height: 100%;
+  height: auto;
+  overflow-y: visible;
 }
 
 .report-content {
@@ -779,7 +781,7 @@
 
 .report-sticky-header::before {
   content: "";
-  position: absolute;
+  /* position: absolute; */
   top: -100px;
   left: 0;
   right: 0;
@@ -1228,7 +1230,9 @@
   color: hsl(var(--muted-foreground));
   padding: 0;
   opacity: 0;
-  transition: opacity 0.1s ease, background 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    background 0.1s ease;
   flex-shrink: 0;
   margin-left: 0.1rem;
 }

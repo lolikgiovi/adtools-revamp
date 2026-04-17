@@ -1533,6 +1533,95 @@ export class MergeSqlService {
    * @param {string} mergedSql
    * @returns {string}
    */
+  /**
+   * Parse a merged SQL string into context groups based on inline "-- SQUAD - FEATURE" comments.
+   * Each group becomes a pseudo-file with an encoded filename so analyzeStatements() can
+   * extract squad/feature metadata via parseFileName().
+   *
+   * Expected merged SQL format (per table section):
+   *   --====...====
+   *   -- SCHEMA.TABLE
+   *   --====...====
+   *   (blank)
+   *   -- SQUAD_NAME - FEATURE_NAME
+   *   MERGE INTO ...;
+   *   (blank)
+   *   -- SQUAD2 - FEATURE2
+   *   MERGE INTO ...;
+   *
+   * @param {string} mergedSql
+   * @returns {Array<{ fileName: string, dmlStatements: string[], selectStatements: string[] }>}
+   */
+  static parseMergedSqlIntoContextGroups(mergedSql) {
+    const lines = mergedSql.split("\n");
+
+    // Matches a squad/feature sub-header: "-- SQUAD - FEATURE"
+    // Squad part must not contain "." (to avoid matching table headers like "-- SCHEMA.TABLE")
+    const SQUAD_FEATURE_RE = /^-- ([^.]+?) - (.+)$/;
+    // Matches section separator lines (--===...===)
+    const SEPARATOR_RE = /^--={30,}$/;
+
+    const groups = []; // { squadName: string|null, featureName: string|null, lines: string[] }
+    let currentSquad = null;
+    let currentFeature = null;
+    let currentLines = [];
+    let prevWasSeparator = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const isSep = SEPARATOR_RE.test(trimmed);
+
+      if (isSep) {
+        prevWasSeparator = true;
+        currentLines.push(line);
+        continue;
+      }
+
+      // Table header: "-- SCHEMA.TABLE" appearing directly after a separator line
+      const isTableHeader = prevWasSeparator && /^-- [A-Z_][A-Z0-9_$#]*\.[A-Z_][A-Z0-9_$#]/.test(trimmed);
+      prevWasSeparator = false;
+
+      if (isTableHeader) {
+        currentLines.push(line);
+        continue;
+      }
+
+      // Squad/feature sub-header: "-- SQUAD - FEATURE" (no dot, contains " - ")
+      const squadMatch = trimmed.match(SQUAD_FEATURE_RE);
+      if (squadMatch) {
+        // Save the current group before switching context
+        if (currentLines.some((l) => l.trim())) {
+          groups.push({ squadName: currentSquad, featureName: currentFeature, lines: currentLines });
+        }
+        currentSquad = squadMatch[1].trim();
+        currentFeature = squadMatch[2].trim();
+        currentLines = [];
+        continue;
+      }
+
+      currentLines.push(line);
+    }
+
+    // Flush the last group
+    if (currentLines.some((l) => l.trim())) {
+      groups.push({ squadName: currentSquad, featureName: currentFeature, lines: currentLines });
+    }
+
+    // If no squad/feature context was found, fall back to treating it as one anonymous file
+    if (!groups.some((g) => g.squadName)) {
+      return [this.parseFile(mergedSql, "MERGED.sql")];
+    }
+
+    // Convert each group to a pseudo-file with an encoded filename that parseFileName() can parse
+    // Format: "MERGED.PLACEHOLDER (SQUAD)[FEATURE].sql"  →  parseStrictFileName extracts squad+feature
+    return groups.map((g) => {
+      const fileName = g.squadName
+        ? `MERGED.PLACEHOLDER (${g.squadName})[${g.featureName || g.squadName}].sql`
+        : "MERGED.sql";
+      return this.parseFile(g.lines.join("\n"), fileName);
+    });
+  }
+
   static buildReportFromMergedSql(mergedSql) {
     if (!mergedSql || typeof mergedSql !== "string" || !mergedSql.trim()) {
       return {
@@ -1547,10 +1636,15 @@ export class MergeSqlService {
       };
     }
 
-    const parsed = this.parseFile(mergedSql, "MERGED.sql");
-    const analysis = this.analyzeStatements([parsed]);
-    const dangerousStatements = this.detectDangerousStatements([parsed]);
-    const nonSystemAuthors = this.detectNonSystemAuthors([parsed]);
+    // Use context groups for squad/feature-aware analysis (parses inline "-- SQUAD - FEATURE" comments)
+    const contextFiles = this.parseMergedSqlIntoContextGroups(mergedSql);
+    const analysis = this.analyzeStatements(contextFiles);
+
+    // Use the full file for dangerous-statement and non-system-author detection
+    // so the filename shown in those reports stays as "MERGED.sql"
+    const fullParsed = this.parseFile(mergedSql, "MERGED.sql");
+    const dangerousStatements = this.detectDangerousStatements([fullParsed]);
+    const nonSystemAuthors = this.detectNonSystemAuthors([fullParsed]);
 
     return {
       statementCounts: analysis.tableCounts,

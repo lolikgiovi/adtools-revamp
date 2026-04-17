@@ -2484,6 +2484,54 @@ VALUES (1, 'John');
 
       expect(report.nonSystemAuthors.length).toBeGreaterThan(0);
     });
+
+    it("parses squad/feature from inline comments in merged SQL", () => {
+      const mergedSql = `SET DEFINE OFF;
+
+--====================================================================================================
+-- LOCALIZATION.ERROR_MESSAGE
+--====================================================================================================
+
+-- CANOPUS - AKDC
+MERGE INTO LOCALIZATION.ERROR_MESSAGE tgt
+USING (SELECT 'E001' AS error_message_code FROM DUAL) src
+ON (tgt.error_message_code = src.error_message_code)
+WHEN NOT MATCHED THEN INSERT (error_message_code) VALUES (src.error_message_code);
+
+-- REGULUS - AUDIT WMCORE
+MERGE INTO LOCALIZATION.ERROR_MESSAGE tgt
+USING (SELECT 'E002' AS error_message_code FROM DUAL) src
+ON (tgt.error_message_code = src.error_message_code)
+WHEN NOT MATCHED THEN INSERT (error_message_code) VALUES (src.error_message_code);
+
+MERGE INTO LOCALIZATION.ERROR_MESSAGE tgt
+USING (SELECT 'E003' AS error_message_code FROM DUAL) src
+ON (tgt.error_message_code = src.error_message_code)
+WHEN NOT MATCHED THEN INSERT (error_message_code) VALUES (src.error_message_code);`;
+
+      const report = MergeSqlService.buildReportFromMergedSql(mergedSql);
+
+      // Squad counts should be populated from inline comments
+      expect(report.squadCounts.length).toBe(2);
+      const canopus = report.squadCounts.find((s) => s.squad === "CANOPUS");
+      expect(canopus).toBeDefined();
+      expect(canopus.merge).toBe(1);
+      const regulus = report.squadCounts.find((s) => s.squad === "REGULUS");
+      expect(regulus).toBeDefined();
+      expect(regulus.merge).toBe(2); // two statements under REGULUS
+
+      // Feature counts should be populated
+      expect(report.featureCounts.length).toBe(2);
+      const akdc = report.featureCounts.find((f) => f.feature === "AKDC");
+      expect(akdc).toBeDefined();
+      const auditWmcore = report.featureCounts.find((f) => f.feature === "AUDIT WMCORE");
+      expect(auditWmcore).toBeDefined();
+
+      // Table counts should still be accurate
+      const tableRow = report.statementCounts.find((r) => r.table === "LOCALIZATION.ERROR_MESSAGE");
+      expect(tableRow).toBeDefined();
+      expect(tableRow.merge).toBe(3);
+    });
   });
 
   describe("uppercaseUnquotedTableRef", () => {
