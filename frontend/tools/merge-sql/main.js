@@ -2076,11 +2076,15 @@ export class MergeSqlTool extends BaseTool {
           return;
         }
         try {
-          const { Image } = await import("@tauri-apps/api/image");
-          const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
-          const pngBytes = new Uint8Array(await blob.arrayBuffer());
-          const tauriImage = await Image.fromBytes(pngBytes);
-          await writeImage(tauriImage);
+          if (window.__TAURI__) {
+            const { Image } = await import("@tauri-apps/api/image");
+            const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+            const pngBytes = new Uint8Array(await blob.arrayBuffer());
+            const tauriImage = await Image.fromBytes(pngBytes);
+            await writeImage(tauriImage);
+          } else {
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          }
           this.showSuccess("Report image copied to clipboard!");
         } catch (clipboardError) {
           console.error("Clipboard image write failed:", clipboardError);
@@ -2114,14 +2118,24 @@ export class MergeSqlTool extends BaseTool {
             return;
           }
           try {
-            const { save } = await import("@tauri-apps/plugin-dialog");
-            const { writeFile } = await import("@tauri-apps/plugin-fs");
-            const savePath = await save({
-              filters: [{ name: "PNG Image", extensions: ["png"] }],
-              defaultPath: fileName,
-            });
-            if (savePath) {
-              await writeFile(savePath, new Uint8Array(await blob.arrayBuffer()));
+            if (window.__TAURI__) {
+              const { save } = await import("@tauri-apps/plugin-dialog");
+              const { writeFile } = await import("@tauri-apps/plugin-fs");
+              const savePath = await save({
+                filters: [{ name: "PNG Image", extensions: ["png"] }],
+                defaultPath: fileName,
+              });
+              if (savePath) {
+                await writeFile(savePath, new Uint8Array(await blob.arrayBuffer()));
+                this.showSuccess(`Downloaded ${fileName}`);
+              }
+            } else {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = fileName;
+              a.click();
+              URL.revokeObjectURL(url);
               this.showSuccess(`Downloaded ${fileName}`);
             }
           } catch (saveError) {
