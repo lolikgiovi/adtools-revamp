@@ -5,6 +5,7 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
+import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
@@ -814,6 +815,13 @@ async function executeQuery(env, cacheKey, query) {
       return new Response(cachedBody, {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
+    }
+
+    if (query.includes("error_events")) {
+      await ensureErrorEventsSchema(env);
+    }
+    if (query.includes("d.app_version") || query.includes("devices.app_version")) {
+      await ensureDeviceAppVersionSchema(env);
     }
 
     const result = await env.DB.prepare(query).all();

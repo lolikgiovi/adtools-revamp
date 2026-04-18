@@ -4,6 +4,7 @@
  */
 
 import { corsHeaders } from '../utils/cors.js';
+import { ensureErrorEventsSchema } from '../utils/analyticsSchema.js';
 import { tsGmt7Plain, tsToGmt7Plain } from '../utils/timestamps.js';
 
 /**
@@ -208,6 +209,8 @@ export async function handleAnalyticsErrorPost(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
+
+    await ensureErrorEventsSchema(env);
 
     await env.DB.prepare(
       `INSERT INTO error_events (

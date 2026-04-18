@@ -64,7 +64,12 @@ npm install
 | `npm run test:ci` | Run tests once |
 | `npm run build` | Build for production |
 | `npm run cf:dev` | Build + run Wrangler locally (http://localhost:8787) |
-| `npm run cf:publish` | Deploy to Cloudflare Workers |
+| `npm run cf:publish` | Build, deploy to Cloudflare Workers, and apply production D1 migrations |
+| `npm run cf:deploy` | Same as `cf:publish` |
+| `npm run cf:deploy:worker` | Deploy Worker and then apply production D1 migrations |
+| `npm run cf:versions:upload` | Upload a preview Worker version without production migration |
+| `npm run db:migrate:local` | Apply D1 migrations locally |
+| `npm run db:migrate:remote` | Apply D1 migrations to production |
 | `npm run release:build` | Build Tauri desktop app |
 | `npm run release:upload` | Upload release to R2 |
 
@@ -98,9 +103,11 @@ Tauri WebView → Same frontend code → API calls to CF Workers
 
 Migrations are in `backend-workers/migrations/`. To apply:
 ```bash
-npx wrangler d1 migrations apply adtools --local   # Local
-npx wrangler d1 migrations apply adtools --remote  # Production
+npm run db:migrate:local   # Local
+npm run db:migrate:remote  # Production
 ```
+
+Keep `npm run build` free of database changes. Use `npm run cf:publish` or `npm run cf:deploy` when the Worker deploy should also apply production D1 migrations.
 
 ## Deployment
 
@@ -108,6 +115,16 @@ npx wrangler d1 migrations apply adtools --remote  # Production
 ```bash
 npm run cf:publish
 ```
+
+For Cloudflare Workers Builds connected to Git:
+
+| Cloudflare setting | Value |
+|--------------------|-------|
+| Build command | `npm run build` |
+| Deploy command | `npm run cf:deploy:worker` |
+| Non-production branch deploy command | `npm run cf:versions:upload` |
+
+This keeps the order as build, deploy the new Worker, then apply production D1 migrations. Preview builds should not run production D1 migrations.
 
 ### Desktop App (Tauri)
 ```bash

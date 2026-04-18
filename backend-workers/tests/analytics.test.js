@@ -156,6 +156,8 @@ describe('Analytics endpoints', () => {
     expect(data.inserted).toBe(1);
 
     const insert = env.DB.executed.find((item) => item.sql.includes('INSERT INTO error_events'));
+    const createTable = env.DB.executed.find((item) => item.sql.includes('CREATE TABLE IF NOT EXISTS error_events'));
+    expect(createTable).toBeTruthy();
     expect(insert.args).toContain('json-tools');
     expect(insert.args).toContain('Unexpected failure with code [redacted-code]');
     const metadata = JSON.parse(insert.args[15]);
@@ -202,6 +204,66 @@ describe('Analytics endpoints', () => {
     expect(ids).toContain('versions');
     expect(ids).toContain('error-summary');
     expect(ids).toContain('errors');
+  });
+
+  it('self-heals error_events schema before dashboard insight queries', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'overview' }),
+      }),
+      env
+    );
+
+    const data = await response.json();
+    const createTable = env.DB.executed.find((item) => item.sql.includes('CREATE TABLE IF NOT EXISTS error_events'));
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(createTable).toBeTruthy();
+  });
+
+  it('self-heals device app_version schema before version dashboard queries', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'versions' }),
+      }),
+      env
+    );
+
+    const data = await response.json();
+    const alter = env.DB.executed.find((item) => item.sql.includes('ALTER TABLE device ADD COLUMN app_version'));
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(alter).toBeTruthy();
   });
 
   it('merges new default insight tabs with stored dashboard config', async () => {

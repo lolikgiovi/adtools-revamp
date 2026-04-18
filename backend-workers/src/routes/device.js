@@ -4,6 +4,7 @@
  */
 
 import { corsHeaders } from '../utils/cors.js';
+import { ensureDeviceAppVersionSchema } from '../utils/analyticsSchema.js';
 import { tsGmt7Plain } from '../utils/timestamps.js';
 
 /**
@@ -36,6 +37,8 @@ export async function handleDeviceVersionUpdate(request, env) {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });
     }
+
+    await ensureDeviceAppVersionSchema(env);
 
     // Check if device exists
     const device = await env.DB.prepare('SELECT device_id FROM device WHERE device_id = ?').bind(deviceId).first();
