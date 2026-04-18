@@ -607,12 +607,7 @@ export class QuickQueryUI {
       acceptSuggestionOnEnter: "off",
       tabCompletion: "off",
     });
-    // Sync initial word wrap label with current editor option
-    const wordWrapButton = document.getElementById("toggleWordWrap");
-    const currentWrap = this.editor.getRawOptions().wordWrap;
-    if (wordWrapButton) {
-      wordWrapButton.textContent = `Word Wrap: ${currentWrap === "on" ? "On" : "Off"}`;
-    }
+    this.syncWordWrapToggle(this.editor.getRawOptions().wordWrap);
     this.scheduleSchemaLayoutRefresh();
   }
 
@@ -1521,13 +1516,22 @@ export class QuickQueryUI {
   }
 
   handleToggleWordWrap() {
-    const wordWrapButton = this.elements?.toggleWordWrapButton || document.getElementById("toggleWordWrap");
     const current = this.editor.getRawOptions().wordWrap;
     const next = current === "on" ? "off" : "on";
 
     this.editor.updateOptions({ wordWrap: next });
+    this.syncWordWrapToggle(next);
+  }
+
+  syncWordWrapToggle(wordWrap) {
+    const wordWrapButton = this.elements?.toggleWordWrapButton || document.getElementById("toggleWordWrap");
+    const isOn = wordWrap === "on";
+
     if (wordWrapButton) {
-      wordWrapButton.textContent = `Word Wrap: ${next === "on" ? "On" : "Off"}`;
+      wordWrapButton.classList.toggle("is-on", isOn);
+      wordWrapButton.setAttribute("aria-checked", String(isOn));
+      wordWrapButton.setAttribute("aria-label", `Turn word wrap ${isOn ? "off" : "on"}`);
+      wordWrapButton.setAttribute("title", `Word wrap: ${isOn ? "On" : "Off"}`);
     }
   }
 

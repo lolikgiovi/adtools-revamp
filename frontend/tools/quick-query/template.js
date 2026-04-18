@@ -47,7 +47,12 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
-                    <button id="toggleWordWrap" class="btn btn-primary btn-sm">Word Wrap: Off</button>
+                    <button id="toggleWordWrap" class="word-wrap-toggle" type="button" role="switch" aria-checked="false" aria-label="Turn word wrap on" title="Word wrap: Off">
+                        <span class="word-wrap-toggle-label">Wrap</span>
+                        <span class="word-wrap-toggle-track" aria-hidden="true">
+                            <span class="word-wrap-toggle-thumb"></span>
+                        </span>
+                    </button>
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy</button>
                     <div class="split-btn">
                         <button id="downloadSQL" class="btn btn-primary btn-sm split-btn-main">Save</button>
