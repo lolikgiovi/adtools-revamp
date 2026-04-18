@@ -66,23 +66,40 @@ SELECT
 FROM get_device_usage
 WHERE true
 ON CONFLICT(device_id, tool_id, action) DO UPDATE SET
-  user_email = excluded.user_email,
-  count = excluded.count,
-  updated_time = excluded.updated_time;
+  user_email = COALESCE(excluded.user_email, device_usage.user_email),
+  count = MAX(device_usage.count, excluded.count),
+  updated_time = CASE
+    WHEN datetime(excluded.updated_time) > datetime(device_usage.updated_time) THEN excluded.updated_time
+    ELSE device_usage.updated_time
+  END;
 
 INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time)
 SELECT
-  user_email,
-  device_id,
+  g.user_email,
+  g.device_id,
   CASE
-    WHEN tool_id = 'master_lockey' THEN 'master-lockey'
-    WHEN tool_id = 'json_tools' THEN 'json-tools'
-    WHEN tool_id = 'jenkins-runner' THEN 'run-query'
-    ELSE tool_id
+    WHEN g.tool_id = 'master_lockey' THEN 'master-lockey'
+    WHEN g.tool_id = 'json_tools' THEN 'json-tools'
+    WHEN g.tool_id = 'jenkins-runner' THEN 'run-query'
+    ELSE g.tool_id
   END AS tool_id,
-  action,
-  created_time
-FROM get_usage_log;
+  g.action,
+  g.created_time
+FROM get_usage_log g
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM usage_log existing
+  WHERE existing.user_email = g.user_email
+    AND existing.device_id = g.device_id
+    AND existing.tool_id = CASE
+      WHEN g.tool_id = 'master_lockey' THEN 'master-lockey'
+      WHEN g.tool_id = 'json_tools' THEN 'json-tools'
+      WHEN g.tool_id = 'jenkins-runner' THEN 'run-query'
+      ELSE g.tool_id
+    END
+    AND existing.action = g.action
+    AND existing.created_time = g.created_time
+);
 
 DROP TABLE IF EXISTS get_device_usage;
 DROP TABLE IF EXISTS get_usage_log;

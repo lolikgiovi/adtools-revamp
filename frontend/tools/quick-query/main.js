@@ -849,12 +849,17 @@ export class QuickQueryUI {
     });
   }
 
-  persistCurrentQueryType() {
+  async persistCurrentQueryType() {
     const tableName = this.elements.tableNameInput?.value?.trim();
-    if (!tableName || !tableName.includes(".")) return;
+    if (!tableName || !tableName.includes(".")) return false;
+
+    await this.flushPendingDataAutosave();
+
     if (this.storageService && typeof this.storageService.updateQueryType === "function") {
-      void this.storageService.updateQueryType(tableName, this.getQueryTypeValue());
+      return this.storageService.updateQueryType(tableName, this.getQueryTypeValue());
     }
+
+    return false;
   }
 
   /**
@@ -877,15 +882,15 @@ export class QuickQueryUI {
 
     // Bind option click handlers
     dropdown.querySelectorAll(".query-type-option").forEach((opt) => {
-      opt.addEventListener("click", (e) => {
+      opt.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
         const value = opt.dataset.value;
         this.setQueryTypeValue(value);
         dropdown.classList.remove("show");
-        this.persistCurrentQueryType();
+        await this.persistCurrentQueryType();
         // Trigger query regeneration
-        this.handleGenerateQuery();
+        await this.handleGenerateQuery();
       });
     });
 
