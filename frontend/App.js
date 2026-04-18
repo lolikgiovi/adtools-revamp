@@ -643,7 +643,7 @@ class App {
         <span class="update-banner-label">${label}</span>
         ${
           notes
-            ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="false">What\'s new?</button>'
+            ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="true">Hide notes</button>'
             : ""
         }
         <div class="update-banner-actions">
@@ -651,7 +651,7 @@ class App {
           <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
         </div>
       </div>
-      ${notes ? `<div class="update-banner-notes" aria-hidden="true"><p>${this.#escapeHtml(notes)}</p></div>` : ""}
+      ${notes ? `<div class="update-banner-notes" aria-hidden="false"><p>${this.#escapeHtml(notes)}</p></div>` : ""}
       <div class="update-banner-progress" aria-hidden="true">
         <div class="update-banner-progressbox"><div class="update-banner-progressbar" style="width: 0%"></div></div>
         <span class="update-banner-stage">Ready</span>

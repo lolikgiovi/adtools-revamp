@@ -37,11 +37,10 @@
 }
 
 .content-a {
+  --qq-upper-extra-space: 56px;
   display: flex;
-  flex: 1 0 auto;
-  /* Allow it to grow but not shrink */
-  min-height: calc(80vh - 80px);
-  /* 80% of container's height (100vh - 100px) */
+  flex: 0 0 auto;
+  min-height: var(--qq-upper-min-height, 460px);
   position: relative;
 }
 
@@ -75,7 +74,8 @@
 }
 
 #spreadsheet-schema {
-  flex: 1;
+  flex: 0 0 auto;
+  min-height: 0;
   overflow: visible;
 }
 
@@ -130,12 +130,12 @@
 
 #queryEditor {
   /* height: 500px;  */
-  flex: 1;
-  min-height: 400px;
+  flex: 0 0 auto;
+  height: var(--qq-query-editor-height, 180px);
+  min-height: 120px;
   display: flex;
   flex-direction: column;
-  overflow: visible;
-  /* allow Monaco widgets to overflow */
+  overflow: hidden;
   /* Contain overscroll so wheel events don't bubble naturally */
   overscroll-behavior: contain;
   border-radius: 6px;
@@ -926,6 +926,7 @@
 
 /* Container styling */
 #files-container {
+  margin-top: auto;
   padding-top: 15px;
   border-radius: 6px;
   background-color: hsl(var(--background));

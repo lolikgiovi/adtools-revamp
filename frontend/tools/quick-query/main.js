@@ -209,6 +209,11 @@ export class QuickQueryUI {
       // Schema editor elements
       schemaContainer: document.getElementById("spreadsheet-schema"),
       dataContainer: document.getElementById("spreadsheet-data"),
+      contentA: document.querySelector(".content-a"),
+      leftPanel: document.querySelector(".quick-query-left-panel"),
+      rightPanel: document.querySelector(".quick-query-right-panel"),
+      rightControls: document.querySelector(".quick-query-right-controls"),
+      queryEditor: document.getElementById("queryEditor"),
 
       // Attachments components
       addFilesButton: document.getElementById("addFilesButton"),
@@ -539,7 +544,7 @@ export class QuickQueryUI {
   }
 
   initializeEditor() {
-    this.editor = createOracleEditor(document.getElementById("queryEditor"), {
+    this.editor = createOracleEditor(this.elements.queryEditor, {
       value: "",
       automaticLayout: true,
       fontSize: 10.5,
@@ -562,6 +567,7 @@ export class QuickQueryUI {
     if (wordWrapButton) {
       wordWrapButton.textContent = `Word Wrap: ${currentWrap === "on" ? "On" : "Off"}`;
     }
+    this.scheduleSchemaLayoutRefresh();
   }
 
   initializeSpreadsheets() {
@@ -571,16 +577,19 @@ export class QuickQueryUI {
         if (changes) {
           this.updateDataSpreadsheet();
           this.handleAddFieldNames();
+          this.scheduleSchemaLayoutRefresh();
         }
       },
       afterCreateRow: (index, amount) => {
         console.log(amount, "Row created, for index:", index);
         this.updateDataSpreadsheet();
         this.handleAddFieldNames();
+        this.scheduleSchemaLayoutRefresh();
       },
       afterRemoveRow: () => {
         this.updateDataSpreadsheet();
         this.handleAddFieldNames();
+        this.scheduleSchemaLayoutRefresh();
       },
       afterGetColHeader: function (col, TH) {
         const header = TH.querySelector(".colHeader");
@@ -590,6 +599,7 @@ export class QuickQueryUI {
       },
     };
     this.schemaTable = new Handsontable(this.elements.schemaContainer, schemaTableConfig);
+    this.scheduleSchemaLayoutRefresh();
 
     const dataTableConfig = {
       ...initialDataTableSpecification,
@@ -611,6 +621,55 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+  }
+
+  scheduleSchemaLayoutRefresh() {
+    if (this._layoutScheduled) return;
+
+    this._layoutScheduled = true;
+    const scheduleFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
+    scheduleFrame(() => {
+      this._layoutScheduled = false;
+      if (!this.schemaTable) return;
+
+      this.schemaTable.updateSettings({ height: "auto" });
+      this.schemaTable.refreshDimensions?.();
+      this.schemaTable.render();
+      this.syncUpperLayoutHeight();
+    });
+  }
+
+  syncUpperLayoutHeight() {
+    const { leftPanel, rightPanel, rightControls, queryEditor, warningMessages, errorMessages, queryProgress } = this.elements;
+    if (!leftPanel || !rightPanel || !queryEditor) return;
+
+    const toPx = (value) => parseFloat(value) || 0;
+    const outerHeight = (element) => {
+      if (!element || element.classList?.contains("hidden") || getComputedStyle(element).display === "none") return 0;
+
+      const styles = getComputedStyle(element);
+      return element.offsetHeight + toPx(styles.marginTop) + toPx(styles.marginBottom);
+    };
+
+    const leftStyles = getComputedStyle(leftPanel);
+    const leftContentHeight =
+      Array.from(leftPanel.children).reduce((height, child) => height + outerHeight(child), 0) +
+      toPx(leftStyles.paddingTop) +
+      toPx(leftStyles.paddingBottom);
+
+    const rightFixedHeight = [rightControls, warningMessages, errorMessages, queryProgress].reduce(
+      (height, element) => height + outerHeight(element),
+      0,
+    );
+    const contentStyles = getComputedStyle(this.elements.contentA || leftPanel);
+    const minUpperHeight = toPx(contentStyles.minHeight) || 500;
+    const extraUpperSpace = toPx(contentStyles.getPropertyValue("--qq-upper-extra-space"));
+    const minEditorHeight = 120;
+    const upperHeight = Math.max(leftContentHeight + extraUpperSpace, minUpperHeight);
+    const editorHeight = Math.max(minEditorHeight, Math.ceil(upperHeight - rightFixedHeight));
+
+    queryEditor.style.setProperty("--qq-query-editor-height", `${editorHeight}px`);
+    this.editor?.layout?.({ width: queryEditor.clientWidth, height: queryEditor.clientHeight });
   }
 
   updateDataSpreadsheet() {
@@ -1176,6 +1235,7 @@ export class QuickQueryUI {
         data: [["", "", "", "", "", ""]],
         colHeaders: ["Field Name", "Data Type", "Null", "Default", "Order", "PK"],
       });
+      this.scheduleSchemaLayoutRefresh();
     }
 
     if (this.dataTable) {
@@ -2166,6 +2226,7 @@ export class QuickQueryUI {
     if (result) {
       this.elements.tableNameInput.value = fullName;
       this.schemaTable.loadData(result.schema);
+      this.scheduleSchemaLayoutRefresh();
       this.updateDataSpreadsheet();
 
       // Load cached data if available
@@ -2976,6 +3037,7 @@ export class QuickQueryUI {
         // Clear existing data and load new data
         this.handleClearData();
         this.schemaTable.loadData(adjustedSchemaData);
+        this.scheduleSchemaLayoutRefresh();
         this.updateDataSpreadsheet();
       } catch (error) {
         console.error("Error updating schema table:", error);
