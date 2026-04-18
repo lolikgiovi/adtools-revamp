@@ -29,8 +29,8 @@ ad-tools-revamp/
 │   └── tauri.conf.json       # Tauri configuration
 │
 ├── docs/                     # Documentation
-├── vite.config.js            # Vite configuration
-├── vitest.config.js          # Vitest test configuration
+├── vite.config.mjs           # Vite configuration
+├── vitest.config.mjs         # Vitest test configuration
 ├── wrangler.toml             # Cloudflare Workers configuration
 └── package.json              # Dependencies & scripts
 ```

@@ -49,7 +49,7 @@ INSERT OR REPLACE INTO device_usage (device_id, user_email, tool_id, action, cou
   ('device-009', 'david.park@bankmandiri.co.id', 'uuid-generator', 'multiple', 75, '2026-01-08 09:00:00'),
   ('device-010', 'emily.zhang@bankmandiri.co.id', 'base64-tools', 'encode', 55, '2026-01-09 14:00:00'),
   ('device-010', 'emily.zhang@bankmandiri.co.id', 'check-image', 'check_start', 53, '2026-01-09 15:00:00'),
-  ('device-001', 'john.doe@bankmandiri.co.id', 'master_lockey', 'mount', 36, '2026-01-06 14:00:00'),
+  ('device-001', 'john.doe@bankmandiri.co.id', 'master-lockey', 'mount', 36, '2026-01-06 14:00:00'),
   ('device-002', 'john.doe@bankmandiri.co.id', 'json-tools', 'prettify', 30, '2026-01-06 13:00:00'),
   ('device-003', 'jane.smith@bankmandiri.co.id', 'json-tools', 'validate', 26, '2026-01-06 15:00:00'),
   ('device-004', 'alex.wong@bankmandiri.co.id', 'qr-tools', 'mount', 25, '2026-01-06 14:30:00'),

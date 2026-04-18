@@ -67,6 +67,41 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
       ORDER BY e.created_time DESC`,
   },
   {
+    id: "errors",
+    name: "Errors",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,
+      SUBSTR(COALESCE(user_email, ''), 1, INSTR(COALESCE(user_email, ''), '@') - 1) AS user,
+      runtime,
+      app_version,
+      COALESCE(tool_id, route) AS area,
+      process_area,
+      error_kind,
+      error_name,
+      message,
+      source,
+      lineno,
+      colno,
+      metadata
+      FROM error_events
+      ORDER BY created_time DESC
+      LIMIT 200`,
+  },
+  {
+    id: "error-summary",
+    name: "Error Summary",
+    query: `SELECT
+      COALESCE(tool_id, route, 'unknown') AS area,
+      process_area,
+      error_name,
+      COUNT(*) AS count,
+      COUNT(DISTINCT user_email) AS affected_users,
+      MAX(created_time) AS last_seen
+      FROM error_events
+      GROUP BY area, process_area, error_name
+      ORDER BY count DESC, last_seen DESC
+      LIMIT 100`,
+  },
+  {
     id: "quick-query",
     name: "Quick Query",
     query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
@@ -261,6 +296,10 @@ const CACHE_TTL_MS = 60 * 1000;
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
 
+function getDefaultTab(id) {
+  return DEFAULT_TABS.find((tab) => tab.id === id) || DEFAULT_TABS[0];
+}
+
 /**
  * Get tab configs from KV or fallback to defaults
  * Returns { source: 'kv' | 'defaults', tabs: [] }
@@ -426,37 +465,37 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 // Legacy endpoints for backwards compatibility
 export const handleStatsTools = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "tools") || DEFAULT_TABS[0];
+  const tab = config.tabs.find((t) => t.id === "tools") || getDefaultTab("tools");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsDaily = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "daily") || DEFAULT_TABS[1];
+  const tab = config.tabs.find((t) => t.id === "daily") || getDefaultTab("daily");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsDevices = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "devices") || DEFAULT_TABS[2];
+  const tab = config.tabs.find((t) => t.id === "devices") || getDefaultTab("devices");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsEvents = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "events") || DEFAULT_TABS[3];
+  const tab = config.tabs.find((t) => t.id === "events") || getDefaultTab("events");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsQuickQuery = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "quick-query") || DEFAULT_TABS[4];
+  const tab = config.tabs.find((t) => t.id === "quick-query") || getDefaultTab("quick-query");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 
 export const handleStatsQuickQueryErrors = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
-  const tab = config.tabs.find((t) => t.id === "quick-query-errors") || DEFAULT_TABS[5];
+  const tab = config.tabs.find((t) => t.id === "quick-query-errors") || getDefaultTab("quick-query-errors");
   return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
 });
 

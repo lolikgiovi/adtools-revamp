@@ -692,7 +692,7 @@ export class RunBatch extends BaseTool {
     renderSavedConfigs();
 
     try {
-      UsageTracker.trackFeature("run-batch");
+      UsageTracker.trackEvent("run-batch", "mount");
     } catch (_) {}
   }
 

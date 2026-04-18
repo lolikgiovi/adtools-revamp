@@ -1627,7 +1627,7 @@ export class JenkinsRunner extends BaseTool {
 
           // Track usage of Save as Template action
           try {
-            UsageTracker.track("jenkins_runner.history.save_as_template");
+          UsageTracker.trackEvent("run-query", "history_save_as_template");
           } catch (_) {}
         }
       });

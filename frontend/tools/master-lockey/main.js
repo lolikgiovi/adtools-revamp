@@ -83,7 +83,7 @@ class MasterLockey extends BaseTool {
     this.setupTabListeners();
 
     // Track feature usage
-    UsageTracker.trackFeature("master_lockey", "mount");
+    UsageTracker.trackFeature("master-lockey", "mount");
 
     // Try to load cached data for the first selected domain
     this.tryLoadCache();
@@ -104,7 +104,7 @@ class MasterLockey extends BaseTool {
         // Save tab state
         localStorage.setItem("masterLockeyActiveTab", targetTab);
         // Track tab switch
-        UsageTracker.trackEvent("master_lockey", "tab_switch", { tab: targetTab });
+        UsageTracker.trackEvent("master-lockey", "tab_switch", { tab: targetTab });
       });
     });
   }
@@ -427,7 +427,7 @@ class MasterLockey extends BaseTool {
     }
 
     // Track mode switch
-    UsageTracker.trackEvent("master_lockey", "confluence_mode_switch", { mode });
+    UsageTracker.trackEvent("master-lockey", "confluence_mode_switch", { mode });
   }
 
   setupBulkConfluenceListeners() {
@@ -717,7 +717,7 @@ class MasterLockey extends BaseTool {
         this.showCache(cached.timestamp);
         this.updateBulkSearchState();
 
-        UsageTracker.trackEvent("master_lockey", "load_from_cache", { domain: this.currentDomain });
+        UsageTracker.trackEvent("master-lockey", "load_from_cache", { domain: this.currentDomain });
 
         // Refresh bulk confluence results if they exist (EN/ID values depend on parsedData)
         if (this.bulkConfluenceResults && this.bulkConfluenceResults.length > 0) {
@@ -740,7 +740,7 @@ class MasterLockey extends BaseTool {
     this.hideCache();
 
     try {
-      UsageTracker.trackEvent("master_lockey", "fetch_latest_data", { domain: this.currentDomain });
+      UsageTracker.trackEvent("master-lockey", "fetch_latest_data", { domain: this.currentDomain });
 
       const rawData = await this.service.fetchLockeyData(this.currentDomainUrl);
       this.parsedData = this.service.parseLockeyData(rawData);
@@ -763,7 +763,7 @@ class MasterLockey extends BaseTool {
       this.hideLoading();
       this.showError("Failed to Fetch Data", error.message);
 
-      UsageTracker.trackEvent("master_lockey", "fetch_error", {
+      UsageTracker.trackEvent("master-lockey", "fetch_error", {
         domain: this.currentDomain,
         error: error.message,
       });
@@ -1117,7 +1117,7 @@ class MasterLockey extends BaseTool {
       this.els.btnRefreshPage.disabled = false;
       this.els.btnDeleteCache.disabled = false;
 
-      UsageTracker.trackEvent("master_lockey", "confluence_load_cached", {
+      UsageTracker.trackEvent("master-lockey", "confluence_load_cached", {
         pageId,
         lockeyCount: cached.lockeys?.length || 0,
       });
@@ -1141,7 +1141,7 @@ class MasterLockey extends BaseTool {
     this.els.confluenceResults.style.display = "none";
 
     try {
-      UsageTracker.trackEvent("master_lockey", "confluence_fetch", { pageIdOrUrl, isRefresh });
+      UsageTracker.trackEvent("master-lockey", "confluence_fetch", { pageIdOrUrl, isRefresh });
 
       // Fetch page content (returns { id, title, html })
       const pageData = await this.service.fetchConfluencePage(pageIdOrUrl);
@@ -1187,7 +1187,7 @@ class MasterLockey extends BaseTool {
       console.error("Confluence fetch error:", error);
       this.showConfluenceError(error.message);
 
-      UsageTracker.trackEvent("master_lockey", "confluence_fetch_error", {
+      UsageTracker.trackEvent("master-lockey", "confluence_fetch_error", {
         error: error.message,
       });
     } finally {
@@ -1471,7 +1471,7 @@ class MasterLockey extends BaseTool {
       .writeText(content)
       .then(() => {
         this.showSuccess(`Copied ${visibleResults.length} lockeys`);
-        UsageTracker.trackEvent("master_lockey", "confluence_copy_lockey", {
+        UsageTracker.trackEvent("master-lockey", "confluence_copy_lockey", {
           rowCount: visibleResults.length,
         });
       })
@@ -1522,7 +1522,7 @@ class MasterLockey extends BaseTool {
       .writeText(content)
       .then(() => {
         this.showSuccess(`Copied ${visibleResults.length} rows to clipboard`);
-        UsageTracker.trackEvent("master_lockey", "confluence_copy_table", {
+        UsageTracker.trackEvent("master-lockey", "confluence_copy_table", {
           rowCount: visibleResults.length,
         });
       })
@@ -1646,7 +1646,7 @@ class MasterLockey extends BaseTool {
     this.bulkSearchResults = results;
 
     // Track usage
-    UsageTracker.trackEvent("master_lockey", "bulk_search", {
+    UsageTracker.trackEvent("master-lockey", "bulk_search", {
       inputCount: keys.length,
       foundCount: results.filter((r) => r.exists).length,
       domain: this.currentDomain,
@@ -1741,7 +1741,7 @@ class MasterLockey extends BaseTool {
       .writeText(content)
       .then(() => {
         this.showSuccess(`Copied ${filteredResults.length} results to clipboard`);
-        UsageTracker.trackEvent("master_lockey", "bulk_search_copy", {
+        UsageTracker.trackEvent("master-lockey", "bulk_search_copy", {
           rowCount: filteredResults.length,
         });
       })
@@ -1772,7 +1772,7 @@ class MasterLockey extends BaseTool {
       .writeText(content)
       .then(() => {
         this.showSuccess(`Copied ${filteredResults.length} lockeys to clipboard`);
-        UsageTracker.trackEvent("master_lockey", "bulk_search_copy_lockey", {
+        UsageTracker.trackEvent("master-lockey", "bulk_search_copy_lockey", {
           rowCount: filteredResults.length,
         });
       })
@@ -1805,7 +1805,7 @@ class MasterLockey extends BaseTool {
     this.els.bulkConfluenceError.style.display = "none";
     this.els.bulkConfluenceResults.style.display = "none";
 
-    UsageTracker.trackEvent("master_lockey", "bulk_confluence_search", {
+    UsageTracker.trackEvent("master-lockey", "bulk_confluence_search", {
       pageCount: pageInputs.length,
     });
 
@@ -1989,7 +1989,7 @@ class MasterLockey extends BaseTool {
       .writeText(content)
       .then(() => {
         this.showSuccess(`Copied ${lockeys.length} lockeys to clipboard`);
-        UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_lockey", {
+        UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_lockey", {
           rowCount: lockeys.length,
         });
       })
@@ -2073,7 +2073,7 @@ class MasterLockey extends BaseTool {
         .write([clipboardItem])
         .then(() => {
           this.showSuccess(`Copied ${dataRowCount} results to clipboard (with hyperlinks)`);
-          UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
+          UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_table", {
             rowCount: dataRowCount,
             format: "html",
           });
@@ -2098,7 +2098,7 @@ class MasterLockey extends BaseTool {
         .writeText(plainText)
         .then(() => {
           this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
-          UsageTracker.trackEvent("master_lockey", "bulk_confluence_copy_table", {
+          UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_table", {
             rowCount: dataRowCount,
             format: "plain",
           });

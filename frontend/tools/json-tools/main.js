@@ -974,7 +974,7 @@ class JSONTools extends BaseTool {
       XLSX.writeFile(wb, filename);
 
       this.showSuccess(`Exported to ${filename}`);
-      UsageTracker.trackEvent("json_tools", "export_excel");
+      UsageTracker.trackEvent("json-tools", "export_excel");
     } catch (error) {
       console.error("Export failed:", error);
       this.showError("Failed to export to Excel");

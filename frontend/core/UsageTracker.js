@@ -13,6 +13,9 @@ class UsageTracker {
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static FLUSH_DELAY_MS = 300; // debounce writes
   static BATCH_FLUSH_INTERVAL_MS = 180 * 60 * 1000; // 3 hours remote flush
+  static META_STRING_LIMIT = 120;
+  static ERROR_MESSAGE_LIMIT = 300;
+  static ERROR_STACK_LIMIT = 1500;
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
@@ -99,10 +102,11 @@ class UsageTracker {
     if (!this._state || !this._state.counts) return;
 
     const counts = this._state.counts;
+    this._migrateCanonicalFeatureIds();
 
     // Quick Query: keep only actual query types (merge, insert, update)
     if (counts["quick-query"]) {
-      const allowed = ["merge", "insert", "update"];
+      const allowed = ["merge", "insert", "update", "open"];
       const quickQuery = counts["quick-query"];
       Object.keys(quickQuery).forEach((action) => {
         if (!allowed.includes(action)) {
@@ -113,7 +117,7 @@ class UsageTracker {
 
     // Jenkins Runner: keep only run_click (feature usage), remove run_success (event)
     if (counts["run-query"]) {
-      const allowed = ["run_click"];
+      const allowed = ["run_click", "template_run_click", "open"];
       const jenkinsRunner = counts["run-query"];
       Object.keys(jenkinsRunner).forEach((action) => {
         if (!allowed.includes(action)) {
@@ -131,13 +135,13 @@ class UsageTracker {
             // Format: "featureId.action"
             if (key.startsWith("quick-query.")) {
               const action = key.split(".")[1];
-              if (!["merge", "insert", "update"].includes(action)) {
+              if (!["merge", "insert", "update", "open"].includes(action)) {
                 delete dayData[key];
               }
             }
             if (key.startsWith("run-query.")) {
               const action = key.split(".")[1];
-              if (action !== "run_click") {
+              if (!["run_click", "template_run_click", "open"].includes(action)) {
                 delete dayData[key];
               }
             }
@@ -161,7 +165,7 @@ class UsageTracker {
     const now = new Date();
     if (!this._isValidTimestamp(now)) return;
 
-    const featureKey = String(featureId);
+    const featureKey = this.normalizeFeatureId(featureId);
     const actionKey = String(action);
 
     const counts = this._state.counts;
@@ -187,14 +191,16 @@ class UsageTracker {
   /** Alias for feature-centric tracking */
   static trackFeature(featureId, action, meta = {}, debounceMs) {
     if (!featureId || !action) return;
+    const featureKey = this.normalizeFeatureId(featureId);
+    const actionKey = String(action);
     const ms = Number(debounceMs);
     if (Number.isFinite(ms) && ms > 0) {
-      const key = `${String(featureId)}:${String(action)}`;
+      const key = `${featureKey}:${actionKey}`;
       const existing = this._debounceTimers.get(key);
       if (existing) clearTimeout(existing);
       const timer = setTimeout(() => {
         try {
-          this.track(featureId, action, meta);
+          this.track(featureKey, actionKey, meta);
         } finally {
           this._debounceTimers.delete(key);
         }
@@ -202,7 +208,7 @@ class UsageTracker {
       this._debounceTimers.set(key, timer);
       return;
     }
-    this.track(featureId, action, meta);
+    this.track(featureKey, actionKey, meta);
 
     // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
     try {
@@ -220,8 +226,8 @@ class UsageTracker {
         AnalyticsSender.sendLog({
           user_email: userEmail,
           device_id: deviceId,
-          tool_id: String(featureId),
-          action: String(action),
+          tool_id: featureKey,
+          action: actionKey,
           created_time: this._isoToGmt7Plain(now.toISOString()),
         }).catch(() => {}); // Fire and forget
       }
@@ -230,14 +236,16 @@ class UsageTracker {
 
   // Add explicit event-level tracking with event detail persistence
   static trackEvent(featureId, event, meta = {}, debounceMs) {
+    const featureKey = this.normalizeFeatureId(featureId);
+    const eventKey = String(event || "");
     const ms = Number(debounceMs);
     if (Number.isFinite(ms) && ms > 0) {
-      const key = `${String(featureId)}:${String(event)}:ev`;
+      const key = `${featureKey}:${eventKey}:ev`;
       const existing = this._debounceTimers.get(key);
       if (existing) clearTimeout(existing);
       const timer = setTimeout(() => {
         try {
-          this._trackEventImmediate(featureId, event, meta);
+          this._trackEventImmediate(featureKey, eventKey, meta);
         } finally {
           this._debounceTimers.delete(key);
         }
@@ -245,7 +253,7 @@ class UsageTracker {
       this._debounceTimers.set(key, timer);
       return;
     }
-    return this._trackEventImmediate(featureId, event, meta);
+    return this._trackEventImmediate(featureKey, eventKey, meta);
   }
 
   static _trackEventImmediate(featureId, event, meta = {}) {
@@ -264,7 +272,7 @@ class UsageTracker {
     const now = new Date();
     if (!this._isValidTimestamp(now)) return;
 
-    const featureKey = String(featureId);
+    const featureKey = this.normalizeFeatureId(featureId);
     const actionKey = String(event);
 
     // trackEvent only logs events, does NOT increment counts
@@ -334,23 +342,41 @@ class UsageTracker {
     try {
       return {
         ...baseMeta,
-        message: String(error?.message || error || "").slice(0, 200),
+        message: this._sanitizeString(error?.message || error || "", this.ERROR_MESSAGE_LIMIT),
         name: error?.name || "Error",
         code: error?.code || null,
-        stack: error?.stack?.split("\n").slice(0, 5).join("\n").slice(0, 500) || null,
+        stack: this._sanitizeString(error?.stack?.split("\n").slice(0, 8).join("\n") || "", this.ERROR_STACK_LIMIT) || null,
       };
     } catch (_) {
-      return { ...baseMeta, message: String(error || "Unknown error").slice(0, 200) };
+      return { ...baseMeta, message: this._sanitizeString(error || "Unknown error", this.ERROR_MESSAGE_LIMIT) };
     }
   }
 
-  static _sanitizeMeta(meta) {
+  static sanitizeErrorMeta(meta) {
+    return this._sanitizeMeta(meta, {
+      defaultStringLimit: this.ERROR_MESSAGE_LIMIT,
+      stringLimits: {
+        message: this.ERROR_MESSAGE_LIMIT,
+        error_message: this.ERROR_MESSAGE_LIMIT,
+        stack: this.ERROR_STACK_LIMIT,
+        source: 500,
+        route: 160,
+        user_agent: 300,
+      },
+    });
+  }
+
+  static _sanitizeMeta(meta, options = {}) {
     try {
       const sanitized = {};
+      const defaultStringLimit = Number(options.defaultStringLimit || this.META_STRING_LIMIT);
+      const stringLimits = options.stringLimits || {};
       Object.entries(meta || {}).forEach(([k, v]) => {
+        if (!this._isAllowedMetaKey(k)) return;
         // Only allow safe primitives, with length limits for strings
         if (typeof v === "string") {
-          sanitized[k] = v.slice(0, 40); // truncate to avoid PII risk
+          const limit = Number(stringLimits[k] || defaultStringLimit);
+          sanitized[k] = this._sanitizeString(v, limit);
         } else if (typeof v === "number" && Number.isFinite(v)) {
           sanitized[k] = v;
         } else if (typeof v === "boolean") {
@@ -361,6 +387,41 @@ class UsageTracker {
     } catch (_) {
       return {};
     }
+  }
+
+  static _isAllowedMetaKey(key) {
+    const raw = String(key || "").trim().toLowerCase();
+    if (!raw) return false;
+    const normalized = raw.replace(/[^a-z0-9]/g, "");
+    const denied = new Set([
+      "sql",
+      "rawsql",
+      "query",
+      "querytext",
+      "token",
+      "authtoken",
+      "authorization",
+      "password",
+      "secret",
+      "otp",
+      "clipboard",
+      "content",
+      "input",
+      "value",
+      "payload",
+      "body",
+      "filecontent",
+    ]);
+    return !denied.has(normalized);
+  }
+
+  static _sanitizeString(value, limit = this.META_STRING_LIMIT) {
+    const max = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : this.META_STRING_LIMIT;
+    return String(value ?? "")
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+      .replace(/([?&](?:token|otp|code|password|secret)=)[^&\s]+/gi, "$1[redacted]")
+      .replace(/\b\d{6}\b/g, "[redacted-code]")
+      .slice(0, max);
   }
 
   static _scheduleFlush() {
@@ -524,6 +585,8 @@ class UsageTracker {
       device_id: deviceId,
       properties: ev.meta || {},
       created_time: this._isoToGmt7Plain(ev.ts || new Date().toISOString()),
+      runtime: this._getRuntime(),
+      app_version: this._getAppVersion(),
     }));
 
     // Build device_usage from absolute counts in state.counts
@@ -539,7 +602,7 @@ class UsageTracker {
           device_usage.push({
             device_id: deviceId,
             user_email: userEmail,
-            tool_id: String(tool_id),
+            tool_id: this.normalizeFeatureId(tool_id),
             action: String(action),
             count: c,
             updated_time: nowPlain,
@@ -548,7 +611,14 @@ class UsageTracker {
       }
     }
 
-    return { device_id: deviceId, user_email: userEmail, events, device_usage };
+    return {
+      device_id: deviceId,
+      user_email: userEmail,
+      runtime: this._getRuntime(),
+      app_version: this._getAppVersion(),
+      events,
+      device_usage,
+    };
   }
 
   // Send batch to backend (idempotent - sends absolute counts)
@@ -557,14 +627,97 @@ class UsageTracker {
     try {
       const payload = this._toBatchPayload();
       if ((payload.events && payload.events.length) || (payload.device_usage && payload.device_usage.length)) {
-        await AnalyticsSender.sendBatch(payload);
-        // After successful send, clear events (counts remain for next sync)
-        this._state.events = [];
-        // Persist local storage changes immediately
-        this.flushSync();
+        const sent = await AnalyticsSender.sendBatch(payload);
+        if (sent) {
+          // After successful send, clear events (counts remain for next sync)
+          this._state.events = [];
+          // Persist local storage changes immediately
+          this.flushSync();
+        }
       }
     } catch (_) {
       // Swallow errors; will retry on next interval
+    }
+  }
+
+  static async reportDeviceVersion(appVersion) {
+    const version = String(appVersion || this._getAppVersion() || "").trim();
+    const deviceId = this.getDeviceId();
+    if (!version || !deviceId) return false;
+    try {
+      const base = (import.meta?.env?.VITE_WORKER_BASE || "").replace(/\/$/, "");
+      const urls = Array.from(new Set([base ? `${base}/device/version` : "", "/device/version"].filter(Boolean)));
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device_id: deviceId, app_version: version }),
+            credentials: "omit",
+          });
+          if (res.ok) return true;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  static normalizeFeatureId(featureId) {
+    const id = String(featureId || "").trim();
+    if (id === "master_lockey") return "master-lockey";
+    if (id === "json_tools") return "json-tools";
+    if (id === "jenkins-runner") return "run-query";
+    return id;
+  }
+
+  static _migrateCanonicalFeatureIds() {
+    if (!this._state) return;
+    const mergeCounts = (from, to) => {
+      const counts = this._state.counts || {};
+      if (!counts[from]) return;
+      counts[to] = counts[to] || {};
+      Object.entries(counts[from]).forEach(([action, count]) => {
+        counts[to][action] = (Number(counts[to][action] || 0) || 0) + (Number(count || 0) || 0);
+      });
+      delete counts[from];
+    };
+    mergeCounts("master_lockey", "master-lockey");
+    mergeCounts("json_tools", "json-tools");
+    mergeCounts("jenkins-runner", "run-query");
+
+    const daily = this._state.daily || {};
+    Object.values(daily).forEach((dayData) => {
+      if (!dayData || typeof dayData !== "object") return;
+      Object.keys(dayData).forEach((key) => {
+        const [feature, ...rest] = key.split(".");
+        const canonical = this.normalizeFeatureId(feature);
+        if (canonical === feature || !rest.length) return;
+        const nextKey = `${canonical}.${rest.join(".")}`;
+        dayData[nextKey] = (Number(dayData[nextKey] || 0) || 0) + (Number(dayData[key] || 0) || 0);
+        delete dayData[key];
+      });
+    });
+
+    if (Array.isArray(this._state.events)) {
+      this._state.events = this._state.events.map((ev) => ({ ...ev, featureId: this.normalizeFeatureId(ev.featureId) }));
+    }
+  }
+
+  static _getRuntime() {
+    try {
+      const w = typeof window !== "undefined" ? window : {};
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+      return w.__TAURI__ || w.__TAURI_IPC__ || /tauri/i.test(ua) ? "tauri" : "web";
+    } catch (_) {
+      return "unknown";
+    }
+  }
+
+  static _getAppVersion() {
+    try {
+      return localStorage.getItem("app.version") || localStorage.getItem("adtools.appVersion") || null;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -7,7 +7,7 @@
 import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 
 // Routes
-import { handleAnalyticsBatchPost, handleAnalyticsBatchGet, handleAnalyticsLogPost, handleAnalyticsLogGet } from './src/routes/analytics.js';
+import { handleAnalyticsBatchPost, handleAnalyticsLogPost, handleAnalyticsErrorPost } from './src/routes/analytics.js';
 import { handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
 import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
@@ -105,12 +105,14 @@ export default {
 
     if (url.pathname === "/analytics/batch") {
       if (method === "POST") return handleAnalyticsBatchPost(request, env);
-      if (method === "GET") return handleAnalyticsBatchGet(request, env);
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/log") {
       if (method === "POST") return handleAnalyticsLogPost(request, env);
-      if (method === "GET") return handleAnalyticsLogGet(request, env);
+      return methodNotAllowed();
+    }
+    if (url.pathname === "/analytics/error") {
+      if (method === "POST") return handleAnalyticsErrorPost(request, env);
       return methodNotAllowed();
     }
 

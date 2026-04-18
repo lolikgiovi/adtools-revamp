@@ -12,6 +12,7 @@ import toolsConfig from "./config/tools.json";
 import { getIconSvg } from "./config/iconRegistry.js";
 import { buildToolDefinitions, getToolDefinition, getToolDefinitionsList } from "./config/toolDefinitions.js";
 import { UsageTracker } from "./core/UsageTracker.js";
+import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
@@ -58,6 +59,11 @@ class App {
     }
     // Initialize usage tracking early with the app event bus
     UsageTracker.init(this.eventBus);
+    ErrorMonitor.init({
+      eventBus: this.eventBus,
+      router: this.router,
+      getCurrentTool: () => this.currentTool?.id || this.router?.getCurrentRoute?.() || null,
+    });
     // Always expose a global reset helper so it’s callable from console
     try {
       window.resetUsageAnalytics = () => {
@@ -74,6 +80,7 @@ class App {
 
     this.initializeComponents();
     this.setupHeaderRuntime();
+    this.syncDeviceVersion();
     // Apply sidebar title from stored username
     try {
       const titleEl = document.querySelector(".sidebar-title");
@@ -364,6 +371,7 @@ class App {
     }
 
     this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
+    UsageTracker.trackFeature(toolId, "open", { route: `#${toolId}` }, 2000);
   }
 
   showSettings() {
@@ -556,6 +564,7 @@ class App {
       const titleEl = document.querySelector(".sidebar-title");
       const username = data?.username || localStorage.getItem("user.username");
       if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+      this.syncDeviceVersion();
     });
 
     // Capture route data payloads from navigations
@@ -1173,6 +1182,33 @@ class App {
         }
       });
     }
+  }
+
+  async syncDeviceVersion() {
+    try {
+      let version = null;
+      if (isTauri()) {
+        try {
+          const { getVersion } = await import("@tauri-apps/api/app");
+          version = await getVersion();
+        } catch (_) {}
+      }
+
+      if (!version) {
+        try {
+          const res = await fetch("./web-build.json", { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            version = data?.version || data?.buildVersion || data?.build || null;
+          }
+        } catch (_) {}
+      }
+
+      if (version) {
+        localStorage.setItem("app.version", String(version));
+        UsageTracker.reportDeviceVersion(String(version)).catch(() => {});
+      }
+    } catch (_) {}
   }
 
   clearCurrentTool() {
