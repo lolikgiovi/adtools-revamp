@@ -17,6 +17,11 @@ import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 
+const ASSET_LOAD_RETRY_DELAY_MS = 3000;
+const ASSET_LOAD_MAX_RETRIES = 3;
+const ASSET_LOAD_MAX_RELOADS = 3;
+const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
+
 class App {
   constructor() {
     this.eventBus = new EventBus();
@@ -26,6 +31,7 @@ class App {
     this.tools = new Map();
     this.pendingToolLoads = new Map();
     this.pageComponents = new Map();
+    this.pendingAssetRecoveryReload = false;
     this.currentTool = null;
     this.mainContent = null;
     this.toolsConfigMap = new Map();
@@ -217,6 +223,9 @@ class App {
       this.router.register(toolId, () => {
         const data = this._routeData?.[toolId] || null;
         this.showTool(toolId, data).catch((error) => {
+          if (this.isAssetRecoveryHandled(error)) {
+            return;
+          }
           console.error(`Failed to show tool ${toolId}:`, error);
           this.showNotification(`Failed to load ${definition.name}`, "error", 2500);
           this.router.navigate("home");
@@ -354,7 +363,11 @@ class App {
       title: definition.name,
       message: "Loading tool and preparing the interface.",
     });
-    const tool = await this.ensureToolLoaded(toolId);
+    const tool = await this.loadWithAssetRecovery(() => this.ensureToolLoaded(toolId), {
+      id: toolId,
+      label: definition.name,
+    });
+    this.clearAssetRecoveryState(toolId);
     this.updateBreadcrumb(definition.name);
 
     this.currentTool = tool;
@@ -423,7 +436,11 @@ class App {
       message: "Loading page content.",
     });
 
-    const PageClass = await this.loadPageComponent(pageId, loader);
+    const PageClass = await this.loadWithAssetRecovery(() => this.loadPageComponent(pageId, loader), {
+      id: pageId,
+      label: title,
+    });
+    this.clearAssetRecoveryState(pageId);
     if (this.mainContent) {
       const page = new PageClass(createOptions?.() || {});
       page.mount(this.mainContent);
@@ -975,6 +992,144 @@ class App {
     const PageClass = await loader();
     this.pageComponents.set(pageId, PageClass);
     return PageClass;
+  }
+
+  async loadWithAssetRecovery(loadFn, { id, label }) {
+    let lastError;
+
+    for (let attempt = 0; attempt <= ASSET_LOAD_MAX_RETRIES; attempt++) {
+      try {
+        return await loadFn();
+      } catch (error) {
+        lastError = error;
+        if (!this.shouldRecoverAssetLoad(error)) {
+          throw error;
+        }
+
+        if (attempt >= ASSET_LOAD_MAX_RETRIES) {
+          this.scheduleAssetRecoveryReload({ id, label, error });
+          if (error && typeof error === "object") {
+            error.assetRecoveryHandled = true;
+          }
+          throw error;
+        }
+
+        const nextAttempt = attempt + 1;
+        console.warn(
+          `[AssetLoadRecovery] Failed to load assets for ${id}; retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}`,
+          error
+        );
+        this.renderLoadingState({
+          title: label || "Loading",
+          message: `Network hiccup while loading assets. Retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}...`,
+        });
+        await this.wait(ASSET_LOAD_RETRY_DELAY_MS);
+      }
+    }
+
+    throw lastError;
+  }
+
+  shouldRecoverAssetLoad(error) {
+    if (isTauri()) return false;
+
+    const message = String(error?.message || error || "");
+    const name = String(error?.name || "");
+
+    return (
+      /Unable to preload CSS/i.test(message) ||
+      /Failed to fetch dynamically imported module/i.test(message) ||
+      /Importing a module script failed/i.test(message) ||
+      /Loading chunk \d+ failed/i.test(message) ||
+      /ChunkLoadError/i.test(message) ||
+      /CSS_CHUNK_LOAD_FAILED/i.test(message) ||
+      /ERR_TIMED_OUT/i.test(message) ||
+      /ChunkLoadError/i.test(name)
+    );
+  }
+
+  isAssetRecoveryHandled(error) {
+    return Boolean(error?.assetRecoveryHandled || this.pendingAssetRecoveryReload);
+  }
+
+  scheduleAssetRecoveryReload({ id, label, error }) {
+    if (isTauri() || this.pendingAssetRecoveryReload) return false;
+
+    const key = this.getAssetRecoveryStorageKey(id);
+    const reloads = this.getSessionNumber(key);
+
+    if (reloads >= ASSET_LOAD_MAX_RELOADS) {
+      console.warn(`[AssetLoadRecovery] Reload limit reached for ${id}`, error);
+      this.renderLoadingState({
+        title: label || "Loading failed",
+        message: "Still unable to load required assets. Please reload once your connection is stable.",
+      });
+      this.showNotification(
+        "Still unable to load required assets. Please reload once your connection is stable.",
+        "error",
+        5000
+      );
+      return false;
+    }
+
+    this.pendingAssetRecoveryReload = true;
+    this.setSessionNumber(key, reloads + 1);
+    console.warn(`[AssetLoadRecovery] Reloading after repeated asset load failures for ${id}`, error);
+    this.renderLoadingState({
+      title: label || "Reloading",
+      message: `Still having trouble loading assets. Reloading ${reloads + 1}/${ASSET_LOAD_MAX_RELOADS}...`,
+    });
+
+    setTimeout(() => {
+      try {
+        window.location.reload();
+      } catch (_) {
+        try {
+          window.location.href = window.location.href;
+        } catch (_) {}
+      }
+    }, 250);
+
+    return true;
+  }
+
+  clearAssetRecoveryState(id) {
+    if (isTauri()) return;
+    try {
+      sessionStorage.removeItem(this.getAssetRecoveryStorageKey(id));
+    } catch (_) {}
+  }
+
+  getAssetRecoveryStorageKey(id) {
+    const buildId = this.getCachedWebBuildId();
+    return `${ASSET_LOAD_RELOAD_KEY_PREFIX}:${buildId}:${id || "route"}`;
+  }
+
+  getCachedWebBuildId() {
+    try {
+      return localStorage.getItem("web.lastBuildId") || "unknown";
+    } catch (_) {
+      return "unknown";
+    }
+  }
+
+  getSessionNumber(key) {
+    try {
+      const value = Number(sessionStorage.getItem(key));
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  setSessionNumber(key, value) {
+    try {
+      sessionStorage.setItem(key, String(value));
+    } catch (_) {}
+  }
+
+  wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
