@@ -626,41 +626,46 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px;
+  gap: 12px;
+  padding: 6px 10px;
   border: 1px solid hsl(var(--border));
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .schema-info {
   flex-grow: 1;
+  min-width: 0;
 }
 
 .schema-name {
   font-weight: 500;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .schema-timestamp {
-  font-size: 0.85em;
-  color: #666;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.schema-timestamp:empty {
+  display: none;
 }
 
 .schema-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.schema-actions button {
-  border-radius: 4px;
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
-  cursor: pointer;
-  font-size: 0.9em;
-  color: hsl(var(--foreground));
-}
-
-.schema-actions button:hover {
-  background: hsl(var(--accent));
+.schema-actions .btn {
+  justify-content: center;
+  min-width: 56px;
 }
 
 .no-schemas {

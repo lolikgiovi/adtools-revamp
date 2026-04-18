@@ -2146,21 +2146,21 @@ export class QuickQueryUI {
         timestampDiv.textContent = ts && !Number.isNaN(ts.getTime()) ? ts.toLocaleString() : "";
 
         infoDiv.appendChild(nameDiv);
-        infoDiv.appendChild(timestampDiv);
 
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "schema-actions";
 
         const loadBtn = document.createElement("button");
         loadBtn.textContent = "Load";
-        loadBtn.className = "btn-sm-xs";
+        loadBtn.className = "btn btn-primary btn-xs";
         loadBtn.addEventListener("click", () => this.handleLoadSchema(table.fullName));
 
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete";
-        deleteBtn.className = "btn-sm-xs";
+        deleteBtn.className = "btn btn-outline btn-danger btn-xs";
         deleteBtn.addEventListener("click", () => this.handleDeleteSchema(table.fullName));
 
+        actionsDiv.appendChild(timestampDiv);
         actionsDiv.appendChild(loadBtn);
         actionsDiv.appendChild(deleteBtn);
 
