@@ -48,10 +48,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
                     <button id="toggleWordWrap" class="btn btn-primary btn-sm">Word Wrap: Off</button>
-                    <button id="copySQL" class="btn btn-primary btn-sm">Copy SQL</button>
+                    <button id="copySQL" class="btn btn-primary btn-sm">Copy</button>
                     <div class="split-btn">
-                        <button id="downloadSQL" class="btn btn-primary btn-sm split-btn-main">Download SQL</button>
-                        <button id="downloadAs" class="btn btn-primary btn-sm split-btn-chevron" aria-label="Download As" title="Download As">&#9660;</button>
+                        <button id="downloadSQL" class="btn btn-primary btn-sm split-btn-main">Save</button>
+                        <button id="downloadAs" class="btn btn-primary btn-sm split-btn-chevron" aria-label="Download As" title="Save As">&#9660;</button>
                     </div>
                     <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
                     <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Run Query</button>
