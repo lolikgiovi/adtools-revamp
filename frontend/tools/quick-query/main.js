@@ -14,7 +14,7 @@ import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
-import { importSchemasPayload } from "./services/SchemaImportService.js";
+import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
@@ -250,6 +250,7 @@ export class QuickQueryUI {
       importSchemasButton: document.getElementById("importSchemas"),
       importDefaultSchemaButton: document.getElementById("importDefaultSchema"),
       importFromOracleEnvButton: document.getElementById("importFromOracleEnv"),
+      pasteDbeaverSchemaButton: document.getElementById("pasteDbeaverSchema"),
 
       // Oracle Env Import overlay elements
       oracleEnvOverlay: document.getElementById("oracleEnvOverlay"),
@@ -477,11 +478,8 @@ export class QuickQueryUI {
       },
 
       // Schema related buttons
-      addNewSchemaRow: {
-        click: () => this.handleAddNewSchemaRow(),
-      },
-      removeLastSchemaRow: {
-        click: () => this.handleRemoveLastSchemaRow(),
+      pasteDbeaverSchemaButton: {
+        click: () => this.handlePasteDbeaverSchema(),
       },
       showSavedSchemasButton: {
         click: async () => {
@@ -2274,6 +2272,52 @@ export class QuickQueryUI {
     }
   }
 
+  async readClipboardText() {
+    if (isTauri()) {
+      try {
+        const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+        return (await readText()) || "";
+      } catch (_) {
+        // Fall back to the browser clipboard API below.
+      }
+    }
+
+    if (typeof navigator === "undefined" || !navigator.clipboard?.readText) {
+      throw new Error("Clipboard read is not available in this environment.");
+    }
+
+    return navigator.clipboard.readText();
+  }
+
+  async handlePasteDbeaverSchema() {
+    try {
+      const text = await this.readClipboardText();
+      const schemaRows = parseDbeaverSchemaClipboard(text);
+      this.loadDbeaverSchemaRows(schemaRows);
+      this.showSuccess(`Pasted ${schemaRows.length} columns from DBeaver`);
+      setTimeout(() => this.clearError(), 3000);
+    } catch (error) {
+      this.showError(`Failed to paste from DBeaver: ${error.message}`);
+      const tableName = this.elements.tableNameInput.value.trim();
+      UsageTracker.trackEvent("quick-query", "ui_error", {
+        type: "dbeaver_paste_failed",
+        message: error.message,
+        table_name: tableName,
+      });
+    }
+  }
+
+  loadDbeaverSchemaRows(schemaRows) {
+    if (!this.schemaTable || typeof this.schemaTable.loadData !== "function") {
+      throw new Error("Schema table is not ready.");
+    }
+
+    this.schemaTable.loadData(schemaRows);
+    this.scheduleSchemaLayoutRefresh();
+    this.updateDataSpreadsheet();
+    this.handleClearData();
+  }
+
   async handleClearAllSchemas() {
     const allTables = await this.storageService.getAllTables();
     if (allTables.length === 0) {
@@ -3195,46 +3239,10 @@ export class QuickQueryUI {
   adjustDbeaverSchema(schemaData) {
     console.log("Adjusting schema data");
 
-    // Remove the header row
-    const removedHeader = schemaData.slice(1);
-
-    // Transform the data
-    const adjustedSchemaData = removedHeader.map((row, idx) => {
-      // Original DBeaver format:
-      // [0]: Column Name
-      // [1]: Column Type
-      // [2]: Type Name
-      // [3]: Column Size
-      // [4]: Nullable
-      // [5]: Default Value
-      // [6]: Comments
-
-      // Transform "Not Null" from TRUE/FALSE to our "Null" column (Yes/No)
-      // DBeaver's "Not Null = true" means the field is NOT nullable, so our Null = "No"
-      // DBeaver's "Not Null = false" means the field IS nullable, so our Null = "Yes"
-      const nullable = String(row[4]).toLowerCase() === "true" ? "No" : "Yes";
-
-      // Transform [NULL] to empty string
-      const defaultValue = row[5] === "[NULL]" ? "" : row[5];
-
-      return [
-        row[0], // [0] Field Name (same as Column Name)
-        row[2], // [1] Data Type (use Type Name instead of Column Type)
-        nullable, // [2] Null
-        defaultValue, // [3] Default Value
-        String(idx + 1), // [4] Order
-        "No", // [5] PK (default to No; DBeaver export doesn't include PK info)
-      ];
-    });
-
     // Update the schemaTable with the new data
     if (this.schemaTable && typeof this.schemaTable.loadData === "function") {
       try {
-        // Clear existing data and load new data
-        this.handleClearData();
-        this.schemaTable.loadData(adjustedSchemaData);
-        this.scheduleSchemaLayoutRefresh();
-        this.updateDataSpreadsheet();
+        this.loadDbeaverSchemaRows(convertDbeaverSchemaRows(schemaData));
       } catch (error) {
         console.error("Error updating schema table:", error);
         const tableName = this.elements.tableNameInput.value.trim();

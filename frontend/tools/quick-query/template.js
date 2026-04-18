@@ -21,8 +21,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 </div>
                 <div class="button-group quick-query-left-controls">
                     <button id="showSavedSchemas" class="btn btn-primary btn-sm">Schemas</button>
-                    <button id="addNewSchemaRow" class="btn btn-primary btn-sm">Add row</button>
-                    <button id="removeLastSchemaRow" class="btn btn-primary btn-sm">Remove last row</button>
+                    <button id="pasteDbeaverSchema" class="btn btn-primary btn-sm"
+                        title="Copy columns from DBeaver, then paste them into the schema table">Paste from DBeaver</button>
                     <button id="clearAll" class="btn btn-primary btn-sm">Clear All</button>
                     <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
                 </div>

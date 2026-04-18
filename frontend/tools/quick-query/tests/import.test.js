@@ -2,7 +2,7 @@
 import { describe, it, beforeEach, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { importSchemasPayload } from '../services/SchemaImportService.js';
+import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from '../services/SchemaImportService.js';
 import { LocalStorageService } from '../services/LocalStorageService.js';
 
 const SCHEMA_KEY = 'tool:quick-query:schema';
@@ -40,5 +40,24 @@ describe('SchemaImportService (KV nested tables payload)', () => {
     expect(other.columns.OTHER_TABLE_ID.type).toBe('VARCHAR2(36)');
     expect(Array.isArray(other.pk)).toBe(true);
     expect(typeof other.last_updated).toBe('string');
+  });
+});
+
+describe('SchemaImportService (DBeaver clipboard payload)', () => {
+  it('parses copied DBeaver columns into Quick Query schema rows', () => {
+    const clipboard = [
+      'Column Name\tColumn Type\tType Name\tColumn Size\tNot Null\tDefault Value\tComments',
+      'CUSTOMER_ID\tVARCHAR\tVARCHAR2(36)\t36\ttrue\t[NULL]\tPrimary identifier',
+      'CUSTOMER_NAME\tVARCHAR\tVARCHAR2(100)\t100\tfalse\tUNKNOWN\tDisplay name',
+    ].join('\n');
+
+    expect(parseDbeaverSchemaClipboard(clipboard)).toEqual([
+      ['CUSTOMER_ID', 'VARCHAR2(36)', 'No', '', '1', 'No'],
+      ['CUSTOMER_NAME', 'VARCHAR2(100)', 'Yes', 'UNKNOWN', '2', 'No'],
+    ]);
+  });
+
+  it('rejects non-DBeaver clipboard text', () => {
+    expect(() => convertDbeaverSchemaRows([['Field Name', 'Data Type']])).toThrow(/DBeaver column export/);
   });
 });
