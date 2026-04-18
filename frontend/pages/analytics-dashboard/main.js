@@ -17,6 +17,8 @@ class AnalyticsDashboardPage {
     this.tabs = [];
     this.currentTab = null;
     this.cache = {};
+    this.filterText = "";
+    this.lastRenderedData = [];
   }
 
   mount(root) {
@@ -49,6 +51,12 @@ class AnalyticsDashboardPage {
     this.container.querySelector("#dashboard-refresh")?.addEventListener("click", () => {
       this.cache = {};
       this.loadCurrentTabData();
+    });
+
+    this.container.querySelector("#dashboard-search")?.addEventListener("input", (e) => {
+      this.filterText = e.target.value.trim().toLowerCase();
+      const content = this.container.querySelector("#dashboard-panel .panel-content");
+      this.renderTable(content, this.lastRenderedData);
     });
 
     // Logout
@@ -112,6 +120,8 @@ class AnalyticsDashboardPage {
     this.tabs = [];
     this.currentTab = null;
     this.cache = {};
+    this.filterText = "";
+    this.lastRenderedData = [];
     try {
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (_) {}
@@ -145,8 +155,10 @@ class AnalyticsDashboardPage {
         this.renderTabs();
         // Show source indicator
         if (sourceIndicator) {
-          const label = this.configSource === "kv" ? "KV Config" : "Defaults";
-          sourceIndicator.innerHTML = `<span class="config-source-badge ${this.configSource}">${label}</span>`;
+          const label =
+            this.configSource === "kv" ? "KV Config" : this.configSource === "kv+defaults" ? "KV + Defaults" : "Defaults";
+          const sourceClass = this.configSource.replace(/[^a-z0-9-]/gi, "-");
+          sourceIndicator.innerHTML = `<span class="config-source-badge ${sourceClass}">${label}</span>`;
         }
         // Auto-select first tab
         if (this.tabs.length > 0) {
@@ -179,6 +191,9 @@ class AnalyticsDashboardPage {
 
   switchTab(tabId) {
     this.currentTab = tabId;
+    this.filterText = "";
+    const searchInput = this.container.querySelector("#dashboard-search");
+    if (searchInput) searchInput.value = "";
 
     // Update active tab button
     this.container.querySelectorAll("#dynamic-tabs .tab-button").forEach((tab) => {
@@ -237,13 +252,23 @@ class AnalyticsDashboardPage {
   }
 
   renderTable(container, data) {
+    if (!container) return;
+    this.lastRenderedData = Array.isArray(data) ? data : [];
+    data = this.filterRows(this.lastRenderedData);
+
     if (!data.length) {
-      container.innerHTML = '<div class="panel-empty">No data available</div>';
+      const message = this.filterText ? "No matching rows" : "No data available";
+      container.innerHTML = `<div class="panel-empty">${message}</div>`;
       return;
     }
 
     // Infer columns from first row
     const columns = Object.keys(data[0] || {});
+
+    if (this.shouldRenderOverviewCards(columns)) {
+      this.renderOverviewCards(container, data);
+      return;
+    }
 
     if (this.shouldRenderGroupedToolUsage(columns, data)) {
       this.renderGroupedToolUsageTable(container, data, columns);
@@ -256,14 +281,7 @@ class AnalyticsDashboardPage {
         const cells = columns
           .map((col) => {
             let value = row[col];
-            // JSON stringify objects
-            if (typeof value === "object" && value !== null) {
-              value = JSON.stringify(value);
-            }
-            // Truncate long values
-            if (typeof value === "string" && value.length > 100) {
-              value = value.slice(0, 100) + "…";
-            }
+            value = this.formatCellValue(value);
             return `<td title="${this.escapeHtml(String(value ?? ""))}">${this.escapeHtml(String(value ?? "-"))}</td>`;
           })
           .join("");
@@ -272,7 +290,7 @@ class AnalyticsDashboardPage {
       .join("");
 
     container.innerHTML = `
-      <div class="table-info">Showing ${data.length} row${data.length !== 1 ? "s" : ""} – click a row for details</div>
+      <div class="table-info">${this.formatTableInfo(data.length)} - click a row for details</div>
       <div class="table-wrapper">
         <table class="dashboard-table">
           <thead><tr>${headerCells}</tr></thead>
@@ -291,6 +309,33 @@ class AnalyticsDashboardPage {
   shouldRenderGroupedToolUsage(columns, data) {
     if (this.currentTab !== "tools") return false;
     return ["tool_id", "action", "total_count"].every((col) => columns.includes(col)) && data.some((row) => row.action === "TOTAL");
+  }
+
+  shouldRenderOverviewCards(columns) {
+    return this.currentTab === "overview" && ["metric", "value", "context"].every((col) => columns.includes(col));
+  }
+
+  renderOverviewCards(container, data) {
+    const cards = data
+      .map((row) => {
+        return `
+          <button type="button" class="overview-card" data-metric="${this.escapeHtml(String(row.metric ?? ""))}">
+            <span class="overview-card-label">${this.escapeHtml(String(row.metric ?? "-"))}</span>
+            <strong>${this.escapeHtml(String(row.value ?? "-"))}</strong>
+            <span class="overview-card-context">${this.escapeHtml(String(row.context ?? ""))}</span>
+          </button>
+        `;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div class="table-info">${this.formatTableInfo(data.length)} - click a card for details</div>
+      <div class="overview-grid">${cards}</div>
+    `;
+
+    container.querySelectorAll(".overview-card").forEach((card, idx) => {
+      card.addEventListener("click", () => this.showRowDetail(data[idx]));
+    });
   }
 
   renderGroupedToolUsageTable(container, data, columns) {
@@ -324,12 +369,7 @@ class AnalyticsDashboardPage {
                 }
 
                 let value = row[col];
-                if (typeof value === "object" && value !== null) {
-                  value = JSON.stringify(value);
-                }
-                if (typeof value === "string" && value.length > 100) {
-                  value = value.slice(0, 100) + "…";
-                }
+                value = this.formatCellValue(value);
 
                 const displayValue = this.escapeHtml(String(value ?? "-"));
                 const title = this.escapeHtml(String(value ?? ""));
@@ -347,7 +387,7 @@ class AnalyticsDashboardPage {
       .join("");
 
     container.innerHTML = `
-      <div class="table-info">Showing ${data.length} row${data.length !== 1 ? "s" : ""} – click a row for details</div>
+      <div class="table-info">${this.formatTableInfo(data.length)} - click a row for details</div>
       <div class="table-wrapper">
         <table class="dashboard-table grouped-tool-usage-table">
           <thead><tr>${headerCells}</tr></thead>
@@ -371,13 +411,13 @@ class AnalyticsDashboardPage {
     // Build transposed table (key-value pairs)
     const rows = Object.entries(row)
       .map(([key, value]) => {
-        let displayValue = value;
+        let displayValue = this.parseJsonString(value);
         // Pretty print objects/arrays
-        if (typeof value === "object" && value !== null) {
+        if (typeof displayValue === "object" && displayValue !== null) {
           try {
-            displayValue = JSON.stringify(value, null, 2);
+            displayValue = JSON.stringify(displayValue, null, 2);
           } catch (_) {
-            displayValue = String(value);
+            displayValue = String(displayValue);
           }
         }
         return `
@@ -405,6 +445,44 @@ class AnalyticsDashboardPage {
 
   formatHeader(key) {
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  formatTableInfo(visibleCount) {
+    const totalCount = this.lastRenderedData.length;
+    const noun = visibleCount === 1 ? "row" : "rows";
+    if (this.filterText && visibleCount !== totalCount) {
+      return `Showing ${visibleCount} of ${totalCount} ${noun}`;
+    }
+    return `Showing ${visibleCount} ${noun}`;
+  }
+
+  filterRows(data) {
+    if (!this.filterText) return data;
+    return data.filter((row) => {
+      return Object.values(row || {}).some((value) => String(value ?? "").toLowerCase().includes(this.filterText));
+    });
+  }
+
+  formatCellValue(value) {
+    let displayValue = value;
+    if (typeof displayValue === "object" && displayValue !== null) {
+      displayValue = JSON.stringify(displayValue);
+    }
+    if (typeof displayValue === "string" && displayValue.length > 120) {
+      displayValue = `${displayValue.slice(0, 120)}...`;
+    }
+    return displayValue;
+  }
+
+  parseJsonString(value) {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (!trimmed || !["{", "["].includes(trimmed[0])) return value;
+    try {
+      return JSON.parse(trimmed);
+    } catch (_) {
+      return value;
+    }
   }
 
   escapeHtml(str) {

@@ -29,6 +29,10 @@ export const AnalyticsDashboardTemplate = /*html*/ `
           <!-- Tabs will be rendered dynamically -->
         </div>
         <div class="dashboard-actions">
+          <label class="dashboard-search" for="dashboard-search">
+            <span>Search</span>
+            <input type="search" id="dashboard-search" class="dashboard-search-input" placeholder="Filter visible rows">
+          </label>
           <span id="config-source"></span>
           <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

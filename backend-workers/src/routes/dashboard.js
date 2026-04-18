@@ -9,6 +9,122 @@ import { corsHeaders } from "../utils/cors.js";
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
   {
+    id: "overview",
+    name: "Overview",
+    query: `WITH params AS (
+  SELECT 'fashalli.bilhaq@bankmandiri.co.id' AS owner_email
+)
+SELECT 'Active users today' AS metric,
+  CAST(COUNT(DISTINCT user_email) AS TEXT) AS value,
+  'People with live usage today' AS context
+  FROM usage_log, params
+  WHERE user_email != owner_email
+    AND created_time >= datetime('now', '+7 hours', 'start of day')
+UNION ALL
+SELECT 'Active users 7d',
+  CAST(COUNT(DISTINCT user_email) AS TEXT),
+  'People with live usage in the last 7 days'
+  FROM usage_log, params
+  WHERE user_email != owner_email
+    AND created_time >= datetime('now', '+7 hours', '-7 days')
+UNION ALL
+SELECT 'Tool opens 7d',
+  CAST(COUNT(*) AS TEXT),
+  'Shell-level tool open events'
+  FROM usage_log, params
+  WHERE user_email != owner_email
+    AND action = 'open'
+    AND created_time >= datetime('now', '+7 hours', '-7 days')
+UNION ALL
+SELECT 'Tracked actions 7d',
+  CAST(COALESCE(SUM(count), 0) AS TEXT),
+  'Aggregated device usage counts'
+  FROM device_usage, params
+  WHERE user_email != owner_email
+    AND updated_time >= datetime('now', '+7 hours', '-7 days')
+UNION ALL
+SELECT 'Uncaught errors 24h',
+  CAST(COUNT(*) AS TEXT),
+  'Immediate frontend error reports'
+  FROM error_events, params
+  WHERE COALESCE(user_email, '') != owner_email
+    AND created_time >= datetime('now', '+7 hours', '-1 day')
+UNION ALL
+SELECT 'Affected users 7d',
+  CAST(COUNT(DISTINCT user_email) AS TEXT),
+  'Users with uncaught errors'
+  FROM error_events, params
+  WHERE COALESCE(user_email, '') != owner_email
+    AND created_time >= datetime('now', '+7 hours', '-7 days')
+UNION ALL
+SELECT 'Most used tool 30d',
+  COALESCE((
+    SELECT tool_id || ' (' || SUM(count) || ')'
+    FROM device_usage, params
+    WHERE user_email != owner_email
+      AND updated_time >= datetime('now', '+7 hours', '-30 days')
+    GROUP BY tool_id
+    ORDER BY SUM(count) DESC
+    LIMIT 1
+  ), '-'),
+  'Tool with the largest aggregated action count'
+UNION ALL
+SELECT 'Noisiest error 7d',
+  COALESCE((
+    SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')'
+    FROM error_events, params
+    WHERE COALESCE(user_email, '') != owner_email
+      AND created_time >= datetime('now', '+7 hours', '-7 days')
+    GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
+    ORDER BY COUNT(*) DESC, MAX(created_time) DESC
+    LIMIT 1
+  ), '-'),
+  'Top uncaught error cluster'`,
+  },
+  {
+    id: "active-users",
+    name: "Active Users",
+    query: `WITH recent_usage AS (
+  SELECT user_email, device_id, tool_id, action, created_time
+  FROM usage_log
+  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND created_time >= datetime('now', '+7 hours', '-30 days')
+),
+user_rollup AS (
+  SELECT user_email,
+    COUNT(*) AS actions_30d,
+    SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens_30d,
+    COUNT(DISTINCT tool_id) AS tools_used,
+    COUNT(DISTINCT device_id) AS devices_seen,
+    GROUP_CONCAT(DISTINCT tool_id) AS tools,
+    MAX(created_time) AS last_activity
+  FROM recent_usage
+  GROUP BY user_email
+),
+error_rollup AS (
+  SELECT user_email,
+    COUNT(*) AS errors_30d,
+    MAX(created_time) AS last_error
+  FROM error_events
+  WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND created_time >= datetime('now', '+7 hours', '-30 days')
+  GROUP BY user_email
+)
+SELECT SUBSTR(user_rollup.user_email, 1, INSTR(user_rollup.user_email, '@') - 1) AS user,
+  user_rollup.actions_30d,
+  user_rollup.opens_30d,
+  user_rollup.tools_used,
+  user_rollup.devices_seen,
+  COALESCE(error_rollup.errors_30d, 0) AS errors_30d,
+  user_rollup.last_activity,
+  error_rollup.last_error,
+  user_rollup.tools
+FROM user_rollup
+LEFT JOIN error_rollup ON error_rollup.user_email = user_rollup.user_email
+ORDER BY user_rollup.last_activity DESC
+LIMIT 200`,
+  },
+  {
     id: "tools",
     name: "Tool Usage",
     query: `WITH n AS (
@@ -36,25 +152,95 @@ FROM (
 ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
   },
   {
+    id: "tool-adoption",
+    name: "Tool Adoption",
+    query: `WITH usage AS (
+  SELECT
+    CASE WHEN tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE tool_id END AS tool_id,
+    action,
+    device_id,
+    user_email,
+    count,
+    updated_time
+  FROM device_usage
+  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+),
+totals AS (
+  SELECT tool_id,
+    SUM(count) AS total_actions,
+    SUM(CASE WHEN action = 'open' THEN count ELSE 0 END) AS opens,
+    COUNT(DISTINCT user_email) AS users,
+    COUNT(DISTINCT device_id) AS devices,
+    MAX(updated_time) AS last_used
+  FROM usage
+  GROUP BY tool_id
+),
+ranked_actions AS (
+  SELECT tool_id,
+    action,
+    action_count,
+    ROW_NUMBER() OVER (PARTITION BY tool_id ORDER BY action_count DESC) AS rank
+  FROM (
+    SELECT tool_id,
+      action,
+      SUM(count) AS action_count
+    FROM usage
+    GROUP BY tool_id, action
+  )
+),
+errors AS (
+  SELECT COALESCE(tool_id, route, 'unknown') AS tool_id,
+    COUNT(*) AS errors_7d,
+    MAX(created_time) AS last_error
+  FROM error_events
+  WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND created_time >= datetime('now', '+7 hours', '-7 days')
+  GROUP BY COALESCE(tool_id, route, 'unknown')
+)
+SELECT totals.tool_id,
+  totals.total_actions,
+  totals.opens,
+  totals.users,
+  totals.devices,
+  ranked_actions.action AS top_action,
+  ranked_actions.action_count AS top_action_count,
+  COALESCE(errors.errors_7d, 0) AS errors_7d,
+  totals.last_used,
+  errors.last_error
+FROM totals
+LEFT JOIN ranked_actions ON ranked_actions.tool_id = totals.tool_id AND ranked_actions.rank = 1
+LEFT JOIN errors ON errors.tool_id = totals.tool_id
+ORDER BY totals.total_actions DESC, totals.users DESC
+LIMIT 100`,
+  },
+  {
     id: "daily",
-    name: "Daily Logs",
-    query: `SELECT u.user_email, d.platform, u.tool_id, u.action
+    name: "Recent Activity",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+      SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
+      COALESCE(d.platform, 'unknown') AS platform,
+      COALESCE(d.app_version, '-') AS app_version,
+      u.tool_id,
+      u.action
       FROM usage_log u
-      JOIN device d ON u.device_id = d.device_id
-      WHERE DATE(u.created_time) = DATE('now')
+      LEFT JOIN device d ON u.device_id = d.device_id
+      WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY u.created_time DESC`,
   },
   {
     id: "devices",
     name: "Devices",
     query: `SELECT d.platform,
-      COUNT(DISTINCT u.email) AS user_count
+      COALESCE(d.app_version, '-') AS app_version,
+      COUNT(DISTINCT u.email) AS user_count,
+      COUNT(DISTINCT d.device_id) AS device_count,
+      MAX(d.last_seen) AS last_seen
       FROM device d
       JOIN users u ON u.id = d.user_id
       WHERE d.platform != 'Unknown'
       AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
-      GROUP BY d.platform
-      ORDER BY user_count DESC, d.platform`,
+      GROUP BY d.platform, COALESCE(d.app_version, '-')
+      ORDER BY last_seen DESC, user_count DESC, d.platform`,
   },
   {
     id: "events",
@@ -64,11 +250,56 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
+      WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC`,
   },
   {
+    id: "friction",
+    name: "Friction",
+    query: `WITH instrumented AS (
+  SELECT 'tracked_event' AS source,
+    e.feature_id AS area,
+    e.action AS issue,
+    COUNT(*) AS count,
+    COUNT(DISTINCT u.email) AS affected_users,
+    MAX(e.created_time) AS last_seen,
+    NULL AS latest_message
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND (
+      LOWER(e.action) LIKE '%error%'
+      OR LOWER(e.action) LIKE '%fail%'
+      OR LOWER(e.action) LIKE '%invalid%'
+      OR LOWER(e.action) LIKE '%timeout%'
+      OR LOWER(e.action) LIKE '%reject%'
+    )
+  GROUP BY e.feature_id, e.action
+),
+uncaught AS (
+  SELECT 'uncaught_error' AS source,
+    COALESCE(tool_id, route, 'unknown') AS area,
+    error_name AS issue,
+    COUNT(*) AS count,
+    COUNT(DISTINCT user_email) AS affected_users,
+    MAX(created_time) AS last_seen,
+    SUBSTR(message, 1, 180) AS latest_message
+  FROM error_events
+  WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
+  GROUP BY COALESCE(tool_id, route, 'unknown'), error_name, SUBSTR(message, 1, 180)
+)
+SELECT source, area, issue, count, affected_users, last_seen, latest_message
+FROM instrumented
+UNION ALL
+SELECT source, area, issue, count, affected_users, last_seen, latest_message
+FROM uncaught
+ORDER BY count DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
     id: "errors",
-    name: "Errors",
+    name: "Error Details",
     query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,
       SUBSTR(COALESCE(user_email, ''), 1, INSTR(COALESCE(user_email, ''), '@') - 1) AS user,
       runtime,
@@ -78,6 +309,7 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
       error_kind,
       error_name,
       message,
+      stack,
       source,
       lineno,
       colno,
@@ -95,11 +327,50 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
       error_name,
       COUNT(*) AS count,
       COUNT(DISTINCT user_email) AS affected_users,
+      COUNT(DISTINCT device_id) AS affected_devices,
+      SUBSTR(MAX(created_time || '|' || message), 21) AS latest_message,
       MAX(created_time) AS last_seen
       FROM error_events
+      WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
       GROUP BY area, process_area, error_name
       ORDER BY count DESC, last_seen DESC
       LIMIT 100`,
+  },
+  {
+    id: "versions",
+    name: "Runtime Versions",
+    query: `WITH devices AS (
+  SELECT d.device_id,
+    u.email,
+    d.platform,
+    COALESCE(d.app_version, '-') AS app_version,
+    d.last_seen
+  FROM device d
+  JOIN users u ON u.id = d.user_id
+  WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+),
+version_errors AS (
+  SELECT COALESCE(app_version, '-') AS app_version,
+    runtime,
+    COUNT(*) AS errors_30d,
+    MAX(created_time) AS last_error
+  FROM error_events
+  WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND created_time >= datetime('now', '+7 hours', '-30 days')
+  GROUP BY COALESCE(app_version, '-'), runtime
+)
+SELECT devices.platform,
+  devices.app_version,
+  COUNT(DISTINCT devices.email) AS users,
+  COUNT(DISTINCT devices.device_id) AS devices,
+  COALESCE(version_errors.runtime, '-') AS error_runtime,
+  COALESCE(version_errors.errors_30d, 0) AS errors_30d,
+  MAX(devices.last_seen) AS last_seen,
+  version_errors.last_error
+FROM devices
+LEFT JOIN version_errors ON version_errors.app_version = devices.app_version
+GROUP BY devices.platform, devices.app_version, version_errors.runtime
+ORDER BY errors_30d DESC, last_seen DESC`,
   },
   {
     id: "quick-query",
@@ -300,13 +571,22 @@ function getDefaultTab(id) {
   return DEFAULT_TABS.find((tab) => tab.id === id) || DEFAULT_TABS[0];
 }
 
+function mergeStoredTabsWithDefaults(storedTabs) {
+  const storedById = new Map(storedTabs.map((tab) => [tab.id, tab]));
+  const merged = DEFAULT_TABS.map((defaultTab) => storedById.get(defaultTab.id) || defaultTab);
+  const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
+  const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
+  return [...merged, ...customTabs];
+}
+
 /**
  * Get tab configs from KV or fallback to defaults
  * Returns { source: 'kv' | 'defaults', tabs: [] }
  */
 async function getTabConfigs(env) {
   const now = Date.now();
-  if (tabConfigCache && tabConfigCache.expiresAt > now) {
+  const kvBinding = env.adtools || null;
+  if (tabConfigCache && tabConfigCache.expiresAt > now && tabConfigCache.kvBinding === kvBinding) {
     return tabConfigCache.value;
   }
 
@@ -315,7 +595,7 @@ async function getTabConfigs(env) {
     if (env.adtools) {
       const stored = await env.adtools.get(KV_KEY, "json");
       if (stored && Array.isArray(stored) && stored.length > 0) {
-        value = { source: "kv", tabs: stored };
+        value = { source: "kv+defaults", tabs: mergeStoredTabsWithDefaults(stored) };
       }
     }
   } catch (err) {
@@ -323,6 +603,7 @@ async function getTabConfigs(env) {
   }
   tabConfigCache = {
     expiresAt: now + CACHE_TTL_MS,
+    kvBinding,
     value,
   };
   return value;

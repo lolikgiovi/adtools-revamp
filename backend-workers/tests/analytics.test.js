@@ -9,18 +9,22 @@ import worker from '../worker.js';
 
 function createDbMock() {
   const executed = [];
+  const run = async (sql, args = []) => {
+    executed.push({ sql, args });
+    return { success: true };
+  };
+  const all = async () => ({ results: [] });
   const db = {
     executed,
     prepare: vi.fn((sql) => ({
+      run: vi.fn(() => run(sql)),
+      all: vi.fn(all),
       bind: (...args) => ({
         sql,
         args,
-        run: vi.fn(async () => {
-          executed.push({ sql, args });
-          return { success: true };
-        }),
+        run: vi.fn(() => run(sql, args)),
         first: vi.fn(async () => null),
-        all: vi.fn(async () => ({ results: [] })),
+        all: vi.fn(all),
       }),
     })),
     batch: vi.fn(async (statements) => {
@@ -36,6 +40,9 @@ function createEnv() {
     SEND_LIVE_USER_LOG: 'true',
     ANALYTICS_DASHBOARD_PASSWORD: 'testpassword123',
     DB: createDbMock(),
+    adtools: {
+      get: vi.fn(async () => null),
+    },
     ASSETS: {
       fetch: vi.fn(async () => new Response('Not Found', { status: 404 })),
     },
@@ -167,5 +174,60 @@ describe('Analytics endpoints', () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it('exposes owner insight dashboard tabs after auth', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request('http://localhost/dashboard/tabs', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env
+    );
+
+    const data = await response.json();
+    const ids = data.tabs.map((tab) => tab.id);
+    expect(response.status).toBe(200);
+    expect(ids.slice(0, 4)).toEqual(['overview', 'active-users', 'tools', 'tool-adoption']);
+    expect(ids).toContain('friction');
+    expect(ids).toContain('versions');
+    expect(ids).toContain('error-summary');
+    expect(ids).toContain('errors');
+  });
+
+  it('merges new default insight tabs with stored dashboard config', async () => {
+    env.adtools.get.mockResolvedValueOnce([{ id: 'custom-tab', name: 'Custom Tab', query: 'SELECT 1 AS ok' }]);
+
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request('http://localhost/dashboard/tabs', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env
+    );
+
+    const data = await response.json();
+    const ids = data.tabs.map((tab) => tab.id);
+    expect(data.source).toBe('kv+defaults');
+    expect(ids[0]).toBe('overview');
+    expect(ids).toContain('custom-tab');
   });
 });
