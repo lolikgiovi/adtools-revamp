@@ -19,6 +19,7 @@ function createDbMock() {
     prepare: vi.fn((sql) => ({
       run: vi.fn(() => run(sql)),
       all: vi.fn(all),
+      first: vi.fn(async () => null),
       bind: (...args) => ({
         sql,
         args,
@@ -206,7 +207,7 @@ describe('Analytics endpoints', () => {
     expect(ids).toContain('errors');
   });
 
-  it('self-heals error_events schema before dashboard insight queries', async () => {
+  it('returns a safe overview even when analytics tables are missing', async () => {
     const login = await worker.fetch(
       new Request('http://localhost/dashboard/verify', {
         method: 'POST',
@@ -225,6 +226,41 @@ describe('Analytics endpoints', () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ tabId: 'overview' }),
+      }),
+      env
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.mode).toBe('computed-overview');
+    expect(data.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ metric: 'Active users today', value: '0' }),
+        expect.objectContaining({ metric: 'Uncaught errors 24h', value: '0' }),
+      ])
+    );
+  });
+
+  it('self-heals error_events schema before error dashboard queries', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'error-summary' }),
       }),
       env
     );

@@ -29,6 +29,27 @@ CREATE INDEX IF NOT EXISTS idx_error_events_tool_time ON error_events(tool_id, c
 CREATE INDEX IF NOT EXISTS idx_error_events_process_time ON error_events(process_area, created_time DESC);
 CREATE INDEX IF NOT EXISTS idx_error_events_name_time ON error_events(error_name, created_time DESC);
 
+-- Keep this cleanup safe in environments that never had GET fallback tables.
+CREATE TABLE IF NOT EXISTS get_device_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL,
+  user_email TEXT,
+  tool_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_time TEXT NOT NULL,
+  UNIQUE(device_id, tool_id, action)
+);
+
+CREATE TABLE IF NOT EXISTS get_usage_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  tool_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_time TEXT NOT NULL
+);
+
 INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time)
 SELECT
   device_id,

@@ -12,75 +12,7 @@ const DEFAULT_TABS = [
   {
     id: "overview",
     name: "Overview",
-    query: `WITH params AS (
-  SELECT 'fashalli.bilhaq@bankmandiri.co.id' AS owner_email
-)
-SELECT 'Active users today' AS metric,
-  CAST(COUNT(DISTINCT user_email) AS TEXT) AS value,
-  'People with live usage today' AS context
-  FROM usage_log, params
-  WHERE user_email != owner_email
-    AND created_time >= datetime('now', '+7 hours', 'start of day')
-UNION ALL
-SELECT 'Active users 7d',
-  CAST(COUNT(DISTINCT user_email) AS TEXT),
-  'People with live usage in the last 7 days'
-  FROM usage_log, params
-  WHERE user_email != owner_email
-    AND created_time >= datetime('now', '+7 hours', '-7 days')
-UNION ALL
-SELECT 'Tool opens 7d',
-  CAST(COUNT(*) AS TEXT),
-  'Shell-level tool open events'
-  FROM usage_log, params
-  WHERE user_email != owner_email
-    AND action = 'open'
-    AND created_time >= datetime('now', '+7 hours', '-7 days')
-UNION ALL
-SELECT 'Tracked actions 7d',
-  CAST(COALESCE(SUM(count), 0) AS TEXT),
-  'Aggregated device usage counts'
-  FROM device_usage, params
-  WHERE user_email != owner_email
-    AND updated_time >= datetime('now', '+7 hours', '-7 days')
-UNION ALL
-SELECT 'Uncaught errors 24h',
-  CAST(COUNT(*) AS TEXT),
-  'Immediate frontend error reports'
-  FROM error_events, params
-  WHERE COALESCE(user_email, '') != owner_email
-    AND created_time >= datetime('now', '+7 hours', '-1 day')
-UNION ALL
-SELECT 'Affected users 7d',
-  CAST(COUNT(DISTINCT user_email) AS TEXT),
-  'Users with uncaught errors'
-  FROM error_events, params
-  WHERE COALESCE(user_email, '') != owner_email
-    AND created_time >= datetime('now', '+7 hours', '-7 days')
-UNION ALL
-SELECT 'Most used tool 30d',
-  COALESCE((
-    SELECT tool_id || ' (' || SUM(count) || ')'
-    FROM device_usage, params
-    WHERE user_email != owner_email
-      AND updated_time >= datetime('now', '+7 hours', '-30 days')
-    GROUP BY tool_id
-    ORDER BY SUM(count) DESC
-    LIMIT 1
-  ), '-'),
-  'Tool with the largest aggregated action count'
-UNION ALL
-SELECT 'Noisiest error 7d',
-  COALESCE((
-    SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')'
-    FROM error_events, params
-    WHERE COALESCE(user_email, '') != owner_email
-      AND created_time >= datetime('now', '+7 hours', '-7 days')
-    GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
-    ORDER BY COUNT(*) DESC, MAX(created_time) DESC
-    LIMIT 1
-  ), '-'),
-  'Top uncaught error cluster'`,
+    query: "SELECT 'Overview is computed by the dashboard API' AS metric, '-' AS value, 'No direct SQL query is used' AS context",
   },
   {
     id: "active-users",
@@ -565,6 +497,7 @@ ORDER BY errors_30d DESC, last_seen DESC`,
 
 const KV_KEY = "analytics-dashboard-config";
 const CACHE_TTL_MS = 60 * 1000;
+const OWNER_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
 
@@ -735,6 +668,10 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       });
     }
 
+    if (tab.id === "overview") {
+      return executeOverviewQuery(env, "tab:overview:v2");
+    }
+
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
@@ -801,6 +738,179 @@ function setCachedDashboardQueryBody(cacheKey, body) {
   });
 }
 
+function dashboardJson(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders() },
+  });
+}
+
+async function executeOverviewQuery(env, cacheKey) {
+  try {
+    if (!env.DB) {
+      return dashboardJson({ ok: false, error: "Database not available", tabId: "overview" }, 200);
+    }
+
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const tables = await getDashboardTables(env);
+    const data = [
+      {
+        metric: "Active users today",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["usage_log"],
+          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            FROM usage_log
+            WHERE user_email != '${OWNER_EMAIL}'
+              AND created_time >= datetime('now', '+7 hours', 'start of day')`,
+          "0"
+        ),
+        context: "People with live usage today",
+      },
+      {
+        metric: "Active users 7d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["usage_log"],
+          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            FROM usage_log
+            WHERE user_email != '${OWNER_EMAIL}'
+              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+          "0"
+        ),
+        context: "People with live usage in the last 7 days",
+      },
+      {
+        metric: "Tool opens 7d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["usage_log"],
+          `SELECT CAST(COUNT(*) AS TEXT) AS value
+            FROM usage_log
+            WHERE user_email != '${OWNER_EMAIL}'
+              AND action = 'open'
+              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+          "0"
+        ),
+        context: "Shell-level tool open events",
+      },
+      {
+        metric: "Tracked actions 7d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["device_usage"],
+          `SELECT CAST(COALESCE(SUM(count), 0) AS TEXT) AS value
+            FROM device_usage
+            WHERE user_email != '${OWNER_EMAIL}'
+              AND updated_time >= datetime('now', '+7 hours', '-7 days')`,
+          "0"
+        ),
+        context: "Aggregated device usage counts",
+      },
+      {
+        metric: "Uncaught errors 24h",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["error_events"],
+          `SELECT CAST(COUNT(*) AS TEXT) AS value
+            FROM error_events
+            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+              AND created_time >= datetime('now', '+7 hours', '-1 day')`,
+          "0"
+        ),
+        context: "Immediate frontend error reports",
+      },
+      {
+        metric: "Affected users 7d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["error_events"],
+          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            FROM error_events
+            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+          "0"
+        ),
+        context: "Users with uncaught errors",
+      },
+      {
+        metric: "Most used tool 30d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["device_usage"],
+          `SELECT tool_id || ' (' || SUM(count) || ')' AS value
+            FROM device_usage
+            WHERE user_email != '${OWNER_EMAIL}'
+              AND updated_time >= datetime('now', '+7 hours', '-30 days')
+            GROUP BY tool_id
+            ORDER BY SUM(count) DESC
+            LIMIT 1`,
+          "-"
+        ),
+        context: "Tool with the largest aggregated action count",
+      },
+      {
+        metric: "Noisiest error 7d",
+        value: await safeDashboardScalar(
+          env,
+          tables,
+          ["error_events"],
+          `SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')' AS value
+            FROM error_events
+            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+              AND created_time >= datetime('now', '+7 hours', '-7 days')
+            GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
+            ORDER BY COUNT(*) DESC, MAX(created_time) DESC
+            LIMIT 1`,
+          "-"
+        ),
+        context: "Top uncaught error cluster",
+      },
+    ];
+
+    const body = JSON.stringify({ ok: true, data, mode: "computed-overview" });
+    setCachedDashboardQueryBody(cacheKey, body);
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Overview failed: ${String(err)}`, tabId: "overview" }, 200);
+  }
+}
+
+async function getDashboardTables(env) {
+  try {
+    const result = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+    return new Set((result.results || []).map((row) => row.name).filter(Boolean));
+  } catch (_) {
+    return new Set();
+  }
+}
+
+async function safeDashboardScalar(env, tables, requiredTables, query, fallback) {
+  if (!requiredTables.every((table) => tables.has(table))) return fallback;
+  try {
+    const row = await env.DB.prepare(query).first();
+    const value = row?.value;
+    return value === null || value === undefined || value === "" ? fallback : String(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
 async function executeQuery(env, cacheKey, query) {
   try {
     if (!env.DB) {
@@ -817,12 +927,7 @@ async function executeQuery(env, cacheKey, query) {
       });
     }
 
-    if (query.includes("error_events")) {
-      await ensureErrorEventsSchema(env);
-    }
-    if (query.includes("d.app_version") || query.includes("devices.app_version")) {
-      await ensureDeviceAppVersionSchema(env);
-    }
+    await prepareDashboardSchema(env, query);
 
     const result = await env.DB.prepare(query).all();
     const body = JSON.stringify({ ok: true, data: result.results || [] });
@@ -832,9 +937,19 @@ async function executeQuery(env, cacheKey, query) {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
-    });
+    return dashboardJson({ ok: false, error: `Dashboard query failed: ${String(err)}` }, 200);
+  }
+}
+
+async function prepareDashboardSchema(env, query) {
+  try {
+    if (query.includes("error_events")) {
+      await ensureErrorEventsSchema(env);
+    }
+    if (query.includes("d.app_version") || query.includes("devices.app_version")) {
+      await ensureDeviceAppVersionSchema(env);
+    }
+  } catch (err) {
+    console.warn("Dashboard schema preparation failed:", err);
   }
 }
