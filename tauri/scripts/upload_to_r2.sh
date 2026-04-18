@@ -188,13 +188,7 @@ for ch in "${CHANNELS[@]}"; do
   fi
 done
 
-echo "Uploading manifests to bucket '$BUCKET'..."
-for ch in "${CHANNELS[@]}"; do
-  mf="$RELEASE_DIR/$ch.json"
-  wrangler r2 object put "$BUCKET/update/$ch.json" $WRANGLER_REMOTE_FLAG --file="$mf" --content-type "application/json"
-done
-
-echo "Uploading artifacts for version $VERSION..."
+echo "Uploading artifacts for version $VERSION to bucket '$BUCKET'..."
 upload_artifact() {
   local channel="$1" arch_dir="$2" arch_key="$3" base_name="$4"
   local tar_path sig_path dmg_path
@@ -225,6 +219,12 @@ upload_artifact() {
 for ch in "${CHANNELS[@]}"; do
   upload_artifact "$ch" darwin-aarch64 darwin-aarch64 mac-arm64
   upload_artifact "$ch" darwin-x86_64 darwin-x86_64 mac-intel
+done
+
+echo "Uploading manifests last..."
+for ch in "${CHANNELS[@]}"; do
+  mf="$RELEASE_DIR/$ch.json"
+  wrangler r2 object put "$BUCKET/update/$ch.json" $WRANGLER_REMOTE_FLAG --file="$mf" --content-type "application/json"
 done
 
 echo "Upload complete. Verify with:"
