@@ -30,8 +30,8 @@ export const AnalyticsDashboardTemplate = /*html*/ `
         </div>
         <div class="dashboard-actions">
           <label class="dashboard-search" for="dashboard-search">
-            <span>Search</span>
-            <input type="search" id="dashboard-search" class="dashboard-search-input" placeholder="Filter visible rows">
+            <span class="dashboard-search-label">Search rows</span>
+            <input type="search" id="dashboard-search" class="dashboard-search-input" placeholder="Search rows">
           </label>
           <span id="config-source"></span>
           <button type="button" class="btn btn-secondary btn-sm" id="dashboard-refresh">
