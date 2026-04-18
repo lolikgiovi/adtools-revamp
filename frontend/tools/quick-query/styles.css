@@ -316,6 +316,112 @@
   white-space: nowrap;
 }
 
+.qq-uuid-generator-anchor {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.qq-uuid-generator-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 900;
+  width: min(380px, calc(100vw - 24px));
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.qq-uuid-generator-popover.hidden {
+  display: none;
+}
+
+.qq-uuid-generator-popover::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: hsl(var(--background));
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
+  transform: rotate(45deg);
+}
+
+.qq-uuid-generator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.qq-uuid-generator-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.qq-uuid-generator-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.qq-uuid-generator-body label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.qq-uuid-generator-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.qq-uuid-generator-actions .qq-input {
+  width: 92px;
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.qq-uuid-generator-output {
+  width: 100%;
+  min-height: 150px;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.qq-uuid-generator-output:focus,
+.qq-uuid-generator-actions .qq-input:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.18);
+}
+
+.qq-uuid-generator-status {
+  min-height: 16px;
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
 /* Handsontable compact sizing overrides (scoped to quick-query) */
 .quick-query-tool-container .handsontable {
   font-size: 11px;
@@ -1111,7 +1217,9 @@
   right: 0;
   bottom: 0;
   background-color: var(--toggle-off-bg, #e5e7eb);
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
   border-radius: 9999px;
 }
 

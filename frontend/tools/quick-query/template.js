@@ -70,7 +70,27 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
         <div class="content-b">
             <div class="button-group quick-query-data-controls">
-                <button id="addFieldNames" class="btn btn-primary btn-sm">Add field names from schema</button>
+                <div class="qq-uuid-generator-anchor" id="quickQueryUuidAnchor">
+                    <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button" aria-expanded="false" aria-controls="quickQueryUuidPopover">Generate UUID</button>
+                    <div id="quickQueryUuidPopover" class="qq-uuid-generator-popover hidden" role="dialog" aria-labelledby="quickQueryUuidTitle" aria-hidden="true">
+                        <div class="qq-uuid-generator-header">
+                            <h3 id="quickQueryUuidTitle">UUID Generator</h3>
+                            <button id="quickQueryUuidClose" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
+                        </div>
+                        <div class="qq-uuid-generator-body">
+                            <label for="quickQueryUuidQuantity">Count</label>
+                            <div class="qq-uuid-generator-actions">
+                                <input type="number" id="quickQueryUuidQuantity" class="qq-input" min="1" max="10000" value="1" />
+                                <button id="quickQueryUuidGenerate" class="btn btn-primary btn-sm" type="button">Generate</button>
+                                <button id="quickQueryUuidCopy" class="btn btn-primary btn-sm" type="button" disabled>Copy</button>
+                                <button id="quickQueryUuidClear" class="btn btn-outline btn-sm" type="button">Clear</button>
+                            </div>
+                            <textarea id="quickQueryUuidOutput" class="qq-uuid-generator-output" readonly rows="8" placeholder="Generated UUIDs appear here"></textarea>
+                            <p id="quickQueryUuidStatus" class="qq-uuid-generator-status">Ready to generate</p>
+                        </div>
+                    </div>
+                </div>
+                <button id="addFieldNames" class="btn btn-primary btn-sm">Sync Field Names</button>
                 <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>

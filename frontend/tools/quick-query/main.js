@@ -97,6 +97,12 @@ export class QuickQueryUI {
         void this.flushPendingDataAutosave();
       }
     };
+    this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
+    this._handleUuidGeneratorKeydown = (event) => {
+      if (event.key === "Escape") {
+        this.closeUuidGenerator();
+      }
+    };
 
     // Initialize search state
     this.searchState = {
@@ -291,6 +297,18 @@ export class QuickQueryUI {
       excelImportRowCount: document.getElementById("excelImportRowCount"),
       clearExcelImportButton: document.getElementById("clearExcelImport"),
 
+      // UUID generator popover elements
+      quickQueryUuidAnchor: document.getElementById("quickQueryUuidAnchor"),
+      quickQueryUuidButton: document.getElementById("quickQueryUuidButton"),
+      quickQueryUuidPopover: document.getElementById("quickQueryUuidPopover"),
+      quickQueryUuidCloseButton: document.getElementById("quickQueryUuidClose"),
+      quickQueryUuidQuantity: document.getElementById("quickQueryUuidQuantity"),
+      quickQueryUuidGenerateButton: document.getElementById("quickQueryUuidGenerate"),
+      quickQueryUuidCopyButton: document.getElementById("quickQueryUuidCopy"),
+      quickQueryUuidClearButton: document.getElementById("quickQueryUuidClear"),
+      quickQueryUuidOutput: document.getElementById("quickQueryUuidOutput"),
+      quickQueryUuidStatus: document.getElementById("quickQueryUuidStatus"),
+
       // Excel import modal elements
       excelImportOverlay: document.getElementById("excelImportOverlay"),
       excelImportModal: document.getElementById("excelImportModal"),
@@ -392,6 +410,32 @@ export class QuickQueryUI {
       // Data related buttons
       addFieldNames: {
         click: () => this.handleAddFieldNames(),
+      },
+      quickQueryUuidButton: {
+        click: (e) => this.toggleUuidGenerator(e),
+      },
+      quickQueryUuidPopover: {
+        click: (e) => e.stopPropagation(),
+      },
+      quickQueryUuidCloseButton: {
+        click: () => this.closeUuidGenerator(),
+      },
+      quickQueryUuidQuantity: {
+        keydown: (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            this.generateQuickQueryUuids();
+          }
+        },
+      },
+      quickQueryUuidGenerateButton: {
+        click: () => this.generateQuickQueryUuids(),
+      },
+      quickQueryUuidCopyButton: {
+        click: (e) => this.copyQuickQueryUuids(e.target),
+      },
+      quickQueryUuidClearButton: {
+        click: () => this.clearQuickQueryUuids(),
       },
       addDataRow: {
         click: () => this.handleAddDataRow(),
@@ -541,6 +585,9 @@ export class QuickQueryUI {
         console.warn(`Element '${elementId}' not found`);
       }
     });
+
+    document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
   }
 
   initializeEditor() {
@@ -726,6 +773,8 @@ export class QuickQueryUI {
 
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
+    document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
     return this.dataAutosave.destroy({ flush });
   }
 
@@ -1830,6 +1879,140 @@ export class QuickQueryUI {
     } catch (err) {
       console.error("Failed to create ZIP:", err);
       this.showError("Failed to create ZIP file");
+    }
+  }
+
+  toggleUuidGenerator(event) {
+    event?.stopPropagation();
+
+    if (this.isUuidGeneratorOpen()) {
+      this.closeUuidGenerator();
+      return;
+    }
+
+    this.openUuidGenerator();
+  }
+
+  openUuidGenerator() {
+    const { quickQueryUuidButton, quickQueryUuidPopover, quickQueryUuidQuantity, quickQueryUuidOutput } = this.elements;
+    if (!quickQueryUuidPopover) return;
+
+    quickQueryUuidPopover.classList.remove("hidden");
+    quickQueryUuidPopover.setAttribute("aria-hidden", "false");
+    quickQueryUuidButton?.setAttribute("aria-expanded", "true");
+
+    if (!quickQueryUuidOutput?.value) {
+      this.generateQuickQueryUuids({ track: false });
+    }
+
+    setTimeout(() => {
+      quickQueryUuidQuantity?.focus();
+      quickQueryUuidQuantity?.select();
+    }, 0);
+  }
+
+  closeUuidGenerator() {
+    const { quickQueryUuidButton, quickQueryUuidPopover } = this.elements;
+    if (!quickQueryUuidPopover || quickQueryUuidPopover.classList.contains("hidden")) return;
+
+    quickQueryUuidPopover.classList.add("hidden");
+    quickQueryUuidPopover.setAttribute("aria-hidden", "true");
+    quickQueryUuidButton?.setAttribute("aria-expanded", "false");
+  }
+
+  isUuidGeneratorOpen() {
+    return !!this.elements.quickQueryUuidPopover && !this.elements.quickQueryUuidPopover.classList.contains("hidden");
+  }
+
+  handleUuidGeneratorDocumentClick(event) {
+    if (!this.isUuidGeneratorOpen()) return;
+
+    const anchor = this.elements.quickQueryUuidAnchor;
+    if (anchor && !anchor.contains(event.target)) {
+      this.closeUuidGenerator();
+    }
+  }
+
+  generateQuickQueryUuids({ track = true } = {}) {
+    const { quickQueryUuidQuantity, quickQueryUuidOutput, quickQueryUuidCopyButton, quickQueryUuidStatus } = this.elements;
+    if (!quickQueryUuidQuantity || !quickQueryUuidOutput) return;
+
+    const quantity = this.getQuickQueryUuidQuantity();
+    const uuids = Array.from({ length: quantity }, () => this.createUuid());
+
+    quickQueryUuidOutput.value = uuids.join("\n");
+    if (quickQueryUuidCopyButton) {
+      quickQueryUuidCopyButton.disabled = false;
+    }
+    if (quickQueryUuidStatus) {
+      quickQueryUuidStatus.textContent = `${quantity} UUID${quantity === 1 ? "" : "s"} ready`;
+    }
+
+    if (track) {
+      UsageTracker.trackEvent("quick-query", "generate_uuid", { quantity });
+    }
+  }
+
+  getQuickQueryUuidQuantity() {
+    const input = this.elements.quickQueryUuidQuantity;
+    const parsed = Number.parseInt(input?.value, 10);
+    const quantity = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 1, 1), 10000);
+
+    if (input) {
+      input.value = String(quantity);
+    }
+
+    return quantity;
+  }
+
+  createUuid() {
+    if (globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+    if (globalThis.crypto?.getRandomValues) {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      bytes.set(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256)));
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex
+      .slice(8, 10)
+      .join("")}-${hex.slice(10, 16).join("")}`;
+  }
+
+  async copyQuickQueryUuids(targetEl) {
+    const { quickQueryUuidOutput, quickQueryUuidStatus } = this.elements;
+    if (!quickQueryUuidOutput) return;
+
+    if (!quickQueryUuidOutput.value) {
+      this.generateQuickQueryUuids({ track: false });
+    }
+
+    await this.copyToClipboard(quickQueryUuidOutput.value, targetEl);
+    if (quickQueryUuidStatus) {
+      quickQueryUuidStatus.textContent = "Copied";
+    }
+    UsageTracker.trackEvent("quick-query", "copy_uuid", {
+      count: quickQueryUuidOutput.value.split("\n").filter(Boolean).length,
+    });
+  }
+
+  clearQuickQueryUuids() {
+    const { quickQueryUuidOutput, quickQueryUuidCopyButton, quickQueryUuidStatus } = this.elements;
+
+    if (quickQueryUuidOutput) {
+      quickQueryUuidOutput.value = "";
+    }
+    if (quickQueryUuidCopyButton) {
+      quickQueryUuidCopyButton.disabled = true;
+    }
+    if (quickQueryUuidStatus) {
+      quickQueryUuidStatus.textContent = "Ready to generate";
     }
   }
 

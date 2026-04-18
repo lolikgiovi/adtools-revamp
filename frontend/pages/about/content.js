@@ -165,7 +165,7 @@ Choose the type of SQL query from the dropdown (MERGE INTO, INSERT, UPDATE).
 
 ### 3. Enter Data
 Use the spreadsheet to enter your data:
-- First row should contain column headers (or use "Add field names from schema")
+- First row should contain column headers (or use "Sync Field Names")
 - Enter data in subsequent rows
 - Use \`max\` in ID fields to enable auto-increment
 
