@@ -245,6 +245,11 @@ class AnalyticsDashboardPage {
     // Infer columns from first row
     const columns = Object.keys(data[0] || {});
 
+    if (this.shouldRenderGroupedToolUsage(columns, data)) {
+      this.renderGroupedToolUsageTable(container, data, columns);
+      return;
+    }
+
     const headerCells = columns.map((col) => `<th>${this.formatHeader(col)}</th>`).join("");
     const rows = data
       .map((row) => {
@@ -280,6 +285,80 @@ class AnalyticsDashboardPage {
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr, idx) => {
       tr.style.cursor = "pointer";
       tr.addEventListener("click", () => this.showRowDetail(data[idx]));
+    });
+  }
+
+  shouldRenderGroupedToolUsage(columns, data) {
+    if (this.currentTab !== "tools") return false;
+    return ["tool_id", "action", "total_count"].every((col) => columns.includes(col)) && data.some((row) => row.action === "TOTAL");
+  }
+
+  renderGroupedToolUsageTable(container, data, columns) {
+    const groupedRows = [];
+    const groups = [];
+
+    data.forEach((row) => {
+      const lastGroup = groups[groups.length - 1];
+      if (!lastGroup || lastGroup.toolId !== row.tool_id) {
+        groups.push({ toolId: row.tool_id, rows: [row] });
+      } else {
+        lastGroup.rows.push(row);
+      }
+    });
+
+    const headerCells = columns.map((col) => `<th>${this.formatHeader(col)}</th>`).join("");
+    const rows = groups
+      .map((group) =>
+        group.rows
+          .map((row, rowIndex) => {
+            groupedRows.push(row);
+            const isSummary = row.action === "TOTAL";
+            const cells = columns
+              .map((col) => {
+                if (col === "tool_id") {
+                  if (rowIndex > 0) return "";
+                  const rowSpan = group.rows.length > 1 ? ` rowspan="${group.rows.length}"` : "";
+                  const toolTitle = this.escapeHtml(String(group.toolId ?? ""));
+                  const toolLabel = this.escapeHtml(String(group.toolId ?? "-"));
+                  return `<td class="tool-group-cell"${rowSpan} title="${toolTitle}">${toolLabel}</td>`;
+                }
+
+                let value = row[col];
+                if (typeof value === "object" && value !== null) {
+                  value = JSON.stringify(value);
+                }
+                if (typeof value === "string" && value.length > 100) {
+                  value = value.slice(0, 100) + "…";
+                }
+
+                const displayValue = this.escapeHtml(String(value ?? "-"));
+                const title = this.escapeHtml(String(value ?? ""));
+                if (col === "action" && !isSummary) {
+                  return `<td class="nested-action-cell" title="${title}"><span class="nested-action-label">${displayValue}</span></td>`;
+                }
+                return `<td title="${title}">${displayValue}</td>`;
+              })
+              .join("");
+
+            return `<tr class="${isSummary ? "tool-summary-row" : "tool-detail-row"}">${cells}</tr>`;
+          })
+          .join(""),
+      )
+      .join("");
+
+    container.innerHTML = `
+      <div class="table-info">Showing ${data.length} row${data.length !== 1 ? "s" : ""} – click a row for details</div>
+      <div class="table-wrapper">
+        <table class="dashboard-table grouped-tool-usage-table">
+          <thead><tr>${headerCells}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.querySelectorAll(".dashboard-table tbody tr").forEach((tr, idx) => {
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", () => this.showRowDetail(groupedRows[idx]));
     });
   }
 

@@ -214,6 +214,44 @@
   border-bottom: none;
 }
 
+.grouped-tool-usage-table .tool-group-cell {
+  width: 32%;
+  vertical-align: top;
+  font-weight: 600;
+  background: hsl(var(--muted) / 0.28);
+}
+
+.grouped-tool-usage-table .tool-summary-row td {
+  font-weight: 600;
+}
+
+.grouped-tool-usage-table .tool-summary-row:not(:first-child) td {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.grouped-tool-usage-table .tool-detail-row td {
+  color: hsl(var(--foreground) / 0.88);
+}
+
+.grouped-tool-usage-table .nested-action-cell {
+  padding-left: 1.75rem;
+}
+
+.grouped-tool-usage-table .nested-action-label {
+  position: relative;
+  display: inline-block;
+  padding-left: 1rem;
+}
+
+.grouped-tool-usage-table .nested-action-label::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.5rem;
+  border-top: 1px solid hsl(var(--muted-foreground) / 0.45);
+}
+
 /* Row Detail Modal */
 .row-detail-overlay {
   position: fixed;
