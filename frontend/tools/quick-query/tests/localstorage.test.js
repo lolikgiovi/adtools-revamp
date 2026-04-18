@@ -63,6 +63,19 @@ describe('LocalStorageService (separated schema/data)', () => {
     expect(result.data[0][0]).toBe('RATE_TIERING_ID');
   });
 
+  it('persists and restores the selected query type', () => {
+    svc.saveSchema('inhouse_forex.rate_tiering', sampleSchemaArray(), sampleDataArray(), { queryType: 'update' });
+
+    let result = svc.loadSchema('inhouse_forex.rate_tiering', true);
+    expect(result.queryType).toBe('update');
+
+    const ok = svc.updateQueryType('inhouse_forex.rate_tiering', 'insert');
+    expect(ok).toBe(true);
+
+    result = svc.loadSchema('inhouse_forex.rate_tiering', true);
+    expect(result.queryType).toBe('insert');
+  });
+
   it('updates table data only', () => {
     svc.saveSchema('inhouse_forex.rate_tiering', sampleSchemaArray(), sampleDataArray());
     const beforeDataStore = JSON.parse(localStorage.getItem(DATA_KEY));

@@ -120,7 +120,7 @@ export class LocalStorageService {
   }
 
   // Schema Management Functions
-  saveSchema(fullTableName, schemaData, tableData = null) {
+  saveSchema(fullTableName, schemaData, tableData = null, metadata = {}) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
 
@@ -132,7 +132,10 @@ export class LocalStorageService {
       }
 
       const now = new Date().toISOString();
+      const existingData = this.getDataStore()?.[schemaName]?.[tableName];
+      const queryType = this._normalizeQueryType(metadata.queryType || existingData?.query_type || existingData?.queryType);
       tableSchema.last_updated = now;
+      tableSchema.query_type = queryType;
 
       const schemaStore = this.getSchemaStore();
       schemaStore[schemaName] = schemaStore[schemaName] || { tables: {} };
@@ -146,11 +149,19 @@ export class LocalStorageService {
       dataStore[schemaName] = dataStore[schemaName] || {};
       if (tableData) {
         const tableRows = this._convertArrayDataToJsonRows(tableData, tableSchema);
-        dataStore[schemaName][tableName] = { rows: tableRows.slice(0, MAX_CACHED_ROWS), last_updated: now };
+        dataStore[schemaName][tableName] = {
+          rows: tableRows.slice(0, MAX_CACHED_ROWS),
+          last_updated: now,
+          query_type: queryType,
+        };
       } else {
         // Ensure last_updated is also persisted in data store even without rows
         const existing = dataStore[schemaName][tableName];
-        dataStore[schemaName][tableName] = { rows: Array.isArray(existing?.rows) ? existing.rows : [], last_updated: now };
+        dataStore[schemaName][tableName] = {
+          rows: Array.isArray(existing?.rows) ? existing.rows : [],
+          last_updated: now,
+          query_type: queryType,
+        };
       }
 
       const dataSaved = this.saveDataStore(dataStore);
@@ -177,8 +188,11 @@ export class LocalStorageService {
       const dataStore = this.getDataStore();
       const tableDataObj = dataStore?.[schemaName]?.[tableName] || null;
       const arrayData = tableDataObj ? this._convertJsonRowsToArray(tableDataObj.rows, arraySchema) : null;
+      const queryType = this._normalizeQueryType(
+        tableDataObj?.query_type || tableDataObj?.queryType || schemaJson.query_type || schemaJson.queryType,
+      );
 
-      return { schema: arraySchema, data: arrayData };
+      return { schema: arraySchema, data: arrayData, queryType };
     } catch (error) {
       console.error("Error loading schema:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "load_schema_failed", message: error.message });
@@ -186,7 +200,7 @@ export class LocalStorageService {
     }
   }
 
-  updateTableData(fullTableName, tableData) {
+  updateTableData(fullTableName, tableData, metadata = {}) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
       const schemaStore = this.getSchemaStore();
@@ -198,11 +212,20 @@ export class LocalStorageService {
       const dataStore = this.getDataStore();
       const tableRows = this._convertArrayDataToJsonRows(tableData, tableSchema);
       const now = new Date().toISOString();
+      const existingData = dataStore?.[schemaName]?.[tableName];
+      const queryType = this._normalizeQueryType(
+        metadata.queryType || existingData?.query_type || existingData?.queryType || tableSchema.query_type,
+      );
       dataStore[schemaName] = dataStore[schemaName] || {};
-      dataStore[schemaName][tableName] = { rows: tableRows.slice(0, MAX_CACHED_ROWS), last_updated: now };
+      dataStore[schemaName][tableName] = {
+        rows: tableRows.slice(0, MAX_CACHED_ROWS),
+        last_updated: now,
+        query_type: queryType,
+      };
 
       // Keep schema store's last_updated in sync to represent last activity
       schemaStore[schemaName].tables[tableName].last_updated = now;
+      schemaStore[schemaName].tables[tableName].query_type = queryType;
 
       const dataSaved = this.saveDataStore(dataStore);
       const schemaSaved = this.saveSchemaStore(schemaStore);
@@ -212,6 +235,44 @@ export class LocalStorageService {
       UsageTracker.trackEvent("quick-query", "storage_error", { type: "update_table_data_failed", message: error.message });
       return false;
     }
+  }
+
+  updateQueryType(fullTableName, queryType) {
+    try {
+      const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
+      const schemaStore = this.getSchemaStore();
+      if (!schemaStore?.[schemaName]?.tables?.[tableName]) {
+        return false;
+      }
+
+      const dataStore = this.getDataStore();
+      const existingData = dataStore?.[schemaName]?.[tableName];
+      const now = new Date().toISOString();
+      const normalizedQueryType = this._normalizeQueryType(queryType);
+
+      dataStore[schemaName] = dataStore[schemaName] || {};
+      dataStore[schemaName][tableName] = {
+        rows: Array.isArray(existingData?.rows) ? existingData.rows : [],
+        last_updated: now,
+        query_type: normalizedQueryType,
+      };
+
+      schemaStore[schemaName].tables[tableName].last_updated = now;
+      schemaStore[schemaName].tables[tableName].query_type = normalizedQueryType;
+
+      const dataSaved = this.saveDataStore(dataStore);
+      const schemaSaved = this.saveSchemaStore(schemaStore);
+      return dataSaved && schemaSaved;
+    } catch (error) {
+      console.error("Error updating query type:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", { type: "update_query_type_failed", message: error.message });
+      return false;
+    }
+  }
+
+  _normalizeQueryType(queryType) {
+    const normalized = String(queryType || "").toLowerCase();
+    return ["merge", "insert", "update"].includes(normalized) ? normalized : "merge";
   }
 
   deleteSchema(fullTableName) {

@@ -75,7 +75,8 @@ export class QuickQueryUI {
     this.splitWorkerService = new SplitWorkerService();
     this.dataAutosave = new TableAutosaveService({
       delayMs: 800,
-      save: (tableName, tableData) => this.storageService.updateTableData(tableName, tableData),
+      save: (tableName, tableData) =>
+        this.storageService.updateTableData(tableName, tableData, { queryType: this.getQueryTypeValue() }),
       onError: (err) => {
         console.error("Failed to persist table data:", err);
       },
@@ -841,6 +842,28 @@ export class QuickQueryUI {
     return activeOption?.dataset.value || "merge";
   }
 
+  setQueryTypeValue(value) {
+    const normalizedValue = String(value || "").toLowerCase();
+    const queryType = ["merge", "insert", "update"].includes(normalizedValue) ? normalizedValue : "merge";
+    const labelMap = { merge: "MERGE INTO", insert: "INSERT", update: "UPDATE" };
+
+    if (this.elements.queryTypeLabel) {
+      this.elements.queryTypeLabel.textContent = labelMap[queryType];
+    }
+
+    this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option").forEach((opt) => {
+      opt.classList.toggle("active", opt.dataset.value === queryType);
+    });
+  }
+
+  persistCurrentQueryType() {
+    const tableName = this.elements.tableNameInput?.value?.trim();
+    if (!tableName || !tableName.includes(".")) return;
+    if (this.storageService && typeof this.storageService.updateQueryType === "function") {
+      void this.storageService.updateQueryType(tableName, this.getQueryTypeValue());
+    }
+  }
+
   /**
    * Handle query type dropdown toggle
    */
@@ -855,10 +878,9 @@ export class QuickQueryUI {
    */
   setupQueryTypeDropdown() {
     const dropdown = this.elements.queryTypeDropdown;
-    const label = this.elements.queryTypeLabel;
     const btn = this.elements.queryTypeBtn;
 
-    if (!dropdown || !label || !btn) return;
+    if (!dropdown || !btn) return;
 
     // Bind option click handlers
     dropdown.querySelectorAll(".query-type-option").forEach((opt) => {
@@ -866,12 +888,9 @@ export class QuickQueryUI {
         e.preventDefault();
         e.stopPropagation();
         const value = opt.dataset.value;
-        const labelMap = { merge: "MERGE INTO", insert: "INSERT", update: "UPDATE" };
-        label.textContent = labelMap[value] || value;
+        this.setQueryTypeValue(value);
         dropdown.classList.remove("show");
-        // Update active state
-        dropdown.querySelectorAll(".query-type-option").forEach((o) => o.classList.remove("active"));
-        opt.classList.add("active");
+        this.persistCurrentQueryType();
         // Trigger query regeneration
         this.handleGenerateQuery();
       });
@@ -925,10 +944,10 @@ export class QuickQueryUI {
 
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
       if (!hasExcelData) {
-        await this.storageService.saveSchema(tableName, schemaData, inputData);
+        await this.storageService.saveSchema(tableName, schemaData, inputData, { queryType });
       } else {
         // Just save schema without data for large Excel imports
-        await this.storageService.saveSchema(tableName, schemaData, null);
+        await this.storageService.saveSchema(tableName, schemaData, null, { queryType });
       }
 
       // Check for HTML content in data and prompt for minification
@@ -1301,14 +1320,7 @@ export class QuickQueryUI {
 
     this.clearError();
     // Reset query type dropdown to MERGE INTO
-    if (this.elements.queryTypeLabel) {
-      this.elements.queryTypeLabel.textContent = "MERGE INTO";
-    }
-    if (this.elements.queryTypeDropdown) {
-      this.elements.queryTypeDropdown.querySelectorAll(".query-type-option").forEach((opt) => {
-        opt.classList.toggle("active", opt.dataset.value === "merge");
-      });
-    }
+    this.setQueryTypeValue("merge");
 
     // Clear imported Excel data
     this.handleClearExcelImport();
@@ -2408,6 +2420,7 @@ export class QuickQueryUI {
     const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
       this.elements.tableNameInput.value = fullName;
+      this.setQueryTypeValue(result.queryType || "merge");
       this.schemaTable.loadData(result.schema);
       this.scheduleSchemaLayoutRefresh();
       this.updateDataSpreadsheet();

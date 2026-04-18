@@ -140,6 +140,7 @@ export class IndexedDBStorageService {
               tableName,
               rows: tableData.rows || [],
               lastUpdated: tableData.last_updated || lastUpdated,
+              queryType: this._normalizeQueryType(tableData.query_type || tableData.queryType),
             });
           }
 
@@ -262,7 +263,7 @@ export class IndexedDBStorageService {
   /**
    * Save a schema and optionally its data.
    */
-  async saveSchema(fullTableName, schemaData, tableData = null) {
+  async saveSchema(fullTableName, schemaData, tableData = null, metadata = {}) {
     try {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
 
@@ -276,6 +277,8 @@ export class IndexedDBStorageService {
       }
 
       const now = new Date().toISOString();
+      const existingData = await this._getRecord(DATA_STORE, fullTableName);
+      const queryType = this._normalizeQueryType(metadata.queryType || existingData?.queryType);
 
       // Store schema
       await this._putRecord(SCHEMA_STORE, {
@@ -284,6 +287,7 @@ export class IndexedDBStorageService {
         tableName,
         schema: tableSchema,
         lastUpdated: now,
+        queryType,
       });
 
       // Store data
@@ -295,16 +299,17 @@ export class IndexedDBStorageService {
           tableName,
           rows: tableRows.slice(0, MAX_CACHED_ROWS),
           lastUpdated: now,
+          queryType,
         });
       } else {
         // Ensure data record exists even without rows
-        const existing = await this._getRecord(DATA_STORE, fullTableName);
         await this._putRecord(DATA_STORE, {
           fullName: fullTableName,
           schemaName,
           tableName,
-          rows: existing?.rows || [],
+          rows: existingData?.rows || [],
           lastUpdated: now,
+          queryType,
         });
       }
 
@@ -333,8 +338,9 @@ export class IndexedDBStorageService {
 
       const dataRecord = await this._getRecord(DATA_STORE, fullTableName);
       const arrayData = dataRecord ? this._convertJsonRowsToArray(dataRecord.rows, arraySchema) : null;
+      const queryType = this._normalizeQueryType(dataRecord?.queryType || schemaRecord.queryType);
 
-      return { schema: arraySchema, data: arrayData };
+      return { schema: arraySchema, data: arrayData, queryType };
     } catch (error) {
       console.error("Error loading schema:", error);
       UsageTracker.trackEvent("quick-query", "storage_error", {
@@ -348,7 +354,7 @@ export class IndexedDBStorageService {
   /**
    * Update table data without modifying the schema.
    */
-  async updateTableData(fullTableName, tableData) {
+  async updateTableData(fullTableName, tableData, metadata = {}) {
     try {
       const schemaRecord = await this._getRecord(SCHEMA_STORE, fullTableName);
       if (!schemaRecord) return false;
@@ -356,6 +362,8 @@ export class IndexedDBStorageService {
       const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
       const tableRows = this._convertArrayDataToJsonRows(tableData, schemaRecord.schema);
       const now = new Date().toISOString();
+      const existingData = await this._getRecord(DATA_STORE, fullTableName);
+      const queryType = this._normalizeQueryType(metadata.queryType || existingData?.queryType || schemaRecord.queryType);
 
       // Update data
       await this._putRecord(DATA_STORE, {
@@ -364,10 +372,12 @@ export class IndexedDBStorageService {
         tableName,
         rows: tableRows.slice(0, MAX_CACHED_ROWS),
         lastUpdated: now,
+        queryType,
       });
 
       // Update schema's lastUpdated
       schemaRecord.lastUpdated = now;
+      schemaRecord.queryType = queryType;
       await this._putRecord(SCHEMA_STORE, schemaRecord);
 
       return true;
@@ -379,6 +389,45 @@ export class IndexedDBStorageService {
       });
       return false;
     }
+  }
+
+  async updateQueryType(fullTableName, queryType) {
+    try {
+      const schemaRecord = await this._getRecord(SCHEMA_STORE, fullTableName);
+      if (!schemaRecord) return false;
+
+      const { schemaName, tableName } = this.parseTableIdentifier(fullTableName);
+      const normalizedQueryType = this._normalizeQueryType(queryType);
+      const now = new Date().toISOString();
+      const existingData = await this._getRecord(DATA_STORE, fullTableName);
+
+      await this._putRecord(DATA_STORE, {
+        fullName: fullTableName,
+        schemaName,
+        tableName,
+        rows: existingData?.rows || [],
+        lastUpdated: now,
+        queryType: normalizedQueryType,
+      });
+
+      schemaRecord.lastUpdated = now;
+      schemaRecord.queryType = normalizedQueryType;
+      await this._putRecord(SCHEMA_STORE, schemaRecord);
+
+      return true;
+    } catch (error) {
+      console.error("Error updating query type:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", {
+        type: "update_query_type_failed",
+        message: error.message,
+      });
+      return false;
+    }
+  }
+
+  _normalizeQueryType(queryType) {
+    const normalized = String(queryType || "").toLowerCase();
+    return ["merge", "insert", "update"].includes(normalized) ? normalized : "merge";
   }
 
   /**
