@@ -18,6 +18,7 @@ import { importSchemasPayload } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
+import { TableAutosaveService } from "./services/TableAutosaveService.js";
 import JSZip from "jszip";
 import MinifyWorker from "../html-editor/minify.worker.js?worker";
 import "./styles.css";
@@ -47,6 +48,11 @@ export class QuickQuery extends BaseTool {
   onMount() {
     this.ui = new QuickQueryUI(this.container, () => {}, this.copyToClipboard.bind(this), this.eventBus);
   }
+
+  onUnmount() {
+    void this.ui?.destroy({ flush: true });
+    this.ui = null;
+  }
 }
 
 export class QuickQueryUI {
@@ -67,6 +73,13 @@ export class QuickQueryUI {
     this.excelImportService = new ExcelImportService();
     this.queryWorkerService = new QueryWorkerService();
     this.splitWorkerService = new SplitWorkerService();
+    this.dataAutosave = new TableAutosaveService({
+      delayMs: 800,
+      save: (tableName, tableData) => this.storageService.updateTableData(tableName, tableData),
+      onError: (err) => {
+        console.error("Failed to persist table data:", err);
+      },
+    });
     this.isGuideActive = false;
     this.isAttachmentActive = false;
     this.isGenerating = false; // Track async generation state
@@ -75,6 +88,15 @@ export class QuickQueryUI {
 
     this._layoutState = { height: "auto", fixedRowsTop: 0 };
     this._layoutScheduled = false;
+    this._autosaveLifecycleListenersBound = false;
+    this._handleAutosavePageHide = () => {
+      void this.flushPendingDataAutosave();
+    };
+    this._handleAutosaveVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        void this.flushPendingDataAutosave();
+      }
+    };
 
     // Initialize search state
     this.searchState = {
@@ -139,6 +161,7 @@ export class QuickQueryUI {
       this.setupEventListeners();
       this.setupQueryTypeDropdown();
       this.setupTableNameSearch();
+      this.setupAutosaveLifecycleListeners();
 
       await this.loadMostRecentSchema();
     } catch (error) {
@@ -581,10 +604,7 @@ export class QuickQueryUI {
 
         if (changes.length > 0) {
           const currentData = this.dataTable.getData();
-          // Fire-and-forget async storage update (don't block UI)
-          this.storageService.updateTableData(tableName, currentData).catch((err) => {
-            console.error("Failed to persist table data:", err);
-          });
+          this.dataAutosave.schedule(tableName, currentData);
         }
       },
       // No height recalculation hooks
@@ -615,6 +635,39 @@ export class QuickQueryUI {
       });
       this.dataTable.loadData(newData);
     }
+  }
+
+  setupAutosaveLifecycleListeners() {
+    if (this._autosaveLifecycleListenersBound) return;
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", this._handleAutosavePageHide);
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this._handleAutosaveVisibilityChange);
+    }
+    this._autosaveLifecycleListenersBound = true;
+  }
+
+  removeAutosaveLifecycleListeners() {
+    if (!this._autosaveLifecycleListenersBound) return;
+
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pagehide", this._handleAutosavePageHide);
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this._handleAutosaveVisibilityChange);
+    }
+    this._autosaveLifecycleListenersBound = false;
+  }
+
+  flushPendingDataAutosave() {
+    return this.dataAutosave.flush();
+  }
+
+  destroy({ flush = true } = {}) {
+    this.removeAutosaveLifecycleListeners();
+    return this.dataAutosave.destroy({ flush });
   }
 
   // Error handling methods
@@ -729,6 +782,8 @@ export class QuickQueryUI {
     if (this.isGenerating) return;
 
     try {
+      await this.flushPendingDataAutosave();
+
       const tableName = this.elements.tableNameInput.value.trim();
       const queryType = this.getQueryTypeValue();
 
@@ -1111,7 +1166,9 @@ export class QuickQueryUI {
     });
   }
 
-  handleClearAll() {
+  async handleClearAll() {
+    await this.flushPendingDataAutosave();
+
     this.elements.tableNameInput.value = "";
 
     if (this.schemaTable) {
@@ -2103,6 +2160,8 @@ export class QuickQueryUI {
   }
 
   async handleLoadSchema(fullName) {
+    await this.flushPendingDataAutosave();
+
     const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
       this.elements.tableNameInput.value = fullName;
@@ -2135,13 +2194,15 @@ export class QuickQueryUI {
 
   async handleDeleteSchema(fullName) {
     if (confirm(`Delete schema for ${fullName}?`)) {
+      await this.flushPendingDataAutosave();
+
       const deleted = await this.storageService.deleteSchema(fullName);
       if (deleted) {
         await this.updateSavedSchemasList();
 
         const currentTable = this.elements.tableNameInput.value;
         if (currentTable === fullName) {
-          this.handleClearAll();
+          await this.handleClearAll();
         }
       } else {
         this.showError(`Failed to delete schema for ${fullName}`);
