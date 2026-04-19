@@ -54,7 +54,8 @@ export class AttachmentProcessorService {
         console.error(`Error processing file ${file.name}:`, error);
         UsageTracker.trackEvent("quick-query", "attachment_error", {
           type: "processing",
-          file: sanitizedFileName,
+          file_type: file.type || extension || "unknown",
+          file_size: file.size || 0,
           message: error.message,
           table_name: tableName,
         });
@@ -97,7 +98,7 @@ export class AttachmentProcessorService {
       } catch (e) {
         UsageTracker.trackEvent("quick-query", "attachment_error", {
           type: "base64_decode_failed",
-          file: processedFile.name,
+          file_type: processedFile.type || "unknown",
           table_name: tableName,
         });
         processedFile.processedFormats.sizes.original = new TextEncoder().encode(textContent).length;
@@ -113,7 +114,12 @@ export class AttachmentProcessorService {
 
       reader.onload = () => resolve(reader.result);
       reader.onerror = () => {
-        UsageTracker.trackEvent("quick-query", "attachment_error", { type: "read_error", file: file.name, readAs, table_name: tableName });
+        UsageTracker.trackEvent("quick-query", "attachment_error", {
+          type: "read_error",
+          file_type: file.type || "unknown",
+          readAs,
+          table_name: tableName,
+        });
         reject(new Error("Error reading file"));
       };
 
@@ -154,7 +160,7 @@ export class AttachmentProcessorService {
           console.error("HTML Minify Worker failed, keeping original:", err);
           UsageTracker.trackEvent("quick-query", "attachment_error", {
             type: "minify_worker_fallback",
-            file: file.name,
+            file_type: file.type || ext || "unknown",
             message: err.message,
             table_name: tableName,
           });
@@ -168,7 +174,7 @@ export class AttachmentProcessorService {
           console.warn("JSON minify failed, keeping original:", e);
           UsageTracker.trackEvent("quick-query", "attachment_error", {
             type: "json_minify_failed",
-            file: file.name,
+            file_type: file.type || ext || "unknown",
             table_name: tableName,
           });
           minified = original;
@@ -197,7 +203,7 @@ export class AttachmentProcessorService {
       console.error("Unexpected error during minify:", e);
       UsageTracker.trackEvent("quick-query", "attachment_error", {
         type: "minify_unexpected",
-        file: file.name,
+        file_type: file.type || "unknown",
         message: e.message,
         table_name: tableName,
       });

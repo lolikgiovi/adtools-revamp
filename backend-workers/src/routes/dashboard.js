@@ -311,16 +311,64 @@ ORDER BY errors_30d DESC, last_seen DESC`,
     query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       d.platform,
-      json_extract(e.properties, '$.queryType') AS type,
-      json_extract(e.properties, '$.tableName') AS table_name,
-      json_extract(e.properties, '$.rowCount') AS row_count,
-      json_extract(e.properties, '$.hasAttachment') AS attachment
+      COALESCE(json_extract(e.properties, '$.query_type'), json_extract(e.properties, '$.queryType')) AS type,
+      COALESCE(json_extract(e.properties, '$.table_name'), json_extract(e.properties, '$.tableName')) AS table_name,
+      COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.rowCount')) AS row_count,
+      COALESCE(json_extract(e.properties, '$.data_source'), '-') AS source,
+      COALESCE(json_extract(e.properties, '$.schema_column_count'), '-') AS columns,
+      COALESCE(json_extract(e.properties, '$.data_type_mix'), '-') AS data_types,
+      COALESCE(
+        json_extract(e.properties, '$.has_attachments'),
+        json_extract(e.properties, '$.hasAttachments'),
+        json_extract(e.properties, '$.hasAttachment')
+      ) AS attachments,
+      COALESCE(json_extract(e.properties, '$.attachment_count'), 0) AS attachment_count,
+      COALESCE(json_extract(e.properties, '$.uuid_generated_in_session'), 0) AS uuid_generated,
+      COALESCE(json_extract(e.properties, '$.uuid_count_session'), 0) AS uuid_count
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' AND e.action = 'query_generated'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "qq-table-usage",
+    name: "QQ Table Usage",
+    query: `WITH qq AS (
+  SELECT e.created_time,
+    u.email,
+    COALESCE(json_extract(e.properties, '$.table_name'), json_extract(e.properties, '$.tableName')) AS table_name,
+    COALESCE(json_extract(e.properties, '$.query_type'), json_extract(e.properties, '$.queryType')) AS query_type,
+    CAST(COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.rowCount'), 0) AS INTEGER) AS row_count,
+    COALESCE(
+      json_extract(e.properties, '$.has_attachments'),
+      json_extract(e.properties, '$.hasAttachments'),
+      json_extract(e.properties, '$.hasAttachment'),
+      0
+    ) AS has_attachments,
+    COALESCE(json_extract(e.properties, '$.uuid_generated_in_session'), 0) AS uuid_generated
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'quick-query'
+    AND e.action = 'query_generated'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT table_name,
+  query_type,
+  COUNT(*) AS generations,
+  COUNT(DISTINCT email) AS users,
+  ROUND(AVG(row_count), 1) AS avg_rows,
+  SUM(CASE WHEN has_attachments IN (1, '1', 'true') THEN 1 ELSE 0 END) AS attachment_generations,
+  SUM(CASE WHEN uuid_generated IN (1, '1', 'true') THEN 1 ELSE 0 END) AS uuid_generations,
+  MAX(created_time) AS last_seen
+FROM qq
+WHERE COALESCE(table_name, '') != ''
+GROUP BY table_name, query_type
+ORDER BY generations DESC, last_seen DESC
+LIMIT 150`,
   },
   {
     id: "quick-query-errors",
@@ -336,26 +384,57 @@ ORDER BY errors_30d DESC, last_seen DESC`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' 
-        AND e.action NOT IN ('query_generated', 'schema_load', 'download_sql', 'split_complete')
+        AND e.action NOT IN (
+          'query_generated',
+          'schema_load',
+          'schema_pasted_dbeaver',
+          'query_type_changed',
+          'open_uuid_generator',
+          'generate_uuid',
+          'copy_uuid',
+          'attachment_added',
+          'attachment_removed',
+          'attachment_minified',
+          'download_sql',
+          'download_sql_as',
+          'split_complete'
+        )
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
   },
   {
     id: "qq-insights",
-    name: "QQ Insights",
+    name: "QQ Workflow",
     query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
       SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
       e.action,
       json_extract(e.properties, '$.source') AS source,
-      json_extract(e.properties, '$.table_name') AS table_name,
-      json_extract(e.properties, '$.row_count') AS rows,
+      COALESCE(json_extract(e.properties, '$.table_name'), json_extract(e.properties, '$.tableName')) AS table_name,
+      COALESCE(json_extract(e.properties, '$.query_type'), json_extract(e.properties, '$.queryType')) AS query_type,
+      COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.rowCount')) AS rows,
+      COALESCE(json_extract(e.properties, '$.attachment_count'), 0) AS attachments,
+      COALESCE(json_extract(e.properties, '$.quantity'), json_extract(e.properties, '$.count'), '-') AS quantity,
       json_extract(e.properties, '$.file_size') AS file_size,
-      json_extract(e.properties, '$.query_type') AS query_type
+      COALESCE(json_extract(e.properties, '$.uuid_count_session'), '-') AS uuid_session
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' 
-        AND e.action IN ('schema_load', 'download_sql')
+        AND e.action IN (
+          'schema_load',
+          'schema_pasted_dbeaver',
+          'query_type_changed',
+          'open_uuid_generator',
+          'generate_uuid',
+          'copy_uuid',
+          'attachment_added',
+          'attachment_removed',
+          'attachment_minified',
+          'download_sql',
+          'download_sql_as'
+        )
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
   },
@@ -372,6 +451,7 @@ ORDER BY errors_30d DESC, last_seen DESC`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'quick-query' AND e.action = 'split_complete'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
   },

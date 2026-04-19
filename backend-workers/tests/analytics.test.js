@@ -18,14 +18,26 @@ function createDbMock() {
     executed,
     prepare: vi.fn((sql) => ({
       run: vi.fn(() => run(sql)),
-      all: vi.fn(all),
-      first: vi.fn(async () => null),
+      all: vi.fn(async () => {
+        executed.push({ sql, args: [] });
+        return all();
+      }),
+      first: vi.fn(async () => {
+        executed.push({ sql, args: [] });
+        return null;
+      }),
       bind: (...args) => ({
         sql,
         args,
         run: vi.fn(() => run(sql, args)),
-        first: vi.fn(async () => null),
-        all: vi.fn(all),
+        first: vi.fn(async () => {
+          executed.push({ sql, args });
+          return null;
+        }),
+        all: vi.fn(async () => {
+          executed.push({ sql, args });
+          return all();
+        }),
       }),
     })),
     batch: vi.fn(async (statements) => {
@@ -205,6 +217,49 @@ describe('Analytics endpoints', () => {
     expect(ids).toContain('versions');
     expect(ids).toContain('error-summary');
     expect(ids).toContain('errors');
+    expect(ids).toContain('qq-table-usage');
+  });
+
+  it('uses Quick Query analytics fallbacks and table usage rollup queries', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const recentResponse = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'quick-query' }),
+      }),
+      env
+    );
+    const rollupResponse = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'qq-table-usage' }),
+      }),
+      env
+    );
+
+    const recentSql = env.DB.executed.find((item) => item.sql.includes("$.has_attachments") && item.sql.includes("$.hasAttachments"));
+    const rollupSql = env.DB.executed.find((item) => item.sql.includes("WITH qq AS") && item.sql.includes("attachment_generations"));
+    expect(recentResponse.status).toBe(200);
+    expect(rollupResponse.status).toBe(200);
+    expect(recentSql).toBeTruthy();
+    expect(rollupSql).toBeTruthy();
   });
 
   it('returns a safe overview even when analytics tables are missing', async () => {

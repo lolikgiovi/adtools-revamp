@@ -114,7 +114,7 @@ export class QueryGenerationService {
     const pkIndices = primaryKeys.map((pk) => {
       const index = fieldNames.indexOf(pk);
       if (index === -1) {
-        UsageTracker.trackEvent("quick-query", "generation_error", { type: "pk_field_missing", pk, table_name: tableName });
+        UsageTracker.trackEvent("quick-query", "generation_error", { type: "pk_field_missing", table_name: tableName });
         throw new Error(`Primary key field '${pk}' not found in data columns`);
       }
       return { field: pk, index };
@@ -444,7 +444,6 @@ export class QueryGenerationService {
                 type: "pk_missing_in_row",
                 row: rowIndex + 2,
                 column: columnLetter,
-                pk,
                 table_name: tableName,
               });
               throw new Error(

@@ -640,6 +640,10 @@ class UsageTracker {
     }
   }
 
+  static async flushBatchNow() {
+    return this._flushBatch();
+  }
+
   static async reportDeviceVersion(appVersion) {
     const version = String(appVersion || this._getAppVersion() || "").trim();
     const deviceId = this.getDeviceId();

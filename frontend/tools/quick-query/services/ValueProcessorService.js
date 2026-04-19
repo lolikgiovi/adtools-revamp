@@ -46,7 +46,7 @@ export class ValueProcessorService {
       }
       // For other operations, validate nullable constraint
       if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType, table_name: tableName });
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", queryType, table_name: tableName });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -56,7 +56,7 @@ export class ValueProcessorService {
     if (isExplicitNull) {
       // Always validate nullable constraint for explicit NULL values
       if (nullable?.toLowerCase() !== "yes") {
-        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", fieldName, queryType, table_name: tableName });
+        UsageTracker.trackEvent("quick-query", "value_error", { type: "null_not_allowed", queryType, table_name: tableName });
         throw new Error(`NULL value not allowed for non-nullable field "${fieldName}"`);
       }
       return "NULL";
@@ -126,7 +126,11 @@ export class ValueProcessorService {
         const num = parseFloat(normalizedValue);
 
         if (isNaN(num)) {
-          UsageTracker.trackEvent("quick-query", "value_error", { type: "invalid_number", fieldName, value, table_name: tableName });
+          UsageTracker.trackEvent("quick-query", "value_error", {
+            type: "invalid_number",
+            data_type: fieldDataType.type,
+            table_name: tableName,
+          });
           throw new Error(`Invalid numeric value "${value}" for field "${fieldName}"`);
         }
 
@@ -146,12 +150,12 @@ export class ValueProcessorService {
           if (fieldDataType.maxLength && fieldDataType.maxLength < UUID_V4_MAXLENGTH) {
             UsageTracker.trackEvent("quick-query", "value_error", {
               type: "uuid_length_too_small",
-              fieldName,
               maxLength: fieldDataType.maxLength,
               table_name: tableName,
             });
             throw new Error(
-              `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. Minimum required length is ${UUID_V4_MAXLENGTH}.`
+              `Field "${fieldName}" length (${fieldDataType.maxLength}) is too small to store UUID. ` +
+                `Minimum required length is ${UUID_V4_MAXLENGTH}.`,
             );
           }
           return `'${crypto.randomUUID()}'`;
@@ -163,7 +167,6 @@ export class ValueProcessorService {
           if (length > fieldDataType.maxLength) {
             UsageTracker.trackEvent("quick-query", "value_error", {
               type: "max_length_exceeded",
-              fieldName,
               maxLength: fieldDataType.maxLength,
               length,
               unit: fieldDataType.unit,
@@ -232,9 +235,7 @@ export class ValueProcessorService {
     if (integerDigits + decimalDigits > precision) {
       UsageTracker.trackEvent("quick-query", "value_error", {
         type: "precision_exceeded",
-        fieldName,
         precision,
-        value: num,
         table_name: tableName,
       });
       throw new Error(`Value ${num} exceeds maximum precision of ${precision} for field "${fieldName}"`);
@@ -243,10 +244,8 @@ export class ValueProcessorService {
     if (scale !== undefined && decimalDigits > scale) {
       UsageTracker.trackEvent("quick-query", "value_error", {
         type: "scale_exceeded",
-        fieldName,
         scale,
         precision,
-        value: num,
         table_name: tableName,
       });
       throw new Error(`Value ${num} exceeds maximum scale of ${scale} (${precision},${scale}) for field "${fieldName}"`);
@@ -255,10 +254,8 @@ export class ValueProcessorService {
     if (scale !== undefined && integerDigits > precision - scale) {
       UsageTracker.trackEvent("quick-query", "value_error", {
         type: "integer_digits_exceeded",
-        fieldName,
         precision,
         scale,
-        value: num,
         table_name: tableName,
       });
       throw new Error(`Integer part of ${num} exceeds maximum allowed digits for field "${fieldName}"`);

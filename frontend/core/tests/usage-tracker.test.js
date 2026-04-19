@@ -40,6 +40,15 @@ describe("UsageTracker analytics reliability", () => {
     expect(UsageTracker._state.events).toHaveLength(0);
   });
 
+  it("exposes a public immediate batch flush wrapper", async () => {
+    AnalyticsSender.sendBatch = vi.fn().mockResolvedValue(true);
+
+    await UsageTracker.flushBatchNow();
+
+    expect(AnalyticsSender.sendBatch).toHaveBeenCalledTimes(1);
+    expect(UsageTracker._state.events).toHaveLength(0);
+  });
+
   it("normalizes legacy feature IDs", () => {
     UsageTracker.sanitizeCounts();
 

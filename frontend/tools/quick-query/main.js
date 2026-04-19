@@ -19,6 +19,11 @@ import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
+import {
+  buildQuickQueryGeneratedMeta,
+  cleanQuickQueryAnalyticsMeta,
+  summarizeQuickQueryAttachments,
+} from "./services/QuickQueryAnalyticsService.js";
 import JSZip from "jszip";
 import MinifyWorker from "../html-editor/minify.worker.js?worker";
 import "./styles.css";
@@ -109,6 +114,10 @@ export class QuickQueryUI {
     this.searchState = {
       selectedIndex: -1,
       visibleItems: [],
+    };
+    this.uuidAnalyticsSession = {
+      generated_count: 0,
+      copied_count: 0,
     };
 
     this.init();
@@ -886,9 +895,20 @@ export class QuickQueryUI {
         e.preventDefault();
         e.stopPropagation();
         const value = opt.dataset.value;
+        const previousQueryType = this.getQueryTypeValue();
         this.setQueryTypeValue(value);
         dropdown.classList.remove("show");
         await this.persistCurrentQueryType();
+        if (previousQueryType !== this.getQueryTypeValue()) {
+          this.trackQuickQueryEvent(
+            "query_type_changed",
+            this.getCurrentQuickQueryContext({
+              previous_query_type: previousQueryType,
+              query_type: this.getQueryTypeValue(),
+            }),
+            { flush: true },
+          );
+        }
         // Trigger query regeneration
         await this.handleGenerateQuery();
       });
@@ -916,6 +936,7 @@ export class QuickQueryUI {
 
       // Use imported Excel data if available, otherwise use Handsontable data
       const hasExcelData = this.excelImportService.hasData();
+      const dataSource = hasExcelData ? "excel" : "manual";
       const inputData = hasExcelData ? this.excelImportService.getDataForQuery() : this.dataTable.getData();
 
       if (!tableName) {
@@ -965,9 +986,9 @@ export class QuickQueryUI {
 
       // Check if we should use the worker (1000+ rows)
       if (this.queryWorkerService.shouldUseWorker(inputData)) {
-        this._generateQueryAsync(tableName, queryType, schemaData, inputData, options);
+        this._generateQueryAsync(tableName, queryType, schemaData, inputData, dataSource, options);
       } else {
-        this._generateQuerySync(tableName, queryType, schemaData, inputData, options);
+        this._generateQuerySync(tableName, queryType, schemaData, inputData, dataSource, options);
       }
     } catch (error) {
       this.showError(error.message);
@@ -978,7 +999,7 @@ export class QuickQueryUI {
   /**
    * Synchronous query generation for small datasets (< 1000 rows)
    */
-  _generateQuerySync(tableName, queryType, schemaData, inputData, options = {}) {
+  _generateQuerySync(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {
     try {
       const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles, options);
 
@@ -991,7 +1012,7 @@ export class QuickQueryUI {
         this.showWarning(duplicateResult.warningMessage);
       }
 
-      this._trackQueryGenerated(queryType, tableName, inputData.length, false);
+      this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, false);
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
@@ -1001,7 +1022,7 @@ export class QuickQueryUI {
   /**
    * Asynchronous query generation using Web Worker for large datasets (1000+ rows)
    */
-  async _generateQueryAsync(tableName, queryType, schemaData, inputData, options = {}) {
+  async _generateQueryAsync(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {
     const rowCount = inputData.length - 1; // Exclude header
 
     // Increment request ID to track this specific generation request
@@ -1044,7 +1065,7 @@ export class QuickQueryUI {
         this.showWarning(result.duplicateResult.warningMessage);
       }
 
-      this._trackQueryGenerated(queryType, tableName, rowCount, true);
+      this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, true);
     } catch (error) {
       // Only handle error if this is still the current request
       if (currentReqId !== this._genReqId) {
@@ -1279,16 +1300,38 @@ export class QuickQueryUI {
   /**
    * Track query generation analytics
    */
-  _trackQueryGenerated(queryType, tableName, rowCount, usedWorker) {
-    UsageTracker.trackFeature("quick-query", queryType);
-    UsageTracker.trackEvent("quick-query", "query_generated", {
-      queryType,
-      tableName,
-      rowCount,
-      hasAttachments: this.processedFiles.length > 0,
-      usedWorker,
-      table_name: tableName,
+  trackQuickQueryEvent(event, meta = {}, { flush = false } = {}) {
+    UsageTracker.trackEvent("quick-query", event, cleanQuickQueryAnalyticsMeta(meta));
+    if (flush) {
+      void UsageTracker.flushBatchNow();
+    }
+  }
+
+  getCurrentQuickQueryContext(extra = {}) {
+    return cleanQuickQueryAnalyticsMeta({
+      table_name: this.elements.tableNameInput?.value?.trim() || "",
+      query_type: this.getQueryTypeValue(),
+      ...summarizeQuickQueryAttachments(this.processedFiles),
+      ...extra,
     });
+  }
+
+  _trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, usedWorker) {
+    UsageTracker.trackFeature("quick-query", queryType);
+    this.trackQuickQueryEvent(
+      "query_generated",
+      buildQuickQueryGeneratedMeta({
+        tableName,
+        queryType,
+        schemaData,
+        inputData,
+        dataSource,
+        attachments: this.processedFiles,
+        usedWorker,
+        uuidSession: this.uuidAnalyticsSession,
+      }),
+      { flush: true },
+    );
   }
 
   async handleClearAll() {
@@ -1346,11 +1389,10 @@ export class QuickQueryUI {
     URL.revokeObjectURL(url);
 
     // Track download for output preference insights
-    UsageTracker.trackEvent("quick-query", "download_sql", {
-      table_name: tableName,
+    this.trackQuickQueryEvent("download_sql", {
+      ...this.getCurrentQuickQueryContext(),
       file_size: blob.size,
-      query_type: this.getQueryTypeValue(),
-    });
+    }, { flush: true });
 
     const displayName = tableName || sanitizedTableName;
     if (this.eventBus) {
@@ -1465,11 +1507,12 @@ export class QuickQueryUI {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      UsageTracker.trackEvent("quick-query", "download_sql_as", {
+      this.trackQuickQueryEvent("download_sql_as", {
+        ...this.getCurrentQuickQueryContext(),
         squad_name: squadName,
         feature_name: featureName,
         file_size: blob.size,
-      });
+      }, { flush: true });
 
       if (this.eventBus) {
         this.eventBus.emit("notification:success", {
@@ -1722,14 +1765,14 @@ export class QuickQueryUI {
 
     // Track split completion for workflow analysis
     const totalSize = metadata.reduce((sum, m) => sum + m.size, 0);
-    UsageTracker.trackEvent("quick-query", "split_complete", {
+    this.trackQuickQueryEvent("split_complete", {
+      ...this.getCurrentQuickQueryContext({ table_name: this._splitState.tableName }),
       mode,
       split_value: value,
       chunk_count: chunks.length,
       total_size: totalSize,
-      table_name: this._splitState.tableName,
       has_oversized: metadata.some((m) => m.isOversized),
-    });
+    }, { flush: true });
 
     this._openSplitResultsModal();
   }
@@ -1920,6 +1963,8 @@ export class QuickQueryUI {
     quickQueryUuidPopover.setAttribute("aria-hidden", "false");
     quickQueryUuidButton?.setAttribute("aria-expanded", "true");
 
+    this.trackQuickQueryEvent("open_uuid_generator", this.getCurrentQuickQueryContext(), { flush: true });
+
     if (!quickQueryUuidOutput?.value) {
       this.generateQuickQueryUuids({ track: false });
     }
@@ -1967,8 +2012,17 @@ export class QuickQueryUI {
       quickQueryUuidStatus.textContent = `${quantity} UUID${quantity === 1 ? "" : "s"} ready`;
     }
 
+    this.uuidAnalyticsSession.generated_count += quantity;
+
     if (track) {
-      UsageTracker.trackEvent("quick-query", "generate_uuid", { quantity });
+      this.trackQuickQueryEvent(
+        "generate_uuid",
+        this.getCurrentQuickQueryContext({
+          quantity,
+          uuid_count_session: this.uuidAnalyticsSession.generated_count,
+        }),
+        { flush: true },
+      );
     }
   }
 
@@ -2016,9 +2070,16 @@ export class QuickQueryUI {
     if (quickQueryUuidStatus) {
       quickQueryUuidStatus.textContent = "Copied";
     }
-    UsageTracker.trackEvent("quick-query", "copy_uuid", {
-      count: quickQueryUuidOutput.value.split("\n").filter(Boolean).length,
-    });
+    const count = quickQueryUuidOutput.value.split("\n").filter(Boolean).length;
+    this.uuidAnalyticsSession.copied_count += count;
+    this.trackQuickQueryEvent(
+      "copy_uuid",
+      this.getCurrentQuickQueryContext({
+        count,
+        uuid_copied_count_session: this.uuidAnalyticsSession.copied_count,
+      }),
+      { flush: true },
+    );
   }
 
   clearQuickQueryUuids() {
@@ -2304,6 +2365,13 @@ export class QuickQueryUI {
       const schemaRows = parseDbeaverSchemaClipboard(text);
       this.loadDbeaverSchemaRows(schemaRows);
       this.showSuccess(`Pasted ${schemaRows.length} columns from DBeaver`);
+      this.trackQuickQueryEvent(
+        "schema_pasted_dbeaver",
+        this.getCurrentQuickQueryContext({
+          pasted_column_count: schemaRows.length,
+        }),
+        { flush: true },
+      );
       setTimeout(() => this.clearError(), 3000);
     } catch (error) {
       this.showError(`Failed to paste from DBeaver: ${error.message}`);
@@ -2490,13 +2558,13 @@ export class QuickQueryUI {
       this.clearError();
 
       // Track schema load for usage insights
-      UsageTracker.trackEvent("quick-query", "schema_load", {
+      this.trackQuickQueryEvent("schema_load", {
         source: "cache",
         table_name: fullName,
         has_cached_data: Boolean(result.data),
         row_count: result.data ? result.data.length : 0,
         column_count: result.schema ? result.schema.length : 0,
-      });
+      }, { flush: true });
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
     }
@@ -3215,7 +3283,8 @@ export class QuickQueryUI {
       UsageTracker.trackEvent("quick-query", "ui_error", {
         type: "schema_import_failed",
         message: error.message,
-        filename: file?.name,
+        file_type: file?.type || "unknown",
+        file_size: file?.size || 0,
         table_name: tableName,
       });
     } finally {
@@ -3361,6 +3430,17 @@ export class QuickQueryUI {
       const tableName = this.elements.tableNameInput.value.trim();
       const addedFiles = await this.attachmentProcessorService.processAttachments(filesToProcess, tableName);
       this.processedFiles = [...this.processedFiles, ...addedFiles];
+      const addedAttachmentSummary = summarizeQuickQueryAttachments(addedFiles);
+      this.trackQuickQueryEvent(
+        "attachment_added",
+        {
+          ...this.getCurrentQuickQueryContext({ table_name: tableName }),
+          added_count: addedFiles.length,
+          added_attachment_total_size: addedAttachmentSummary.attachment_total_size,
+          added_attachment_types: addedAttachmentSummary.attachment_types,
+        },
+        { flush: true },
+      );
 
       // Clear current file items and re-render full list
       this._renderAttachmentsList();
@@ -3408,6 +3488,14 @@ export class QuickQueryUI {
         if (idx !== -1) {
           this.processedFiles.splice(idx, 1);
           fileButton.remove();
+          this.trackQuickQueryEvent(
+            "attachment_removed",
+            {
+              ...this.getCurrentQuickQueryContext(),
+              removed_count: 1,
+            },
+            { flush: true },
+          );
         }
 
         // If no files left, return to empty state
@@ -3453,6 +3541,17 @@ export class QuickQueryUI {
       const addedFiles = await this.attachmentProcessorService.processAttachments(files, tableName);
       // Merge with existing files while preserving previously added ones
       this.processedFiles = [...this.processedFiles, ...addedFiles];
+      const addedAttachmentSummary = summarizeQuickQueryAttachments(addedFiles);
+      this.trackQuickQueryEvent(
+        "attachment_added",
+        {
+          ...this.getCurrentQuickQueryContext({ table_name: tableName }),
+          added_count: addedFiles.length,
+          added_attachment_total_size: addedAttachmentSummary.attachment_total_size,
+          added_attachment_types: addedAttachmentSummary.attachment_types,
+        },
+        { flush: true },
+      );
 
       // Reset file input for subsequent selections
       this.elements.attachmentsInput.value = "";
@@ -3506,6 +3605,7 @@ export class QuickQueryUI {
     }
 
     const failedFiles = [];
+    const beforeSummary = summarizeQuickQueryAttachments(this.processedFiles);
     this.processedFiles = await Promise.all(
       this.processedFiles.map(async (file) => {
         const ext = (file.name.split(".").pop() || "").toLowerCase();
@@ -3535,6 +3635,17 @@ export class QuickQueryUI {
       }
     }
 
+    this.trackQuickQueryEvent(
+      "attachment_minified",
+      {
+        ...this.getCurrentQuickQueryContext(),
+        attempted_count: beforeSummary.attachment_count,
+        failed_count: failedFiles.length,
+        success_count: Math.max(beforeSummary.attachment_count - failedFiles.length, 0),
+      },
+      { flush: true },
+    );
+
     // Refresh viewer if it's open
     const fileViewer = document.getElementById("fileViewerOverlay");
     if (fileViewer && !fileViewer.classList.contains("hidden")) {
@@ -3554,6 +3665,7 @@ export class QuickQueryUI {
   }
 
   handleDeleteAllAttachments() {
+    const removedSummary = summarizeQuickQueryAttachments(this.processedFiles);
     this.processedFiles = [];
     const container = this.elements.fileItemsContainer || this.elements.filesContainer;
     if (container) {
@@ -3572,6 +3684,18 @@ export class QuickQueryUI {
     }
 
     this.updateAttachmentControlsState();
+    if (removedSummary.attachment_count > 0) {
+      this.trackQuickQueryEvent(
+        "attachment_removed",
+        {
+          ...this.getCurrentQuickQueryContext(),
+          removed_count: removedSummary.attachment_count,
+          removed_attachment_total_size: removedSummary.attachment_total_size,
+          removed_attachment_types: removedSummary.attachment_types,
+        },
+        { flush: true },
+      );
+    }
   }
 
   handleEmptyStateKeydown(evt) {
