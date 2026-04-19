@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.vite
+.wrangler
+backend-workers/.wrangler
+tauri/target
+tauri/gen
+tauri/releases
+tauri/sidecar/build
+tauri/oracle-sidecar-*
+tauri/binaries/oracle-sidecar-*
+frontend/tools/html-editor/vendor
+frontend/public/web-build.json
+package-lock.json
+backend-workers/package-lock.json
