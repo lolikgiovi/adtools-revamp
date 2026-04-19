@@ -83,9 +83,33 @@ prompt_channel() {
 }
 
 prompt_release_message() {
-  local default_msg="$1" msg
-  read -r -p "Release message [${default_msg}]: " msg || true
-  echo "${msg:-$default_msg}"
+  local default_msg="$1" choice file_path msg
+  while true; do
+    read -r -p "Release notes (t)ext / (f)ile / (d)efault [${default_msg}]: " choice || true
+    case "${choice}" in
+      t|T|text)
+        read -r -p "Release message: " msg || true
+        echo "${msg:-$default_msg}"
+        return 0
+        ;;
+      f|F|file)
+        read -r -p "Path to .md file: " file_path || true
+        if [[ -f "$file_path" ]]; then
+          cat "$file_path"
+          return 0
+        else
+          echo "WARNING: File not found: $file_path" >&2
+        fi
+        ;;
+      d|D|default|"")
+        echo "$default_msg"
+        return 0
+        ;;
+      *)
+        echo "Enter (t)ext, (f)ile, or (d)efault."
+        ;;
+    esac
+  done
 }
 
 # Removed: JSON is constructed via jq directly in write_manifest

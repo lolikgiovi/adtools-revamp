@@ -677,7 +677,7 @@ class App {
           <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
         </div>
       </div>
-      ${notes ? `<div class="update-banner-notes" aria-hidden="false"><p>${this.#escapeHtml(notes)}</p></div>` : ""}
+      ${notes ? `<div class="update-banner-notes" aria-hidden="false"><div class="update-banner-notes-content">${this.#renderMarkdown(notes)}</div></div>` : ""}
       <div class="update-banner-progress" aria-hidden="true">
         <div class="update-banner-progressbox"><div class="update-banner-progressbar" style="width: 0%"></div></div>
         <span class="update-banner-stage">Ready</span>
@@ -777,7 +777,7 @@ class App {
       ? `
       <div class="update-modal-notes">
         <h4>What's new:</h4>
-        <p>${this.#escapeHtml(notes)}</p>
+        <div class="update-modal-notes-content">${this.#renderMarkdown(notes)}</div>
       </div>
     `
       : "";
@@ -873,15 +873,58 @@ class App {
     }
   }
 
-  #escapeHtml(str) {
+#escapeHtml(str) {
     if (!str) return "";
     return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;")
-      .replace(/\n/g, "<br>");
+      .replace(/'/g, "&#039;");
+  }
+
+  #renderMarkdown(markdown) {
+    if (!markdown) return "";
+
+    let html = markdown.trim();
+
+    html = html
+      .replace(/&(?!amp;|lt;|gt;|quot;|#)/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+    html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+    html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+    html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+      return `<pre><code class="language-${lang || "text"}">${code.trim()}</code></pre>`;
+    });
+
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    html = html.replace(/^&gt; (.+)$/gm, "<blockquote><p>$1</p></blockquote>");
+    html = html.replace(/^---$/gm, "<hr>");
+
+    html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
+    html = html.replace(/(<li>[\s\S]*?<\/li>[\n\r]*)+/g, (match) => {
+      if (!match.includes("<li>")) return match;
+      return `<ul>${match}</ul>`;
+    });
+
+    html = html.replace(/^(\d+)\. (.+)$/gm, "<li>$2</li>");
+    html = html.replace(/(<li>[\s\S]*?<\/li>[\n\r]*)+/g, (match) => {
+      if (!match.includes("<li>")) return match;
+      return `<ol>${match}</ol>`;
+    });
+
+    html = html.replace(/\n\n+/g, "</p><p>");
+    html = html.replace(/^(?!<[hulopbhrc])(.+)$/gm, "<p>$1</p>");
+    html = html.replace(/<p><\/p>/g, "");
+
+    return html;
   }
 
   /**
