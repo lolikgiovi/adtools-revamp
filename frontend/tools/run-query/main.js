@@ -21,6 +21,7 @@ export class JenkinsRunner extends BaseTool {
       icon: "jenkins-query",
       category: "config",
       eventBus,
+      isHeavyTool: true,
     });
     this.service = new JenkinsRunnerService();
     this.storageService = new IndexedDBStorageService();
@@ -2946,6 +2947,14 @@ export class JenkinsRunner extends BaseTool {
     } catch (_) {}
   }
 
+  onWarmResume() {
+    try {
+      this.editor?.layout?.();
+      this.templateEditor?.layout?.();
+      this.splitEditor?.layout?.();
+    } catch (_) {}
+  }
+
   onDeactivate() {
     // If split execution is running (started but not completed), preserve log listeners
     // so the async execution loop can continue in the background
@@ -3005,18 +3014,11 @@ export class JenkinsRunner extends BaseTool {
       this._cleanupSplitResources();
     }
 
-    // Dispose editors to save memory regardless
-    if (this.editor) {
-      this.editor.dispose();
-      this.editor = null;
-    }
-    if (this.templateEditor) {
-      this.templateEditor.dispose();
-      this.templateEditor = null;
-    }
-    if (this.splitEditor) {
-      this.splitEditor.dispose();
-      this.splitEditor = null;
-    }
+    // Keep editors warm during short feature switches. They are disposed by
+    // onUnmount after the app-level warm-cache timeout or explicit teardown.
+  }
+
+  hasActiveBackgroundWork() {
+    return Boolean(this.state?.split?.started && !this.state?.split?.completed);
   }
 }

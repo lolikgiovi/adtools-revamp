@@ -22,6 +22,7 @@ class HTMLTemplateTool extends BaseTool {
       icon: "html",
       category: "config",
       eventBus,
+      isHeavyTool: true,
     });
 
     this.editor = null;
@@ -83,6 +84,12 @@ class HTMLTemplateTool extends BaseTool {
       this.minifyWorker.terminate();
       this.minifyWorker = null;
     }
+  }
+
+  onWarmResume() {
+    try {
+      this.editor?.layout?.();
+    } catch (_) {}
   }
 
   async initializeMonacoEditor() {

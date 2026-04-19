@@ -17,6 +17,7 @@ class SQLInClauseTool extends BaseTool {
       icon: "sql-in",
       category: "config",
       eventBus,
+      isHeavyTool: true,
     });
     this.editor = null;
     this.format = "single"; // single | multi | select
@@ -53,6 +54,12 @@ class SQLInClauseTool extends BaseTool {
       this.editor.dispose();
       this.editor = null;
     }
+  }
+
+  onWarmResume() {
+    try {
+      this.editor?.layout?.();
+    } catch (_) {}
   }
 
   async initializeMonacoEditor() {

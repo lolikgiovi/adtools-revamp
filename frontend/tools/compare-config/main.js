@@ -52,12 +52,15 @@ class CompareConfigTool extends BaseTool {
       icon: "database-compare",
       category: "database",
       eventBus: eventBus,
+      isHeavyTool: true,
     });
 
     // State
     this.oracleClientReady = false;
     this.sidecarStatus = SidecarStatus.STOPPED;
     this.savedConnections = [];
+    this._sidecarStatusUnsubscribe = null;
+    this._documentListenerCleanups = [];
 
     this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
     this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
@@ -221,7 +224,7 @@ class CompareConfigTool extends BaseTool {
       const sidecarClient = getOracleSidecarClient();
 
       // Subscribe to status changes to update UI
-      sidecarClient.onStatusChange((status) => {
+      this._sidecarStatusUnsubscribe = sidecarClient.onStatusChange((status) => {
         this.sidecarStatus = status;
         this.updateSidecarStatusUI();
       });
@@ -767,7 +770,7 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Close dropdown when clicking outside
-      document.addEventListener("click", (e) => {
+      this.addDocumentListener("click", (e) => {
         if (!e.target.closest(".export-dropdown")) {
           exportDropdownMenu.classList.remove("show");
         }
@@ -813,7 +816,7 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Close dropdown when clicking outside
-      document.addEventListener("click", (e) => {
+      this.addDocumentListener("click", (e) => {
         if (!e.target.closest(".view-dropdown")) {
           viewDropdownMenu.classList.remove("show");
         }
@@ -4653,7 +4656,55 @@ class CompareConfigTool extends BaseTool {
     }
   }
 
-  onUnmount() {}
+  addDocumentListener(eventName, handler, options) {
+    document.addEventListener(eventName, handler, options);
+    this._documentListenerCleanups.push(() => {
+      document.removeEventListener(eventName, handler, options);
+    });
+  }
+
+  onUnmount() {
+    this._documentListenerCleanups.splice(0).forEach((cleanup) => {
+      try {
+        cleanup();
+      } catch (_) {}
+    });
+
+    if (this._sidecarStatusUnsubscribe) {
+      try {
+        this._sidecarStatusUnsubscribe();
+      } catch (_) {}
+      this._sidecarStatusUnsubscribe = null;
+    }
+    try {
+      getDiffWorkerManager().terminate();
+    } catch (_) {}
+
+    this.results = { unified: null };
+    if (this.excelCompare) {
+      this.excelCompare.refParsedData = null;
+      this.excelCompare.compParsedData = null;
+      this.excelCompare.refFiles = [];
+      this.excelCompare.compFiles = [];
+      this.excelCompare.pairs = [];
+    }
+    if (this.unified) {
+      ["sourceA", "sourceB"].forEach((key) => {
+        if (!this.unified[key]) return;
+        this.unified[key].excelFiles = [];
+        this.unified[key].selectedExcelFile = null;
+        this.unified[key].file = null;
+        this.unified[key].parsedData = null;
+        this.unified[key].data = null;
+      });
+    }
+  }
+
+  onWarmResume() {
+    try {
+      this.updateSidecarStatusUI();
+    } catch (_) {}
+  }
 
   // =============================================================================
   // IndexedDB State Management
@@ -5736,7 +5787,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
+    this.addDocumentListener("click", (e) => {
       if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.remove("show");
       }
@@ -5799,7 +5850,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
+    this.addDocumentListener("click", (e) => {
       if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.remove("show");
       }
@@ -8022,7 +8073,7 @@ class CompareConfigTool extends BaseTool {
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
+    this.addDocumentListener("click", (e) => {
       if (!newBtn.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.remove("show");
       }

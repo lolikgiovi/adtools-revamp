@@ -24,6 +24,7 @@ export class MergeSqlTool extends BaseTool {
       icon: "merge-sql",
       category: "config",
       eventBus,
+      isHeavyTool: true,
     });
 
     this.files = [];
@@ -124,6 +125,17 @@ export class MergeSqlTool extends BaseTool {
       this.fileEditor.dispose();
       this.fileEditor = null;
     }
+  }
+
+  onWarmResume() {
+    try {
+      this.mergedEditor?.layout?.();
+      this.selectEditor?.layout?.();
+      this.validationEditor?.layout?.();
+      this.inputEditor?.layout?.();
+      this.validationSqlEditor?.layout?.();
+      this.fileEditor?.layout?.();
+    } catch (_) {}
   }
 
   initMonaco() {

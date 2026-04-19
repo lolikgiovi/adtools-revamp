@@ -12,6 +12,7 @@ class BaseTool {
     this.container = null;
     this.isActive = false;
     this.eventBus = config.eventBus;
+    this.isHeavyTool = Boolean(config.isHeavyTool);
 
     this.init();
   }
@@ -57,6 +58,7 @@ class BaseTool {
     if (this.isActive) return;
 
     this.isActive = true;
+    this.onWarmResume();
     this.onActivate();
 
     if (this.eventBus) {
@@ -71,6 +73,7 @@ class BaseTool {
     if (!this.isActive) return;
 
     this.isActive = false;
+    this.onSoftDeactivate();
     this.onDeactivate();
 
     if (this.eventBus) {
@@ -92,6 +95,37 @@ class BaseTool {
    */
   onDeactivate() {
     // Default behavior
+  }
+
+  /**
+   * Called when a tool is deactivated but may be kept warm for fast return.
+   * Override in child classes to pause hidden work without destroying state.
+   */
+  onSoftDeactivate() {
+    // Default behavior
+  }
+
+  /**
+   * Called before a warm tool is shown again.
+   * Override in child classes to refresh layouts or resume paused work.
+   */
+  onWarmResume() {
+    // Default behavior
+  }
+
+  /**
+   * Release heavyweight resources after the app decides the warm cache can be reclaimed.
+   * Override in child classes for resources not already released by onUnmount.
+   */
+  disposeHeavyResources(_reason = "idle-timeout") {
+    // Default behavior
+  }
+
+  /**
+   * Return true when hard disposal would interrupt background work.
+   */
+  hasActiveBackgroundWork() {
+    return false;
   }
 
   /**

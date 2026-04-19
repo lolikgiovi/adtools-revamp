@@ -22,6 +22,7 @@ class SplunkVTLEditor extends BaseTool {
       icon: "splunk-template",
       category: "config",
       eventBus,
+      isHeavyTool: true,
     });
     this.editor = null;
     this.table = null;
@@ -64,6 +65,14 @@ class SplunkVTLEditor extends BaseTool {
       this.table.destroy();
       this.table = null;
     }
+  }
+
+  onWarmResume() {
+    try {
+      this.editor?.layout?.();
+      this.table?.refreshDimensions?.();
+      this.table?.render?.();
+    } catch (_) {}
   }
 
   async registerVtlLanguage() {

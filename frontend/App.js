@@ -21,6 +21,8 @@ const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 const ASSET_LOAD_MAX_RETRIES = 3;
 const ASSET_LOAD_MAX_RELOADS = 3;
 const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
+const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
+const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
 
 class App {
   constructor() {
@@ -30,6 +32,8 @@ class App {
     this.sidebar = null;
     this.tools = new Map();
     this.pendingToolLoads = new Map();
+    this.toolDomRoots = new Map();
+    this.warmHeavyTools = new Map();
     this.pageComponents = new Map();
     this.pendingAssetRecoveryReload = false;
     this.currentTool = null;
@@ -359,22 +363,40 @@ class App {
     if (this.currentTool && this.currentTool.id !== toolId) {
       this.clearCurrentTool();
     }
-    this.renderLoadingState({
-      title: definition.name,
-      message: "Loading tool and preparing the interface.",
-    });
+    const warmEntry = this.warmHeavyTools.get(toolId);
+    if (!warmEntry) {
+      this.renderLoadingState({
+        title: definition.name,
+        message: "Loading tool and preparing the interface.",
+      });
+    }
     const tool = await this.loadWithAssetRecovery(() => this.ensureToolLoaded(toolId), {
       id: toolId,
       label: definition.name,
     });
+    this.cancelWarmToolDisposal(toolId);
     this.clearAssetRecoveryState(toolId);
     this.updateBreadcrumb(definition.name);
 
     this.currentTool = tool;
-    tool.activate();
 
     if (this.mainContent) {
-      tool.mount(this.mainContent);
+      const toolRoot = this.ensureToolRoot(toolId);
+      const canReuseWarmDom = tool.container === toolRoot && toolRoot.childNodes.length > 0;
+
+      this.mainContent.innerHTML = "";
+      this.mainContent.appendChild(toolRoot);
+
+      if (!canReuseWarmDom) {
+        tool.mount(toolRoot);
+      }
+
+      if (tool.isActive) {
+        tool.onWarmResume?.();
+      } else {
+        tool.activate();
+      }
+
       // Pass any route data to tool if it supports it
       try {
         if (routeData && typeof tool.onRouteData === "function") {
@@ -1205,6 +1227,7 @@ class App {
       this.currentTool.deactivate();
       this.currentTool.unmount();
     }
+    this.disposeAllWarmTools("app-destroy");
 
     console.log("AD Tools app destroyed");
   }
@@ -1411,9 +1434,118 @@ class App {
 
   clearCurrentTool() {
     if (!this.currentTool) return;
-    this.currentTool.deactivate();
-    this.currentTool.unmount();
+    const tool = this.currentTool;
+    const toolId = tool.id;
+    tool.deactivate();
+
+    if (this.shouldKeepToolWarm(tool)) {
+      const toolRoot = this.toolDomRoots.get(toolId) || tool.container;
+      if (toolRoot && toolRoot.parentNode) {
+        toolRoot.parentNode.removeChild(toolRoot);
+      }
+      this.scheduleWarmToolDisposal(tool, toolRoot);
+    } else {
+      tool.unmount();
+      const toolRoot = this.toolDomRoots.get(toolId);
+      if (toolRoot && toolRoot.parentNode) {
+        toolRoot.parentNode.removeChild(toolRoot);
+      }
+      this.toolDomRoots.delete(toolId);
+    }
     this.currentTool = null;
+  }
+
+  ensureToolRoot(toolId) {
+    let root = this.toolDomRoots.get(toolId);
+    if (!root) {
+      root = document.createElement("div");
+      root.className = "tool-root";
+      root.dataset.toolRoot = toolId;
+      this.toolDomRoots.set(toolId, root);
+    }
+    return root;
+  }
+
+  shouldKeepToolWarm(tool) {
+    return Boolean(tool?.isHeavyTool);
+  }
+
+  scheduleWarmToolDisposal(tool, root) {
+    if (!tool?.id || !root) return;
+
+    const existing = this.warmHeavyTools.get(tool.id);
+    if (existing?.timerId) clearTimeout(existing.timerId);
+
+    const entry = {
+      tool,
+      root,
+      lastUsed: Date.now(),
+      timerId: setTimeout(() => {
+        this.disposeWarmTool(tool.id, "idle-timeout");
+      }, WARM_TOOL_IDLE_DISPOSE_MS),
+    };
+    this.warmHeavyTools.set(tool.id, entry);
+    this.enforceWarmToolLimit();
+  }
+
+  cancelWarmToolDisposal(toolId) {
+    const entry = this.warmHeavyTools.get(toolId);
+    if (!entry) return;
+    if (entry.timerId) clearTimeout(entry.timerId);
+    this.warmHeavyTools.delete(toolId);
+  }
+
+  enforceWarmToolLimit() {
+    if (this.warmHeavyTools.size <= WARM_TOOL_MAX_HEAVY_TOOLS) return;
+
+    const candidates = Array.from(this.warmHeavyTools.values())
+      .filter((entry) => !this.toolHasActiveBackgroundWork(entry.tool))
+      .sort((a, b) => a.lastUsed - b.lastUsed);
+
+    while (this.warmHeavyTools.size > WARM_TOOL_MAX_HEAVY_TOOLS && candidates.length > 0) {
+      const oldest = candidates.shift();
+      this.disposeWarmTool(oldest.tool.id, "warm-cache-limit");
+    }
+  }
+
+  toolHasActiveBackgroundWork(tool) {
+    try {
+      return Boolean(tool?.hasActiveBackgroundWork?.());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  disposeWarmTool(toolId, reason = "idle-timeout") {
+    const entry = this.warmHeavyTools.get(toolId);
+    if (!entry) return;
+
+    if (reason !== "app-destroy" && this.toolHasActiveBackgroundWork(entry.tool)) {
+      this.scheduleWarmToolDisposal(entry.tool, entry.root);
+      return;
+    }
+
+    if (entry.timerId) clearTimeout(entry.timerId);
+    this.warmHeavyTools.delete(toolId);
+
+    try {
+      entry.tool.unmount();
+    } catch (_) {}
+
+    try {
+      entry.tool.disposeHeavyResources?.(reason);
+    } catch (_) {}
+
+    try {
+      entry.root.remove();
+    } catch (_) {}
+    this.toolDomRoots.delete(toolId);
+  }
+
+  disposeAllWarmTools(reason = "app-destroy") {
+    Array.from(this.warmHeavyTools.keys()).forEach((toolId) => {
+      this.disposeWarmTool(toolId, reason);
+    });
   }
 
   renderLoadingState({ title = "Loading", message = "Preparing the interface." } = {}) {

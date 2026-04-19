@@ -155,7 +155,7 @@ class UsageTracker {
     console.log("Usage counts sanitized - removed event tracking from counts");
   }
 
-  /** Track a usage event (simple: increment counts and daily, flush immediately) */
+  /** Track a usage event (simple: increment counts and daily, then persist via debounced flush) */
   static track(featureId, action, meta = {}) {
     if (!featureId || !action) return;
     if (!this._enabled) return;
@@ -181,7 +181,7 @@ class UsageTracker {
     this._state.lastUpdated = now.toISOString();
     this._state.revision = (this._state.revision || 0) + 1;
 
-    this.flushSync();
+    this._scheduleFlush();
 
     try {
       this._eventBus?.emit?.("usage:updated", { featureId: featureKey, action: actionKey, ts: this._state.lastUpdated });
@@ -293,7 +293,7 @@ class UsageTracker {
     this._state.lastUpdated = ev.ts;
     this._state.revision = (this._state.revision || 0) + 1;
 
-    this.flushSync();
+    this._scheduleFlush();
 
     try {
       this._eventBus?.emit?.("usage:updated", ev);
@@ -427,11 +427,8 @@ class UsageTracker {
   static _scheduleFlush() {
     if (this._flushTimer) return;
     this._flushTimer = setTimeout(() => {
-      this.flush()
-        .catch(() => {})
-        .finally(() => {
-          this._flushTimer = null;
-        });
+      this._flushTimer = null;
+      this.flushSync();
     }, this.FLUSH_DELAY_MS);
   }
 

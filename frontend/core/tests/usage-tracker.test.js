@@ -9,6 +9,7 @@ describe("UsageTracker analytics reliability", () => {
     localStorage.clear();
     UsageTracker._enabled = true;
     UsageTracker._backupEnabled = false;
+    UsageTracker._flushTimer = null;
     UsageTracker._state = {
       version: 1,
       deviceId: "device-1",
@@ -70,5 +71,26 @@ describe("UsageTracker analytics reliability", () => {
     expect(meta.message).toContain("[redacted-code]");
     expect(meta.sql).toBeUndefined();
     expect(meta.token).toBeUndefined();
+  });
+
+  it("debounces bursty event persistence while keeping explicit sync flush available", async () => {
+    vi.useFakeTimers();
+    const setItemSpy = vi.spyOn(localStorage, "setItem");
+
+    UsageTracker.trackEvent("json-tools", "tab_switch", { tab: "formatter" });
+    UsageTracker.trackEvent("json-tools", "tab_switch", { tab: "validator" });
+
+    expect(setItemSpy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(UsageTracker.FLUSH_DELAY_MS);
+
+    expect(setItemSpy).toHaveBeenCalled();
+
+    setItemSpy.mockClear();
+    UsageTracker.flushSync();
+    expect(setItemSpy).toHaveBeenCalled();
+
+    setItemSpy.mockRestore();
+    vi.useRealTimers();
   });
 });

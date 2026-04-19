@@ -38,6 +38,7 @@ export class QuickQuery extends BaseTool {
       icon: "database",
       category: "application",
       eventBus,
+      isHeavyTool: true,
     });
     this.ui = null;
   }
@@ -57,6 +58,19 @@ export class QuickQuery extends BaseTool {
   onUnmount() {
     void this.ui?.destroy({ flush: true });
     this.ui = null;
+  }
+
+  disposeHeavyResources() {
+    void this.ui?.destroy({ flush: true });
+    this.ui = null;
+  }
+
+  onSoftDeactivate() {
+    this.ui?.pauseHiddenWork?.();
+  }
+
+  onWarmResume() {
+    this.ui?.refreshLayouts?.();
   }
 }
 
@@ -92,8 +106,9 @@ export class QuickQueryUI {
     this.isSplitting = false; // Track async split state
     this.processedFiles = [];
 
-    this._layoutState = { height: "auto", fixedRowsTop: 0 };
+    this._layoutState = { height: "auto", fixedRowsTop: 0, baseUpperHeight: null, upperHeight: null };
     this._layoutScheduled = false;
+    this._cancelScheduledLayout = null;
     this._autosaveLifecycleListenersBound = false;
     this._handleAutosavePageHide = () => {
       void this.flushPendingDataAutosave();
@@ -677,9 +692,13 @@ export class QuickQueryUI {
     if (this._layoutScheduled) return;
 
     this._layoutScheduled = true;
-    const scheduleFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
-    scheduleFrame(() => {
+    const useAnimationFrame = typeof requestAnimationFrame === "function";
+    const scheduleFrame = useAnimationFrame ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
+    const cancelFrame = useAnimationFrame && typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout;
+    const frameId = scheduleFrame(() => {
       this._layoutScheduled = false;
+      this._cancelScheduledLayout = null;
+      if (!this.elements.contentA?.isConnected) return;
       if (!this.schemaTable) return;
 
       this.schemaTable.updateSettings({ height: "auto" });
@@ -687,6 +706,7 @@ export class QuickQueryUI {
       this.schemaTable.render();
       this.syncUpperLayoutHeight();
     });
+    this._cancelScheduledLayout = () => cancelFrame(frameId);
   }
 
   syncUpperLayoutHeight() {
@@ -701,9 +721,28 @@ export class QuickQueryUI {
       return element.offsetHeight + toPx(styles.marginTop) + toPx(styles.marginBottom);
     };
 
+    const schemaTableHeight = () => {
+      const schemaContainer = this.elements.schemaContainer;
+      if (!schemaContainer || !this.schemaTable) return outerHeight(schemaContainer);
+
+      const styles = getComputedStyle(schemaContainer);
+      const settings = this.schemaTable.getSettings?.() || {};
+      const rowHeight = toPx(settings.rowHeights) || 20;
+      const headerHeight = toPx(settings.columnHeaderHeight) || rowHeight;
+      const rows = Math.max(this.schemaTable.countRows?.() || 0, settings.minRows || 1);
+      const tableBorderAllowance = 2;
+
+      return rows * rowHeight + headerHeight + tableBorderAllowance + toPx(styles.marginTop) + toPx(styles.marginBottom);
+    };
+
     const leftStyles = getComputedStyle(leftPanel);
     const leftContentHeight =
-      Array.from(leftPanel.children).reduce((height, child) => height + outerHeight(child), 0) +
+      Array.from(leftPanel.children).reduce((height, child) => {
+        // Handsontable's rendered wrapper can inherit the current flex row height. Use the table's content size so warm
+        // resumes do not feed the previous upper-section height back into the next editor-height calculation.
+        if (child === this.elements.schemaContainer) return height + schemaTableHeight();
+        return height + outerHeight(child);
+      }, 0) +
       toPx(leftStyles.paddingTop) +
       toPx(leftStyles.paddingBottom);
 
@@ -711,13 +750,19 @@ export class QuickQueryUI {
       (height, element) => height + outerHeight(element),
       0,
     );
-    const contentStyles = getComputedStyle(this.elements.contentA || leftPanel);
+    const contentA = this.elements.contentA;
+    const contentStyles = getComputedStyle(contentA || leftPanel);
     const minUpperHeight = toPx(contentStyles.minHeight) || 500;
-    const extraUpperSpace = toPx(contentStyles.getPropertyValue("--qq-upper-extra-space"));
+    const measuredUpperHeight = Math.ceil(contentA?.getBoundingClientRect?.().height || contentA?.offsetHeight || 0);
+    if (!this._layoutState.baseUpperHeight) {
+      this._layoutState.baseUpperHeight = Math.max(minUpperHeight, measuredUpperHeight);
+    }
+
     const minEditorHeight = 120;
-    const upperHeight = Math.max(leftContentHeight + extraUpperSpace, minUpperHeight);
+    const upperHeight = Math.max(this._layoutState.baseUpperHeight, Math.ceil(leftContentHeight));
     const editorHeight = Math.max(minEditorHeight, Math.ceil(upperHeight - rightFixedHeight));
 
+    this._layoutState.upperHeight = upperHeight;
     queryEditor.style.setProperty("--qq-query-editor-height", `${editorHeight}px`);
     this.editor?.layout?.({ width: queryEditor.clientWidth, height: queryEditor.clientHeight });
   }
@@ -774,11 +819,74 @@ export class QuickQueryUI {
     return this.dataAutosave.flush();
   }
 
+  pauseHiddenWork() {
+    if (this._cancelScheduledLayout) {
+      this._cancelScheduledLayout();
+      this._cancelScheduledLayout = null;
+    }
+    this._layoutScheduled = false;
+  }
+
+  refreshLayouts() {
+    try {
+      this.editor?.layout?.();
+    } catch (_) {}
+    try {
+      this._splitEditor?.layout?.();
+    } catch (_) {}
+    try {
+      this.schemaTable?.refreshDimensions?.();
+      this.schemaTable?.render?.();
+    } catch (_) {}
+    try {
+      this.dataTable?.refreshDimensions?.();
+      this.dataTable?.render?.();
+    } catch (_) {}
+  }
+
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
-    return this.dataAutosave.destroy({ flush });
+    const persist = this.dataAutosave.destroy({ flush });
+
+    if (this.editor) {
+      try {
+        this.editor.dispose();
+      } catch (_) {}
+      this.editor = null;
+    }
+    if (this._splitEditor) {
+      try {
+        this._splitEditor.dispose();
+      } catch (_) {}
+      this._splitEditor = null;
+    }
+    if (this.schemaTable) {
+      try {
+        this.schemaTable.destroy();
+      } catch (_) {}
+      this.schemaTable = null;
+    }
+    if (this.dataTable) {
+      try {
+        this.dataTable.destroy();
+      } catch (_) {}
+      this.dataTable = null;
+    }
+    try {
+      this.queryWorkerService?.cancel?.();
+    } catch (_) {}
+    try {
+      this.splitWorkerService?.cancel?.();
+    } catch (_) {}
+
+    this.elements = {};
+    this.processedFiles = [];
+    this._splitState = null;
+    this.searchState = { selectedIndex: -1, visibleItems: [] };
+
+    return persist;
   }
 
   // Error handling methods

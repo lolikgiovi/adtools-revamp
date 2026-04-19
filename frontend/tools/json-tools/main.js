@@ -22,6 +22,7 @@ class JSONTools extends BaseTool {
       icon: "json",
       category: "application",
       eventBus: eventBus,
+      isHeavyTool: true,
     });
     this.editor = null;
     this.outputEditor = null;
@@ -1058,6 +1059,13 @@ class JSONTools extends BaseTool {
       this.outputEditor.dispose();
       this.outputEditor = null;
     }
+  }
+
+  onWarmResume() {
+    try {
+      this.editor?.layout?.();
+      this.outputEditor?.layout?.();
+    } catch (_) {}
   }
 }
 
