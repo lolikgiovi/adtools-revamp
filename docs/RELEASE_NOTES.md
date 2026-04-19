@@ -1,4 +1,6 @@
 - **Quick Query Enhancements**
   - DBeaver schema paste support
   - UUID generator popover support
+  - Save As file name, also support format for Deployment
+- **Performance Enhancement** — Prevent memory leak by cleaning up idle editors/tables/workers
 - **Merge SQL** — Add "Validation SQL" to count before-after query execution
