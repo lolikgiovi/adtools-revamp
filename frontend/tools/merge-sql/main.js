@@ -9,6 +9,8 @@ import { getIconSvg } from "./icon.js";
 import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
 import { createOracleEditor } from "../../core/MonacoOracle.js";
+import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeFiles, summarizeText } from "../../core/AnalyticsMeta.js";
 import * as monaco from "monaco-editor";
 import * as IndexedDBManager from "./indexeddb-manager.js";
 import html2canvas from "html2canvas";
@@ -55,12 +57,37 @@ export class MergeSqlTool extends BaseTool {
     return MergeSqlTemplate;
   }
 
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("merge-sql", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
+  }
+
+  buildResultAnalyticsMeta(extra = {}) {
+    const report = this.result?.report || {};
+    return cleanAnalyticsMeta({
+      input_mode: this.inputMode,
+      file_count: this.files.length,
+      table_count: Array.isArray(report.statementCounts) ? report.statementCounts.length : 0,
+      squad_count: Array.isArray(report.squadCounts) ? report.squadCounts.length : 0,
+      feature_count: Array.isArray(report.featureCounts) ? report.featureCounts.length : 0,
+      duplicate_count: Array.isArray(this.result?.duplicates) ? this.result.duplicates.length : 0,
+      dangerous_statement_count: Array.isArray(report.dangerousStatements) ? report.dangerousStatements.length : 0,
+      non_system_author_count: Array.isArray(report.nonSystemAuthors) ? report.nonSystemAuthors.length : 0,
+      merged_size: String(this.result?.mergedSql || "").length,
+      select_size: String(this.result?.selectSql || "").length,
+      validation_size: String(this.result?.validationSql || "").length,
+      ...extra,
+    });
+  }
+
   async onMount() {
     this.initMonaco();
     this.renderResultTabs();
     this.bindEvents();
     await this.loadFromIndexedDB();
     this.updateUI();
+    this.trackAnalytics("mount", { restored_file_count: this.files.length, input_mode: this.inputMode });
   }
 
   onUnmount() {
@@ -370,6 +397,7 @@ export class MergeSqlTool extends BaseTool {
   }
 
   addFiles(files) {
+    const initialCount = this.files.length;
     for (const file of files) {
       if (!file.name.toLowerCase().endsWith(".sql")) continue;
 
@@ -394,6 +422,21 @@ export class MergeSqlTool extends BaseTool {
     this.applySorting();
     this.saveFilesToIndexedDB();
     this.updateUI();
+
+    const addedCount = this.files.length - initialCount;
+    if (addedCount > 0) {
+      this.trackAnalytics("files_added", {
+        source: "files",
+        added_count: addedCount,
+        ...summarizeFiles(
+          files.filter((file) =>
+            String(file?.name || "")
+              .toLowerCase()
+              .endsWith(".sql"),
+          ),
+        ),
+      });
+    }
   }
 
   removeFile(fileId) {
@@ -429,6 +472,7 @@ export class MergeSqlTool extends BaseTool {
     this.updateSortButtons();
     this.saveStateToIndexedDB();
     this.renderFileList();
+    this.trackAnalytics("sort_changed", { sort_order: order, file_count: this.files.length, table_count: this.tableOrder.length });
   }
 
   applySorting() {
@@ -467,6 +511,7 @@ export class MergeSqlTool extends BaseTool {
 
     this.currentTab = "report";
     this.handleTabSwitch("report");
+    this.trackAnalytics("input_mode_changed", { input_mode: mode });
   }
 
   renderResultTabs() {
@@ -664,10 +709,7 @@ export class MergeSqlTool extends BaseTool {
     const fileItem = this.files.find((f) => f.id === fileId);
     if (!fileItem) return;
 
-    const content =
-      fileItem.editedContent !== null
-        ? fileItem.editedContent
-        : await MergeSqlService.readFileContent(fileItem.file);
+    const content = fileItem.editedContent !== null ? fileItem.editedContent : await MergeSqlService.readFileContent(fileItem.file);
 
     // Create a Monaco model for this file
     const model = monaco.editor.createModel(content, "oracle-dml");
@@ -757,9 +799,7 @@ export class MergeSqlTool extends BaseTool {
     const entry = this.fileEditorModels.get(this.activeEditorFileId);
     if (!fileItem || !entry) return;
 
-    const confirmed = window.confirm(
-      `Revert "${fileItem.name}" to its original content? All your edits will be lost.`
-    );
+    const confirmed = window.confirm(`Revert "${fileItem.name}" to its original content? All your edits will be lost.`);
     if (!confirmed) return;
 
     const originalContent = await MergeSqlService.readFileContent(fileItem.file);
@@ -837,8 +877,7 @@ export class MergeSqlTool extends BaseTool {
         if (!fileItem) return "";
         const isActive = fileId === this.activeEditorFileId;
         const entry = this.fileEditorModels.get(fileId);
-        const isDirty =
-          entry ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId : false;
+        const isDirty = entry ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId : false;
         return `<div class="file-editor-tab${isActive ? " active" : ""}${isDirty ? " dirty" : ""}" data-id="${this.escapeHtml(fileId)}">
           <svg class="file-editor-tab-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -874,9 +913,7 @@ export class MergeSqlTool extends BaseTool {
 
   _updateEditorToolbar(fileId) {
     const entry = this.fileEditorModels.get(fileId);
-    const isDirty = entry
-      ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId
-      : false;
+    const isDirty = entry ? entry.model.getAlternativeVersionId() !== entry.lastSavedVersionId : false;
     const fileItem = this.files.find((f) => f.id === fileId);
     const hasOriginal = fileItem && fileItem.editedContent !== null;
 
@@ -902,6 +939,8 @@ export class MergeSqlTool extends BaseTool {
       return;
     }
 
+    const startTime = Date.now();
+
     const mergeBtn = document.getElementById("merge-sql-btn");
     if (mergeBtn) {
       mergeBtn.disabled = true;
@@ -920,10 +959,7 @@ export class MergeSqlTool extends BaseTool {
       const parsedFiles = [];
 
       for (const fileItem of this.files) {
-        const content =
-          fileItem.editedContent !== null
-            ? fileItem.editedContent
-            : await MergeSqlService.readFileContent(fileItem.file);
+        const content = fileItem.editedContent !== null ? fileItem.editedContent : await MergeSqlService.readFileContent(fileItem.file);
         const parsed = MergeSqlService.parseFile(content, fileItem.name);
         parsedFiles.push(parsed);
       }
@@ -946,16 +982,22 @@ export class MergeSqlTool extends BaseTool {
         this.result.validationSql || "",
         this.result.duplicates,
         this.result.report,
-        this.inputEditor?.getValue() || ""
+        this.inputEditor?.getValue() || "",
       );
 
       this.showResult();
       this.updateDuplicatesInsight();
       this.showSuccess("SQL files merged successfully!");
       this.handleTabSwitch("report");
+      UsageTracker.trackFeature("merge-sql", "merge");
+      this.trackAnalytics("merge_success", this.buildResultAnalyticsMeta({ duration_ms: Date.now() - startTime }));
     } catch (error) {
       console.error("Merge failed:", error);
       this.showError(`Failed to merge files: ${error.message}`);
+      this.trackAnalytics(
+        "merge_error",
+        UsageTracker.enrichErrorMeta(error, { input_mode: this.inputMode, file_count: this.files.length }),
+      );
     } finally {
       if (mergeBtn) {
         mergeBtn.disabled = false;
@@ -1025,7 +1067,7 @@ export class MergeSqlTool extends BaseTool {
       this.result.validationSql,
       this.result.duplicates,
       this.result.report,
-      this.inputEditor?.getValue() || ""
+      this.inputEditor?.getValue() || "",
     );
 
     this.showResult();
@@ -1047,6 +1089,8 @@ export class MergeSqlTool extends BaseTool {
       sqlRefreshBtn.disabled = true;
     }
 
+    const startTime = Date.now();
+
     try {
       const validationSql = MergeSqlService.buildValidationSqlFromMergedSql(mergedSql);
       if (this.validationSqlEditor) {
@@ -1063,22 +1107,21 @@ export class MergeSqlTool extends BaseTool {
         report,
       };
 
-      await IndexedDBManager.saveResults(
-        mergedSql,
-        "",
-        validationSql,
-        [],
-        report,
-        mergedSql
-      );
+      await IndexedDBManager.saveResults(mergedSql, "", validationSql, [], report, mergedSql);
 
       this.showResult();
       this.updateDuplicatesInsight();
       this.handleTabSwitch("report");
       this.showSuccess("Report and Validation SQL generated from merged SQL");
+      UsageTracker.trackFeature("merge-sql", "report_from_sql");
+      this.trackAnalytics(
+        "sql_mode_refresh_success",
+        this.buildResultAnalyticsMeta({ duration_ms: Date.now() - startTime, ...summarizeText(mergedSql, "input") }),
+      );
     } catch (error) {
       console.error("SQL mode refresh failed:", error);
       this.showError(`Failed to process merged SQL: ${error.message}`);
+      this.trackAnalytics("sql_mode_refresh_error", UsageTracker.enrichErrorMeta(error, { ...summarizeText(mergedSql, "input") }));
     } finally {
       if (sqlRefreshBtn) {
         sqlRefreshBtn.disabled = false;
@@ -1127,6 +1170,12 @@ export class MergeSqlTool extends BaseTool {
     if (editor) {
       const content = editor.getValue();
       this.copyToClipboard(content);
+      this.trackAnalytics("copy_sql", {
+        input_mode: this.inputMode,
+        tab: this.currentTab,
+        subtab: this.currentSubtab,
+        ...summarizeText(content, "output"),
+      });
     }
   }
 
@@ -1142,6 +1191,13 @@ export class MergeSqlTool extends BaseTool {
       if (content) {
         this.downloadFile(fileName, content);
         this.showSuccess(`Downloaded ${fileName}`);
+        this.trackAnalytics("download_sql", {
+          input_mode: this.inputMode,
+          tab: this.currentTab,
+          subtab: this.currentSubtab,
+          format: "single",
+          ...summarizeText(content, "output"),
+        });
       }
     }
   }
@@ -1172,6 +1228,12 @@ export class MergeSqlTool extends BaseTool {
 
     if (downloads.length > 0) {
       this.showSuccess(`Downloaded ${downloads.length} file${downloads.length > 1 ? "s" : ""}`);
+      this.trackAnalytics("download_sql", {
+        input_mode: this.inputMode,
+        format: "all",
+        file_count: downloads.length,
+        output_size: downloads.reduce((sum, item) => sum + String(item.content || "").length, 0),
+      });
     }
   }
 
@@ -1234,7 +1296,8 @@ export class MergeSqlTool extends BaseTool {
     }
 
     if (insightTitle) insightTitle.textContent = "Duplicate Queries Detected";
-    if (duplicatesText) duplicatesText.textContent = `${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"} detected`;
+    if (duplicatesText)
+      duplicatesText.textContent = `${this.result.duplicates.length} duplicate${this.result.duplicates.length === 1 ? "" : "s"} detected`;
     if (viewDuplicatesBtn) viewDuplicatesBtn.style.display = "";
     if (viewReportBtn) viewReportBtn.style.display = "none";
   }
@@ -1339,7 +1402,7 @@ export class MergeSqlTool extends BaseTool {
 
         // Only render columns that have at least one non-zero value
         const hasInsert = statementCounts.some((r) => (r.insert || 0) > 0);
-        const hasMerge  = statementCounts.some((r) => (r.merge  || 0) > 0);
+        const hasMerge = statementCounts.some((r) => (r.merge || 0) > 0);
         const hasUpdate = statementCounts.some((r) => (r.update || 0) > 0);
         const hasDelete = statementCounts.some((r) => (r.delete || 0) > 0);
         const activeColCount = 1 + [hasInsert, hasMerge, hasUpdate, hasDelete].filter(Boolean).length + 1; // name + active + total
@@ -1347,7 +1410,7 @@ export class MergeSqlTool extends BaseTool {
         const numCells = (r) => {
           let s = "";
           if (hasInsert) s += `<td>${r.insert || 0}</td>`;
-          if (hasMerge)  s += `<td>${r.merge  || 0}</td>`;
+          if (hasMerge) s += `<td>${r.merge || 0}</td>`;
           if (hasUpdate) s += `<td>${r.update || 0}</td>`;
           if (hasDelete) s += `<td>${r.delete || 0}</td>`;
           s += `<td>${r.total || 0}</td>`;
@@ -1911,14 +1974,14 @@ export class MergeSqlTool extends BaseTool {
       }
 
       const tHasInsert = report.statementCounts.some((r) => (r.insert || 0) > 0);
-      const tHasMerge  = report.statementCounts.some((r) => (r.merge  || 0) > 0);
+      const tHasMerge = report.statementCounts.some((r) => (r.merge || 0) > 0);
       const tHasUpdate = report.statementCounts.some((r) => (r.update || 0) > 0);
       const tHasDelete = report.statementCounts.some((r) => (r.delete || 0) > 0);
 
       const fmtCounts = (r) => {
         const parts = [];
         if (tHasInsert) parts.push(`INS: ${r.insert || 0}`);
-        if (tHasMerge)  parts.push(`MRG: ${r.merge  || 0}`);
+        if (tHasMerge) parts.push(`MRG: ${r.merge || 0}`);
         if (tHasUpdate) parts.push(`UPD: ${r.update || 0}`);
         if (tHasDelete) parts.push(`DEL: ${r.delete || 0}`);
         parts.push(`Tot: ${r.total || 0}`);
@@ -1969,14 +2032,18 @@ export class MergeSqlTool extends BaseTool {
         const group = squadGroups.get(key);
         lines.push(`*${group.displayName}*`);
         for (const row of group.features) {
-          lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          lines.push(
+            `${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`,
+          );
         }
         lines.push("");
       }
       if (noSquadFeatures.length > 0) {
         lines.push("*Other*");
         for (const row of noSquadFeatures) {
-          lines.push(`${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`);
+          lines.push(
+            `${row.feature || "Feature not Mentioned"} → INS: ${row.insert} | MRG: ${row.merge} | UPD: ${row.update} | Tot: ${row.total}`,
+          );
         }
         lines.push("");
       }
@@ -2031,7 +2098,7 @@ export class MergeSqlTool extends BaseTool {
     reportContent.style.maxHeight = "none";
 
     const computedBg = window.getComputedStyle(reportContent).backgroundColor;
-    const bgColor = (computedBg && computedBg !== "rgba(0, 0, 0, 0)") ? computedBg : "#ffffff";
+    const bgColor = computedBg && computedBg !== "rgba(0, 0, 0, 0)" ? computedBg : "#ffffff";
 
     try {
       const canvas = await html2canvas(reportContent, {

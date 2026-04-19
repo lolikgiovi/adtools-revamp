@@ -539,8 +539,91 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'run-query'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "run-query-summary",
+    name: "Run Query Summary",
+    query: `WITH rq AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.env'), '-') AS env,
+    COALESCE(json_extract(e.properties, '$.source'), '-') AS source,
+    CAST(COALESCE(json_extract(e.properties, '$.sql_size'), json_extract(e.properties, '$.sql_length'), json_extract(e.properties, '$.sql_len'), 0) AS INTEGER) AS sql_size,
+    CAST(COALESCE(json_extract(e.properties, '$.sql_bytes'), 0) AS INTEGER) AS sql_bytes,
+    COALESCE(json_extract(e.properties, '$.over_size_limit'), 0) AS over_size_limit
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'run-query'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT env,
+  source,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action = 'run_started' THEN 1 ELSE 0 END) AS runs_started,
+  SUM(CASE WHEN action = 'run_success' THEN 1 ELSE 0 END) AS runs_success,
+  SUM(CASE WHEN action = 'run_error' THEN 1 ELSE 0 END) AS run_errors,
+  ROUND(AVG(CASE WHEN sql_size > 0 THEN sql_size END), 1) AS avg_sql_chars,
+  MAX(sql_bytes) AS max_sql_bytes,
+  SUM(CASE WHEN over_size_limit IN (1, '1', 'true') THEN 1 ELSE 0 END) AS oversize_runs,
+  MAX(created_time) AS last_seen
+FROM rq
+GROUP BY env, source
+ORDER BY runs_started DESC, events DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
+    id: "run-batch",
+    name: "Run Batch",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      e.action,
+      COALESCE(json_extract(e.properties, '$.env'), '-') AS env,
+      COALESCE(json_extract(e.properties, '$.batch_name_length'), '-') AS batch_name_len,
+      COALESCE(json_extract(e.properties, '$.job_name_length'), '-') AS job_name_len,
+      COALESCE(json_extract(e.properties, '$.has_confluence_link'), '-') AS confluence_link,
+      COALESCE(json_extract(e.properties, '$.build_number'), json_extract(e.properties, '$.buildNumber'), '-') AS build_number
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'run-batch'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      ORDER BY e.created_time DESC
+      LIMIT 100`,
+  },
+  {
+    id: "run-batch-summary",
+    name: "Run Batch Summary",
+    query: `WITH rb AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.env'), '-') AS env,
+    COALESCE(json_extract(e.properties, '$.has_confluence_link'), 0) AS has_confluence_link
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'run-batch'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT env,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action = 'run_started' THEN 1 ELSE 0 END) AS runs_started,
+  SUM(CASE WHEN action = 'run_success' THEN 1 ELSE 0 END) AS runs_success,
+  SUM(CASE WHEN action = 'run_error' THEN 1 ELSE 0 END) AS run_errors,
+  SUM(CASE WHEN action = 'config_saved' THEN 1 ELSE 0 END) AS configs_saved,
+  SUM(CASE WHEN has_confluence_link IN (1, '1', 'true') THEN 1 ELSE 0 END) AS configs_with_confluence,
+  MAX(created_time) AS last_seen
+FROM rb
+GROUP BY env
+ORDER BY runs_started DESC, events DESC, last_seen DESC
+LIMIT 100`,
   },
   {
     id: "json-tools",
@@ -556,8 +639,40 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'json-tools'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "json-tools-summary",
+    name: "JSON Tool Summary",
+    query: `WITH jt AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.action'), e.action) AS process_action,
+    COALESCE(json_extract(e.properties, '$.top_level_type'), '-') AS top_level_type,
+    CAST(COALESCE(json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size,
+    CAST(COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.match_count'), 0) AS INTEGER) AS result_count
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'json-tools'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT process_action,
+  top_level_type,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  ROUND(AVG(CASE WHEN input_size > 0 THEN input_size END), 1) AS avg_input_size,
+  ROUND(AVG(CASE WHEN output_size > 0 THEN output_size END), 1) AS avg_output_size,
+  MAX(result_count) AS max_result_count,
+  MAX(created_time) AS last_seen
+FROM jt
+GROUP BY process_action, top_level_type
+ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
   },
   {
     id: "base64-tools",
@@ -573,8 +688,45 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'base64-tools'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "base64-summary",
+    name: "Base64 Summary",
+    query: `WITH b64 AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+    COALESCE(json_extract(e.properties, '$.input_mode'), '-') AS input_mode,
+    COALESCE(json_extract(e.properties, '$.output_format'), json_extract(e.properties, '$.format'), '-') AS output_format,
+    COALESCE(json_extract(e.properties, '$.output_kind'), '-') AS output_kind,
+    CAST(COALESCE(json_extract(e.properties, '$.file_count'), 0) AS INTEGER) AS file_count,
+    CAST(COALESCE(json_extract(e.properties, '$.total_size'), json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'base64-tools'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT action,
+  mode,
+  input_mode,
+  output_format,
+  output_kind,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(file_count) AS files,
+  ROUND(AVG(CASE WHEN input_size > 0 THEN input_size END), 1) AS avg_input_size,
+  ROUND(AVG(CASE WHEN output_size > 0 THEN output_size END), 1) AS avg_output_size,
+  MAX(created_time) AS last_seen
+FROM b64
+GROUP BY action, mode, input_mode, output_format, output_kind
+ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
   },
   {
     id: "qr-tools",
@@ -591,8 +743,93 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'qr-tools'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "qr-summary",
+    name: "QR Summary",
+    query: `WITH qr AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+    CAST(COALESCE(json_extract(e.properties, '$.content_length'), 0) AS INTEGER) AS content_length,
+    CAST(COALESCE(json_extract(e.properties, '$.ratio'), 0) AS REAL) AS contrast_ratio,
+    CAST(COALESCE(json_extract(e.properties, '$.size'), 0) AS INTEGER) AS qr_size
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'qr-tools'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT action,
+  mode,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  ROUND(AVG(CASE WHEN content_length > 0 THEN content_length END), 1) AS avg_content_length,
+  ROUND(AVG(CASE WHEN contrast_ratio > 0 THEN contrast_ratio END), 2) AS avg_contrast,
+  MAX(qr_size) AS max_size,
+  MAX(created_time) AS last_seen
+FROM qr
+GROUP BY action, mode
+ORDER BY events DESC, last_seen DESC
+LIMIT 100`,
+  },
+  {
+    id: "tlv-viewer",
+    name: "TLV Viewer",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      e.action,
+      COALESCE(json_extract(e.properties, '$.format'), '-') AS format,
+      COALESCE(json_extract(e.properties, '$.node_count'), json_extract(e.properties, '$.nodes'), 0) AS nodes,
+      COALESCE(json_extract(e.properties, '$.max_depth'), '-') AS depth,
+      COALESCE(json_extract(e.properties, '$.crc_present'), '-') AS crc_present,
+      COALESCE(json_extract(e.properties, '$.crc_valid'), '-') AS crc_valid,
+      COALESCE(json_extract(e.properties, '$.validation_count'), 0) AS validation_count,
+      COALESCE(json_extract(e.properties, '$.input_size'), '-') AS input_size
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'tlv-viewer'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      ORDER BY e.created_time DESC
+      LIMIT 100`,
+  },
+  {
+    id: "tlv-summary",
+    name: "TLV Summary",
+    query: `WITH tlv AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.format'), '-') AS format,
+    CAST(COALESCE(json_extract(e.properties, '$.node_count'), json_extract(e.properties, '$.nodes'), 0) AS INTEGER) AS node_count,
+    CAST(COALESCE(json_extract(e.properties, '$.max_depth'), 0) AS INTEGER) AS max_depth,
+    CAST(COALESCE(json_extract(e.properties, '$.validation_count'), 0) AS INTEGER) AS validation_count,
+    COALESCE(json_extract(e.properties, '$.crc_valid'), 0) AS crc_valid
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'tlv-viewer'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT format,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action = 'parse' THEN 1 ELSE 0 END) AS parses,
+  SUM(CASE WHEN action = 'parse_error' THEN 1 ELSE 0 END) AS parse_errors,
+  ROUND(AVG(CASE WHEN node_count > 0 THEN node_count END), 1) AS avg_nodes,
+  MAX(max_depth) AS max_depth,
+  SUM(validation_count) AS validation_items,
+  SUM(CASE WHEN crc_valid IN (1, '1', 'true') THEN 1 ELSE 0 END) AS valid_crc,
+  MAX(created_time) AS last_seen
+FROM tlv
+GROUP BY format
+ORDER BY parses DESC, events DESC, last_seen DESC
+LIMIT 100`,
   },
   {
     id: "image-checker",
@@ -609,8 +846,43 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id = 'check-image'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "image-checker-summary",
+    name: "Image Check Summary",
+    query: `WITH img AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    CAST(COALESCE(json_extract(e.properties, '$.image_count'), json_extract(e.properties, '$.images'), 0) AS INTEGER) AS image_count,
+    CAST(COALESCE(json_extract(e.properties, '$.env_count'), json_extract(e.properties, '$.envs'), 0) AS INTEGER) AS env_count,
+    CAST(COALESCE(json_extract(e.properties, '$.success_count'), 0) AS INTEGER) AS success_count,
+    CAST(COALESCE(json_extract(e.properties, '$.failed_count'), 0) AS INTEGER) AS failed_count,
+    CAST(COALESCE(json_extract(e.properties, '$.timeout_count'), 0) AS INTEGER) AS timeout_count,
+    CAST(COALESCE(json_extract(e.properties, '$.duration_ms'), 0) AS INTEGER) AS duration_ms
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'check-image'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT action,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(image_count) AS images,
+  SUM(env_count) AS envs,
+  SUM(success_count) AS successes,
+  SUM(failed_count) AS failures,
+  SUM(timeout_count) AS timeouts,
+  ROUND(AVG(CASE WHEN duration_ms > 0 THEN duration_ms END), 1) AS avg_duration_ms,
+  MAX(created_time) AS last_seen
+FROM img
+GROUP BY action
+ORDER BY events DESC, last_seen DESC
+LIMIT 100`,
   },
   {
     id: "html-splunk",
@@ -624,8 +896,41 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id IN ('html-template', 'splunk-template')
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "template-editors-summary",
+    name: "Template Editors",
+    query: `WITH tpl AS (
+  SELECT e.created_time,
+    u.email,
+    e.feature_id,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.env'), '-') AS env,
+    CAST(COALESCE(json_extract(e.properties, '$.html_size'), json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size,
+    CAST(COALESCE(json_extract(e.properties, '$.field_count'), json_extract(e.properties, '$.variable_count'), 0) AS INTEGER) AS field_count
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id IN ('html-template', 'splunk-template')
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT feature_id AS tool,
+  action,
+  env,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  ROUND(AVG(CASE WHEN input_size > 0 THEN input_size END), 1) AS avg_input_size,
+  ROUND(AVG(CASE WHEN output_size > 0 THEN output_size END), 1) AS avg_output_size,
+  MAX(field_count) AS max_fields,
+  MAX(created_time) AS last_seen
+FROM tpl
+GROUP BY feature_id, action, env
+ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
   },
   {
     id: "uuid-sql",
@@ -641,8 +946,153 @@ LIMIT 150`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE e.feature_id IN ('uuid-generator', 'sql-in-clause')
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "uuid-sql-summary",
+    name: "UUID & SQL Summary",
+    query: `WITH us AS (
+  SELECT e.created_time,
+    u.email,
+    e.feature_id,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.format'), '-') AS format,
+    COALESCE(json_extract(e.properties, '$.type'), '-') AS copy_type,
+    CAST(COALESCE(json_extract(e.properties, '$.quantity'), json_extract(e.properties, '$.count'), 0) AS INTEGER) AS quantity,
+    CAST(COALESCE(json_extract(e.properties, '$.input_line_count'), json_extract(e.properties, '$.line_count'), 0) AS INTEGER) AS line_count,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id IN ('uuid-generator', 'sql-in-clause')
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT feature_id AS tool,
+  action,
+  format,
+  copy_type,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(quantity) AS total_quantity,
+  SUM(line_count) AS total_lines,
+  ROUND(AVG(CASE WHEN output_size > 0 THEN output_size END), 1) AS avg_output_size,
+  MAX(created_time) AS last_seen
+FROM us
+GROUP BY feature_id, action, format, copy_type
+ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
+    id: "merge-sql",
+    name: "Merge SQL",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      e.action,
+      COALESCE(json_extract(e.properties, '$.input_mode'), '-') AS input_mode,
+      COALESCE(json_extract(e.properties, '$.file_count'), 0) AS files,
+      COALESCE(json_extract(e.properties, '$.table_count'), 0) AS tables,
+      COALESCE(json_extract(e.properties, '$.squad_count'), 0) AS squads,
+      COALESCE(json_extract(e.properties, '$.feature_count'), 0) AS features,
+      COALESCE(json_extract(e.properties, '$.duplicate_count'), 0) AS duplicates,
+      COALESCE(json_extract(e.properties, '$.dangerous_statement_count'), 0) AS dangerous,
+      COALESCE(json_extract(e.properties, '$.duration_ms'), '-') AS duration_ms
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'merge-sql'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      ORDER BY e.created_time DESC
+      LIMIT 100`,
+  },
+  {
+    id: "merge-sql-summary",
+    name: "Merge SQL Summary",
+    query: `WITH ms AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.input_mode'), '-') AS input_mode,
+    CAST(COALESCE(json_extract(e.properties, '$.file_count'), 0) AS INTEGER) AS file_count,
+    CAST(COALESCE(json_extract(e.properties, '$.table_count'), 0) AS INTEGER) AS table_count,
+    CAST(COALESCE(json_extract(e.properties, '$.duplicate_count'), 0) AS INTEGER) AS duplicate_count,
+    CAST(COALESCE(json_extract(e.properties, '$.dangerous_statement_count'), 0) AS INTEGER) AS dangerous_statement_count,
+    CAST(COALESCE(json_extract(e.properties, '$.duration_ms'), 0) AS INTEGER) AS duration_ms
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'merge-sql'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT input_mode,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action = 'merge_success' THEN 1 ELSE 0 END) AS merges,
+  SUM(CASE WHEN action LIKE '%error' THEN 1 ELSE 0 END) AS errors,
+  ROUND(AVG(CASE WHEN file_count > 0 THEN file_count END), 1) AS avg_files,
+  ROUND(AVG(CASE WHEN table_count > 0 THEN table_count END), 1) AS avg_tables,
+  SUM(duplicate_count) AS duplicates,
+  SUM(dangerous_statement_count) AS dangerous_statements,
+  ROUND(AVG(CASE WHEN duration_ms > 0 THEN duration_ms END), 1) AS avg_duration_ms,
+  MAX(created_time) AS last_seen
+FROM ms
+GROUP BY input_mode
+ORDER BY merges DESC, events DESC, last_seen DESC
+LIMIT 100`,
+  },
+  {
+    id: "master-lockey",
+    name: "Master Lockey",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      e.action,
+      COALESCE(json_extract(e.properties, '$.tab'), '-') AS tab,
+      COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+      COALESCE(json_extract(e.properties, '$.domain'), '-') AS domain,
+      COALESCE(json_extract(e.properties, '$.result_count'), json_extract(e.properties, '$.results'), '-') AS results,
+      COALESCE(json_extract(e.properties, '$.lockey_count'), '-') AS lockeys,
+      COALESCE(json_extract(e.properties, '$.screen_count'), '-') AS screens
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'master-lockey'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      ORDER BY e.created_time DESC
+      LIMIT 100`,
+  },
+  {
+    id: "master-lockey-summary",
+    name: "Lockey Summary",
+    query: `WITH ml AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.domain'), '-') AS domain,
+    COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+    CAST(COALESCE(json_extract(e.properties, '$.result_count'), json_extract(e.properties, '$.results'), 0) AS INTEGER) AS result_count,
+    CAST(COALESCE(json_extract(e.properties, '$.lockey_count'), 0) AS INTEGER) AS lockey_count,
+    CAST(COALESCE(json_extract(e.properties, '$.screen_count'), 0) AS INTEGER) AS screen_count
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'master-lockey'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT domain,
+  mode,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action LIKE '%search%' THEN 1 ELSE 0 END) AS searches,
+  SUM(CASE WHEN action LIKE '%copy%' THEN 1 ELSE 0 END) AS copies,
+  MAX(result_count) AS max_results,
+  MAX(lockey_count) AS max_lockeys,
+  MAX(screen_count) AS max_screens,
+  MAX(created_time) AS last_seen
+FROM ml
+GROUP BY domain, mode
+ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
   },
 ];
 
@@ -921,7 +1371,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM usage_log
             WHERE user_email != '${OWNER_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', 'start of day')`,
-          "0"
+          "0",
         ),
         context: "People with live usage today",
       },
@@ -935,7 +1385,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM usage_log
             WHERE user_email != '${OWNER_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')`,
-          "0"
+          "0",
         ),
         context: "People with live usage in the last 7 days",
       },
@@ -950,7 +1400,7 @@ async function executeOverviewQuery(env, cacheKey) {
             WHERE user_email != '${OWNER_EMAIL}'
               AND action = 'open'
               AND created_time >= datetime('now', '+7 hours', '-7 days')`,
-          "0"
+          "0",
         ),
         context: "Shell-level tool open events",
       },
@@ -964,7 +1414,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM device_usage
             WHERE user_email != '${OWNER_EMAIL}'
               AND updated_time >= datetime('now', '+7 hours', '-7 days')`,
-          "0"
+          "0",
         ),
         context: "Aggregated device usage counts",
       },
@@ -978,7 +1428,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM error_events
             WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-1 day')`,
-          "0"
+          "0",
         ),
         context: "Immediate frontend error reports",
       },
@@ -992,7 +1442,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM error_events
             WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')`,
-          "0"
+          "0",
         ),
         context: "Users with uncaught errors",
       },
@@ -1009,7 +1459,7 @@ async function executeOverviewQuery(env, cacheKey) {
             GROUP BY tool_id
             ORDER BY SUM(count) DESC
             LIMIT 1`,
-          "-"
+          "-",
         ),
         context: "Tool with the largest aggregated action count",
       },
@@ -1026,7 +1476,7 @@ async function executeOverviewQuery(env, cacheKey) {
             GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
             ORDER BY COUNT(*) DESC, MAX(created_time) DESC
             LIMIT 1`,
-          "-"
+          "-",
         ),
         context: "Top uncaught error cluster",
       },

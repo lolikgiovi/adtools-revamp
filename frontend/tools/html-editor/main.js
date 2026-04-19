@@ -9,6 +9,7 @@ import MinifyWorker from "./minify.worker.js?worker";
 import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
@@ -43,6 +44,12 @@ class HTMLTemplateTool extends BaseTool {
 
   render() {
     return HTMLTemplateToolTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("html-template", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   async onMount() {
@@ -170,7 +177,7 @@ class HTMLTemplateTool extends BaseTool {
         if (action) {
           await action.run();
           this.renderPreview(this.editor.getValue());
-          UsageTracker.trackEvent("html-template", "format_action");
+          this.trackAnalytics("format_action", summarizeText(this.editor.getValue(), "html"));
         }
       });
     }
@@ -180,7 +187,7 @@ class HTMLTemplateTool extends BaseTool {
         const html = this.editor.getValue();
         btnMinify.disabled = true;
         this.minifyWorker.postMessage({ type: "minify", html });
-        UsageTracker.trackEvent("html-template", "minify_action");
+        this.trackAnalytics("minify_action", summarizeText(html, "html"));
       });
     }
 
@@ -247,6 +254,10 @@ class HTMLTemplateTool extends BaseTool {
           }
         }
         if (modal) modal.style.display = "block";
+        this.trackAnalytics("vtl_extract", {
+          variable_count: vars.length,
+          ...summarizeText(html, "html"),
+        });
       });
     }
 
@@ -286,6 +297,7 @@ class HTMLTemplateTool extends BaseTool {
         try {
           await navigator.clipboard.writeText(this.editor.getValue());
           this.showSuccess("HTML copied");
+          this.trackAnalytics("copy_html", summarizeText(this.editor.getValue(), "html"));
         } catch (e) {
           this.showError("Copy failed");
         }
@@ -305,6 +317,7 @@ class HTMLTemplateTool extends BaseTool {
               this.editor.setValue(text);
             }
             this.renderPreview(this.editor.getValue());
+            this.trackAnalytics("paste_html", summarizeText(text, "html"));
           }
         } catch (e) {
           this.showError("Paste failed");
@@ -319,6 +332,7 @@ class HTMLTemplateTool extends BaseTool {
           localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", "");
         } catch (_) {}
         this.renderPreview("");
+        this.trackAnalytics("clear_html");
       });
     }
 
@@ -534,6 +548,7 @@ class HTMLTemplateTool extends BaseTool {
     } catch (_) {}
 
     this.showSuccess("HTML file imported successfully");
+    this.trackAnalytics("import_html", summarizeText(content, "html"));
   }
 
   initializeResizer() {

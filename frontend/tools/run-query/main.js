@@ -4,6 +4,7 @@ import { JenkinsRunnerService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -76,6 +77,12 @@ export class JenkinsRunner extends BaseTool {
 
   render() {
     return JenkinsRunnerTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("run-query", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   /**
@@ -1627,7 +1634,7 @@ export class JenkinsRunner extends BaseTool {
 
           // Track usage of Save as Template action
           try {
-          UsageTracker.trackEvent("run-query", "history_save_as_template");
+            UsageTracker.trackEvent("run-query", "history_save_as_template");
           } catch (_) {}
         }
       });
@@ -2390,8 +2397,22 @@ export class JenkinsRunner extends BaseTool {
       if (!safety.ok) {
         statusEl.textContent = safety.message;
         this.showError("Unsafe SQL");
+        this.trackAnalytics("validation_error", {
+          type: "unsafe_sql",
+          env,
+          source,
+          ...summarizeText(sql, "sql"),
+        });
         return;
       }
+
+      this.trackAnalytics("run_started", {
+        env,
+        source,
+        over_size_limit: totalBytes > MAX_SQL_BYTES,
+        sql_bytes: totalBytes,
+        ...summarizeText(sql, "sql"),
+      });
 
       // If the SQL is oversize, allow the user to preview and split first
       if (totalBytes > MAX_SQL_BYTES) {

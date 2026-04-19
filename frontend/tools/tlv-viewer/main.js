@@ -3,6 +3,7 @@ import { TLVViewerService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import "./styles.css";
 
 class TLVViewer extends BaseTool {
@@ -34,11 +35,18 @@ class TLVViewer extends BaseTool {
     return TLVViewerTemplate;
   }
 
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("tlv-viewer", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
+  }
+
   onMount() {
     this.bindToolEvents();
     this.restoreState();
     this.applyView(this.currentView);
     this.updateCopyButton();
+    this.trackAnalytics("mount", { view: this.currentView });
   }
 
   onUnmount() {
@@ -120,7 +128,9 @@ class TLVViewer extends BaseTool {
   }
 
   persistValue(key, value) {
-    try { localStorage.setItem(key, value || ""); } catch (_) {}
+    try {
+      localStorage.setItem(key, value || "");
+    } catch (_) {}
   }
 
   // ── Parsing ───────────────────────────────────────────────────────────
@@ -147,7 +157,15 @@ class TLVViewer extends BaseTool {
       this.renderResult(result);
       this.updateCopyButton();
       UsageTracker.trackFeature("tlv-viewer", "parse");
-      UsageTracker.trackEvent("tlv-viewer", "parse", { format: result.format, nodes: result.summary.nodeCount });
+      this.trackAnalytics("parse", {
+        format: result.format,
+        node_count: result.summary.nodeCount,
+        max_depth: result.summary.maxDepth,
+        crc_present: Boolean(result.crc?.present),
+        crc_valid: Boolean(result.crc?.valid),
+        validation_count: Array.isArray(result.validation) ? result.validation.length : 0,
+        ...summarizeText(input, "input"),
+      });
     } catch (error) {
       this.lastResult = null;
       this.renderEmpty();
@@ -254,20 +272,29 @@ class TLVViewer extends BaseTool {
       return;
     }
 
-    bar.innerHTML = result.validation.map((v) => {
-      const cls = v.level === "error" ? "validation-error" : "validation-warn";
-      const icon = v.level === "error" ? "✗" : "⚠";
-      return `<span class="tlv-validation-item ${cls}"><span class="tlv-validation-icon">${icon}</span> ${this.esc(v.message)}</span>`;
-    }).join("");
+    bar.innerHTML = result.validation
+      .map((v) => {
+        const cls = v.level === "error" ? "validation-error" : "validation-warn";
+        const icon = v.level === "error" ? "✗" : "⚠";
+        return `<span class="tlv-validation-item ${cls}"><span class="tlv-validation-icon">${icon}</span> ${this.esc(v.message)}</span>`;
+      })
+      .join("");
   }
 
   hideStatusBar() {
     const statusBar = this.container?.querySelector("#tlv-status-bar");
-    if (statusBar) { statusBar.style.display = "none"; }
+    if (statusBar) {
+      statusBar.style.display = "none";
+    }
     const crc = this.container?.querySelector("#tlv-crc-bar");
-    if (crc) { crc.className = "tlv-crc-status"; crc.textContent = ""; }
+    if (crc) {
+      crc.className = "tlv-crc-status";
+      crc.textContent = "";
+    }
     const val = this.container?.querySelector("#tlv-validation-bar");
-    if (val) { val.innerHTML = ""; }
+    if (val) {
+      val.innerHTML = "";
+    }
   }
 
   renderTableHead(format) {
@@ -290,7 +317,7 @@ class TLVViewer extends BaseTool {
 
     const renderLevel = (items) => `
       <ul class="tlv-tree-level">
-        ${items.map((node) => format === "qris" ? this.qrisTreeNode(node, renderLevel) : this.berTreeNode(node, renderLevel)).join("")}
+        ${items.map((node) => (format === "qris" ? this.qrisTreeNode(node, renderLevel) : this.berTreeNode(node, renderLevel))).join("")}
       </ul>
     `;
 
@@ -299,7 +326,9 @@ class TLVViewer extends BaseTool {
 
   qrisTreeNode(node, renderLevel) {
     const name = node.tagName ? `<span class="tlv-tree-name">${this.esc(node.tagName)}</span>` : "";
-    const annotation = node.annotation ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(node.tag, node.annotation)})</span>` : "";
+    const annotation = node.annotation
+      ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(node.tag, node.annotation)})</span>`
+      : "";
 
     if (node.constructed) {
       return `
@@ -357,13 +386,15 @@ class TLVViewer extends BaseTool {
     if (!rows || rows.length === 0) {
       return `<tr class="tlv-empty-row"><td colspan="10">No rows.</td></tr>`;
     }
-    return rows.map((r) => format === "qris" ? this.qrisTableRow(r) : this.berTableRow(r)).join("");
+    return rows.map((r) => (format === "qris" ? this.qrisTableRow(r) : this.berTableRow(r))).join("");
   }
 
   qrisTableRow(row) {
     const indent = `<span class="tlv-depth-indent"></span>`.repeat(row.depth);
     const value = row.value.length > 100 ? row.value.slice(0, 100) + "..." : row.value;
-    const annotation = row.annotation ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(row.tag, row.annotation)})</span>` : "";
+    const annotation = row.annotation
+      ? ` <span class="tlv-tree-annotation">(${this.formatAnnotation(row.tag, row.annotation)})</span>`
+      : "";
     return `
       <tr>
         <td>${row.rowIndex}</td>
@@ -410,6 +441,7 @@ class TLVViewer extends BaseTool {
     c.querySelectorAll(".tlv-view-tabs .tab-button").forEach((btn) => {
       btn.classList.toggle("active", btn.getAttribute("data-view") === view);
     });
+    this.trackAnalytics("view_switch", { view, has_result: Boolean(this.lastResult) });
   }
 
   // ── Actions ───────────────────────────────────────────────────────────
@@ -421,6 +453,7 @@ class TLVViewer extends BaseTool {
       if (!inputEl) return;
       inputEl.value = text || "";
       this.persistInputDebounced();
+      this.trackAnalytics("paste_input", summarizeText(text, "input"));
       this.parseCurrentInput();
     } catch (_) {
       this.showError("Failed to read clipboard");
@@ -442,6 +475,7 @@ class TLVViewer extends BaseTool {
 
     this.persistValue(this.storageKeys.format, formatEl.value);
     this.persistInputDebounced();
+    this.trackAnalytics("sample_loaded", { sample_type: type, format: formatEl.value });
     this.parseCurrentInput();
   }
 
@@ -466,6 +500,11 @@ class TLVViewer extends BaseTool {
     }
 
     await this.copyToClipboard(text);
+    this.trackAnalytics("copy_output", {
+      view: this.currentView,
+      format: this.lastResult.format,
+      ...summarizeText(text, "output"),
+    });
   }
 
   buildTableCopyText(rows, format) {
@@ -477,7 +516,7 @@ class TLVViewer extends BaseTool {
 
     const header = ["#", "depth", "offset", "class", "tag", "constructed", "length", "preview", "value_hex"].join("\t");
     const lines = rows.map((r) =>
-      [r.rowIndex, r.depth, r.offset, r.tagClass, r.tag, r.constructed ? "Y" : "N", r.length, r.valuePreview || "", r.valueHex].join("\t")
+      [r.rowIndex, r.depth, r.offset, r.tagClass, r.tag, r.constructed ? "Y" : "N", r.length, r.valuePreview || "", r.valueHex].join("\t"),
     );
     return [header, ...lines].join("\n");
   }

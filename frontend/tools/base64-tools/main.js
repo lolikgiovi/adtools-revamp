@@ -4,6 +4,7 @@ import { Base64ToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeFiles, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
 import JSZip from "jszip";
 import "./styles.css";
@@ -28,6 +29,12 @@ class Base64Tools extends BaseTool {
 
   render() {
     return Base64ToolsTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("base64-tools", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   async onMount() {
@@ -294,6 +301,11 @@ class Base64Tools extends BaseTool {
     }
 
     this.showInputFileContainer(mode);
+    this.trackAnalytics("file_upload", {
+      mode,
+      source: "tauri",
+      file_count: paths.length,
+    });
 
     if (this.eventBus) {
       this.eventBus.emit("notification:success", {
@@ -305,6 +317,7 @@ class Base64Tools extends BaseTool {
 
   switchMode(mode) {
     const container = this.validateContainer();
+    const previousMode = this.currentMode;
 
     this.currentMode = mode;
 
@@ -322,6 +335,10 @@ class Base64Tools extends BaseTool {
     sections.forEach((section) => {
       section.style.display = section.classList.contains(`${mode}-section`) ? "block" : "none";
     });
+
+    if (previousMode !== mode) {
+      this.trackAnalytics("mode_switch", { from_mode: previousMode, to_mode: mode });
+    }
   }
 
   async handleMultipleFileUpload(event, mode) {
@@ -339,12 +356,10 @@ class Base64Tools extends BaseTool {
       });
 
       // Track file upload for behavior analysis
-      const totalSize = filesToAdd.reduce((sum, f) => sum + f.size, 0);
-      UsageTracker.trackEvent("base64-tools", "file_upload", {
+      this.trackAnalytics("file_upload", {
         mode,
-        file_count: filesToAdd.length,
-        total_size: totalSize,
-        file_types: [...new Set(filesToAdd.map((f) => f.type || "unknown"))],
+        source: "web",
+        ...summarizeFiles(filesToAdd),
       });
     }
     this.showInputFileContainer(mode);
@@ -585,6 +600,12 @@ class Base64Tools extends BaseTool {
 
         this.updateOutputHeaderButtons("encode", false); // false = not multi-file
         this.showSuccess("Encoded to Base64!");
+        this.trackAnalytics("encode_success", {
+          input_mode: "file",
+          output_format: "data_uri",
+          output_size: dataUri.length,
+          ...summarizeFiles([file]),
+        });
       } catch (error) {
         UsageTracker.trackEvent("base64-tools", "encode_error", UsageTracker.enrichErrorMeta(error, { type: "file" }));
         this.showError("Failed to encode file to Base64");
@@ -612,6 +633,12 @@ class Base64Tools extends BaseTool {
         }
 
         this.updateOutputHeaderButtons("encode", false); // false = not multi-file
+        this.trackAnalytics("encode_success", {
+          input_mode: "text",
+          output_format: "base64",
+          output_size: encoded.length,
+          ...summarizeText(text, "input"),
+        });
       } catch (error) {
         this.showError("Failed to encode text to Base64");
         outputArea.value = "";
@@ -656,6 +683,12 @@ class Base64Tools extends BaseTool {
 
           // Enable copy button for text output
           this.updateOutputHeaderButtons("decode", false); // false = single file, text output
+          this.trackAnalytics("decode_success", {
+            input_mode: "text",
+            output_kind: "text",
+            output_size: decoded.length,
+            ...summarizeText(base64Text, "input"),
+          });
         } else {
           outputArea.value = "";
           outputArea.style.display = "none";
@@ -709,6 +742,12 @@ class Base64Tools extends BaseTool {
           }
 
           this.displayProcessedFiles(processedFiles, "decode");
+          this.trackAnalytics("decode_success", {
+            input_mode: "text",
+            output_kind: contentType,
+            output_size: bytes.length,
+            ...summarizeText(base64Text, "input"),
+          });
 
           // Disable copy button for binary output (single file showing as card)
           const copyBtn = container.querySelector("#decode-copy-btn");
@@ -833,6 +872,12 @@ class Base64Tools extends BaseTool {
 
     // Display processed files
     this.displayProcessedFiles(processedFiles, mode);
+    this.trackAnalytics(`${mode}_success`, {
+      input_mode: "multi_file",
+      output_file_count: processedFiles.length,
+      output_size: processedFiles.reduce((sum, file) => sum + (Number(file.size) || 0), 0),
+      ...summarizeFiles(selectedFilesForMode.map(([, data]) => data.file)),
+    });
   }
 
   async processFileForMultiple(file, mode) {
@@ -1239,6 +1284,12 @@ class Base64Tools extends BaseTool {
         const dateStr = this.getFormattedDate();
         this.downloadBlob(zipBlob, `decoded_b64_${dateStr}.zip`);
         this.showSuccess("Downloaded all files as ZIP");
+        UsageTracker.trackEvent("base64-tools", "download_result", {
+          mode,
+          format: "zip",
+          file_count: selectedFilesForMode.length,
+          output_size: zipBlob.size,
+        });
       } catch (error) {
         console.error("Failed to create ZIP:", error);
         this.showError("Failed to create ZIP file");
@@ -1256,10 +1307,12 @@ class Base64Tools extends BaseTool {
 
       const blob = new Blob([outputArea.value], { type: "text/plain" });
       this.downloadBlob(blob, "encoded.txt");
+      this.trackAnalytics("download_result", { mode, format: "txt", output_size: blob.size });
     } else {
       // For decode mode, check if we have a decoded blob
       if (this.decodedBlob) {
         this.downloadBlob(this.decodedBlob, this.decodedFilename || "decoded_file");
+        this.trackAnalytics("download_result", { mode, format: "file", output_size: this.decodedBlob.size || 0 });
       } else {
         const outputArea = container.querySelector("#decode-output");
         if (!outputArea || !outputArea.value.trim()) {
@@ -1269,6 +1322,7 @@ class Base64Tools extends BaseTool {
 
         const blob = new Blob([outputArea.value], { type: "text/plain" });
         this.downloadBlob(blob, "decoded.txt");
+        this.trackAnalytics("download_result", { mode, format: "txt", output_size: blob.size });
       }
     }
   }

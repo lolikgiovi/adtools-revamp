@@ -9,6 +9,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, getObjectShapeMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
@@ -42,6 +43,26 @@ class JSONTools extends BaseTool {
 
   render() {
     return JSONToolsTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("json-tools", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
+  }
+
+  trackProcessSuccess(action, input, output, meta = {}) {
+    let shapeMeta = {};
+    try {
+      shapeMeta = getObjectShapeMeta(JSON.parse(input));
+    } catch (_) {}
+    this.trackAnalytics("process_success", {
+      action,
+      ...shapeMeta,
+      ...summarizeText(input, "input"),
+      ...summarizeText(output, "output"),
+      ...meta,
+    });
   }
 
   async onMount() {
@@ -423,6 +444,7 @@ class JSONTools extends BaseTool {
     } else {
       this.showSuccess("JSON is valid ✅");
       this.outputEditor.setValue(res.result || "");
+      this.trackProcessSuccess("prettify", content, res.result || "");
     }
   }
 
@@ -435,6 +457,7 @@ class JSONTools extends BaseTool {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
+      this.trackProcessSuccess("minify", content, res.result || "");
     }
   }
 
@@ -447,6 +470,7 @@ class JSONTools extends BaseTool {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
+      this.trackProcessSuccess("stringify", content, res.result || "");
     }
   }
 
@@ -460,6 +484,7 @@ class JSONTools extends BaseTool {
     } else {
       this.outputEditor.setValue(res.result || "");
       this.clearErrors();
+      this.trackProcessSuccess("unstringify", content, res.result || "");
     }
   }
 
@@ -472,6 +497,7 @@ class JSONTools extends BaseTool {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
+      this.trackProcessSuccess("escape", content, res.result || "");
     }
   }
 
@@ -485,6 +511,7 @@ class JSONTools extends BaseTool {
     } else {
       this.outputEditor.setValue(res.result || "");
       this.clearErrors();
+      this.trackProcessSuccess("unescape", content, res.result || "");
     }
   }
 
@@ -499,6 +526,10 @@ class JSONTools extends BaseTool {
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
+      this.trackProcessSuccess("extract_keys", content, res.result || "", {
+        extract_type: extractType,
+        sort_order: sortOrder,
+      });
     }
   }
 
@@ -521,6 +552,15 @@ class JSONTools extends BaseTool {
 
     // Render the table
     this.renderTable();
+    const flattenedPairs = [];
+    this.flattenObject(this.validatedJson, "", flattenedPairs);
+    this.trackAnalytics("json_to_table_success", {
+      ...getObjectShapeMeta(this.validatedJson),
+      ...summarizeText(content, "input"),
+      row_count: flattenedPairs.length,
+      transposed: this.isTransposed,
+      sort_order: this.keySortOrder,
+    });
   }
 
   renderTable() {
@@ -570,6 +610,7 @@ class JSONTools extends BaseTool {
 
     // Re-render table with new transpose state
     this.renderTable();
+    this.trackAnalytics("table_transpose", { transposed: this.isTransposed });
   }
 
   toggleExpandTable() {
@@ -592,6 +633,7 @@ class JSONTools extends BaseTool {
       outputSection.classList.remove("expanded");
       expandBtn.textContent = "Expand";
     }
+    this.trackAnalytics("table_expand", { expanded: this.isExpanded });
   }
 
   searchTable(query) {
@@ -820,6 +862,7 @@ class JSONTools extends BaseTool {
         await writeHtml(html, this.generateTSVFromData());
         console.log("[Clipboard] Tauri writeHtml SUCCESS");
         this.showSuccess("Copied to clipboard!");
+        this.trackAnalytics("copy_table", { format: "html", runtime: "tauri", ...summarizeText(html, "output") });
         return;
       } catch (error) {
         console.warn("[Clipboard] Tauri clipboard failed, falling back to browser API:", error);
@@ -836,11 +879,13 @@ class JSONTools extends BaseTool {
       });
       await navigator.clipboard.write([clipboardItem]);
       this.showSuccess("Copied to clipboard!");
+      this.trackAnalytics("copy_table", { format: "html", runtime: "web", ...summarizeText(html, "output") });
     } catch (error) {
       // Final fallback to plain text TSV
       console.warn("HTML clipboard failed, falling back to TSV:", error);
       const tsv = this.generateTSVFromData();
       this.copyToClipboard(tsv);
+      this.trackAnalytics("copy_table", { format: "tsv_fallback", ...summarizeText(tsv, "output") });
     }
   }
 
@@ -974,7 +1019,10 @@ class JSONTools extends BaseTool {
       XLSX.writeFile(wb, filename);
 
       this.showSuccess(`Exported to ${filename}`);
-      UsageTracker.trackEvent("json-tools", "export_excel");
+      UsageTracker.trackEvent("json-tools", "export_excel", {
+        row_count: flattenedPairs.length,
+        top_level_type: getObjectShapeMeta(this.validatedJson).top_level_type,
+      });
     } catch (error) {
       console.error("Export failed:", error);
       this.showError("Failed to export to Excel");

@@ -5,6 +5,7 @@ import { SQLInClauseTemplate } from "./template.js";
 import { SQLInClauseService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import "./styles.css";
 
 class SQLInClauseTool extends BaseTool {
@@ -29,6 +30,12 @@ class SQLInClauseTool extends BaseTool {
 
   render() {
     return SQLInClauseTemplate;
+  }
+
+  trackAnalytics(event, meta = {}, debounceMs) {
+    try {
+      UsageTracker.trackEvent("sql-in-clause", event, cleanAnalyticsMeta(meta), debounceMs);
+    } catch (_) {}
   }
 
   async onMount() {
@@ -103,9 +110,7 @@ class SQLInClauseTool extends BaseTool {
         this.updateOutput();
 
         // Track format change for usage patterns
-        UsageTracker.trackEvent("sql-in-clause", "convert", {
-          format: this.format,
-        });
+        this.trackAnalytics("format_changed", this.buildAnalyticsMeta());
       });
     }
 
@@ -119,7 +124,10 @@ class SQLInClauseTool extends BaseTool {
       copyBtn.addEventListener("click", () => {
         const out = container.querySelector("#sqlInOutput");
         const text = out?.value || "";
-        if (text) this.copyToClipboard(text, copyBtn);
+        if (text) {
+          this.trackAnalytics("copy_output", this.buildAnalyticsMeta());
+          this.copyToClipboard(text, copyBtn);
+        }
       });
     }
 
@@ -134,10 +142,7 @@ class SQLInClauseTool extends BaseTool {
             this.showSuccess("Pasted from clipboard");
 
             // Track paste for input behavior
-            UsageTracker.trackEvent("sql-in-clause", "paste_input", {
-              length: text.length,
-              line_count: text.split("\n").length,
-            });
+            this.trackAnalytics("paste_input", summarizeText(text, "input"));
           } else {
             this.showError("Clipboard is empty");
           }
@@ -170,6 +175,18 @@ class SQLInClauseTool extends BaseTool {
     if (configRow) configRow.style.display = this.format === "select" ? "block" : "none";
   }
 
+  buildAnalyticsMeta() {
+    const raw = this.editor?.getValue() || "";
+    const output = this.container?.querySelector("#sqlInOutput")?.value || "";
+    return {
+      format: this.format,
+      has_table: Boolean(this.tableInput?.value?.trim()),
+      has_column: Boolean(this.columnInput?.value?.trim()),
+      ...summarizeText(raw, "input"),
+      ...summarizeText(output, "output"),
+    };
+  }
+
   updateOutput() {
     const raw = this.editor?.getValue() || "";
     const table = this.tableInput?.value || "";
@@ -184,6 +201,10 @@ class SQLInClauseTool extends BaseTool {
     const copyBtn = this.container.querySelector("#sqlInCopyBtn");
     if (copyBtn) {
       copyBtn.disabled = !result;
+    }
+
+    if (raw.trim()) {
+      this.trackAnalytics("convert", this.buildAnalyticsMeta(), 2000);
     }
   }
 }

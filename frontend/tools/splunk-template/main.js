@@ -8,6 +8,7 @@ import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
 import { formatVtlTemplate, minifyVtlTemplate, extractFieldsFromTemplate, splitByPipesSafely } from "./service.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import "./styles.css";
 import Handsontable from "handsontable";
 import "handsontable/dist/handsontable.full.css";
@@ -35,6 +36,12 @@ class SplunkVTLEditor extends BaseTool {
   }
   render() {
     return SplunkVTLEditorTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("splunk-template", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   async onMount() {
@@ -223,7 +230,11 @@ class SplunkVTLEditor extends BaseTool {
       const formatted = formatVtlTemplate(src);
       this.editor.setValue(formatted);
       this.updateFieldsTable();
-      UsageTracker.trackEvent("splunk-template", "format_action");
+      this.trackAnalytics("format_action", {
+        field_count: extractFieldsFromTemplate(formatted).length,
+        ...summarizeText(src, "input"),
+        ...summarizeText(formatted, "output"),
+      });
     });
 
     btnMinify?.addEventListener("click", () => {
@@ -231,13 +242,20 @@ class SplunkVTLEditor extends BaseTool {
       const minified = minifyVtlTemplate(src);
       this.editor.setValue(minified);
       this.updateFieldsTable();
-      UsageTracker.trackEvent("splunk-template", "minify_action");
+      this.trackAnalytics("minify_action", {
+        field_count: extractFieldsFromTemplate(minified).length,
+        ...summarizeText(src, "input"),
+        ...summarizeText(minified, "output"),
+      });
     });
 
     btnCopy?.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(this.editor.getValue());
-        UsageTracker.trackEvent("splunk-template", "copy_success");
+        this.trackAnalytics("copy_success", {
+          field_count: extractFieldsFromTemplate(this.editor.getValue()).length,
+          ...summarizeText(this.editor.getValue(), "output"),
+        });
       } catch (_) {}
     });
     btnPaste?.addEventListener("click", async () => {
@@ -252,6 +270,10 @@ class SplunkVTLEditor extends BaseTool {
             this.editor.setValue(text);
           }
           this.updateFieldsTable();
+          this.trackAnalytics("paste_template", {
+            field_count: extractFieldsFromTemplate(text).length,
+            ...summarizeText(text, "input"),
+          });
         }
       } catch (_) {}
     });
@@ -276,7 +298,7 @@ class SplunkVTLEditor extends BaseTool {
         this.table.setDataAtRowProp(idx, "value", "");
         this.table.setDataAtRowProp(idx, "functions", "");
         this.table.selectCell(idx, 0);
-        UsageTracker.trackEvent("splunk-template", "add_field");
+        this.trackAnalytics("add_field", { field_count: this.table.countRows() });
       } catch (_) {}
       this._suppressTableEdit = false;
     });

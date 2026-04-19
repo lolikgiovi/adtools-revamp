@@ -2,6 +2,7 @@ import { UUIDGeneratorTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta } from "../../core/AnalyticsMeta.js";
 import "./styles.css";
 
 class UUIDGenerator extends BaseTool {
@@ -24,9 +25,16 @@ class UUIDGenerator extends BaseTool {
     return UUIDGeneratorTemplate;
   }
 
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("uuid-generator", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
+  }
+
   onMount() {
     this.bindToolEvents();
     this.generateSingleUUID();
+    this.trackAnalytics("mount");
   }
 
   bindToolEvents() {
@@ -81,6 +89,7 @@ class UUIDGenerator extends BaseTool {
     if (copyBtn) {
       copyBtn.disabled = false;
     }
+    this.trackAnalytics("single_generate");
   }
 
   generateMultipleUUIDs() {
@@ -105,7 +114,7 @@ class UUIDGenerator extends BaseTool {
     }
 
     // Track bulk generation for usage insights
-    UsageTracker.trackEvent("uuid-generator", "bulk_generate", {
+    this.trackAnalytics("bulk_generate", {
       quantity: Math.min(quantity, 10000),
     });
   }
@@ -114,6 +123,7 @@ class UUIDGenerator extends BaseTool {
     const resultInput = document.getElementById("singleUuidResult");
     if (resultInput && resultInput.value) {
       UsageTracker.trackFeature("uuid-generator", "single");
+      this.trackAnalytics("copy_action", { type: "single", count: 1 });
       await this.copyToClipboard(resultInput.value);
     }
   }
@@ -122,7 +132,7 @@ class UUIDGenerator extends BaseTool {
     const resultTextarea = document.getElementById("multipleUuidResult");
     if (resultTextarea && resultTextarea.value) {
       UsageTracker.trackFeature("uuid-generator", "multiple");
-      UsageTracker.trackEvent("uuid-generator", "copy_action", {
+      this.trackAnalytics("copy_action", {
         type: "multiple",
         count: resultTextarea.value.split("\n").length,
       });

@@ -4,6 +4,7 @@ import { RunBatchService } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { cleanAnalyticsMeta } from "../../core/AnalyticsMeta.js";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../../core/Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -36,6 +37,12 @@ export class RunBatch extends BaseTool {
 
   render() {
     return RunBatchTemplate;
+  }
+
+  trackAnalytics(event, meta = {}) {
+    try {
+      UsageTracker.trackEvent("run-batch", event, cleanAnalyticsMeta(meta));
+    } catch (_) {}
   }
 
   async onMount() {
@@ -140,22 +147,25 @@ export class RunBatch extends BaseTool {
           const data = ev?.payload || {};
           const chunk = typeof data === "string" ? data : data.chunk || "";
           appendLog(chunk);
-        })
+        }),
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-error", (ev) => {
           const msg = String(ev?.payload || "Log stream error");
           this.showError(msg);
           statusEl.textContent = "Log stream error";
-        })
+        }),
       );
       this._logUnsubscribes.push(
         await listen("jenkins:log-complete", () => {
           statusEl.textContent = "Complete";
           try {
-            UsageTracker.trackEvent("run-batch", "run_success", { buildNumber: this.state.buildNumber || null });
+            this.trackAnalytics("run_success", {
+              build_number: this.state.buildNumber || null,
+              env: envSelect.value || "",
+            });
           } catch (_) {}
-        })
+        }),
       );
     };
 
@@ -275,7 +285,7 @@ export class RunBatch extends BaseTool {
             jobNameInput.value = cfg.jobName || "";
             toggleRunEnabled();
             try {
-              UsageTracker.trackEvent("run-batch", "config_loaded", { configId: id });
+              this.trackAnalytics("config_loaded", { has_config: Boolean(id) });
             } catch (_) {}
           }
         });
@@ -368,7 +378,11 @@ export class RunBatch extends BaseTool {
 
       try {
         statusEl.textContent = "Triggering batch job…";
-        UsageTracker.trackEvent("run-batch", "run_started", { env, batchName, jobName });
+        this.trackAnalytics("run_started", {
+          env,
+          batch_name_length: batchName.length,
+          job_name_length: jobName.length,
+        });
 
         await subscribeToLogs();
 
@@ -422,7 +436,14 @@ export class RunBatch extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Error: " + errorMapping(err);
         this.showError(errorMapping(err));
-        UsageTracker.trackEvent("run-batch", "run_error", { error: String(err) });
+        this.trackAnalytics(
+          "run_error",
+          UsageTracker.enrichErrorMeta(err, {
+            env,
+            batch_name_length: batchName.length,
+            job_name_length: jobName.length,
+          }),
+        );
 
         // Record history on error
         addHistoryEntry({
@@ -504,7 +525,11 @@ export class RunBatch extends BaseTool {
       statusEl.textContent = "Configuration saved";
 
       try {
-        UsageTracker.trackEvent("run-batch", "config_saved", { configId: newConfig.id });
+        this.trackAnalytics("config_saved", {
+          has_confluence_link: Boolean(confluenceLink),
+          batch_name_length: newConfig.batchName.length,
+          job_name_length: newConfig.jobName.length,
+        });
       } catch (_) {}
     });
 
@@ -530,7 +555,7 @@ export class RunBatch extends BaseTool {
         saveSavedConfigs(configs);
         renderSavedConfigs();
         try {
-          UsageTracker.trackEvent("run-batch", "config_deleted", { configId: _pendingDeleteId });
+          this.trackAnalytics("config_deleted", { has_config: true });
         } catch (_) {}
       }
       closeConfirmModal();
@@ -599,7 +624,11 @@ export class RunBatch extends BaseTool {
         closeEditModal();
         statusEl.textContent = "Configuration updated";
         try {
-          UsageTracker.trackEvent("run-batch", "config_updated", { configId: id });
+          this.trackAnalytics("config_updated", {
+            has_confluence_link: Boolean(confluenceLink),
+            batch_name_length: batchName.length,
+            job_name_length: jobName.length,
+          });
         } catch (_) {}
       }
     });
@@ -675,7 +704,7 @@ export class RunBatch extends BaseTool {
             ${h.buildUrl ? `<a href="#" class="rb-history-link" data-url="${escHtml(h.buildUrl)}">View Build</a>` : "-"}
           </td>
         </tr>
-      `
+      `,
         )
         .join("");
 
@@ -692,7 +721,7 @@ export class RunBatch extends BaseTool {
     renderSavedConfigs();
 
     try {
-      UsageTracker.trackEvent("run-batch", "mount");
+      this.trackAnalytics("mount", { saved_config_count: loadSavedConfigs().length });
     } catch (_) {}
   }
 
