@@ -218,6 +218,8 @@ describe('Analytics endpoints', () => {
     expect(ids).toContain('error-summary');
     expect(ids).toContain('errors');
     expect(ids).toContain('qq-table-usage');
+    expect(ids).toContain('compare-config');
+    expect(ids).toContain('cc-table-pairs');
   });
 
   it('uses Quick Query analytics fallbacks and table usage rollup queries', async () => {
@@ -256,6 +258,50 @@ describe('Analytics endpoints', () => {
 
     const recentSql = env.DB.executed.find((item) => item.sql.includes("$.has_attachments") && item.sql.includes("$.hasAttachments"));
     const rollupSql = env.DB.executed.find((item) => item.sql.includes("WITH qq AS") && item.sql.includes("attachment_generations"));
+    expect(recentResponse.status).toBe(200);
+    expect(rollupResponse.status).toBe(200);
+    expect(recentSql).toBeTruthy();
+    expect(rollupSql).toBeTruthy();
+  });
+
+  it('uses Compare Config source and table pair dashboard queries', async () => {
+    const login = await worker.fetch(
+      new Request('http://localhost/dashboard/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'testpassword123' }),
+      }),
+      env
+    );
+    const { token } = await login.json();
+
+    const recentResponse = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'compare-config' }),
+      }),
+      env
+    );
+    const rollupResponse = await worker.fetch(
+      new Request('http://localhost/dashboard/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: 'cc-table-pairs' }),
+      }),
+      env
+    );
+
+    const recentSql = env.DB.executed.find(
+      (item) => item.sql.includes("$.source_a_env") && item.sql.includes("$.source_b_table")
+    );
+    const rollupSql = env.DB.executed.find((item) => item.sql.includes("WITH cc AS") && item.sql.includes("GROUP BY env_a"));
     expect(recentResponse.status).toBe(200);
     expect(rollupResponse.status).toBe(200);
     expect(recentSql).toBeTruthy();

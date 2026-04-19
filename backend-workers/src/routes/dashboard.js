@@ -456,6 +456,77 @@ LIMIT 150`,
       LIMIT 100`,
   },
   {
+    id: "compare-config",
+    name: "Compare Config",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      SUBSTR(u.email, 1, INSTR(u.email, '@') - 1) AS user,
+      d.platform,
+      COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+      COALESCE(json_extract(e.properties, '$.source_a_env'), '-') AS env_a,
+      COALESCE(json_extract(e.properties, '$.source_a_table'), json_extract(e.properties, '$.table_name'), '-') AS table_a,
+      COALESCE(json_extract(e.properties, '$.source_b_env'), '-') AS env_b,
+      COALESCE(json_extract(e.properties, '$.source_b_table'), json_extract(e.properties, '$.table_name'), '-') AS table_b,
+      COALESCE(json_extract(e.properties, '$.source_a_type'), '-') AS type_a,
+      COALESCE(json_extract(e.properties, '$.source_b_type'), '-') AS type_b,
+      COALESCE(json_extract(e.properties, '$.source_a_query_mode'), '-') AS mode_a,
+      COALESCE(json_extract(e.properties, '$.source_b_query_mode'), '-') AS mode_b,
+      COALESCE(json_extract(e.properties, '$.rows_compared'), 0) AS rows_compared,
+      COALESCE(json_extract(e.properties, '$.rows_match'), 0) AS rows_match,
+      COALESCE(json_extract(e.properties, '$.rows_differ'), 0) AS rows_differ,
+      COALESCE(json_extract(e.properties, '$.rows_only_a'), 0) AS only_a,
+      COALESCE(json_extract(e.properties, '$.rows_only_b'), 0) AS only_b,
+      COALESCE(json_extract(e.properties, '$.pk_fields'), 0) AS pk_fields,
+      COALESCE(json_extract(e.properties, '$.compare_fields'), 0) AS compare_fields
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE e.feature_id = 'compare-config'
+        AND e.action = 'comparison_success'
+        AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+      ORDER BY e.created_time DESC
+      LIMIT 150`,
+  },
+  {
+    id: "cc-table-pairs",
+    name: "CC Table Pairs",
+    query: `WITH cc AS (
+  SELECT e.created_time,
+    u.email,
+    COALESCE(json_extract(e.properties, '$.mode'), '-') AS mode,
+    COALESCE(json_extract(e.properties, '$.source_a_env'), '-') AS env_a,
+    COALESCE(json_extract(e.properties, '$.source_a_table'), json_extract(e.properties, '$.table_name'), '-') AS table_a,
+    COALESCE(json_extract(e.properties, '$.source_b_env'), '-') AS env_b,
+    COALESCE(json_extract(e.properties, '$.source_b_table'), json_extract(e.properties, '$.table_name'), '-') AS table_b,
+    CAST(COALESCE(json_extract(e.properties, '$.rows_compared'), 0) AS INTEGER) AS rows_compared,
+    CAST(COALESCE(json_extract(e.properties, '$.rows_differ'), 0) AS INTEGER) AS rows_differ,
+    CAST(COALESCE(json_extract(e.properties, '$.rows_only_a'), 0) AS INTEGER) AS rows_only_a,
+    CAST(COALESCE(json_extract(e.properties, '$.rows_only_b'), 0) AS INTEGER) AS rows_only_b
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'compare-config'
+    AND e.action = 'comparison_success'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT env_a,
+  table_a,
+  env_b,
+  table_b,
+  mode,
+  COUNT(*) AS comparisons,
+  COUNT(DISTINCT email) AS users,
+  ROUND(AVG(rows_compared), 1) AS avg_rows,
+  SUM(rows_differ) AS rows_differ,
+  SUM(rows_only_a) AS rows_only_a,
+  SUM(rows_only_b) AS rows_only_b,
+  MAX(created_time) AS last_seen
+FROM cc
+WHERE COALESCE(table_a, '') != '' OR COALESCE(table_b, '') != ''
+GROUP BY env_a, table_a, env_b, table_b, mode
+ORDER BY comparisons DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
     id: "run-query",
     name: "Run Query",
     query: `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,

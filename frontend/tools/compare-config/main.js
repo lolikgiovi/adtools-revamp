@@ -24,6 +24,11 @@ import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
 import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
 import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
 import {
+  buildCompareConfigSuccessMeta,
+  buildUnifiedSourceAnalytics,
+  cleanCompareConfigAnalyticsMeta,
+} from "./lib/compare-config-analytics.js";
+import {
   syncPkFieldsToCompareFields,
   syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
@@ -162,6 +167,13 @@ class CompareConfigTool extends BaseTool {
 
   render() {
     return CompareConfigTemplate;
+  }
+
+  trackCompareConfigEvent(event, meta = {}, { flush = false } = {}) {
+    UsageTracker.trackEvent("compare-config", event, cleanCompareConfigAnalyticsMeta(meta));
+    if (flush) {
+      void UsageTracker.flushBatchNow();
+    }
   }
 
   async onMount() {
@@ -2278,18 +2290,31 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track rich success event for behavioral insights
-      UsageTracker.trackEvent("compare-config", "comparison_success", {
-        mode: "excel",
-        source_a_type: "excel",
-        source_b_type: "excel",
-        rows_compared: viewResult.rows?.length || 0,
-        rows_match: viewResult.summary?.matches || 0,
-        rows_differ: viewResult.summary?.differs || 0,
-        rows_only_a: viewResult.summary?.only_in_env1 || 0,
-        rows_only_b: viewResult.summary?.only_in_env2 || 0,
-        pk_fields: selectedPkFields.length,
-        compare_fields: selectedFields.length,
-      });
+      this.trackCompareConfigEvent(
+        "comparison_success",
+        buildCompareConfigSuccessMeta({
+          mode: "excel",
+          sourceA: {
+            type: "excel",
+            queryMode: "excel",
+            rowCount: refParsedData?.metadata?.rowCount,
+            excelFiles: [selectedRefFile],
+          },
+          sourceB: {
+            type: "excel",
+            queryMode: "excel",
+            rowCount: compParsedData?.metadata?.rowCount,
+            excelFiles: [selectedCompFile],
+          },
+          result: viewResult,
+          pkFields: selectedPkFields,
+          compareFields: selectedFields,
+          queryMode: "excel",
+          rowMatching,
+          dataComparison,
+        }),
+        { flush: true },
+      );
     } catch (error) {
       console.error("[ExcelCompare] Comparison failed:", error);
       this.hideProgress();
@@ -2707,6 +2732,37 @@ class CompareConfigTool extends BaseTool {
         rows_compared: results?.rows?.length || 0,
         pairs_count: preparedPairs.length,
       });
+
+      this.trackCompareConfigEvent(
+        "comparison_success",
+        buildCompareConfigSuccessMeta({
+          mode: "excel_batch",
+          sourceA: {
+            type: "excel",
+            queryMode: "excel",
+            rowCount: results?.summary?.total,
+            excelFiles: this.excelCompare.refFiles,
+          },
+          sourceB: {
+            type: "excel",
+            queryMode: "excel",
+            rowCount: results?.summary?.total,
+            excelFiles: this.excelCompare.compFiles,
+          },
+          result: results,
+          pkFields: this.excelCompare.pkColumns
+            ? this.excelCompare.pkColumns
+                .split(",")
+                .map((field) => field.trim())
+                .filter(Boolean)
+            : [],
+          compareFields: [],
+          queryMode: "excel",
+          rowMatching: this.excelCompare.rowMatching,
+          dataComparison: this.excelCompare.dataComparison,
+        }),
+        { flush: true },
+      );
     } catch (error) {
       console.error("[ExcelCompare] Comparison failed:", error);
       this.hideProgress();
@@ -2862,21 +2918,39 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track rich success event for behavioral insights
-      UsageTracker.trackEvent("compare-config", "comparison_success", {
-        mode: "table",
-        source_a_type: "oracle",
-        source_b_type: "oracle",
-        rows_compared: result?.rows?.length || 0,
-        rows_match: result?.summary?.matches || 0,
-        rows_differ: result?.summary?.differs || 0,
-        rows_only_a: result?.summary?.only_in_env1 || 0,
-        rows_only_b: result?.summary?.only_in_env2 || 0,
-        pk_fields: pkColumns.length,
-        compare_fields: this.selectedFields?.length || 0,
-        query_mode: "table",
-        schema: this.selectedSchema || "",
-        table_name: this.selectedTable || "",
-      });
+      this.trackCompareConfigEvent(
+        "comparison_success",
+        buildCompareConfigSuccessMeta({
+          mode: "table",
+          sourceA: {
+            type: "oracle",
+            queryMode: "table",
+            connection: this.env1.connection,
+            schema: this.schema,
+            table: this.table,
+            whereClause: this.whereClause,
+            maxRows: this.maxRows || 500,
+            rowCount: dataEnv1.row_count,
+          },
+          sourceB: {
+            type: "oracle",
+            queryMode: "table",
+            connection: this.env2.connection,
+            schema: this.schema,
+            table: this.table,
+            whereClause: this.whereClause,
+            maxRows: this.maxRows || 500,
+            rowCount: dataEnv2.row_count,
+          },
+          result,
+          pkFields: pkColumns,
+          compareFields: this.selectedFields || [],
+          queryMode: "table",
+          rowMatching: "key",
+          dataComparison: "strict",
+        }),
+        { flush: true },
+      );
     } catch (error) {
       console.error("[Compare] Comparison failed:", error);
       this.hideLoading();
@@ -3035,18 +3109,33 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track rich success event for behavioral insights
-      UsageTracker.trackEvent("compare-config", "comparison_success", {
-        mode: "raw_sql",
-        source_a_type: "oracle",
-        source_b_type: "oracle",
-        rows_compared: result?.rows?.length || 0,
-        rows_match: result?.summary?.matches || 0,
-        rows_differ: result?.summary?.differs || 0,
-        rows_only_a: result?.summary?.only_in_env1 || 0,
-        rows_only_b: result?.summary?.only_in_env2 || 0,
-        pk_fields: pkColumns.length,
-        query_mode: "raw_sql",
-      });
+      this.trackCompareConfigEvent(
+        "comparison_success",
+        buildCompareConfigSuccessMeta({
+          mode: "raw_sql",
+          sourceA: {
+            type: "oracle",
+            queryMode: "raw_sql",
+            connection: this.rawenv1.connection,
+            maxRows: this.rawMaxRows,
+            rowCount: dataEnv1.row_count,
+          },
+          sourceB: {
+            type: "oracle",
+            queryMode: "raw_sql",
+            connection: this.rawenv2.connection,
+            maxRows: this.rawMaxRows,
+            rowCount: dataEnv2.row_count,
+          },
+          result,
+          pkFields: pkColumns,
+          compareFields: dataEnv1.headers || [],
+          queryMode: "raw_sql",
+          rowMatching: "key",
+          dataComparison: "strict",
+        }),
+        { flush: true },
+      );
     } catch (error) {
       console.error("Raw SQL comparison failed:", error);
       this.hideLoading();
@@ -7741,21 +7830,22 @@ class CompareConfigTool extends BaseTool {
       });
 
       // Track rich success event for behavioral insights
-      UsageTracker.trackEvent("compare-config", "comparison_success", {
-        mode: comparisonMode,
-        source_a_type: sourceA.type,
-        source_b_type: sourceB.type,
-        rows_compared: viewResult.rows?.length || 0,
-        rows_match: viewResult.summary?.matches || 0,
-        rows_differ: viewResult.summary?.differs || 0,
-        rows_only_a: viewResult.summary?.only_in_env1 || 0,
-        rows_only_b: viewResult.summary?.only_in_env2 || 0,
-        pk_fields: selectedPkFields.length,
-        compare_fields: selectedCompareFields.length,
-        query_mode: this.unified.sourceA.queryMode || "",
-        schema: this.unified.sourceA.schema || "",
-        table_name: this.unified.sourceA.table || "",
-      });
+      this.trackCompareConfigEvent(
+        "comparison_success",
+        buildCompareConfigSuccessMeta({
+          mode: comparisonMode,
+          sourceA: buildUnifiedSourceAnalytics(sourceA, sourceA.data),
+          sourceB: buildUnifiedSourceAnalytics(sourceB, sourceB.data),
+          result: viewResult,
+          pkFields: selectedPkFields,
+          compareFields: selectedCompareFields,
+          queryMode: this.unified.sourceA.queryMode || "",
+          rowMatching,
+          dataComparison,
+          normalizeFields,
+        }),
+        { flush: true },
+      );
     } catch (error) {
       console.error("Unified comparison failed:", error);
       this.updateCompareProgressStep("compare", "error", error.message || "Failed");
