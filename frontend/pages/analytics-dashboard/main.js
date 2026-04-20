@@ -19,6 +19,7 @@ class AnalyticsDashboardPage {
     this.cache = {};
     this.filterText = "";
     this.selectedRange = "30d";
+    this.currentWhoSection = "users";
     this.lastRenderedData = [];
   }
 
@@ -129,6 +130,7 @@ class AnalyticsDashboardPage {
     this.cache = {};
     this.filterText = "";
     this.selectedRange = "30d";
+    this.currentWhoSection = "users";
     this.lastRenderedData = [];
     try {
       sessionStorage.removeItem(TOKEN_KEY);
@@ -336,24 +338,31 @@ class AnalyticsDashboardPage {
   renderWhoInsights(container, data) {
     const sections = [
       {
+        id: "users",
         name: "Top users",
+        tabLabel: "Users",
         description: "People with the most activity in the selected time range.",
         columns: ["rank", "user", "main_activity", "events", "tools_used", "devices_seen", "errors", "last_activity"],
-        limit: 10,
       },
       {
+        id: "tools",
         name: "Top user tools",
+        tabLabel: "Tools by user",
         description: "Which tools the most active people used most.",
         columns: ["rank", "user", "tool_id", "events", "action", "last_activity"],
-        limit: 12,
       },
       {
+        id: "actions",
         name: "Top user actions",
+        tabLabel: "Actions",
         description: "The repeated actions that make up most usage.",
         columns: ["rank", "user", "tool_id", "action", "events", "last_activity"],
-        limit: 12,
       },
     ];
+    if (!sections.some((section) => section.id === this.currentWhoSection)) {
+      this.currentWhoSection = "users";
+    }
+    const activeSection = sections.find((section) => section.id === this.currentWhoSection) || sections[0];
     const topUsers = data.filter((row) => row.section === "Top users");
     const topUser = topUsers[0];
     const activeUsers = Number(topUser?.active_users_total ?? topUsers.length);
@@ -383,17 +392,24 @@ class AnalyticsDashboardPage {
       )
       .join("");
 
-    const sectionMarkup = sections
+    const sectionTabs = sections
       .map((section) => {
         const allRows = data.filter((row) => row.section === section.name);
-        const rows = allRows.slice(0, section.limit);
-        if (!rows.length) return "";
-
-        const headerCells = section.columns.map((col) => `<th>${this.formatWhoHeader(col, section.name)}</th>`).join("");
-        const bodyRows = rows
+        return `
+          <button type="button" class="who-section-tab${section.id === activeSection.id ? " active" : ""}" data-who-section="${section.id}">
+            <span>${this.escapeHtml(section.tabLabel)}</span>
+            <strong>${allRows.length}</strong>
+          </button>
+        `;
+      })
+      .join("");
+    const activeRows = data.filter((row) => row.section === activeSection.name);
+    const headerCells = activeSection.columns.map((col) => `<th>${this.formatWhoHeader(col, activeSection.name)}</th>`).join("");
+    const bodyRows = activeRows.length
+      ? activeRows
           .map((row) => {
             const rowIndex = clickableRows.push(row) - 1;
-            const cells = section.columns
+            const cells = activeSection.columns
               .map((col) => {
                 const value = this.formatWhoValue(row, col);
                 return `<td title="${this.escapeHtml(String(value ?? ""))}">${this.escapeHtml(String(value ?? "-"))}</td>`;
@@ -401,35 +417,38 @@ class AnalyticsDashboardPage {
               .join("");
             return `<tr data-row-index="${rowIndex}">${cells}</tr>`;
           })
-          .join("");
-
-        return `
-          <section class="who-insight-section">
-            <div class="who-insight-heading">
-              <div>
-                <h3>${this.escapeHtml(section.name)}</h3>
-                <p>${this.escapeHtml(section.description)}</p>
-              </div>
-              <span>${this.formatSectionInfo(rows.length, allRows.length)}</span>
-            </div>
-            <div class="table-wrapper who-table-wrapper">
-              <table class="dashboard-table">
-                <thead><tr>${headerCells}</tr></thead>
-                <tbody>${bodyRows}</tbody>
-              </table>
-            </div>
-          </section>
-        `;
-      })
-      .join("");
+          .join("")
+      : `<tr><td colspan="${activeSection.columns.length}" class="who-empty-cell">No matching rows</td></tr>`;
 
     container.innerHTML = `
-      <div class="table-info">${this.formatTableInfo(data.length)} across ${this.escapeHtml(rangeLabel)} - click a row for details</div>
+      <div class="table-info">People activity across ${this.escapeHtml(rangeLabel)} - click a row for details</div>
       <div class="who-insights">
         <div class="who-summary-grid">${summary}</div>
-        ${sectionMarkup}
+        <div class="who-section-tabs">${sectionTabs}</div>
+        <section class="who-insight-section">
+          <div class="who-insight-heading">
+            <div>
+              <h3>${this.escapeHtml(activeSection.name)}</h3>
+              <p>${this.escapeHtml(activeSection.description)}</p>
+            </div>
+            <span>${this.formatSectionInfo(activeRows.length)}</span>
+          </div>
+          <div class="table-wrapper who-table-wrapper">
+            <table class="dashboard-table">
+              <thead><tr>${headerCells}</tr></thead>
+              <tbody>${bodyRows}</tbody>
+            </table>
+          </div>
+        </section>
       </div>
     `;
+
+    container.querySelectorAll(".who-section-tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.currentWhoSection = button.dataset.whoSection || "users";
+        this.renderTable(container, this.lastRenderedData);
+      });
+    });
 
     container.querySelectorAll(".dashboard-table tbody tr").forEach((tr) => {
       tr.style.cursor = "pointer";
