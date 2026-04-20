@@ -337,15 +337,21 @@ class AnalyticsDashboardPage {
     const sections = [
       {
         name: "Top users",
-        columns: ["rank", "user", "events", "tool_id", "action", "tools_used", "devices_seen", "errors", "last_activity"],
+        description: "People with the most activity in the selected time range.",
+        columns: ["rank", "user", "main_activity", "events", "tools_used", "devices_seen", "errors", "last_activity"],
+        limit: 10,
       },
       {
         name: "Top user tools",
+        description: "Which tools the most active people used most.",
         columns: ["rank", "user", "tool_id", "events", "action", "last_activity"],
+        limit: 12,
       },
       {
         name: "Top user actions",
+        description: "The repeated actions that make up most usage.",
         columns: ["rank", "user", "tool_id", "action", "events", "last_activity"],
+        limit: 12,
       },
     ];
     const topUsers = data.filter((row) => row.section === "Top users");
@@ -358,13 +364,13 @@ class AnalyticsDashboardPage {
 
     const summary = [
       {
-        label: "Most active person",
+        label: "Most active",
         value: topUser?.user || "-",
-        context: topUser ? `${topUser.events || 0} actions in ${rangeLabel}` : rangeLabel,
+        context: topUser ? `${topUser.events || 0} actions, mostly ${this.formatActionName(topUser.action)}` : rangeLabel,
       },
-      { label: "People active", value: activeUsers, context: rangeLabel },
-      { label: "Actions counted", value: totalActions, context: "Usage clicks and tracked tool events" },
-      { label: "Errors reported", value: totalErrors, context: "Uncaught errors from active people" },
+      { label: "People", value: activeUsers, context: `Active ${rangeLabel}` },
+      { label: "Actions", value: totalActions, context: "Tool usage events counted" },
+      { label: "Errors", value: totalErrors, context: "Uncaught errors reported" },
     ]
       .map(
         (card) => `
@@ -379,7 +385,8 @@ class AnalyticsDashboardPage {
 
     const sectionMarkup = sections
       .map((section) => {
-        const rows = data.filter((row) => row.section === section.name);
+        const allRows = data.filter((row) => row.section === section.name);
+        const rows = allRows.slice(0, section.limit);
         if (!rows.length) return "";
 
         const headerCells = section.columns.map((col) => `<th>${this.formatWhoHeader(col, section.name)}</th>`).join("");
@@ -388,7 +395,7 @@ class AnalyticsDashboardPage {
             const rowIndex = clickableRows.push(row) - 1;
             const cells = section.columns
               .map((col) => {
-                const value = this.formatCellValue(row[col]);
+                const value = this.formatWhoValue(row, col);
                 return `<td title="${this.escapeHtml(String(value ?? ""))}">${this.escapeHtml(String(value ?? "-"))}</td>`;
               })
               .join("");
@@ -399,8 +406,11 @@ class AnalyticsDashboardPage {
         return `
           <section class="who-insight-section">
             <div class="who-insight-heading">
-              <h3>${this.escapeHtml(section.name)}</h3>
-              <span>${this.formatSectionInfo(rows.length)}</span>
+              <div>
+                <h3>${this.escapeHtml(section.name)}</h3>
+                <p>${this.escapeHtml(section.description)}</p>
+              </div>
+              <span>${this.formatSectionInfo(rows.length, allRows.length)}</span>
             </div>
             <div class="table-wrapper who-table-wrapper">
               <table class="dashboard-table">
@@ -435,6 +445,57 @@ class AnalyticsDashboardPage {
     if (key === "devices_seen") return "Devices";
     if (key === "last_activity") return "Last seen";
     return this.formatHeader(key);
+  }
+
+  formatWhoValue(row, key) {
+    if (key === "main_activity") {
+      return `${this.formatToolName(row.tool_id)}: ${this.formatActionName(row.action)}`;
+    }
+    if (key === "tool_id") return this.formatToolName(row.tool_id);
+    if (key === "action") return this.formatActionName(row.action);
+    return this.formatCellValue(row[key]);
+  }
+
+  formatToolName(toolId) {
+    const labels = {
+      "base64-tools": "Base64 Tools",
+      "compare-config": "Compare Config",
+      "html-template": "HTML Template",
+      "image-checker": "Check Image",
+      "json-tools": "JSON Tools",
+      "master-lockey": "Master Lockey",
+      "merge-sql": "Merge SQL",
+      "quick-query": "Quick Query",
+      "qr-tools": "QR Tools",
+      "run-batch": "Run Batch",
+      "run-query": "Run Query",
+      "tlv-viewer": "TLV Viewer",
+      "uuid-generator": "UUID Generator",
+    };
+    return labels[toolId] || this.formatTitleValue(toolId);
+  }
+
+  formatActionName(action) {
+    const labels = {
+      comparison_success: "successful comparisons",
+      copy_uuid: "copied UUIDs",
+      format_action: "formatted content",
+      generate_uuid: "generated UUIDs",
+      load_from_cache: "loaded saved data",
+      merge: "merged data",
+      query_generated: "generated queries",
+      run_click: "clicked Run",
+      run_started: "started runs",
+      run_success: "successful runs",
+      schema_load: "loaded schemas",
+    };
+    return labels[action] || this.formatTitleValue(action);
+  }
+
+  formatTitleValue(value) {
+    return String(value || "-")
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
   renderOverviewCards(container, data) {
@@ -579,8 +640,9 @@ class AnalyticsDashboardPage {
     return `Showing ${visibleCount} ${noun}`;
   }
 
-  formatSectionInfo(visibleCount) {
+  formatSectionInfo(visibleCount, totalCount = visibleCount) {
     const noun = visibleCount === 1 ? "row" : "rows";
+    if (visibleCount < totalCount) return `Top ${visibleCount} of ${totalCount}`;
     return `Showing ${visibleCount} ${noun}`;
   }
 
