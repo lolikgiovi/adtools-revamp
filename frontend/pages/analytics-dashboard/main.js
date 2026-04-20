@@ -330,14 +330,14 @@ class AnalyticsDashboardPage {
   }
 
   shouldRenderWhoInsights(columns) {
-    return this.currentTab === "who" && ["section", "rank", "user", "events"].every((col) => columns.includes(col));
+    return ["section", "rank", "user", "events"].every((col) => columns.includes(col));
   }
 
   renderWhoInsights(container, data) {
     const sections = [
       {
         name: "Top users",
-        columns: ["rank", "user", "events", "opens", "tools_used", "devices_seen", "errors", "tool_id", "action", "last_activity"],
+        columns: ["rank", "user", "events", "tool_id", "action", "tools_used", "devices_seen", "errors", "last_activity"],
       },
       {
         name: "Top user tools",
@@ -357,10 +357,14 @@ class AnalyticsDashboardPage {
     const clickableRows = [];
 
     const summary = [
-      { label: "Top user", value: topUser?.user || "-", context: topUser ? `${topUser.events || 0} actions in ${rangeLabel}` : rangeLabel },
-      { label: "Active users", value: activeUsers, context: rangeLabel },
-      { label: "Tracked actions", value: totalActions, context: "From live usage and event analytics" },
-      { label: "Uncaught errors", value: totalErrors, context: "Reported by these users" },
+      {
+        label: "Most active person",
+        value: topUser?.user || "-",
+        context: topUser ? `${topUser.events || 0} actions in ${rangeLabel}` : rangeLabel,
+      },
+      { label: "People active", value: activeUsers, context: rangeLabel },
+      { label: "Actions counted", value: totalActions, context: "Usage clicks and tracked tool events" },
+      { label: "Errors reported", value: totalErrors, context: "Uncaught errors from active people" },
     ]
       .map(
         (card) => `
@@ -424,9 +428,12 @@ class AnalyticsDashboardPage {
   }
 
   formatWhoHeader(key, sectionName) {
-    if (key === "events") return sectionName === "Top users" ? "Actions" : "Count";
-    if (key === "tool_id" && sectionName === "Top users") return "Top Tool";
-    if (key === "action" && sectionName === "Top users") return "Top Action";
+    if (key === "events") return sectionName === "Top user actions" ? "Times" : "Actions";
+    if (key === "tool_id") return sectionName === "Top users" ? "Top tool" : "Tool";
+    if (key === "action") return sectionName === "Top users" ? "Most common action" : "Action";
+    if (key === "tools_used") return "Tools";
+    if (key === "devices_seen") return "Devices";
+    if (key === "last_activity") return "Last seen";
     return this.formatHeader(key);
   }
 
