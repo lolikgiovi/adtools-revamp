@@ -212,7 +212,8 @@ describe("Analytics endpoints", () => {
     const data = await response.json();
     const ids = data.tabs.map((tab) => tab.id);
     expect(response.status).toBe(200);
-    expect(ids.slice(0, 4)).toEqual(["overview", "active-users", "tools", "tool-adoption"]);
+    expect(ids.slice(0, 4)).toEqual(["overview", "who", "active-users", "tools"]);
+    expect(ids).toContain("who");
     expect(ids).toContain("friction");
     expect(ids).toContain("versions");
     expect(ids).toContain("error-summary");
@@ -395,6 +396,37 @@ describe("Analytics endpoints", () => {
         expect.objectContaining({ metric: "Uncaught errors 24h", value: "0" }),
       ]),
     );
+  });
+
+  it("returns safe computed Who insights with a time range", async () => {
+    const login = await worker.fetch(
+      new Request("http://localhost/dashboard/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpassword123" }),
+      }),
+      env,
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: "who", range: "7d" }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.mode).toBe("computed-who");
+    expect(data.range).toBe("7d");
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
   it("self-heals error_events schema before error dashboard queries", async () => {

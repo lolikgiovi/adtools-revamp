@@ -18,6 +18,7 @@ class AnalyticsDashboardPage {
     this.currentTab = null;
     this.cache = {};
     this.filterText = "";
+    this.selectedRange = "30d";
     this.lastRenderedData = [];
   }
 
@@ -57,6 +58,12 @@ class AnalyticsDashboardPage {
       this.filterText = e.target.value.trim().toLowerCase();
       const content = this.container.querySelector("#dashboard-panel .panel-content");
       this.renderTable(content, this.lastRenderedData);
+    });
+
+    this.container.querySelector("#dashboard-range")?.addEventListener("change", (e) => {
+      this.selectedRange = e.target.value || "30d";
+      delete this.cache[this.getCacheKey(this.currentTab)];
+      this.loadCurrentTabData();
     });
 
     // Logout
@@ -121,6 +128,7 @@ class AnalyticsDashboardPage {
     this.currentTab = null;
     this.cache = {};
     this.filterText = "";
+    this.selectedRange = "30d";
     this.lastRenderedData = [];
     try {
       sessionStorage.removeItem(TOKEN_KEY);
@@ -155,8 +163,7 @@ class AnalyticsDashboardPage {
         this.renderTabs();
         // Show source indicator
         if (sourceIndicator) {
-          const label =
-            this.configSource === "kv" ? "KV Config" : this.configSource === "kv+defaults" ? "KV + Defaults" : "Defaults";
+          const label = this.configSource === "kv" ? "KV Config" : this.configSource === "kv+defaults" ? "KV + Defaults" : "Defaults";
           const sourceClass = this.configSource.replace(/[^a-z0-9-]/gi, "-");
           sourceIndicator.innerHTML = `<span class="config-source-badge ${sourceClass}">${label}</span>`;
         }
@@ -194,6 +201,7 @@ class AnalyticsDashboardPage {
     this.filterText = "";
     const searchInput = this.container.querySelector("#dashboard-search");
     if (searchInput) searchInput.value = "";
+    this.updateRangeVisibility();
 
     // Update active tab button
     this.container.querySelectorAll("#dynamic-tabs .tab-button").forEach((tab) => {
@@ -213,8 +221,9 @@ class AnalyticsDashboardPage {
     if (!panel || !content) return;
 
     // Check cache
-    if (this.cache[this.currentTab]) {
-      this.renderTable(content, this.cache[this.currentTab]);
+    const cacheKey = this.getCacheKey(this.currentTab);
+    if (this.cache[cacheKey]) {
+      this.renderTable(content, this.cache[cacheKey]);
       return;
     }
 
@@ -228,7 +237,7 @@ class AnalyticsDashboardPage {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.token}`,
         },
-        body: JSON.stringify({ tabId: this.currentTab }),
+        body: JSON.stringify({ tabId: this.currentTab, range: this.selectedRange }),
       });
 
       if (res.status === 401) {
@@ -239,7 +248,7 @@ class AnalyticsDashboardPage {
       const data = await res.json();
 
       if (data.ok && Array.isArray(data.data)) {
-        this.cache[this.currentTab] = data.data;
+        this.cache[cacheKey] = data.data;
         this.renderTable(content, data.data);
       } else {
         content.innerHTML = `<div class="panel-error">${data.error || "Failed to load data"}</div>`;
@@ -272,6 +281,11 @@ class AnalyticsDashboardPage {
 
     if (this.shouldRenderGroupedToolUsage(columns, data)) {
       this.renderGroupedToolUsageTable(container, data, columns);
+      return;
+    }
+
+    if (this.shouldRenderWhoInsights(columns)) {
+      this.renderWhoInsights(container, data);
       return;
     }
 
@@ -313,6 +327,107 @@ class AnalyticsDashboardPage {
 
   shouldRenderOverviewCards(columns) {
     return this.currentTab === "overview" && ["metric", "value", "context"].every((col) => columns.includes(col));
+  }
+
+  shouldRenderWhoInsights(columns) {
+    return this.currentTab === "who" && ["section", "rank", "user", "events"].every((col) => columns.includes(col));
+  }
+
+  renderWhoInsights(container, data) {
+    const sections = [
+      {
+        name: "Top users",
+        columns: ["rank", "user", "events", "opens", "tools_used", "devices_seen", "errors", "tool_id", "action", "last_activity"],
+      },
+      {
+        name: "Top user tools",
+        columns: ["rank", "user", "tool_id", "events", "action", "last_activity"],
+      },
+      {
+        name: "Top user actions",
+        columns: ["rank", "user", "tool_id", "action", "events", "last_activity"],
+      },
+    ];
+    const topUsers = data.filter((row) => row.section === "Top users");
+    const topUser = topUsers[0];
+    const activeUsers = Number(topUser?.active_users_total ?? topUsers.length);
+    const totalActions = Number(topUser?.events_total ?? topUsers.reduce((sum, row) => sum + Number(row.events || 0), 0));
+    const totalErrors = Number(topUser?.errors_total ?? topUsers.reduce((sum, row) => sum + Number(row.errors || 0), 0));
+    const rangeLabel = this.getRangeLabel(this.selectedRange);
+    const clickableRows = [];
+
+    const summary = [
+      { label: "Top user", value: topUser?.user || "-", context: topUser ? `${topUser.events || 0} actions in ${rangeLabel}` : rangeLabel },
+      { label: "Active users", value: activeUsers, context: rangeLabel },
+      { label: "Tracked actions", value: totalActions, context: "From live usage and event analytics" },
+      { label: "Uncaught errors", value: totalErrors, context: "Reported by these users" },
+    ]
+      .map(
+        (card) => `
+          <div class="who-summary-card">
+            <span>${this.escapeHtml(String(card.label))}</span>
+            <strong>${this.escapeHtml(String(card.value))}</strong>
+            <small>${this.escapeHtml(String(card.context))}</small>
+          </div>
+        `,
+      )
+      .join("");
+
+    const sectionMarkup = sections
+      .map((section) => {
+        const rows = data.filter((row) => row.section === section.name);
+        if (!rows.length) return "";
+
+        const headerCells = section.columns.map((col) => `<th>${this.formatWhoHeader(col, section.name)}</th>`).join("");
+        const bodyRows = rows
+          .map((row) => {
+            const rowIndex = clickableRows.push(row) - 1;
+            const cells = section.columns
+              .map((col) => {
+                const value = this.formatCellValue(row[col]);
+                return `<td title="${this.escapeHtml(String(value ?? ""))}">${this.escapeHtml(String(value ?? "-"))}</td>`;
+              })
+              .join("");
+            return `<tr data-row-index="${rowIndex}">${cells}</tr>`;
+          })
+          .join("");
+
+        return `
+          <section class="who-insight-section">
+            <div class="who-insight-heading">
+              <h3>${this.escapeHtml(section.name)}</h3>
+              <span>${this.formatSectionInfo(rows.length)}</span>
+            </div>
+            <div class="table-wrapper who-table-wrapper">
+              <table class="dashboard-table">
+                <thead><tr>${headerCells}</tr></thead>
+                <tbody>${bodyRows}</tbody>
+              </table>
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div class="table-info">${this.formatTableInfo(data.length)} across ${this.escapeHtml(rangeLabel)} - click a row for details</div>
+      <div class="who-insights">
+        <div class="who-summary-grid">${summary}</div>
+        ${sectionMarkup}
+      </div>
+    `;
+
+    container.querySelectorAll(".dashboard-table tbody tr").forEach((tr) => {
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", () => this.showRowDetail(clickableRows[Number(tr.dataset.rowIndex)]));
+    });
+  }
+
+  formatWhoHeader(key, sectionName) {
+    if (key === "events") return sectionName === "Top users" ? "Actions" : "Count";
+    if (key === "tool_id" && sectionName === "Top users") return "Top Tool";
+    if (key === "action" && sectionName === "Top users") return "Top Action";
+    return this.formatHeader(key);
   }
 
   renderOverviewCards(container, data) {
@@ -410,6 +525,7 @@ class AnalyticsDashboardPage {
 
     // Build transposed table (key-value pairs)
     const rows = Object.entries(row)
+      .filter(([key]) => !["section_order", "active_users_total", "events_total", "errors_total"].includes(key))
       .map(([key, value]) => {
         let displayValue = this.parseJsonString(value);
         // Pretty print objects/arrays
@@ -456,10 +572,39 @@ class AnalyticsDashboardPage {
     return `Showing ${visibleCount} ${noun}`;
   }
 
+  formatSectionInfo(visibleCount) {
+    const noun = visibleCount === 1 ? "row" : "rows";
+    return `Showing ${visibleCount} ${noun}`;
+  }
+
+  getCacheKey(tabId) {
+    return tabId === "who" ? `${tabId}:${this.selectedRange}` : tabId;
+  }
+
+  updateRangeVisibility() {
+    const rangeControl = this.container.querySelector(".dashboard-range");
+    if (rangeControl) rangeControl.hidden = this.currentTab !== "who";
+  }
+
+  getRangeLabel(range) {
+    const labels = {
+      today: "today",
+      "7d": "the last 7 days",
+      "30d": "the last 30 days",
+      "90d": "the last 90 days",
+      all: "all time",
+    };
+    return labels[range] || labels["30d"];
+  }
+
   filterRows(data) {
     if (!this.filterText) return data;
     return data.filter((row) => {
-      return Object.values(row || {}).some((value) => String(value ?? "").toLowerCase().includes(this.filterText));
+      return Object.values(row || {}).some((value) =>
+        String(value ?? "")
+          .toLowerCase()
+          .includes(this.filterText),
+      );
     });
   }
 

@@ -29,6 +29,16 @@ export const AnalyticsDashboardTemplate = /*html*/ `
           <!-- Tabs will be rendered dynamically -->
         </div>
         <div class="dashboard-actions">
+          <label class="dashboard-range" for="dashboard-range" hidden>
+            <span class="dashboard-range-label">Who range</span>
+            <select id="dashboard-range" class="dashboard-range-select">
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d" selected>Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
           <label class="dashboard-search" for="dashboard-search">
             <span class="dashboard-search-label">Search rows</span>
             <input type="search" id="dashboard-search" class="dashboard-search-input" placeholder="Search rows">

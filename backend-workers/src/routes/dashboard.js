@@ -15,6 +15,11 @@ const DEFAULT_TABS = [
     query: "SELECT 'Overview is computed by the dashboard API' AS metric, '-' AS value, 'No direct SQL query is used' AS context",
   },
   {
+    id: "who",
+    name: "Who",
+    query: "SELECT 'Who is computed by the dashboard API' AS section, '-' AS user, 'Use the dashboard API time range filter' AS details",
+  },
+  {
     id: "active-users",
     name: "Active Users",
     query: `WITH recent_usage AS (
@@ -1251,6 +1256,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 
     const body = await request.json();
     const tabId = String(body.tabId || "");
+    const range = String(body.range || "30d");
 
     if (!tabId) {
       return new Response(JSON.stringify({ ok: false, error: "tabId is required" }), {
@@ -1271,6 +1277,11 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 
     if (tab.id === "overview") {
       return executeOverviewQuery(env, "tab:overview:v2");
+    }
+
+    if (tab.id === "who") {
+      const rangeConfig = getDashboardRangeConfig(range);
+      return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v1`, rangeConfig);
     }
 
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
@@ -1490,6 +1501,293 @@ async function executeOverviewQuery(env, cacheKey) {
   } catch (err) {
     return dashboardJson({ ok: false, error: `Overview failed: ${String(err)}`, tabId: "overview" }, 200);
   }
+}
+
+async function executeWhoQuery(env, cacheKey, rangeConfig) {
+  try {
+    if (!env.DB) {
+      return dashboardJson({ ok: false, error: "Database not available", tabId: "who" }, 200);
+    }
+
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    await ensureErrorEventsSchema(env);
+    const tables = await getDashboardTables(env);
+    const activityBranches = getWhoActivityBranches(tables, rangeConfig);
+
+    if (!activityBranches.length) {
+      const body = JSON.stringify({ ok: true, data: [], mode: "computed-who", range: rangeConfig.id, rangeLabel: rangeConfig.label });
+      setCachedDashboardQueryBody(cacheKey, body);
+      return new Response(body, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const errorRollup = tables.has("error_events")
+      ? `SELECT LOWER(user_email) AS user_email,
+    COUNT(*) AS errors
+  FROM error_events
+  WHERE COALESCE(LOWER(user_email), '') != '${OWNER_EMAIL}'
+    ${rangeConfig.where("created_time")}
+  GROUP BY user_email`
+      : "SELECT NULL AS user_email, 0 AS errors WHERE 0";
+    const query = `WITH activity AS (
+  ${activityBranches.join("\n  UNION ALL\n  ")}
+),
+clean_activity AS (
+  SELECT user_email,
+    COALESCE(device_id, '-') AS device_id,
+    COALESCE(NULLIF(tool_id, ''), 'unknown') AS tool_id,
+    COALESCE(NULLIF(action, ''), 'unknown') AS action,
+    created_time,
+    source
+  FROM activity
+  WHERE COALESCE(user_email, '') != ''
+),
+error_rollup AS (
+  ${errorRollup}
+),
+user_rollup AS (
+  SELECT user_email,
+    COUNT(*) AS events,
+    SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+    COUNT(DISTINCT tool_id) AS tools_used,
+    COUNT(DISTINCT device_id) AS devices_seen,
+    MAX(created_time) AS last_activity
+  FROM clean_activity
+  GROUP BY user_email
+),
+user_tool_counts AS (
+  SELECT user_email,
+    tool_id,
+    COUNT(*) AS events,
+    MAX(created_time) AS last_activity,
+    ROW_NUMBER() OVER (PARTITION BY user_email ORDER BY COUNT(*) DESC, MAX(created_time) DESC, tool_id) AS tool_rank
+  FROM clean_activity
+  GROUP BY user_email, tool_id
+),
+user_tool_action_counts AS (
+  SELECT user_email,
+    tool_id,
+    action,
+    COUNT(*) AS events,
+    MAX(created_time) AS last_activity,
+    ROW_NUMBER() OVER (PARTITION BY user_email, tool_id ORDER BY COUNT(*) DESC, MAX(created_time) DESC, action) AS action_rank_for_tool
+  FROM clean_activity
+  GROUP BY user_email, tool_id, action
+),
+user_action_counts AS (
+  SELECT user_email,
+    action,
+    COUNT(*) AS events,
+    MAX(created_time) AS last_activity,
+    ROW_NUMBER() OVER (PARTITION BY user_email ORDER BY COUNT(*) DESC, MAX(created_time) DESC, action) AS action_rank
+  FROM clean_activity
+  GROUP BY user_email, action
+),
+user_tool_list AS (
+  SELECT user_email,
+    GROUP_CONCAT(tool_id) AS tools
+  FROM user_tool_counts
+  WHERE tool_rank <= 5
+  GROUP BY user_email
+),
+ranked_users AS (
+  SELECT ROW_NUMBER() OVER (ORDER BY ur.events DESC, ur.last_activity DESC, ur.user_email) AS rank,
+    ur.user_email,
+    CASE WHEN INSTR(ur.user_email, '@') > 0 THEN SUBSTR(ur.user_email, 1, INSTR(ur.user_email, '@') - 1) ELSE ur.user_email END AS user,
+    COALESCE(utc.tool_id, '-') AS tool_id,
+    COALESCE(uac.action, '-') AS action,
+    ur.events,
+    ur.opens,
+    ur.tools_used,
+    ur.devices_seen,
+    COALESCE(er.errors, 0) AS errors,
+    ur.last_activity,
+    COUNT(*) OVER () AS active_users_total,
+    SUM(ur.events) OVER () AS events_total,
+    SUM(COALESCE(er.errors, 0)) OVER () AS errors_total,
+    COALESCE(utl.tools, '-') AS details
+  FROM user_rollup ur
+  LEFT JOIN user_tool_counts utc ON utc.user_email = ur.user_email AND utc.tool_rank = 1
+  LEFT JOIN user_action_counts uac ON uac.user_email = ur.user_email AND uac.action_rank = 1
+  LEFT JOIN error_rollup er ON er.user_email = ur.user_email
+  LEFT JOIN user_tool_list utl ON utl.user_email = ur.user_email
+),
+ranked_user_tools AS (
+  SELECT ROW_NUMBER() OVER (ORDER BY ru.rank, utc.tool_rank) AS rank,
+    utc.user_email,
+    ru.user,
+    utc.tool_id,
+    COALESCE(utac.action, '-') AS action,
+    utc.events,
+    0 AS opens,
+    0 AS tools_used,
+    0 AS devices_seen,
+    0 AS errors,
+    utc.last_activity,
+    'Top tool for ' || ru.user AS details
+  FROM user_tool_counts utc
+  JOIN ranked_users ru ON ru.user_email = utc.user_email
+  LEFT JOIN user_tool_action_counts utac
+    ON utac.user_email = utc.user_email AND utac.tool_id = utc.tool_id AND utac.action_rank_for_tool = 1
+  WHERE ru.rank <= 10 AND utc.tool_rank <= 3
+),
+ranked_actions AS (
+  SELECT ROW_NUMBER() OVER (ORDER BY utac.events DESC, utac.last_activity DESC, utac.user_email, utac.tool_id, utac.action) AS rank,
+    utac.user_email,
+    CASE WHEN INSTR(utac.user_email, '@') > 0 THEN SUBSTR(utac.user_email, 1, INSTR(utac.user_email, '@') - 1) ELSE utac.user_email END AS user,
+    utac.tool_id,
+    utac.action,
+    utac.events,
+    0 AS opens,
+    0 AS tools_used,
+    0 AS devices_seen,
+    0 AS errors,
+    utac.last_activity,
+    'Repeated action by user' AS details
+  FROM user_tool_action_counts utac
+)
+SELECT 1 AS section_order,
+  'Top users' AS section,
+  rank,
+  user,
+  tool_id,
+  action,
+  events,
+  opens,
+  tools_used,
+  devices_seen,
+  errors,
+  last_activity,
+  active_users_total,
+  events_total,
+  errors_total,
+  details
+FROM ranked_users
+WHERE rank <= 25
+UNION ALL
+SELECT 2 AS section_order,
+  'Top user tools' AS section,
+  rank,
+  user,
+  tool_id,
+  action,
+  events,
+  opens,
+  tools_used,
+  devices_seen,
+  errors,
+  last_activity,
+  0 AS active_users_total,
+  0 AS events_total,
+  0 AS errors_total,
+  details
+FROM ranked_user_tools
+WHERE rank <= 30
+UNION ALL
+SELECT 3 AS section_order,
+  'Top user actions' AS section,
+  rank,
+  user,
+  tool_id,
+  action,
+  events,
+  opens,
+  tools_used,
+  devices_seen,
+  errors,
+  last_activity,
+  0 AS active_users_total,
+  0 AS events_total,
+  0 AS errors_total,
+  details
+FROM ranked_actions
+WHERE rank <= 50
+ORDER BY section_order, rank`;
+
+    const result = await env.DB.prepare(query).all();
+    const body = JSON.stringify({
+      ok: true,
+      data: result.results || [],
+      mode: "computed-who",
+      range: rangeConfig.id,
+      rangeLabel: rangeConfig.label,
+    });
+    setCachedDashboardQueryBody(cacheKey, body);
+
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Who insights failed: ${String(err)}`, tabId: "who" }, 200);
+  }
+}
+
+function getWhoActivityBranches(tables, rangeConfig) {
+  const branches = [];
+  if (tables.has("usage_log")) {
+    branches.push(`SELECT LOWER(user_email) AS user_email,
+    device_id,
+    CASE WHEN tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE tool_id END AS tool_id,
+    action,
+    created_time,
+    'live_usage' AS source
+  FROM usage_log
+  WHERE LOWER(user_email) != '${OWNER_EMAIL}'
+    ${rangeConfig.where("created_time")}`);
+  }
+  if (tables.has("events") && tables.has("device") && tables.has("users")) {
+    branches.push(`SELECT LOWER(u.email) AS user_email,
+    e.device_id,
+    CASE WHEN e.feature_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE e.feature_id END AS tool_id,
+    e.action,
+    e.created_time,
+    'tracked_event' AS source
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE LOWER(u.email) != '${OWNER_EMAIL}'
+    ${rangeConfig.where("e.created_time")}`);
+  }
+  return branches;
+}
+
+function getDashboardRangeConfig(range) {
+  const normalized = ["today", "7d", "30d", "90d", "all"].includes(range) ? range : "30d";
+  const configs = {
+    today: {
+      id: "today",
+      label: "today",
+      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', 'start of day')`,
+    },
+    "7d": {
+      id: "7d",
+      label: "the last 7 days",
+      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-7 days')`,
+    },
+    "30d": {
+      id: "30d",
+      label: "the last 30 days",
+      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-30 days')`,
+    },
+    "90d": {
+      id: "90d",
+      label: "the last 90 days",
+      where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-90 days')`,
+    },
+    all: {
+      id: "all",
+      label: "all time",
+      where: () => "",
+    },
+  };
+  return configs[normalized];
 }
 
 async function getDashboardTables(env) {
