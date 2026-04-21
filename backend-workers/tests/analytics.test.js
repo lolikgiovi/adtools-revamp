@@ -62,6 +62,31 @@ function createEnv() {
   };
 }
 
+function mockDashboardTables(env, tableNames) {
+  const originalPrepare = env.DB.prepare;
+  env.DB.prepare = vi.fn((sql) => {
+    if (sql === "SELECT name FROM sqlite_master WHERE type = 'table'") {
+      return {
+        run: vi.fn(async () => ({ success: true })),
+        first: vi.fn(async () => null),
+        all: vi.fn(async () => ({
+          results: tableNames.map((name) => ({ name })),
+        })),
+        bind: (...args) => ({
+          sql,
+          args,
+          run: vi.fn(async () => ({ success: true })),
+          first: vi.fn(async () => null),
+          all: vi.fn(async () => ({
+            results: tableNames.map((name) => ({ name })),
+          })),
+        }),
+      };
+    }
+    return originalPrepare(sql);
+  });
+}
+
 describe("Analytics endpoints", () => {
   let env;
 
@@ -399,6 +424,8 @@ describe("Analytics endpoints", () => {
   });
 
   it("returns safe computed Who insights with a time range", async () => {
+    mockDashboardTables(env, ["usage_log", "events", "device", "users", "error_events"]);
+
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {
         method: "POST",
@@ -427,6 +454,133 @@ describe("Analytics endpoints", () => {
     expect(data.mode).toBe("computed-who");
     expect(data.range).toBe("7d");
     expect(Array.isArray(data.data)).toBe(true);
+    const whoQuery = env.DB.executed.find((item) => item.sql.includes("WITH activity AS ("));
+    expect(whoQuery.sql).toContain("FROM usage_log");
+    expect(whoQuery.sql).not.toContain("FROM events e");
+    expect(whoQuery.sql).toContain("NOT EXISTS");
+    expect(whoQuery.sql).toContain("u2.action != 'open'");
+  });
+
+  it("uses normalized usage log for tools and tool adoption instead of aggregated device counts", async () => {
+    mockDashboardTables(env, ["usage_log", "device_usage", "error_events"]);
+
+    const login = await worker.fetch(
+      new Request("http://localhost/dashboard/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpassword123" }),
+      }),
+      env,
+    );
+    const { token } = await login.json();
+
+    const toolsResponse = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: "tools" }),
+      }),
+      env,
+    );
+    const toolAdoptionResponse = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: "tool-adoption" }),
+      }),
+      env,
+    );
+
+    const toolsQuery = env.DB.executed.find(
+      (item) => item.sql.includes("WITH normalized_usage AS") && item.sql.includes("SELECT tool_id, action, total_count"),
+    );
+    const toolAdoptionQuery = env.DB.executed.find(
+      (item) => item.sql.includes("WITH normalized_usage AS") && item.sql.includes("top_action_count"),
+    );
+
+    expect(toolsResponse.status).toBe(200);
+    expect(toolAdoptionResponse.status).toBe(200);
+    expect(toolsQuery).toBeTruthy();
+    expect(toolAdoptionQuery).toBeTruthy();
+    expect(toolsQuery.sql).toContain("NOT EXISTS");
+    expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
+    expect(toolsQuery.sql).not.toContain("FROM device_usage");
+  });
+
+  it("uses normalized usage log for overview action totals and top tool", async () => {
+    mockDashboardTables(env, ["usage_log", "error_events"]);
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+
+    try {
+      const login = await worker.fetch(
+        new Request("http://localhost/dashboard/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: "testpassword123" }),
+        }),
+        env,
+      );
+      const { token } = await login.json();
+
+      const response = await worker.fetch(
+        new Request("http://localhost/dashboard/query", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tabId: "overview" }),
+        }),
+        env,
+      );
+
+      const data = await response.json();
+      const normalizedOverviewQueries = env.DB.executed.filter((item) => item.sql.includes("WITH normalized_usage AS"));
+      expect(response.status).toBe(200);
+      expect(data.ok).toBe(true);
+      expect(normalizedOverviewQueries.length).toBeGreaterThanOrEqual(2);
+      expect(normalizedOverviewQueries.some((item) => item.sql.includes("NOT EXISTS"))).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("normalizes Active Users query to avoid counting open plus actual usage twice", async () => {
+    const login = await worker.fetch(
+      new Request("http://localhost/dashboard/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpassword123" }),
+      }),
+      env,
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: "active-users" }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    const activeUsersQuery = env.DB.executed.find((item) => item.sql.includes("WITH recent_usage AS ("));
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(activeUsersQuery).toBeTruthy();
+    expect(activeUsersQuery.sql).toContain("NOT EXISTS");
+    expect(activeUsersQuery.sql).toContain("u2.action != 'open'");
   });
 
   it("self-heals error_events schema before error dashboard queries", async () => {
@@ -484,9 +638,12 @@ describe("Analytics endpoints", () => {
 
     const data = await response.json();
     const alter = env.DB.executed.find((item) => item.sql.includes("ALTER TABLE device ADD COLUMN app_version"));
+    const versionQuery = env.DB.executed.find((item) => item.sql.includes("WITH devices AS") && item.sql.includes("error_runtimes"));
     expect(response.status).toBe(200);
     expect(data.ok).toBe(true);
     expect(alter).toBeTruthy();
+    expect(versionQuery).toBeTruthy();
+    expect(versionQuery.sql).not.toContain("GROUP BY devices.platform, devices.app_version, version_errors.runtime");
   });
 
   it("merges new default insight tabs with stored dashboard config", async () => {

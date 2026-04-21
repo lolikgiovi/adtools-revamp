@@ -23,10 +23,26 @@ const DEFAULT_TABS = [
     id: "active-users",
     name: "Active Users",
     query: `WITH recent_usage AS (
-  SELECT user_email, device_id, tool_id, action, created_time
-  FROM usage_log
-  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
-    AND created_time >= datetime('now', '+7 hours', '-30 days')
+  SELECT LOWER(u.user_email) AS user_email,
+    u.device_id,
+    CASE WHEN u.tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE u.tool_id END AS tool_id,
+    u.action,
+    u.created_time
+  FROM usage_log u
+  WHERE LOWER(u.user_email) != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND u.created_time >= datetime('now', '+7 hours', '-30 days')
+    AND (
+      u.action != 'open'
+      OR NOT EXISTS (
+        SELECT 1
+        FROM usage_log u2
+        WHERE LOWER(u2.user_email) = LOWER(u.user_email)
+          AND u2.device_id = u.device_id
+          AND u2.tool_id = u.tool_id
+          AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
+          AND u2.action != 'open'
+      )
+    )
 ),
 user_rollup AS (
   SELECT user_email,
@@ -289,25 +305,25 @@ LIMIT 150`,
 ),
 version_errors AS (
   SELECT COALESCE(app_version, '-') AS app_version,
-    runtime,
     COUNT(*) AS errors_30d,
-    MAX(created_time) AS last_error
+    MAX(created_time) AS last_error,
+    GROUP_CONCAT(DISTINCT COALESCE(runtime, '-')) AS error_runtimes
   FROM error_events
   WHERE COALESCE(user_email, '') != 'fashalli.bilhaq@bankmandiri.co.id'
     AND created_time >= datetime('now', '+7 hours', '-30 days')
-  GROUP BY COALESCE(app_version, '-'), runtime
+  GROUP BY COALESCE(app_version, '-')
 )
 SELECT devices.platform,
   devices.app_version,
   COUNT(DISTINCT devices.email) AS users,
   COUNT(DISTINCT devices.device_id) AS devices,
-  COALESCE(version_errors.runtime, '-') AS error_runtime,
+  COALESCE(version_errors.error_runtimes, '-') AS error_runtimes,
   COALESCE(version_errors.errors_30d, 0) AS errors_30d,
   MAX(devices.last_seen) AS last_seen,
   version_errors.last_error
 FROM devices
 LEFT JOIN version_errors ON version_errors.app_version = devices.app_version
-GROUP BY devices.platform, devices.app_version, version_errors.runtime
+GROUP BY devices.platform, devices.app_version, version_errors.error_runtimes
 ORDER BY errors_30d DESC, last_seen DESC`,
   },
   {
@@ -1284,6 +1300,14 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v1`, rangeConfig);
     }
 
+    if (tab.id === "tools") {
+      return executeToolsQuery(env, "tab:tools:v2", tab.query);
+    }
+
+    if (tab.id === "tool-adoption") {
+      return executeToolAdoptionQuery(env, "tab:tool-adoption:v2", tab.query);
+    }
+
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
@@ -1297,7 +1321,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 export const handleStatsTools = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "tools") || getDefaultTab("tools");
-  return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
+  return executeToolsQuery(env, "tab:tools:v2", tab.query);
 });
 
 export const handleStatsDaily = withAuth(async (request, env) => {
@@ -1371,6 +1395,8 @@ async function executeOverviewQuery(env, cacheKey) {
     }
 
     const tables = await getDashboardTables(env);
+    const normalizedUsage7d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("7d"));
+    const normalizedUsage30d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("30d"));
     const data = [
       {
         metric: "Active users today",
@@ -1420,14 +1446,15 @@ async function executeOverviewQuery(env, cacheKey) {
         value: await safeDashboardScalar(
           env,
           tables,
-          ["device_usage"],
-          `SELECT CAST(COALESCE(SUM(count), 0) AS TEXT) AS value
-            FROM device_usage
-            WHERE user_email != '${OWNER_EMAIL}'
-              AND updated_time >= datetime('now', '+7 hours', '-7 days')`,
+          ["usage_log"],
+          `WITH normalized_usage AS (
+            ${normalizedUsage7d}
+          )
+          SELECT CAST(COUNT(*) AS TEXT) AS value
+            FROM normalized_usage`,
           "0",
         ),
-        context: "Aggregated device usage counts",
+        context: "Normalized usage actions",
       },
       {
         metric: "Uncaught errors 24h",
@@ -1462,17 +1489,18 @@ async function executeOverviewQuery(env, cacheKey) {
         value: await safeDashboardScalar(
           env,
           tables,
-          ["device_usage"],
-          `SELECT tool_id || ' (' || SUM(count) || ')' AS value
-            FROM device_usage
-            WHERE user_email != '${OWNER_EMAIL}'
-              AND updated_time >= datetime('now', '+7 hours', '-30 days')
+          ["usage_log"],
+          `WITH normalized_usage AS (
+            ${normalizedUsage30d}
+          )
+          SELECT tool_id || ' (' || COUNT(*) || ')' AS value
+            FROM normalized_usage
             GROUP BY tool_id
-            ORDER BY SUM(count) DESC
+            ORDER BY COUNT(*) DESC
             LIMIT 1`,
           "-",
         ),
-        context: "Tool with the largest aggregated action count",
+        context: "Tool with the most normalized usage actions",
       },
       {
         metric: "Noisiest error 7d",
@@ -1729,19 +1757,153 @@ ORDER BY section_order, rank`;
   }
 }
 
-function getWhoActivityBranches(tables, rangeConfig) {
-  const branches = [];
-  if (tables.has("usage_log")) {
-    branches.push(`SELECT LOWER(user_email) AS user_email,
-    device_id,
-    CASE WHEN tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE tool_id END AS tool_id,
+async function executeToolsQuery(env, cacheKey, fallbackQuery) {
+  try {
+    if (!env.DB) {
+      return dashboardJson({ ok: false, error: "Database not available", tabId: "tools" }, 200);
+    }
+
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const tables = await getDashboardTables(env);
+    if (!tables.has("usage_log")) {
+      return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
+    }
+
+    const query = `WITH normalized_usage AS (
+  ${buildNormalizedUsageLogQuery()}
+),
+n AS (
+  SELECT tool_id,
     action,
-    created_time,
-    'live_usage' AS source
-  FROM usage_log
-  WHERE LOWER(user_email) != '${OWNER_EMAIL}'
-    ${rangeConfig.where("created_time")}`);
+    COUNT(*) AS action_count
+  FROM normalized_usage
+  GROUP BY tool_id, action
+),
+t AS (
+  SELECT tool_id,
+    SUM(action_count) AS tool_total
+  FROM n
+  GROUP BY tool_id
+)
+SELECT tool_id, action, total_count
+FROM (
+  SELECT t.tool_id, 'TOTAL' AS action, t.tool_total AS total_count, t.tool_total AS tool_total, 0 AS row_type
+  FROM t
+  UNION ALL
+  SELECT n.tool_id, n.action, n.action_count, t.tool_total, 1
+  FROM n JOIN t USING (tool_id)
+)
+ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`;
+    const result = await env.DB.prepare(query).all();
+    const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tools" });
+    setCachedDashboardQueryBody(cacheKey, body);
+
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Tool usage failed: ${String(err)}`, tabId: "tools" }, 200);
   }
+}
+
+async function executeToolAdoptionQuery(env, cacheKey, fallbackQuery) {
+  try {
+    if (!env.DB) {
+      return dashboardJson({ ok: false, error: "Database not available", tabId: "tool-adoption" }, 200);
+    }
+
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    await ensureErrorEventsSchema(env);
+    const tables = await getDashboardTables(env);
+    if (!tables.has("usage_log")) {
+      return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
+    }
+
+    const query = `WITH normalized_usage AS (
+  ${buildNormalizedUsageLogQuery()}
+),
+totals AS (
+  SELECT tool_id,
+    COUNT(*) AS total_actions,
+    SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+    COUNT(DISTINCT user_email) AS users,
+    COUNT(DISTINCT device_id) AS devices,
+    MAX(created_time) AS last_used
+  FROM normalized_usage
+  GROUP BY tool_id
+),
+ranked_actions AS (
+  SELECT tool_id,
+    action,
+    action_count,
+    ROW_NUMBER() OVER (PARTITION BY tool_id ORDER BY action_count DESC, action) AS rank
+  FROM (
+    SELECT tool_id,
+      action,
+      COUNT(*) AS action_count
+    FROM normalized_usage
+    GROUP BY tool_id, action
+  )
+),
+errors AS (
+  SELECT COALESCE(tool_id, route, 'unknown') AS tool_id,
+    COUNT(*) AS errors_7d,
+    MAX(created_time) AS last_error
+  FROM error_events
+  WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+    AND created_time >= datetime('now', '+7 hours', '-7 days')
+  GROUP BY COALESCE(tool_id, route, 'unknown')
+)
+SELECT totals.tool_id,
+  totals.total_actions,
+  totals.opens,
+  totals.users,
+  totals.devices,
+  ranked_actions.action AS top_action,
+  ranked_actions.action_count AS top_action_count,
+  COALESCE(errors.errors_7d, 0) AS errors_7d,
+  totals.last_used,
+  errors.last_error
+FROM totals
+LEFT JOIN ranked_actions ON ranked_actions.tool_id = totals.tool_id AND ranked_actions.rank = 1
+LEFT JOIN errors ON errors.tool_id = totals.tool_id
+ORDER BY totals.total_actions DESC, totals.users DESC
+LIMIT 100`;
+    const result = await env.DB.prepare(query).all();
+    const body = JSON.stringify({ ok: true, data: result.results || [], mode: "computed-tool-adoption" });
+    setCachedDashboardQueryBody(cacheKey, body);
+
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Tool adoption failed: ${String(err)}`, tabId: "tool-adoption" }, 200);
+  }
+}
+
+function getWhoActivityBranches(tables, rangeConfig) {
+  if (tables.has("usage_log")) {
+    return [
+      `SELECT user_email, device_id, tool_id, action, created_time, 'live_usage' AS source
+  FROM (
+    ${buildNormalizedUsageLogQuery(rangeConfig)}
+  )`,
+    ];
+  }
+
+  const branches = [];
   if (tables.has("events") && tables.has("device") && tables.has("users")) {
     branches.push(`SELECT LOWER(u.email) AS user_email,
     e.device_id,
@@ -1756,6 +1918,29 @@ function getWhoActivityBranches(tables, rangeConfig) {
     ${rangeConfig.where("e.created_time")}`);
   }
   return branches;
+}
+
+function buildNormalizedUsageLogQuery(rangeConfig = null) {
+  const rangeClause = rangeConfig ? `\n    ${rangeConfig.where("u.created_time")}` : "";
+  return `SELECT LOWER(u.user_email) AS user_email,
+    u.device_id,
+    CASE WHEN u.tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE u.tool_id END AS tool_id,
+    u.action,
+    u.created_time
+  FROM usage_log u
+  WHERE LOWER(u.user_email) != '${OWNER_EMAIL}'${rangeClause}
+    AND (
+      u.action != 'open'
+      OR NOT EXISTS (
+        SELECT 1
+        FROM usage_log u2
+        WHERE LOWER(u2.user_email) = LOWER(u.user_email)
+          AND u2.device_id = u.device_id
+          AND u2.tool_id = u.tool_id
+          AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
+          AND u2.action != 'open'
+      )
+    )`;
 }
 
 function getDashboardRangeConfig(range) {
