@@ -9,8 +9,8 @@ export const RegisterTemplate = /* html */ `
           <input type="text" id="reg-username" class="register-input" placeholder="Input Username" aria-label="Username" maxlength="15" required />
         </div>
         <div class="register-field">
-          <label for="reg-email">Office Email</label>
-          <input type="email" id="reg-email" class="register-input" placeholder="name@bankmandiri.co.id" aria-label="Office Email" required />
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" class="register-input" placeholder="name@example.com" aria-label="Email" required />
         </div>
         <div class="register-field otp-field" style="display:none">
           <label for="reg-otp">Verification Code</label>
@@ -22,7 +22,7 @@ export const RegisterTemplate = /* html */ `
         </div>
         <div class="register-error" aria-live="polite"></div>
       </form>
-      <p class="register-note">We verify your office email via OTP. Whitelist applies.</p>
+      <p class="register-note">We verify your email via OTP. Bank Mandiri email is required for managed config access.</p>
     </div>
   </div>
 `;

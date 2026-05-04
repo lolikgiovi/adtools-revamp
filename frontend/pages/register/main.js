@@ -36,68 +36,15 @@ export class RegisterPage {
         return;
       }
       if (!emailOk) {
-        errorEl.textContent = "Please enter a valid company email.";
+        errorEl.textContent = "Please enter a valid email.";
         return;
       }
 
       try {
         const baseEnv = (import.meta?.env?.VITE_WORKER_BASE || "").replace(/\/$/, "");
 
-        // Step 1: enforce whitelist and request OTP
+        // Step 1: request OTP
         if (this.step === "email") {
-          // Fetch whitelist from Worker or fallback
-          const fallback = baseEnv ? `${baseEnv}/whitelist.json` : "https://adtools.lolik.workers.dev/whitelist.json";
-          const WHITELIST_CANDIDATES = ["/whitelist.json", fallback];
-          let whitelist = [];
-          for (const url of WHITELIST_CANDIDATES) {
-            try {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 5000);
-              const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
-              clearTimeout(timeoutId);
-              if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data)) whitelist = data;
-                else if (data && Array.isArray(data.whitelistEmails)) whitelist = data.whitelistEmails;
-                else if (data && Array.isArray(data.allowedEmails)) whitelist = data.allowedEmails;
-                else if (data && Array.isArray(data.emails)) whitelist = data.emails;
-                else console.warn("Unexpected whitelist schema from URL");
-                if (whitelist && whitelist.length) break;
-              }
-            } catch (_) {
-              // Try next candidate
-            }
-          }
-
-          // Normalize and cache whitelist locally
-          try {
-            const lower = (whitelist || [])
-              .map((e) =>
-                String(e || "")
-                  .trim()
-                  .toLowerCase()
-              )
-              .filter(Boolean);
-            localStorage.setItem("config.whitelistEmails", JSON.stringify(lower));
-            localStorage.setItem("config.whitelistFetchedAt", new Date().toISOString());
-            whitelist = lower;
-          } catch (_) {}
-
-          // Fallback to cached whitelist when fetch failed
-          if (!Array.isArray(whitelist) || !whitelist.length) {
-            try {
-              const cached = JSON.parse(localStorage.getItem("config.whitelistEmails") || "[]");
-              if (Array.isArray(cached) && cached.length) whitelist = cached;
-            } catch (_) {}
-          }
-
-          // Enforce whitelist when available; if none available, allow
-          const allowed = whitelist.length ? whitelist.includes(email.toLowerCase()) : true;
-          if (!allowed) {
-            errorEl.textContent = "Email is not whitelisted. Please contact admin.";
-            return;
-          }
-
           // Request OTP
           submitBtn.disabled = true;
           submitBtn.textContent = "Sending code...";

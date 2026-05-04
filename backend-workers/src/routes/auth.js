@@ -3,9 +3,19 @@
  * Handles /register, /register/request-otp, /register/verify, and /api/kv/get
  */
 
-import { corsHeaders, isOriginAllowed } from '../utils/cors.js';
-import { tsGmt7, tsGmt7Plain, parseTsFlexible } from '../utils/timestamps.js';
-import { isEmailDomainAllowed, sendOtpEmail } from '../utils/email.js';
+import { corsHeaders, isOriginAllowed } from "../utils/cors.js";
+import { tsGmt7, tsGmt7Plain, parseTsFlexible } from "../utils/timestamps.js";
+import { allowedEmailDomains, sendOtpEmail } from "../utils/email.js";
+
+function isConfigEmailAllowed(email, env) {
+  const domain = String(email || "")
+    .trim()
+    .toLowerCase()
+    .split("@")
+    .pop();
+  const allowed = allowedEmailDomains(env);
+  return allowed.length > 0 && allowed.includes(domain);
+}
 
 /**
  * Handle POST /register - legacy registration
@@ -43,13 +53,6 @@ export async function handleRegisterRequestOtp(request, env) {
         status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
-
-    if (!isEmailDomainAllowed(normalized, env)) {
-      return new Response(JSON.stringify({ ok: false, error: "Email domain not allowed" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
 
     // Rate-limit OTP requests per email using KV (10 min window, max 3)
     try {
@@ -116,7 +119,7 @@ export async function handleRegisterVerify(request, env) {
     const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || "").trim();
     const ua = request.headers.get("User-Agent") || "";
     const payloadPlatform = String(data.platform || "").trim();
-    
+
     // Decide platform label
     let platform;
     if (/^desktop\s*\(tauri\)$/i.test(payloadPlatform) || /tauri/i.test(payloadPlatform)) {
@@ -125,27 +128,20 @@ export async function handleRegisterVerify(request, env) {
       platform = /Firefox\//i.test(ua)
         ? "Firefox"
         : /Edg\//i.test(ua)
-        ? "Edge"
-        : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
-        ? "Chrome"
-        : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
-        ? "Safari"
-        : /Chromium\//i.test(ua)
-        ? "Chromium"
-        : "Unknown";
+          ? "Edge"
+          : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
+            ? "Chrome"
+            : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
+              ? "Safari"
+              : /Chromium\//i.test(ua)
+                ? "Chromium"
+                : "Unknown";
     }
     const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
 
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
         status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
-
-    if (!isEmailDomainAllowed(email, env)) {
-      return new Response(JSON.stringify({ ok: false, error: "Email domain not allowed" }), {
-        status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
@@ -188,7 +184,7 @@ export async function handleRegisterVerify(request, env) {
     const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
     const newUserId = existingUser?.id || crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen"
+      "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen",
     )
       .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain())
       .run();
@@ -196,7 +192,7 @@ export async function handleRegisterVerify(request, env) {
     const userId = userRow?.id || newUserId;
 
     await env.DB.prepare(
-      "INSERT INTO device (device_id, user_id, platform, created_time, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen"
+      "INSERT INTO device (device_id, user_id, platform, created_time, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen",
     )
       .bind(deviceId, userId, platform, tsGmt7Plain(), tsGmt7Plain())
       .run();
@@ -240,10 +236,25 @@ export async function handleKvGet(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
       });
     }
-    const session = await env.adtools.get(`session:${token}`);
-    if (!session) {
+    const sessionRaw = await env.adtools.get(`session:${token}`);
+    if (!sessionRaw) {
       return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
         status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    let session;
+    try {
+      session = JSON.parse(sessionRaw);
+    } catch (_) {
+      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
+    if (!isConfigEmailAllowed(session?.email, env)) {
+      return new Response(JSON.stringify({ ok: false, error: "Config access restricted to @bankmandiri.co.id email" }), {
+        status: 403,
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
       });
     }
