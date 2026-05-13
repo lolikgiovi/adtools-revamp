@@ -4,6 +4,7 @@ import {
   buildRequestBody,
   classifyResult,
   extractTemplateFromResponse,
+  formatVelocityParseError,
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
@@ -145,6 +146,25 @@ describe("VelocityTemplateService", () => {
         body: JSON.stringify({ context: { name: "Ada" }, template: "Hello" }),
       }),
     );
+  });
+
+  it("formats rendered JSON parser errors with template guidance", () => {
+    const result = formatVelocityParseError(
+      new Error("Unexpected character (',' (code 44)): expected a valid value at [Source: { ApplicationID: , WhiteListID: EVREMASUAT2605NRNW00000355 }]; line: 1, column: 18]"),
+    );
+
+    expect(result).toContain("Velocity parse failed");
+    expect(result).toContain("not valid JSON");
+    expect(result).toContain("Quote JSON object keys");
+    expect(result).toContain("render `null` or an empty string");
+    expect(result).toContain("Quote string values");
+    expect(result).not.toContain("CORS");
+  });
+
+  it("keeps the CORS hint for likely connection failures", () => {
+    const result = formatVelocityParseError(new Error("Failed to fetch"));
+
+    expect(result).toContain("CORS");
   });
 
   it("classifies valid JSON results", () => {

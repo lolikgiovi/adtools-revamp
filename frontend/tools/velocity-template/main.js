@@ -14,6 +14,7 @@ import {
   DEFAULT_VELOCITY_ENDPOINT,
   classifyResult,
   getVelocitySettings,
+  formatVelocityParseError,
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
@@ -302,11 +303,8 @@ class VelocityTemplateTool extends BaseTool {
         ...summarizeText(rendered, "result"),
       });
     } catch (error) {
-      const message =
-        error?.name === "AbortError"
-          ? "Velocity endpoint timed out after 30 seconds."
-          : `Velocity parse failed: ${error?.message || String(error)}`;
-      this.showStatus(`${message}\nIf the endpoint works in curl but fails here, check browser/WebView CORS policy.`, "error");
+      const message = formatVelocityParseError(error);
+      this.showStatus(message, "error");
       this.trackAnalytics("parse_error", { message: String(error?.message || error).slice(0, 180) });
     } finally {
       clearTimeout(timer);

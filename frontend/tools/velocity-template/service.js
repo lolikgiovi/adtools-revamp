@@ -278,6 +278,47 @@ export function getVelocitySettings() {
   return { endpoint, headersRaw, customFunctions };
 }
 
+export function formatVelocityParseError(error) {
+  if (error?.name === "AbortError") {
+    return "Velocity endpoint timed out after 30 seconds.";
+  }
+
+  const rawMessage = error?.message || String(error);
+  const message = `Velocity parse failed: ${rawMessage}`;
+  const jsonRenderHint = getRenderedJsonErrorHint(rawMessage);
+  if (jsonRenderHint) {
+    return `${message}\n${jsonRenderHint}`;
+  }
+
+  if (isLikelyConnectionError(rawMessage)) {
+    return `${message}\nIf the endpoint works in curl but fails here, check browser/WebView CORS policy.`;
+  }
+
+  return message;
+}
+
+function getRenderedJsonErrorHint(message) {
+  const raw = String(message || "");
+  if (!/Unexpected character|expected a valid value|JSON parse|JsonParseException|Unrecognized token/i.test(raw)) return "";
+
+  const hints = ["The endpoint rendered the template, then rejected the rendered output because it is not valid JSON."];
+  if (/[{,]\s*[A-Za-z_$][\w$-]*\s*:/.test(raw)) {
+    hints.push('Quote JSON object keys, for example `"ApplicationID"` instead of `ApplicationID`.');
+  }
+  if (/:\s*,/.test(raw)) {
+    hints.push("Empty Velocity values cannot be left blank in JSON; render `null` or an empty string instead.");
+  }
+  if (/:\s*[A-Za-z_][\w.-]*(?:\s*[,}])/.test(raw)) {
+    hints.push('Quote string values, for example `"EVREMASUAT2605NRNW00000355"`.');
+  }
+
+  return hints.join(" ");
+}
+
+function isLikelyConnectionError(message) {
+  return /Failed to fetch|NetworkError|Load failed|CORS|blocked by|origin|preflight/i.test(String(message || ""));
+}
+
 export async function requestVelocityTemplate({ endpoint, headers, template, payload, fetchImpl = fetch, signal } = {}) {
   const target = String(endpoint || "").trim();
   if (!target) throw new Error("Velocity endpoint is not configured.");
@@ -317,6 +358,7 @@ export const VelocityTemplateService = {
   extractTemplateFromResponse,
   getSettingsValue,
   getVelocitySettings,
+  formatVelocityParseError,
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
