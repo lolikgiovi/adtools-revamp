@@ -126,6 +126,43 @@
   min-height: 0;
 }
 
+.velocity-template-tool .monaco-editor .suggest-widget {
+  z-index: 9999 !important;
+  background: #252526 !important;
+  border: 1px solid #3c3c3c !important;
+}
+
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row {
+  background: #252526 !important;
+}
+
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row {
+  color: #d4d4d4 !important;
+}
+
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.selected {
+  background: #094771 !important;
+}
+
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label .label-name,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label .label-name > span,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-highlighted-label,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-highlighted-label span {
+  color: #d4d4d4 !important;
+  opacity: 1 !important;
+}
+
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name > span,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
+.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label span {
+  color: #ffffff !important;
+}
+
 .velocity-status {
   display: none;
   padding: 0.375rem 0.5rem;
