@@ -18,7 +18,6 @@ import {
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
-  validateTemplateJsonShape,
   validateVelocitySyntax,
 } from "./service.js";
 import "./styles.css";
@@ -249,7 +248,6 @@ class VelocityTemplateTool extends BaseTool {
   bindEvents() {
     document.getElementById("btnVelocityParse")?.addEventListener("click", () => this.handleParse());
     document.getElementById("btnVelocityCheck")?.addEventListener("click", () => this.handleCheckSyntax());
-    document.getElementById("btnVelocityValidateTemplateJson")?.addEventListener("click", () => this.handleValidateTemplateJson());
     document.getElementById("btnVelocityFormatPayload")?.addEventListener("click", () => this.handleFormatPayload());
     document.getElementById("btnVelocityCopyTemplate")?.addEventListener("click", () => this.copyToClipboard(this.templateEditor.getValue()));
     document.getElementById("btnVelocityClearTemplate")?.addEventListener("click", () => this.templateEditor.setValue(""));
@@ -338,20 +336,6 @@ class VelocityTemplateTool extends BaseTool {
     this.markEditor(this.templateEditor, "velocity-template", result.error || "Invalid Velocity syntax", result.position);
     this.showStatus(`Velocity syntax error: ${result.error}`, "error");
     this.trackAnalytics("syntax_check_error");
-  }
-
-  handleValidateTemplateJson() {
-    this.clearMarkers();
-    const result = validateTemplateJsonShape(this.templateEditor.getValue());
-    if (result.valid) {
-      this.showStatus("Template JSON structure looks valid after replacing Velocity values.", "success");
-      this.showSuccess("Template JSON structure looks valid");
-      this.trackAnalytics("template_json_check_success");
-      return;
-    }
-    this.markEditor(this.templateEditor, "velocity-template-json", result.error || "Invalid template JSON structure", result.position);
-    this.showStatus(result.error || "Invalid template JSON structure.", "error");
-    this.trackAnalytics("template_json_check_error");
   }
 
   async handleFormatPayload() {
