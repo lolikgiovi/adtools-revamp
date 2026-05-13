@@ -19,6 +19,7 @@ export const VelocityTemplateToolTemplate = /* html */ `
           <div class="velocity-pane-actions">
             <button id="btnVelocityParse" class="btn btn-primary btn-sm" title="Parse template with JSON payload">Parse</button>
             <button id="btnVelocityCheck" class="btn btn-ghost btn-sm" title="Check Velocity syntax">Check Syntax</button>
+            <button id="btnVelocityValidateTemplateJson" class="btn btn-ghost btn-sm" title="Validate JSON structure inside template">Validate JSON</button>
             <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm" title="Copy template">Copy</button>
             <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm" title="Clear template">Clear</button>
           </div>

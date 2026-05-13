@@ -9,6 +9,8 @@ import {
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
+  sanitizeVelocityJsonTemplate,
+  validateTemplateJsonShape,
   validateVelocitySyntax,
 } from "../service.js";
 import { LIVIN_FN_COMPLETIONS, LIVIN_REGISTRY_FUNCTION_NAMES } from "../functionCatalog.js";
@@ -26,6 +28,45 @@ describe("VelocityTemplateService", () => {
 
     expect(result.valid).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+
+  it("validates JSON-shaped Velocity templates", () => {
+    const result = validateTemplateJsonShape(`
+      ## setup
+      #set($amount = $offer.loanAmount)
+      {
+        "name": "$!application.fullname",
+        "amount": $!amount,
+        "active": true
+      }
+    `);
+
+    expect(result.valid).toBe(true);
+  });
+
+  it("reports invalid JSON structure inside Velocity templates", () => {
+    const result = validateTemplateJsonShape(`
+      {
+        "name": "$!application.fullname"
+        "amount": $!offer.loanAmount
+      }
+    `);
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("Template JSON structure error");
+  });
+
+  it("sanitizes Velocity comments and references before JSON validation", () => {
+    const result = sanitizeVelocityJsonTemplate(`
+      {
+        "amount": $!offer.loanShippingFee, ## nullable number
+        "label": "$!offer.pickupBranchName"
+      }
+    `);
+
+    expect(result).toContain('"amount": null,');
+    expect(result).toContain('"label": "__VTL_VALUE__"');
+    expect(result).not.toContain("nullable number");
   });
 
   it("validates payload JSON objects", () => {

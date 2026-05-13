@@ -89,6 +89,83 @@ export function validateVelocitySyntax(template) {
   }
 }
 
+export function validateTemplateJsonShape(template) {
+  const source = String(template ?? "");
+  const jsonStart = source.search(/[\[{]/);
+  if (jsonStart < 0) {
+    return { valid: false, error: "Template does not contain a JSON object or array.", position: null };
+  }
+
+  const jsonLike = source.slice(jsonStart);
+  const sanitized = sanitizeVelocityJsonTemplate(jsonLike);
+  try {
+    JSON.parse(sanitized);
+    return { valid: true, error: null, sanitized };
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Template JSON structure error: ${error.message}`,
+      position: getErrorPosition(error.message),
+      sanitized,
+    };
+  }
+}
+
+export function sanitizeVelocityJsonTemplate(template) {
+  let output = String(template ?? "");
+  output = stripVelocityComments(output);
+  output = output
+    .split("\n")
+    .filter((line) => !/^\s*#(set|if|elseif|else|end|foreach|macro|break|stop|include|parse|define|evaluate)\b/.test(line))
+    .join("\n");
+  output = output.replace(/\$!?\{[^}]+\}/g, "__VTL_VALUE__");
+  output = output.replace(/\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*(?:\([^)]*\))?)*(?:\([^)]*\))?/g, "__VTL_VALUE__");
+  output = output.replace(/:\s*__VTL_VALUE__(\s*[,}\]])/g, ": null$1");
+  return output;
+}
+
+function stripVelocityComments(source) {
+  let output = "";
+  let inString = false;
+  let quote = "";
+  let escaped = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1];
+
+    if (inString) {
+      output += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === quote) {
+        inString = false;
+        quote = "";
+      }
+      continue;
+    }
+
+    if (current === '"' || current === "'") {
+      inString = true;
+      quote = current;
+      output += current;
+      continue;
+    }
+
+    if (current === "#" && next === "#") {
+      while (index < source.length && source[index] !== "\n") index += 1;
+      output += "\n";
+      continue;
+    }
+
+    output += current;
+  }
+
+  return output;
+}
+
 export function validateDirectiveBalance(source) {
   const text = String(source ?? "");
   const stack = [];
@@ -389,6 +466,8 @@ export const VelocityTemplateService = {
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
+  sanitizeVelocityJsonTemplate,
   validateDirectiveBalance,
+  validateTemplateJsonShape,
   validateVelocitySyntax,
 };

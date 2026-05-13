@@ -18,6 +18,7 @@ import {
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
+  validateTemplateJsonShape,
   validateVelocitySyntax,
 } from "./service.js";
 import "./styles.css";
@@ -126,14 +127,17 @@ class VelocityTemplateTool extends BaseTool {
           root: [
             [/##.*$/, "comment"],
             [/#\*/, "comment", "@comment"],
+            [/"(?:[^"\\]|\\.)*"(?=\s*:)/, "type.identifier"],
             [/"([^"\\]|\\.)*"/, "string"],
             [/'([^'\\]|\\.)*'/, "string"],
             [/#(if|elseif|else|end|set|foreach|macro|parse|include|define|stop|break|evaluate)\b/, "keyword"],
             [/\$!?\{[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*(?:\([^)]*\))?)*\}/, "variable"],
             [/\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*(?:\([^)]*\))?)*/, "variable"],
             [/\.[A-Za-z_][\w]*(?=\()/, "predefined"],
+            [/[,:]/, "delimiter"],
             [/[{}()[\]]/, "delimiter.bracket"],
             [/[=><!?:+\-*/%&|]+/, "operator"],
+            [/\b(?:true|false|null)\b/, "constant"],
             [/\b\d+(?:\.\d+)?\b/, "number"],
           ],
           comment: [
@@ -150,8 +154,12 @@ class VelocityTemplateTool extends BaseTool {
           { token: "keyword", foreground: "93c5ff" },
           { token: "variable", foreground: "ffcb6b" },
           { token: "predefined", foreground: "c792ea" },
+          { token: "type.identifier", foreground: "82aaff" },
           { token: "string", foreground: "c3e88d" },
           { token: "number", foreground: "f78c6c" },
+          { token: "constant", foreground: "ff5370" },
+          { token: "delimiter", foreground: "89ddff" },
+          { token: "delimiter.bracket", foreground: "89ddff" },
           { token: "comment", foreground: "697098" },
         ],
         colors: {
@@ -241,6 +249,7 @@ class VelocityTemplateTool extends BaseTool {
   bindEvents() {
     document.getElementById("btnVelocityParse")?.addEventListener("click", () => this.handleParse());
     document.getElementById("btnVelocityCheck")?.addEventListener("click", () => this.handleCheckSyntax());
+    document.getElementById("btnVelocityValidateTemplateJson")?.addEventListener("click", () => this.handleValidateTemplateJson());
     document.getElementById("btnVelocityFormatPayload")?.addEventListener("click", () => this.handleFormatPayload());
     document.getElementById("btnVelocityCopyTemplate")?.addEventListener("click", () => this.copyToClipboard(this.templateEditor.getValue()));
     document.getElementById("btnVelocityClearTemplate")?.addEventListener("click", () => this.templateEditor.setValue(""));
@@ -329,6 +338,20 @@ class VelocityTemplateTool extends BaseTool {
     this.markEditor(this.templateEditor, "velocity-template", result.error || "Invalid Velocity syntax", result.position);
     this.showStatus(`Velocity syntax error: ${result.error}`, "error");
     this.trackAnalytics("syntax_check_error");
+  }
+
+  handleValidateTemplateJson() {
+    this.clearMarkers();
+    const result = validateTemplateJsonShape(this.templateEditor.getValue());
+    if (result.valid) {
+      this.showStatus("Template JSON structure looks valid after replacing Velocity values.", "success");
+      this.showSuccess("Template JSON structure looks valid");
+      this.trackAnalytics("template_json_check_success");
+      return;
+    }
+    this.markEditor(this.templateEditor, "velocity-template-json", result.error || "Invalid template JSON structure", result.position);
+    this.showStatus(result.error || "Invalid template JSON structure.", "error");
+    this.trackAnalytics("template_json_check_error");
   }
 
   async handleFormatPayload() {
