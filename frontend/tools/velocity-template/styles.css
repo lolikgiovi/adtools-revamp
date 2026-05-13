@@ -30,7 +30,7 @@
 }
 
 .velocity-template-layout.payload-collapsed {
-  grid-template-columns: 42px 0 minmax(320px, 1fr) 6px minmax(320px, 1fr);
+  grid-template-columns: 42px minmax(320px, 1fr) 6px minmax(320px, 1fr);
 }
 
 .velocity-pane {

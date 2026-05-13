@@ -274,9 +274,12 @@ class VelocityTemplateTool extends BaseTool {
       const layout = document.getElementById("velocityTemplateLayout");
       if (!layout) return;
       const savedLayout = JSON.parse(localStorage.getItem(VELOCITY_LAYOUT_KEY) || "{}");
-      if (savedLayout.payload) layout.style.setProperty("--velocity-payload-width", `${savedLayout.payload}px`);
-      if (savedLayout.template) layout.style.setProperty("--velocity-template-width", `${savedLayout.template}px`);
-      if (savedLayout.result) layout.style.setProperty("--velocity-result-width", `${savedLayout.result}px`);
+      const savedWidths = this.constrainPaneWidths({
+        payload: Number(savedLayout.payload) || 320,
+        template: Number(savedLayout.template) || 420,
+        result: Number(savedLayout.result) || 420,
+      });
+      this.applyPaneWidths(savedWidths);
       this.setPayloadCollapsed(localStorage.getItem(VELOCITY_PAYLOAD_COLLAPSED_KEY) === "true");
     } catch (_) {}
   }
@@ -333,13 +336,16 @@ class VelocityTemplateTool extends BaseTool {
 
   constrainPaneWidths(widths) {
     const min = { payload: 220, template: 280, result: 300 };
-    const total = widths.payload + widths.template + widths.result;
+    const layout = document.getElementById("velocityTemplateLayout");
+    const available = Math.max(900, (layout?.getBoundingClientRect?.().width || 1260) - 12);
+    const rawTotal = widths.payload + widths.template + widths.result;
+    const scale = rawTotal > available ? available / rawTotal : 1;
     const next = {
-      payload: Math.max(min.payload, widths.payload),
-      template: Math.max(min.template, widths.template),
-      result: Math.max(min.result, widths.result),
+      payload: Math.max(min.payload, widths.payload * scale),
+      template: Math.max(min.template, widths.template * scale),
+      result: Math.max(min.result, widths.result * scale),
     };
-    const overflow = next.payload + next.template + next.result - total;
+    const overflow = next.payload + next.template + next.result - available;
     if (overflow > 0) {
       const largest = Object.entries(next).sort((a, b) => b[1] - a[1])[0][0];
       next[largest] = Math.max(min[largest], next[largest] - overflow);
