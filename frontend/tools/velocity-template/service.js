@@ -297,6 +297,10 @@ export function formatVelocityParseError(error) {
   return message;
 }
 
+export function getRenderedOutputFromError(error) {
+  return extractRenderedOutputFromMessage(error?.message || String(error || ""));
+}
+
 function getRenderedJsonErrorHint(message) {
   const raw = String(message || "");
   if (!/Unexpected character|expected a valid value|JSON parse|JsonParseException|Unrecognized token/i.test(raw)) return "";
@@ -313,6 +317,14 @@ function getRenderedJsonErrorHint(message) {
   }
 
   return hints.join(" ");
+}
+
+function extractRenderedOutputFromMessage(message) {
+  const raw = String(message || "");
+  const sourceMatch = raw.match(/\[Source:\s*(?:\([^)]+\)\s*)?([\s\S]*?);\s*line:\s*\d+,\s*column:\s*\d+\]/i);
+  const source = sourceMatch?.[1]?.trim();
+  if (!source || source === "UNKNOWN") return "";
+  return source.replace(/\.\.\.\s*$/, "").trim();
 }
 
 function isLikelyConnectionError(message) {
@@ -340,7 +352,9 @@ export async function requestVelocityTemplate({ endpoint, headers, template, pay
 
   if (!response.ok) {
     const message = data?.message || data?.error || data?.detail?.message || data?.detail || response.statusText || `HTTP ${response.status}`;
-    throw new Error(String(message));
+    const error = new Error(String(message));
+    error.renderedOutput = getRenderedOutputFromError(error);
+    throw error;
   }
 
   const extracted = extractTemplateFromResponse(data);
@@ -356,6 +370,7 @@ export const VelocityTemplateService = {
   buildRequestBody,
   classifyResult,
   extractTemplateFromResponse,
+  getRenderedOutputFromError,
   getSettingsValue,
   getVelocitySettings,
   formatVelocityParseError,

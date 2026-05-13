@@ -303,6 +303,9 @@ class VelocityTemplateTool extends BaseTool {
         ...summarizeText(rendered, "result"),
       });
     } catch (error) {
+      if (error?.renderedOutput) {
+        this.renderResult(error.renderedOutput);
+      }
       const message = formatVelocityParseError(error);
       this.showStatus(message, "error");
       this.trackAnalytics("parse_error", { message: String(error?.message || error).slice(0, 180) });

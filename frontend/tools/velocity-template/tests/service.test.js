@@ -5,6 +5,7 @@ import {
   classifyResult,
   extractTemplateFromResponse,
   formatVelocityParseError,
+  getRenderedOutputFromError,
   parseHeaderSettings,
   parseJsonObject,
   requestVelocityTemplate,
@@ -159,6 +160,38 @@ describe("VelocityTemplateService", () => {
     expect(result).toContain("render `null` or an empty string");
     expect(result).toContain("Quote string values");
     expect(result).not.toContain("CORS");
+  });
+
+  it("extracts rendered output from endpoint JSON parser errors", () => {
+    const result = getRenderedOutputFromError(
+      new Error("Unexpected character (',' (code 44)): expected a valid value at [Source: (String)  {  requestTemplate:  {    ApplicationID: ,    WhiteListID: EVREMASUAT2605NRNW00000355  }}; line: 341, column: 21]"),
+    );
+
+    expect(result).toBe("{  requestTemplate:  {    ApplicationID: ,    WhiteListID: EVREMASUAT2605NRNW00000355  }}");
+  });
+
+  it("attaches rendered output to failed endpoint responses when available", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      statusText: "Bad Request",
+      text: async () =>
+        JSON.stringify({
+          message:
+            "Unexpected character (',' (code 44)): expected a valid value at [Source: (String)  {  ApplicationID: ,  }; line: 1, column: 21]",
+        }),
+    }));
+
+    await expect(
+      requestVelocityTemplate({
+        endpoint: "https://example.test/velocity",
+        headers: { "content-type": "application/json" },
+        template: "Hello",
+        payload: {},
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({
+      renderedOutput: "{  ApplicationID: ,  }",
+    });
   });
 
   it("keeps the CORS hint for likely connection failures", () => {
