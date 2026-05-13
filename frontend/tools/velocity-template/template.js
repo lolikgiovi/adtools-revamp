@@ -1,3 +1,20 @@
+const copyIcon = /* html */ `
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+`;
+
+const trashIcon = /* html */ `
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18"></path>
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+    <path d="M10 11v6"></path>
+    <path d="M14 11v6"></path>
+  </svg>
+`;
+
 export const VelocityTemplateToolTemplate = /* html */ `
   <div class="tool-container velocity-template-tool">
     <div class="velocity-template-layout">
@@ -6,8 +23,8 @@ export const VelocityTemplateToolTemplate = /* html */ `
           <h3>JSON Payload Input</h3>
           <div class="velocity-pane-actions">
             <button id="btnVelocityFormatPayload" class="btn btn-ghost btn-sm" title="Format JSON payload">Format Json</button>
-            <button id="btnVelocityClearPayload" class="btn btn-ghost btn-sm" title="Clear payload">Clear</button>
-            <button id="btnVelocityCopyPayload" class="btn btn-ghost btn-sm" title="Copy payload">Copy</button>
+            <button id="btnVelocityClearPayload" class="btn btn-ghost btn-sm btn-icon-only" title="Clear payload" aria-label="Clear payload">${trashIcon}</button>
+            <button id="btnVelocityCopyPayload" class="btn btn-ghost btn-sm btn-icon-only" title="Copy payload" aria-label="Copy payload">${copyIcon}</button>
           </div>
         </header>
         <div id="velocityPayloadEditor" class="velocity-editor"></div>
@@ -20,8 +37,8 @@ export const VelocityTemplateToolTemplate = /* html */ `
             <button id="btnVelocityParse" class="btn btn-primary btn-sm" title="Parse template with JSON payload">Parse</button>
             <button id="btnVelocityCheck" class="btn btn-ghost btn-sm" title="Check Velocity syntax">Check Syntax</button>
             <button id="btnVelocityValidateTemplateJson" class="btn btn-ghost btn-sm" title="Validate JSON structure inside template">Validate JSON</button>
-            <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm" title="Copy template">Copy</button>
-            <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm" title="Clear template">Clear</button>
+            <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm btn-icon-only" title="Copy template" aria-label="Copy template">${copyIcon}</button>
+            <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm btn-icon-only" title="Clear template" aria-label="Clear template">${trashIcon}</button>
           </div>
         </header>
         <div id="velocityTemplateEditor" class="velocity-editor"></div>
@@ -36,7 +53,7 @@ export const VelocityTemplateToolTemplate = /* html */ `
           <div class="velocity-pane-actions">
             <button id="btnVelocityShowRendered" class="btn btn-ghost btn-sm velocity-html-only" title="Show rendered HTML" style="display:none">Rendered</button>
             <button id="btnVelocityShowSource" class="btn btn-ghost btn-sm velocity-html-only" title="Show result source" style="display:none">Source</button>
-            <button id="btnVelocityCopyResult" class="btn btn-ghost btn-sm" title="Copy result">Copy</button>
+            <button id="btnVelocityCopyResult" class="btn btn-ghost btn-sm btn-icon-only" title="Copy result" aria-label="Copy result">${copyIcon}</button>
             <button id="btnVelocityValidateResultJson" class="btn btn-ghost btn-sm" title="Validate result JSON">Validate JSON</button>
           </div>
         </header>
