@@ -13,18 +13,6 @@ export const VelocityTemplateToolTemplate = /* html */ `
     </div>
 
     <div class="velocity-template-layout">
-      <section class="velocity-pane velocity-template-pane">
-        <header class="velocity-pane-header">
-          <h3>Template Input</h3>
-          <div class="velocity-pane-actions">
-            <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm" title="Copy template">Copy</button>
-            <button id="btnVelocityPasteTemplate" class="btn btn-ghost btn-sm" title="Paste template">Paste</button>
-            <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm" title="Clear template">Clear</button>
-          </div>
-        </header>
-        <div id="velocityTemplateEditor" class="velocity-editor"></div>
-      </section>
-
       <section class="velocity-pane velocity-payload-pane">
         <header class="velocity-pane-header">
           <h3>JSON Payload Input</h3>
@@ -35,6 +23,18 @@ export const VelocityTemplateToolTemplate = /* html */ `
           </div>
         </header>
         <div id="velocityPayloadEditor" class="velocity-editor"></div>
+      </section>
+
+      <section class="velocity-pane velocity-template-pane">
+        <header class="velocity-pane-header">
+          <h3>Template Input</h3>
+          <div class="velocity-pane-actions">
+            <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm" title="Copy template">Copy</button>
+            <button id="btnVelocityPasteTemplate" class="btn btn-ghost btn-sm" title="Paste template">Paste</button>
+            <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm" title="Clear template">Clear</button>
+          </div>
+        </header>
+        <div id="velocityTemplateEditor" class="velocity-editor"></div>
       </section>
 
       <section class="velocity-pane velocity-result-pane">
