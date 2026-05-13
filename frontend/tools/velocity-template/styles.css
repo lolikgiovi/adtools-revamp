@@ -162,6 +162,31 @@
 .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .left {
   flex: 1 1 100% !important;
   max-width: 100% !important;
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents,
+.suggest-widget .monaco-list .monaco-list-row > .contents {
+  padding-left: 0 !important;
+  width: 100% !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main,
+.suggest-widget .monaco-list .monaco-list-row > .contents > .main {
+  justify-content: flex-start !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .left > .monaco-icon-label,
+.suggest-widget .monaco-list .monaco-list-row > .contents > .main > .left > .monaco-icon-label {
+  flex: 1 1 auto !important;
+  max-width: 100% !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label::before,
+.suggest-widget .monaco-list .monaco-list-row .monaco-icon-label::before {
+  display: none !important;
+  width: 0 !important;
 }
 
 .monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .right,
