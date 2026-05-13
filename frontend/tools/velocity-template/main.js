@@ -243,12 +243,11 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("btnVelocityCheck")?.addEventListener("click", () => this.handleCheckSyntax());
     document.getElementById("btnVelocityFormatPayload")?.addEventListener("click", () => this.handleFormatPayload());
     document.getElementById("btnVelocityCopyTemplate")?.addEventListener("click", () => this.copyToClipboard(this.templateEditor.getValue()));
-    document.getElementById("btnVelocityPasteTemplate")?.addEventListener("click", () => this.pasteIntoEditor(this.templateEditor));
     document.getElementById("btnVelocityClearTemplate")?.addEventListener("click", () => this.templateEditor.setValue(""));
     document.getElementById("btnVelocityCopyPayload")?.addEventListener("click", () => this.copyToClipboard(this.payloadEditor.getValue()));
-    document.getElementById("btnVelocityPastePayload")?.addEventListener("click", () => this.pasteIntoEditor(this.payloadEditor));
     document.getElementById("btnVelocityClearPayload")?.addEventListener("click", () => this.payloadEditor.setValue(""));
     document.getElementById("btnVelocityCopyResult")?.addEventListener("click", () => this.copyToClipboard(this.lastResultRaw || this.resultEditor.getValue()));
+    document.getElementById("btnVelocityValidateResultJson")?.addEventListener("click", () => this.handleValidateResultJson());
     document.getElementById("btnVelocityShowRendered")?.addEventListener("click", () => this.showHtmlRendered());
     document.getElementById("btnVelocityShowSource")?.addEventListener("click", () => this.showHtmlSource());
   }
@@ -344,6 +343,22 @@ class VelocityTemplateTool extends BaseTool {
       await this.payloadEditor.getAction("editor.action.formatDocument")?.run?.();
     } catch (_) {}
     this.showStatus("Payload formatted.", "success");
+  }
+
+  handleValidateResultJson() {
+    this.clearMarkers();
+    const result = classifyResult(this.resultEditor.getValue());
+    if (result.type !== "json") {
+      this.showStatus("Result is not JSON-shaped.", "error");
+      return;
+    }
+    if (result.valid) {
+      this.resultEditor.setValue(result.display);
+      this.showStatus("Result is valid JSON.", "success");
+      return;
+    }
+    this.markEditor(this.resultEditor, "velocity-result", `Result JSON syntax error: ${result.error}`, result.position);
+    this.showStatus(`Result JSON syntax error: ${result.error}`, "error");
   }
 
   renderResult(raw) {

@@ -1,25 +1,13 @@
 export const VelocityTemplateToolTemplate = /* html */ `
   <div class="tool-container velocity-template-tool">
-    <div class="velocity-template-toolbar">
-      <div class="velocity-template-toolbar-main">
-        <button id="btnVelocityParse" class="btn btn-primary btn-sm" title="Parse template with configured endpoint">Parse</button>
-        <button id="btnVelocityCheck" class="btn btn-secondary btn-sm" title="Check Velocity syntax">Check Syntax</button>
-        <button id="btnVelocityFormatPayload" class="btn btn-secondary btn-sm" title="Format JSON payload">Format Payload</button>
-      </div>
-      <div class="velocity-template-endpoint" title="Configured in Settings">
-        <span>Endpoint</span>
-        <code id="velocityEndpointLabel"></code>
-      </div>
-    </div>
-
     <div class="velocity-template-layout">
       <section class="velocity-pane velocity-payload-pane">
         <header class="velocity-pane-header">
           <h3>JSON Payload Input</h3>
           <div class="velocity-pane-actions">
-            <button id="btnVelocityCopyPayload" class="btn btn-ghost btn-sm" title="Copy payload">Copy</button>
-            <button id="btnVelocityPastePayload" class="btn btn-ghost btn-sm" title="Paste payload">Paste</button>
+            <button id="btnVelocityFormatPayload" class="btn btn-ghost btn-sm" title="Format JSON payload">Format Json</button>
             <button id="btnVelocityClearPayload" class="btn btn-ghost btn-sm" title="Clear payload">Clear</button>
+            <button id="btnVelocityCopyPayload" class="btn btn-ghost btn-sm" title="Copy payload">Copy</button>
           </div>
         </header>
         <div id="velocityPayloadEditor" class="velocity-editor"></div>
@@ -29,8 +17,9 @@ export const VelocityTemplateToolTemplate = /* html */ `
         <header class="velocity-pane-header">
           <h3>Template Input</h3>
           <div class="velocity-pane-actions">
+            <button id="btnVelocityParse" class="btn btn-primary btn-sm" title="Parse template with JSON payload">Parse</button>
+            <button id="btnVelocityCheck" class="btn btn-ghost btn-sm" title="Check Velocity syntax">Check Syntax</button>
             <button id="btnVelocityCopyTemplate" class="btn btn-ghost btn-sm" title="Copy template">Copy</button>
-            <button id="btnVelocityPasteTemplate" class="btn btn-ghost btn-sm" title="Paste template">Paste</button>
             <button id="btnVelocityClearTemplate" class="btn btn-ghost btn-sm" title="Clear template">Clear</button>
           </div>
         </header>
@@ -47,6 +36,7 @@ export const VelocityTemplateToolTemplate = /* html */ `
             <button id="btnVelocityShowRendered" class="btn btn-ghost btn-sm velocity-html-only" title="Show rendered HTML" style="display:none">Rendered</button>
             <button id="btnVelocityShowSource" class="btn btn-ghost btn-sm velocity-html-only" title="Show result source" style="display:none">Source</button>
             <button id="btnVelocityCopyResult" class="btn btn-ghost btn-sm" title="Copy result">Copy</button>
+            <button id="btnVelocityValidateResultJson" class="btn btn-ghost btn-sm" title="Validate result JSON">Validate JSON</button>
           </div>
         </header>
         <div id="velocityStatus" class="velocity-status" role="status" aria-live="polite"></div>

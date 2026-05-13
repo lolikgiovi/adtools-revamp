@@ -1,7 +1,7 @@
 .velocity-template-tool.tool-container {
   width: 100%;
   max-width: none;
-  height: calc(100vh - 90px);
+  height: calc(100vh - 48px);
   margin: 0;
   padding: 0;
   display: flex;
@@ -10,41 +10,11 @@
   color: hsl(var(--foreground));
 }
 
-.velocity-template-toolbar {
-  min-height: 44px;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-}
-
-.velocity-template-toolbar-main,
 .velocity-pane-actions,
 .velocity-result-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.velocity-template-endpoint {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
-}
-
-.velocity-template-endpoint code {
-  max-width: min(42vw, 640px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: hsl(var(--foreground));
-  font-size: 0.75rem;
 }
 
 .velocity-template-layout {
@@ -68,8 +38,8 @@
 }
 
 .velocity-pane-header {
-  min-height: 44px;
-  padding: 0.5rem 0.625rem;
+  min-height: 40px;
+  padding: 0.375rem 0.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -101,7 +71,7 @@
 
 .velocity-status {
   display: none;
-  padding: 0.5rem 0.625rem;
+  padding: 0.375rem 0.5rem;
   border-bottom: 1px solid hsl(var(--border));
   font-size: 0.8rem;
   line-height: 1.4;
@@ -172,15 +142,6 @@
 }
 
 @media (max-width: 760px) {
-  .velocity-template-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .velocity-template-endpoint code {
-    max-width: 100%;
-  }
-
   .velocity-template-layout {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(3, minmax(300px, 1fr));
