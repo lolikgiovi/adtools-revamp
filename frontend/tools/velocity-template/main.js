@@ -127,7 +127,7 @@ class VelocityTemplateTool extends BaseTool {
           root: [
             [/##.*$/, "comment"],
             [/#\*/, "comment", "@comment"],
-            [/"(?:[^"\\]|\\.)*"(?=\s*:)/, "type.identifier"],
+            [/"(?:[^"\\]|\\.)*"(?=\s*:)/, "json-key"],
             [/"([^"\\]|\\.)*"/, "string"],
             [/'([^'\\]|\\.)*'/, "string"],
             [/#(if|elseif|else|end|set|foreach|macro|parse|include|define|stop|break|evaluate)\b/, "keyword"],
@@ -154,7 +154,7 @@ class VelocityTemplateTool extends BaseTool {
           { token: "keyword", foreground: "93c5ff" },
           { token: "variable", foreground: "ffcb6b" },
           { token: "predefined", foreground: "c792ea" },
-          { token: "type.identifier", foreground: "9cdcfe" },
+          { token: "json-key", foreground: "9cdcfe" },
           { token: "string", foreground: "ce9178" },
           { token: "number", foreground: "b5cea8" },
           { token: "constant", foreground: "569cd6" },
