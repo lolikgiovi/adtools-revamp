@@ -159,6 +159,34 @@
           "validation": {
             "pattern": "^https?://"
           }
+        },
+        {
+          "key": "config.velocityTemplate.endpoint",
+          "storageKey": "config.velocityTemplate.endpoint",
+          "label": "Velocity Template Endpoint",
+          "type": "string",
+          "default": "http://sandbox.everest.supporting.devmandiri.co.id/api-migration/v1/velocity/template",
+          "description": "Endpoint used by Velocity Template tool to parse templates.",
+          "validation": {
+            "required": true,
+            "pattern": "^https?://"
+          }
+        },
+        {
+          "key": "config.velocityTemplate.headers",
+          "storageKey": "config.velocityTemplate.headers",
+          "label": "Velocity Template Headers",
+          "type": "json",
+          "default": "{\n  \"accept-language\": \"id-ID\",\n  \"content-type\": \"application/json\",\n  \"x-device-id\": \"8A921BF0-CBA6-48D1-A151-F8A1836A4C1B\"\n}",
+          "description": "JSON object of headers sent to the Velocity Template endpoint."
+        },
+        {
+          "key": "config.velocityTemplate.customFunctions",
+          "storageKey": "config.velocityTemplate.customFunctions",
+          "label": "Velocity Template Custom Functions",
+          "type": "string-list",
+          "default": [],
+          "description": "Extra autocomplete functions for Velocity Template. Enter one function or snippet per line."
         }
       ]
     },

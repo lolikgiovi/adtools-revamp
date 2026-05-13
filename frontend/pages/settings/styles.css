@@ -139,6 +139,25 @@
   font-family: inherit;
 }
 
+.setting-json-input,
+.json-setting-preview {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+}
+
+.json-setting-preview {
+  max-height: 11rem;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .setting-control {
   display: inline-flex;
   align-items: center;

@@ -837,6 +837,8 @@ class SettingsPage {
       displayValue = this.#kvPreviewHTML(Array.isArray(current) ? current : []);
     } else if (item.type === "string-list") {
       displayValue = this.#stringListPreviewHTML(Array.isArray(current) ? current : []);
+    } else if (item.type === "json") {
+      displayValue = this.#jsonPreviewHTML(current);
     } else {
       displayValue = this.formatValueForDisplay(current, item.type);
     }
@@ -1009,6 +1011,8 @@ class SettingsPage {
           display = this.#kvPreviewHTML(Array.isArray(stored) ? stored : []);
         } else if (item.type === "string-list") {
           display = this.#stringListPreviewHTML(Array.isArray(stored) ? stored : []);
+        } else if (item.type === "json") {
+          display = this.#jsonPreviewHTML(stored);
         } else {
           display = this.formatValueForDisplay(stored, item.type);
         }
@@ -1104,6 +1108,9 @@ class SettingsPage {
       const arr = Array.isArray(value) ? value : [];
       return this.#stringListPreviewHTML(arr);
     }
+    if (type === "json") {
+      return this.#jsonPreviewHTML(value);
+    }
     if (value === undefined || value === null || value === "") return "—";
     switch (type) {
       case "boolean":
@@ -1149,6 +1156,18 @@ class SettingsPage {
         ${values.map((value) => `<span class="string-list-chip">${esc(value)}</span>`).join("")}
       </div>
     `;
+  }
+
+  #jsonPreviewHTML(value) {
+    if (value === undefined || value === null || value === "") return "—";
+    const esc = (s) =>
+      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    let text = String(value);
+    try {
+      text = JSON.stringify(JSON.parse(text), null, 2);
+    } catch (_) {}
+    const compact = text.length > 360 ? `${text.slice(0, 360)}…` : text;
+    return `<pre class="json-setting-preview">${esc(compact)}</pre>`;
   }
 
   deactivate() {

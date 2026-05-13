@@ -49,6 +49,11 @@ const TOOL_MODULES = {
     description: "Edit and preview HTML templates with live rendering",
     load: () => import("../tools/html-editor/main.js").then((module) => ({ ToolClass: module.HTMLTemplateTool })),
   },
+  "velocity-template": {
+    name: "Velocity Template",
+    description: "Create, validate, and parse Apache Velocity templates",
+    load: () => import("../tools/velocity-template/main.js").then((module) => ({ ToolClass: module.VelocityTemplateTool })),
+  },
   "splunk-template": {
     name: "Splunk Template",
     description: "Edit Splunk templates with formatting, minify, syntax highlighting, and field review",

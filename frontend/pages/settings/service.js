@@ -68,6 +68,9 @@ class SettingsService {
       if (type === "string-list") {
         return Array.isArray(defaultValue) ? defaultValue : [];
       }
+      if (type === "json") {
+        return String(defaultValue ?? "");
+      }
       return defaultValue;
     }
     try {
@@ -96,6 +99,7 @@ class SettingsService {
         case "date":
         case "time":
         case "datetime":
+        case "json":
         case "string":
         case "color":
         case "enum":
@@ -130,6 +134,7 @@ class SettingsService {
       case "date":
       case "time":
       case "datetime":
+      case "json":
       case "string":
       case "color":
       case "enum":
@@ -149,7 +154,10 @@ class SettingsService {
     }
 
     this.eventBus?.emit?.("notification:success", { message: "Setting saved", duration: 1000 });
-    return type === "kvlist" ? (Array.isArray(value) ? value : []) : storeVal;
+    if (type === "kvlist" || type === "oracle-connections" || type === "string-list") {
+      return Array.isArray(value) ? value : [];
+    }
+    return storeVal;
   }
 
   validate(value, type, rules = {}) {
@@ -189,6 +197,18 @@ class SettingsService {
           }
         }
         return { valid: true };
+      }
+      case "json": {
+        if (!String(value || "").trim()) return { valid: true };
+        try {
+          const parsed = JSON.parse(String(value));
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return { valid: false, message: "Must be a JSON object" };
+          }
+          return { valid: true };
+        } catch (err) {
+          return { valid: false, message: err.message || "Invalid JSON" };
+        }
       }
       case "secret":
       case "string": {
@@ -244,6 +264,11 @@ class SettingsService {
       case "string-list": {
         return `
           <textarea class="setting-input setting-textarea setting-list-input" rows="6" placeholder="One squad name per line" aria-label="${item.label}"></textarea>
+        `;
+      }
+      case "json": {
+        return `
+          <textarea class="setting-input setting-textarea setting-json-input" rows="7" spellcheck="false" aria-label="${item.label}"></textarea>
         `;
       }
       case "secret": {

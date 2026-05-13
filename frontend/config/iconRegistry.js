@@ -16,6 +16,7 @@ import { getIconSvg as getSplunkIconSvg } from "../tools/splunk-template/icon.js
 import { getIconSvg as getSqlInIconSvg } from "../tools/sql-in-clause/icon.js";
 import { getIconSvg as getTlvIconSvg } from "../tools/tlv-viewer/icon.js";
 import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
+import { getIconSvg as getVelocityTemplateIconSvg } from "../tools/velocity-template/icon.js";
 
 const ICON_REGISTRY = new Map([
   ["about", getAboutIconSvg],
@@ -36,6 +37,7 @@ const ICON_REGISTRY = new Map([
   ["sql-in", getSqlInIconSvg],
   ["tlv", getTlvIconSvg],
   ["uuid", getUuidIconSvg],
+  ["velocity-template", getVelocityTemplateIconSvg],
 ]);
 
 const DEFAULT_ICON = () => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg">

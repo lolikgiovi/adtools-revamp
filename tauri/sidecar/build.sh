@@ -5,8 +5,19 @@ cd "$(dirname "$0")"
 
 # Build for native architecture (arm64 on Apple Silicon)
 echo "=== Building sidecar for native architecture ==="
-source venv/bin/activate
-python build_sidecar.py
+if [[ ! -x "venv/bin/python3" && ! -x "venv/bin/python" ]]; then
+  echo "Creating Python virtual environment..."
+  python3 -m venv venv
+  ./venv/bin/python3 -m pip install --upgrade pip
+  ./venv/bin/python3 -m pip install -r requirements.txt
+  ./venv/bin/python3 -m pip install pyinstaller
+fi
+
+PYTHON_BIN="./venv/bin/python3"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="./venv/bin/python"
+fi
+"$PYTHON_BIN" build_sidecar.py
 
 # Build for x86_64 using Rosetta (only on macOS ARM)
 if [[ "$(uname)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then

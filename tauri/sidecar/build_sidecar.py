@@ -7,6 +7,7 @@ The output is placed in tauri/binaries/ with the correct target triple suffix.
 import subprocess
 import platform
 import sys
+import os
 from pathlib import Path
 
 
@@ -86,7 +87,11 @@ def main():
     ]
 
     print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=script_dir)
+    env = os.environ.copy()
+    # Keep PyInstaller cache inside the project so sandboxed/local builds do not
+    # need to touch ~/Library/Application Support/pyinstaller.
+    env.setdefault("PYINSTALLER_CONFIG_DIR", str(script_dir / "build" / "pyinstaller-cache"))
+    result = subprocess.run(cmd, cwd=script_dir, env=env)
 
     if result.returncode != 0:
         print("❌ Build failed!")

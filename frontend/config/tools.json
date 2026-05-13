@@ -122,6 +122,16 @@
       "order": 60
     },
     {
+      "id": "velocity-template",
+      "name": "Velocity Template",
+      "category": "config",
+      "icon": "velocity-template",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 65
+    },
+    {
       "id": "splunk-template",
       "name": "Splunk Template",
       "category": "config",
