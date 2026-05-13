@@ -171,6 +171,18 @@ class VelocityTemplateTool extends BaseTool {
         ],
         colors: {
           "editor.background": "#1e1e1e",
+          "editorSuggestWidget.background": "#252526",
+          "editorSuggestWidget.border": "#3c3c3c",
+          "editorSuggestWidget.foreground": "#d4d4d4",
+          "editorSuggestWidget.highlightForeground": "#ffffff",
+          "editorSuggestWidget.selectedBackground": "#094771",
+          "editorSuggestWidget.selectedForeground": "#ffffff",
+          "list.hoverBackground": "#2a2d2e",
+          "list.hoverForeground": "#ffffff",
+          "list.focusBackground": "#094771",
+          "list.focusForeground": "#ffffff",
+          "list.activeSelectionBackground": "#094771",
+          "list.activeSelectionForeground": "#ffffff",
         },
       });
       velocityLanguageRegistered = true;
