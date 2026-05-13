@@ -126,40 +126,56 @@
   min-height: 0;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget {
+.monaco-editor .suggest-widget,
+.monaco-editor-hover .suggest-widget {
   z-index: 9999 !important;
   background: #252526 !important;
   border: 1px solid #3c3c3c !important;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row {
+.monaco-editor .suggest-widget .monaco-list,
+.monaco-editor .suggest-widget .monaco-list-row,
+.suggest-widget .monaco-list,
+.suggest-widget .monaco-list-row {
   background: #252526 !important;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row {
+.monaco-editor .suggest-widget .monaco-list-row,
+.suggest-widget .monaco-list-row {
   color: #d4d4d4 !important;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.selected {
+.monaco-editor .suggest-widget .monaco-list-row.focused,
+.monaco-editor .suggest-widget .monaco-list-row.selected,
+.suggest-widget .monaco-list-row.focused,
+.suggest-widget .monaco-list-row.selected {
   background: #094771 !important;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label .label-name,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-icon-label .label-name > span,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-highlighted-label,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-highlighted-label span {
+.monaco-editor .suggest-widget .monaco-icon-label,
+.monaco-editor .suggest-widget .monaco-icon-label .label-name,
+.monaco-editor .suggest-widget .monaco-icon-label .label-name > span,
+.monaco-editor .suggest-widget .monaco-highlighted-label,
+.monaco-editor .suggest-widget .monaco-highlighted-label span,
+.suggest-widget .monaco-icon-label,
+.suggest-widget .monaco-icon-label .label-name,
+.suggest-widget .monaco-icon-label .label-name > span,
+.suggest-widget .monaco-highlighted-label,
+.suggest-widget .monaco-highlighted-label span {
   color: #d4d4d4 !important;
   opacity: 1 !important;
 }
 
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name > span,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
-.velocity-template-tool .monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label span {
+.monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label,
+.monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name,
+.monaco-editor .suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name > span,
+.monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
+.monaco-editor .suggest-widget .monaco-list-row.focused .monaco-highlighted-label span,
+.suggest-widget .monaco-list-row.focused .monaco-icon-label,
+.suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name,
+.suggest-widget .monaco-list-row.focused .monaco-icon-label .label-name > span,
+.suggest-widget .monaco-list-row.focused .monaco-highlighted-label,
+.suggest-widget .monaco-list-row.focused .monaco-highlighted-label span {
   color: #ffffff !important;
 }
 
