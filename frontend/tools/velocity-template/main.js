@@ -25,6 +25,8 @@ import "./styles.css";
 const VELOCITY_LANGUAGE_ID = "velocity-template";
 const VELOCITY_TEMPLATE_KEY = "tool:velocity-template:template";
 const VELOCITY_PAYLOAD_KEY = "tool:velocity-template:payload";
+const VELOCITY_LAYOUT_KEY = "tool:velocity-template:layout";
+const VELOCITY_PAYLOAD_COLLAPSED_KEY = "tool:velocity-template:payload-collapsed";
 let velocityLanguageRegistered = false;
 let velocityCompletionRegistered = false;
 
@@ -44,6 +46,7 @@ class VelocityTemplateTool extends BaseTool {
     this.resultEditor = null;
     this.lastResultRaw = "";
     this._persistTimer = null;
+    this._resizeCleanup = null;
   }
 
   getIconSvg() {
@@ -58,6 +61,8 @@ class VelocityTemplateTool extends BaseTool {
     this.registerVelocityLanguage();
     this.initializeEditors();
     this.bindEvents();
+    this.restoreLayoutState();
+    this.initializePaneResizing();
     this.refreshEndpointLabel();
     this.showStatus("Ready. Configure endpoint and headers in Settings.", "info");
     try {
@@ -69,9 +74,11 @@ class VelocityTemplateTool extends BaseTool {
     this.templateEditor?.dispose?.();
     this.payloadEditor?.dispose?.();
     this.resultEditor?.dispose?.();
+    this._resizeCleanup?.();
     this.templateEditor = null;
     this.payloadEditor = null;
     this.resultEditor = null;
+    this._resizeCleanup = null;
   }
 
   onWarmResume() {
@@ -79,6 +86,7 @@ class VelocityTemplateTool extends BaseTool {
       this.templateEditor?.layout?.();
       this.payloadEditor?.layout?.();
       this.resultEditor?.layout?.();
+      this.layoutEditors();
       this.refreshEndpointLabel();
     } catch (_) {}
   }
@@ -253,10 +261,135 @@ class VelocityTemplateTool extends BaseTool {
     document.getElementById("btnVelocityClearTemplate")?.addEventListener("click", () => this.templateEditor.setValue(""));
     document.getElementById("btnVelocityCopyPayload")?.addEventListener("click", () => this.copyToClipboard(this.payloadEditor.getValue()));
     document.getElementById("btnVelocityClearPayload")?.addEventListener("click", () => this.payloadEditor.setValue(""));
+    document.getElementById("btnVelocityTogglePayload")?.addEventListener("click", () => this.togglePayloadPane(true));
+    document.getElementById("velocityPayloadCollapsedTab")?.addEventListener("click", () => this.togglePayloadPane(false));
     document.getElementById("btnVelocityCopyResult")?.addEventListener("click", () => this.copyToClipboard(this.lastResultRaw || this.resultEditor.getValue()));
     document.getElementById("btnVelocityValidateResultJson")?.addEventListener("click", () => this.handleValidateResultJson());
     document.getElementById("btnVelocityShowRendered")?.addEventListener("click", () => this.showHtmlRendered());
     document.getElementById("btnVelocityShowSource")?.addEventListener("click", () => this.showHtmlSource());
+  }
+
+  restoreLayoutState() {
+    try {
+      const layout = document.getElementById("velocityTemplateLayout");
+      if (!layout) return;
+      const savedLayout = JSON.parse(localStorage.getItem(VELOCITY_LAYOUT_KEY) || "{}");
+      if (savedLayout.payload) layout.style.setProperty("--velocity-payload-width", `${savedLayout.payload}px`);
+      if (savedLayout.template) layout.style.setProperty("--velocity-template-width", `${savedLayout.template}px`);
+      if (savedLayout.result) layout.style.setProperty("--velocity-result-width", `${savedLayout.result}px`);
+      this.setPayloadCollapsed(localStorage.getItem(VELOCITY_PAYLOAD_COLLAPSED_KEY) === "true");
+    } catch (_) {}
+  }
+
+  initializePaneResizing() {
+    const layout = document.getElementById("velocityTemplateLayout");
+    if (!layout) return;
+
+    const onPointerDown = (event) => {
+      const handle = event.target.closest("[data-resize-handle]");
+      if (!handle || layout.classList.contains("payload-collapsed") || window.matchMedia("(max-width: 1180px)").matches) return;
+
+      event.preventDefault();
+      handle.classList.add("is-dragging");
+      const startX = event.clientX;
+      const startWidths = this.getPaneWidths();
+      const handleType = handle.dataset.resizeHandle;
+
+      const onPointerMove = (moveEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const next = { ...startWidths };
+        if (handleType === "payload") {
+          next.payload = startWidths.payload + delta;
+          next.template = startWidths.template - delta;
+        } else {
+          next.template = startWidths.template + delta;
+          next.result = startWidths.result - delta;
+        }
+        this.applyPaneWidths(this.constrainPaneWidths(next));
+      };
+
+      const onPointerUp = () => {
+        handle.classList.remove("is-dragging");
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        this.persistPaneWidths();
+      };
+
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp, { once: true });
+    };
+
+    layout.addEventListener("pointerdown", onPointerDown);
+    this._resizeCleanup = () => layout.removeEventListener("pointerdown", onPointerDown);
+  }
+
+  getPaneWidths() {
+    return {
+      payload: document.querySelector(".velocity-payload-pane")?.getBoundingClientRect?.().width || 320,
+      template: document.querySelector(".velocity-template-pane")?.getBoundingClientRect?.().width || 420,
+      result: document.querySelector(".velocity-result-pane")?.getBoundingClientRect?.().width || 420,
+    };
+  }
+
+  constrainPaneWidths(widths) {
+    const min = { payload: 220, template: 280, result: 300 };
+    const total = widths.payload + widths.template + widths.result;
+    const next = {
+      payload: Math.max(min.payload, widths.payload),
+      template: Math.max(min.template, widths.template),
+      result: Math.max(min.result, widths.result),
+    };
+    const overflow = next.payload + next.template + next.result - total;
+    if (overflow > 0) {
+      const largest = Object.entries(next).sort((a, b) => b[1] - a[1])[0][0];
+      next[largest] = Math.max(min[largest], next[largest] - overflow);
+    }
+    return next;
+  }
+
+  applyPaneWidths(widths) {
+    const layout = document.getElementById("velocityTemplateLayout");
+    if (!layout) return;
+    layout.style.setProperty("--velocity-payload-width", `${Math.round(widths.payload)}px`);
+    layout.style.setProperty("--velocity-template-width", `${Math.round(widths.template)}px`);
+    layout.style.setProperty("--velocity-result-width", `${Math.round(widths.result)}px`);
+    this.layoutEditors();
+  }
+
+  persistPaneWidths() {
+    try {
+      localStorage.setItem(VELOCITY_LAYOUT_KEY, JSON.stringify(this.getPaneWidths()));
+    } catch (_) {}
+  }
+
+  togglePayloadPane(collapsed) {
+    this.setPayloadCollapsed(collapsed);
+    try {
+      localStorage.setItem(VELOCITY_PAYLOAD_COLLAPSED_KEY, collapsed ? "true" : "false");
+    } catch (_) {}
+  }
+
+  setPayloadCollapsed(collapsed) {
+    const layout = document.getElementById("velocityTemplateLayout");
+    const toggle = document.getElementById("btnVelocityTogglePayload");
+    const tab = document.getElementById("velocityPayloadCollapsedTab");
+    if (!layout) return;
+    layout.classList.toggle("payload-collapsed", collapsed);
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      toggle.title = collapsed ? "Expand payload pane" : "Collapse payload pane";
+      toggle.setAttribute("aria-label", collapsed ? "Expand payload pane" : "Collapse payload pane");
+    }
+    if (tab) tab.style.display = collapsed ? "" : "none";
+    this.layoutEditors();
+  }
+
+  layoutEditors() {
+    requestAnimationFrame(() => {
+      this.templateEditor?.layout?.();
+      this.payloadEditor?.layout?.();
+      this.resultEditor?.layout?.();
+    });
   }
 
   async handleParse() {

@@ -21,7 +21,16 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(320px, 1.15fr);
+  grid-template-columns:
+    var(--velocity-payload-width, minmax(280px, 1fr))
+    6px
+    var(--velocity-template-width, minmax(280px, 1fr))
+    6px
+    var(--velocity-result-width, minmax(320px, 1.15fr));
+}
+
+.velocity-template-layout.payload-collapsed {
+  grid-template-columns: 42px 0 minmax(320px, 1fr) 6px minmax(320px, 1fr);
 }
 
 .velocity-pane {
@@ -33,8 +42,56 @@
   background: hsl(var(--background));
 }
 
-.velocity-pane:last-child {
+.velocity-result-pane {
   border-right: 0;
+}
+
+.velocity-resize-handle {
+  min-width: 6px;
+  cursor: col-resize;
+  background: hsl(var(--border));
+  transition: background 0.15s ease;
+}
+
+.velocity-resize-handle:hover,
+.velocity-resize-handle.is-dragging {
+  background: hsl(var(--ring));
+}
+
+.velocity-template-layout.payload-collapsed .velocity-resize-handle-payload {
+  display: none;
+}
+
+.velocity-collapsed-tab {
+  display: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.5rem 0;
+  border: 0;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.velocity-collapsed-tab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+}
+
+.velocity-template-layout.payload-collapsed .velocity-payload-pane {
+  display: none;
+}
+
+.velocity-template-layout.payload-collapsed .velocity-collapsed-tab {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 .velocity-pane-header {
@@ -133,6 +190,15 @@
   .velocity-template-layout {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: minmax(320px, 1fr) minmax(320px, 1fr);
+  }
+
+  .velocity-resize-handle,
+  .velocity-collapsed-tab {
+    display: none !important;
+  }
+
+  .velocity-template-layout.payload-collapsed .velocity-payload-pane {
+    display: flex;
   }
 
   .velocity-result-pane {

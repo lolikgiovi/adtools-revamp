@@ -15,9 +15,17 @@ const trashIcon = /* html */ `
   </svg>
 `;
 
+const panelLeftIcon = /* html */ `
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+    <path d="M9 4v16"></path>
+    <path d="M15 10l-3 2 3 2"></path>
+  </svg>
+`;
+
 export const VelocityTemplateToolTemplate = /* html */ `
   <div class="tool-container velocity-template-tool">
-    <div class="velocity-template-layout">
+    <div id="velocityTemplateLayout" class="velocity-template-layout">
       <section class="velocity-pane velocity-payload-pane">
         <header class="velocity-pane-header">
           <h3>JSON Payload Input</h3>
@@ -25,10 +33,17 @@ export const VelocityTemplateToolTemplate = /* html */ `
             <button id="btnVelocityFormatPayload" class="btn btn-ghost btn-sm" title="Format JSON payload">Format Json</button>
             <button id="btnVelocityClearPayload" class="btn btn-ghost btn-sm btn-icon-only" title="Clear payload" aria-label="Clear payload">${trashIcon}</button>
             <button id="btnVelocityCopyPayload" class="btn btn-ghost btn-sm btn-icon-only" title="Copy payload" aria-label="Copy payload">${copyIcon}</button>
+            <button id="btnVelocityTogglePayload" class="btn btn-ghost btn-sm btn-icon-only" title="Collapse payload pane" aria-label="Collapse payload pane" aria-expanded="true">${panelLeftIcon}</button>
           </div>
         </header>
         <div id="velocityPayloadEditor" class="velocity-editor"></div>
       </section>
+
+      <button id="velocityPayloadCollapsedTab" class="velocity-collapsed-tab" title="Expand payload pane" aria-label="Expand payload pane" style="display:none">
+        <span>Payload</span>
+      </button>
+
+      <div class="velocity-resize-handle velocity-resize-handle-payload" data-resize-handle="payload" role="separator" aria-orientation="vertical" title="Resize payload pane"></div>
 
       <section class="velocity-pane velocity-template-pane">
         <header class="velocity-pane-header">
@@ -42,6 +57,8 @@ export const VelocityTemplateToolTemplate = /* html */ `
         </header>
         <div id="velocityTemplateEditor" class="velocity-editor"></div>
       </section>
+
+      <div class="velocity-resize-handle velocity-resize-handle-result" data-resize-handle="result" role="separator" aria-orientation="vertical" title="Resize result pane"></div>
 
       <section class="velocity-pane velocity-result-pane">
         <header class="velocity-pane-header">
