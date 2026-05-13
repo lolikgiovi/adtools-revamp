@@ -230,6 +230,11 @@ class VelocityTemplateTool extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
       fontSize: 12,
+      suggest: {
+        showIcons: false,
+        showInlineDetails: false,
+        showStatusBar: false,
+      },
     });
 
     this.payloadEditor = monaco.editor.create(document.getElementById("velocityPayloadEditor"), {

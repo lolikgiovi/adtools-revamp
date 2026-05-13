@@ -152,6 +152,24 @@
   background: #094771 !important;
 }
 
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .left,
+.suggest-widget .monaco-list .monaco-list-row > .contents > .main > .left {
+  flex: 1 1 100% !important;
+  max-width: 100% !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .right,
+.suggest-widget .monaco-list .monaco-list-row > .contents > .main > .right {
+  display: none !important;
+}
+
+.monaco-editor .suggest-widget.no-icons .monaco-list .monaco-list-row .icon,
+.monaco-editor .suggest-widget.no-icons .monaco-list .monaco-list-row .suggest-icon::before,
+.suggest-widget.no-icons .monaco-list .monaco-list-row .icon,
+.suggest-widget.no-icons .monaco-list .monaco-list-row .suggest-icon::before {
+  display: none !important;
+}
+
 .monaco-editor .suggest-widget .monaco-icon-label,
 .monaco-editor .suggest-widget .monaco-icon-label .label-name,
 .monaco-editor .suggest-widget .monaco-icon-label .label-name > span,
