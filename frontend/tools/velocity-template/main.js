@@ -304,7 +304,10 @@ class VelocityTemplateTool extends BaseTool {
       });
     } catch (error) {
       if (error?.renderedOutput) {
-        this.renderResult(error.renderedOutput);
+        const renderedOutput = error.renderedOutputTruncated
+          ? `${error.renderedOutput}\n\n/* Output truncated by endpoint error response; full rendered template was not returned. */`
+          : error.renderedOutput;
+        this.renderResult(renderedOutput);
       }
       const message = formatVelocityParseError(error);
       this.showStatus(message, "error");

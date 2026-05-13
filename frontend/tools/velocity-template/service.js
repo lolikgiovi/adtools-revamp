@@ -284,10 +284,12 @@ export function formatVelocityParseError(error) {
   }
 
   const rawMessage = error?.message || String(error);
-  const message = `Velocity parse failed: ${rawMessage}`;
+  const compactMessage = summarizeEndpointError(rawMessage);
+  const message = `Velocity parse failed: ${compactMessage}`;
   const jsonRenderHint = getRenderedJsonErrorHint(rawMessage);
   if (jsonRenderHint) {
-    return `${message}\n${jsonRenderHint}`;
+    const sourceNote = error?.renderedOutputTruncated ? "\nThe Result pane shows only the partial rendered output returned in the endpoint error." : "";
+    return `${message}\n${jsonRenderHint}${sourceNote}`;
   }
 
   if (isLikelyConnectionError(rawMessage)) {
@@ -298,7 +300,7 @@ export function formatVelocityParseError(error) {
 }
 
 export function getRenderedOutputFromError(error) {
-  return extractRenderedOutputFromMessage(error?.message || String(error || ""));
+  return extractRenderedOutputFromMessage(error?.message || String(error || "")).output;
 }
 
 function getRenderedJsonErrorHint(message) {
@@ -323,8 +325,16 @@ function extractRenderedOutputFromMessage(message) {
   const raw = String(message || "");
   const sourceMatch = raw.match(/\[Source:\s*(?:\([^)]+\)\s*)?([\s\S]*?);\s*line:\s*\d+,\s*column:\s*\d+\]/i);
   const source = sourceMatch?.[1]?.trim();
-  if (!source || source === "UNKNOWN") return "";
-  return source.replace(/\.\.\.\s*$/, "").trim();
+  if (!source || source === "UNKNOWN") return { output: "", truncated: false };
+  const truncated = /\[truncated\s+\d+\s+chars?\]/i.test(source);
+  return { output: source.replace(/\.\.\.\s*$/, "").trim(), truncated };
+}
+
+function summarizeEndpointError(message) {
+  const raw = String(message || "");
+  const location = raw.match(/;\s*line:\s*\d+,\s*column:\s*\d+/i)?.[0]?.replace(/^;\s*/, "");
+  const withoutSource = raw.replace(/\s+at\s+\[Source:[\s\S]*$/i, "").trim();
+  return location ? `${withoutSource} (${location})` : withoutSource;
 }
 
 function isLikelyConnectionError(message) {
@@ -353,7 +363,9 @@ export async function requestVelocityTemplate({ endpoint, headers, template, pay
   if (!response.ok) {
     const message = data?.message || data?.error || data?.detail?.message || data?.detail || response.statusText || `HTTP ${response.status}`;
     const error = new Error(String(message));
-    error.renderedOutput = getRenderedOutputFromError(error);
+    const rendered = extractRenderedOutputFromMessage(error.message);
+    error.renderedOutput = rendered.output;
+    error.renderedOutputTruncated = rendered.truncated;
     throw error;
   }
 

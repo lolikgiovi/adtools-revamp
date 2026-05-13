@@ -156,6 +156,8 @@ describe("VelocityTemplateService", () => {
 
     expect(result).toContain("Velocity parse failed");
     expect(result).toContain("not valid JSON");
+    expect(result).toContain("line: 1, column: 18");
+    expect(result).not.toContain("[Source:");
     expect(result).toContain("Quote JSON object keys");
     expect(result).toContain("render `null` or an empty string");
     expect(result).toContain("Quote string values");
@@ -191,6 +193,31 @@ describe("VelocityTemplateService", () => {
       }),
     ).rejects.toMatchObject({
       renderedOutput: "{  ApplicationID: ,  }",
+    });
+  });
+
+  it("notes when rendered output in endpoint errors is truncated", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      statusText: "Bad Request",
+      text: async () =>
+        JSON.stringify({
+          message:
+            "Unexpected character (',' (code 44)): expected a valid value at [Source: (String)  {  ApplicationID: , Creat[truncated 11199 chars]; line: 341, column: 21]",
+        }),
+    }));
+
+    await expect(
+      requestVelocityTemplate({
+        endpoint: "https://example.test/velocity",
+        headers: { "content-type": "application/json" },
+        template: "Hello",
+        payload: {},
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({
+      renderedOutput: "{  ApplicationID: , Creat[truncated 11199 chars]",
+      renderedOutputTruncated: true,
     });
   });
 
