@@ -140,8 +140,20 @@ class HTMLTemplateTool extends BaseTool {
   initializeWorker() {
     this.minifyWorker = new MinifyWorker();
     this.minifyWorker.onmessage = (e) => {
-      const { success, result, error, engine } = e.data || {};
+      const { type, success, result, error } = e.data || {};
       const btn = document.getElementById("btnMinifyHtml");
+
+      if (type === "probe") {
+        if (btn) {
+          btn.disabled = !success;
+          btn.title = success ? "Minify HTML" : error || "HTML minifier is unavailable";
+        }
+        if (!success && error) {
+          this.showError(error);
+        }
+        return;
+      }
+
       if (btn) btn.disabled = false;
 
       if (success && typeof result === "string") {

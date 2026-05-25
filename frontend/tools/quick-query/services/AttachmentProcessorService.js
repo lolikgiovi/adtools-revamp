@@ -159,7 +159,7 @@ export class AttachmentProcessorService {
         } catch (err) {
           console.error("HTML Minify Worker failed, keeping original:", err);
           UsageTracker.trackEvent("quick-query", "attachment_error", {
-            type: "minify_worker_fallback",
+            type: "minify_worker_unavailable",
             file_type: file.type || ext || "unknown",
             message: err.message,
             table_name: tableName,

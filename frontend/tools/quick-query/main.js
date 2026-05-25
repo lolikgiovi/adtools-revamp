@@ -1372,7 +1372,7 @@ export class QuickQueryUI {
   }
 
   /**
-   * Minify HTML using the minify worker (rejects if fallback engine is used)
+   * Minify HTML using the minify worker.
    */
   _minifyHtmlWithWorker(html) {
     return new Promise((resolve, reject) => {
@@ -1384,15 +1384,10 @@ export class QuickQueryUI {
       };
       worker.onmessage = (event) => {
         const data = event.data || {};
-        const { success, result, error, engine } = data;
+        const { success, result, error } = data;
         cleanup();
         if (!success) {
           reject(new Error(error || "HTML minify failed"));
-          return;
-        }
-        // Reject fallback engine - regex minification can destroy embedded JS
-        if (engine === "fallback") {
-          reject(new Error("Minifier engine unavailable (fallback rejected)"));
           return;
         }
         resolve(typeof result === "string" ? result : "");

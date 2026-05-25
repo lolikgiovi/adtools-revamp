@@ -1,6 +1,9 @@
-// HTML Minifier vendored browser build (CDN download) with fallback
+// HTML Minifier vendored browser build (CDN download)
 import minifierSource from "./vendor/htmlminifier.min.js?raw";
 let minifyFn = null;
+
+const MINIFIER_UNAVAILABLE_MESSAGE =
+  "HTML minifier is unavailable. Reinstall dependencies with npm install html-minifier or npm install, then restart the app.";
 
 function parseCdnPackageInfo() {
   const src = typeof minifierSource === "string" ? minifierSource : "";
@@ -10,9 +13,7 @@ function parseCdnPackageInfo() {
   const m1 = src.match(/html-minifier\s*v(\d+\.\d+\.\d+)/i);
   const m2 = src.match(/@version\s*([0-9]+\.[0-9]+\.[0-9]+)/i);
   version = (m1 && m1[1]) || (m2 && m2[1]) || null;
-  const npmUrl = version
-    ? `https://www.npmjs.com/package/${name}/v/${version}`
-    : `https://www.npmjs.com/package/${name}`;
+  const npmUrl = version ? `https://www.npmjs.com/package/${name}/v/${version}` : `https://www.npmjs.com/package/${name}`;
   return { name, version, npmUrl };
 }
 
@@ -22,7 +23,7 @@ async function ensureMinifierLoaded() {
     if (minifierSource && typeof minifierSource === "string" && minifierSource.length > 0) {
       const factory = new Function(
         minifierSource +
-          "\nreturn (typeof require===\"function\" ? require(\"html-minifier\") : (self.minify || (self.htmlMinifier && self.htmlMinifier.minify) || null));"
+          '\nreturn (typeof require==="function" ? require("html-minifier") : (self.minify || (self.htmlMinifier && self.htmlMinifier.minify) || null));',
       );
       const mod = factory();
       const candidate = (mod && mod.minify) || mod;
@@ -32,45 +33,9 @@ async function ensureMinifierLoaded() {
       }
     }
   } catch (e) {
-    // swallow and fallback
+    // Surface a single actionable message to the UI below.
   }
   return false;
-}
-
-// Fallback single-line minifier that preserves script/style/pre/textarea blocks
-const TOKEN_PREFIX = "__HTML_MIN_BLOCK_";
-function extractPreservedBlocks(html) {
-  const blocks = [];
-  const patterns = [
-    { type: "script", re: /<script\b[^>]*>[\s\S]*?<\/script>/gi },
-    { type: "style", re: /<style\b[^>]*>[\s\S]*?<\/style>/gi },
-    { type: "pre", re: /<pre\b[^>]*>[\s\S]*?<\/pre>/gi },
-    { type: "textarea", re: /<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi },
-  ];
-  let processed = html;
-  for (const p of patterns) {
-    processed = processed.replace(p.re, (m) => {
-      const id = blocks.push({ type: p.type, content: m }) - 1;
-      return `${TOKEN_PREFIX}${id}__`;
-    });
-  }
-  return { processed, blocks };
-}
-function restorePreservedBlocks(html, blocks) {
-  return html.replace(new RegExp(`${TOKEN_PREFIX}(\\d+)__`, "g"), (_, idx) => {
-    const b = blocks[Number(idx)];
-    return b ? b.content : "";
-  });
-}
-function fallbackMinify(html) {
-  const { processed, blocks } = extractPreservedBlocks(html || "");
-  let s = processed;
-  s = s.replace(/<!--(?!\[if)[\s\S]*?-->/g, "");
-  s = s.replace(/>\s+</g, "><");
-  s = s.replace(/[\r\n\t]+/g, "");
-  s = s.replace(/\s{2,}/g, " ").trim();
-  s = restorePreservedBlocks(s, blocks);
-  return s.replace(/\r?\n+/g, "");
 }
 
 // Options matching your desired configuration
@@ -111,31 +76,32 @@ self.onmessage = async (e) => {
   try {
     if (type === "probe") {
       const loaded = await ensureMinifierLoaded();
-      const engine = loaded ? "cdn" : "fallback";
       const details = loaded ? parseCdnPackageInfo() : null;
       self.postMessage({
-        success: true,
-        engine,
+        type: "probe",
+        success: loaded,
+        error: loaded ? null : MINIFIER_UNAVAILABLE_MESSAGE,
+        engine: loaded ? "html-minifier" : null,
         enginePackageName: details?.name || null,
         enginePackageVersion: details?.version || null,
         enginePackageUrl: details?.npmUrl || null,
       });
       return;
     }
-    let result;
     const loaded = await ensureMinifierLoaded();
-    const engine = loaded ? "cdn" : "fallback";
-    const details = loaded ? parseCdnPackageInfo() : null;
-    if (loaded) {
-      result = minifyFn(html, OPTIONS);
-      result = typeof result === "string" ? result.replace(/\r?\n+/g, "") : "";
-    } else {
-      result = fallbackMinify(html);
+    if (!loaded) {
+      self.postMessage({ type: "minify", success: false, error: MINIFIER_UNAVAILABLE_MESSAGE });
+      return;
     }
+
+    const details = loaded ? parseCdnPackageInfo() : null;
+    let result = minifyFn(html, OPTIONS);
+    result = typeof result === "string" ? result.replace(/\r?\n+/g, "") : "";
     self.postMessage({
+      type: "minify",
       success: true,
       result,
-      engine,
+      engine: "html-minifier",
       enginePackageName: details?.name || null,
       enginePackageVersion: details?.version || null,
       enginePackageUrl: details?.npmUrl || null,
