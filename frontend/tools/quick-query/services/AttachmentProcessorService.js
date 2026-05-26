@@ -224,7 +224,11 @@ export class AttachmentProcessorService {
         const { success, result, error } = data;
         cleanup();
         if (success) {
-          resolve(typeof result === "string" ? result : "");
+          if (typeof result !== "string") {
+            reject(new Error("HTML minify returned an invalid result"));
+            return;
+          }
+          resolve(result);
         } else {
           UsageTracker.trackEvent("quick-query", "attachment_error", {
             type: "minify_worker_failed",

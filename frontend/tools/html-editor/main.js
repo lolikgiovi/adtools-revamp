@@ -27,6 +27,7 @@ class HTMLTemplateTool extends BaseTool {
 
     this.editor = null;
     this.minifyWorker = null;
+    this.minifierAvailable = false;
     this.lastRenderedHTML = "";
     this.sandboxSameOriginAllowed = false; // default disabled for safer preview
     this.debouncedRender = null;
@@ -138,12 +139,35 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   initializeWorker() {
-    this.minifyWorker = new MinifyWorker();
+    const btn = document.getElementById("btnMinifyHtml");
+    const unavailableMessage = "HTML minifier could not be loaded. Your HTML was left unchanged.";
+
+    if (btn) {
+      btn.disabled = true;
+      btn.title = "Checking HTML minifier...";
+    }
+
+    const markUnavailable = (message = unavailableMessage) => {
+      this.minifierAvailable = false;
+      if (btn) {
+        btn.disabled = true;
+        btn.title = message;
+      }
+      this.showError(message);
+    };
+
+    try {
+      this.minifyWorker = new MinifyWorker();
+    } catch (err) {
+      markUnavailable(err?.message ? `${unavailableMessage} ${err.message}` : unavailableMessage);
+      return;
+    }
+
     this.minifyWorker.onmessage = (e) => {
       const { type, success, result, error } = e.data || {};
-      const btn = document.getElementById("btnMinifyHtml");
 
       if (type === "probe") {
+        this.minifierAvailable = Boolean(success);
         if (btn) {
           btn.disabled = !success;
           btn.title = success ? "Minify HTML" : error || "HTML minifier is unavailable";
@@ -154,14 +178,20 @@ class HTMLTemplateTool extends BaseTool {
         return;
       }
 
-      if (btn) btn.disabled = false;
+      if (btn) btn.disabled = !this.minifierAvailable;
 
       if (success && typeof result === "string") {
         this.editor.setValue(result);
         this.renderPreview(result);
       } else if (!success && error) {
-        this.showError(`Minify error: ${error}`);
+        this.showError(`Minify failed. Your HTML was left unchanged. ${error}`);
       }
+    };
+    this.minifyWorker.onerror = (err) => {
+      markUnavailable(err?.message ? `${unavailableMessage} ${err.message}` : unavailableMessage);
+    };
+    this.minifyWorker.onmessageerror = () => {
+      markUnavailable("HTML minifier returned an unreadable response. Your HTML was left unchanged.");
     };
     // Probe worker for engine status on load
     this.minifyWorker.postMessage({ type: "probe" });
@@ -203,6 +233,10 @@ class HTMLTemplateTool extends BaseTool {
 
     if (btnMinify) {
       btnMinify.addEventListener("click", async () => {
+        if (!this.minifyWorker || !this.minifierAvailable) {
+          this.showError("HTML minifier is unavailable. Your HTML was left unchanged.");
+          return;
+        }
         const html = this.editor.getValue();
         btnMinify.disabled = true;
         this.minifyWorker.postMessage({ type: "minify", html });

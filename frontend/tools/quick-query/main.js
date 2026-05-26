@@ -1390,7 +1390,11 @@ export class QuickQueryUI {
           reject(new Error(error || "HTML minify failed"));
           return;
         }
-        resolve(typeof result === "string" ? result : "");
+        if (typeof result !== "string") {
+          reject(new Error("HTML minify returned an invalid result"));
+          return;
+        }
+        resolve(result);
       };
       worker.onerror = (err) => {
         cleanup();
