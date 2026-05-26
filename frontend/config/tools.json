@@ -126,7 +126,7 @@
       "name": "Velocity Template",
       "category": "config",
       "icon": "velocity-template",
-      "showInSidebar": true,
+      "showInSidebar": false,
       "showOnHome": true,
       "enabled": true,
       "order": 65
