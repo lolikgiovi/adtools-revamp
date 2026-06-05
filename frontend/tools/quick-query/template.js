@@ -33,7 +33,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <div id="files-container">
                     <div id="attachments-controls" class="button-group quick-query-attachments-controls" role="toolbar" aria-label="Attachment actions">
                         <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file">Add file</button>
-                        <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached text files" disabled aria-disabled="true">Minify</button>
+                        <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached HTML files" disabled aria-disabled="true">Minify</button>
                         <button id="deleteAllButton" class="btn btn-outline btn-xs delete-all-button" aria-label="Delete all attached files" disabled aria-disabled="true">Delete all</button>
                         <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png, .html, .pdf, .json" multiple style="display: none;" />
                     </div>

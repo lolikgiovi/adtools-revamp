@@ -143,50 +143,22 @@ export class AttachmentProcessorService {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const t = (file.type || "").toLowerCase();
 
-      // Only attempt minify for text-like and specific known types
-      if (
-        !original ||
-        (!t.includes("text") && !t.includes("json") && !t.includes("html") && !["txt", "html", "htm", "json"].includes(ext))
-      ) {
-        return file;
+      if (!original || (ext !== "html" && ext !== "htm" && !t.includes("html"))) {
+        return { file, minifyFailed: false };
       }
 
       let minified = original;
-
-      if (ext === "html" || ext === "htm" || t.includes("html")) {
-        try {
-          minified = await this.#minifyHtmlWithWorker(original, tableName);
-        } catch (err) {
-          console.error("HTML Minify Worker failed, keeping original:", err);
-          UsageTracker.trackEvent("quick-query", "attachment_error", {
-            type: "minify_worker_unavailable",
-            file_type: file.type || ext || "unknown",
-            message: err.message,
-            table_name: tableName,
-          });
-          return { file, minifyFailed: true };
-        }
-      } else if (ext === "json" || t.includes("json")) {
-        try {
-          minified = JSON.stringify(JSON.parse(original));
-        } catch (e) {
-          // Keep original if JSON parse fails
-          console.warn("JSON minify failed, keeping original:", e);
-          UsageTracker.trackEvent("quick-query", "attachment_error", {
-            type: "json_minify_failed",
-            file_type: file.type || ext || "unknown",
-            table_name: tableName,
-          });
-          minified = original;
-        }
-      } else {
-        // Generic text: collapse extra whitespace and trim
-        minified = original
-          .split("\n")
-          .map((line) => line.trim())
-          .join(" ")
-          .replace(/\s{2,}/g, " ")
-          .trim();
+      try {
+        minified = await this.#minifyHtmlWithWorker(original, tableName);
+      } catch (err) {
+        console.error("HTML Minify Worker failed, keeping original:", err);
+        UsageTracker.trackEvent("quick-query", "attachment_error", {
+          type: "minify_worker_unavailable",
+          file_type: file.type || ext || "unknown",
+          message: err.message,
+          table_name: tableName,
+        });
+        return { file, minifyFailed: true };
       }
 
       return {

@@ -3676,10 +3676,10 @@ export class QuickQueryUI {
 
   updateAttachmentControlsState() {
     const hasFiles = this.processedFiles.length > 0;
-    const hasTextFile = this.processedFiles.some((file) => {
+    const hasHtmlFile = this.processedFiles.some((file) => {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const t = (file.type || "").toLowerCase();
-      return ["txt", "html", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html");
+      return ["html", "htm"].includes(ext) || t.includes("html");
     });
 
     if (this.elements.deleteAllButton) {
@@ -3688,8 +3688,8 @@ export class QuickQueryUI {
     }
 
     if (this.elements.minifyButton) {
-      this.elements.minifyButton.disabled = !hasTextFile;
-      this.elements.minifyButton.setAttribute("aria-disabled", String(!hasTextFile));
+      this.elements.minifyButton.disabled = !hasHtmlFile;
+      this.elements.minifyButton.setAttribute("aria-disabled", String(!hasHtmlFile));
     }
 
     if (this.elements.filesEmpty) {
@@ -3717,7 +3717,7 @@ export class QuickQueryUI {
       this.processedFiles.map(async (file) => {
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         const t = (file.type || "").toLowerCase();
-        if (["txt", "html", "htm", "json"].includes(ext) || t.includes("text") || t.includes("json") || t.includes("html")) {
+        if (["html", "htm"].includes(ext) || t.includes("html")) {
           const tableName = this.elements.tableNameInput.value.trim();
           const result = await this.attachmentProcessorService.minifyContent(file, tableName);
           if (result.minifyFailed) {
