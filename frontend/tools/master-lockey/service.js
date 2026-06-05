@@ -5,16 +5,19 @@
 
 class MasterLockeyService {
   /**
-   * Fetch lockey data from a URL using Tauri backend (bypasses CORS)
+   * Fetch raw lockey JSON source from a URL using Tauri backend (bypasses CORS)
    * @param {string} url - URL to fetch from
-   * @returns {Promise<Object>} Fetched JSON data
+   * @returns {Promise<string>} Raw JSON response text
    */
   async fetchLockeyData(url) {
     try {
       // Use Tauri's invoke to fetch via Rust backend (no CORS restrictions)
       const { invoke } = await import("@tauri-apps/api/core");
-      const data = await invoke("fetch_lockey_json", { url });
-      return data;
+      const rawSource = await invoke("fetch_lockey_json", { url });
+      if (typeof rawSource !== "string") {
+        throw new Error("Invalid lockey response: Expected raw JSON text");
+      }
+      return rawSource;
     } catch (error) {
       // Handle Tauri invoke errors
       if (typeof error === "string") {
@@ -28,10 +31,18 @@ class MasterLockeyService {
 
   /**
    * Parse lockey JSON into table-friendly format with dynamic language detection
-   * @param {Object} json - Raw JSON data
+   * @param {Object|string} json - Parsed lockey object or raw JSON source text
    * @returns {Object} Parsed data { languagePackId, languages, rows }
    */
   parseLockeyData(json) {
+    if (typeof json === "string") {
+      try {
+        json = JSON.parse(json);
+      } catch (error) {
+        throw new Error(`Failed to parse JSON response: ${error.message}`);
+      }
+    }
+
     if (!json || typeof json !== "object") {
       throw new Error("Invalid JSON structure: Expected an object");
     }

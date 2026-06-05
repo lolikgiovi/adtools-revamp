@@ -39,10 +39,27 @@ describe("MasterLockeyService", () => {
       expect(result.languagePackId).toBe("N/A");
     });
 
+    it("should parse raw JSON source while preserving newline vs literal slash-n semantics", () => {
+      const rawSource =
+        '{"content":{"en":{"actualNewline":"Line 1\\nLine 2","literalSlashN":"Line 1\\\\nLine 2"}},"languagePackId":"raw-source"}';
+
+      const result = service.parseLockeyData(rawSource);
+      const actualNewline = result.rows.find((row) => row.key === "actualNewline");
+      const literalSlashN = result.rows.find((row) => row.key === "literalSlashN");
+
+      expect(result.languagePackId).toBe("raw-source");
+      expect(actualNewline.en).toBe("Line 1\nLine 2");
+      expect(literalSlashN.en).toBe("Line 1\\nLine 2");
+    });
+
     it("should throw error for invalid JSON structure", () => {
       expect(() => service.parseLockeyData(null)).toThrow("Invalid JSON structure");
       expect(() => service.parseLockeyData({})).toThrow('Missing "content" property');
       expect(() => service.parseLockeyData({ content: {} })).toThrow("No language data found");
+    });
+
+    it("should throw a readable error for invalid raw JSON source", () => {
+      expect(() => service.parseLockeyData("{")).toThrow("Failed to parse JSON response");
     });
   });
 

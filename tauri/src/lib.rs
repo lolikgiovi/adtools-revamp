@@ -564,7 +564,7 @@ fn get_arch() -> String {
 // Fetch JSON data from a URL (bypasses browser CORS restrictions)
 // Used by Master Lockey tool to fetch localization data
 #[tauri::command]
-async fn fetch_lockey_json(url: String) -> Result<serde_json::Value, String> {
+async fn fetch_lockey_json(url: String) -> Result<String, String> {
   // Build a more permissive client for development (accepts invalid SSL certs)
   let client = Client::builder()
     .timeout(Duration::from_secs(30))
@@ -601,12 +601,12 @@ async fn fetch_lockey_json(url: String) -> Result<serde_json::Value, String> {
     return Err(format!("HTTP {}: {} - Server returned an error", status_code, reason));
   }
   
-  let json = response
-    .json::<serde_json::Value>()
+  let json_source = response
+    .text()
     .await
-    .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
+    .map_err(|e| format!("Failed to read JSON response: {}", e))?;
   
-  Ok(json)
+  Ok(json_source)
 }
 
 // Cache management for Master Lockey
@@ -634,7 +634,8 @@ fn sanitize_domain_name(domain: &str) -> String {
 async fn save_lockey_cache(
   app: AppHandle,
   domain: String,
-  data: serde_json::Value
+  data: serde_json::Value,
+  raw_source: Option<String>
 ) -> Result<(), String> {
   let cache_dir = get_cache_dir(app)?;
   let safe_domain = sanitize_domain_name(&domain);
@@ -643,6 +644,7 @@ async fn save_lockey_cache(
   let cache_data = serde_json::json!({
     "domain": domain,
     "data": data,
+    "rawSource": raw_source,
     "timestamp": chrono::Utc::now().timestamp_millis()
   });
   

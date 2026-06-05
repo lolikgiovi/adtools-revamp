@@ -25,6 +25,7 @@ class MasterLockey extends BaseTool {
     this.service = new MasterLockeyService();
     this.currentDomain = null;
     this.currentDomainUrl = null;
+    this.rawLockeySource = null;
     this.parsedData = null; // { languagePackId, languages, rows }
     this.filteredRows = null;
 
@@ -268,6 +269,7 @@ class MasterLockey extends BaseTool {
       } else {
         this.currentDomain = null;
         this.currentDomainUrl = null;
+        this.rawLockeySource = null;
         this.els.btnFetch.disabled = true;
         this.hideCache();
       }
@@ -711,8 +713,9 @@ class MasterLockey extends BaseTool {
       const { invoke } = await import("@tauri-apps/api/core");
       const cached = await invoke("load_lockey_cache", { domain: this.currentDomain });
 
-      if (cached && cached.data) {
-        this.parsedData = cached.data;
+      if (cached && (cached.rawSource || cached.data)) {
+        this.rawLockeySource = cached.rawSource || null;
+        this.parsedData = cached.rawSource ? this.service.parseLockeyData(cached.rawSource) : cached.data;
         this.displayData();
         this.showCache(cached.timestamp);
         this.updateBulkSearchState();
@@ -742,14 +745,16 @@ class MasterLockey extends BaseTool {
     try {
       UsageTracker.trackEvent("master-lockey", "fetch_latest_data", { domain: this.currentDomain });
 
-      const rawData = await this.service.fetchLockeyData(this.currentDomainUrl);
-      this.parsedData = this.service.parseLockeyData(rawData);
+      const rawSource = await this.service.fetchLockeyData(this.currentDomainUrl);
+      this.rawLockeySource = rawSource;
+      this.parsedData = this.service.parseLockeyData(rawSource);
 
-      // Cache the parsed data using Tauri backend
+      // Cache both raw source and parsed data. The raw source stays authoritative for future reparsing.
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("save_lockey_cache", {
         domain: this.currentDomain,
         data: this.parsedData,
+        rawSource,
       });
 
       this.displayData();
