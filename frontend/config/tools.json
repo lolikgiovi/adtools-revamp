@@ -127,8 +127,8 @@
       "category": "config",
       "icon": "velocity-template",
       "showInSidebar": false,
-      "showOnHome": true,
-      "enabled": true,
+      "showOnHome": false,
+      "enabled": false,
       "order": 65
     },
     {
