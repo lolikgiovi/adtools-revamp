@@ -16,6 +16,17 @@ describe("html minifier engine", () => {
 
     expect(typeof minify).toBe("function");
     expect(minify("<div>  hello </div>", MINIFIER_OPTIONS)).toBe("<div>hello</div>");
+    expect(minify('<meta charset="UTF-8" />', MINIFIER_OPTIONS)).toBe('<meta charset="UTF-8"/>');
+  });
+
+  it("preserves closing tags for legacy HTML processors", () => {
+    const minify = loadHtmlMinifier(minifierSource);
+
+    expect(minify("<ul><li>One</li><li>Two</li></ul>", MINIFIER_OPTIONS)).toBe("<ul><li>One</li><li>Two</li></ul>");
+    expect(minify("<table><tr><td>One</td><td>Two</td></tr></table>", MINIFIER_OPTIONS)).toBe(
+      "<table><tr><td>One</td><td>Two</td></tr></table>",
+    );
+    expect(minify("<p>Hello</p><p>World</p>", MINIFIER_OPTIONS)).toBe("<p>Hello</p><p>World</p>");
   });
 
   it("does not fall back to global minify functions", () => {
