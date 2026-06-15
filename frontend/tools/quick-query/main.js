@@ -94,12 +94,14 @@ export class QuickQueryUI {
     this.splitWorkerService = new SplitWorkerService();
     this.dataAutosave = new TableAutosaveService({
       delayMs: 800,
-      save: (tableName, tableData) =>
-        this.storageService.updateTableData(tableName, tableData, { queryType: this.getQueryTypeValue() }),
+      save: () => this.saveActiveTabDraft(),
       onError: (err) => {
-        console.error("Failed to persist table data:", err);
+        console.error("Failed to persist tab draft:", err);
       },
     });
+    this.tabs = [];
+    this.activeTabId = null;
+    this._isHydratingTab = false;
     this.isGuideActive = false;
     this.isAttachmentActive = false;
     this.isGenerating = false; // Track async generation state
@@ -194,7 +196,7 @@ export class QuickQueryUI {
       this.setupTableNameSearch();
       this.setupAutosaveLifecycleListeners();
 
-      await this.loadMostRecentSchema();
+      await this.initializeTabs();
     } catch (error) {
       console.error("Failed to initialize Quick Query:", error);
       this.container.innerHTML = `<div class="error-message">Failed to load: ${error.message}</div>`;
@@ -229,6 +231,10 @@ export class QuickQueryUI {
 
   bindElements() {
     this.elements = {
+      tabStrip: document.getElementById("quickQueryTabStrip"),
+      tabList: document.getElementById("quickQueryTabList"),
+      addTabButton: document.getElementById("quickQueryAddTab"),
+
       // Input elements
       tableNameInput: document.getElementById("tableNameInput"),
       queryTypeBtn: document.getElementById("queryTypeBtn"),
@@ -362,6 +368,9 @@ export class QuickQueryUI {
 
   setupEventListeners() {
     const eventMap = {
+      addTabButton: {
+        click: () => this.createNewTab({ activate: true }),
+      },
       // Input elements
       tableNameInput: {
         input: (e) => this.handleSearchInput(e),
@@ -631,6 +640,11 @@ export class QuickQueryUI {
       acceptSuggestionOnEnter: "off",
       tabCompletion: "off",
     });
+    this.editor.onDidChangeModelContent(() => {
+      if (!this._isHydratingTab) {
+        this.scheduleActiveTabDraftSave();
+      }
+    });
     this.syncWordWrapToggle(this.editor.getRawOptions().wordWrap);
     this.scheduleSchemaLayoutRefresh();
   }
@@ -639,22 +653,28 @@ export class QuickQueryUI {
     const schemaTableConfig = {
       ...initialSchemaTableSpecification,
       afterChange: (changes) => {
+        if (this._isHydratingTab) return;
         if (changes) {
           this.updateDataSpreadsheet();
           this.handleAddFieldNames();
           this.scheduleSchemaLayoutRefresh();
+          this.scheduleActiveTabDraftSave();
         }
       },
       afterCreateRow: (index, amount) => {
+        if (this._isHydratingTab) return;
         console.log(amount, "Row created, for index:", index);
         this.updateDataSpreadsheet();
         this.handleAddFieldNames();
         this.scheduleSchemaLayoutRefresh();
+        this.scheduleActiveTabDraftSave();
       },
       afterRemoveRow: () => {
+        if (this._isHydratingTab) return;
         this.updateDataSpreadsheet();
         this.handleAddFieldNames();
         this.scheduleSchemaLayoutRefresh();
+        this.scheduleActiveTabDraftSave();
       },
       afterGetColHeader: function (col, TH) {
         const header = TH.querySelector(".colHeader");
@@ -674,12 +694,8 @@ export class QuickQueryUI {
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
 
-        const tableName = this.elements.tableNameInput.value.trim();
-        if (!tableName) return; // Skip if no table name
-
         if (changes.length > 0) {
-          const currentData = this.dataTable.getData();
-          this.dataAutosave.schedule(tableName, currentData);
+          this.scheduleActiveTabDraftSave();
         }
       },
       // No height recalculation hooks
@@ -844,8 +860,402 @@ export class QuickQueryUI {
     } catch (_) {}
   }
 
+  createTabDraft(overrides = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: overrides.id || `qq-tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: overrides.title || "Untitled",
+      tableName: overrides.tableName || "",
+      queryType: overrides.queryType || "merge",
+      schemaData: Array.isArray(overrides.schemaData) ? overrides.schemaData : [["", "", "", "", "", ""]],
+      inputData: Array.isArray(overrides.inputData) ? overrides.inputData : [[], []],
+      attachments: Array.isArray(overrides.attachments) ? overrides.attachments : [],
+      generatedSql: overrides.generatedSql || "",
+      dirty: Boolean(overrides.dirty),
+      createdAt: overrides.createdAt || now,
+      lastUpdated: overrides.lastUpdated || now,
+      source: overrides.source || null,
+    };
+  }
+
+  async initializeTabs() {
+    const savedTabs = await this.storageService.getAllQueryTabs();
+    const session = await this.storageService.loadQueryTabSession();
+    const savedById = new Map(savedTabs.map((tab) => [tab.id, this.createTabDraft(tab)]));
+    const orderedIds = Array.isArray(session?.tabOrder) ? session.tabOrder.filter((id) => savedById.has(id)) : [];
+    const remaining = savedTabs
+      .map((tab) => tab.id)
+      .filter((id) => !orderedIds.includes(id))
+      .sort((a, b) => new Date(savedById.get(b)?.lastUpdated || 0) - new Date(savedById.get(a)?.lastUpdated || 0));
+
+    this.tabs = [...orderedIds, ...remaining].map((id) => savedById.get(id)).filter(Boolean).slice(0, 10);
+
+    if (this.tabs.length === 0) {
+      const initialTab = this.createTabDraft();
+      this.tabs = [initialTab];
+      this.activeTabId = initialTab.id;
+      this.renderTabs();
+      await this.applyTabDraft(initialTab);
+      await this.loadMostRecentSchema({ mode: "schema-data", skipChoice: true });
+      await this.saveActiveTabDraft();
+      await this.saveTabSession();
+      return;
+    }
+
+    this.activeTabId = savedById.has(session?.activeTabId) ? session.activeTabId : this.tabs[0].id;
+    this.renderTabs();
+    await this.applyTabDraft(this.getActiveTab());
+    await this.saveTabSession();
+  }
+
+  getActiveTab() {
+    return this.tabs.find((tab) => tab.id === this.activeTabId) || this.tabs[0] || null;
+  }
+
+  getTabTitle(tab) {
+    const title = (tab?.title || "").trim();
+    if (title && title !== "Untitled") return title;
+    const tableName = (tab?.tableName || "").trim();
+    if (tableName) return tableName;
+    return "Untitled";
+  }
+
+  renderTabs() {
+    if (!this.elements.tabList) return;
+    this.elements.tabList.innerHTML = "";
+
+    this.tabs.forEach((tab) => {
+      const item = document.createElement("div");
+      item.className = `qq-query-tab${tab.id === this.activeTabId ? " active" : ""}`;
+      item.setAttribute("role", "tab");
+      item.setAttribute("aria-selected", String(tab.id === this.activeTabId));
+      item.dataset.tabId = tab.id;
+
+      const label = document.createElement("button");
+      label.type = "button";
+      label.className = "qq-query-tab-label";
+      label.title = this.getTabTitle(tab);
+      label.textContent = this.getTabTitle(tab);
+      label.addEventListener("click", () => this.switchTab(tab.id));
+      label.addEventListener("dblclick", () => this.renameTab(tab.id));
+      label.addEventListener("contextmenu", (event) => this.openTabContextMenu(event, tab.id));
+      item.addEventListener("contextmenu", (event) => this.openTabContextMenu(event, tab.id));
+
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "qq-query-tab-close";
+      close.title = "Close tab";
+      close.setAttribute("aria-label", `Close ${this.getTabTitle(tab)}`);
+      close.textContent = "x";
+      close.disabled = this.tabs.length <= 1;
+      close.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.closeTab(tab.id);
+      });
+
+      item.append(label, close);
+      this.elements.tabList.appendChild(item);
+    });
+
+    if (this.elements.addTabButton) {
+      this.elements.addTabButton.disabled = this.tabs.length >= 10;
+      this.elements.addTabButton.title = this.tabs.length >= 10 ? "Maximum 10 tabs" : "New tab";
+    }
+  }
+
+  openTabContextMenu(event, tabId) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeTabContextMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "qq-tab-context-menu";
+    menu.style.left = `${event.clientX}px`;
+    menu.style.top = `${event.clientY}px`;
+    menu.dataset.tabId = tabId;
+
+    const actions = [
+      { label: "Rename", run: () => this.renameTab(tabId) },
+      { label: "Duplicate", run: () => this.duplicateTab(tabId), disabled: this.tabs.length >= 10 },
+      { label: "Close", run: () => this.closeTab(tabId), disabled: this.tabs.length <= 1 },
+    ];
+
+    actions.forEach((action) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = action.label;
+      button.disabled = Boolean(action.disabled);
+      button.addEventListener("click", () => {
+        this.closeTabContextMenu();
+        void action.run();
+      });
+      menu.appendChild(button);
+    });
+
+    document.body.appendChild(menu);
+    this._tabContextMenu = menu;
+    this._handleTabContextDismiss = (dismissEvent) => {
+      if (!menu.contains(dismissEvent.target)) {
+        this.closeTabContextMenu();
+      }
+    };
+    this._handleTabContextKeydown = (keydownEvent) => {
+      if (keydownEvent.key === "Escape") {
+        this.closeTabContextMenu();
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener("click", this._handleTabContextDismiss);
+      document.addEventListener("contextmenu", this._handleTabContextDismiss);
+      document.addEventListener("keydown", this._handleTabContextKeydown);
+    }, 0);
+  }
+
+  closeTabContextMenu() {
+    if (this._tabContextMenu?.parentNode) {
+      this._tabContextMenu.parentNode.removeChild(this._tabContextMenu);
+    }
+    this._tabContextMenu = null;
+    if (this._handleTabContextDismiss) {
+      document.removeEventListener("click", this._handleTabContextDismiss);
+      document.removeEventListener("contextmenu", this._handleTabContextDismiss);
+      this._handleTabContextDismiss = null;
+    }
+    if (this._handleTabContextKeydown) {
+      document.removeEventListener("keydown", this._handleTabContextKeydown);
+      this._handleTabContextKeydown = null;
+    }
+  }
+
+  captureCurrentTabDraft() {
+    const active = this.getActiveTab();
+    const now = new Date().toISOString();
+    const tableName = this.elements.tableNameInput?.value?.trim() || "";
+
+    return this.createTabDraft({
+      ...active,
+      title: active?.title || "Untitled",
+      tableName,
+      queryType: this.getQueryTypeValue(),
+      schemaData: this.schemaTable?.getData?.() || [["", "", "", "", "", ""]],
+      inputData: this.dataTable?.getData?.() || [[], []],
+      attachments: this.cloneAttachments(this.processedFiles),
+      generatedSql: this.editor?.getValue?.() || "",
+      dirty: true,
+      createdAt: active?.createdAt,
+      lastUpdated: now,
+      source: active?.source || null,
+    });
+  }
+
+  cloneAttachments(files) {
+    try {
+      return JSON.parse(JSON.stringify(Array.isArray(files) ? files : []));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async applyTabDraft(tab) {
+    if (!tab) return;
+    this._isHydratingTab = true;
+    try {
+      this.elements.tableNameInput.value = tab.tableName || "";
+      this.setQueryTypeValue(tab.queryType || "merge");
+      this.schemaTable?.loadData?.(Array.isArray(tab.schemaData) ? tab.schemaData : [["", "", "", "", "", ""]]);
+      this.scheduleSchemaLayoutRefresh();
+      this.updateDataSpreadsheet();
+      this.dataTable?.loadData?.(Array.isArray(tab.inputData) ? tab.inputData : [[], []]);
+      this.processedFiles = this.cloneAttachments(tab.attachments);
+      if (this.processedFiles.length > 0) {
+        this._renderAttachmentsList();
+      } else {
+        this._renderEmptyAttachmentsState();
+      }
+      this.updateAttachmentControlsState();
+      this.editor?.setValue?.(tab.generatedSql || "");
+      this.clearError();
+      this.renderTabs();
+      this.refreshLayouts();
+    } finally {
+      this._isHydratingTab = false;
+    }
+  }
+
+  scheduleActiveTabDraftSave() {
+    const active = this.getActiveTab();
+    if (!active || this._isHydratingTab) return;
+    this.dataAutosave.schedule(active.id, []);
+  }
+
+  async saveActiveTabDraft() {
+    const active = this.getActiveTab();
+    if (!active || !this._storageReady || this._isHydratingTab) return false;
+
+    const draft = this.captureCurrentTabDraft();
+    const idx = this.tabs.findIndex((tab) => tab.id === draft.id);
+    if (idx !== -1) {
+      this.tabs[idx] = draft;
+    }
+    this.renderTabs();
+    await this.storageService.saveQueryTab(draft);
+    await this.saveTabSession();
+    return true;
+  }
+
+  async saveTabSession() {
+    if (!this._storageReady) return false;
+    return this.storageService.saveQueryTabSession({
+      tabOrder: this.tabs.map((tab) => tab.id),
+      activeTabId: this.activeTabId,
+    });
+  }
+
+  async switchTab(tabId) {
+    if (!tabId || tabId === this.activeTabId) return;
+    await this.flushPendingDataAutosave();
+    await this.saveActiveTabDraft();
+    const next = this.tabs.find((tab) => tab.id === tabId);
+    if (!next) return;
+    this.activeTabId = tabId;
+    await this.applyTabDraft(next);
+    await this.saveTabSession();
+  }
+
+  async createNewTab({ activate = true } = {}) {
+    if (this.tabs.length >= 10) return null;
+    await this.flushPendingDataAutosave();
+    await this.saveActiveTabDraft();
+    const tab = this.createTabDraft();
+    this.tabs.push(tab);
+    if (activate) {
+      this.activeTabId = tab.id;
+      await this.applyTabDraft(tab);
+    }
+    await this.storageService.saveQueryTab(tab);
+    await this.saveTabSession();
+    this.renderTabs();
+    return tab;
+  }
+
+  async duplicateTab(tabId) {
+    if (this.tabs.length >= 10) return null;
+    await this.flushPendingDataAutosave();
+    await this.saveActiveTabDraft();
+    const source = this.tabs.find((tab) => tab.id === tabId);
+    if (!source) return null;
+    const duplicate = this.createTabDraft({
+      ...source,
+      id: undefined,
+      title: `${this.getTabTitle(source)} copy`,
+      attachments: this.cloneAttachments(source.attachments),
+      schemaData: source.schemaData?.map((row) => [...row]),
+      inputData: source.inputData?.map((row) => [...row]),
+      dirty: true,
+    });
+    const sourceIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    this.tabs.splice(sourceIndex + 1, 0, duplicate);
+    this.activeTabId = duplicate.id;
+    await this.storageService.saveQueryTab(duplicate);
+    await this.applyTabDraft(duplicate);
+    await this.saveTabSession();
+    return duplicate;
+  }
+
+  async closeTab(tabId) {
+    if (this.tabs.length <= 1) return;
+    await this.flushPendingDataAutosave();
+    if (tabId === this.activeTabId) {
+      await this.saveActiveTabDraft();
+    }
+    const index = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) return;
+    this.tabs.splice(index, 1);
+    await this.storageService.deleteQueryTab(tabId);
+    if (tabId === this.activeTabId) {
+      const next = this.tabs[Math.min(index, this.tabs.length - 1)];
+      this.activeTabId = next.id;
+      await this.applyTabDraft(next);
+    }
+    await this.saveTabSession();
+    this.renderTabs();
+  }
+
+  async renameTab(tabId) {
+    const tab = this.tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const tabEl = this.elements.tabList?.querySelector(`[data-tab-id="${tabId}"]`);
+    if (!tabEl) return;
+    const currentTitle = this.getTabTitle(tab);
+    tabEl.innerHTML = "";
+
+    const input = document.createElement("input");
+    input.className = "qq-query-tab-rename";
+    input.value = currentTitle;
+    input.setAttribute("aria-label", "Rename tab");
+    tabEl.appendChild(input);
+
+    const commit = async () => {
+      const nextTitle = input.value.trim();
+      if (nextTitle && nextTitle !== currentTitle) {
+        tab.title = nextTitle;
+        tab.tableName = nextTitle.includes(".") ? nextTitle : tab.tableName;
+        if (tab.id === this.activeTabId && tab.tableName) {
+          this.elements.tableNameInput.value = tab.tableName;
+        }
+        tab.dirty = true;
+        await this.storageService.saveQueryTab(tab);
+        await this.saveTabSession();
+      }
+      this.renderTabs();
+    };
+
+    const cancel = () => {
+      this.renderTabs();
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void commit();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancel();
+      }
+    });
+    input.addEventListener("blur", () => {
+      void commit();
+    });
+
+    input.focus();
+    input.select();
+  }
+
+  isCurrentDraftEmpty() {
+    const tableName = this.elements.tableNameInput?.value?.trim();
+    const schemaData = this.schemaTable?.getData?.() || [];
+    const inputData = this.dataTable?.getData?.() || [];
+    const sql = this.editor?.getValue?.() || "";
+    const hasSchema = schemaData.some((row) => Array.isArray(row) && row.some((cell) => cell !== null && cell !== ""));
+    const hasData = inputData.some((row) => Array.isArray(row) && row.some((cell) => cell !== null && cell !== ""));
+    return !tableName && !hasSchema && !hasData && !sql && this.processedFiles.length === 0;
+  }
+
+  chooseSchemaLoadMode(fullName) {
+    if (this.isCurrentDraftEmpty()) return "schema-data";
+    const choice = prompt(
+      `Load ${fullName} into this tab?\n\n1 = schema and saved data\n2 = schema only\n3 = replace schema and keep current data`,
+      "1",
+    );
+    if (choice === null) return null;
+    if (choice.trim() === "2") return "schema-only";
+    if (choice.trim() === "3") return "schema-keep-data";
+    return "schema-data";
+  }
+
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
+    this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
     const persist = this.dataAutosave.destroy({ flush });
@@ -967,16 +1377,8 @@ export class QuickQueryUI {
   }
 
   async persistCurrentQueryType() {
-    const tableName = this.elements.tableNameInput?.value?.trim();
-    if (!tableName || !tableName.includes(".")) return false;
-
     await this.flushPendingDataAutosave();
-
-    if (this.storageService && typeof this.storageService.updateQueryType === "function") {
-      return this.storageService.updateQueryType(tableName, this.getQueryTypeValue());
-    }
-
-    return false;
+    return this.saveActiveTabDraft();
   }
 
   /**
@@ -1121,9 +1523,11 @@ export class QuickQueryUI {
       }
 
       this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, false);
+      this.scheduleActiveTabDraftSave();
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
+      this.scheduleActiveTabDraftSave();
     }
   }
 
@@ -1174,6 +1578,7 @@ export class QuickQueryUI {
       }
 
       this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, true);
+      this.scheduleActiveTabDraftSave();
     } catch (error) {
       // Only handle error if this is still the current request
       if (currentReqId !== this._genReqId) {
@@ -1190,6 +1595,7 @@ export class QuickQueryUI {
 
       this.showError(error.message);
       this.editor.setValue("");
+      this.scheduleActiveTabDraftSave();
     }
   }
 
@@ -1472,6 +1878,7 @@ export class QuickQueryUI {
 
     // Clear imported Excel data
     this.handleClearExcelImport();
+    this.scheduleActiveTabDraftSave();
   }
 
   handleDownloadSql() {
@@ -2219,6 +2626,7 @@ export class QuickQueryUI {
     }
 
     this.dataTable.loadData(currentData);
+    this.scheduleActiveTabDraftSave();
   }
 
   handleAddDataRow() {
@@ -2228,12 +2636,14 @@ export class QuickQueryUI {
     const newRow = Array(columnCount).fill(null);
     const newData = [...currentData, newRow];
     this.dataTable.loadData(newData);
+    this.scheduleActiveTabDraftSave();
   }
 
   handleRemoveDataRow() {
     const currentData = this.dataTable.getData();
     const newData = currentData.slice(0, -1);
     this.dataTable.loadData(newData);
+    this.scheduleActiveTabDraftSave();
   }
 
   handleClearData() {
@@ -2244,6 +2654,7 @@ export class QuickQueryUI {
     this.dataTable.loadData(newData);
     // Also clear any imported Excel data
     this.handleClearExcelImport();
+    this.scheduleActiveTabDraftSave();
   }
 
   // ===== Excel Import Methods =====
@@ -2642,20 +3053,29 @@ export class QuickQueryUI {
     await this.updateSavedSchemasList(results);
   }
 
-  async handleLoadSchema(fullName) {
+  async handleLoadSchema(fullName, options = {}) {
     await this.flushPendingDataAutosave();
 
     const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
+      const mode = options.mode || (options.skipChoice ? "schema-data" : this.chooseSchemaLoadMode(fullName));
+      if (!mode) return;
+      const existingData = this.dataTable?.getData?.() || [[], []];
       this.elements.tableNameInput.value = fullName;
       this.setQueryTypeValue(result.queryType || "merge");
       this.schemaTable.loadData(result.schema);
       this.scheduleSchemaLayoutRefresh();
       this.updateDataSpreadsheet();
 
-      // Load cached data if available
-      if (result.data) {
+      if (mode === "schema-data" && result.data) {
         this.dataTable.loadData(result.data);
+      } else if (mode === "schema-keep-data") {
+        const columnCount = result.schema.length;
+        const normalizedData = existingData.map((row) => {
+          const safeRow = Array.isArray(row) ? row : [];
+          return safeRow.slice(0, columnCount).concat(Array(Math.max(0, columnCount - safeRow.length)).fill(null));
+        });
+        this.dataTable.loadData(normalizedData.length ? normalizedData : [Array(columnCount).fill(null), Array(columnCount).fill(null)]);
       } else {
         this.handleAddFieldNames();
         this.handleClearData();
@@ -2669,9 +3089,11 @@ export class QuickQueryUI {
         source: "cache",
         table_name: fullName,
         has_cached_data: Boolean(result.data),
+        load_mode: mode,
         row_count: result.data ? result.data.length : 0,
         column_count: result.schema ? result.schema.length : 0,
       }, { flush: true });
+      this.scheduleActiveTabDraftSave();
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
     }
@@ -3178,6 +3600,7 @@ export class QuickQueryUI {
       // Replace the value with sanitized content; caret is moved to end for simplicity
       el.value = sanitized;
     }
+    this.scheduleActiveTabDraftSave();
     const input = sanitized.trim();
     this.elements.tableNameInput.style.borderColor = "";
 
@@ -3336,11 +3759,11 @@ export class QuickQueryUI {
     });
   }
 
-  async loadMostRecentSchema() {
+  async loadMostRecentSchema(options = {}) {
     // Prefer last activity from data store to restore the most recent working table
     const recentFromData = await this.storageService.getMostRecentDataTable();
     if (recentFromData && recentFromData.fullName) {
-      await this.handleLoadSchema(recentFromData.fullName);
+      await this.handleLoadSchema(recentFromData.fullName, options);
       return;
     }
 
@@ -3353,7 +3776,7 @@ export class QuickQueryUI {
         return best;
       }, null);
       if (mostRecent?.t?.fullName) {
-        await this.handleLoadSchema(mostRecent.t.fullName);
+        await this.handleLoadSchema(mostRecent.t.fullName, options);
       }
     }
   }
@@ -3554,6 +3977,7 @@ export class QuickQueryUI {
 
       // Update action buttons state
       this.updateAttachmentControlsState();
+      this.scheduleActiveTabDraftSave();
       this.clearError();
 
       if (this.eventBus) {
@@ -3611,6 +4035,7 @@ export class QuickQueryUI {
         }
 
         this.updateAttachmentControlsState();
+        this.scheduleActiveTabDraftSave();
       });
 
       fileButton.addEventListener("click", () => this.showFileViewer(file));
@@ -3668,6 +4093,7 @@ export class QuickQueryUI {
 
       // Update action buttons state
       this.updateAttachmentControlsState();
+      this.scheduleActiveTabDraftSave();
       this.clearError();
     } catch (error) {
       this.showError(`Error processing attachments: ${error.message}`);
@@ -3769,6 +4195,7 @@ export class QuickQueryUI {
       btn.setAttribute("aria-disabled", "false");
     }
     this.updateAttachmentControlsState();
+    this.scheduleActiveTabDraftSave();
   }
 
   handleDeleteAllAttachments() {
@@ -3791,6 +4218,7 @@ export class QuickQueryUI {
     }
 
     this.updateAttachmentControlsState();
+    this.scheduleActiveTabDraftSave();
     if (removedSummary.attachment_count > 0) {
       this.trackQuickQueryEvent(
         "attachment_removed",

@@ -1,4 +1,8 @@
 export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container">
+    <div class="qq-tab-strip" id="quickQueryTabStrip" aria-label="Quick Query tabs">
+        <div class="qq-tab-list" id="quickQueryTabList" role="tablist"></div>
+        <button type="button" class="qq-tab-add" id="quickQueryAddTab" aria-label="New tab" title="New tab">+</button>
+    </div>
     <div class="quick-query-content">
         <div class="content-a">
             <div class="quick-query-left-panel">
@@ -16,8 +20,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                             <button class="query-type-option" data-value="update">UPDATE</button>
                         </div>
                     </div>
-                    <input type="text" id="tableNameInput" placeholder="schema_name.table_name"
-                        value="schema_name.table_name">
+                    <input type="text" id="tableNameInput" placeholder="schema_name.table_name" value="">
                 </div>
                 <div class="button-group quick-query-left-controls">
                     <button id="showSavedSchemas" class="btn btn-primary btn-sm">Schemas</button>

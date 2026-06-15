@@ -2,9 +2,12 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 
 // Database constants
 const DB_NAME = "QuickQueryDatabase";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const SCHEMA_STORE = "schemas";
 const DATA_STORE = "tableData";
+const TAB_STORE = "queryTabs";
+const TAB_SESSION_STORE = "queryTabSession";
+const TAB_SESSION_KEY = "default";
 
 // Legacy localStorage keys for migration
 const LEGACY_SCHEMA_KEY = "tool:quick-query:schema";
@@ -90,6 +93,15 @@ export class IndexedDBStorageService {
           const dataStore = db.createObjectStore(DATA_STORE, { keyPath: "fullName" });
           dataStore.createIndex("schemaName", "schemaName", { unique: false });
           dataStore.createIndex("lastUpdated", "lastUpdated", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(TAB_STORE)) {
+          const tabStore = db.createObjectStore(TAB_STORE, { keyPath: "id" });
+          tabStore.createIndex("lastUpdated", "lastUpdated", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(TAB_SESSION_STORE)) {
+          db.createObjectStore(TAB_SESSION_STORE, { keyPath: "id" });
         }
       };
     });
@@ -537,6 +549,87 @@ export class IndexedDBStorageService {
       const { fullName, schemaName, tableName, lastUpdated } = best;
       return { fullName, schemaName, tableName, lastUpdated };
     } catch (_) {
+      return null;
+    }
+  }
+
+  // ==================== Tab Draft Functions ====================
+
+  async saveQueryTab(tab) {
+    try {
+      if (!tab?.id) throw new Error("Tab id is required");
+      const now = new Date().toISOString();
+      await this._putRecord(TAB_STORE, {
+        ...tab,
+        title: tab.title || "Untitled",
+        lastUpdated: now,
+        createdAt: tab.createdAt || now,
+      });
+      return true;
+    } catch (error) {
+      console.error("Error saving query tab:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", {
+        type: "save_query_tab_failed",
+        message: error.message,
+      });
+      return false;
+    }
+  }
+
+  async getQueryTab(tabId) {
+    if (!tabId) return null;
+    try {
+      return (await this._getRecord(TAB_STORE, tabId)) || null;
+    } catch (error) {
+      console.error("Error loading query tab:", error);
+      return null;
+    }
+  }
+
+  async getAllQueryTabs() {
+    try {
+      return await this._getAllRecords(TAB_STORE);
+    } catch (error) {
+      console.error("Error loading query tabs:", error);
+      return [];
+    }
+  }
+
+  async deleteQueryTab(tabId) {
+    if (!tabId) return false;
+    try {
+      await this._deleteRecord(TAB_STORE, tabId);
+      return true;
+    } catch (error) {
+      console.error("Error deleting query tab:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", {
+        type: "delete_query_tab_failed",
+        message: error.message,
+      });
+      return false;
+    }
+  }
+
+  async saveQueryTabSession(session) {
+    try {
+      await this._putRecord(TAB_SESSION_STORE, {
+        id: TAB_SESSION_KEY,
+        tabOrder: Array.isArray(session?.tabOrder) ? session.tabOrder : [],
+        activeTabId: session?.activeTabId || null,
+        lastUpdated: new Date().toISOString(),
+      });
+      return true;
+    } catch (error) {
+      console.error("Error saving query tab session:", error);
+      return false;
+    }
+  }
+
+  async loadQueryTabSession() {
+    try {
+      return (await this._getRecord(TAB_SESSION_STORE, TAB_SESSION_KEY)) || null;
+    } catch (error) {
+      console.error("Error loading query tab session:", error);
       return null;
     }
   }

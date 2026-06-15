@@ -19,6 +19,141 @@
   white-space: normal;
 }
 
+.qq-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  overflow-x: auto;
+}
+
+.qq-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.qq-query-tab {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  height: 30px;
+  border: 1px solid hsl(var(--border));
+  border-bottom-color: transparent;
+  border-radius: 6px 6px 0 0;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.qq-query-tab.active {
+  background: hsl(var(--background));
+  border-color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--background));
+}
+
+.qq-query-tab-label,
+.qq-query-tab-close,
+.qq-tab-add {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.qq-query-tab-label {
+  min-width: 0;
+  max-width: 240px;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qq-query-tab-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  padding: 0;
+  border-radius: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.qq-query-tab-close:hover:not(:disabled) {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.qq-query-tab-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.qq-query-tab-rename {
+  width: 220px;
+  height: 24px;
+  margin: 0 4px;
+  padding: 0 8px;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  outline: none;
+}
+
+.qq-tab-add:hover {
+  background: hsl(var(--accent));
+}
+
+.qq-tab-add {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.qq-tab-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--popover, var(--background)));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.qq-tab-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.qq-tab-context-menu button:hover:not(:disabled) {
+  background: hsl(var(--accent));
+}
+
+.qq-tab-context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .quick-query-right-panel .button-group,
 .quick-query-left-controls.button-group {
   flex-wrap: wrap;
