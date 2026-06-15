@@ -1820,11 +1820,8 @@ export class QuickQueryUI {
   /**
    * Track query generation analytics
    */
-  trackQuickQueryEvent(event, meta = {}, { flush = false } = {}) {
+  trackQuickQueryEvent(event, meta = {}) {
     UsageTracker.trackEvent("quick-query", event, cleanQuickQueryAnalyticsMeta(meta));
-    if (flush) {
-      void UsageTracker.flushBatchNow();
-    }
   }
 
   getCurrentQuickQueryContext(extra = {}) {

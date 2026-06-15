@@ -20,6 +20,29 @@ describe("UsageTracker analytics reliability", () => {
         json_tools: { export_excel: 1 },
       },
       events: [{ featureId: "json_tools", action: "export_excel", ts: new Date().toISOString(), meta: { stack: "a".repeat(200) } }],
+      usageLogs: [
+        {
+          user_email: "user@example.com",
+          device_id: "device-1",
+          tool_id: "json_tools",
+          action: "export_excel",
+          ts: new Date().toISOString(),
+        },
+      ],
+      errorEvents: [
+        {
+          user_email: "user@example.com",
+          device_id: "device-1",
+          runtime: "web",
+          route: "#json-tools",
+          tool_id: "json_tools",
+          process_area: "tool",
+          error_kind: "captured_error",
+          error_name: "Error",
+          message: "boom",
+          created_time: new Date().toISOString(),
+        },
+      ],
       daily: {},
       integrity: null,
     };
@@ -31,14 +54,18 @@ describe("UsageTracker analytics reliability", () => {
     await UsageTracker._flushBatch();
 
     expect(UsageTracker._state.events).toHaveLength(1);
+    expect(UsageTracker._state.usageLogs).toHaveLength(1);
+    expect(UsageTracker._state.errorEvents).toHaveLength(1);
   });
 
-  it("clears events when batch send succeeds", async () => {
+  it("clears detail rows when batch send succeeds", async () => {
     AnalyticsSender.sendBatch = vi.fn().mockResolvedValue(true);
 
     await UsageTracker._flushBatch();
 
     expect(UsageTracker._state.events).toHaveLength(0);
+    expect(UsageTracker._state.usageLogs).toHaveLength(0);
+    expect(UsageTracker._state.errorEvents).toHaveLength(0);
   });
 
   it("exposes a public immediate batch flush wrapper", async () => {
@@ -48,6 +75,49 @@ describe("UsageTracker analytics reliability", () => {
 
     expect(AnalyticsSender.sendBatch).toHaveBeenCalledTimes(1);
     expect(UsageTracker._state.events).toHaveLength(0);
+    expect(UsageTracker._state.usageLogs).toHaveLength(0);
+    expect(UsageTracker._state.errorEvents).toHaveLength(0);
+  });
+
+  it("queues feature usage logs for the next batch instead of sending live logs", () => {
+    AnalyticsSender.sendLog = vi.fn();
+    localStorage.setItem("user.email", "USER@example.com");
+    localStorage.setItem("adtools.deviceId", "device-1");
+    UsageTracker._state.usageLogs = [];
+
+    UsageTracker.trackFeature("json_tools", "prettify");
+
+    expect(AnalyticsSender.sendLog).not.toHaveBeenCalled();
+    expect(UsageTracker._state.usageLogs).toEqual([
+      expect.objectContaining({
+        user_email: "user@example.com",
+        device_id: "device-1",
+        tool_id: "json-tools",
+        action: "prettify",
+      }),
+    ]);
+  });
+
+  it("queues error events for the next batch", () => {
+    UsageTracker._state.errorEvents = [];
+
+    UsageTracker.queueErrorEvent({
+      user_email: "user@example.com",
+      device_id: "device-1",
+      error_kind: "captured_error",
+      error_name: "Error",
+      message: "boom",
+      created_time: new Date().toISOString(),
+    });
+
+    expect(UsageTracker._state.errorEvents).toEqual([
+      expect.objectContaining({
+        user_email: "user@example.com",
+        device_id: "device-1",
+        error_kind: "captured_error",
+        message: "boom",
+      }),
+    ]);
   });
 
   it("normalizes legacy feature IDs", () => {

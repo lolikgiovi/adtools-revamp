@@ -8,7 +8,7 @@ import { ensureErrorEventsSchema } from '../utils/analyticsSchema.js';
 import { tsGmt7Plain, tsToGmt7Plain } from '../utils/timestamps.js';
 
 /**
- * Handle POST /analytics/batch - batch insert events and upsert device_usage
+ * Handle POST /analytics/batch - batch insert events/usage logs and upsert device_usage
  * IMPROVEMENTS:
  * - Uses env.DB.batch() for single transaction (performance)
  * - Removed legacy daily_usage and user_usage writes
@@ -19,9 +19,17 @@ export async function handleAnalyticsBatchPost(request, env) {
     const deviceId = String(data.device_id || data.deviceId || "");
     const userEmail = String(data.user_email || "").trim().toLowerCase() || null;
     const events = Array.isArray(data.events) ? data.events : [];
+    const usageLogs = Array.isArray(data.usage_log)
+      ? data.usage_log
+      : Array.isArray(data.usage_logs)
+        ? data.usage_logs
+        : [];
+    const errorEvents = Array.isArray(data.error_events) ? data.error_events : [];
     const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
 
     let insertedEvents = 0;
+    let insertedUsageLogs = 0;
+    let insertedErrorEvents = 0;
     let upsertsDevice = 0;
 
     if (env.DB) {
@@ -49,6 +57,74 @@ export async function handleAnalyticsBatchPost(request, env) {
         );
       }
 
+      const errorStatements = [];
+      if (errorEvents.length > 0) {
+        await ensureErrorEventsSchema(env);
+      }
+      for (const err of errorEvents) {
+        const userEmailForError = safeString(err.user_email || "", 160).trim().toLowerCase() || null;
+        const deviceIdForError = safeString(err.device_id || deviceId || "unknown", 120);
+        const runtime = safeString(err.runtime || data.runtime || "unknown", 40);
+        const appVersion = safeString(err.app_version || data.app_version || "", 60) || null;
+        const route = safeString(err.route || "", 160) || null;
+        const toolId = normalizeFeatureId(err.tool_id || "");
+        const processArea = safeString(err.process_area || "shell", 80);
+        const errorKind = safeString(err.error_kind || "uncaught_error", 80);
+        const errorName = safeString(err.error_name || "Error", 120);
+        const message = safeString(err.message || "Unknown error", 300);
+        const stack = safeString(err.stack || "", 1500) || null;
+        const source = safeString(err.source || "", 500) || null;
+        const lineno = Number.isFinite(Number(err.lineno)) ? Number(err.lineno) : null;
+        const colno = Number.isFinite(Number(err.colno)) ? Number(err.colno) : null;
+        const userAgent = safeString(err.user_agent || "", 300) || null;
+        const metadata = JSON.stringify(sanitizeObject(err.metadata || {}, 300));
+        const createdTime = tsToGmt7Plain(err.created_time) || tsGmt7Plain();
+
+        errorStatements.push(
+          env.DB.prepare(
+            `INSERT INTO error_events (
+              user_email, device_id, runtime, app_version, route, tool_id, process_area,
+              error_kind, error_name, message, stack, source, lineno, colno, user_agent,
+              metadata, created_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+            .bind(
+              userEmailForError,
+              deviceIdForError,
+              runtime,
+              appVersion,
+              route,
+              toolId || null,
+              processArea,
+              errorKind,
+              errorName,
+              message,
+              stack,
+              source,
+              lineno,
+              colno,
+              userAgent,
+              metadata,
+              createdTime
+            )
+        );
+      }
+
+      const usageLogStatements = [];
+      for (const log of usageLogs) {
+        const email = String(log.user_email || userEmail || "").trim().toLowerCase();
+        if (!email) continue;
+        const dev = String(log.device_id || deviceId || "unknown");
+        const toolId = normalizeFeatureId(log.tool_id || "unknown");
+        const action = String(log.action || "unknown");
+        const createdTime = String(log.created_time || tsGmt7Plain());
+
+        usageLogStatements.push(
+          env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
+            .bind(email, dev, toolId, action, createdTime)
+        );
+      }
+
       // Build batch statements for device_usage (idempotent - replaces counts)
       const usageStatements = [];
       for (const du of deviceUsage) {
@@ -72,12 +148,14 @@ export async function handleAnalyticsBatchPost(request, env) {
       }
 
       // Execute all statements in a single batch transaction
-      const allStatements = [...eventStatements, ...usageStatements];
+      const allStatements = [...eventStatements, ...errorStatements, ...usageLogStatements, ...usageStatements];
       if (allStatements.length > 0) {
         try {
           await env.DB.batch(allStatements);
           // Count successful inserts
           insertedEvents = eventStatements.length;
+          insertedErrorEvents = errorStatements.length;
+          insertedUsageLogs = usageLogStatements.length;
           upsertsDevice = usageStatements.length;
         } catch (batchErr) {
           // Fallback to individual inserts if batch fails
@@ -85,6 +163,18 @@ export async function handleAnalyticsBatchPost(request, env) {
             try {
               await stmt.run();
               insertedEvents++;
+            } catch (_) {}
+          }
+          for (const stmt of errorStatements) {
+            try {
+              await stmt.run();
+              insertedErrorEvents++;
+            } catch (_) {}
+          }
+          for (const stmt of usageLogStatements) {
+            try {
+              await stmt.run();
+              insertedUsageLogs++;
             } catch (_) {}
           }
           for (const stmt of usageStatements) {
@@ -98,7 +188,10 @@ export async function handleAnalyticsBatchPost(request, env) {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inserted: { events: insertedEvents, device_usage: upsertsDevice } }),
+      JSON.stringify({
+        ok: true,
+        inserted: { events: insertedEvents, error_events: insertedErrorEvents, usage_log: insertedUsageLogs, device_usage: upsertsDevice },
+      }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       }

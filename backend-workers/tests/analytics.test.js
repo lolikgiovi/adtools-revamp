@@ -116,6 +116,30 @@ describe("Analytics endpoints", () => {
         body: JSON.stringify({
           device_id: "analytics-test-device",
           user_email: "analytics-test@bankmandiri.co.id",
+          usage_log: [
+            {
+              user_email: "analytics-test@bankmandiri.co.id",
+              device_id: "analytics-test-device",
+              tool_id: "json_tools",
+              action: "open",
+              created_time: "2026-01-01 10:00:00+07:00",
+            },
+          ],
+          error_events: [
+            {
+              user_email: "analytics-test@bankmandiri.co.id",
+              device_id: "analytics-test-device",
+              runtime: "web",
+              route: "#json-tools",
+              tool_id: "json_tools",
+              process_area: "tool",
+              error_kind: "captured_error",
+              error_name: "Error",
+              message: "Unexpected 123456 failure",
+              created_time: "2026-01-01T03:00:00.000Z",
+              metadata: { token: "secret", safe_context: "formatter" },
+            },
+          ],
           device_usage: [
             {
               device_id: "analytics-test-device",
@@ -135,6 +159,8 @@ describe("Analytics endpoints", () => {
     const data = await response.json();
     expect(response.status).toBe(200);
     expect(data.ok).toBe(true);
+    expect(data.inserted.error_events).toBe(1);
+    expect(data.inserted.usage_log).toBe(1);
     expect(data.inserted.device_usage).toBe(1);
     expect(env.DB.batch).toHaveBeenCalledTimes(1);
   });

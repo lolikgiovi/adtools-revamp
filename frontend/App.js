@@ -62,10 +62,16 @@ class App {
     this.buildToolsConfigMap();
     this.buildCategoriesConfigMap();
     this.buildToolDefinitions();
-    // Dev: speed up analytics batch interval for quicker feedback
+    // Keep analytics batched by default; override this key manually when testing shorter intervals.
     if (import.meta?.env?.DEV) {
       try {
-        localStorage.setItem("usage.analytics.batch.interval.ms", String(15 * 60 * 1000));
+        const analyticsIntervalKey = "usage.analytics.batch.interval.ms";
+        const previousDevInterval = String(15 * 60 * 1000);
+        const hourlyInterval = String(60 * 60 * 1000);
+        const currentInterval = localStorage.getItem(analyticsIntervalKey);
+        if (!currentInterval || currentInterval === previousDevInterval) {
+          localStorage.setItem(analyticsIntervalKey, hourlyInterval);
+        }
       } catch (_) {}
     }
     // Initialize usage tracking early with the app event bus

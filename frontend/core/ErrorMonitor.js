@@ -1,4 +1,3 @@
-import { AnalyticsSender } from "./AnalyticsSender.js";
 import { UsageTracker } from "./UsageTracker.js";
 import { getRuntime } from "./Runtime.js";
 
@@ -125,7 +124,7 @@ class ErrorMonitor {
 
   static _send(payload) {
     if (!payload || this._isDuplicate(payload)) return;
-    AnalyticsSender.sendError(this._sanitizePayload(payload)).catch(() => {});
+    UsageTracker.queueErrorEvent(this._sanitizePayload(payload));
   }
 
   static _sanitizePayload(payload) {

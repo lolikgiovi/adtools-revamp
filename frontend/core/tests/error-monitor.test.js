@@ -1,8 +1,8 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AnalyticsSender } from "../AnalyticsSender.js";
 import { ErrorMonitor } from "../ErrorMonitor.js";
+import { UsageTracker } from "../UsageTracker.js";
 
 describe("ErrorMonitor", () => {
   beforeEach(() => {
@@ -26,7 +26,7 @@ describe("ErrorMonitor", () => {
     ErrorMonitor._initialized = false;
     ErrorMonitor._options = { getCurrentTool: () => "json_tools" };
     ErrorMonitor._recent = new Map();
-    AnalyticsSender.sendError = vi.fn().mockResolvedValue(true);
+    UsageTracker.queueErrorEvent = vi.fn();
   });
 
   it("serializes uncaught errors with route, canonical tool, and useful stack", () => {
@@ -42,8 +42,8 @@ describe("ErrorMonitor", () => {
       colno: 4,
     });
 
-    expect(AnalyticsSender.sendError).toHaveBeenCalledTimes(1);
-    const payload = AnalyticsSender.sendError.mock.calls[0][0];
+    expect(UsageTracker.queueErrorEvent).toHaveBeenCalledTimes(1);
+    const payload = UsageTracker.queueErrorEvent.mock.calls[0][0];
     expect(payload.user_email).toBe("user@example.com");
     expect(payload.tool_id).toBe("json-tools");
     expect(payload.route).toBe("#json-tools");
@@ -56,8 +56,8 @@ describe("ErrorMonitor", () => {
   it("serializes unhandled rejections", () => {
     ErrorMonitor.captureUnhandledRejection({ reason: "plain rejection" });
 
-    expect(AnalyticsSender.sendError).toHaveBeenCalledTimes(1);
-    const payload = AnalyticsSender.sendError.mock.calls[0][0];
+    expect(UsageTracker.queueErrorEvent).toHaveBeenCalledTimes(1);
+    const payload = UsageTracker.queueErrorEvent.mock.calls[0][0];
     expect(payload.error_kind).toBe("unhandled_rejection");
     expect(payload.message).toBe("plain rejection");
     expect(payload.metadata.reason_type).toBe("string");
@@ -69,8 +69,8 @@ describe("ErrorMonitor", () => {
 
     ErrorMonitor.captureWindowError({ target: script });
 
-    expect(AnalyticsSender.sendError).toHaveBeenCalledTimes(1);
-    const payload = AnalyticsSender.sendError.mock.calls[0][0];
+    expect(UsageTracker.queueErrorEvent).toHaveBeenCalledTimes(1);
+    const payload = UsageTracker.queueErrorEvent.mock.calls[0][0];
     expect(payload.error_kind).toBe("resource_error");
     expect(payload.source).toBe("https://cdn.example/app.js");
     expect(payload.metadata.tag).toBe("script");

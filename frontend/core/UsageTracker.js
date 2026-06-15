@@ -11,8 +11,10 @@ class UsageTracker {
   static BACKUP_KEY = "usage.analytics.backup.v1";
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
+  static MAX_USAGE_LOGS = 1500; // rolling buffer for batched usage_log rows
+  static MAX_ERROR_EVENTS = 300; // rolling buffer for batched error_events rows
   static FLUSH_DELAY_MS = 300; // debounce writes
-  static BATCH_FLUSH_INTERVAL_MS = 180 * 60 * 1000; // 3 hours remote flush
+  static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour remote flush
   static META_STRING_LIMIT = 120;
   static ERROR_MESSAGE_LIMIT = 300;
   static ERROR_STACK_LIMIT = 1500;
@@ -200,7 +202,7 @@ class UsageTracker {
       if (existing) clearTimeout(existing);
       const timer = setTimeout(() => {
         try {
-          this.track(featureKey, actionKey, meta);
+          this._trackFeatureImmediate(featureKey, actionKey, meta);
         } finally {
           this._debounceTimers.delete(key);
         }
@@ -208,9 +210,16 @@ class UsageTracker {
       this._debounceTimers.set(key, timer);
       return;
     }
-    this.track(featureKey, actionKey, meta);
+    this._trackFeatureImmediate(featureKey, actionKey, meta);
+  }
 
-    // Send live usage log (if server has SEND_LIVE_USER_LOG enabled)
+  static _trackFeatureImmediate(featureKey, actionKey, meta = {}) {
+    this.track(featureKey, actionKey, meta);
+    this._queueUsageLog(featureKey, actionKey);
+  }
+
+  static _queueUsageLog(featureKey, actionKey) {
+    if (!this._enabled) return;
     try {
       let userEmail = null;
       let deviceId = null;
@@ -223,13 +232,19 @@ class UsageTracker {
 
       if (userEmail && deviceId) {
         const now = new Date();
-        AnalyticsSender.sendLog({
+        if (!this._isValidTimestamp(now)) return;
+        if (!this._state) this._state = this._loadFromStorage();
+        this._state.usageLogs = Array.isArray(this._state.usageLogs) ? this._state.usageLogs : [];
+        this._state.usageLogs.push({
           user_email: userEmail,
           device_id: deviceId,
           tool_id: featureKey,
           action: actionKey,
-          created_time: this._isoToGmt7Plain(now.toISOString()),
-        }).catch(() => {}); // Fire and forget
+          ts: now.toISOString(),
+        });
+        if (this._state.usageLogs.length > this.MAX_USAGE_LOGS) {
+          this._state.usageLogs = this._state.usageLogs.slice(this._state.usageLogs.length - this.MAX_USAGE_LOGS);
+        }
       }
     } catch (_) {}
   }
@@ -297,6 +312,28 @@ class UsageTracker {
 
     try {
       this._eventBus?.emit?.("usage:updated", ev);
+    } catch (_) {}
+  }
+
+  static queueErrorEvent(errorPayload = {}) {
+    if (!this._enabled) return;
+    try {
+      if (!this._state) this._state = this._loadFromStorage();
+      const createdTime = String(errorPayload.created_time || new Date().toISOString());
+      const errorEvent = {
+        ...errorPayload,
+        tool_id: this.normalizeFeatureId(errorPayload.tool_id || ""),
+        created_time: createdTime,
+      };
+      if (!this._validateErrorEvent(errorEvent)) return;
+      this._state.errorEvents = Array.isArray(this._state.errorEvents) ? this._state.errorEvents : [];
+      this._state.errorEvents.push(errorEvent);
+      if (this._state.errorEvents.length > this.MAX_ERROR_EVENTS) {
+        this._state.errorEvents = this._state.errorEvents.slice(this._state.errorEvents.length - this.MAX_ERROR_EVENTS);
+      }
+      this._state.lastUpdated = createdTime;
+      this._state.revision = (this._state.revision || 0) + 1;
+      this._scheduleFlush();
     } catch (_) {}
   }
 
@@ -452,12 +489,18 @@ class UsageTracker {
     } catch (err) {
       // Quota or other write issues: trim events and retry best-effort
       try {
-        const targetLen = Math.max(0, Math.floor(payload.events.length * 0.5));
-        payload.events.splice(0, payload.events.length - targetLen);
+        const targetEventsLen = Math.max(0, Math.floor(payload.events.length * 0.5));
+        payload.events.splice(0, payload.events.length - targetEventsLen);
+        const usageLogs = Array.isArray(payload.usageLogs) ? payload.usageLogs : [];
+        const targetUsageLogsLen = Math.max(0, Math.floor(usageLogs.length * 0.5));
+        usageLogs.splice(0, usageLogs.length - targetUsageLogsLen);
+        const errorEvents = Array.isArray(payload.errorEvents) ? payload.errorEvents : [];
+        const targetErrorEventsLen = Math.max(0, Math.floor(errorEvents.length * 0.5));
+        errorEvents.splice(0, errorEvents.length - targetErrorEventsLen);
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
       } catch (_) {
         // Fall back to saving counts only
-        const minimal = { ...payload, events: [] };
+        const minimal = { ...payload, events: [], usageLogs: [], errorEvents: [] };
         try {
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(minimal));
         } catch (_) {}
@@ -493,6 +536,8 @@ class UsageTracker {
         } else {
           // Validate timestamps on existing events
           state.events = Array.isArray(state.events) ? state.events.filter((ev) => this._validateEvent(ev)) : [];
+          state.usageLogs = Array.isArray(state.usageLogs) ? state.usageLogs.filter((log) => this._validateUsageLog(log)) : [];
+          state.errorEvents = Array.isArray(state.errorEvents) ? state.errorEvents.filter((err) => this._validateErrorEvent(err)) : [];
 
           // Time-based rotation: drop events older than 7 days
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -500,9 +545,23 @@ class UsageTracker {
             const evTime = new Date(ev.ts).getTime();
             return !Number.isNaN(evTime) && evTime > sevenDaysAgo;
           });
+          state.usageLogs = state.usageLogs.filter((log) => {
+            const logTime = new Date(log.ts).getTime();
+            return !Number.isNaN(logTime) && logTime > sevenDaysAgo;
+          });
+          state.errorEvents = state.errorEvents.filter((err) => {
+            const errTime = new Date(err.created_time).getTime();
+            return !Number.isNaN(errTime) && errTime > sevenDaysAgo;
+          });
 
           if (state.events.length > this.MAX_EVENTS) {
             state.events = state.events.slice(state.events.length - this.MAX_EVENTS);
+          }
+          if (state.usageLogs.length > this.MAX_USAGE_LOGS) {
+            state.usageLogs = state.usageLogs.slice(state.usageLogs.length - this.MAX_USAGE_LOGS);
+          }
+          if (state.errorEvents.length > this.MAX_ERROR_EVENTS) {
+            state.errorEvents = state.errorEvents.slice(state.errorEvents.length - this.MAX_ERROR_EVENTS);
           }
           state.counts = state.counts && typeof state.counts === "object" ? state.counts : {};
           state.daily = state.daily && typeof state.daily === "object" ? state.daily : {};
@@ -529,6 +588,8 @@ class UsageTracker {
       revision: 0,
       counts: {},
       events: [],
+      usageLogs: [],
+      errorEvents: [],
       daily: {},
       integrity: null,
     };
@@ -586,6 +647,21 @@ class UsageTracker {
       app_version: this._getAppVersion(),
     }));
 
+    const usage_log = (Array.isArray(s.usageLogs) ? s.usageLogs : []).map((log) => ({
+      user_email: log.user_email || userEmail,
+      device_id: log.device_id || deviceId,
+      tool_id: this.normalizeFeatureId(log.tool_id),
+      action: String(log.action || "unknown"),
+      created_time: this._isoToGmt7Plain(log.ts || new Date().toISOString()),
+    }));
+
+    const error_events = (Array.isArray(s.errorEvents) ? s.errorEvents : []).map((err) => ({
+      ...err,
+      user_email: err.user_email || userEmail,
+      device_id: err.device_id || deviceId,
+      tool_id: this.normalizeFeatureId(err.tool_id || ""),
+    }));
+
     // Build device_usage from absolute counts in state.counts
     const device_usage = [];
     const nowPlain = this._nowGmt7Plain();
@@ -614,6 +690,8 @@ class UsageTracker {
       runtime: this._getRuntime(),
       app_version: this._getAppVersion(),
       events,
+      usage_log,
+      error_events,
       device_usage,
     };
   }
@@ -623,11 +701,18 @@ class UsageTracker {
     if (!this._enabled) return;
     try {
       const payload = this._toBatchPayload();
-      if ((payload.events && payload.events.length) || (payload.device_usage && payload.device_usage.length)) {
+      if (
+        (payload.events && payload.events.length) ||
+        (payload.usage_log && payload.usage_log.length) ||
+        (payload.error_events && payload.error_events.length) ||
+        (payload.device_usage && payload.device_usage.length)
+      ) {
         const sent = await AnalyticsSender.sendBatch(payload);
         if (sent) {
-          // After successful send, clear events (counts remain for next sync)
+          // After successful send, clear detail rows (counts remain for next sync)
           this._state.events = [];
+          this._state.usageLogs = [];
+          this._state.errorEvents = [];
           // Persist local storage changes immediately
           this.flushSync();
         }
@@ -786,6 +871,19 @@ class UsageTracker {
     if (!ev || typeof ev !== "object") return false;
     if (typeof ev.featureId !== "string" || typeof ev.action !== "string" || typeof ev.ts !== "string") return false;
     return this._validateTimestampString(ev.ts);
+  }
+
+  static _validateUsageLog(log) {
+    if (!log || typeof log !== "object") return false;
+    if (typeof log.user_email !== "string" || typeof log.device_id !== "string") return false;
+    if (typeof log.tool_id !== "string" || typeof log.action !== "string" || typeof log.ts !== "string") return false;
+    return this._validateTimestampString(log.ts);
+  }
+
+  static _validateErrorEvent(err) {
+    if (!err || typeof err !== "object") return false;
+    if (typeof err.error_kind !== "string" || typeof err.message !== "string" || typeof err.created_time !== "string") return false;
+    return this._validateTimestampString(err.created_time);
   }
 
   static _isValidTimestamp(dt) {

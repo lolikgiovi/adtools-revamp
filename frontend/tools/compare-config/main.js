@@ -172,11 +172,8 @@ class CompareConfigTool extends BaseTool {
     return CompareConfigTemplate;
   }
 
-  trackCompareConfigEvent(event, meta = {}, { flush = false } = {}) {
+  trackCompareConfigEvent(event, meta = {}) {
     UsageTracker.trackEvent("compare-config", event, cleanCompareConfigAnalyticsMeta(meta));
-    if (flush) {
-      void UsageTracker.flushBatchNow();
-    }
   }
 
   async onMount() {
