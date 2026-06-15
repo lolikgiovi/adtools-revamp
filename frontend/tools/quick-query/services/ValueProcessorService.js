@@ -387,10 +387,31 @@ export class ValueProcessorService {
           const [_, datePart, fractional, ampm] = fractionalAmPmMatch;
           const formats = [
             "MM/DD/YYYY hh:mm:ss A",
+            "MM/DD/YYYY h:mm:ss A",
             "M/DD/YYYY hh:mm:ss A",
+            "M/DD/YYYY h:mm:ss A",
             "M/D/YYYY hh:mm:ss A",
+            "M/D/YYYY h:mm:ss A",
             "MM/D/YYYY hh:mm:ss A",
+            "MM/D/YYYY h:mm:ss A",
+            "DD/MM/YYYY hh:mm:ss A",
+            "DD/MM/YYYY h:mm:ss A",
+            "D/MM/YYYY hh:mm:ss A",
+            "D/MM/YYYY h:mm:ss A",
+            "D/M/YYYY hh:mm:ss A",
+            "D/M/YYYY h:mm:ss A",
+            "DD/M/YYYY hh:mm:ss A",
+            "DD/M/YYYY h:mm:ss A",
+            "DD-MM-YYYY hh:mm:ss A",
+            "DD-MM-YYYY h:mm:ss A",
+            "D-MM-YYYY hh:mm:ss A",
+            "D-MM-YYYY h:mm:ss A",
+            "D-M-YYYY hh:mm:ss A",
+            "D-M-YYYY h:mm:ss A",
+            "DD-M-YYYY hh:mm:ss A",
+            "DD-M-YYYY h:mm:ss A",
             "YYYY-MM-DD hh:mm:ss A",
+            "YYYY-MM-DD h:mm:ss A",
           ];
           const parsed = moment(`${datePart} ${ampm}`, formats, true);
           if (parsed.isValid()) {

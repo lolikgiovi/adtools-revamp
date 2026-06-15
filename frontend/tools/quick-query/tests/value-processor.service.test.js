@@ -157,6 +157,7 @@ describe("ValueProcessorService", () => {
 
         // Specific Toad Export case: 1/30/1993 12:00:00.000000 AM
         { input: "1/30/1993 12:00:00.000000 AM", expected: "TO_TIMESTAMP('1993-01-30 00:00:00.000000', 'YYYY-MM-DD HH24:MI:SS.FF6')" },
+        { input: "8/12/2021 9:15:43.496000 PM", expected: "TO_TIMESTAMP('2021-08-12 21:15:43.496000', 'YYYY-MM-DD HH24:MI:SS.FF6')" },
       ];
 
       testCases.forEach(({ input, expected }) => {
