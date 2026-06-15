@@ -3,7 +3,7 @@ import { QueryGenerationService } from "./services/QueryGenerationService.js";
 import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
-import { ExcelImportService } from "./services/ExcelImportService.js";
+import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
@@ -90,7 +90,7 @@ export class QuickQueryUI {
     this.schemaValidationService = new SchemaValidationService();
     this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
-    this.excelImportService = new ExcelImportService();
+    this.excelImportService = new ExcelImportWorkerService();
     this.queryWorkerService = new QueryWorkerService();
     this.splitWorkerService = new SplitWorkerService();
     this.dataAutosave = new TableAutosaveService({
@@ -1290,6 +1290,9 @@ export class QuickQueryUI {
     }
     try {
       this.queryWorkerService?.cancel?.();
+    } catch (_) {}
+    try {
+      this.excelImportService?.dispose?.();
     } catch (_) {}
     try {
       this.splitWorkerService?.cancel?.();
@@ -2740,7 +2743,7 @@ export class QuickQueryUI {
       const fileData = await readFile(selected);
 
       // Process Excel file
-      const result = this.excelImportService.processFromUint8Array(fileData);
+      const result = await this.excelImportService.processFromUint8Array(fileData);
       this._onExcelImportSuccess(result);
     } catch (error) {
       console.error("Failed to import Excel (Tauri):", error);

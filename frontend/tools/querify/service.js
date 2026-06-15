@@ -1,4 +1,4 @@
-import { ExcelImportService } from "../quick-query/services/ExcelImportService.js";
+import { ExcelImportWorkerService } from "../quick-query/services/ExcelImportWorkerService.js";
 import { IndexedDBStorageService } from "../quick-query/services/IndexedDBStorageService.js";
 import { QueryGenerationService } from "../quick-query/services/QueryGenerationService.js";
 import { QueryWorkerService } from "../quick-query/services/QueryWorkerService.js";
@@ -9,7 +9,7 @@ const EXCEL_EXTENSION_REGEX = /\.(xlsx|xls)$/i;
 export class QuerifyService {
   constructor(options = {}) {
     this.storageService = options.storageService || new IndexedDBStorageService();
-    this.excelImportServiceFactory = options.excelImportServiceFactory || (() => new ExcelImportService());
+    this.excelImportServiceFactory = options.excelImportServiceFactory || (() => new ExcelImportWorkerService());
     this.schemaValidationService = options.schemaValidationService || new SchemaValidationService();
     this.queryGenerationService = options.queryGenerationService || new QueryGenerationService();
     this.queryWorkerService = options.queryWorkerService || new QueryWorkerService();
@@ -89,16 +89,16 @@ export class QuerifyService {
       throw new Error(`Schema not found in Quick Query: ${parsedFileName.requestedFullName}`);
     }
 
+    options.onProgress?.(5, "Reading Excel file...");
     const excelImportService = this.excelImportServiceFactory();
-    const imported = file?.uint8Array
-      ? excelImportService.processFromUint8Array(file.uint8Array)
-      : await excelImportService.processFromFile(file);
+    const imported = await this.importExcelFile(file, excelImportService, options);
     const inputData = [imported.header, ...imported.data];
     const generationOptions = {
       ...this.defaultGenerationOptions,
       ...(options.generationOptions || {}),
     };
 
+    options.onProgress?.(30, "Validating schema...");
     this.schemaValidationService.validateSchema(schemaData, schemaRecord.fullName);
     this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
 
@@ -136,6 +136,25 @@ export class QuerifyService {
       duplicateResult,
       usedWorker: false,
     };
+  }
+
+  async importExcelFile(file, excelImportService, options = {}) {
+    if (file?.uint8Array) {
+      return excelImportService.processFromUint8Array(file.uint8Array);
+    }
+
+    if (file?.path && typeof file.arrayBuffer !== "function") {
+      const readFile = options.readFile || (await this.loadTauriReadFile());
+      const fileData = await readFile(file.path);
+      return excelImportService.processFromUint8Array(fileData);
+    }
+
+    return excelImportService.processFromFile(file);
+  }
+
+  async loadTauriReadFile() {
+    const { readFile } = await import("@tauri-apps/plugin-fs");
+    return readFile;
   }
 
   buildCombinedSql(results) {

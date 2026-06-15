@@ -151,7 +151,6 @@ export class QuerifyTool extends BaseTool {
   async handleAddFilesTauri() {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const { readFile } = await import("@tauri-apps/plugin-fs");
 
       const selected = await open({
         multiple: true,
@@ -164,21 +163,15 @@ export class QuerifyTool extends BaseTool {
       }
 
       const paths = Array.isArray(selected) ? selected : [selected];
-      const files = [];
+      const files = paths
+        .map((selectedPath) => {
+          const filePath = typeof selectedPath === "string" ? selectedPath : selectedPath?.path;
+          if (!filePath) return null;
 
-      for (const selectedPath of paths) {
-        const filePath = typeof selectedPath === "string" ? selectedPath : selectedPath?.path;
-        if (!filePath) continue;
-
-        const fileName = this.getFileNameFromPath(filePath);
-        if (!this.isExcelFile(fileName)) {
-          files.push({ name: fileName, path: filePath });
-          continue;
-        }
-
-        const uint8Array = await readFile(filePath);
-        files.push({ name: fileName, path: filePath, uint8Array });
-      }
+          const fileName = this.getFileNameFromPath(filePath);
+          return { name: fileName, path: filePath };
+        })
+        .filter(Boolean);
 
       this.addFiles(files);
     } catch (error) {
@@ -246,37 +239,49 @@ export class QuerifyTool extends BaseTool {
 
     try {
       const schemaLookup = await this.service.buildSchemaLookup();
+      const readFile = isTauri() ? (await import("@tauri-apps/plugin-fs")).readFile : null;
 
       for (const item of this.files) {
         if (item.status === "failed" && !this.isExcelFile(item.fileName)) continue;
-        this.updateFile(item.id, { status: "generating", error: "", warning: "", sql: "", rowCount: 0 });
+        this.updateFile(item.id, { status: "generating", error: "", warning: "", sql: "", rowCount: 0 }, { refreshEditor: false });
 
         try {
           const result = await this.service.generateFile(item.file, queryType, {
             schemaLookup,
+            readFile,
             onProgress: (_percent, message) => {
-              this.updateFile(item.id, { status: "generating", progress: message || "Generating..." });
+              this.updateFile(item.id, { status: "generating", progress: message || "Generating..." }, { refreshEditor: false });
             },
           });
-          const warning = result.duplicateResult?.hasDuplicates ? result.duplicateResult.warningMessage?.summary || "Duplicate primary keys detected" : "";
+          const warning = result.duplicateResult?.hasDuplicates
+            ? result.duplicateResult.warningMessage?.summary || "Duplicate primary keys detected"
+            : "";
 
-          this.updateFile(item.id, {
-            status: "success",
-            tableName: result.tableName,
-            sql: result.sql,
-            rowCount: result.rowCount,
-            warning,
-            error: "",
-            progress: "",
-          });
+          this.updateFile(
+            item.id,
+            {
+              status: "success",
+              tableName: result.tableName,
+              sql: result.sql,
+              rowCount: result.rowCount,
+              warning,
+              error: "",
+              progress: "",
+            },
+            { refreshEditor: false },
+          );
         } catch (error) {
-          this.updateFile(item.id, {
-            status: "failed",
-            error: error.message || String(error),
-            warning: "",
-            sql: "",
-            progress: "",
-          });
+          this.updateFile(
+            item.id,
+            {
+              status: "failed",
+              error: error.message || String(error),
+              warning: "",
+              sql: "",
+              progress: "",
+            },
+            { refreshEditor: false },
+          );
         }
       }
 
@@ -294,14 +299,18 @@ export class QuerifyTool extends BaseTool {
     } finally {
       this.isGenerating = false;
       this.updateControls();
+      this.renderFiles();
       this.refreshEditor();
     }
   }
 
-  updateFile(id, patch) {
+  updateFile(id, patch, options = {}) {
+    const { render = true, refreshEditor = true } = options;
     this.files = this.files.map((item) => (item.id === id ? { ...item, ...patch } : item));
-    this.renderFiles();
-    if (this.activeFileId === id || this.activeView === "combined") {
+    if (render) {
+      this.renderFiles();
+    }
+    if (refreshEditor && (this.activeFileId === id || this.activeView === "combined")) {
       this.refreshEditor();
     }
   }
@@ -387,7 +396,10 @@ export class QuerifyTool extends BaseTool {
 
   updateControls() {
     const hasFiles = this.files.length > 0;
-    const hasSql = Boolean(this.getCurrentSql());
+    const hasSql =
+      this.activeView === "combined"
+        ? this.files.some((item) => item.status === "success" && item.sql)
+        : Boolean(this.getActiveFile()?.sql);
     if (this.elements.clearFilesButton) this.elements.clearFilesButton.disabled = !hasFiles || this.isGenerating;
     if (this.elements.generateButton) this.elements.generateButton.disabled = !hasFiles || this.isGenerating;
     if (this.elements.copyButton) this.elements.copyButton.disabled = !hasSql;

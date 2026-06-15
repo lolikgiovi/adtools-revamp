@@ -11,7 +11,9 @@ vi.mock("../../../core/UsageTracker.js", () => ({
 function createService(overrides = {}) {
   const storageService = overrides.storageService || {
     init: vi.fn().mockResolvedValue(undefined),
-    getAllTables: vi.fn().mockResolvedValue([{ fullName: "INHOUSE_FOREX.RATE_TIERING", schemaName: "INHOUSE_FOREX", tableName: "RATE_TIERING" }]),
+    getAllTables: vi
+      .fn()
+      .mockResolvedValue([{ fullName: "INHOUSE_FOREX.RATE_TIERING", schemaName: "INHOUSE_FOREX", tableName: "RATE_TIERING" }]),
     loadSchema: vi.fn().mockResolvedValue([
       ["ID", "NUMBER", "No", "", "", "Yes"],
       ["NAME", "VARCHAR2(50)", "Yes", "", "", "No"],
@@ -97,7 +99,7 @@ describe("QuerifyService schema lookup", () => {
     const { service, queryGenerationService } = createService();
 
     await expect(service.generateFile({ name: "missing_schema.missing_table.xlsx" }, "merge")).rejects.toThrow(
-      /Schema not found in Quick Query/
+      /Schema not found in Quick Query/,
     );
     expect(queryGenerationService.generateQuery).not.toHaveBeenCalled();
   });
@@ -139,7 +141,7 @@ describe("QuerifyService generation", () => {
         ["2", "Beta"],
       ],
       [],
-      { defaultSysdate: true }
+      { defaultSysdate: true },
     );
     expect(result).toMatchObject({
       fileName: "inhouse_forex.rate_tiering.xlsx",
@@ -158,7 +160,7 @@ describe("QuerifyService generation", () => {
         { status: "success", tableName: "APP.ONE", sql: "SET DEFINE OFF;\n\nINSERT INTO APP.ONE VALUES (1);" },
         { status: "failed", tableName: "APP.TWO", sql: "SHOULD_NOT_APPEAR" },
         { status: "success", tableName: "APP.THREE", sql: "UPDATE APP.THREE SET NAME = 'A';\n" },
-      ])
+      ]),
     ).toBe(
       [
         "-- BEGIN APP.ONE",
@@ -168,7 +170,7 @@ describe("QuerifyService generation", () => {
         "-- BEGIN APP.THREE",
         "UPDATE APP.THREE SET NAME = 'A';",
         "-- END APP.THREE",
-      ].join("\n")
+      ].join("\n"),
     );
   });
 
@@ -189,7 +191,40 @@ describe("QuerifyService generation", () => {
         ["3", "Gamma"],
       ],
       [],
-      { defaultSysdate: true }
+      { defaultSysdate: true },
+    );
+    expect(result).toMatchObject({
+      rowCount: 1,
+      usedWorker: false,
+    });
+  });
+
+  it("reads Tauri path files lazily during generation", async () => {
+    const { service, excelImportService, queryGenerationService } = createService();
+    const uint8Array = new Uint8Array([4, 5, 6]);
+    const readFile = vi.fn().mockResolvedValue(uint8Array);
+
+    const result = await service.generateFile(
+      { name: "inhouse_forex.rate_tiering.xlsx", path: "/tmp/inhouse_forex.rate_tiering.xlsx" },
+      "insert",
+      {
+        readFile,
+      },
+    );
+
+    expect(readFile).toHaveBeenCalledWith("/tmp/inhouse_forex.rate_tiering.xlsx");
+    expect(excelImportService.processFromUint8Array).toHaveBeenCalledWith(uint8Array);
+    expect(excelImportService.processFromFile).not.toHaveBeenCalled();
+    expect(queryGenerationService.generateQuery).toHaveBeenCalledWith(
+      "INHOUSE_FOREX.RATE_TIERING",
+      "insert",
+      expect.any(Array),
+      [
+        ["ID", "NAME"],
+        ["3", "Gamma"],
+      ],
+      [],
+      { defaultSysdate: true },
     );
     expect(result).toMatchObject({
       rowCount: 1,
