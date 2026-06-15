@@ -19,6 +19,7 @@ import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount
 import { QueryWorkerService } from "./services/QueryWorkerService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
+import { isTabDraftContentEmpty } from "./services/TabDraftStateService.js";
 import {
   buildQuickQueryGeneratedMeta,
   cleanQuickQueryAnalyticsMeta,
@@ -1231,18 +1232,21 @@ export class QuickQueryUI {
     input.select();
   }
 
-  isCurrentDraftEmpty() {
-    const tableName = this.elements.tableNameInput?.value?.trim();
-    const schemaData = this.schemaTable?.getData?.() || [];
-    const inputData = this.dataTable?.getData?.() || [];
-    const sql = this.editor?.getValue?.() || "";
-    const hasSchema = schemaData.some((row) => Array.isArray(row) && row.some((cell) => cell !== null && cell !== ""));
-    const hasData = inputData.some((row) => Array.isArray(row) && row.some((cell) => cell !== null && cell !== ""));
-    return !tableName && !hasSchema && !hasData && !sql && this.processedFiles.length === 0;
+  isCurrentDraftEmpty({ ignoreTableName = false } = {}) {
+    return isTabDraftContentEmpty(
+      {
+        tableName: this.elements.tableNameInput?.value?.trim(),
+        schemaData: this.schemaTable?.getData?.() || [],
+        inputData: this.dataTable?.getData?.() || [],
+        sql: this.editor?.getValue?.() || "",
+        attachments: this.processedFiles,
+      },
+      { ignoreTableName },
+    );
   }
 
   chooseSchemaLoadMode(fullName) {
-    if (this.isCurrentDraftEmpty()) return "schema-data";
+    if (this.isCurrentDraftEmpty({ ignoreTableName: true })) return "schema-data";
     const choice = prompt(
       `Load ${fullName} into this tab?\n\n1 = schema and saved data\n2 = schema only\n3 = replace schema and keep current data`,
       "1",
@@ -2987,7 +2991,14 @@ export class QuickQueryUI {
         const loadBtn = document.createElement("button");
         loadBtn.textContent = "Load";
         loadBtn.className = "btn btn-primary btn-xs";
-        loadBtn.addEventListener("click", () => this.handleLoadSchema(table.fullName));
+        loadBtn.addEventListener("click", async () => {
+          loadBtn.disabled = true;
+          try {
+            await this.handleLoadSchema(table.fullName);
+          } finally {
+            loadBtn.disabled = false;
+          }
+        });
 
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete";
@@ -3093,7 +3104,7 @@ export class QuickQueryUI {
         row_count: result.data ? result.data.length : 0,
         column_count: result.schema ? result.schema.length : 0,
       }, { flush: true });
-      this.scheduleActiveTabDraftSave();
+      await this.saveActiveTabDraft();
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
     }
@@ -3656,7 +3667,7 @@ export class QuickQueryUI {
     }
 
     if (this.elements.dropdownContainer.style.display === "block") {
-      this.handleDropdownNavigation(event);
+      await this.handleDropdownNavigation(event);
     }
   }
 
@@ -3710,17 +3721,16 @@ export class QuickQueryUI {
     dropdownContainer.style.display = "block";
   }
 
-  selectSearchResult(fullName) {
-    this.elements.tableNameInput.value = fullName;
+  async selectSearchResult(fullName) {
     this.elements.dropdownContainer.style.display = "none";
-    this.handleLoadSchema(fullName);
+    await this.handleLoadSchema(fullName);
 
     // Reset selection
     this.searchState.selectedIndex = -1;
     this.elements.tableNameInput.focus();
   }
 
-  handleDropdownNavigation(event) {
+  async handleDropdownNavigation(event) {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
@@ -3737,7 +3747,7 @@ export class QuickQueryUI {
       case "Enter":
         event.preventDefault();
         if (this.searchState.selectedIndex >= 0 && this.searchState.selectedIndex < this.searchState.visibleItems.length) {
-          this.selectSearchResult(this.searchState.visibleItems[this.searchState.selectedIndex].dataset.fullName);
+          await this.selectSearchResult(this.searchState.visibleItems[this.searchState.selectedIndex].dataset.fullName);
         }
         break;
 
