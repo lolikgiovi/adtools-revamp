@@ -198,6 +198,18 @@
   min-height: 0;
 }
 
+.main-content.main-content-flush {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.main-content.main-content-flush > .tool-root {
+  flex: 1;
+  min-height: 0;
+}
+
 .tool-root {
   display: contents;
 }

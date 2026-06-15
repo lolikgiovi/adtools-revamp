@@ -79,6 +79,16 @@
       "order": 50
     },
     {
+      "id": "querify",
+      "name": "Querify",
+      "category": "config",
+      "icon": "querify",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 52
+    },
+    {
       "id": "compare-config",
       "name": "Compare Config",
       "category": "config",

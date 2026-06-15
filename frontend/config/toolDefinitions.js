@@ -29,6 +29,11 @@ const TOOL_MODULES = {
     description: "Generate Oracle SQL from schema/data with attachments and previews",
     load: () => import("../tools/quick-query/main.js").then((module) => ({ ToolClass: module.QuickQuery })),
   },
+  querify: {
+    name: "Querify",
+    description: "Generate SQL in bulk from Excel files using Quick Query schemas",
+    load: () => import("../tools/querify/main.js").then((module) => ({ ToolClass: module.QuerifyTool })),
+  },
   "compare-config": {
     name: "Compare Config",
     description: "Compare Oracle database configs between environments",

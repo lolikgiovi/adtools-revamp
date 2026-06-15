@@ -23,6 +23,7 @@ const ASSET_LOAD_MAX_RELOADS = 3;
 const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
 const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
 const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
+const FLUSH_MAIN_CONTENT_TOOL_IDS = new Set(["querify"]);
 
 class App {
   constructor() {
@@ -284,6 +285,7 @@ class App {
     }
     this.updateBreadcrumb("Home", true);
     this.clearCurrentTool();
+    this.setMainContentFlush(false);
 
     const runtimeIsTauri = isTauri();
     if (!runtimeIsTauri && !this._runtimeRetryHome) {
@@ -363,6 +365,7 @@ class App {
     if (this.currentTool && this.currentTool.id !== toolId) {
       this.clearCurrentTool();
     }
+    this.setMainContentFlush(FLUSH_MAIN_CONTENT_TOOL_IDS.has(toolId));
     const warmEntry = this.warmHeavyTools.get(toolId);
     if (!warmEntry) {
       this.renderLoadingState({
@@ -453,6 +456,7 @@ class App {
     // Update breadcrumb for settings
     this.updateBreadcrumb(title);
     this.clearCurrentTool();
+    this.setMainContentFlush(false);
     this.renderLoadingState({
       title,
       message: "Loading page content.",
@@ -1561,6 +1565,10 @@ class App {
         </div>
       </div>
     `;
+  }
+
+  setMainContentFlush(isFlush) {
+    this.mainContent?.classList.toggle("main-content-flush", Boolean(isFlush));
   }
 }
 

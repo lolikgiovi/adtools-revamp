@@ -10,6 +10,7 @@ import { getIconSvg as getMasterLockeyIconSvg } from "../tools/master-lockey/ico
 import { getIconSvg as getMergeSqlIconSvg } from "../tools/merge-sql/icon.js";
 import { getIconSvg as getQrIconSvg } from "../tools/qr-tools/icon.js";
 import { getIconSvg as getQuickQueryIconSvg } from "../tools/quick-query/icon.js";
+import { getIconSvg as getQuerifyIconSvg } from "../tools/querify/icon.js";
 import { getIconSvg as getRunBatchIconSvg } from "../tools/run-batch/icon.js";
 import { getIconSvg as getRunQueryIconSvg } from "../tools/run-query/icon.js";
 import { getIconSvg as getSplunkIconSvg } from "../tools/splunk-template/icon.js";
@@ -33,6 +34,7 @@ const ICON_REGISTRY = new Map([
   ["language", getMasterLockeyIconSvg],
   ["merge-sql", getMergeSqlIconSvg],
   ["qr", getQrIconSvg],
+  ["querify", getQuerifyIconSvg],
   ["splunk-template", getSplunkIconSvg],
   ["sql-in", getSqlInIconSvg],
   ["tlv", getTlvIconSvg],
