@@ -143,6 +143,33 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
+<div id="schemaLoadModeOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="schemaLoadModeModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="schemaLoadModeTitle">
+    <div class="qq-modal-content qq-schema-load-mode-content">
+        <div class="qq-modal-header">
+            <h3 id="schemaLoadModeTitle">Load Schema</h3>
+            <button id="closeSchemaLoadMode" class="overlay-close-button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <p class="qq-schema-load-mode-question" id="schemaLoadModeQuestion">Load this schema into this tab?</p>
+            <div class="qq-schema-load-mode-actions" role="group" aria-label="Schema load options">
+                <button class="btn btn-primary qq-schema-load-mode-btn" type="button" data-schema-load-mode="schema-data">
+                    <span class="qq-schema-load-mode-title">Schema and saved data</span>
+                    <span class="qq-schema-load-mode-description">Replace this tab with the saved schema and saved table rows.</span>
+                </button>
+                <button class="btn btn-outline qq-schema-load-mode-btn" type="button" data-schema-load-mode="schema-only">
+                    <span class="qq-schema-load-mode-title">Schema only</span>
+                    <span class="qq-schema-load-mode-description">Load the saved schema and clear this tab's data rows.</span>
+                </button>
+                <button class="btn btn-outline qq-schema-load-mode-btn" type="button" data-schema-load-mode="schema-keep-data">
+                    <span class="qq-schema-load-mode-title">Replace schema, keep current data</span>
+                    <span class="qq-schema-load-mode-description">Load the saved schema and resize the current rows to match.</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="downloadAsOverlay" class="download-as-overlay hidden">
     <div class="download-as-modal">
         <div class="download-as-modal-header">

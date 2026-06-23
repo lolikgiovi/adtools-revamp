@@ -1569,6 +1569,10 @@
   width: min(420px, 90vw);
 }
 
+.qq-schema-load-mode-content {
+  width: min(520px, 92vw);
+}
+
 .qq-split-results-content {
   width: min(1000px, 95vw);
   min-height: clamp(520px, 54vh, 720px);
@@ -1650,6 +1654,48 @@
   font-size: 0.8rem;
   color: hsl(var(--muted-foreground));
   margin: 0;
+}
+
+.qq-schema-load-mode-question {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.qq-schema-load-mode-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.qq-schema-load-mode-btn {
+  width: 100%;
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.qq-schema-load-mode-title {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.qq-schema-load-mode-description {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.btn-primary.qq-schema-load-mode-btn .qq-schema-load-mode-description {
+  color: hsl(var(--primary-foreground));
+  opacity: 0.8;
 }
 
 /* Split Results Modal */

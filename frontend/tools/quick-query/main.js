@@ -124,9 +124,14 @@ export class QuickQueryUI {
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
     this._handleUuidGeneratorKeydown = (event) => {
       if (event.key === "Escape") {
-        this.closeUuidGenerator();
+        if (this._schemaLoadModeResolve) {
+          this._resolveSchemaLoadMode(null);
+        } else {
+          this.closeUuidGenerator();
+        }
       }
     };
+    this._schemaLoadModeResolve = null;
 
     // Initialize search state
     this.searchState = {
@@ -271,6 +276,11 @@ export class QuickQueryUI {
       // Schema overlay elements
       schemaOverlay: document.getElementById("schemaOverlay"),
       savedSchemasList: document.getElementById("savedSchemasList"),
+      schemaLoadModeOverlay: document.getElementById("schemaLoadModeOverlay"),
+      schemaLoadModeModal: document.getElementById("schemaLoadModeModal"),
+      schemaLoadModeQuestion: document.getElementById("schemaLoadModeQuestion"),
+      closeSchemaLoadModeButton: document.getElementById("closeSchemaLoadMode"),
+      cancelSchemaLoadModeButton: document.getElementById("cancelSchemaLoadMode"),
 
       // Buttons
       toggleWordWrapButton: document.getElementById("toggleWordWrap"),
@@ -434,6 +444,27 @@ export class QuickQueryUI {
             this.elements.schemaOverlay.classList.add("hidden");
           }
         },
+      },
+      schemaLoadModeOverlay: {
+        click: (e) => {
+          if (e.target === this.elements.schemaLoadModeOverlay) {
+            this._resolveSchemaLoadMode(null);
+          }
+        },
+      },
+      schemaLoadModeModal: {
+        click: (e) => {
+          const modeButton = e.target.closest("[data-schema-load-mode]");
+          if (modeButton) {
+            this._resolveSchemaLoadMode(modeButton.dataset.schemaLoadMode);
+          }
+        },
+      },
+      closeSchemaLoadModeButton: {
+        click: () => this._resolveSchemaLoadMode(null),
+      },
+      cancelSchemaLoadModeButton: {
+        click: () => this._resolveSchemaLoadMode(null),
       },
       filePreviewOverlay: {
         click: (e) => {
@@ -1245,16 +1276,51 @@ export class QuickQueryUI {
     );
   }
 
-  chooseSchemaLoadMode(fullName) {
+  async chooseSchemaLoadMode(fullName) {
     if (this.isCurrentDraftEmpty({ ignoreTableName: true })) return "schema-data";
-    const choice = prompt(
-      `Load ${fullName} into this tab?\n\n1 = schema and saved data\n2 = schema only\n3 = replace schema and keep current data`,
-      "1",
-    );
-    if (choice === null) return null;
-    if (choice.trim() === "2") return "schema-only";
-    if (choice.trim() === "3") return "schema-keep-data";
-    return "schema-data";
+    return this.openSchemaLoadModeOverlay(fullName);
+  }
+
+  openSchemaLoadModeOverlay(fullName) {
+    if (!this.elements.schemaLoadModeOverlay || !this.elements.schemaLoadModeModal) {
+      return Promise.resolve("schema-data");
+    }
+
+    if (this._schemaLoadModeResolve) {
+      this._resolveSchemaLoadMode(null);
+    }
+
+    if (this.elements.schemaLoadModeQuestion) {
+      this.elements.schemaLoadModeQuestion.textContent = `Load ${fullName} into this tab?`;
+    }
+
+    this.elements.schemaLoadModeOverlay.classList.remove("hidden");
+    this.elements.schemaLoadModeOverlay.setAttribute("aria-hidden", "false");
+    this.elements.schemaLoadModeModal.classList.remove("hidden");
+
+    const firstModeButton = this.elements.schemaLoadModeModal.querySelector("[data-schema-load-mode='schema-data']");
+    const scheduleFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
+    scheduleFrame(() => firstModeButton?.focus());
+
+    return new Promise((resolve) => {
+      this._schemaLoadModeResolve = resolve;
+    });
+  }
+
+  _resolveSchemaLoadMode(mode) {
+    if (this.elements.schemaLoadModeOverlay) {
+      this.elements.schemaLoadModeOverlay.classList.add("hidden");
+      this.elements.schemaLoadModeOverlay.setAttribute("aria-hidden", "true");
+    }
+    if (this.elements.schemaLoadModeModal) {
+      this.elements.schemaLoadModeModal.classList.add("hidden");
+    }
+
+    const resolve = this._schemaLoadModeResolve;
+    this._schemaLoadModeResolve = null;
+    if (resolve) {
+      resolve(mode);
+    }
   }
 
   destroy({ flush = true } = {}) {
@@ -1297,6 +1363,7 @@ export class QuickQueryUI {
     try {
       this.splitWorkerService?.cancel?.();
     } catch (_) {}
+    this._resolveSchemaLoadMode(null);
 
     this.elements = {};
     this.processedFiles = [];
@@ -3069,7 +3136,7 @@ export class QuickQueryUI {
 
     const result = await this.storageService.loadSchema(fullName, true);
     if (result) {
-      const mode = options.mode || (options.skipChoice ? "schema-data" : this.chooseSchemaLoadMode(fullName));
+      const mode = options.mode || (options.skipChoice ? "schema-data" : await this.chooseSchemaLoadMode(fullName));
       if (!mode) return;
       const existingData = this.dataTable?.getData?.() || [[], []];
       this.elements.tableNameInput.value = fullName;
