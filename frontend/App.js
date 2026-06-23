@@ -95,6 +95,20 @@ class App {
       } catch (_) {}
     }
 
+    // Auto-register in dev mode to skip OTP flow
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      try {
+        if (localStorage.getItem("user.registered") !== "true") {
+          localStorage.setItem("user.registered", "true");
+          localStorage.setItem("user.username", "Dev User");
+          localStorage.setItem("user.email", "dev@localhost");
+        }
+        if (window.location.hash === "#register") {
+          window.location.hash = "";
+        }
+      } catch (_) {}
+    }
+
     this.initializeComponents();
     this.setupHeaderRuntime();
     this.syncDeviceVersion();
@@ -264,6 +278,10 @@ class App {
 
     // Register route for onboarding
     this.router.register("register", () => {
+      if (localStorage.getItem("user.registered") === "true") {
+        this.router.navigate("home");
+        return;
+      }
       this.showRegister().catch((error) => {
         console.error("Failed to show register page:", error);
       });
