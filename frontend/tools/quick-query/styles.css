@@ -2112,7 +2112,8 @@
 /* ===== Oracle Env Import Modal ===== */
 .qq-oracle-env-content {
   width: min(520px, 92vw);
-  max-height: 80vh;
+  max-height: 95vh;
+  overflow-y: auto;
 }
 
 .qq-oracle-schema-header {
