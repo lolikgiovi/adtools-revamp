@@ -177,7 +177,9 @@
   --qq-upper-extra-space: 56px;
   display: flex;
   flex: 0 0 auto;
-  min-height: var(--qq-upper-min-height, 460px);
+  min-height: min(var(--qq-upper-min-height, 460px), 60vh);
+  max-height: 60vh;
+  overflow: hidden;
   position: relative;
 }
 
@@ -185,9 +187,17 @@
   flex: 0 1 50%;
   padding: 0 8px 8px 0;
   border-right: 1px solid hsl(var(--border));
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.quick-query-left-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .quick-query-right-panel {
@@ -209,6 +219,9 @@
   /* Allow it to grow but not shrink */
   padding: 8px 0 8px 0;
   border-top: 1px solid hsl(var(--border));
+  position: relative;
+  z-index: 1;
+  background: hsl(var(--background));
 }
 
 #spreadsheet-schema {

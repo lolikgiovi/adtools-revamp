@@ -103,7 +103,6 @@ export class QuickQueryUI {
     this.tabs = [];
     this.activeTabId = null;
     this._isHydratingTab = false;
-    this.isGuideActive = false;
     this.isAttachmentActive = false;
     this.isGenerating = false; // Track async generation state
     this.isSplitting = false; // Track async split state
@@ -155,13 +154,6 @@ export class QuickQueryUI {
       if (!this.container.querySelector(".quick-query-content")) {
         this.container.innerHTML = MAIN_TEMPLATE;
       }
-      if (this.isGuideActive) {
-        const guideContainer = document.getElementById("guideContainer");
-        if (guideContainer) {
-          guideContainer.innerHTML = GUIDE_TEMPLATE;
-        }
-      }
-
       // Initialize UI components
       this.bindElements();
 
@@ -789,6 +781,7 @@ export class QuickQueryUI {
         // Handsontable's rendered wrapper can inherit the current flex row height. Use the table's content size so warm
         // resumes do not feed the previous upper-section height back into the next editor-height calculation.
         if (child === this.elements.schemaContainer) return height + schemaTableHeight();
+        if (child.classList?.contains("quick-query-left-scroll")) return height + outerHeight(child);
         return height + outerHeight(child);
       }, 0) +
       toPx(leftStyles.paddingTop) +
@@ -807,7 +800,8 @@ export class QuickQueryUI {
     }
 
     const minEditorHeight = 120;
-    const upperHeight = Math.max(this._layoutState.baseUpperHeight, Math.ceil(leftContentHeight));
+    const maxUpperHeight = toPx(contentStyles.maxHeight) || Infinity;
+    const upperHeight = Math.min(maxUpperHeight, Math.max(this._layoutState.baseUpperHeight, Math.ceil(leftContentHeight)));
     const editorHeight = Math.max(minEditorHeight, Math.ceil(upperHeight - rightFixedHeight));
 
     this._layoutState.upperHeight = upperHeight;

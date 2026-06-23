@@ -30,22 +30,21 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
                 </div>
 
-                <div id="spreadsheet-schema"></div>
+                <div class="quick-query-left-scroll">
+                    <div id="spreadsheet-schema"></div>
 
-                <!-- Attachments container -->
-                <div id="files-container">
-                    <div id="attachments-controls" class="button-group quick-query-attachments-controls" role="toolbar" aria-label="Attachment actions">
-                        <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file">Add file</button>
-                        <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached HTML files" disabled aria-disabled="true">Minify</button>
-                        <button id="deleteAllButton" class="btn btn-outline btn-xs delete-all-button" aria-label="Delete all attached files" disabled aria-disabled="true">Delete all</button>
-                        <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png, .html, .pdf, .json" multiple style="display: none;" />
+                    <!-- Attachments container -->
+                    <div id="files-container">
+                        <div id="attachments-controls" class="button-group quick-query-attachments-controls" role="toolbar" aria-label="Attachment actions">
+                            <button id="addFilesButton" class="btn btn-outline btn-xs" aria-label="Add file">Add file</button>
+                            <button id="minifyButton" class="btn btn-outline btn-xs minify-button" aria-label="Minify attached HTML files" disabled aria-disabled="true">Minify</button>
+                            <button id="deleteAllButton" class="btn btn-outline btn-xs delete-all-button" aria-label="Delete all attached files" disabled aria-disabled="true">Delete all</button>
+                            <input type="file" id="attachmentsInput" accept=".txt, .jpg, .jpeg, .png, .html, .pdf, .json" multiple style="display: none;" />
+                        </div>
+                        <div id="file-items">
+                            <div id="files-empty" class="empty-file-button" role="button" tabindex="0" aria-label="No file attached, click to attach file">No file attached, click to attach file</div>
+                        </div>
                     </div>
-                    <div id="file-items">
-                        <div id="files-empty" class="empty-file-button" role="button" tabindex="0" aria-label="No file attached, click to attach file">No file attached, click to attach file</div>
-                    </div>
-                </div>
-
-                <div id="guideContainer">
                 </div>
             </div>
             <div class="quick-query-right-panel">
