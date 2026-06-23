@@ -103,26 +103,27 @@
 
 /* Danger button - destructive actions */
 .btn-danger {
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
   border-color: hsl(var(--destructive));
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: hsl(var(--destructive) / 0.9);
-  border-color: hsl(var(--destructive) / 0.9);
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--destructive));
 }
 
-/* Outline + Danger combination - outline style with danger hover */
+/* Outline + Danger combination keeps the same centralized danger treatment. */
 .btn-outline.btn-danger {
-  background: transparent;
-  color: hsl(var(--destructive));
-  border-color: hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--destructive));
 }
 
 .btn-outline.btn-danger:hover:not(:disabled) {
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--foreground));
   border-color: hsl(var(--destructive));
 }
 

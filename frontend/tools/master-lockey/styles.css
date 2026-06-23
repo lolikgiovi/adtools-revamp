@@ -598,6 +598,18 @@
   background: hsl(var(--muted));
 }
 
+.btn-confluence.btn-danger {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--destructive));
+}
+
+.btn-confluence.btn-danger:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--destructive));
+}
+
 .btn-confluence:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1038,12 +1050,6 @@
 
 .confluence-controls-row .btn-confluence {
   flex-shrink: 0;
-}
-
-.btn-confluence.btn-danger:hover:not(:disabled) {
-  background: hsl(var(--destructive) / 0.1);
-  border-color: hsl(var(--destructive));
-  color: hsl(var(--destructive));
 }
 
 /* ===================== */
