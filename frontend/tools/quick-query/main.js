@@ -168,12 +168,12 @@ export class QuickQueryUI {
         }
       } catch (_) {}
 
-      // Tauri-only: swap "Import Default Schema" for "Import from Oracle Env"
+      // Hide default schema import everywhere; Tauri can import schemas from Oracle Env instead.
       try {
+        const importDefaultBtn = document.getElementById("importDefaultSchema");
+        const importOracleBtn = document.getElementById("importFromOracleEnv");
+        if (importDefaultBtn) importDefaultBtn.style.display = "none";
         if (isTauri()) {
-          const importDefaultBtn = document.getElementById("importDefaultSchema");
-          const importOracleBtn = document.getElementById("importFromOracleEnv");
-          if (importDefaultBtn) importDefaultBtn.style.display = "none";
           if (importOracleBtn) importOracleBtn.style.display = "";
         }
       } catch (_) {}
@@ -272,7 +272,6 @@ export class QuickQueryUI {
       schemaLoadModeModal: document.getElementById("schemaLoadModeModal"),
       schemaLoadModeQuestion: document.getElementById("schemaLoadModeQuestion"),
       closeSchemaLoadModeButton: document.getElementById("closeSchemaLoadMode"),
-      cancelSchemaLoadModeButton: document.getElementById("cancelSchemaLoadMode"),
 
       // Buttons
       toggleWordWrapButton: document.getElementById("toggleWordWrap"),
@@ -453,9 +452,6 @@ export class QuickQueryUI {
         },
       },
       closeSchemaLoadModeButton: {
-        click: () => this._resolveSchemaLoadMode(null),
-      },
-      cancelSchemaLoadModeButton: {
         click: () => this._resolveSchemaLoadMode(null),
       },
       filePreviewOverlay: {
@@ -914,7 +910,10 @@ export class QuickQueryUI {
       .filter((id) => !orderedIds.includes(id))
       .sort((a, b) => new Date(savedById.get(b)?.lastUpdated || 0) - new Date(savedById.get(a)?.lastUpdated || 0));
 
-    this.tabs = [...orderedIds, ...remaining].map((id) => savedById.get(id)).filter(Boolean).slice(0, 10);
+    this.tabs = [...orderedIds, ...remaining]
+      .map((id) => savedById.get(id))
+      .filter(Boolean)
+      .slice(0, 10);
 
     if (this.tabs.length === 0) {
       const initialTab = this.createTabDraft();
@@ -1968,10 +1967,14 @@ export class QuickQueryUI {
     URL.revokeObjectURL(url);
 
     // Track download for output preference insights
-    this.trackQuickQueryEvent("download_sql", {
-      ...this.getCurrentQuickQueryContext(),
-      file_size: blob.size,
-    }, { flush: true });
+    this.trackQuickQueryEvent(
+      "download_sql",
+      {
+        ...this.getCurrentQuickQueryContext(),
+        file_size: blob.size,
+      },
+      { flush: true },
+    );
 
     const displayName = tableName || sanitizedTableName;
     if (this.eventBus) {
@@ -1990,9 +1993,7 @@ export class QuickQueryUI {
     const squadName = (this.elements.downloadAsSquadName.value || "").trim();
     const featureName = (this.elements.downloadAsFeatureName.value || "").trim();
 
-    let base = schemaName && tableName && schemaName !== tableName
-      ? `${schemaName}.${tableName}`
-      : schemaName || tableName || "query";
+    let base = schemaName && tableName && schemaName !== tableName ? `${schemaName}.${tableName}` : schemaName || tableName || "query";
 
     if (squadName) base += ` (${squadName})`;
     if (featureName) base += ` [${featureName}]`;
@@ -2035,7 +2036,9 @@ export class QuickQueryUI {
 
     const onSquadInput = () => syncFilename();
     const onFeatureInput = () => syncFilename();
-    const onFilenameInput = () => { this._downloadAsFilenameEdited = true; };
+    const onFilenameInput = () => {
+      this._downloadAsFilenameEdited = true;
+    };
 
     const closeBtn = document.getElementById("closeDownloadAsOverlay");
     const cancelBtn = document.getElementById("downloadAsCancel");
@@ -2086,12 +2089,16 @@ export class QuickQueryUI {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      this.trackQuickQueryEvent("download_sql_as", {
-        ...this.getCurrentQuickQueryContext(),
-        squad_name: squadName,
-        feature_name: featureName,
-        file_size: blob.size,
-      }, { flush: true });
+      this.trackQuickQueryEvent(
+        "download_sql_as",
+        {
+          ...this.getCurrentQuickQueryContext(),
+          squad_name: squadName,
+          feature_name: featureName,
+          file_size: blob.size,
+        },
+        { flush: true },
+      );
 
       if (this.eventBus) {
         this.eventBus.emit("notification:success", {
@@ -2344,14 +2351,18 @@ export class QuickQueryUI {
 
     // Track split completion for workflow analysis
     const totalSize = metadata.reduce((sum, m) => sum + m.size, 0);
-    this.trackQuickQueryEvent("split_complete", {
-      ...this.getCurrentQuickQueryContext({ table_name: this._splitState.tableName }),
-      mode,
-      split_value: value,
-      chunk_count: chunks.length,
-      total_size: totalSize,
-      has_oversized: metadata.some((m) => m.isOversized),
-    }, { flush: true });
+    this.trackQuickQueryEvent(
+      "split_complete",
+      {
+        ...this.getCurrentQuickQueryContext({ table_name: this._splitState.tableName }),
+        mode,
+        split_value: value,
+        chunk_count: chunks.length,
+        total_size: totalSize,
+        has_oversized: metadata.some((m) => m.isOversized),
+      },
+      { flush: true },
+    );
 
     this._openSplitResultsModal();
   }
@@ -3157,14 +3168,18 @@ export class QuickQueryUI {
       this.clearError();
 
       // Track schema load for usage insights
-      this.trackQuickQueryEvent("schema_load", {
-        source: "cache",
-        table_name: fullName,
-        has_cached_data: Boolean(result.data),
-        load_mode: mode,
-        row_count: result.data ? result.data.length : 0,
-        column_count: result.schema ? result.schema.length : 0,
-      }, { flush: true });
+      this.trackQuickQueryEvent(
+        "schema_load",
+        {
+          source: "cache",
+          table_name: fullName,
+          has_cached_data: Boolean(result.data),
+          load_mode: mode,
+          row_count: result.data ? result.data.length : 0,
+          column_count: result.schema ? result.schema.length : 0,
+        },
+        { flush: true },
+      );
       await this.saveActiveTabDraft();
     } else {
       this.showError(`Failed to load schema for ${fullName}`);
@@ -3435,9 +3450,15 @@ export class QuickQueryUI {
       this.hideOracleEnvError();
 
       try {
-        const payload = await svc.fetchAllMetadata(name, config, selectedSchemas, (msg, pct) => {
-          this.showOracleEnvProgress(msg, pct);
-        }, selectedTables);
+        const payload = await svc.fetchAllMetadata(
+          name,
+          config,
+          selectedSchemas,
+          (msg, pct) => {
+            this.showOracleEnvProgress(msg, pct);
+          },
+          selectedTables,
+        );
 
         this.showOracleEnvProgress("Importing into storage...", 90);
         const count = await importSchemasPayload(payload, this.storageService);
