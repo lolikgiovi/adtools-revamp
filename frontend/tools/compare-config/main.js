@@ -263,16 +263,16 @@ class CompareConfigTool extends BaseTool {
     if (statusText) {
       switch (this.sidecarStatus) {
         case SidecarStatus.STARTING:
-          statusText.textContent = "Starting...";
+          statusText.textContent = "Oracle: Starting...";
           break;
         case SidecarStatus.READY:
-          statusText.textContent = "Connected";
+          statusText.textContent = "Oracle: Connected";
           break;
         case SidecarStatus.ERROR:
-          statusText.textContent = "Error";
+          statusText.textContent = "Oracle: Error";
           break;
         default:
-          statusText.textContent = "Disconnected";
+          statusText.textContent = "Oracle: Disconnected";
       }
     }
 
@@ -398,6 +398,8 @@ class CompareConfigTool extends BaseTool {
       const settings = {
         currentView: this.currentView,
         statusFilter: this.statusFilter,
+        sourceAType: this.unified.sourceA.type,
+        sourceBType: this.unified.sourceB.type,
       };
       localStorage.setItem("compare-config.settings", JSON.stringify(settings));
 
@@ -428,6 +430,9 @@ class CompareConfigTool extends BaseTool {
         this.currentView = savedView === "expandable" ? "grid" : savedView;
         // Default to "differ" filter if not set (null means "all")
         this.statusFilter = settings.statusFilter !== undefined ? settings.statusFilter : "differ";
+        // Restore saved source types
+        if (settings.sourceAType) this.unified.sourceA.type = settings.sourceAType;
+        if (settings.sourceBType) this.unified.sourceB.type = settings.sourceBType;
       }
 
       // Migrate from old localStorage format if present
@@ -5637,6 +5642,16 @@ class CompareConfigTool extends BaseTool {
       // Show Excel configs
       this.updateUnifiedSourceConfigVisibility("A");
       this.updateUnifiedSourceConfigVisibility("B");
+    } else {
+      // Tauri: apply saved source types (default to oracle if nothing saved)
+      const typeA = this.unified.sourceA.type || "oracle";
+      const typeB = this.unified.sourceB.type || "oracle";
+      const radioA = document.getElementById(`source-a-type-${typeA}`);
+      const radioB = document.getElementById(`source-b-type-${typeB}`);
+      if (radioA) radioA.checked = true;
+      if (radioB) radioB.checked = true;
+      this.unified.sourceA.type = typeA;
+      this.unified.sourceB.type = typeB;
     }
 
     // Restore cached unified Excel files from IndexedDB
@@ -6994,6 +7009,11 @@ class CompareConfigTool extends BaseTool {
       });
       return;
     }
+
+    // Clear any previous results so user doesn't confuse which comparison they're seeing
+    this.results.unified = null;
+    const resultsSection = document.getElementById("results-section");
+    if (resultsSection) resultsSection.style.display = "none";
 
     // Validate Oracle vs Oracle configuration (both sources independently)
     const isOracleToOracle = this.unified.sourceA.type === "oracle" && this.unified.sourceB.type === "oracle";
