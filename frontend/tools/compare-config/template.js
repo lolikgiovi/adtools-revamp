@@ -54,39 +54,6 @@ export const CompareConfigTemplate = /* html */ `
 
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
-        <!-- Tabs Header -->
-        <div class="tabs-container">
-            <div class="tabs-left">
-                <div class="tool-tabs">
-                    <button class="tool-tab active" data-tab="compare" id="tab-compare">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                        Single Comparison
-                    </button>
-                    <!-- Bulk Select tab hidden for now - needs more work -->
-                    <!-- <button class="tool-tab" data-tab="bulk-select" id="tab-bulk-select">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 6h16M4 12h16M4 18h16"></path>
-                        </svg>
-                        Bulk Select
-                    </button> -->
-                </div>
-            </div>
-            <div class="tabs-right">
-                <!-- Sidecar Status Indicator (Tauri modes only) -->
-                <div id="sidecar-status-indicator" class="sidecar-status-indicator tauri-only">
-                    <span class="status-dot stopped"></span>
-                    <span class="status-text">Disconnected</span>
-                    <button class="btn-sidecar-restart" id="btn-sidecar-restart" title="Restart Oracle sidecar" style="display: none;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="23 4 23 10 17 10"/>
-                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
 
         <!-- Compare Tab Content -->
         <div id="tab-content-compare" class="tab-content active">

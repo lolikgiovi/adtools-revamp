@@ -484,9 +484,6 @@ class CompareConfigTool extends BaseTool {
    * Binds event listeners
    */
   bindEvents() {
-    // Tab switching
-    this.bindTabEvents();
-
     // Bulk Select tab events
     this.bindBulkSelectEvents();
 
@@ -4667,12 +4664,9 @@ class CompareConfigTool extends BaseTool {
       } catch (_) {}
     });
 
-    if (this._sidecarStatusUnsubscribe) {
-      try {
-        this._sidecarStatusUnsubscribe();
-      } catch (_) {}
-      this._sidecarStatusUnsubscribe = null;
-    }
+    // NOTE: Sidecar status subscription intentionally kept alive.
+    // The indicator now lives in the global app header and should
+    // continue receiving status updates even when the tool is unmounted.
     try {
       getDiffWorkerManager().terminate();
     } catch (_) {}
@@ -7911,44 +7905,6 @@ class CompareConfigTool extends BaseTool {
       // Track error for debugging insights (rich error with code, stack)
       const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
       UsageTracker.trackEvent("compare-config", "comparison_error", UsageTracker.enrichErrorMeta(error, { mode: comparisonMode }));
-    }
-  }
-
-  // ============================================================================
-  // TAB SWITCHING
-  // ============================================================================
-
-  /**
-   * Binds tab switching events
-   */
-  bindTabEvents() {
-    const tabs = document.querySelectorAll(".tool-tab");
-    tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        const tabId = tab.dataset.tab;
-        this.switchTab(tabId);
-      });
-    });
-  }
-
-  /**
-   * Switches between tabs
-   */
-  switchTab(tabId) {
-    // Update tab buttons
-    document.querySelectorAll(".tool-tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === tabId);
-    });
-
-    // Update tab content
-    document.querySelectorAll(".tab-content").forEach((content) => {
-      const contentId = content.id.replace("tab-content-", "");
-      content.classList.toggle("active", contentId === tabId);
-    });
-
-    // Initialize Bulk Select UI when switching to that tab
-    if (tabId === "bulk-select" && this.oracleClientReady) {
-      this.initBulkSelectUI();
     }
   }
 
