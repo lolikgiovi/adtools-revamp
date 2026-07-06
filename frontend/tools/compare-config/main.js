@@ -5347,6 +5347,7 @@ class CompareConfigTool extends BaseTool {
       sqlInput.addEventListener("input", (e) => {
         const sourceKey = source === "A" ? "sourceA" : "sourceB";
         this.unified[sourceKey].sql = e.target.value;
+        this.updateUnifiedLoadButtonState();
         this.updateUnifiedLoadDataButtonVisibility();
       });
     }
@@ -6075,7 +6076,10 @@ class CompareConfigTool extends BaseTool {
     }
 
     const connection = this.savedConnections.find((c) => c.name === connectionName);
-    if (!connection) return;
+    if (!connection) {
+      this.updateUnifiedLoadButtonState();
+      return;
+    }
 
     this.unified[sourceKey].connection = connection;
     this.unified[sourceKey].dataLoaded = false;
