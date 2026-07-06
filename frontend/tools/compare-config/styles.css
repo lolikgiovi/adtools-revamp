@@ -3974,50 +3974,6 @@
 }
 
 /* ============================================
-   ORACLE INIT LOADING OVERLAY
-   ============================================ */
-
-.oracle-init-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  width: 100%;
-}
-
-.init-loading-card {
-  text-align: center;
-  padding: 3rem 4rem;
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  box-shadow: 0 4px 24px hsl(0 0% 0% / 0.08);
-}
-
-.init-loading-card h3 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: hsl(var(--foreground));
-  margin: 1.5rem 0 0.5rem;
-}
-
-.init-loading-card p {
-  font-size: 0.875rem;
-  color: hsl(var(--muted-foreground));
-  margin: 0;
-}
-
-.init-loading-spinner {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  border: 3px solid hsl(var(--border));
-  border-top-color: hsl(var(--primary));
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-/* ============================================
    BULK SELECT MODE
    ============================================ */
 

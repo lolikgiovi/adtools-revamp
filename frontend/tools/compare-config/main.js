@@ -342,14 +342,9 @@ class CompareConfigTool extends BaseTool {
   showMainInterface() {
     const guide = document.getElementById("installation-guide");
     const main = document.getElementById("main-interface");
-    const loading = document.getElementById("oracle-init-loading");
-
 
     if (guide) guide.style.display = "none";
     if (main) main.style.display = "block";
-    // Hide initial loading overlay
-    if (loading) loading.style.display = "none";
-
   }
 
   /**
