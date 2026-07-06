@@ -20,13 +20,14 @@
 }
 
 .qq-tab-strip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: 34px;
   margin: 0 0 8px;
   border-bottom: 1px solid hsl(var(--border));
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 .qq-tab-list {
@@ -34,6 +35,14 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-right: 34px;
+}
+
+.qq-tab-list::-webkit-scrollbar {
+  display: none;
 }
 
 .qq-query-tab {
@@ -115,12 +124,17 @@
 }
 
 .qq-tab-add {
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
   width: 28px;
   height: 28px;
   border: 1px solid hsl(var(--border));
   border-radius: 6px;
   font-size: 1rem;
+  background: hsl(var(--background));
 }
 
 .qq-tab-context-menu {

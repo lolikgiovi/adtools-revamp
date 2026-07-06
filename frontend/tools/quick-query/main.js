@@ -983,8 +983,8 @@ export class QuickQueryUI {
     });
 
     if (this.elements.addTabButton) {
-      this.elements.addTabButton.disabled = this.tabs.length >= 10;
-      this.elements.addTabButton.title = this.tabs.length >= 10 ? "Maximum 10 tabs" : "New tab";
+      this.elements.addTabButton.disabled = this.tabs.length >= 15;
+      this.elements.addTabButton.title = this.tabs.length >= 15 ? "Maximum 15 tabs" : "New tab";
     }
   }
 
@@ -1001,7 +1001,7 @@ export class QuickQueryUI {
 
     const actions = [
       { label: "Rename", run: () => this.renameTab(tabId) },
-      { label: "Duplicate", run: () => this.duplicateTab(tabId), disabled: this.tabs.length >= 10 },
+      { label: "Duplicate", run: () => this.duplicateTab(tabId), disabled: this.tabs.length >= 15 },
       { label: "Close", run: () => this.closeTab(tabId), disabled: this.tabs.length <= 1 },
     ];
 
@@ -1148,7 +1148,7 @@ export class QuickQueryUI {
   }
 
   async createNewTab({ activate = true } = {}) {
-    if (this.tabs.length >= 10) return null;
+    if (this.tabs.length >= 15) return null;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
     const tab = this.createTabDraft();
@@ -1164,7 +1164,7 @@ export class QuickQueryUI {
   }
 
   async duplicateTab(tabId) {
-    if (this.tabs.length >= 10) return null;
+    if (this.tabs.length >= 15) return null;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
     const source = this.tabs.find((tab) => tab.id === tabId);
