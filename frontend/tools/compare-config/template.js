@@ -52,6 +52,15 @@ export const CompareConfigTemplate = /* html */ `
         </div>
     </div>
 
+    <!-- Central loading state while sidecar starts (shown immediately in Tauri) -->
+    <div id="oracle-init-loading" class="oracle-init-loading tauri-only">
+        <div class="init-loading-card">
+            <div class="init-loading-spinner"></div>
+            <h3>Connecting to Oracle</h3>
+            <p>Starting the Oracle connection service...</p>
+        </div>
+    </div>
+
     <!-- Main Tool Interface (shown when client is installed) -->
     <div id="main-interface" class="main-interface">
 
