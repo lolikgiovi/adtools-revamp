@@ -37,10 +37,29 @@ class Base64Tools extends BaseTool {
     } catch (_) {}
   }
 
+  restoreFileCards() {
+    if (this.selectedFiles.size === 0) return;
+    const container = this.validateContainer();
+    if (!container) return;
+
+    let hasEncodeFiles = false;
+    let hasDecodeFiles = false;
+
+    for (const [fileId, { file, mode }] of this.selectedFiles) {
+      this.displayFileCard(file, fileId, mode);
+      if (mode === 'encode') hasEncodeFiles = true;
+      if (mode === 'decode') hasDecodeFiles = true;
+    }
+
+    if (hasEncodeFiles) this.showInputFileContainer('encode');
+    if (hasDecodeFiles) this.showInputFileContainer('decode');
+  }
+
   async onMount() {
     this.bindToolEvents();
     this.setupFileHandling();
     this.switchMode(this.currentMode);
+    this.restoreFileCards();
   }
 
   bindToolEvents() {
