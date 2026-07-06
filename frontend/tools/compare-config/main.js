@@ -400,6 +400,7 @@ class CompareConfigTool extends BaseTool {
         statusFilter: this.statusFilter,
         sourceAType: this.unified.sourceA.type,
         sourceBType: this.unified.sourceB.type,
+        sourceBUseQueryA: this.unified.sourceB.useSourceAQuery || false,
       };
       localStorage.setItem("compare-config.settings", JSON.stringify(settings));
 
@@ -433,6 +434,7 @@ class CompareConfigTool extends BaseTool {
         // Restore saved source types
         if (settings.sourceAType) this.unified.sourceA.type = settings.sourceAType;
         if (settings.sourceBType) this.unified.sourceB.type = settings.sourceBType;
+        if (settings.sourceBUseQueryA) this.unified.sourceB.useSourceAQuery = true;
       }
 
       // Migrate from old localStorage format if present
@@ -5348,7 +5350,36 @@ class CompareConfigTool extends BaseTool {
         this.unified[sourceKey].sql = e.target.value;
         this.updateUnifiedLoadButtonState();
         this.updateUnifiedLoadDataButtonVisibility();
+
+        // If Source A changes and Source B has "use same query" checked, sync to B
+        if (source === "A" && this.unified.sourceB.useSourceAQuery) {
+          const sqlB = document.getElementById("source-b-sql");
+          this.unified.sourceB.sql = e.target.value;
+          if (sqlB) sqlB.value = e.target.value;
+        }
       });
+    }
+
+    // "Use same query as Source A" checkbox (Source B only)
+    if (source === "B") {
+      const useQueryACheckbox = document.getElementById("source-b-use-sql-a");
+      if (useQueryACheckbox) {
+        useQueryACheckbox.addEventListener("change", () => {
+          this.unified.sourceB.useSourceAQuery = useQueryACheckbox.checked;
+          const sqlB = document.getElementById("source-b-sql");
+          if (useQueryACheckbox.checked) {
+            // Copy Source A's SQL to Source B and disable editing
+            if (this.unified.sourceA.sql) {
+              this.unified.sourceB.sql = this.unified.sourceA.sql;
+              if (sqlB) sqlB.value = this.unified.sourceA.sql;
+            }
+            if (sqlB) sqlB.disabled = true;
+          } else {
+            if (sqlB) sqlB.disabled = false;
+          }
+          this.updateUnifiedLoadButtonState();
+        });
+      }
     }
 
     // Max rows
@@ -6049,6 +6080,23 @@ class CompareConfigTool extends BaseTool {
 
     if (oracleConfig) oracleConfig.style.display = type === "oracle" ? "flex" : "none";
     if (excelConfig) excelConfig.style.display = type === "excel" ? "block" : "none";
+
+    // Show/hide "Use same query as Source A" checkbox for Source B SQL mode
+    if (source === "B") {
+      const useQueryAWrapper = document.getElementById("source-b-use-sql-a-wrapper");
+      const useQueryACheckbox = document.getElementById("source-b-use-sql-a");
+      const sqlModeConfig = document.getElementById("source-b-sql-config");
+      const isSqlMode = sqlModeConfig && sqlModeConfig.style.display !== "none";
+      if (useQueryAWrapper) {
+        useQueryAWrapper.style.display = isSqlMode ? "" : "none";
+        // Restore saved state
+        if (useQueryACheckbox && this.unified.sourceB.useSourceAQuery) {
+          useQueryACheckbox.checked = true;
+          const sqlB = document.getElementById("source-b-sql");
+          if (sqlB) sqlB.disabled = true;
+        }
+      }
+    }
     const isLoaded = this.unified[sourceKey].dataLoaded || this.unified[sourceKey].schemaLoaded;
     if (preview) preview.style.display = isLoaded ? "block" : "none";
 
@@ -6290,6 +6338,24 @@ class CompareConfigTool extends BaseTool {
 
     if (tableConfig) tableConfig.style.display = mode === "table" ? "flex" : "none";
     if (sqlConfig) sqlConfig.style.display = mode === "sql" ? "block" : "none";
+
+    // Show/hide "Use same query as Source A" checkbox for Source B
+    if (source === "B") {
+      const useQueryAWrapper = document.getElementById("source-b-use-sql-a-wrapper");
+      if (useQueryAWrapper) {
+        useQueryAWrapper.style.display = mode === "sql" ? "" : "none";
+        if (mode === "sql" && this.unified.sourceB.useSourceAQuery) {
+          const useQueryACheckbox = document.getElementById("source-b-use-sql-a");
+          if (useQueryACheckbox) useQueryACheckbox.checked = true;
+          const sqlB = document.getElementById("source-b-sql");
+          if (sqlB) sqlB.disabled = true;
+          if (this.unified.sourceA.sql) {
+            this.unified.sourceB.sql = this.unified.sourceA.sql;
+            if (sqlB) sqlB.value = this.unified.sourceA.sql;
+          }
+        }
+      }
+    }
 
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
@@ -7324,7 +7390,7 @@ class CompareConfigTool extends BaseTool {
         connection: config.connection,
         schema: config.schema,
         table: config.table,
-        sql: config.sql,
+        sql: config.useSourceAQuery ? this.unified.sourceA.sql : config.sql,
         whereClause: config.whereClause,
         maxRows: config.maxRows,
       };

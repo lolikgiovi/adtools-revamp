@@ -3952,6 +3952,28 @@
 }
 
 /* ============================================
+   USE SOURCE A QUERY CHECKBOX
+   ============================================ */
+
+.use-source-a-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  user-select: none;
+}
+
+.use-source-a-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: hsl(var(--primary));
+}
+
+/* ============================================
    BULK SELECT MODE
    ============================================ */
 

@@ -333,6 +333,10 @@ export const CompareConfigTemplate = /* html */ `
                                 <label>SQL Query</label>
                                 <textarea id="source-b-sql" class="form-textarea sql-input"
                                           placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
+                                <label class="checkbox-label use-source-a-label" id="source-b-use-sql-a-wrapper" style="display: none;">
+                                    <input type="checkbox" id="source-b-use-sql-a">
+                                    Use same query as Source A
+                                </label>
                             </div>
                         </div>
 
