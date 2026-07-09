@@ -10,6 +10,7 @@ Uses oracledb in THIN mode - no native Oracle client libraries required!
 
 import asyncio
 import atexit
+import base64
 import logging
 import signal
 import sys
@@ -198,6 +199,8 @@ def output_type_handler(cursor, metadata):
     """Let oracledb handle type conversion at the C level."""
     if metadata.type_code == oracledb.DB_TYPE_CLOB:
         return cursor.var(str, arraysize=cursor.arraysize)
+    if metadata.type_code == oracledb.DB_TYPE_BLOB:
+        return cursor.var(bytes, arraysize=cursor.arraysize)
     if metadata.type_code in (oracledb.DB_TYPE_DATE, oracledb.DB_TYPE_TIMESTAMP):
         return cursor.var(str, arraysize=cursor.arraysize)
 
@@ -305,6 +308,17 @@ def _convert_value(val):
         return val
     if isinstance(val, datetime):
         return val.isoformat()
+    if isinstance(val, (bytes, bytearray, memoryview)):
+        raw = bytes(val)
+        return {
+            "__adtools_type": "oracle_blob",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "byte_length": len(raw),
+        }
+    if hasattr(val, "read"):
+        data = val.read()
+        return _convert_value(data)
     return str(val)
 
 

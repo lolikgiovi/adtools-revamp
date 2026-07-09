@@ -99,6 +99,16 @@
       "order": 51
     },
     {
+      "id": "export-content",
+      "name": "Export Content",
+      "category": "config",
+      "icon": "export-content",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "order": 53
+    },
+    {
       "id": "run-query",
       "name": "Run Query",
       "category": "jenkins",

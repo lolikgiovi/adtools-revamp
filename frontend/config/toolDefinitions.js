@@ -39,6 +39,11 @@ const TOOL_MODULES = {
     description: "Compare Oracle database configs between environments",
     load: () => import("../tools/compare-config/main.js").then((module) => ({ ToolClass: module.CompareConfigTool })),
   },
+  "export-content": {
+    name: "Export Content",
+    description: "Export HTML content files from Oracle query results",
+    load: () => import("../tools/export-content/main.js").then((module) => ({ ToolClass: module.ExportContentTool })),
+  },
   "run-query": {
     name: "Run Query",
     description: "Run Oracle SQL Query via Jenkins job and stream the build logs",
