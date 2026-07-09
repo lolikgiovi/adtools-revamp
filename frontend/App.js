@@ -16,6 +16,7 @@ import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
+import { OracleConnectionService } from "./core/OracleConnectionService.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 const ASSET_LOAD_MAX_RETRIES = 3;
@@ -1400,6 +1401,7 @@ class App {
       const rt = isTauri() ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
       if (reloadBtn) reloadBtn.title = rt === "tauri" ? "Reload window" : "Reload";
+      OracleConnectionService.bindHeaderStatus({ eventBus: this.eventBus });
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init

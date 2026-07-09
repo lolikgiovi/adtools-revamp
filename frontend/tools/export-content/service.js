@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { CompareConfigService } from "../compare-config/service.js";
+import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 
 const CONTENT_COLUMN_SUFFIX_REGEX = /_(EN|ID)$/i;
 const READONLY_SQL_REGEX = /^\s*(with|select)\b/i;
@@ -9,7 +9,7 @@ const ORACLE_BLOB_TYPE = "oracle_blob";
 
 export class ExportContentService {
   constructor(options = {}) {
-    this.queryService = options.queryService || CompareConfigService;
+    this.queryService = options.queryService || OracleConnectionService;
     this.zipFactory = options.zipFactory || (() => new JSZip());
   }
 

@@ -22,7 +22,7 @@ import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
 import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
-import { getOracleSidecarClient, SidecarStatus } from "./lib/oracle-sidecar-client.js";
+import { OracleConnectionService, SidecarStatus } from "../../core/OracleConnectionService.js";
 import {
   buildCompareConfigSuccessMeta,
   buildUnifiedSourceAnalytics,
@@ -218,16 +218,17 @@ class CompareConfigTool extends BaseTool {
     try {
       console.log("[OracleCheck] Starting Oracle sidecar...");
 
-      const sidecarClient = getOracleSidecarClient();
-
       // Subscribe to status changes to update UI
-      this._sidecarStatusUnsubscribe = sidecarClient.onStatusChange((status) => {
+      if (this._sidecarStatusUnsubscribe) {
+        this._sidecarStatusUnsubscribe();
+        this._sidecarStatusUnsubscribe = null;
+      }
+      this._sidecarStatusUnsubscribe = OracleConnectionService.onStatusChange((status) => {
         this.sidecarStatus = status;
-        this.updateSidecarStatusUI();
       });
 
       // Start the sidecar
-      const started = await sidecarClient.start();
+      const started = await OracleConnectionService.startSidecar();
 
       if (started) {
         console.log("[OracleCheck] Oracle sidecar started successfully");
@@ -253,39 +254,7 @@ class CompareConfigTool extends BaseTool {
    * Update the sidecar status indicator in the UI
    */
   updateSidecarStatusUI() {
-    const statusIndicator = document.getElementById("sidecar-status-indicator");
-    if (!statusIndicator) return;
-
-    const statusText = statusIndicator.querySelector(".status-text");
-    const statusDot = statusIndicator.querySelector(".status-dot");
-    const restartBtn = statusIndicator.querySelector("#btn-sidecar-restart");
-
-    if (statusText) {
-      switch (this.sidecarStatus) {
-        case SidecarStatus.STARTING:
-          statusText.textContent = "Oracle: Starting...";
-          break;
-        case SidecarStatus.READY:
-          statusText.textContent = "Oracle: Connected";
-          break;
-        case SidecarStatus.ERROR:
-          statusText.textContent = "Oracle: Error";
-          break;
-        default:
-          statusText.textContent = "Oracle: Disconnected";
-      }
-    }
-
-    if (statusDot) {
-      statusDot.classList.remove("starting", "ready", "error", "stopped");
-      statusDot.classList.add(this.sidecarStatus);
-    }
-
-    // Show restart button when sidecar is in error or stopped state
-    if (restartBtn) {
-      const showRestart = this.sidecarStatus === SidecarStatus.ERROR || this.sidecarStatus === SidecarStatus.STOPPED;
-      restartBtn.style.display = showRestart ? "flex" : "none";
-    }
+    OracleConnectionService.updateHeaderStatus(this.sidecarStatus);
   }
 
   /**
@@ -298,8 +267,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     try {
-      const sidecarClient = getOracleSidecarClient();
-      const success = await sidecarClient.restart();
+      const success = await OracleConnectionService.restartSidecar();
 
       if (success) {
         this.eventBus.emit("notification:show", {
@@ -493,12 +461,6 @@ class CompareConfigTool extends BaseTool {
   bindEvents() {
     // Bulk Select tab events
     this.bindBulkSelectEvents();
-
-    // Sidecar restart button
-    const sidecarRestartBtn = document.getElementById("btn-sidecar-restart");
-    if (sidecarRestartBtn) {
-      sidecarRestartBtn.addEventListener("click", () => this.handleSidecarRestart());
-    }
 
     // Installation guide events
     const checkAgainBtn = document.getElementById("btn-check-again");
@@ -4671,9 +4633,11 @@ class CompareConfigTool extends BaseTool {
       } catch (_) {}
     });
 
-    // NOTE: Sidecar status subscription intentionally kept alive.
-    // The indicator now lives in the global app header and should
-    // continue receiving status updates even when the tool is unmounted.
+    if (this._sidecarStatusUnsubscribe) {
+      this._sidecarStatusUnsubscribe();
+      this._sidecarStatusUnsubscribe = null;
+    }
+
     try {
       getDiffWorkerManager().terminate();
     } catch (_) {}

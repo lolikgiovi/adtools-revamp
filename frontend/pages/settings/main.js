@@ -4,7 +4,7 @@ import { SettingsService } from "./service.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
-import { getOracleSidecarClient } from "../../tools/compare-config/lib/oracle-sidecar-client.js";
+import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
@@ -664,29 +664,17 @@ class SettingsPage {
           const connName = name || "test";
           // Try sidecar first (preferred) — ensure it's running
           try {
-            await getOracleSidecarClient().ensureStarted();
-            const response = await fetch("http://127.0.0.1:21522/test-connection", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                connection: {
-                  name: connName,
-                  connect_string: connectString,
-                  username,
-                  password,
-                },
-              }),
-              signal: AbortSignal.timeout(30000),
+            await OracleConnectionService.testConnectionWithCredentials({
+              name: connName,
+              connect_string: connectString,
+              username,
+              password,
             });
-            if (!response.ok) {
-              const err = await response.json();
-              throw new Error(err.detail?.message || err.detail || "Connection failed");
-            }
             statusEl.textContent = "✓ Connection successful";
             statusEl.className = "oracle-form-status success";
           } catch (fetchErr) {
             // Fallback to Tauri backend if sidecar not available
-            if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+            if (this.isSidecarUnavailableError(fetchErr)) {
               const config = { name: connName, connect_string: connectString };
               await invoke("test_oracle_connection", { config, username, password });
               statusEl.textContent = "✓ Connection successful";
@@ -743,24 +731,12 @@ class SettingsPage {
             // Test connection via sidecar or Tauri backend
             try {
               // Try sidecar first (preferred) — ensure it's running
-              await getOracleSidecarClient().ensureStarted();
-              const response = await fetch("http://127.0.0.1:21522/test-connection", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  connection: {
-                    name: connName,
-                    connect_string: conn.connect_string,
-                    username,
-                    password,
-                  },
-                }),
-                signal: AbortSignal.timeout(30000),
+              await OracleConnectionService.testConnectionWithCredentials({
+                name: connName,
+                connect_string: conn.connect_string,
+                username,
+                password,
               });
-              if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail?.message || err.detail || "Connection failed");
-              }
               // Success via sidecar
               if (statusEl) {
                 statusEl.textContent = "✓ Connected";
@@ -768,7 +744,7 @@ class SettingsPage {
               }
             } catch (fetchErr) {
               // Fallback to Tauri backend if sidecar not available
-              if (fetchErr.name === "TypeError" || fetchErr.message?.includes("fetch")) {
+              if (this.isSidecarUnavailableError(fetchErr)) {
                 await invoke("test_oracle_connection", {
                   config: { name: connName, connect_string: conn.connect_string },
                   username,
@@ -1168,6 +1144,11 @@ class SettingsPage {
     } catch (_) {}
     const compact = text.length > 360 ? `${text.slice(0, 360)}…` : text;
     return `<pre class="json-setting-preview">${esc(compact)}</pre>`;
+  }
+
+  isSidecarUnavailableError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return error?.name === "TypeError" || message.includes("fetch") || message.includes("sidecar");
   }
 
   deactivate() {

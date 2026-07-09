@@ -1,5 +1,4 @@
-import { getOracleSidecarClient } from "../../compare-config/lib/oracle-sidecar-client.js";
-import { invoke } from "@tauri-apps/api/core";
+import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
 
 const SYSTEM_SCHEMAS = [
   "SYS",
@@ -73,13 +72,7 @@ export class OracleEnvImportService {
    * @returns {Promise<{ name: string, connect_string: string, username: string, password: string }>}
    */
   static async buildConnection(name, config) {
-    const [username, password] = await invoke("get_oracle_credentials", { name });
-    return {
-      name: config.name || name,
-      connect_string: config.connect_string,
-      username,
-      password,
-    };
+    return OracleConnectionService.buildSidecarConnection(name, config);
   }
 
   /**
@@ -87,8 +80,7 @@ export class OracleEnvImportService {
    * @returns {Promise<boolean>}
    */
   static async ensureSidecarStarted() {
-    const client = getOracleSidecarClient();
-    return client.ensureStarted();
+    return OracleConnectionService.ensureSidecarStarted();
   }
 
   /**
@@ -98,11 +90,10 @@ export class OracleEnvImportService {
    * @returns {Promise<string[]>}
    */
   static async fetchSchemas(name, config) {
-    const client = getOracleSidecarClient();
     const connection = await this.buildConnection(name, config);
     const inList = SYSTEM_SCHEMAS.map((s) => `'${s}'`).join(",");
     const sql = `SELECT DISTINCT OWNER FROM ALL_TABLES WHERE OWNER NOT IN (${inList}) ORDER BY OWNER`;
-    const result = await client.query({ connection, sql, max_rows: 1000 });
+    const result = await OracleConnectionService.queryWithConnection(connection, sql, 1000);
     return result.rows.map((row) => row[0]);
   }
 
@@ -114,12 +105,11 @@ export class OracleEnvImportService {
    * @returns {Promise<{ schema: string, table: string }[]>}
    */
   static async fetchTables(name, config, schemaNames) {
-    const client = getOracleSidecarClient();
     const connection = await this.buildConnection(name, config);
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
     const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
     const sql = `SELECT OWNER, TABLE_NAME FROM ALL_TABLES WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList}) ORDER BY OWNER, TABLE_NAME`;
-    const result = await client.query({ connection, sql, max_rows: 100000 });
+    const result = await OracleConnectionService.queryWithConnection(connection, sql, 100000);
     return result.rows.map((row) => ({ schema: row[0], table: row[1] }));
   }
 
@@ -133,7 +123,6 @@ export class OracleEnvImportService {
    * @returns {Promise<Object>} Canonical payload { schema: { tables: { table: { columns, pk } } } }
    */
   static async fetchAllMetadata(name, config, schemaNames, onProgress, selectedTables) {
-    const client = getOracleSidecarClient();
     const connection = await this.buildConnection(name, config);
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
 
@@ -161,7 +150,7 @@ FROM ALL_TAB_COLUMNS
 WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList})${tableFilter}
 ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
 
-    const columnsResult = await client.query({ connection, sql: columnsSql, max_rows: 100000 });
+    const columnsResult = await OracleConnectionService.queryWithConnection(connection, columnsSql, 100000);
 
     if (onProgress) onProgress("Fetching primary keys...", 60);
 
@@ -171,7 +160,7 @@ JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.
 WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND cons.TABLE_NAME NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
 ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
 
-    const pkResult = await client.query({ connection, sql: pkSql, max_rows: 100000 });
+    const pkResult = await OracleConnectionService.queryWithConnection(connection, pkSql, 100000);
 
     if (onProgress) onProgress("Building schema payload...", 80);
 

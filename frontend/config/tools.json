@@ -103,6 +103,7 @@
       "name": "Export Content",
       "category": "config",
       "icon": "export-content",
+      "requiresTauri": true,
       "showInSidebar": true,
       "showOnHome": true,
       "enabled": true,

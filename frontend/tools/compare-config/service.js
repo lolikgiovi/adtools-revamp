@@ -8,7 +8,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { getOracleSidecarClient, OracleSidecarError } from "./lib/oracle-sidecar-client.js";
+import { OracleConnectionService, OracleSidecarError } from "../../core/OracleConnectionService.js";
 import {
   generateQueryCacheKey,
   getQueryCache,
@@ -126,11 +126,7 @@ export class CompareConfigService {
    * @returns {Promise<void>}
    */
   static async setOracleCredentials(name, username, password) {
-    return await invoke("set_oracle_credentials", {
-      name,
-      username,
-      password,
-    });
+    return OracleConnectionService.setOracleCredentials(name, username, password);
   }
 
   /**
@@ -139,9 +135,7 @@ export class CompareConfigService {
    * @returns {Promise<[string, string]>} [username, password]
    */
   static async getOracleCredentials(name) {
-    return await invoke("get_oracle_credentials", {
-      name,
-    });
+    return OracleConnectionService.getOracleCredentials(name);
   }
 
   /**
@@ -150,9 +144,7 @@ export class CompareConfigService {
    * @returns {Promise<void>}
    */
   static async deleteOracleCredentials(name) {
-    return await invoke("delete_oracle_credentials", {
-      name,
-    });
+    return OracleConnectionService.deleteOracleCredentials(name);
   }
 
   /**
@@ -161,9 +153,7 @@ export class CompareConfigService {
    * @returns {Promise<boolean>}
    */
   static async hasOracleCredentials(name) {
-    return await invoke("has_oracle_credentials", {
-      name,
-    });
+    return OracleConnectionService.hasOracleCredentials(name);
   }
 
   // Connection pool management methods
@@ -190,7 +180,7 @@ export class CompareConfigService {
    * @returns {import('./lib/oracle-sidecar-client.js').OracleSidecarClient}
    */
   static getSidecarClient() {
-    return getOracleSidecarClient();
+    return OracleConnectionService.getSidecarClient();
   }
 
   /**
@@ -198,8 +188,7 @@ export class CompareConfigService {
    * @returns {Promise<boolean>} True if sidecar is ready
    */
   static async startSidecar() {
-    const client = getOracleSidecarClient();
-    return client.start();
+    return OracleConnectionService.startSidecar();
   }
 
   /**
@@ -207,8 +196,7 @@ export class CompareConfigService {
    * @returns {Promise<boolean>} True if sidecar is ready
    */
   static async ensureSidecarStarted() {
-    const client = getOracleSidecarClient();
-    return client.ensureStarted();
+    return OracleConnectionService.ensureSidecarStarted();
   }
 
   /**
@@ -216,8 +204,7 @@ export class CompareConfigService {
    * @returns {boolean}
    */
   static isSidecarReady() {
-    const client = getOracleSidecarClient();
-    return client.isReady();
+    return OracleConnectionService.isSidecarReady();
   }
 
   /**
@@ -227,13 +214,7 @@ export class CompareConfigService {
    * @returns {Promise<{name: string, connect_string: string, username: string, password: string}>}
    */
   static async buildSidecarConnection(connectionName, config) {
-    const [username, password] = await this.getOracleCredentials(connectionName);
-    return {
-      name: config.name || connectionName,
-      connect_string: config.connect_string,
-      username,
-      password,
-    };
+    return OracleConnectionService.buildSidecarConnection(connectionName, config);
   }
 
   /**
@@ -243,10 +224,7 @@ export class CompareConfigService {
    * @returns {Promise<{success: boolean, message: string}>}
    */
   static async testConnectionViaSidecar(connectionName, config) {
-    await this.ensureSidecarStarted();
-    const client = getOracleSidecarClient();
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return client.testConnection(connection);
+    return OracleConnectionService.testConnectionViaSidecar(connectionName, config);
   }
 
   /**
@@ -258,10 +236,7 @@ export class CompareConfigService {
    * @returns {Promise<{columns: string[], rows: any[][], row_count: number, execution_time_ms: number}>}
    */
   static async queryViaSidecar(connectionName, config, sql, maxRows = 1000) {
-    await this.ensureSidecarStarted();
-    const client = getOracleSidecarClient();
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return client.query({ connection, sql, max_rows: maxRows });
+    return OracleConnectionService.queryViaSidecar(connectionName, config, sql, maxRows);
   }
 
   /**
@@ -273,10 +248,7 @@ export class CompareConfigService {
    * @returns {Promise<{columns: string[], rows: Object[], row_count: number, execution_time_ms: number}>}
    */
   static async queryAsDictViaSidecar(connectionName, config, sql, maxRows = 1000) {
-    await this.ensureSidecarStarted();
-    const client = getOracleSidecarClient();
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return client.queryAsDict({ connection, sql, max_rows: maxRows });
+    return OracleConnectionService.queryAsDictViaSidecar(connectionName, config, sql, maxRows);
   }
 
   /**
@@ -426,18 +398,7 @@ export class CompareConfigService {
    * @returns {Promise<Array<{columns: string[], rows: Object[], row_count: number, error?: string}>>}
    */
   static async queryBatchViaSidecar(queries) {
-    await this.ensureSidecarStarted();
-    const client = getOracleSidecarClient();
-
-    // Build query requests with resolved credentials
-    const queryRequests = await Promise.all(
-      queries.map(async ({ connection_name, config, sql, max_rows = 1000 }) => {
-        const connection = await this.buildSidecarConnection(connection_name, config);
-        return { connection, sql, max_rows };
-      })
-    );
-
-    const batchResult = await client.queryBatch(queryRequests);
+    const batchResult = await OracleConnectionService.queryBatchViaSidecar(queries);
 
     // Convert array rows to dict rows client-side for each result
     return batchResult.results.map((result) => {
