@@ -65,11 +65,9 @@ export class ExportContentService {
 
   formatTimestamp(date = new Date()) {
     const pad = (value) => String(value).padStart(2, "0");
-    return [
-      date.getFullYear(),
-      pad(date.getMonth() + 1),
-      pad(date.getDate()),
-    ].join("_") + `-${pad(date.getHours())}_${pad(date.getMinutes())}`;
+    return (
+      [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join("_") + `-${pad(date.getHours())}_${pad(date.getMinutes())}`
+    );
   }
 
   deriveSourceNameFromSql(sql) {
@@ -115,7 +113,10 @@ export class ExportContentService {
   }
 
   buildHtmlFilename({ identifierValues = [], language = "HTML", timestamp = this.formatTimestamp(), existingNames = new Set() }) {
-    const identifier = identifierValues.map((value) => this.sanitizeFilenamePart(value)).filter(Boolean).join("-");
+    const identifier = identifierValues
+      .map((value) => this.sanitizeFilenamePart(value))
+      .filter(Boolean)
+      .join("-");
     const baseName = [identifier || "content", this.sanitizeFilenamePart(language).toUpperCase(), timestamp].join("-");
     let fileName = `${baseName}.html`;
     let counter = 2;
@@ -186,10 +187,10 @@ export class ExportContentService {
   isOracleBlobValue(value) {
     return Boolean(
       value &&
-        typeof value === "object" &&
-        value.__adtools_type === ORACLE_BLOB_TYPE &&
-        value.encoding === "base64" &&
-        typeof value.data === "string",
+      typeof value === "object" &&
+      value.__adtools_type === ORACLE_BLOB_TYPE &&
+      value.encoding === "base64" &&
+      typeof value.data === "string",
     );
   }
 
@@ -238,5 +239,34 @@ export class ExportContentService {
       zip.file(item.filename, item.content, item.contentType === ORACLE_BLOB_TYPE ? { binary: true } : undefined);
     });
     return zip.generateAsync({ type: "blob" });
+  }
+
+  buildManifest({
+    preview,
+    environment = "",
+    savedQueryName = "",
+    identifierColumns = [],
+    contentColumns = [],
+    items = [],
+    skippedEmpty = 0,
+    generatedAt = new Date().toISOString(),
+  }) {
+    return {
+      sourceName: preview?.sourceName || "query-result",
+      environment,
+      savedQueryName,
+      rowCount: preview?.rows?.length || 0,
+      columns: preview?.columns || [],
+      identifierColumns,
+      contentColumns,
+      generatedAt,
+      skippedEmpty,
+      files: items.map((item) => ({
+        filename: item.filename,
+        column: item.column,
+        language: item.language,
+        identifierValues: item.identifierValues || [],
+      })),
+    };
   }
 }

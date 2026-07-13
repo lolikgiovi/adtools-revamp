@@ -143,10 +143,7 @@ describe("ExportContentService filenames and items", () => {
     });
 
     expect(result.skippedEmpty).toBe(1);
-    expect(result.items.map((item) => item.filename)).toEqual([
-      "terms-ID-2026_07_09-14_30.html",
-      "terms-ID-2026_07_09-14_30-2.html",
-    ]);
+    expect(result.items.map((item) => item.filename)).toEqual(["terms-ID-2026_07_09-14_30.html", "terms-ID-2026_07_09-14_30-2.html"]);
   });
 
   it("preserves VARCHAR and CLOB text content as strings", () => {
@@ -224,6 +221,52 @@ describe("ExportContentService filenames and items", () => {
     const bytes = new TextEncoder().encode(text);
 
     expect(service.contentToPreviewText(bytes, "oracle_blob")).toBe(text);
+  });
+
+  it("builds a manifest for generated files without embedding HTML content", () => {
+    const service = createService();
+    const manifest = service.buildManifest({
+      generatedAt: "2026-07-09T07:00:00.000Z",
+      environment: "UAT 3 Comp",
+      savedQueryName: "Gold Loan Content",
+      preview: {
+        sourceName: "CONTENT.MESSAGE_TEMPLATE",
+        columns: ["TOPIC", "TEMPLATE_MESSAGE_EN"],
+        rows: [{ TOPIC: "terms", TEMPLATE_MESSAGE_EN: "<html>Terms</html>" }],
+      },
+      identifierColumns: ["TOPIC"],
+      contentColumns: ["TEMPLATE_MESSAGE_EN"],
+      skippedEmpty: 1,
+      items: [
+        {
+          filename: "terms-EN-2026_07_09-14_30.html",
+          column: "TEMPLATE_MESSAGE_EN",
+          language: "EN",
+          identifierValues: ["terms"],
+          content: "<html>Terms</html>",
+        },
+      ],
+    });
+
+    expect(manifest).toEqual({
+      sourceName: "CONTENT.MESSAGE_TEMPLATE",
+      environment: "UAT 3 Comp",
+      savedQueryName: "Gold Loan Content",
+      rowCount: 1,
+      columns: ["TOPIC", "TEMPLATE_MESSAGE_EN"],
+      identifierColumns: ["TOPIC"],
+      contentColumns: ["TEMPLATE_MESSAGE_EN"],
+      generatedAt: "2026-07-09T07:00:00.000Z",
+      skippedEmpty: 1,
+      files: [
+        {
+          filename: "terms-EN-2026_07_09-14_30.html",
+          column: "TEMPLATE_MESSAGE_EN",
+          language: "EN",
+          identifierValues: ["terms"],
+        },
+      ],
+    });
   });
 });
 
