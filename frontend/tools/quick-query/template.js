@@ -108,6 +108,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <span class="slider"></span>
                 </label>
                 <span class="sysdate-toggle-label">Default SYSDATE</span>
+                <label class="switch wrap-text-toggle" title="Wrap text in data preview cells">
+                    <input type="checkbox" id="toggleWrapText" />
+                    <span class="slider"></span>
+                </label>
+                <span class="wrap-text-toggle-label">Wrap Text</span>
             </div>
             <div id="excelImportInfo" class="excel-import-info hidden">
                 <span class="excel-import-icon">📊</span>

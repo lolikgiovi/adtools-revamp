@@ -738,7 +738,17 @@
   padding: 0 6px !important;
   line-height: 15px !important;
   white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  max-width: 300px;
   /* text-overflow: ellipsis; */
+}
+
+/* Wrap Text OFF: single line with ellipsis */
+#spreadsheet-data.wrap-text-off .handsontable .htCore td {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Ensure theme class selector also picks up compact vars */
@@ -1492,6 +1502,12 @@
 }
 
 .sysdate-toggle-label {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  user-select: none;
+}
+
+.wrap-text-toggle-label {
   font-size: 11px;
   color: hsl(var(--muted-foreground));
   user-select: none;

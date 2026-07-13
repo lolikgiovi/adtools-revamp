@@ -353,6 +353,9 @@ export class QuickQueryUI {
       // Default SYSDATE toggle
       defaultSysdateToggle: document.getElementById("defaultSysdate"),
 
+      // Wrap Text toggle
+      toggleWrapText: document.getElementById("toggleWrapText"),
+
       // HTML Minify overlay elements
       htmlMinifyOverlay: document.getElementById("htmlMinifyOverlay"),
       htmlMinifyFieldList: document.getElementById("htmlMinifyFieldList"),
@@ -405,6 +408,9 @@ export class QuickQueryUI {
       },
       toggleWordWrapButton: {
         click: () => this.handleToggleWordWrap(),
+      },
+      toggleWrapText: {
+        change: () => this.handleToggleWrapText(),
       },
       splitQuery: {
         click: () => this.handleOpenSplitOptions(),
@@ -2166,6 +2172,21 @@ export class QuickQueryUI {
       wordWrapButton.setAttribute("aria-checked", String(isOn));
       wordWrapButton.setAttribute("aria-label", `Turn word wrap ${isOn ? "off" : "on"}`);
       wordWrapButton.setAttribute("title", `Word wrap: ${isOn ? "On" : "Off"}`);
+    }
+  }
+
+  handleToggleWrapText() {
+    const checkbox = this.elements.toggleWrapText || document.getElementById("toggleWrapText");
+    const container = document.getElementById("spreadsheet-data");
+    if (!checkbox || !container) return;
+
+    const isOn = checkbox.checked;
+    container.classList.toggle("wrap-text-off", isOn);
+
+    // Re-render Handsontable so autoRowSize recalculates cell heights
+    // based on the new wrapping mode (pre-wrap vs nowrap)
+    if (this.dataTable) {
+      this.dataTable.render();
     }
   }
 
