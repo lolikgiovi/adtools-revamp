@@ -14,7 +14,7 @@ import {
   splitValues,
 } from "../service.js";
 
-describe("Ticket Template Create service", () => {
+describe("Ticket Template service", () => {
   it("normalizes the Jira connection and issue URLs", () => {
     expect(normalizeBaseUrl("https://jira.example.com/")).toBe("https://jira.example.com");
     expect(normalizeProjectKey(" evdev ")).toBe("EVDEV");

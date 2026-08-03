@@ -55,7 +55,7 @@ const TOOL_MODULES = {
     load: () => import("../tools/run-batch/main.js").then((module) => ({ ToolClass: module.RunBatch })),
   },
   "ticket-template-create": {
-    name: "Ticket Template Create",
+    name: "Ticket Template",
     description: "Discover Jira fields and prepare FE or BE subtask templates",
     load: () => import("../tools/ticket-template-create/main.js").then((module) => ({ ToolClass: module.TicketTemplateCreateTool })),
   },

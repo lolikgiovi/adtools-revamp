@@ -29,13 +29,14 @@ function createLookupHarness() {
   tool.scheduleLabelLookup = vi.fn();
   tool.lookupTimers = new Map();
   tool.lookupActiveIndexes = new Map();
+  tool.lookupDisplayValues = new Map();
   tool.updateDateHint = vi.fn();
   tool.renderCreatePreview = vi.fn();
   tool.renderOverrideNotice = vi.fn();
   return { tool, userInput };
 }
 
-describe("Ticket Template Create lookup controls", () => {
+describe("Ticket Template lookup controls", () => {
   it("schedules Jira user lookup for boolean data-user-lookup attributes", () => {
     const { tool, userInput } = createLookupHarness();
     tool.bindActions();
@@ -81,6 +82,41 @@ describe("Ticket Template Create lookup controls", () => {
     expect(tool.updateDateHint).toHaveBeenCalled();
     expect(tool.renderCreatePreview).toHaveBeenCalled();
     expect(tool.renderOverrideNotice).toHaveBeenCalled();
+  });
+
+  it("renders selected Jira users as removable name and ID chips", () => {
+    const { tool } = createLookupHarness();
+    const field = document.createElement("label");
+    field.className = "ttc-lookup-field";
+    field.dataset.lookupMultiple = "true";
+    field.innerHTML = `
+      <div data-lookup-control>
+        <div data-lookup-chips></div>
+        <input data-lookup-input data-lookup-field="reviewers" data-user-lookup type="text" />
+        <div data-lookup-menu hidden></div>
+      </div>
+      <input data-lookup-committed type="hidden" />
+      <input data-field="reviewers" data-lookup-value type="hidden" />
+    `;
+    const input = field.querySelector("[data-lookup-input]");
+    const option = document.createElement("button");
+    option.type = "button";
+    option.dataset.lookupOption = "";
+    option.dataset.lookupValue = "2399783232";
+    option.innerHTML = "<strong>FASHALLI GIOVI BILHAQ</strong><small>2399783232</small>";
+    field.querySelector("[data-lookup-menu]").append(option);
+    tool.container.append(field);
+
+    tool.chooseLookupOption(option);
+
+    const chip = field.querySelector("[data-lookup-chip]");
+    expect(chip.textContent).toContain("FASHALLI GIOVI BILHAQ");
+    expect(chip.textContent).toContain("(2399783232)");
+    expect(field.querySelector('[data-field="reviewers"]').value).toBe("2399783232");
+
+    tool.removeLookupValue(input, "2399783232");
+    expect(field.querySelector('[data-field="reviewers"]').value).toBe("");
+    expect(field.querySelector("[data-lookup-chip]")).toBeNull();
   });
 
   it("navigates Jira lookup suggestions with arrow keys and commits with Enter", () => {
@@ -160,5 +196,40 @@ describe("Ticket Template Create lookup controls", () => {
 
     expect(menu.hidden).toBe(true);
     expect(preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("shows a first-use tutorial and advances through its steps", () => {
+    const { tool } = createLookupHarness();
+    tool.tutorialSteps = [
+      { target: "connection", kicker: "QUICK GUIDE · 1 OF 2", title: "Connect", copy: "Load Jira metadata." },
+      { target: "feature", kicker: "QUICK GUIDE · 2 OF 2", title: "Save a feature", copy: "Reuse feature settings." },
+    ];
+    tool.tutorialStep = 0;
+    tool.container.innerHTML = `
+      <section data-tutorial-target="connection"></section>
+      <section data-tutorial-target="feature"></section>
+      <aside data-tutorial hidden>
+        <span data-tutorial-kicker></span>
+        <h3 data-tutorial-title></h3>
+        <p data-tutorial-copy></p>
+        <button data-tutorial-back></button>
+        <button data-tutorial-next></button>
+      </aside>
+      <button data-tutorial-trigger></button>
+    `;
+
+    tool.openTutorial(0, true);
+
+    const panel = tool.container.querySelector("[data-tutorial]");
+    expect(panel.hidden).toBe(false);
+    expect(panel.querySelector("[data-tutorial-title]").textContent).toBe("Connect");
+    expect(tool.container.querySelector('[data-tutorial-target="connection"]').classList.contains("ttc-tutorial-target")).toBe(true);
+
+    tool.moveTutorial(1);
+    expect(panel.querySelector("[data-tutorial-title]").textContent).toBe("Save a feature");
+    expect(panel.querySelector("[data-tutorial-next]").textContent).toBe("Done");
+
+    tool.moveTutorial(1);
+    expect(panel.hidden).toBe(true);
   });
 });

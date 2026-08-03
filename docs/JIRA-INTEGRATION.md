@@ -113,7 +113,7 @@ The browser UI never receives or persists a Jira PAT. The implementation:
 
 The web app still does not call Jira directly. A web deployment needs an approved gateway before this tool can be enabled there.
 
-## Ticket Template Create
+## Ticket Template
 
 The Tauri implementation discovers the live project contract and creates subtasks through Jira's bulk endpoint. It does not depend on
 hardcoded sample issue keys.

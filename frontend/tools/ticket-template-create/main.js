@@ -12,7 +12,7 @@ import {
   todayIso,
   GLOBAL_DEFAULTS_KEY,
 } from "./service.js";
-import { TICKET_TEMPLATE_CREATE_TEMPLATE } from "./template.js";
+import { lookupInput, TICKET_TEMPLATE_CREATE_TEMPLATE } from "./template.js";
 import { TicketTemplateStorage } from "./template-storage.js";
 import { getIconSvg } from "./icon.js";
 import "./styles.css";
@@ -33,6 +33,7 @@ const SHARED_DEFAULT_FIELDS = [
 ];
 
 const PEOPLE_STREAMS = ["ios", "android", "web", "be"];
+const TUTORIAL_STORAGE_KEY = "ticket-template:tutorial-seen";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -59,7 +60,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   constructor(eventBus) {
     super({
       id: "ticket-template-create",
-      name: "Ticket Template Create",
+      name: "Ticket Template",
       description: "Create consistent Jira FE and BE subtasks from reusable templates",
       icon: "ticket-template",
       category: "jira",
@@ -75,7 +76,41 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.globalDefaults = createDefaultGlobalDefaults();
     this.lookupTimers = new Map();
     this.lookupActiveIndexes = new Map();
+    this.lookupDisplayValues = new Map();
     this.comboboxStates = new Map();
+    this.tutorialStep = 0;
+    this.tutorialSteps = [
+      {
+        target: "connection",
+        kicker: "QUICK GUIDE · 1 OF 5",
+        title: "Load Jira metadata",
+        copy: "Start by loading the live Jira fields and your PAT owner. This only reads Jira.",
+      },
+      {
+        target: "feature",
+        kicker: "QUICK GUIDE · 2 OF 5",
+        title: "Save a feature once",
+        copy: "Keep the parent, feature labels, summaries, and people overrides together for reuse.",
+      },
+      {
+        target: "global",
+        kicker: "QUICK GUIDE · 3 OF 5",
+        title: "Set defaults for every ticket",
+        copy: "Global defaults prefill every new ticket. Feature settings can override them when needed.",
+      },
+      {
+        target: "parent",
+        kicker: "QUICK GUIDE · 4 OF 5",
+        title: "Resolve the parent",
+        copy: "Enter an Epic, Story, Improvement, or Bug. Epic children are merged into one searchable parent list.",
+      },
+      {
+        target: "ticket",
+        kicker: "QUICK GUIDE · 5 OF 5",
+        title: "Review before Jira writes",
+        copy: "Choose FE or BE, check the generated bundle, then create only after the preview is correct.",
+      },
+    ];
     this.busy = false;
   }
 
@@ -94,6 +129,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.loadConnection();
     this.bindActions();
     this.initializeDates();
+    this.initializeTutorial();
     void this.refreshPatStatus();
     void this.initializeFeatureStorage();
   }
@@ -146,18 +182,18 @@ export class TicketTemplateCreateTool extends BaseTool {
       const scope = container.dataset.peopleScope || "feature";
       const fields = stream === "common" ? [["sa-ad-lead", "AD / SA Lead Jira user *"], ["sa-ad-sub-leads", "AD / SA Sub-Lead Jira user(s) *"]] : PEOPLE_FIELDS;
       const prefix = scope === "global" ? "global-" : "";
-      container.innerHTML = fields.map(
-        ([field, label]) => {
+      container.innerHTML = fields
+        .map(([field, label]) => {
           const fieldName = stream === "common" ? `${prefix}${field}` : `${prefix}${stream}-${field}`;
-          return `
-          <label class="ttc-field ttc-lookup-field">
-            <span>${label}</span>
-            <input data-field="${fieldName}" data-user-lookup type="text" autocomplete="off" spellcheck="false" placeholder="${field.endsWith("sub-leads") ? "Type a name, comma separated" : "Find by Jira name"}" />
-            <div class="ttc-lookup-menu" data-lookup-menu role="listbox" hidden></div>
-          </label>
-        `;
-        },
-      ).join("");
+          return lookupInput({
+            field: fieldName,
+            label,
+            lookup: "user",
+            multiple: field.endsWith("sub-leads"),
+            placeholder: field.endsWith("sub-leads") ? "Add people…" : "Find a Jira user…",
+          });
+        })
+        .join("");
     });
   }
 
@@ -299,6 +335,12 @@ export class TicketTemplateCreateTool extends BaseTool {
   }
 
   handleComboboxKeydown(event) {
+    const tutorial = this.container.querySelector("[data-tutorial]");
+    if (event.key === "Escape" && tutorial && !tutorial.hidden) {
+      event.preventDefault();
+      this.closeTutorial();
+      return;
+    }
     const lookupInput = event.target.closest?.("[data-user-lookup], [data-label-lookup]");
     if (lookupInput) {
       const menu = this.lookupMenu(lookupInput);
@@ -393,11 +435,28 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements.featureDuplicate.addEventListener("click", () => void this.duplicateFeature());
     this.elements.featureDelete.addEventListener("click", () => void this.deleteFeature());
     this.elements.globalSave.addEventListener("click", () => void this.saveGlobalDefaults());
+    this.container.querySelector("[data-tutorial-trigger]")?.addEventListener("click", () => this.openTutorial());
+    this.container.querySelector("[data-tutorial-close]")?.addEventListener("click", () => this.closeTutorial());
+    this.container.querySelector("[data-tutorial-back]")?.addEventListener("click", () => this.moveTutorial(-1));
+    this.container.querySelector("[data-tutorial-next]")?.addEventListener("click", () => this.moveTutorial(1));
     this.elements.openSettings.addEventListener("click", () => {
       if (window.app?.router?.navigate) window.app.router.navigate("settings");
       else window.location.hash = "#settings";
     });
     this.container.addEventListener("click", (event) => {
+      if (!event.target.closest("[data-tutorial], [data-tutorial-trigger]")) this.closeTutorial();
+      const remove = event.target.closest("[data-lookup-remove]");
+      if (remove) {
+        const input = remove.closest(".ttc-lookup-field")?.querySelector("[data-lookup-input]");
+        if (input) {
+          this.removeLookupValue(input, remove.dataset.lookupValue || "");
+          this.updateDateHint();
+          this.renderCreatePreview();
+          this.renderOverrideNotice();
+          input.focus();
+        }
+        return;
+      }
       const option = event.target.closest("[data-combobox-option], [data-lookup-option]");
       if (option) {
         if (option.matches("[data-combobox-option]")) this.chooseComboboxOption(option);
@@ -414,7 +473,7 @@ export class TicketTemplateCreateTool extends BaseTool {
         this.toggleCombobox(trigger.closest("[data-combobox]"));
         return;
       }
-      if (!event.target.closest("[data-combobox], [data-lookup-menu], [data-user-lookup], [data-label-lookup]")) {
+      if (!event.target.closest("[data-combobox], [data-lookup-control], [data-lookup-menu], [data-user-lookup], [data-label-lookup]")) {
         this.closeComboboxes();
         this.closeLookupMenus();
       }
@@ -434,6 +493,16 @@ export class TicketTemplateCreateTool extends BaseTool {
         this.filterCombobox(wrapper, event.target.value);
         return;
       }
+      if (event.target?.dataset?.lookupInput !== undefined) {
+        this.syncLookupField(event.target);
+        if (["start-offset-days", "deadline-offset-days"].includes(event.target?.dataset?.field)) this.applyDateRule();
+        this.updateDateHint();
+        this.renderCreatePreview();
+        this.renderOverrideNotice();
+        if (event.target.hasAttribute("data-user-lookup")) this.scheduleUserLookup(event.target);
+        if (event.target.hasAttribute("data-label-lookup")) this.scheduleLabelLookup(event.target);
+        return;
+      }
       if (event.target?.dataset?.field === "parent-sources") this.resetParentResolution();
       if (["start-offset-days", "deadline-offset-days"].includes(event.target?.dataset?.field)) this.applyDateRule();
       this.updateDateHint();
@@ -442,6 +511,67 @@ export class TicketTemplateCreateTool extends BaseTool {
       if (event.target?.hasAttribute?.("data-user-lookup")) this.scheduleUserLookup(event.target);
       if (event.target?.hasAttribute?.("data-label-lookup")) this.scheduleLabelLookup(event.target);
     });
+  }
+
+  initializeTutorial() {
+    try {
+      if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "true") return;
+    } catch (_) {
+      // Private browsing or a restricted webview may deny local storage; help remains available manually.
+    }
+    this.openTutorial(0, true);
+  }
+
+  openTutorial(step = 0, firstUse = false) {
+    const panel = this.container.querySelector("[data-tutorial]");
+    if (!panel) return;
+    this.tutorialStep = Math.min(Math.max(Number(step) || 0, 0), this.tutorialSteps.length - 1);
+    if (firstUse) {
+      try {
+        localStorage.setItem(TUTORIAL_STORAGE_KEY, "true");
+      } catch (_) {
+        // The tutorial still works for this session when persistence is unavailable.
+      }
+    }
+    panel.hidden = false;
+    this.renderTutorialStep();
+  }
+
+  closeTutorial() {
+    const panel = this.container.querySelector("[data-tutorial]");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    this.container.querySelectorAll(".ttc-tutorial-target").forEach((target) => target.classList.remove("ttc-tutorial-target"));
+    if (panel.contains(document.activeElement)) this.container.querySelector("[data-tutorial-trigger]")?.focus();
+  }
+
+  moveTutorial(delta) {
+    const nextStep = this.tutorialStep + delta;
+    if (nextStep < 0) return;
+    if (nextStep >= this.tutorialSteps.length) {
+      this.closeTutorial();
+      return;
+    }
+    this.openTutorial(nextStep);
+  }
+
+  renderTutorialStep() {
+    const panel = this.container.querySelector("[data-tutorial]");
+    const step = this.tutorialSteps[this.tutorialStep];
+    if (!panel || !step) return;
+    panel.querySelector("[data-tutorial-kicker]").textContent = step.kicker;
+    panel.querySelector("[data-tutorial-title]").textContent = step.title;
+    panel.querySelector("[data-tutorial-copy]").textContent = step.copy;
+    const back = panel.querySelector("[data-tutorial-back]");
+    const next = panel.querySelector("[data-tutorial-next]");
+    back.disabled = this.tutorialStep === 0;
+    next.textContent = this.tutorialStep === this.tutorialSteps.length - 1 ? "Done" : "Next";
+    this.container.querySelectorAll(".ttc-tutorial-target").forEach((target) => target.classList.remove("ttc-tutorial-target"));
+    const target = this.container.querySelector(`[data-tutorial-target="${step.target}"]`);
+    if (target && !target.closest("[hidden]")) {
+      target.classList.add("ttc-tutorial-target");
+      target.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    }
   }
 
   initializeDates() {
@@ -459,6 +589,59 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   field(name) {
     return this.container.querySelector(`[data-field="${name}"]`);
+  }
+
+  lookupInputForField(fieldName) {
+    return this.field(fieldName)?.closest(".ttc-lookup-field")?.querySelector("[data-lookup-input]") || null;
+  }
+
+  setLookupValue(fieldName, value) {
+    const hidden = this.field(fieldName);
+    const input = this.lookupInputForField(fieldName);
+    if (!hidden?.hasAttribute("data-lookup-value") || !input) return;
+    const values = splitValues(Array.isArray(value) ? value.join(", ") : value);
+    const field = input.closest(".ttc-lookup-field");
+    const committed = field?.querySelector("[data-lookup-committed]");
+    if (committed) committed.value = values.join(", ");
+    hidden.value = values.join(", ");
+    input.value = "";
+    this.renderLookupChips(input);
+  }
+
+  syncLookupField(input) {
+    const field = input.closest(".ttc-lookup-field");
+    const hidden = field?.querySelector("[data-lookup-value][data-field]");
+    const committed = field?.querySelector("[data-lookup-committed]");
+    if (!field || !hidden || !committed) return;
+    hidden.value = [...splitValues(committed.value), ...splitValues(input.value)].join(", ");
+    this.renderLookupChips(input);
+  }
+
+  renderLookupChips(input) {
+    const field = input.closest(".ttc-lookup-field");
+    const chips = field?.querySelector("[data-lookup-chips]");
+    const committed = field?.querySelector("[data-lookup-committed]");
+    if (!chips || !committed) return;
+    const displayValues = this.lookupDisplayValues.get(input) || new Map();
+    const isUser = input.hasAttribute("data-user-lookup");
+    chips.innerHTML = splitValues(committed.value)
+      .map((value) => {
+        const display = displayValues.get(value) || { label: isUser ? "Jira user" : value, detail: isUser ? value : "" };
+        return `<span class="ttc-lookup-chip" data-lookup-chip><span class="ttc-lookup-chip-copy"><strong>${this.escapeHtml(display.label)}</strong>${display.detail ? `<small>(${this.escapeHtml(display.detail)})</small>` : ""}</span><button type="button" data-lookup-remove data-lookup-value="${this.escapeHtml(value)}" aria-label="Remove ${this.escapeHtml(display.label)}">×</button></span>`;
+      })
+      .join("");
+  }
+
+  removeLookupValue(input, value) {
+    const field = input.closest(".ttc-lookup-field");
+    const hidden = field?.querySelector("[data-lookup-value][data-field]");
+    const committed = field?.querySelector("[data-lookup-committed]");
+    if (!hidden || !committed) return;
+    const values = splitValues(committed.value).filter((candidate) => candidate !== value);
+    committed.value = values.join(", ");
+    hidden.value = [...values, ...splitValues(input.value)].join(", ");
+    this.lookupDisplayValues.get(input)?.delete(value);
+    this.renderLookupChips(input);
   }
 
   selectedStreams() {
@@ -820,7 +1003,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.field("summary-mobile").value = "";
     this.field("summary-web").value = "";
     this.field("summary-be").value = "";
-    this.field("feature-labels").value = "";
+    this.setLookupValue("feature-labels", []);
     this.field("description").value = "";
     this.field("confluence-page").value = "";
     this.field("be-component").value = "API";
@@ -936,6 +1119,10 @@ export class TicketTemplateCreateTool extends BaseTool {
     const set = (name, value) => {
       const element = this.field(name);
       if (element && value !== undefined && value !== null) {
+        if (element.dataset.lookupValue !== undefined) {
+          this.setLookupValue(name, value);
+          return;
+        }
         element.value = Array.isArray(value) ? value.join(", ") : value;
         if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
       }
@@ -978,6 +1165,10 @@ export class TicketTemplateCreateTool extends BaseTool {
     const set = (name, value) => {
       const element = this.field(name);
       if (element && value !== undefined && value !== null) {
+        if (element.dataset.lookupValue !== undefined) {
+          this.setLookupValue(name, value);
+          return;
+        }
         element.value = Array.isArray(value) ? value.join(", ") : value;
         if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
       }
@@ -1035,12 +1226,13 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   lookupQuery(input) {
     const value = input.value || "";
-    if (input.hasAttribute("data-user-lookup") && input.dataset.field.endsWith("sub-leads")) return value.split(/[\n,]/).pop().trim();
+    const fieldName = input.dataset.lookupField || input.dataset.field || "";
+    if (input.hasAttribute("data-user-lookup") && fieldName.endsWith("sub-leads")) return value.split(/[\n,]/).pop().trim();
     return value.split(/[\n,]/).pop().trim();
   }
 
   scheduleUserLookup(input) {
-    const key = `user:${input.dataset.field}`;
+    const key = `user:${input.dataset.lookupField || input.dataset.field}`;
     clearTimeout(this.lookupTimers.get(key));
     const timer = setTimeout(async () => {
       const query = this.lookupQuery(input);
@@ -1060,7 +1252,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   }
 
   scheduleLabelLookup(input) {
-    const key = `label:${input.dataset.field}`;
+    const key = `label:${input.dataset.lookupField || input.dataset.field}`;
     clearTimeout(this.lookupTimers.get(key));
     const timer = setTimeout(async () => {
       const query = this.lookupQuery(input);
@@ -1157,16 +1349,36 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   chooseLookupOption(option) {
     const field = option.closest(".ttc-lookup-field");
-    const input = field?.querySelector("[data-user-lookup], [data-label-lookup]");
+    const input = field?.querySelector("[data-lookup-input], [data-user-lookup], [data-label-lookup]");
     if (!input) return;
     const lookupType = input.hasAttribute("data-user-lookup") ? "user" : "label";
-    const lookupKey = `${lookupType}:${input.dataset.field}`;
+    const fieldName = input.dataset.lookupField || input.dataset.field || field?.querySelector("[data-field]")?.dataset.field || "";
+    const lookupKey = `${lookupType}:${fieldName}`;
     clearTimeout(this.lookupTimers.get(lookupKey));
     this.lookupTimers.delete(lookupKey);
     const value = option.dataset.lookupValue || "";
-    const current = input.value || "";
-    const separatorIndex = Math.max(current.lastIndexOf(","), current.lastIndexOf("\n"));
-    input.value = separatorIndex >= 0 ? `${current.slice(0, separatorIndex + 1)} ${value}` : value;
+    const lookupValue = field?.querySelector("[data-lookup-value][data-field]");
+    const committed = field?.querySelector("[data-lookup-committed]");
+    if (lookupValue && committed) {
+      const isMultiple = field.dataset.lookupMultiple === "true";
+      const typedValues = splitValues(input.value);
+      const typedBeforeActive = isMultiple ? typedValues.slice(0, -1) : [];
+      const values = isMultiple ? [...splitValues(committed.value), ...typedBeforeActive, value] : [value];
+      committed.value = splitValues(values).join(", ");
+      lookupValue.value = committed.value;
+      input.value = "";
+      const displayValues = this.lookupDisplayValues.get(input) || new Map();
+      displayValues.set(value, {
+        label: option.querySelector("strong")?.textContent?.trim() || option.textContent.trim() || value,
+        detail: input.hasAttribute("data-user-lookup") ? option.querySelector("small")?.textContent?.trim() || value : "",
+      });
+      this.lookupDisplayValues.set(input, displayValues);
+      this.renderLookupChips(input);
+    } else {
+      const current = input.value || "";
+      const separatorIndex = Math.max(current.lastIndexOf(","), current.lastIndexOf("\n"));
+      input.value = separatorIndex >= 0 ? `${current.slice(0, separatorIndex + 1)} ${value}` : value;
+    }
     this.closeLookupMenus();
     this.updateDateHint();
     this.renderCreatePreview();

@@ -3,6 +3,7 @@ export const CATEGORIES = {
   GENERAL: "general",
   CONFIG: "config",
   JENKINS: "jenkins",
+  JIRA: "jira",
 };
 
 // Normalize raw category strings to a known set
@@ -16,6 +17,9 @@ export function normalizeCategory(value) {
   const jenkinsAliases = ["jenkins"];
   if (jenkinsAliases.includes(v)) return CATEGORIES.JENKINS;
 
+  const jiraAliases = ["jira"];
+  if (jiraAliases.includes(v)) return CATEGORIES.JIRA;
+
   return CATEGORIES.GENERAL;
 }
 
@@ -25,6 +29,7 @@ export function categorizeTool(tool) {
   const base = normalizeCategory(tool.category);
   if (base === CATEGORIES.CONFIG) return CATEGORIES.CONFIG;
   if (base === CATEGORIES.JENKINS) return CATEGORIES.JENKINS;
+  if (base === CATEGORIES.JIRA) return CATEGORIES.JIRA;
 
   const id = (tool.id || "").toLowerCase();
   const name = (tool.name || "").toLowerCase();

@@ -139,7 +139,7 @@
     },
     {
       "id": "ticket-template-create",
-      "name": "Ticket Template Create",
+      "name": "Ticket Template",
       "category": "jira",
       "icon": "ticket-template",
       "showInSidebar": true,

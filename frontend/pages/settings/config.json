@@ -166,7 +166,7 @@
           "label": "Jira URL",
           "type": "string",
           "default": "https://jira.corp.devmandiri.co.id",
-          "description": "Jira Data Center base URL used by Ticket Template Create.",
+          "description": "Jira Data Center base URL used by Ticket Template.",
           "validation": {
             "required": true,
             "pattern": "^https://"
