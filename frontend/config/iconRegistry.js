@@ -17,6 +17,7 @@ import { getIconSvg as getRunQueryIconSvg } from "../tools/run-query/icon.js";
 import { getIconSvg as getSplunkIconSvg } from "../tools/splunk-template/icon.js";
 import { getIconSvg as getSqlInIconSvg } from "../tools/sql-in-clause/icon.js";
 import { getIconSvg as getTlvIconSvg } from "../tools/tlv-viewer/icon.js";
+import { getIconSvg as getTicketTemplateIconSvg } from "../tools/ticket-template-create/icon.js";
 import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
 
 const ICON_REGISTRY = new Map([
@@ -39,6 +40,7 @@ const ICON_REGISTRY = new Map([
   ["splunk-template", getSplunkIconSvg],
   ["sql-in", getSqlInIconSvg],
   ["tlv", getTlvIconSvg],
+  ["ticket-template", getTicketTemplateIconSvg],
   ["uuid", getUuidIconSvg],
 ]);
 

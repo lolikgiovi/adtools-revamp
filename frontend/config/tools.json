@@ -12,6 +12,12 @@
       "requiresTauri": true
     },
     {
+      "id": "jira",
+      "name": "Jira",
+      "order": 17,
+      "requiresTauri": true
+    },
+    {
       "id": "general",
       "name": "General",
       "order": 20
@@ -130,6 +136,17 @@
       "enabled": true,
       "requiresTauri": true,
       "order": 56
+    },
+    {
+      "id": "ticket-template-create",
+      "name": "Ticket Template Create",
+      "category": "jira",
+      "icon": "ticket-template",
+      "showInSidebar": true,
+      "showOnHome": true,
+      "enabled": true,
+      "requiresTauri": true,
+      "order": 10
     },
 
     {

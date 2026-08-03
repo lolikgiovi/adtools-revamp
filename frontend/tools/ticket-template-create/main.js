@@ -1,0 +1,1292 @@
+import { BaseTool } from "../../core/BaseTool.js";
+import {
+  JiraDiscoveryService,
+  BE_COMPONENTS,
+  addDaysIso,
+  buildSummary,
+  createDefaultGlobalDefaults,
+  formatFieldValue,
+  labelsForStream,
+  normalizeLabels,
+  splitValues,
+  todayIso,
+  GLOBAL_DEFAULTS_KEY,
+} from "./service.js";
+import { TICKET_TEMPLATE_CREATE_TEMPLATE } from "./template.js";
+import { TicketTemplateStorage } from "./template-storage.js";
+import { getIconSvg } from "./icon.js";
+import "./styles.css";
+
+const PEOPLE_FIELDS = [
+  ["developer", "Developer Jira user *"],
+  ["developer-lead", "Developer Lead Jira user *"],
+  ["developer-sub-leads", "Developer Sub-Lead Jira user(s) *"],
+];
+
+const SHARED_DEFAULT_FIELDS = [
+  ["priority", "global-priority", "priorityId"],
+  ["ad-story-point", "global-ad-story-point", "adStoryPointId"],
+  ["dev-story-point", "global-dev-story-point", "devStoryPointId"],
+  ["release", "global-release", "releaseId"],
+  ["squad", "global-squad", "squadId"],
+  ["task-trigger", "global-task-trigger", "taskTriggerId"],
+];
+
+const PEOPLE_STREAMS = ["ios", "android", "web", "be"];
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function globalDefaultsFromStorage(value) {
+  const defaults = createDefaultGlobalDefaults();
+  if (!value || typeof value !== "object") return defaults;
+  const merged = {
+    ...defaults,
+    ...value,
+    labels: { ...defaults.labels, ...value.labels, be: { ...defaults.labels.be, ...value.labels?.be } },
+    people: { ...defaults.people, ...value.people, common: { ...defaults.people.common, ...value.people?.common }, streams: { ...defaults.people.streams } },
+    shared: { ...defaults.shared, ...value.shared },
+    dateRule: { ...defaults.dateRule, ...value.dateRule },
+  };
+  PEOPLE_STREAMS.forEach((stream) => {
+    merged.people.streams[stream] = { ...defaults.people.streams[stream], ...(value.people?.streams?.[stream] || {}) };
+  });
+  return merged;
+}
+
+export class TicketTemplateCreateTool extends BaseTool {
+  constructor(eventBus) {
+    super({
+      id: "ticket-template-create",
+      name: "Ticket Template Create",
+      description: "Create consistent Jira FE and BE subtasks from reusable templates",
+      icon: "ticket-template",
+      category: "jira",
+      eventBus,
+    });
+    this.service = new JiraDiscoveryService();
+    this.templateStorage = new TicketTemplateStorage();
+    this.elements = {};
+    this.discovery = null;
+    this.parentResolution = null;
+    this.features = [];
+    this.currentFeature = null;
+    this.globalDefaults = createDefaultGlobalDefaults();
+    this.lookupTimers = new Map();
+    this.lookupActiveIndexes = new Map();
+    this.comboboxStates = new Map();
+    this.busy = false;
+  }
+
+  getIconSvg() {
+    return getIconSvg();
+  }
+
+  render() {
+    return TICKET_TEMPLATE_CREATE_TEMPLATE;
+  }
+
+  onMount() {
+    this.bindElements();
+    this.renderPeopleFields();
+    this.initializeComboboxes();
+    this.loadConnection();
+    this.bindActions();
+    this.initializeDates();
+    void this.refreshPatStatus();
+    void this.initializeFeatureStorage();
+  }
+
+  bindElements() {
+    const query = (selector) => this.container.querySelector(selector);
+    this.elements = {
+      baseUrl: query("#ttc-base-url"),
+      projectKey: query("#ttc-project-key"),
+      allowInvalidTls: query("#ttc-allow-invalid-tls"),
+      patStatus: query("#ttc-pat-status"),
+      jiraSyncStatus: query("#ttc-jira-sync-status"),
+      jiraSyncDetail: query("#ttc-jira-sync-detail"),
+      discover: query("#ttc-discover"),
+      openSettings: query("#ttc-open-settings"),
+      error: query("#ttc-error"),
+      workflow: query("#ttc-create-workflow"),
+      workflowEmpty: query("#ttc-workflow-empty"),
+      parentInput: query("#ttc-parent-input"),
+      resolveParent: query("#ttc-resolve-parent"),
+      parentResult: query("#ttc-parent-result"),
+      parentSource: query("#ttc-parent-source"),
+      parentSelect: query("#ttc-parent-select"),
+      ticketForm: query("#ttc-ticket-form"),
+      preview: query("#ttc-create-preview"),
+      create: query("#ttc-create"),
+      createStatus: query("#ttc-create-status"),
+      dateHint: query("#ttc-date-hint"),
+      contractDetails: query("#ttc-contract-details"),
+      globalStatus: query("#ttc-global-status"),
+      globalSave: query("#ttc-global-save"),
+      featureStatus: query("#ttc-feature-status"),
+      featureSelect: query("#ttc-feature-select"),
+      featureName: query("#ttc-feature-name"),
+      featureNew: query("#ttc-feature-new"),
+      featureSave: query("#ttc-feature-save"),
+      featureDuplicate: query("#ttc-feature-duplicate"),
+      featureDelete: query("#ttc-feature-delete"),
+      results: query("#ttc-results"),
+      resultTime: query("#ttc-result-time"),
+      summary: query("#ttc-summary"),
+      issueTypes: query("#ttc-issue-types"),
+      overrideNotice: query("#ttc-override-notice"),
+    };
+  }
+
+  renderPeopleFields() {
+    this.container.querySelectorAll("[data-people-stream]").forEach((container) => {
+      const stream = container.dataset.peopleStream;
+      const scope = container.dataset.peopleScope || "feature";
+      const fields = stream === "common" ? [["sa-ad-lead", "AD / SA Lead Jira user *"], ["sa-ad-sub-leads", "AD / SA Sub-Lead Jira user(s) *"]] : PEOPLE_FIELDS;
+      const prefix = scope === "global" ? "global-" : "";
+      container.innerHTML = fields.map(
+        ([field, label]) => {
+          const fieldName = stream === "common" ? `${prefix}${field}` : `${prefix}${stream}-${field}`;
+          return `
+          <label class="ttc-field ttc-lookup-field">
+            <span>${label}</span>
+            <input data-field="${fieldName}" data-user-lookup type="text" autocomplete="off" spellcheck="false" placeholder="${field.endsWith("sub-leads") ? "Type a name, comma separated" : "Find by Jira name"}" />
+            <div class="ttc-lookup-menu" data-lookup-menu role="listbox" hidden></div>
+          </label>
+        `;
+        },
+      ).join("");
+    });
+  }
+
+  initializeComboboxes() {
+    this.container.querySelectorAll("[data-combobox]").forEach((wrapper) => {
+      const field = wrapper.dataset.comboboxField;
+      this.comboboxStates.set(field, { options: [], filtered: [], activeIndex: -1, placeholder: "Choose an option", disabled: false });
+    });
+    this.setComboboxOptions("feature-select", [{ value: "", label: "New feature" }], { selectedValue: "", placeholder: "New feature" });
+    this.setComboboxOptions("parent-select", [], { placeholder: "Find eligible parents first", disabled: true });
+    this.setComboboxOptions(
+      "be-component",
+      Object.keys(BE_COMPONENTS).map((component) => ({ value: component, label: component })),
+      { selectedValue: "API", placeholder: "API" },
+    );
+    ["ad-story-point", "dev-story-point", "priority", "release", "squad", "task-trigger", "global-ad-story-point", "global-dev-story-point", "global-priority", "global-release", "global-squad", "global-task-trigger"].forEach((field) => {
+      this.setComboboxOptions(field, [], { placeholder: "Load Jira metadata first", disabled: true });
+    });
+  }
+
+  combobox(field) {
+    return this.container.querySelector(`[data-combobox-field="${field}"]`);
+  }
+
+  setComboboxOptions(field, options = [], { selectedValue, placeholder = "Choose an option", disabled = false, emptyMessage } = {}) {
+    const wrapper = this.combobox(field);
+    if (!wrapper) return;
+    const state = this.comboboxStates.get(field) || { activeIndex: -1 };
+    const valueElement = wrapper.querySelector("[data-combobox-value]");
+    const currentValue = selectedValue !== undefined ? String(selectedValue ?? "") : valueElement?.value || "";
+    state.options = options.map((option) => ({ value: String(option.value ?? ""), label: String(option.label ?? option.value ?? "") }));
+    state.placeholder = placeholder;
+    state.disabled = disabled;
+    state.fallbackLabel = disabled && currentValue ? "Saved Jira value · load metadata to verify" : "";
+    state.emptyMessage = emptyMessage || (disabled ? "Load Jira metadata to enable options." : "No matching options");
+    this.comboboxStates.set(field, state);
+    if (valueElement) valueElement.value = currentValue;
+    const selected = state.options.find((option) => option.value === currentValue);
+    wrapper.querySelector("[data-combobox-search]").value = selected?.label || (currentValue ? state.fallbackLabel || currentValue : "");
+    const trigger = wrapper.querySelector("[data-combobox-trigger]");
+    trigger.disabled = disabled;
+    trigger.setAttribute("aria-disabled", String(disabled));
+    const search = wrapper.querySelector("[data-combobox-search]");
+    search.disabled = disabled;
+    search.setAttribute("aria-disabled", String(disabled));
+    wrapper.classList.toggle("is-disabled", disabled);
+    this.filterCombobox(wrapper, "");
+  }
+
+  syncComboboxValue(field) {
+    const wrapper = this.combobox(field);
+    const state = this.comboboxStates.get(field);
+    const valueElement = wrapper?.querySelector("[data-combobox-value]");
+    if (!wrapper || !state || !valueElement) return;
+    const selected = state.options.find((option) => option.value === valueElement.value);
+    const fallback = state.fallbackLabel || (state.disabled && valueElement.value ? "Saved Jira value · load metadata to verify" : valueElement.value);
+    wrapper.querySelector("[data-combobox-search]").value = selected?.label || (valueElement.value ? fallback : "");
+  }
+
+  filterCombobox(wrapper, query = "") {
+    if (!wrapper) return;
+    const field = wrapper.dataset.comboboxField;
+    const state = this.comboboxStates.get(field);
+    if (!state) return;
+    const normalizedQuery = String(query || "").trim().toLocaleLowerCase();
+    state.filtered = state.options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedQuery));
+    state.activeIndex = -1;
+    const options = wrapper.querySelector("[data-combobox-options]");
+    const heading = `<div class="ttc-combobox-options-header" aria-hidden="true">${this.escapeHtml(wrapper.dataset.comboboxHeading || "Options")}</div>`;
+    options.innerHTML = heading + (state.filtered.length
+      ? state.filtered
+          .map(
+            (option, index) =>
+              `<button class="ttc-combobox-option${index === state.activeIndex ? " is-active" : ""}" data-combobox-option data-value="${this.escapeHtml(option.value)}" type="button" role="option" aria-selected="${String(option.value === wrapper.querySelector("[data-combobox-value]").value)}"><span>${this.escapeHtml(option.label)}</span></button>`,
+          )
+          .join("")
+      : `<div class="ttc-combobox-empty">${this.escapeHtml(state.emptyMessage)}</div>`);
+  }
+
+  openCombobox(wrapper, { clearQuery = false } = {}) {
+    if (!wrapper || wrapper.classList.contains("is-disabled")) return;
+    const menu = wrapper.querySelector("[data-combobox-menu]");
+    this.closeComboboxes(wrapper);
+    menu.hidden = false;
+    const search = wrapper.querySelector("[data-combobox-search]");
+    const valueElement = wrapper.querySelector("[data-combobox-value]");
+    const state = this.comboboxStates.get(wrapper.dataset.comboboxField);
+    const selected = state?.options.find((option) => option.value === valueElement.value);
+    const showingSelection = selected?.label === search.value;
+    if (clearQuery || showingSelection) search.value = "";
+    this.filterCombobox(wrapper, search.value);
+    search.setAttribute("aria-expanded", "true");
+    wrapper.querySelector("[data-combobox-trigger]").setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => search.focus());
+  }
+
+  toggleCombobox(wrapper) {
+    if (!wrapper || wrapper.classList.contains("is-disabled")) return;
+    const menu = wrapper.querySelector("[data-combobox-menu]");
+    if (!menu.hidden) {
+      this.closeCombobox(wrapper);
+      return;
+    }
+    this.openCombobox(wrapper, { clearQuery: true });
+  }
+
+  closeCombobox(wrapper) {
+    if (!wrapper) return;
+    const menu = wrapper.querySelector("[data-combobox-menu]");
+    menu.hidden = true;
+    const search = wrapper.querySelector("[data-combobox-search]");
+    if (search) this.syncComboboxValue(wrapper.dataset.comboboxField);
+    if (search) search.setAttribute("aria-expanded", "false");
+    wrapper.querySelector("[data-combobox-trigger]").setAttribute("aria-expanded", "false");
+  }
+
+  closeComboboxes(except = null) {
+    this.container.querySelectorAll("[data-combobox]").forEach((wrapper) => {
+      if (wrapper !== except) this.closeCombobox(wrapper);
+    });
+  }
+
+  chooseComboboxOption(option) {
+    const wrapper = option.closest("[data-combobox]");
+    const field = wrapper?.dataset.comboboxField;
+    if (!wrapper || !field) return;
+    const valueElement = wrapper.querySelector("[data-combobox-value]");
+    valueElement.value = option.dataset.value || "";
+    wrapper.querySelector("[data-combobox-search]").value = option.textContent.trim() || "";
+    this.closeCombobox(wrapper);
+    if (field === "feature-select") void this.selectFeature(valueElement.value);
+    if (field === "be-component") {
+      const prefix = this.container.querySelector("[data-be-prefix]");
+      if (prefix) prefix.textContent = `[${valueElement.value || "API"}]`;
+    }
+    this.updateDateHint();
+    this.renderCreatePreview();
+    this.renderOverrideNotice();
+  }
+
+  handleComboboxKeydown(event) {
+    const lookupInput = event.target.closest?.("[data-user-lookup], [data-label-lookup]");
+    if (lookupInput) {
+      const menu = this.lookupMenu(lookupInput);
+      const options = this.lookupOptions(lookupInput);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeLookupMenus();
+        lookupInput.focus();
+        return;
+      }
+      if (!menu || menu.hidden || !options.length) return;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const currentIndex = this.lookupActiveIndexes?.get(lookupInput) ?? -1;
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        const nextIndex = Math.min(Math.max(currentIndex + delta, -1), options.length - 1);
+        this.setLookupActiveOption(lookupInput, nextIndex);
+        return;
+      }
+      if (event.key === "Enter") {
+        const activeIndex = this.lookupActiveIndexes?.get(lookupInput) ?? -1;
+        const selected = activeIndex >= 0 ? options[activeIndex] : null;
+        if (selected) {
+          event.preventDefault();
+          this.chooseLookupOption(selected);
+        }
+      }
+      return;
+    }
+
+    const trigger = event.target.closest("[data-combobox-trigger]");
+    if (trigger && ["Enter", " ", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      this.toggleCombobox(trigger.closest("[data-combobox]"));
+      return;
+    }
+    const search = event.target.closest("[data-combobox-search]");
+    if (!search) return;
+    const wrapper = search.closest("[data-combobox]");
+    const state = this.comboboxStates.get(wrapper.dataset.comboboxField);
+    if (!state) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const wasHidden = wrapper.querySelector("[data-combobox-menu]").hidden;
+      if (wasHidden) {
+        this.openCombobox(wrapper);
+        state.activeIndex = event.key === "ArrowDown" && state.filtered.length ? 0 : -1;
+        this.setComboboxActiveOption(wrapper, state.activeIndex);
+        return;
+      }
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = state.filtered.length ? Math.min(Math.max(state.activeIndex + delta, -1), state.filtered.length - 1) : -1;
+      state.activeIndex = nextIndex;
+      this.setComboboxActiveOption(wrapper, state.activeIndex);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this.closeCombobox(wrapper);
+      search.focus();
+      return;
+    }
+    if (event.key === "Enter" && state.activeIndex >= 0 && state.filtered[state.activeIndex]) {
+      event.preventDefault();
+      const selected = wrapper.querySelectorAll("[data-combobox-option]")[state.activeIndex];
+      if (selected) this.chooseComboboxOption(selected);
+    }
+  }
+
+  setComboboxActiveOption(wrapper, activeIndex) {
+    wrapper?.querySelectorAll("[data-combobox-option]").forEach((candidate, index) => {
+      const isActive = index === activeIndex;
+      candidate.classList.toggle("is-active", isActive);
+      if (isActive) candidate.scrollIntoView?.({ block: "nearest" });
+    });
+  }
+
+  loadConnection() {
+    const connection = this.service.loadConnection();
+    this.elements.baseUrl.value = connection.baseUrl;
+    this.elements.projectKey.value = connection.projectKey;
+    this.elements.allowInvalidTls.checked = connection.allowInvalidTls;
+  }
+
+  bindActions() {
+    this.elements.discover.addEventListener("click", () => void this.runDiscovery());
+    this.container.querySelector("[data-empty-discover]")?.addEventListener("click", () => void this.runDiscovery());
+    this.elements.resolveParent.addEventListener("click", () => void this.resolveParent());
+    this.elements.create.addEventListener("click", () => void this.createTickets());
+    this.elements.featureNew.addEventListener("click", () => this.newFeature());
+    this.elements.featureSave.addEventListener("click", () => void this.saveFeature());
+    this.elements.featureDuplicate.addEventListener("click", () => void this.duplicateFeature());
+    this.elements.featureDelete.addEventListener("click", () => void this.deleteFeature());
+    this.elements.globalSave.addEventListener("click", () => void this.saveGlobalDefaults());
+    this.elements.openSettings.addEventListener("click", () => {
+      if (window.app?.router?.navigate) window.app.router.navigate("settings");
+      else window.location.hash = "#settings";
+    });
+    this.container.addEventListener("click", (event) => {
+      const option = event.target.closest("[data-combobox-option], [data-lookup-option]");
+      if (option) {
+        if (option.matches("[data-combobox-option]")) this.chooseComboboxOption(option);
+        else this.chooseLookupOption(option);
+        return;
+      }
+      const searchInput = event.target.closest("[data-combobox-search]");
+      if (searchInput) {
+        this.openCombobox(searchInput.closest("[data-combobox]"));
+        return;
+      }
+      const trigger = event.target.closest("[data-combobox-trigger]");
+      if (trigger) {
+        this.toggleCombobox(trigger.closest("[data-combobox]"));
+        return;
+      }
+      if (!event.target.closest("[data-combobox], [data-lookup-menu], [data-user-lookup], [data-label-lookup]")) {
+        this.closeComboboxes();
+        this.closeLookupMenus();
+      }
+    });
+    this.container.addEventListener("keydown", (event) => this.handleComboboxKeydown(event));
+    this.container.addEventListener("change", (event) => {
+      const stream = event.target?.dataset?.streamToggle;
+      if (stream) this.toggleStream(stream, event.target.checked);
+      this.updateDateHint();
+      this.renderCreatePreview();
+      this.renderOverrideNotice();
+    });
+    this.container.addEventListener("input", (event) => {
+      if (event.target?.dataset?.comboboxSearch !== undefined) {
+        const wrapper = event.target.closest("[data-combobox]");
+        this.openCombobox(wrapper);
+        this.filterCombobox(wrapper, event.target.value);
+        return;
+      }
+      if (event.target?.dataset?.field === "parent-sources") this.resetParentResolution();
+      if (["start-offset-days", "deadline-offset-days"].includes(event.target?.dataset?.field)) this.applyDateRule();
+      this.updateDateHint();
+      this.renderCreatePreview();
+      this.renderOverrideNotice();
+      if (event.target?.hasAttribute?.("data-user-lookup")) this.scheduleUserLookup(event.target);
+      if (event.target?.hasAttribute?.("data-label-lookup")) this.scheduleLabelLookup(event.target);
+    });
+  }
+
+  initializeDates() {
+    this.applyDateRule();
+    this.updateDateHint();
+  }
+
+  applyDateRule() {
+    const startOffset = Number(this.field("start-offset-days")?.value || 0);
+    const deadlineOffset = Number(this.field("deadline-offset-days")?.value || 3);
+    const start = addDaysIso(todayIso(), Number.isFinite(startOffset) ? startOffset : 0);
+    this.field("start-date").value = start;
+    this.field("deadline").value = addDaysIso(start, Number.isFinite(deadlineOffset) ? deadlineOffset : 3);
+  }
+
+  field(name) {
+    return this.container.querySelector(`[data-field="${name}"]`);
+  }
+
+  selectedStreams() {
+    return [...this.container.querySelectorAll("[data-stream-toggle]:checked")].map((input) => input.dataset.streamToggle);
+  }
+
+  connection() {
+    return this.service.saveConnection(this.elements.baseUrl.value, this.elements.projectKey.value, this.elements.allowInvalidTls.checked);
+  }
+
+  async refreshPatStatus() {
+    try {
+      const configured = await this.service.hasPat();
+      this.elements.patStatus.dataset.state = configured ? "ready" : "missing";
+      this.elements.patStatus.textContent = configured ? "PAT configured" : "PAT required";
+      return configured;
+    } catch (_) {
+      this.elements.patStatus.dataset.state = "missing";
+      this.elements.patStatus.textContent = "PAT unavailable";
+      return false;
+    }
+  }
+
+  async runDiscovery() {
+    if (this.busy) return;
+    this.clearError();
+    if (!(await this.refreshPatStatus())) {
+      this.showInlineError("Add your Jira PAT in Settings before loading the form.");
+      return;
+    }
+    this.setBusy(true, "Loading Jira metadata…");
+    this.setJiraSyncStatus("checking", "Fetching Jira metadata", "Reading create fields, allowed values, and the PAT owner…");
+    try {
+      this.discovery = await this.service.discover({
+        ...this.connection(),
+      });
+      this.populateCreateOptions();
+      this.renderDiscovery(this.discovery);
+      this.applyGlobalDefaults();
+      if (this.currentFeature) this.applyFeature(this.currentFeature);
+      this.elements.workflow.hidden = false;
+      this.elements.workflowEmpty.hidden = true;
+      this.elements.contractDetails.hidden = false;
+      this.setJiraSyncStatus("ready", "Jira metadata loaded", `Fetched ${new Date().toLocaleString()}. Option filtering is local; user and label lookup fetches on typing.`);
+      this.showSuccess("Jira creation fields loaded.");
+      this.elements.parentInput.focus();
+    } catch (error) {
+      this.setJiraSyncStatus("missing", "Jira metadata unavailable", "Fix the connection or PAT, then try again.");
+      this.showInlineError(String(error || "Jira discovery failed."));
+    } finally {
+      this.setBusy(false);
+    }
+  }
+
+  setJiraSyncStatus(state, label, detail) {
+    if (this.elements.jiraSyncStatus) {
+      this.elements.jiraSyncStatus.dataset.state = state;
+      this.elements.jiraSyncStatus.textContent = label;
+    }
+    if (this.elements.jiraSyncDetail) this.elements.jiraSyncDetail.textContent = detail;
+  }
+
+  populateCreateOptions() {
+    const mappings = [
+      ["ad-story-point", "global-ad-story-point", "customfield_15313"],
+      ["dev-story-point", "global-dev-story-point", "customfield_15309"],
+      ["priority", "global-priority", "priority"],
+      ["release", "global-release", "customfield_11802"],
+      ["squad", "global-squad", "customfield_14903"],
+      ["task-trigger", "global-task-trigger", "customfield_14304"],
+    ];
+    mappings.forEach(([elementName, globalElementName, fieldId]) => {
+      const keepEmpty = elementName === "dev-story-point";
+      const metadata = this.findField(fieldId);
+      const options = (metadata?.allowed_values || []).filter((option) => option.disabled !== true);
+      const comboboxOptions = [
+        { value: "", label: keepEmpty ? "Use Jira default (0)" : "Choose…" },
+        ...options.map((option) => ({ value: option.id, label: formatFieldValue(option) })),
+      ];
+      [elementName, globalElementName].forEach((name) => {
+        this.setComboboxOptions(name, comboboxOptions, { placeholder: keepEmpty ? "Use Jira default (0)" : "Choose an option", disabled: !metadata });
+      });
+      if (elementName === "priority" && !this.globalDefaults.shared.priorityId) {
+        const low = options.find((option) => option.id === "4" || option.name === "Low" || option.value === "Low");
+        if (low) this.globalDefaults.shared.priorityId = low.id;
+      }
+      if (elementName === "task-trigger" && !this.globalDefaults.shared.taskTriggerId) {
+        const design = options.find((option) => option.value === "Design" || option.name === "Design");
+        if (design) this.globalDefaults.shared.taskTriggerId = design.id;
+      }
+    });
+    this.applyGlobalDefaults();
+    if (this.currentFeature) this.applyFeature(this.currentFeature);
+  }
+
+  findField(fieldId) {
+    return (this.discovery?.issue_types || []).flatMap((issueType) => issueType.fields || []).find((field) => field.id === fieldId);
+  }
+
+  issueTypeId(stream) {
+    const target = stream === "be" ? "be-sub-task" : "fe-sub-task";
+    return (this.discovery?.issue_types || []).find((issueType) => issueType.name.toLowerCase() === target)?.id || "";
+  }
+
+  async resolveParent() {
+    if (!this.discovery || this.busy) return;
+    this.clearError();
+    const issueKeys = splitValues(this.field("parent-sources")?.value);
+    if (!issueKeys.length) {
+      this.showInlineError("Enter at least one Epic, Story, Improvement, or Bug.");
+      return;
+    }
+    this.setBusy(true, "Looking up parent…");
+    try {
+      this.parentResolution = await this.service.resolveParents({
+        ...this.connection(),
+        issueKeys,
+      });
+      const { inputs, candidates } = this.parentResolution;
+      this.elements.parentSource.textContent = `${inputs.map((input) => `${input.key} · ${input.issue_type}`).join(" + ")} → ${candidates.length} eligible parent${candidates.length === 1 ? "" : "s"}`;
+      this.setComboboxOptions(
+        "parent-select",
+        candidates.map((candidate) => ({
+          value: candidate.key,
+          label: `${candidate.key} · ${candidate.issue_type} · ${candidate.summary}${candidate.source_epic_key ? ` · From ${candidate.source_epic_key}` : ""} (${candidate.status})`,
+        })),
+        { placeholder: candidates.length ? "Choose an eligible parent" : "No eligible parent found", disabled: candidates.length === 0 },
+      );
+      this.elements.parentResult.hidden = false;
+      this.elements.ticketForm.hidden = candidates.length === 0;
+      this.renderCreatePreview();
+    } catch (error) {
+      this.showInlineError(String(error || "Parent lookup failed."));
+    } finally {
+      this.setBusy(false);
+    }
+  }
+
+  resetParentResolution() {
+    this.parentResolution = null;
+    if (this.elements.parentResult) this.elements.parentResult.hidden = true;
+    if (this.elements.ticketForm) this.elements.ticketForm.hidden = true;
+    this.setComboboxOptions("parent-select", [], { placeholder: "Find eligible parents first", disabled: true });
+  }
+
+  toggleStream(stream, enabled) {
+    if (enabled) {
+      if (stream === "be") {
+        ["ios", "android", "web"].forEach((other) => this.setStreamChecked(other, false));
+      } else {
+        this.setStreamChecked("be", false);
+        if (stream === "web") {
+          ["ios", "android"].forEach((other) => this.setStreamChecked(other, false));
+        } else {
+          this.setStreamChecked("web", false);
+        }
+      }
+    }
+    this.refreshStreamCards();
+  }
+
+  refreshStreamCards() {
+    const mobileSummary = this.container.querySelector("[data-mobile-summary]");
+    if (mobileSummary) mobileSummary.hidden = !this.selectedStreams().some((selected) => selected === "ios" || selected === "android");
+    const modeNote = this.container.querySelector("#ttc-mode-note");
+    if (modeNote) modeNote.textContent = this.selectedStreams().includes("be") ? "BE mode creates one backend ticket." : "FE mode supports iOS, Android, iOS + Android, or Web alone.";
+    ["ios", "android", "web", "be"].forEach((name) => {
+      const current = this.container.querySelector(`[data-stream-toggle="${name}"]`)?.checked;
+      const streamCard = this.container.querySelector(`[data-stream-card="${name}"]`);
+      if (streamCard) streamCard.hidden = !current;
+    });
+  }
+
+  setStreamChecked(stream, checked) {
+    const toggle = this.container.querySelector(`[data-stream-toggle="${stream}"]`);
+    if (toggle) toggle.checked = checked;
+  }
+
+  collectTickets() {
+    const streams = this.selectedStreams();
+    if (!streams.length) throw new Error("Select at least one ticket to create.");
+    if (streams.includes("be") && streams.length > 1) throw new Error("Choose either FE or BE mode, not both.");
+    if (streams.includes("web") && streams.length > 1) throw new Error("Web is a standalone FE mode. Deselect iOS and Android.");
+    const shared = {
+      priorityId: this.field("priority").value || null,
+      adStoryPointId: this.requiredValue("ad-story-point", "AD Story Point"),
+      devStoryPointId: this.field("dev-story-point").value || null,
+      squadId: this.requiredValue("squad", "Squad"),
+      releaseId: this.requiredValue("release", "Release Number"),
+      startDate: this.requiredValue("start-date", "Start Development On"),
+      deadline: this.requiredValue("deadline", "Deadline"),
+      saAdLead: this.requiredValue("sa-ad-lead", "SA/AD Lead"),
+      saAdSubLeads: splitValues(this.requiredValue("sa-ad-sub-leads", "SA/AD Sub-Lead")),
+      taskTriggerId: this.requiredValue("task-trigger", "Task Trigger By"),
+      description: this.field("description").value.trim(),
+      confluencePage: this.field("confluence-page").value.trim(),
+    };
+    const featureLabels = normalizeLabels(this.field("feature-labels").value);
+    return streams.map((stream) => {
+      const component = this.field("be-component").value;
+      const summaryField = stream === "ios" || stream === "android" ? "summary-mobile" : `summary-${stream}`;
+      const summary = buildSummary(stream, this.field(summaryField).value, component);
+      const labels = labelsForStream(this.globalDefaults, stream, component, featureLabels);
+      if (!labels.length) throw new Error("At least one label is required.");
+      return {
+        issueTypeId: this.issueTypeId(stream),
+        stream,
+        summary,
+        labels,
+        ...shared,
+        developer: this.requiredValue(`${stream}-developer`, `${stream} Developer`),
+        developerLead: this.requiredValue(`${stream}-developer-lead`, `${stream} Developer Lead`),
+        developerSubLeads: splitValues(this.requiredValue(`${stream}-developer-sub-leads`, `${stream} Developer Sub-Lead`)),
+      };
+    });
+  }
+
+  requiredValue(fieldName, label) {
+    const value = this.field(fieldName)?.value?.trim();
+    if (!value) throw new Error(`${label} is required.`);
+    return value;
+  }
+
+  renderCreatePreview() {
+    if (!this.elements.preview || this.elements.ticketForm.hidden) return;
+    const parent = this.elements.parentSelect.value;
+    const streams = this.selectedStreams();
+    const component = this.field("be-component").value;
+    this.elements.preview.innerHTML = streams.length
+      ? streams
+          .map((stream) => {
+            const summaryField = stream === "ios" || stream === "android" ? "summary-mobile" : `summary-${stream}`;
+            const body = this.field(summaryField).value.trim() || "Summary required";
+            const summary = body === "Summary required" ? body : buildSummary(stream, body, component);
+            const labels = labelsForStream(this.globalDefaults, stream, component, this.field("feature-labels").value);
+            return `<article><strong>${this.escapeHtml(summary)}</strong><span>Parent ${this.escapeHtml(parent || "not selected")}</span><small>${this.escapeHtml(labels.join(" · "))}</small></article>`;
+          })
+          .join("")
+      : '<div class="ttc-empty">Select at least one ticket.</div>';
+  }
+
+  updateDateHint() {
+    const start = this.field("start-date")?.value;
+    const deadline = this.field("deadline")?.value;
+    if (!start || !deadline) {
+      this.elements.dateHint.textContent = "";
+      return;
+    }
+    const startDate = new Date(`${start}T00:00:00`);
+    const deadlineDate = new Date(`${deadline}T00:00:00`);
+    const days = Math.round((deadlineDate - startDate) / 86_400_000);
+    const formatted = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(deadlineDate);
+    this.elements.dateHint.textContent = `${formatted} · ${days >= 0 ? `${days} more days` : `${Math.abs(days)} days before start`}`;
+  }
+
+  initializeGlobalDefaults() {
+    try {
+      const raw = localStorage.getItem(GLOBAL_DEFAULTS_KEY);
+      this.globalDefaults = globalDefaultsFromStorage(raw ? JSON.parse(raw) : null);
+      this.elements.globalStatus.dataset.state = "ready";
+      this.elements.globalStatus.textContent = "Local defaults ready";
+    } catch (error) {
+      this.globalDefaults = createDefaultGlobalDefaults();
+      this.elements.globalStatus.dataset.state = "missing";
+      this.elements.globalStatus.textContent = "Defaults unavailable";
+      this.showInlineError(String(error || "Unable to load global defaults."));
+    }
+    this.applyGlobalDefaults();
+  }
+
+  async initializeFeatureStorage() {
+    this.initializeGlobalDefaults();
+    try {
+      await this.templateStorage.init();
+      this.features = await this.templateStorage.list();
+      this.elements.featureStatus.dataset.state = "ready";
+      this.elements.featureStatus.textContent = "Features ready";
+      this.renderFeatureOptions();
+      if (this.features[0]) await this.selectFeature(this.features[0].id);
+      else this.newFeature();
+    } catch (error) {
+      this.elements.featureStatus.dataset.state = "missing";
+      this.elements.featureStatus.textContent = "Storage unavailable";
+      this.showInlineError(String(error || "Unable to initialize feature storage."));
+    }
+  }
+
+  collectGlobalDefaults() {
+    const defaults = clone(this.globalDefaults);
+    const labels = (name) => normalizeLabels(this.field(name)?.value);
+    defaults.labels.common = labels("global-label-common");
+    defaults.labels.ios = labels("global-label-ios");
+    defaults.labels.android = labels("global-label-android");
+    defaults.labels.web = labels("global-label-web");
+    Object.keys(BE_COMPONENTS).forEach((component) => {
+      defaults.labels.be[component] = labels(`global-label-be-${component}`);
+    });
+    defaults.people.common = {
+      saAdLead: this.field("global-sa-ad-lead")?.value.trim() || "",
+      saAdSubLeads: splitValues(this.field("global-sa-ad-sub-leads")?.value),
+    };
+    PEOPLE_STREAMS.forEach((stream) => {
+      defaults.people.streams[stream] = {
+        developer: this.field(`global-${stream}-developer`)?.value.trim() || "",
+        developerLead: this.field(`global-${stream}-developer-lead`)?.value.trim() || "",
+        developerSubLeads: splitValues(this.field(`global-${stream}-developer-sub-leads`)?.value),
+      };
+    });
+    SHARED_DEFAULT_FIELDS.forEach(([, globalField, key]) => {
+      defaults.shared[key] = this.field(globalField)?.value || "";
+    });
+    defaults.dateRule = {
+      startOffsetDays: Number(this.field("global-start-offset-days")?.value || 0),
+      deadlineOffsetDays: Number(this.field("global-deadline-offset-days")?.value || 3),
+    };
+    return defaults;
+  }
+
+  async saveGlobalDefaults() {
+    this.clearError();
+    try {
+      this.globalDefaults = globalDefaultsFromStorage(this.collectGlobalDefaults());
+      localStorage.setItem(GLOBAL_DEFAULTS_KEY, JSON.stringify(this.globalDefaults));
+      this.applyGlobalDefaults();
+      if (this.currentFeature) this.applyFeature(this.currentFeature);
+      this.showSuccess(this.discovery ? "Saved global defaults." : "Saved locally. Load Jira metadata to verify Jira-backed defaults.");
+    } catch (error) {
+      this.showInlineError(String(error || "Unable to save global defaults."));
+    }
+  }
+
+  renderFeatureOptions(selectedId = this.currentFeature?.id || "") {
+    this.setComboboxOptions(
+      "feature-select",
+      [{ value: "", label: "New feature" }, ...this.features.map((feature) => ({ value: feature.id, label: feature.name }))],
+      { selectedValue: selectedId, placeholder: "New feature" },
+    );
+  }
+
+  async selectFeature(id) {
+    if (!id) {
+      this.newFeature();
+      return;
+    }
+    this.resetParentResolution();
+    this.currentFeature = id ? await this.templateStorage.get(id) : null;
+    this.elements.featureName.value = this.currentFeature?.name || "";
+    this.renderFeatureOptions(id);
+    this.applyGlobalDefaults();
+    if (this.currentFeature) this.applyFeature(this.currentFeature);
+  }
+
+  newFeature() {
+    this.resetParentResolution();
+    this.currentFeature = null;
+    this.elements.featureName.value = "";
+    this.renderFeatureOptions("");
+    this.field("parent-sources").value = "";
+    this.field("summary-mobile").value = "";
+    this.field("summary-web").value = "";
+    this.field("summary-be").value = "";
+    this.field("feature-labels").value = "";
+    this.field("description").value = "";
+    this.field("confluence-page").value = "";
+    this.field("be-component").value = "API";
+    this.syncComboboxValue("be-component");
+    ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, stream === "ios" || stream === "android"));
+    this.applyGlobalDefaults();
+    this.refreshStreamCards();
+    this.renderOverrideNotice();
+    this.renderCreatePreview();
+    this.elements.featureName.focus();
+  }
+
+  collectPeopleOverrides() {
+    const overrides = { common: {}, streams: {} };
+    const global = this.globalDefaults.people;
+    const currentCommonLead = this.field("sa-ad-lead").value.trim();
+    const currentCommonSubLeads = splitValues(this.field("sa-ad-sub-leads").value);
+    if (currentCommonLead && currentCommonLead !== global.common.saAdLead) overrides.common.saAdLead = currentCommonLead;
+    if (currentCommonSubLeads.length && JSON.stringify(currentCommonSubLeads) !== JSON.stringify(global.common.saAdSubLeads)) overrides.common.saAdSubLeads = currentCommonSubLeads;
+    PEOPLE_STREAMS.forEach((stream) => {
+      const current = {
+        developer: this.field(`${stream}-developer`).value.trim(),
+        developerLead: this.field(`${stream}-developer-lead`).value.trim(),
+        developerSubLeads: splitValues(this.field(`${stream}-developer-sub-leads`).value),
+      };
+      const source = global.streams[stream];
+      const override = {};
+      if (current.developer && current.developer !== source.developer) override.developer = current.developer;
+      if (current.developerLead && current.developerLead !== source.developerLead) override.developerLead = current.developerLead;
+      if (current.developerSubLeads.length && JSON.stringify(current.developerSubLeads) !== JSON.stringify(source.developerSubLeads)) override.developerSubLeads = current.developerSubLeads;
+      overrides.streams[stream] = override;
+    });
+    return overrides;
+  }
+
+  collectFeature() {
+    const name = this.elements.featureName.value.trim();
+    if (!name) throw new Error("Feature name is required.");
+    const overrides = { shared: {}, people: this.collectPeopleOverrides(), dateRule: {} };
+    SHARED_DEFAULT_FIELDS.forEach(([featureField, , key]) => {
+      const value = this.field(featureField).value;
+      if (value && value !== this.globalDefaults.shared[key]) overrides.shared[key] = value;
+    });
+    const startOffset = Number(this.field("start-offset-days").value || 0);
+    const deadlineOffset = Number(this.field("deadline-offset-days").value || 3);
+    if (startOffset !== this.globalDefaults.dateRule.startOffsetDays) overrides.dateRule.startOffsetDays = startOffset;
+    if (deadlineOffset !== this.globalDefaults.dateRule.deadlineOffsetDays) overrides.dateRule.deadlineOffsetDays = deadlineOffset;
+    return {
+      id: this.currentFeature?.id,
+      createdAt: this.currentFeature?.createdAt,
+      name,
+      parentSources: splitValues(this.field("parent-sources").value),
+      selectedStreams: this.selectedStreams(),
+      summaries: {
+        mobile: this.field("summary-mobile").value.trim(),
+        web: this.field("summary-web").value.trim(),
+        be: this.field("summary-be").value.trim(),
+        beComponent: this.field("be-component").value,
+      },
+      featureLabels: normalizeLabels(this.field("feature-labels").value),
+      description: this.field("description").value,
+      confluencePage: this.field("confluence-page").value.trim(),
+      overrides,
+    };
+  }
+
+  async saveFeature() {
+    this.clearError();
+    try {
+      const feature = this.collectFeature();
+      const duplicate = this.features.find((candidate) => candidate.id !== feature.id && candidate.name.toLowerCase() === feature.name.toLowerCase());
+      if (duplicate) throw new Error(`A feature named “${duplicate.name}” already exists.`);
+      this.currentFeature = await this.templateStorage.save(feature);
+      this.features = await this.templateStorage.list();
+      this.renderFeatureOptions(this.currentFeature.id);
+      this.renderOverrideNotice();
+      this.showSuccess(`Saved feature “${this.currentFeature.name}”.`);
+    } catch (error) {
+      this.showInlineError(String(error || "Unable to save feature."));
+    }
+  }
+
+  async duplicateFeature() {
+    if (!this.currentFeature) {
+      this.showInlineError("Choose a saved feature to duplicate.");
+      return;
+    }
+    try {
+      this.currentFeature = await this.templateStorage.duplicate(this.currentFeature.id);
+      this.features = await this.templateStorage.list();
+      this.elements.featureName.value = this.currentFeature.name;
+      this.renderFeatureOptions(this.currentFeature.id);
+      this.showSuccess(`Duplicated as “${this.currentFeature.name}”.`);
+    } catch (error) {
+      this.showInlineError(String(error || "Unable to duplicate feature."));
+    }
+  }
+
+  async deleteFeature() {
+    if (!this.currentFeature) {
+      this.showInlineError("Choose a saved feature to delete.");
+      return;
+    }
+    const name = this.currentFeature.name;
+    if (!window.confirm(`Delete feature “${name}”? Jira tickets are not affected.`)) return;
+    await this.templateStorage.delete(this.currentFeature.id);
+    this.features = await this.templateStorage.list();
+    this.newFeature();
+    this.showSuccess(`Deleted feature “${name}”.`);
+  }
+
+  applyGlobalDefaults() {
+    const set = (name, value) => {
+      const element = this.field(name);
+      if (element && value !== undefined && value !== null) {
+        element.value = Array.isArray(value) ? value.join(", ") : value;
+        if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
+      }
+    };
+    set("global-label-common", this.globalDefaults.labels.common);
+    set("global-label-ios", this.globalDefaults.labels.ios);
+    set("global-label-android", this.globalDefaults.labels.android);
+    set("global-label-web", this.globalDefaults.labels.web);
+    Object.keys(BE_COMPONENTS).forEach((component) => set(`global-label-be-${component}`, this.globalDefaults.labels.be[component]));
+    set("global-sa-ad-lead", this.globalDefaults.people.common.saAdLead);
+    set("global-sa-ad-sub-leads", this.globalDefaults.people.common.saAdSubLeads);
+    PEOPLE_STREAMS.forEach((stream) => {
+      const people = this.globalDefaults.people.streams[stream];
+      set(`global-${stream}-developer`, people.developer);
+      set(`global-${stream}-developer-lead`, people.developerLead);
+      set(`global-${stream}-developer-sub-leads`, people.developerSubLeads);
+      set(`${stream}-developer`, people.developer);
+      set(`${stream}-developer-lead`, people.developerLead);
+      set(`${stream}-developer-sub-leads`, people.developerSubLeads);
+    });
+    set("sa-ad-lead", this.globalDefaults.people.common.saAdLead);
+    set("sa-ad-sub-leads", this.globalDefaults.people.common.saAdSubLeads);
+    SHARED_DEFAULT_FIELDS.forEach(([featureField, globalField, key]) => {
+      set(globalField, this.globalDefaults.shared[key]);
+      set(featureField, this.globalDefaults.shared[key]);
+    });
+    set("global-start-offset-days", this.globalDefaults.dateRule.startOffsetDays);
+    set("global-deadline-offset-days", this.globalDefaults.dateRule.deadlineOffsetDays);
+    set("start-offset-days", this.globalDefaults.dateRule.startOffsetDays);
+    set("deadline-offset-days", this.globalDefaults.dateRule.deadlineOffsetDays);
+    if (this.discovery?.user) set("assignee-display", this.discovery.user.display_name || this.discovery.user.username);
+    const prefix = this.container.querySelector("[data-be-prefix]");
+    if (prefix) prefix.textContent = `[${this.field("be-component")?.value || "API"}]`;
+    this.applyDateRule();
+    this.updateDateHint();
+    this.renderCreatePreview();
+  }
+
+  applyFeature(feature) {
+    const set = (name, value) => {
+      const element = this.field(name);
+      if (element && value !== undefined && value !== null) {
+        element.value = Array.isArray(value) ? value.join(", ") : value;
+        if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
+      }
+    };
+    const selected = new Set(feature.selectedStreams || ["ios", "android"]);
+    ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, selected.has(stream)));
+    ["ios", "android", "web", "be"].forEach((stream) => this.toggleStream(stream, selected.has(stream)));
+    set("parent-sources", (feature.parentSources || []).join("\n"));
+    set("summary-mobile", feature.summaries?.mobile);
+    set("summary-web", feature.summaries?.web);
+    set("summary-be", feature.summaries?.be);
+    set("be-component", feature.summaries?.beComponent || "API");
+    set("feature-labels", feature.featureLabels || feature.shared?.extraLabels || []);
+    set("description", feature.description || "");
+    set("confluence-page", feature.confluencePage || "");
+    const overrides = feature.overrides || {
+      shared: feature.shared || {},
+      people: { common: {}, streams: feature.people || {} },
+      dateRule: feature.dateRule || {},
+    };
+    SHARED_DEFAULT_FIELDS.forEach(([featureField, , key]) => set(featureField, overrides.shared?.[key] ?? this.globalDefaults.shared[key]));
+    set("start-offset-days", overrides.dateRule?.startOffsetDays ?? this.globalDefaults.dateRule.startOffsetDays);
+    set("deadline-offset-days", overrides.dateRule?.deadlineOffsetDays ?? this.globalDefaults.dateRule.deadlineOffsetDays);
+    const common = overrides.people?.common || {};
+    set("sa-ad-lead", common.saAdLead ?? this.globalDefaults.people.common.saAdLead);
+    set("sa-ad-sub-leads", common.saAdSubLeads ?? this.globalDefaults.people.common.saAdSubLeads);
+    PEOPLE_STREAMS.forEach((stream) => {
+      const people = overrides.people?.streams?.[stream] || overrides.people?.[stream] || {};
+      const globalPeople = this.globalDefaults.people.streams[stream];
+      set(`${stream}-developer`, people.developer ?? globalPeople.developer);
+      set(`${stream}-developer-lead`, people.developerLead ?? globalPeople.developerLead);
+      set(`${stream}-developer-sub-leads`, people.developerSubLeads ?? globalPeople.developerSubLeads);
+    });
+    const prefix = this.container.querySelector("[data-be-prefix]");
+    if (prefix) prefix.textContent = `[${this.field("be-component")?.value || "API"}]`;
+    this.applyDateRule();
+    this.updateDateHint();
+    this.renderOverrideNotice();
+    this.renderCreatePreview();
+  }
+
+  renderOverrideNotice() {
+    if (!this.elements.overrideNotice) return;
+    const messages = [];
+    const feature = this.currentFeature;
+    const overrides = feature?.overrides;
+    if (overrides?.shared && Object.keys(overrides.shared).length) messages.push(`Feature overrides: ${Object.keys(overrides.shared).join(", ")}.`);
+    if (overrides?.people?.common && Object.keys(overrides.people.common).length) messages.push("Feature overrides AD / SA people.");
+    const streamOverrides = PEOPLE_STREAMS.filter((stream) => Object.keys(overrides?.people?.streams?.[stream] || {}).length);
+    if (streamOverrides.length) messages.push(`Feature overrides people for ${streamOverrides.join(", ")}.`);
+    if (overrides?.dateRule && Object.keys(overrides.dateRule).length) messages.push("Feature overrides the global date rule.");
+    this.elements.overrideNotice.hidden = messages.length === 0;
+    this.elements.overrideNotice.textContent = messages.join(" ");
+  }
+
+  lookupQuery(input) {
+    const value = input.value || "";
+    if (input.hasAttribute("data-user-lookup") && input.dataset.field.endsWith("sub-leads")) return value.split(/[\n,]/).pop().trim();
+    return value.split(/[\n,]/).pop().trim();
+  }
+
+  scheduleUserLookup(input) {
+    const key = `user:${input.dataset.field}`;
+    clearTimeout(this.lookupTimers.get(key));
+    const timer = setTimeout(async () => {
+      const query = this.lookupQuery(input);
+      if (query.replaceAll("*", "").trim().length < 2) {
+        this.clearLookupSuggestions(input);
+        return;
+      }
+      this.renderLookupLoading(input, "Searching Jira users…");
+      try {
+        const users = await this.service.searchUsers({ ...this.connection(), query });
+        if (this.lookupQuery(input) === query) this.renderUserSuggestions(input, users);
+      } catch {
+        if (this.lookupQuery(input) === query) this.renderLookupError(input, "Unable to fetch Jira users. Check the PAT or Jira connection.");
+      }
+    }, 250);
+    this.lookupTimers.set(key, timer);
+  }
+
+  scheduleLabelLookup(input) {
+    const key = `label:${input.dataset.field}`;
+    clearTimeout(this.lookupTimers.get(key));
+    const timer = setTimeout(async () => {
+      const query = this.lookupQuery(input);
+      if (query.replaceAll("*", "").trim().length < 2) {
+        this.clearLookupSuggestions(input);
+        return;
+      }
+      this.renderLookupLoading(input, "Searching Jira labels…");
+      try {
+        const labels = await this.service.searchLabels({ ...this.connection(), query });
+        if (this.lookupQuery(input) === query) this.renderLabelSuggestions(input, labels);
+      } catch {
+        if (this.lookupQuery(input) === query) this.renderLookupError(input, "Unable to fetch Jira labels. Check the PAT or Jira connection.");
+      }
+    }, 250);
+    this.lookupTimers.set(key, timer);
+  }
+
+  renderUserSuggestions(input, users) {
+    const menu = this.lookupMenu(input);
+    if (!menu) return;
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira users</div>${users.length
+      ? users.map((user) => `<button data-lookup-option data-lookup-value="${this.escapeHtml(user.username)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(user.display_name)}</strong><small>${this.escapeHtml(user.username)}</small></button>`).join("")
+      : '<div class="ttc-lookup-empty">No Jira users found.</div>'}`;
+    this.resetLookupActiveOption(input);
+    menu.hidden = false;
+  }
+
+  clearLookupSuggestions(input) {
+    const menu = this.lookupMenu(input);
+    if (!menu) return;
+    menu.innerHTML = "";
+    this.resetLookupActiveOption(input);
+    menu.hidden = true;
+  }
+
+  renderLabelSuggestions(input, labels) {
+    const menu = this.lookupMenu(input);
+    if (!menu) return;
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira labels</div>${labels.length
+      ? labels.map((label) => `<button data-lookup-option data-lookup-value="${this.escapeHtml(label)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(label)}</strong></button>`).join("")
+      : '<div class="ttc-lookup-empty">No Jira labels found.</div>'}`;
+    this.resetLookupActiveOption(input);
+    menu.hidden = false;
+  }
+
+  renderLookupLoading(input, message) {
+    const menu = this.lookupMenu(input);
+    if (!menu) return;
+    const heading = input.hasAttribute("data-user-lookup") ? "Jira users" : "Jira labels";
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">${heading}</div><div class="ttc-lookup-loading">${this.escapeHtml(message)}</div>`;
+    this.resetLookupActiveOption(input);
+    menu.hidden = false;
+  }
+
+  renderLookupError(input, message) {
+    const menu = this.lookupMenu(input);
+    if (!menu) return;
+    const heading = input.hasAttribute("data-user-lookup") ? "Jira users" : "Jira labels";
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">${heading}</div><div class="ttc-lookup-error">${this.escapeHtml(message)}</div>`;
+    this.resetLookupActiveOption(input);
+    menu.hidden = false;
+  }
+
+  lookupMenu(input) {
+    return input?.closest?.("[data-lookup-menu]") || input?.parentElement?.querySelector("[data-lookup-menu]");
+  }
+
+  lookupOptions(input) {
+    return [...(this.lookupMenu(input)?.querySelectorAll("[data-lookup-option]") || [])];
+  }
+
+  resetLookupActiveOption(input) {
+    this.lookupActiveIndexes ||= new Map();
+    this.lookupActiveIndexes.delete(input);
+    this.lookupOptions(input).forEach((option) => {
+      option.classList.remove("is-active");
+      option.setAttribute("aria-selected", "false");
+    });
+  }
+
+  setLookupActiveOption(input, activeIndex) {
+    this.lookupActiveIndexes ||= new Map();
+    const options = this.lookupOptions(input);
+    const nextIndex = activeIndex >= 0 && activeIndex < options.length ? activeIndex : -1;
+    this.lookupActiveIndexes.set(input, nextIndex);
+    options.forEach((option, index) => {
+      const isActive = index === nextIndex;
+      option.classList.toggle("is-active", isActive);
+      option.setAttribute("aria-selected", String(isActive));
+      if (isActive) option.scrollIntoView?.({ block: "nearest" });
+    });
+  }
+
+  chooseLookupOption(option) {
+    const field = option.closest(".ttc-lookup-field");
+    const input = field?.querySelector("[data-user-lookup], [data-label-lookup]");
+    if (!input) return;
+    const lookupType = input.hasAttribute("data-user-lookup") ? "user" : "label";
+    const lookupKey = `${lookupType}:${input.dataset.field}`;
+    clearTimeout(this.lookupTimers.get(lookupKey));
+    this.lookupTimers.delete(lookupKey);
+    const value = option.dataset.lookupValue || "";
+    const current = input.value || "";
+    const separatorIndex = Math.max(current.lastIndexOf(","), current.lastIndexOf("\n"));
+    input.value = separatorIndex >= 0 ? `${current.slice(0, separatorIndex + 1)} ${value}` : value;
+    this.closeLookupMenus();
+    this.updateDateHint();
+    this.renderCreatePreview();
+    this.renderOverrideNotice();
+    input.focus();
+  }
+
+  closeLookupMenus() {
+    this.container.querySelectorAll("[data-user-lookup], [data-label-lookup]").forEach((input) => this.resetLookupActiveOption(input));
+    this.container.querySelectorAll("[data-lookup-menu]").forEach((menu) => {
+      menu.hidden = true;
+    });
+  }
+
+  async createTickets() {
+    if (this.busy) return;
+    this.clearError();
+    try {
+      const parentKey = this.elements.parentSelect.value;
+      if (!parentKey) throw new Error("Choose an eligible parent.");
+      const tickets = this.collectTickets();
+      const summaries = tickets.map((ticket) => `• ${ticket.summary}`).join("\n");
+      const confirmed = window.confirm(
+        `Create ${tickets.length} Jira subtask${tickets.length === 1 ? "" : "s"} under ${parentKey}?\n\n${summaries}\n\nThis action writes to Jira and cannot be undone here.`,
+      );
+      if (!confirmed) return;
+
+      this.setBusy(true, "Creating tickets…");
+      const result = await this.service.createSubtasks({
+        ...this.connection(),
+        parentKey,
+        tickets,
+      });
+      const baseUrl = this.connection().baseUrl;
+      this.elements.createStatus.innerHTML = (result.issues || [])
+        .map(
+          (issue) =>
+            `<a href="${this.escapeHtml(baseUrl)}/browse/${this.escapeHtml(issue.key)}" target="_blank" rel="noreferrer">${this.escapeHtml(issue.key)}</a>`,
+        )
+        .join(" · ");
+      this.showSuccess(`Created ${result.issues.length} Jira ticket${result.issues.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      this.showInlineError(String(error || "Jira ticket creation failed."));
+    } finally {
+      this.setBusy(false);
+    }
+  }
+
+  setBusy(busy, label = "") {
+    this.busy = busy;
+    [this.elements.discover, this.elements.resolveParent, this.elements.create].forEach((button) => {
+      if (button) button.disabled = busy;
+    });
+    this.elements.discover.textContent = busy && label ? label : "Load Jira metadata";
+    const emptyDiscover = this.container.querySelector("[data-empty-discover]");
+    if (emptyDiscover) emptyDiscover.disabled = busy;
+  }
+
+  showInlineError(message) {
+    this.elements.error.hidden = false;
+    this.elements.error.textContent = message.replace(/^Error:\s*/, "");
+    this.elements.error.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  clearError() {
+    this.elements.error.hidden = true;
+    this.elements.error.textContent = "";
+  }
+
+  renderDiscovery(result) {
+    this.elements.resultTime.textContent = `Fetched ${new Date().toLocaleString()}`;
+    this.elements.summary.innerHTML = [
+      ["Server", result.server?.server_title || "Jira"],
+      ["Version", result.server?.version || "Unknown"],
+      ["Authenticated as", result.user?.display_name || result.user?.username || "Unknown"],
+      ["Project", result.project_key || "Unknown"],
+    ]
+      .map(
+        ([label, value]) =>
+          `<article class="ttc-summary-card"><span>${this.escapeHtml(label)}</span><strong>${this.escapeHtml(value)}</strong></article>`,
+      )
+      .join("");
+    this.elements.issueTypes.innerHTML = (result.issue_types || []).map((issueType) => this.renderIssueType(issueType)).join("");
+  }
+
+  renderIssueType(issueType) {
+    const required = (issueType.fields || []).filter((field) => field.required).length;
+    return `
+      <article class="ttc-issue-type-card">
+        <header>
+          <div><span class="ttc-type-id">Issue type ${this.escapeHtml(issueType.id)}</span><h3>${this.escapeHtml(issueType.name)}</h3></div>
+          <div class="ttc-field-counts"><span>${required} required</span><span>${issueType.fields?.length || 0} total fields</span></div>
+        </header>
+        <div class="ttc-table-wrap"><table>
+          <thead><tr><th>Field</th><th>ID</th><th>Type</th><th>Required</th><th>Allowed/default</th></tr></thead>
+          <tbody>${(issueType.fields || []).map((field) => this.renderFieldRow(field)).join("")}</tbody>
+        </table></div>
+      </article>`;
+  }
+
+  renderFieldRow(field) {
+    const allowed = (field.allowed_values || []).slice(0, 4).map(formatFieldValue).filter(Boolean);
+    const detail = allowed.length
+      ? `${allowed.join(", ")}${field.allowed_values.length > allowed.length ? ` +${field.allowed_values.length - allowed.length}` : ""}`
+      : field.has_default_value
+        ? `Default: ${formatFieldValue(field.default_value)}`
+        : "—";
+    return `<tr class="${field.required ? "is-required" : ""}">
+      <td><strong>${this.escapeHtml(field.name)}</strong></td><td><code>${this.escapeHtml(field.id)}</code></td>
+      <td>${this.escapeHtml(field.schema_items ? `${field.schema_type}<${field.schema_items}>` : field.schema_type)}</td>
+      <td>${field.required ? '<span class="ttc-required">Required</span>' : "Optional"}</td><td>${this.escapeHtml(detail)}</td>
+    </tr>`;
+  }
+
+  escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+}

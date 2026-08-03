@@ -54,6 +54,11 @@ const TOOL_MODULES = {
     description: "Trigger Jenkins batch jobs with configurable parameters",
     load: () => import("../tools/run-batch/main.js").then((module) => ({ ToolClass: module.RunBatch })),
   },
+  "ticket-template-create": {
+    name: "Ticket Template Create",
+    description: "Discover Jira fields and prepare FE or BE subtask templates",
+    load: () => import("../tools/ticket-template-create/main.js").then((module) => ({ ToolClass: module.TicketTemplateCreateTool })),
+  },
   "html-template": {
     name: "HTML Template",
     description: "Edit and preview HTML templates with live rendering",

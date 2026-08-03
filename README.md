@@ -88,6 +88,11 @@ Browser → Cloudflare Workers → D1/KV/R2
 Tauri WebView → Same frontend code → API calls to CF Workers
 ```
 
+## Documentation
+
+- [AD Tools architecture](docs/AD_TOOLS_ARCHITECTURE.md)
+- [Jira 9.17 REST integration notes](docs/JIRA-INTEGRATION.md)
+
 ## Adding a New Tool
 
 1. Create folder: `frontend/tools/[tool-name]/`

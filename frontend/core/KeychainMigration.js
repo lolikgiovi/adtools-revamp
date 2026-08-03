@@ -10,7 +10,7 @@
  * - ad-tools:confluence/pat (Confluence PAT)
  *
  * New structure:
- * - ad-tools:credentials/secrets (JSON: {"jenkins_token": "...", "confluence_pat": "..."})
+ * - ad-tools:credentials/secrets (JSON containing Jenkins, Confluence, Jira, and Oracle credentials)
  */
 
 import { invoke } from "@tauri-apps/api/core";

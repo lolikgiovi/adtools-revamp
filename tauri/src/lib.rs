@@ -46,6 +46,15 @@ pub fn run() {
       confluence_fetch_page,
       confluence_fetch_by_space_title,
       confluence_search_pages,
+      // Jira commands
+      set_jira_pat,
+      has_jira_pat,
+      jira_discover,
+      jira_resolve_parent,
+      jira_resolve_parents,
+      jira_search_users,
+      jira_search_labels,
+      jira_create_subtasks,
       // Oracle commands (legacy IC commands removed in Phase 4.10 - now using Python sidecar)
       oracle::test_oracle_connection,
       oracle::fetch_schemas,
@@ -223,6 +232,7 @@ fn apply_zoom(app: &tauri::AppHandle, level: f64) {
 }
 pub mod jenkins;
 pub mod confluence;
+pub mod jira;
 pub mod oracle;
 pub mod oracle_sidecar;
 use keyring::Entry;
@@ -240,6 +250,7 @@ const UNIFIED_KEYCHAIN_KEY: &str = "secrets";
 struct UnifiedSecrets {
     jenkins_token: Option<String>,
     confluence_pat: Option<String>,
+    jira_pat: Option<String>,
     oracle_credentials: Option<HashMap<String, oracle::CredentialEntry>>,
 }
 
@@ -277,6 +288,7 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     let mut secrets = load_unified_secrets()?;
     let had_jenkins = secrets.jenkins_token.is_some();
     let had_confluence = secrets.confluence_pat.is_some();
+    let had_jira = secrets.jira_pat.is_some();
     let had_oracle = secrets.oracle_credentials.as_ref().map_or(false, |m| !m.is_empty());
 
     let mut migrated_jenkins = false;
@@ -346,14 +358,14 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     }
 
     // no_credentials = true if there's nothing in unified AND nothing was found in old locations
-    let no_credentials = !had_jenkins && !had_confluence && !had_oracle
+    let no_credentials = !had_jenkins && !had_confluence && !had_jira && !had_oracle
         && !found_old_jenkins && !found_old_confluence && !found_old_oracle;
 
     Ok(MigrationResult {
         migrated_jenkins,
         migrated_confluence,
         migrated_oracle,
-        already_unified: had_jenkins || had_confluence,
+        already_unified: had_jenkins || had_confluence || had_jira,
         already_has_oracle: had_oracle,
         no_credentials,
     })
@@ -364,6 +376,14 @@ fn http_client() -> Client {
     .timeout(Duration::from_secs(30))
     .build()
     .expect("failed to build reqwest client")
+}
+
+fn jira_http_client(allow_invalid_tls: bool) -> Result<Client, String> {
+  Client::builder()
+    .timeout(Duration::from_secs(30))
+    .danger_accept_invalid_certs(allow_invalid_tls)
+    .build()
+    .map_err(|_| "Failed to initialize the Jira HTTP client.".to_string())
 }
 
 // HTTP client for Confluence that accepts invalid/self-signed SSL certs
@@ -760,4 +780,131 @@ async fn confluence_fetch_by_space_title(
   let pat = load_confluence_pat().await?;
   let client = confluence_http_client();
   confluence::fetch_page_by_space_title(&client, &domain, &space_key, &title, &username, &pat).await
+}
+
+// Jira integration commands
+
+#[tauri::command]
+fn set_jira_pat(pat: String) -> Result<(), String> {
+  let pat = pat.trim();
+  if pat.len() < 8 {
+    return Err("Jira PAT must be at least 8 characters.".to_string());
+  }
+  let mut secrets = load_unified_secrets()?;
+  secrets.jira_pat = Some(pat.to_string());
+  save_unified_secrets(&secrets)
+}
+
+#[tauri::command]
+fn has_jira_pat() -> Result<bool, String> {
+  let secrets = load_unified_secrets().unwrap_or_default();
+  Ok(secrets.jira_pat.as_ref().is_some_and(|pat| !pat.trim().is_empty()))
+}
+
+fn load_jira_pat() -> Result<String, String> {
+  let secrets = load_unified_secrets()?;
+  secrets
+    .jira_pat
+    .filter(|pat| !pat.trim().is_empty())
+    .ok_or_else(|| "Jira PAT not found in Keychain. Add it in Settings.".to_string())
+}
+
+#[tauri::command]
+async fn jira_discover(
+  base_url: String,
+  project_key: String,
+  sample_issue_keys: Vec<String>,
+  issue_type_names: Vec<String>,
+  allow_invalid_tls: bool,
+) -> Result<jira::JiraDiscovery, String> {
+  if sample_issue_keys.len() > 20 {
+    return Err("Jira discovery accepts at most 20 sample issues.".to_string());
+  }
+  if issue_type_names.len() > 20 {
+    return Err("Jira discovery accepts at most 20 issue types.".to_string());
+  }
+
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::discover(
+    &client,
+    &base_url,
+    &project_key,
+    &sample_issue_keys,
+    &issue_type_names,
+    &pat,
+  )
+  .await
+}
+
+#[tauri::command]
+async fn jira_resolve_parent(
+  base_url: String,
+  project_key: String,
+  issue_key: String,
+  allow_invalid_tls: bool,
+) -> Result<jira::ParentResolution, String> {
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::resolve_parent(&client, &base_url, &project_key, &issue_key, &pat).await
+}
+
+#[tauri::command]
+async fn jira_resolve_parents(
+  base_url: String,
+  project_key: String,
+  issue_keys: Vec<String>,
+  allow_invalid_tls: bool,
+) -> Result<jira::ParentResolution, String> {
+  if issue_keys.len() > 20 {
+    return Err("Jira parent lookup accepts at most 20 inputs.".to_string());
+  }
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::resolve_parents(&client, &base_url, &project_key, &issue_keys, &pat).await
+}
+
+#[tauri::command]
+async fn jira_search_users(
+  base_url: String,
+  project_key: String,
+  query: String,
+  allow_invalid_tls: bool,
+) -> Result<Vec<jira::JiraUserOption>, String> {
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::search_users(&client, &base_url, &project_key, &query, &pat).await
+}
+
+#[tauri::command]
+async fn jira_search_labels(
+  base_url: String,
+  project_key: String,
+  query: String,
+  allow_invalid_tls: bool,
+) -> Result<Vec<String>, String> {
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::search_labels(&client, &base_url, &project_key, &query, &pat).await
+}
+
+#[tauri::command]
+async fn jira_create_subtasks(
+  base_url: String,
+  project_key: String,
+  parent_key: String,
+  tickets: Vec<jira::CreateSubtaskInput>,
+  allow_invalid_tls: bool,
+) -> Result<jira::CreateBatchResult, String> {
+  let pat = load_jira_pat()?;
+  let client = jira_http_client(allow_invalid_tls)?;
+  jira::create_subtasks(
+    &client,
+    &base_url,
+    &project_key,
+    &parent_key,
+    tickets,
+    &pat,
+  )
+  .await
 }

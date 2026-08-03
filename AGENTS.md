@@ -22,5 +22,12 @@
 ## Database
 - Migrations: `backend-workers/migrations/`; apply with `npx wrangler d1 migrations apply adtools --local`
 
+## Jira Template UI Interaction Conventions
+- Use custom searchable comboboxes for Jira Template choices; do not reintroduce native `<select>` or `<datalist>` controls.
+- Match Quick Query’s menu behavior: show a compact heading, filter as the user types, highlight the active row, and keep the menu attached to its field.
+- Support Arrow Down/Up to move the active option, Enter to commit it, and Escape to close the menu for both local Jira option menus and remote user/label lookup menus.
+- Use `▼` for the combobox trigger affordance.
+- After committing a remote lookup option, update the field directly and close the menu; do not dispatch another `input` event that would start a duplicate lookup loop.
+
 # Client Performance Note
 Do not run `npm run test` directly, and never run more than one vitest instance, it will hang client computer. Tell user to run the `npm run test` themselves

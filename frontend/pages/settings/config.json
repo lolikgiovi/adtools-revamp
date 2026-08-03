@@ -159,6 +159,38 @@
           "validation": {
             "pattern": "^https?://"
           }
+        },
+        {
+          "key": "config.jira.url",
+          "storageKey": "config.jira.url",
+          "label": "Jira URL",
+          "type": "string",
+          "default": "https://jira.corp.devmandiri.co.id",
+          "description": "Jira Data Center base URL used by Ticket Template Create.",
+          "validation": {
+            "required": true,
+            "pattern": "^https://"
+          }
+        },
+        {
+          "key": "config.jira.projectKey",
+          "storageKey": "config.jira.projectKey",
+          "label": "Jira Project Key",
+          "type": "string",
+          "default": "EVDEV",
+          "description": "Default Jira project for ticket template discovery and creation.",
+          "validation": {
+            "required": true,
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+          }
+        },
+        {
+          "key": "config.jira.allowInvalidTls",
+          "storageKey": "config.jira.allowInvalidTls",
+          "label": "Allow Untrusted Jira Certificate",
+          "type": "boolean",
+          "default": false,
+          "description": "Jira-only fallback for a corporate self-signed certificate. This disables certificate verification and can expose the PAT to interception; prefer installing the corporate CA in macOS Keychain."
         }
       ]
     },
@@ -251,6 +283,18 @@
           "type": "secret",
           "default": "",
           "description": "Personal Access Token. Generate in Confluence: Profile → Personal Access Tokens → Create token. Stored in macOS Keychain.",
+          "validation": {
+            "required": true,
+            "minLength": 8
+          }
+        },
+        {
+          "key": "secure.jira.pat",
+          "storageKey": "secure.jira.pat",
+          "label": "Jira PAT",
+          "type": "secret",
+          "default": "",
+          "description": "Personal Access Token for Jira 9.17.3. Stored in macOS Keychain and sent only by the Tauri backend.",
           "validation": {
             "required": true,
             "minLength": 8

@@ -966,11 +966,24 @@ class SettingsPage {
           }
           // Store a marker only, not the PAT itself
           stored = this.service.setValue(storageKey, "secret", "set", item.apply);
-        } else if (storageKey === "config.jenkins.url") {
+        } else if (storageKey === "secure.jira.pat") {
+          try {
+            await invoke("set_jira_pat", { pat: value });
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          // Store a marker only, not the PAT itself
+          stored = this.service.setValue(storageKey, "secret", "set", item.apply);
+        } else if (storageKey === "config.jenkins.url" || storageKey === "config.jira.url") {
           // Strong URL validation via URL parser
           try {
             const u = new URL(String(value));
-            if (!u.protocol.startsWith("http")) throw new Error("URL must be http(s)");
+            if (storageKey === "config.jira.url" && u.protocol !== "https:") {
+              throw new Error("Jira URL must use HTTPS");
+            }
+            if (storageKey === "config.jenkins.url" && !u.protocol.startsWith("http")) throw new Error("URL must be http(s)");
+            if (u.search || u.hash) throw new Error("URL cannot include query or fragment");
           } catch (err) {
             errorEl.textContent = "Invalid URL format";
             return;
