@@ -12,6 +12,13 @@ const customCombobox = ({ field, label, placeholder = "Choose an option", id = `
   </div>
 `;
 
+const featureConfigField = (markup, key) => `
+  <div class="ttc-config-field" data-feature-config-field="${key}">
+    ${markup}
+    <small class="ttc-config-origin" data-config-origin="${key}">Inherited from Global config</small>
+  </div>
+`;
+
 export const lookupInput = ({ field, label, placeholder, lookup, multiple = false }) => `
   <label class="ttc-field ttc-lookup-field${multiple ? " ttc-lookup-field--multiple" : " ttc-lookup-field--single"}" data-lookup-multiple="${String(multiple)}">
     <span class="ttc-field-label"><span>${label}</span><small>${multiple ? "Many values" : "1 value"}</small></span>
@@ -26,14 +33,15 @@ export const lookupInput = ({ field, label, placeholder, lookup, multiple = fals
 `;
 
 export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
-  <section class="ticket-template-create">
+  <section class="ticket-template-create" data-template-state="locked">
     <header class="ttc-hero">
       <div class="ttc-hero-copy">
         <p class="ttc-eyebrow">JIRA TICKET WORKBENCH</p>
-        <h2>Create developer tickets from a feature</h2>
+        <h2>Ticket Template</h2>
+        <p>Create FE or BE subtasks with reusable defaults.</p>
       </div>
       <div class="ttc-hero-state">
-        <span class="ttc-mode-badge">Preview before create</span>
+        <span class="ttc-mode-badge">No Jira writes yet</span>
         <span id="ttc-jira-sync-status" class="ttc-status-badge" data-state="idle">Jira metadata not loaded</span>
         <button class="ttc-help-link" data-tutorial-trigger type="button" aria-controls="ttc-tutorial">Show tutorial</button>
         <small id="ttc-jira-sync-detail" class="ttc-visually-hidden" aria-live="polite"></small>
@@ -53,6 +61,8 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
       </div>
     </aside>
 
+    <div id="ttc-error" class="ttc-error" role="alert" hidden></div>
+
     <div class="ttc-workbench-grid">
       <aside class="ttc-rail" aria-label="Feature context and reusable defaults">
         <section class="ttc-panel ttc-rail-card" data-tutorial-target="connection" aria-labelledby="ttc-connection-title">
@@ -60,7 +70,7 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
           <div class="ttc-panel-header">
             <div>
               <h3 id="ttc-connection-title">Connect Jira</h3>
-              <p>Read live Jira fields through the desktop PAT.</p>
+              <p>Load live fields through the desktop PAT.</p>
             </div>
             <span id="ttc-pat-status" class="ttc-status-badge" data-state="checking">Checking PAT…</span>
           </div>
@@ -79,17 +89,21 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
           <button id="ttc-discover" class="btn btn-primary ttc-full-button" type="button">Load Jira metadata</button>
         </section>
 
-        <section class="ttc-panel ttc-rail-card" data-tutorial-target="feature" aria-labelledby="ttc-feature-title">
-          <div class="ttc-step-label">02 · FEATURE SETTINGS</div>
+        <section class="ttc-panel ttc-rail-card" data-tutorial-target="feature" data-post-discovery aria-labelledby="ttc-feature-title">
+          <div class="ttc-step-label">02 · FEATURE PROFILE</div>
           <div class="ttc-panel-header">
             <div>
-              <h3 id="ttc-feature-title">Feature settings</h3>
-              <p>Save parent and feature-specific overrides.</p>
+              <h3 id="ttc-feature-title">Feature profile</h3>
+              <p>Choose the reusable feature context and its saved name.</p>
             </div>
             <span id="ttc-feature-status" class="ttc-status-badge" data-state="checking">Opening…</span>
           </div>
           ${customCombobox({ field: "feature-select", label: "Saved feature", placeholder: "New feature", id: "ttc-feature-select" })}
           <label class="ttc-field"><span>Feature name</span><input id="ttc-feature-name" type="text" placeholder="e.g. Payment Redeem Point" maxlength="100" /></label>
+          <div class="ttc-scope-link">
+            <div><strong>Feature-level config</strong><small>People, labels, Jira fields, and dates for this feature.</small></div>
+            <a href="#ttc-feature-config" data-feature-config-link>Configure <span aria-hidden="true">→</span></a>
+          </div>
           <div class="ttc-template-actions">
             <button id="ttc-feature-new" class="btn btn-secondary" type="button">New</button>
             <button id="ttc-feature-save" class="btn btn-primary" type="button">Save feature settings</button>
@@ -98,9 +112,9 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
           </div>
         </section>
 
-        <details id="ttc-global-panel" class="ttc-panel ttc-defaults-panel" data-tutorial-target="global">
+        <details id="ttc-global-panel" class="ttc-panel ttc-defaults-panel" data-tutorial-target="global" data-post-discovery>
           <summary class="ttc-panel-summary">
-            <span><span class="ttc-step-label">03 · DEFAULTS FOR EVERY TICKET</span><strong>Global defaults</strong><small>Set the starting values used for every new ticket. Feature settings can override them.</small></span>
+            <span><span class="ttc-step-label">03 · GLOBAL CONFIG</span><strong>Global config</strong><small>Set the starting values used for every new ticket. Feature-level config can override them.</small></span>
             <span id="ttc-global-status" class="ttc-status-badge" data-state="checking">Loading defaults…</span>
           </summary>
           <div class="ttc-defaults-body">
@@ -154,13 +168,60 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
             <button id="ttc-global-save" class="btn btn-secondary ttc-full-button" type="button">Save defaults for all tickets</button>
           </div>
         </details>
+
+        <details id="ttc-feature-config" class="ttc-panel ttc-defaults-panel" data-tutorial-target="feature-config" data-post-discovery>
+          <summary class="ttc-panel-summary">
+            <span><span class="ttc-step-label">04 · FEATURE CONFIG</span><strong>Feature-level config</strong><small>Save values for this feature only. Unchanged values inherit from Global config.</small></span>
+            <span id="ttc-feature-config-status" class="ttc-status-badge" data-state="idle">Inherited from Global</span>
+          </summary>
+          <div class="ttc-defaults-body">
+            <div class="ttc-config-intro">
+              <strong data-feature-scope-name>New feature</strong>
+              <p>Use this panel for reusable people, labels, Jira defaults, and date rules. Summary, description, Confluence Page, parent, stream, and BE component are entered when creating tickets.</p>
+            </div>
+            <div class="ttc-default-section">
+              <div class="ttc-subsection-heading"><h4>Feature labels</h4><p>Add labels for this feature. Global stream labels still apply.</p></div>
+              ${featureConfigField(lookupInput({ field: "feature-labels", label: "Feature labels", placeholder: "Add a feature label…", lookup: "label", multiple: true }), "feature-labels")}
+            </div>
+            <div class="ttc-default-section">
+              <div class="ttc-subsection-heading"><h4>Feature people</h4><p>These values start from Global config. Change them here to override people for this feature.</p></div>
+              <div class="ttc-people-grid">
+                <article class="ttc-default-card"><h4>AD / SA reviewers</h4><small class="ttc-config-origin" data-config-origin="people-common">Inherited from Global config</small><div data-people-scope="feature" data-people-stream="common"></div></article>
+                <article class="ttc-default-card"><h4>iOS developers</h4><small class="ttc-config-origin" data-config-origin="people-ios">Inherited from Global config</small><div data-people-scope="feature" data-people-stream="ios"></div></article>
+                <article class="ttc-default-card"><h4>Android developers</h4><small class="ttc-config-origin" data-config-origin="people-android">Inherited from Global config</small><div data-people-scope="feature" data-people-stream="android"></div></article>
+                <article class="ttc-default-card"><h4>Web developers</h4><small class="ttc-config-origin" data-config-origin="people-web">Inherited from Global config</small><div data-people-scope="feature" data-people-stream="web"></div></article>
+                <article class="ttc-default-card"><h4>BE developers</h4><small class="ttc-config-origin" data-config-origin="people-be">Inherited from Global config</small><div data-people-scope="feature" data-people-stream="be"></div></article>
+              </div>
+            </div>
+            <div class="ttc-default-section">
+              <div class="ttc-subsection-heading"><h4>Feature Jira defaults</h4><p>These values prefill every ticket created from this feature.</p></div>
+              <div class="ttc-form-stack">
+                ${featureConfigField(customCombobox({ field: "ad-story-point", label: "AD Story Point", hint: "Required", id: "ttc-ad-story-point" }), "ad-story-point")}
+                ${featureConfigField(customCombobox({ field: "dev-story-point", label: "Dev Story Point", hint: "Optional", id: "ttc-dev-story-point" }), "dev-story-point")}
+                ${featureConfigField(customCombobox({ field: "priority", label: "Priority", hint: "Low by default", id: "ttc-priority" }), "priority")}
+                ${featureConfigField(customCombobox({ field: "release", label: "Release Number", hint: "Required", id: "ttc-release" }), "release")}
+                ${featureConfigField(customCombobox({ field: "squad", label: "Squad", hint: "Required", id: "ttc-squad" }), "squad")}
+                ${featureConfigField(customCombobox({ field: "task-trigger", label: "Task Trigger By", hint: "Design by default", id: "ttc-task-trigger" }), "task-trigger")}
+              </div>
+            </div>
+            <div class="ttc-default-section">
+              <div class="ttc-subsection-heading"><h4>Feature date rule</h4><p>Set reusable calendar-day offsets. The resulting dates remain editable for each ticket run.</p></div>
+              <div class="ttc-default-grid ttc-default-grid-2">
+                ${featureConfigField('<label class="ttc-field"><span>Start offset</span><input data-field="start-offset-days" type="number" value="0" min="-30" max="365" /></label>', "start-offset-days")}
+                ${featureConfigField('<label class="ttc-field"><span>Duration</span><input data-field="deadline-offset-days" type="number" value="3" min="0" max="365" /></label>', "deadline-offset-days")}
+              </div>
+            </div>
+            <p id="ttc-override-notice" class="ttc-override-notice" hidden></p>
+            <p id="ttc-date-hint" class="ttc-date-hint"></p>
+            <button id="ttc-feature-config-save" class="btn btn-secondary ttc-full-button" type="button">Save feature config</button>
+          </div>
+        </details>
       </aside>
 
       <main class="ttc-main-column">
-        <div id="ttc-error" class="ttc-error" role="alert" hidden></div>
         <section id="ttc-create-workflow" class="ttc-create-workflow" hidden>
           <section class="ttc-panel ttc-flow-panel" data-tutorial-target="parent">
-            <div class="ttc-step-label">04 · PARENT RESOLUTION</div>
+            <div class="ttc-step-label">05 · PARENT RESOLUTION</div>
             <div class="ttc-panel-header">
               <div>
                 <h3>Choose where the tickets belong</h3>
@@ -178,14 +239,19 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
             </div>
           </section>
 
-          <section id="ttc-ticket-form" class="ttc-panel ttc-flow-panel" data-tutorial-target="ticket" hidden>
-            <div class="ttc-step-label">05 · FEATURE-SPECIFIC TICKET SETTINGS</div>
+          <section id="ttc-ticket-form" class="ttc-panel ttc-flow-panel" data-tutorial-target="ticket">
+            <div class="ttc-step-label">06 · CREATE TICKETS</div>
             <div class="ttc-panel-header">
               <div>
-                <h3>Feature ticket settings</h3>
-                <p>Change only what this feature needs. Everything else is inherited from Global defaults.</p>
+                <h3>Create ticket details</h3>
+                <p>Enter the details that change for this run. People, labels, Jira defaults, and date rules come from config.</p>
               </div>
               <span id="ttc-mode-note" class="ttc-flow-status">iOS + Android selected</span>
+            </div>
+
+            <div class="ttc-prefill-summary" id="ttc-prefill-summary">
+              <div><strong>Config prefill</strong><span id="ttc-prefill-source">Global config · feature uses inherited values</span></div>
+              <a href="#ttc-feature-config" data-feature-config-link>View config <span aria-hidden="true">→</span></a>
             </div>
 
             <fieldset class="ttc-stream-picker">
@@ -202,60 +268,38 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
             </label>
 
             <div class="ttc-ticket-grid">
-              <article class="ttc-ticket-card" data-stream-card="ios"><div class="ttc-card-kicker">FE · iOS</div><h4>iOS developer matrix</h4><div data-people-scope="feature" data-people-stream="ios"></div></article>
-              <article class="ttc-ticket-card" data-stream-card="android"><div class="ttc-card-kicker">FE · ANDROID</div><h4>Android developer matrix</h4><div data-people-scope="feature" data-people-stream="android"></div></article>
+              <article class="ttc-ticket-card" data-stream-card="ios"><div class="ttc-card-kicker">FE · iOS</div><h4>iOS ticket</h4><p class="ttc-card-note">People and labels are prefilled from config.</p></article>
+              <article class="ttc-ticket-card" data-stream-card="android"><div class="ttc-card-kicker">FE · ANDROID</div><h4>Android ticket</h4><p class="ttc-card-note">People and labels are prefilled from config.</p></article>
               <article class="ttc-ticket-card" data-stream-card="web" hidden>
-                <div class="ttc-card-kicker">FE · WEB</div><h4>Web developer matrix</h4>
+                <div class="ttc-card-kicker">FE · WEB</div><h4>Web ticket</h4>
                 <label class="ttc-field"><span>Summary</span><div class="ttc-prefixed-input"><strong>[Web]</strong><input data-field="summary-web" type="text" placeholder="Web Screen X" /></div></label>
-                <div data-people-scope="feature" data-people-stream="web"></div>
+                <p class="ttc-card-note">People and labels are prefilled from config.</p>
               </article>
               <article class="ttc-ticket-card" data-stream-card="be" hidden>
-                <div class="ttc-card-kicker">BE · COMPONENT</div><h4>Backend developer matrix</h4>
+                <div class="ttc-card-kicker">BE · COMPONENT</div><h4>Backend ticket</h4>
                 ${customCombobox({ field: "be-component", label: "Component prefix", placeholder: "API", id: "ttc-be-component" })}
                 <label class="ttc-field"><span>Summary</span><div class="ttc-prefixed-input"><strong data-be-prefix>[API]</strong><input data-field="summary-be" type="text" placeholder="POST service/v1/endpoint" /></div></label>
-                <div data-people-scope="feature" data-people-stream="be"></div>
-              </article>
-              <article class="ttc-ticket-card ttc-ticket-card--shared" data-stream-card="shared">
-                <div class="ttc-card-kicker">SHARED · AD / SA</div><h4>Design reviewers</h4>
-                <p class="ttc-card-note">Feature-specific people override the global defaults.</p>
-                <div data-people-scope="feature" data-people-stream="common"></div>
+                <p class="ttc-card-note">People and labels are prefilled from config.</p>
               </article>
             </div>
 
-            <div class="ttc-section-divider"><span>Feature-specific fields</span><small>Inherited values are editable here for this feature.</small></div>
-            <div class="ttc-form-grid ttc-shared-fields">
+            <div class="ttc-section-divider"><span>Per-ticket details</span><small>These are entered for this creation run.</small></div>
+            <div class="ttc-form-grid ttc-creation-fields">
               <label class="ttc-field ttc-wide"><span>Description</span><textarea data-field="description" rows="4" placeholder="Optional Jira description"></textarea></label>
               <label class="ttc-field ttc-wide"><span>Confluence Page</span><input data-field="confluence-page" type="url" placeholder="https://confluence…" /></label>
-              ${lookupInput({ field: "feature-labels", label: "Feature labels", placeholder: "Add a feature label…", lookup: "label", multiple: true })}
-              ${customCombobox({ field: "ad-story-point", label: "AD Story Point", hint: "Required", id: "ttc-ad-story-point" })}
-              ${customCombobox({ field: "dev-story-point", label: "Dev Story Point", hint: "Optional; defaults to 0", id: "ttc-dev-story-point" })}
-              ${customCombobox({ field: "priority", label: "Priority", hint: "Low by default", id: "ttc-priority" })}
-              ${customCombobox({ field: "release", label: "Release Number", hint: "Required", id: "ttc-release" })}
-              ${customCombobox({ field: "squad", label: "Squad", hint: "Required", id: "ttc-squad" })}
-              ${customCombobox({ field: "task-trigger", label: "Task Trigger By", hint: "Design by default", id: "ttc-task-trigger" })}
               <label class="ttc-field"><span>Start Development On</span><input data-field="start-date" type="date" /></label>
               <label class="ttc-field"><span>Deadline</span><input data-field="deadline" type="date" /></label>
-              <label class="ttc-field"><span>Feature start offset</span><input data-field="start-offset-days" type="number" value="0" min="-30" max="365" /></label>
-              <label class="ttc-field"><span>Feature duration</span><input data-field="deadline-offset-days" type="number" value="3" min="0" max="365" /></label>
               <label class="ttc-field ttc-wide"><span>Assignee</span><input data-field="assignee-display" type="text" readonly placeholder="Loaded from Jira PAT user" /></label>
             </div>
-            <p id="ttc-override-notice" class="ttc-override-notice" hidden></p>
-            <p id="ttc-date-hint" class="ttc-date-hint"></p>
 
             <section class="ttc-preview-panel">
-              <div class="ttc-section-heading"><div><div class="ttc-step-label">06 · REVIEW</div><h4>Creation preview</h4><p>Confirm parent, stream, summaries, and labels before the only Jira write.</p></div></div>
+              <div class="ttc-section-heading"><div><div class="ttc-step-label">07 · REVIEW</div><h4>Creation preview</h4><p>Confirm parent, stream, summaries, and labels before the only Jira write.</p></div></div>
               <div id="ttc-create-preview" class="ttc-create-preview"></div>
             </section>
             <div class="ttc-actions ttc-final-actions"><span id="ttc-create-status" class="ttc-note">Choose a parent and complete required fields.</span><button id="ttc-create" class="btn btn-primary" type="button">Review and create tickets</button></div>
           </section>
         </section>
 
-        <div class="ttc-empty-state" id="ttc-workflow-empty">
-          <div class="ttc-empty-state-mark">01</div>
-          <h3>Load Jira metadata to start</h3>
-          <p>Load live Jira fields before creating tickets.</p>
-          <button class="btn btn-primary" data-empty-discover type="button">Load Jira metadata</button>
-        </div>
       </main>
     </div>
 

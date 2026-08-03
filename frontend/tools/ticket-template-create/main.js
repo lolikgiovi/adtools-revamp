@@ -90,13 +90,13 @@ export class TicketTemplateCreateTool extends BaseTool {
         target: "feature",
         kicker: "QUICK GUIDE · 2 OF 5",
         title: "Save a feature once",
-        copy: "Keep the parent, feature labels, summaries, and people overrides together for reuse.",
+        copy: "Choose a feature profile, then open Feature-level config to save reusable labels, people, Jira defaults, and date rules.",
       },
       {
         target: "global",
         kicker: "QUICK GUIDE · 3 OF 5",
         title: "Set defaults for every ticket",
-        copy: "Global defaults prefill every new ticket. Feature settings can override them when needed.",
+        copy: "Global config prefills every new ticket. Feature-level config can override it when needed.",
       },
       {
         target: "parent",
@@ -107,10 +107,12 @@ export class TicketTemplateCreateTool extends BaseTool {
       {
         target: "ticket",
         kicker: "QUICK GUIDE · 5 OF 5",
-        title: "Review before Jira writes",
-        copy: "Choose FE or BE, check the generated bundle, then create only after the preview is correct.",
+        title: "Configure this feature",
+        copy: "Set feature-level people, labels, Jira fields, and dates. Then choose a parent and review the bundle before writing.",
       },
     ];
+    this.oracleStatusElement = null;
+    this.oracleStatusPreviousDisplay = "";
     this.busy = false;
   }
 
@@ -123,6 +125,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   }
 
   onMount() {
+    this.hideOracleShellStatus();
     this.bindElements();
     this.renderPeopleFields();
     this.initializeComboboxes();
@@ -132,6 +135,33 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.initializeTutorial();
     void this.refreshPatStatus();
     void this.initializeFeatureStorage();
+  }
+
+  onActivate() {
+    this.hideOracleShellStatus();
+  }
+
+  onDeactivate() {
+    this.restoreOracleShellStatus();
+  }
+
+  onUnmount() {
+    this.restoreOracleShellStatus();
+  }
+
+  hideOracleShellStatus() {
+    const indicator = document.getElementById("sidecar-status-indicator");
+    if (!indicator || this.oracleStatusElement === indicator) return;
+    this.oracleStatusElement = indicator;
+    this.oracleStatusPreviousDisplay = indicator.style.display;
+    indicator.style.display = "none";
+  }
+
+  restoreOracleShellStatus() {
+    if (!this.oracleStatusElement) return;
+    this.oracleStatusElement.style.display = this.oracleStatusPreviousDisplay;
+    this.oracleStatusElement = null;
+    this.oracleStatusPreviousDisplay = "";
   }
 
   bindElements() {
@@ -147,7 +177,6 @@ export class TicketTemplateCreateTool extends BaseTool {
       openSettings: query("#ttc-open-settings"),
       error: query("#ttc-error"),
       workflow: query("#ttc-create-workflow"),
-      workflowEmpty: query("#ttc-workflow-empty"),
       parentInput: query("#ttc-parent-input"),
       resolveParent: query("#ttc-resolve-parent"),
       parentResult: query("#ttc-parent-result"),
@@ -162,6 +191,9 @@ export class TicketTemplateCreateTool extends BaseTool {
       globalStatus: query("#ttc-global-status"),
       globalSave: query("#ttc-global-save"),
       featureStatus: query("#ttc-feature-status"),
+      featureConfig: query("#ttc-feature-config"),
+      featureConfigStatus: query("#ttc-feature-config-status"),
+      featureConfigSave: query("#ttc-feature-config-save"),
       featureSelect: query("#ttc-feature-select"),
       featureName: query("#ttc-feature-name"),
       featureNew: query("#ttc-feature-new"),
@@ -173,6 +205,7 @@ export class TicketTemplateCreateTool extends BaseTool {
       summary: query("#ttc-summary"),
       issueTypes: query("#ttc-issue-types"),
       overrideNotice: query("#ttc-override-notice"),
+      prefillSource: query("#ttc-prefill-source"),
     };
   }
 
@@ -427,11 +460,11 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   bindActions() {
     this.elements.discover.addEventListener("click", () => void this.runDiscovery());
-    this.container.querySelector("[data-empty-discover]")?.addEventListener("click", () => void this.runDiscovery());
     this.elements.resolveParent.addEventListener("click", () => void this.resolveParent());
     this.elements.create.addEventListener("click", () => void this.createTickets());
     this.elements.featureNew.addEventListener("click", () => this.newFeature());
     this.elements.featureSave.addEventListener("click", () => void this.saveFeature());
+    this.elements.featureConfigSave?.addEventListener("click", () => void this.saveFeature());
     this.elements.featureDuplicate.addEventListener("click", () => void this.duplicateFeature());
     this.elements.featureDelete.addEventListener("click", () => void this.deleteFeature());
     this.elements.globalSave.addEventListener("click", () => void this.saveGlobalDefaults());
@@ -442,6 +475,13 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements.openSettings.addEventListener("click", () => {
       if (window.app?.router?.navigate) window.app.router.navigate("settings");
       else window.location.hash = "#settings";
+    });
+    this.container.querySelectorAll("[data-feature-config-link]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (this.elements.featureConfig) this.elements.featureConfig.open = true;
+        this.elements.featureConfig?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      });
     });
     this.container.addEventListener("click", (event) => {
       if (!event.target.closest("[data-tutorial], [data-tutorial-trigger]")) this.closeTutorial();
@@ -568,7 +608,9 @@ export class TicketTemplateCreateTool extends BaseTool {
     next.textContent = this.tutorialStep === this.tutorialSteps.length - 1 ? "Done" : "Next";
     this.container.querySelectorAll(".ttc-tutorial-target").forEach((target) => target.classList.remove("ttc-tutorial-target"));
     const target = this.container.querySelector(`[data-tutorial-target="${step.target}"]`);
-    if (target && !target.closest("[hidden]")) {
+    const targetDeferred =
+      target?.hasAttribute("data-post-discovery") && this.templateRoot()?.dataset.templateState !== "ready";
+    if (target && !targetDeferred && !target.closest("[hidden]")) {
       target.classList.add("ttc-tutorial-target");
       target.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     }
@@ -589,6 +631,11 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   field(name) {
     return this.container.querySelector(`[data-field="${name}"]`);
+  }
+
+  templateRoot() {
+    if (this.container?.matches?.(".ticket-template-create")) return this.container;
+    return this.container?.querySelector?.(".ticket-template-create") || null;
   }
 
   lookupInputForField(fieldName) {
@@ -683,7 +730,8 @@ export class TicketTemplateCreateTool extends BaseTool {
       this.applyGlobalDefaults();
       if (this.currentFeature) this.applyFeature(this.currentFeature);
       this.elements.workflow.hidden = false;
-      this.elements.workflowEmpty.hidden = true;
+      const templateRoot = this.templateRoot();
+      if (templateRoot) templateRoot.dataset.templateState = "ready";
       this.elements.contractDetails.hidden = false;
       this.setJiraSyncStatus("ready", "Jira metadata loaded", `Fetched ${new Date().toLocaleString()}. Option filtering is local; user and label lookup fetches on typing.`);
       this.showSuccess("Jira creation fields loaded.");
@@ -771,7 +819,7 @@ export class TicketTemplateCreateTool extends BaseTool {
         { placeholder: candidates.length ? "Choose an eligible parent" : "No eligible parent found", disabled: candidates.length === 0 },
       );
       this.elements.parentResult.hidden = false;
-      this.elements.ticketForm.hidden = candidates.length === 0;
+      this.elements.ticketForm.hidden = false;
       this.renderCreatePreview();
     } catch (error) {
       this.showInlineError(String(error || "Parent lookup failed."));
@@ -783,7 +831,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   resetParentResolution() {
     this.parentResolution = null;
     if (this.elements.parentResult) this.elements.parentResult.hidden = true;
-    if (this.elements.ticketForm) this.elements.ticketForm.hidden = true;
+    if (this.elements.ticketForm) this.elements.ticketForm.hidden = false;
     this.setComboboxOptions("parent-select", [], { placeholder: "Find eligible parents first", disabled: true });
   }
 
@@ -987,6 +1035,7 @@ export class TicketTemplateCreateTool extends BaseTool {
       return;
     }
     this.resetParentResolution();
+    this.resetCreationDraft();
     this.currentFeature = id ? await this.templateStorage.get(id) : null;
     this.elements.featureName.value = this.currentFeature?.name || "";
     this.renderFeatureOptions(id);
@@ -996,24 +1045,30 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   newFeature() {
     this.resetParentResolution();
+    this.resetCreationDraft();
     this.currentFeature = null;
     this.elements.featureName.value = "";
     this.renderFeatureOptions("");
-    this.field("parent-sources").value = "";
-    this.field("summary-mobile").value = "";
-    this.field("summary-web").value = "";
-    this.field("summary-be").value = "";
     this.setLookupValue("feature-labels", []);
-    this.field("description").value = "";
-    this.field("confluence-page").value = "";
-    this.field("be-component").value = "API";
-    this.syncComboboxValue("be-component");
-    ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, stream === "ios" || stream === "android"));
     this.applyGlobalDefaults();
     this.refreshStreamCards();
     this.renderOverrideNotice();
     this.renderCreatePreview();
     this.elements.featureName.focus();
+  }
+
+  resetCreationDraft() {
+    ["parent-sources", "summary-mobile", "summary-web", "summary-be", "description", "confluence-page"].forEach((name) => {
+      const field = this.field(name);
+      if (field) field.value = "";
+    });
+    const component = this.field("be-component");
+    if (component) {
+      component.value = "API";
+      this.syncComboboxValue("be-component");
+    }
+    ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, stream === "ios" || stream === "android"));
+    this.refreshStreamCards();
   }
 
   collectPeopleOverrides() {
@@ -1055,17 +1110,7 @@ export class TicketTemplateCreateTool extends BaseTool {
       id: this.currentFeature?.id,
       createdAt: this.currentFeature?.createdAt,
       name,
-      parentSources: splitValues(this.field("parent-sources").value),
-      selectedStreams: this.selectedStreams(),
-      summaries: {
-        mobile: this.field("summary-mobile").value.trim(),
-        web: this.field("summary-web").value.trim(),
-        be: this.field("summary-be").value.trim(),
-        beComponent: this.field("be-component").value,
-      },
       featureLabels: normalizeLabels(this.field("feature-labels").value),
-      description: this.field("description").value,
-      confluencePage: this.field("confluence-page").value.trim(),
       overrides,
     };
   }
@@ -1159,6 +1204,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.applyDateRule();
     this.updateDateHint();
     this.renderCreatePreview();
+    this.renderOverrideNotice();
   }
 
   applyFeature(feature) {
@@ -1173,17 +1219,7 @@ export class TicketTemplateCreateTool extends BaseTool {
         if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
       }
     };
-    const selected = new Set(feature.selectedStreams || ["ios", "android"]);
-    ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, selected.has(stream)));
-    ["ios", "android", "web", "be"].forEach((stream) => this.toggleStream(stream, selected.has(stream)));
-    set("parent-sources", (feature.parentSources || []).join("\n"));
-    set("summary-mobile", feature.summaries?.mobile);
-    set("summary-web", feature.summaries?.web);
-    set("summary-be", feature.summaries?.be);
-    set("be-component", feature.summaries?.beComponent || "API");
     set("feature-labels", feature.featureLabels || feature.shared?.extraLabels || []);
-    set("description", feature.description || "");
-    set("confluence-page", feature.confluencePage || "");
     const overrides = feature.overrides || {
       shared: feature.shared || {},
       people: { common: {}, streams: feature.people || {} },
@@ -1202,8 +1238,6 @@ export class TicketTemplateCreateTool extends BaseTool {
       set(`${stream}-developer-lead`, people.developerLead ?? globalPeople.developerLead);
       set(`${stream}-developer-sub-leads`, people.developerSubLeads ?? globalPeople.developerSubLeads);
     });
-    const prefix = this.container.querySelector("[data-be-prefix]");
-    if (prefix) prefix.textContent = `[${this.field("be-component")?.value || "API"}]`;
     this.applyDateRule();
     this.updateDateHint();
     this.renderOverrideNotice();
@@ -1220,8 +1254,70 @@ export class TicketTemplateCreateTool extends BaseTool {
     const streamOverrides = PEOPLE_STREAMS.filter((stream) => Object.keys(overrides?.people?.streams?.[stream] || {}).length);
     if (streamOverrides.length) messages.push(`Feature overrides people for ${streamOverrides.join(", ")}.`);
     if (overrides?.dateRule && Object.keys(overrides.dateRule).length) messages.push("Feature overrides the global date rule.");
+    const hasFeatureValues = this.renderConfigSources();
+    if (hasFeatureValues && !messages.length) messages.push("Feature values differ from Global config. Save feature config to reuse them.");
     this.elements.overrideNotice.hidden = messages.length === 0;
     this.elements.overrideNotice.textContent = messages.join(" ");
+    this.renderConfigSummary(hasFeatureValues);
+  }
+
+  renderConfigSources() {
+    const origin = (key, text) => {
+      const element = this.container.querySelector(`[data-config-origin="${key}"]`);
+      if (element) element.textContent = text;
+    };
+    const sharedChanged = (fieldName, key) => {
+      const value = this.field(fieldName)?.value || "";
+      return value !== (this.globalDefaults.shared[key] || "");
+    };
+    const peopleChanged = (stream) => {
+      const source = stream === "common" ? this.globalDefaults.people.common : this.globalDefaults.people.streams[stream];
+      const names = stream === "common" ? ["sa-ad-lead", "sa-ad-sub-leads"] : [`${stream}-developer`, `${stream}-developer-lead`, `${stream}-developer-sub-leads`];
+      const expected = stream === "common" ? [source.saAdLead, source.saAdSubLeads] : [source.developer, source.developerLead, source.developerSubLeads];
+      return names.some((name, index) => {
+        const actual = this.field(name)?.value || "";
+        const expectedValue = Array.isArray(expected[index]) ? expected[index].join(", ") : expected[index] || "";
+        return actual !== expectedValue;
+      });
+    };
+    const featureLabelCount = normalizeLabels(this.field("feature-labels")?.value).length;
+    origin("feature-labels", featureLabelCount ? "Feature labels · Global labels still apply" : "No feature labels · Global labels still apply");
+
+    const peopleKeys = ["common", ...PEOPLE_STREAMS];
+    const peopleOverride = peopleKeys.some((stream) => {
+      const changed = peopleChanged(stream);
+      origin(`people-${stream}`, changed ? "Feature override · Global fallback" : "Inherited from Global config");
+      return changed;
+    });
+
+    const sharedOverride = SHARED_DEFAULT_FIELDS.some(([fieldName, , key]) => {
+      const changed = sharedChanged(fieldName, key);
+      origin(fieldName, changed ? "Feature override" : "Inherited from Global config");
+      return changed;
+    });
+
+    const dateOverride = [
+      ["start-offset-days", this.globalDefaults.dateRule.startOffsetDays],
+      ["deadline-offset-days", this.globalDefaults.dateRule.deadlineOffsetDays],
+    ].some(([fieldName, expected]) => (this.field(fieldName)?.value || "") !== String(expected));
+    origin("start-offset-days", dateOverride ? "Feature override" : "Inherited from Global config");
+    origin("deadline-offset-days", dateOverride ? "Feature override" : "Inherited from Global config");
+
+    const hasFeatureValues = Boolean(featureLabelCount || peopleOverride || sharedOverride || dateOverride);
+    if (this.elements.featureConfigStatus) {
+      this.elements.featureConfigStatus.dataset.state = hasFeatureValues ? "ready" : "idle";
+      this.elements.featureConfigStatus.textContent = hasFeatureValues ? "Feature overrides active" : "Inherited from Global";
+    }
+    const scopeName = this.container.querySelector("[data-feature-scope-name]");
+    if (scopeName) scopeName.textContent = this.elements.featureName?.value.trim() || "New feature";
+    return hasFeatureValues;
+  }
+
+  renderConfigSummary(hasFeatureValues = false) {
+    if (!this.elements.prefillSource) return;
+    this.elements.prefillSource.textContent = hasFeatureValues
+      ? "Global config + Feature-level overrides"
+      : "Global config · feature uses inherited values";
   }
 
   lookupQuery(input) {
@@ -1433,8 +1529,6 @@ export class TicketTemplateCreateTool extends BaseTool {
       if (button) button.disabled = busy;
     });
     this.elements.discover.textContent = busy && label ? label : "Load Jira metadata";
-    const emptyDiscover = this.container.querySelector("[data-empty-discover]");
-    if (emptyDiscover) emptyDiscover.disabled = busy;
   }
 
   showInlineError(message) {

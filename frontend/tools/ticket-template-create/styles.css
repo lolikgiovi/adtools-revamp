@@ -62,6 +62,11 @@
   text-wrap: pretty;
 }
 
+.ttc-hero-copy > p:last-child {
+  font-size: 0.78rem;
+  max-width: 620px;
+}
+
 .ttc-eyebrow,
 .ttc-step-label,
 .ttc-card-kicker {
@@ -233,6 +238,16 @@
   grid-template-columns: minmax(280px, 0.3fr) minmax(0, 0.7fr);
 }
 
+.ticket-template-create[data-template-state="locked"] .ttc-workbench-grid {
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
+}
+
+.ticket-template-create[data-template-state="locked"] .ttc-main-column,
+.ticket-template-create[data-template-state="locked"] [data-post-discovery] {
+  display: none;
+}
+
 .ttc-rail,
 .ttc-main-column,
 .ttc-create-workflow {
@@ -242,7 +257,6 @@
 }
 
 .ttc-panel,
-.ttc-empty-state,
 .ttc-contract-details {
   background: var(--ttc-surface);
   border: 1px solid var(--ttc-border);
@@ -332,6 +346,81 @@
 .ttc-default-section {
   display: grid;
   gap: 9px;
+}
+
+.ttc-config-intro,
+.ttc-prefill-summary {
+  background: var(--ttc-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ttc-accent) 20%, transparent);
+  border-radius: 8px;
+}
+
+.ttc-config-intro {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.ttc-config-intro strong {
+  font-size: 0.78rem;
+}
+
+.ttc-config-intro p {
+  color: var(--ttc-muted);
+  font-size: 0.71rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.ttc-config-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ttc-config-origin {
+  color: var(--ttc-muted);
+  font-size: 0.64rem;
+  line-height: 1.3;
+}
+
+.ttc-prefill-summary {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.ttc-prefill-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ttc-prefill-summary strong {
+  font-size: 0.76rem;
+}
+
+.ttc-prefill-summary span {
+  color: var(--ttc-muted);
+  font-size: 0.68rem;
+}
+
+.ttc-prefill-summary a {
+  color: var(--ttc-accent);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ttc-prefill-summary a:hover,
+.ttc-prefill-summary a:focus-visible {
+  color: var(--ttc-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .ttc-subsection-heading h4 {
@@ -526,6 +615,49 @@
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ttc-scope-link {
+  align-items: center;
+  background: var(--ttc-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ttc-accent) 20%, transparent);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.ttc-scope-link > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ttc-scope-link strong {
+  font-size: 0.76rem;
+}
+
+.ttc-scope-link small {
+  color: var(--ttc-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.ttc-scope-link a {
+  color: var(--ttc-accent);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ttc-scope-link a:hover,
+.ttc-scope-link a:focus-visible {
+  color: var(--ttc-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .ttc-combobox-field {
@@ -1061,41 +1193,6 @@
   border-radius: 10px;
   color: #dc2626;
   padding: 11px 13px;
-}
-
-.ttc-empty-state {
-  align-items: center;
-  display: grid;
-  gap: 9px;
-  justify-items: start;
-  min-height: 280px;
-  padding: 28px;
-}
-
-.ttc-empty-state-mark {
-  align-items: center;
-  background: var(--ttc-accent-soft);
-  border-radius: 10px;
-  color: var(--ttc-accent);
-  display: flex;
-  font-size: 0.78rem;
-  font-weight: 800;
-  height: 34px;
-  justify-content: center;
-  letter-spacing: 0.08em;
-  width: 34px;
-}
-
-.ttc-empty-state h3 {
-  font-size: 1.3rem;
-  letter-spacing: -0.025em;
-  margin: 0;
-}
-
-.ttc-empty-state p {
-  color: var(--ttc-muted);
-  margin: 0 0 7px;
-  max-width: 460px;
 }
 
 .ttc-contract-details {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { TicketTemplateCreateTool } from "../main.js";
+import { TICKET_TEMPLATE_CREATE_TEMPLATE } from "../template.js";
 
 function createButton() {
   return document.createElement("button");
@@ -37,6 +38,34 @@ function createLookupHarness() {
 }
 
 describe("Ticket Template lookup controls", () => {
+  it("starts with one Jira metadata action and defers the workbench", () => {
+    const host = document.createElement("div");
+    host.innerHTML = TICKET_TEMPLATE_CREATE_TEMPLATE;
+    const root = host.querySelector(".ticket-template-create");
+
+    expect(root.dataset.templateState).toBe("locked");
+    expect(host.querySelectorAll("#ttc-discover")).toHaveLength(1);
+    expect(host.querySelectorAll("[data-empty-discover]")).toHaveLength(0);
+    expect(host.querySelectorAll("[data-post-discovery]")).toHaveLength(3);
+    expect(host.querySelector("#ttc-create-workflow").hidden).toBe(true);
+    expect(host.querySelector("#ttc-ticket-form").hidden).toBe(false);
+    expect(host.querySelector("#ttc-feature-config").textContent).toContain("Feature-level config");
+    expect(host.querySelector("[data-feature-config-link]")?.getAttribute("href")).toBe("#ttc-feature-config");
+    expect(host.querySelector("#ttc-feature-config").open).toBe(false);
+    expect(host.querySelector("#ttc-feature-config").textContent).toContain("Summary, description, Confluence Page");
+  });
+
+  it("finds the template root when mounted inside the app tool container", () => {
+    const mount = document.createElement("div");
+    mount.innerHTML = TICKET_TEMPLATE_CREATE_TEMPLATE;
+    const tool = Object.create(TicketTemplateCreateTool.prototype);
+    tool.container = mount;
+
+    expect(tool.templateRoot()).toBe(mount.querySelector(".ticket-template-create"));
+    tool.templateRoot().dataset.templateState = "ready";
+    expect(mount.querySelector(".ticket-template-create").dataset.templateState).toBe("ready");
+  });
+
   it("schedules Jira user lookup for boolean data-user-lookup attributes", () => {
     const { tool, userInput } = createLookupHarness();
     tool.bindActions();
