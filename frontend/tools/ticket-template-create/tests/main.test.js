@@ -38,7 +38,7 @@ function createLookupHarness() {
 }
 
 describe("Ticket Template lookup controls", () => {
-  it("starts with one Jira metadata action and defers the workbench", () => {
+  it("starts with PAT setup and defers project, feature, and ticket work", () => {
     const host = document.createElement("div");
     host.innerHTML = TICKET_TEMPLATE_CREATE_TEMPLATE;
     const root = host.querySelector(".ticket-template-create");
@@ -46,7 +46,11 @@ describe("Ticket Template lookup controls", () => {
     expect(root.dataset.templateState).toBe("locked");
     expect(host.querySelectorAll("#ttc-discover")).toHaveLength(1);
     expect(host.querySelectorAll("[data-empty-discover]")).toHaveLength(0);
-    expect(host.querySelectorAll("[data-post-discovery]")).toHaveLength(3);
+    expect(host.querySelectorAll("[data-post-discovery]")).toHaveLength(2);
+    expect(host.querySelector("#ttc-pat-setup").hidden).toBe(false);
+    expect(host.querySelector("#ttc-project-setup").hidden).toBe(true);
+    expect(host.querySelector("#ttc-feature-setup").hidden).toBe(true);
+    expect(host.querySelector("#ttc-workbench-shell").hidden).toBe(true);
     expect(host.querySelector("#ttc-create-workflow").hidden).toBe(true);
     expect(host.querySelector("#ttc-ticket-form").hidden).toBe(false);
     expect(host.querySelector("#ttc-feature-config").textContent).toContain("Feature-level config");

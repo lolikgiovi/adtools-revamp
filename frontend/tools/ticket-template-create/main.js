@@ -81,16 +81,16 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.tutorialStep = 0;
     this.tutorialSteps = [
       {
-        target: "connection",
+        target: "pat",
         kicker: "QUICK GUIDE · 1 OF 5",
-        title: "Load Jira metadata",
-        copy: "Start by loading the live Jira fields and your PAT owner. This only reads Jira.",
+        title: "Set up your Jira PAT",
+        copy: "Save the PAT once in Settings. Ticket Template uses it to read metadata and create tickets.",
       },
       {
-        target: "feature",
+        target: "project",
         kicker: "QUICK GUIDE · 2 OF 5",
-        title: "Save a feature once",
-        copy: "Choose a feature profile, then open Feature-level config to save reusable labels, people, Jira defaults, and date rules.",
+        title: "Load the project metadata",
+        copy: "Enter the Jira project key, then load its live fields. This is a read-only Jira request.",
       },
       {
         target: "global",
@@ -132,8 +132,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.loadConnection();
     this.bindActions();
     this.initializeDates();
-    this.initializeTutorial();
-    void this.refreshPatStatus();
+    void this.initializeEntryFlow();
     void this.initializeFeatureStorage();
   }
 
@@ -173,6 +172,15 @@ export class TicketTemplateCreateTool extends BaseTool {
       patStatus: query("#ttc-pat-status"),
       jiraSyncStatus: query("#ttc-jira-sync-status"),
       jiraSyncDetail: query("#ttc-jira-sync-detail"),
+      patSetup: query("#ttc-pat-setup"),
+      projectSetup: query("#ttc-project-setup"),
+      featureSetup: query("#ttc-feature-setup"),
+      featureList: query("#ttc-feature-list"),
+      featureEmpty: query("#ttc-feature-empty"),
+      newFeatureForm: query("#ttc-new-feature-form"),
+      featureCancel: query("#ttc-feature-cancel"),
+      featureCreate: query("#ttc-feature-create"),
+      workbench: query("#ttc-workbench-shell"),
       discover: query("#ttc-discover"),
       openSettings: query("#ttc-open-settings"),
       error: query("#ttc-error"),
@@ -189,6 +197,11 @@ export class TicketTemplateCreateTool extends BaseTool {
       dateHint: query("#ttc-date-hint"),
       contractDetails: query("#ttc-contract-details"),
       globalStatus: query("#ttc-global-status"),
+      globalPanel: query("#ttc-global-panel"),
+      configStack: query("#ttc-config-stack"),
+      globalConfigOpen: query("#ttc-global-config-open"),
+      featureConfigOpen: query("#ttc-feature-config-open"),
+      featureChange: query("#ttc-feature-change"),
       globalSave: query("#ttc-global-save"),
       featureStatus: query("#ttc-feature-status"),
       featureConfig: query("#ttc-feature-config"),
@@ -206,6 +219,10 @@ export class TicketTemplateCreateTool extends BaseTool {
       issueTypes: query("#ttc-issue-types"),
       overrideNotice: query("#ttc-override-notice"),
       prefillSource: query("#ttc-prefill-source"),
+      featureContextName: query("[data-feature-context-name]"),
+      featureContextKey: query("#ttc-feature-context-key"),
+      featureContextPrefill: query("#ttc-feature-context-prefill"),
+      projectPatState: query("#ttc-project-pat-state"),
     };
   }
 
@@ -463,6 +480,11 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements.resolveParent.addEventListener("click", () => void this.resolveParent());
     this.elements.create.addEventListener("click", () => void this.createTickets());
     this.elements.featureNew.addEventListener("click", () => this.newFeature());
+    this.elements.featureCreate?.addEventListener("click", () => this.newFeature());
+    this.elements.featureCancel?.addEventListener("click", () => this.showFeatureLibrary());
+    this.elements.featureChange?.addEventListener("click", () => this.showFeatureLibrary());
+    this.elements.globalConfigOpen?.addEventListener("click", () => this.openConfigPanel("global"));
+    this.elements.featureConfigOpen?.addEventListener("click", () => this.openConfigPanel("feature"));
     this.elements.featureSave.addEventListener("click", () => void this.saveFeature());
     this.elements.featureConfigSave?.addEventListener("click", () => void this.saveFeature());
     this.elements.featureDuplicate.addEventListener("click", () => void this.duplicateFeature());
@@ -479,12 +501,16 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.container.querySelectorAll("[data-feature-config-link]").forEach((link) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();
-        if (this.elements.featureConfig) this.elements.featureConfig.open = true;
-        this.elements.featureConfig?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        this.openConfigPanel("feature");
       });
     });
     this.container.addEventListener("click", (event) => {
       if (!event.target.closest("[data-tutorial], [data-tutorial-trigger]")) this.closeTutorial();
+      const featureChoice = event.target.closest("[data-feature-choice]");
+      if (featureChoice) {
+        void this.selectFeature(featureChoice.dataset.featureChoice);
+        return;
+      }
       const remove = event.target.closest("[data-lookup-remove]");
       if (remove) {
         const input = remove.closest(".ttc-lookup-field")?.querySelector("[data-lookup-input]");
@@ -560,6 +586,51 @@ export class TicketTemplateCreateTool extends BaseTool {
       // Private browsing or a restricted webview may deny local storage; help remains available manually.
     }
     this.openTutorial(0, true);
+  }
+
+  async initializeEntryFlow() {
+    const configured = await this.refreshPatStatus();
+    this.setTemplateStage(configured ? "project" : "pat");
+  }
+
+  setTemplateStage(stage) {
+    const root = this.templateRoot();
+    if (!root) return;
+    root.dataset.templateStage = stage;
+    root.dataset.templateState = stage === "ready" ? "ready" : "locked";
+    const visibility = [
+      [this.elements.patSetup, stage === "pat"],
+      [this.elements.projectSetup, stage === "project"],
+      [this.elements.featureSetup, stage === "feature"],
+      [this.elements.workbench, stage === "ready"],
+    ];
+    visibility.forEach(([element, visible]) => {
+      if (element) element.hidden = !visible;
+    });
+    if (this.elements.workflow) this.elements.workflow.hidden = stage !== "ready";
+    if (stage !== "ready") {
+      if (this.elements.configStack) this.elements.configStack.hidden = true;
+      this.elements.globalPanel?.removeAttribute("open");
+      this.elements.featureConfig?.removeAttribute("open");
+    }
+  }
+
+  showFeatureLibrary() {
+    if (!this.discovery) return;
+    this.setTemplateStage("feature");
+    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
+    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = this.features.length > 0;
+    this.renderFeatureOptions(this.currentFeature?.id || "");
+  }
+
+  openConfigPanel(scope = "feature") {
+    if (!this.elements.configStack) return;
+    this.elements.configStack.hidden = false;
+    const panel = scope === "global" ? this.elements.globalPanel : this.elements.featureConfig;
+    const other = scope === "global" ? this.elements.featureConfig : this.elements.globalPanel;
+    other?.removeAttribute("open");
+    if (panel) panel.open = true;
+    panel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
   openTutorial(step = 0, firstUse = false) {
@@ -704,10 +775,12 @@ export class TicketTemplateCreateTool extends BaseTool {
       const configured = await this.service.hasPat();
       this.elements.patStatus.dataset.state = configured ? "ready" : "missing";
       this.elements.patStatus.textContent = configured ? "PAT configured" : "PAT required";
+      if (this.elements.projectPatState) this.elements.projectPatState.textContent = configured ? "PAT configured" : "PAT required";
       return configured;
     } catch (_) {
       this.elements.patStatus.dataset.state = "missing";
       this.elements.patStatus.textContent = "PAT unavailable";
+      if (this.elements.projectPatState) this.elements.projectPatState.textContent = "PAT unavailable";
       return false;
     }
   }
@@ -729,13 +802,12 @@ export class TicketTemplateCreateTool extends BaseTool {
       this.renderDiscovery(this.discovery);
       this.applyGlobalDefaults();
       if (this.currentFeature) this.applyFeature(this.currentFeature);
-      this.elements.workflow.hidden = false;
-      const templateRoot = this.templateRoot();
-      if (templateRoot) templateRoot.dataset.templateState = "ready";
+      this.renderFeatureOptions();
+      this.setTemplateStage("feature");
       this.elements.contractDetails.hidden = false;
       this.setJiraSyncStatus("ready", "Jira metadata loaded", `Fetched ${new Date().toLocaleString()}. Option filtering is local; user and label lookup fetches on typing.`);
-      this.showSuccess("Jira creation fields loaded.");
-      this.elements.parentInput.focus();
+      this.showSuccess(`Jira metadata loaded for ${this.connection().projectKey}. Choose a feature to continue.`);
+      this.elements.featureList?.focus?.();
     } catch (error) {
       this.setJiraSyncStatus("missing", "Jira metadata unavailable", "Fix the connection or PAT, then try again.");
       this.showInlineError(String(error || "Jira discovery failed."));
@@ -966,10 +1038,8 @@ export class TicketTemplateCreateTool extends BaseTool {
       await this.templateStorage.init();
       this.features = await this.templateStorage.list();
       this.elements.featureStatus.dataset.state = "ready";
-      this.elements.featureStatus.textContent = "Features ready";
+      this.elements.featureStatus.textContent = this.features.length ? `${this.features.length} saved feature${this.features.length === 1 ? "" : "s"}` : "No saved features";
       this.renderFeatureOptions();
-      if (this.features[0]) await this.selectFeature(this.features[0].id);
-      else this.newFeature();
     } catch (error) {
       this.elements.featureStatus.dataset.state = "missing";
       this.elements.featureStatus.textContent = "Storage unavailable";
@@ -1027,6 +1097,27 @@ export class TicketTemplateCreateTool extends BaseTool {
       [{ value: "", label: "New feature" }, ...this.features.map((feature) => ({ value: feature.id, label: feature.name }))],
       { selectedValue: selectedId, placeholder: "New feature" },
     );
+    if (this.elements.featureList) {
+      this.elements.featureList.innerHTML = this.features.length
+        ? this.features
+            .map(
+              (feature) => `
+                <article class="ttc-feature-option${feature.id === selectedId ? " is-selected" : ""}">
+                  <div class="ttc-feature-option-copy"><span class="ttc-feature-option-marker" aria-hidden="true">↳</span><div><strong>${this.escapeHtml(feature.name)}</strong><small>Saved ${this.escapeHtml(this.formatFeatureDate(feature.updatedAt || feature.createdAt))}</small></div></div>
+                  <button class="btn btn-primary" type="button" data-feature-choice="${this.escapeHtml(feature.id)}">Use feature <span aria-hidden="true">→</span></button>
+                </article>`,
+            )
+            .join("")
+        : "";
+    }
+    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = this.features.length > 0 || !this.elements.newFeatureForm?.hidden;
+  }
+
+  formatFeatureDate(value) {
+    if (!value) return "recently";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "recently";
+    return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(date);
   }
 
   async selectFeature(id) {
@@ -1041,6 +1132,10 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.renderFeatureOptions(id);
     this.applyGlobalDefaults();
     if (this.currentFeature) this.applyFeature(this.currentFeature);
+    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
+    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
+    this.setTemplateStage("ready");
+    this.renderFeatureContext();
   }
 
   newFeature() {
@@ -1054,7 +1149,10 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.refreshStreamCards();
     this.renderOverrideNotice();
     this.renderCreatePreview();
-    this.elements.featureName.focus();
+    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = false;
+    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
+    this.setTemplateStage("feature");
+    requestAnimationFrame(() => this.elements.featureName?.focus());
   }
 
   resetCreationDraft() {
@@ -1118,14 +1216,19 @@ export class TicketTemplateCreateTool extends BaseTool {
   async saveFeature() {
     this.clearError();
     try {
+      const wasExisting = Boolean(this.currentFeature?.id);
       const feature = this.collectFeature();
       const duplicate = this.features.find((candidate) => candidate.id !== feature.id && candidate.name.toLowerCase() === feature.name.toLowerCase());
       if (duplicate) throw new Error(`A feature named “${duplicate.name}” already exists.`);
       this.currentFeature = await this.templateStorage.save(feature);
       this.features = await this.templateStorage.list();
       this.renderFeatureOptions(this.currentFeature.id);
+      if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
+      if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
+      this.setTemplateStage("ready");
+      this.renderFeatureContext();
       this.renderOverrideNotice();
-      this.showSuccess(`Saved feature “${this.currentFeature.name}”.`);
+      this.showSuccess(`${wasExisting ? "Saved" : "Created"} feature “${this.currentFeature.name}”. Choose a Jira parent to continue.`);
     } catch (error) {
       this.showInlineError(String(error || "Unable to save feature."));
     }
@@ -1141,6 +1244,7 @@ export class TicketTemplateCreateTool extends BaseTool {
       this.features = await this.templateStorage.list();
       this.elements.featureName.value = this.currentFeature.name;
       this.renderFeatureOptions(this.currentFeature.id);
+      this.renderFeatureContext();
       this.showSuccess(`Duplicated as “${this.currentFeature.name}”.`);
     } catch (error) {
       this.showInlineError(String(error || "Unable to duplicate feature."));
@@ -1318,6 +1422,13 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements.prefillSource.textContent = hasFeatureValues
       ? "Global config + Feature-level overrides"
       : "Global config · feature uses inherited values";
+    this.renderFeatureContext(hasFeatureValues);
+  }
+
+  renderFeatureContext(hasFeatureValues = this.currentFeature ? Boolean(this.currentFeature.overrides && Object.keys(this.currentFeature.overrides).some((key) => Object.keys(this.currentFeature.overrides[key] || {}).length)) : false) {
+    if (this.elements.featureContextName) this.elements.featureContextName.textContent = this.currentFeature?.name || "New feature";
+    if (this.elements.featureContextKey) this.elements.featureContextKey.textContent = this.elements.projectKey?.value?.trim()?.toUpperCase() || "—";
+    if (this.elements.featureContextPrefill) this.elements.featureContextPrefill.textContent = hasFeatureValues ? "Global + feature" : "Global defaults";
   }
 
   lookupQuery(input) {
