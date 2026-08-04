@@ -48,6 +48,26 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
       </div>
     </header>
 
+    <section class="ttc-workspace-header" data-tutorial-target="project" aria-label="Ticket template workspace controls">
+      <div class="ttc-workspace-header-left">
+        <div class="ttc-header-control ttc-project-control">
+          ${customCombobox({ field: "project-key", label: "Project", placeholder: "Choose a project", id: "ttc-project-select" })}
+          <button id="ttc-project-reload" class="ttc-icon-button" type="button" aria-label="Reload Jira project metadata" title="Reload Jira project metadata">↻</button>
+          <span id="ttc-project-status" class="ttc-header-status" data-state="idle">Choose a project</span>
+        </div>
+        <div class="ttc-header-control ttc-feature-control">
+          ${customCombobox({ field: "feature-select", label: "Feature", placeholder: "Choose a feature", id: "ttc-feature-select" })}
+          <button id="ttc-feature-edit" class="ttc-icon-button" type="button" aria-label="Edit selected feature" title="Edit selected feature" disabled>✎</button>
+          <span id="ttc-feature-status" class="ttc-header-status" data-state="idle">Choose a feature</span>
+        </div>
+      </div>
+      <div class="ttc-workspace-header-right">
+        <button id="ttc-feature-config-open" class="ttc-header-action" type="button" disabled><span>Feature config</span><small>Selected feature</small></button>
+        <button id="ttc-global-config-open" class="ttc-header-action" type="button"><span>Global config</span><small>All tickets</small></button>
+        ${customCombobox({ field: "ticket-type", label: "Ticket type", placeholder: "Choose ticket type", id: "ttc-ticket-type" })}
+      </div>
+    </section>
+
     <aside id="ttc-tutorial" class="ttc-tutorial" data-tutorial hidden role="dialog" aria-modal="false" aria-labelledby="ttc-tutorial-title" aria-describedby="ttc-tutorial-copy">
       <div class="ttc-tutorial-header">
         <span class="ttc-tutorial-kicker" data-tutorial-kicker>QUICK GUIDE · 1 OF 5</span>
@@ -63,94 +83,43 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
 
     <div id="ttc-error" class="ttc-error" role="alert" hidden></div>
 
-    <section id="ttc-pat-setup" class="ttc-panel ttc-entry-state" data-entry-state="pat" data-tutorial-target="pat" aria-labelledby="ttc-pat-setup-title">
-      <div class="ttc-entry-mark" aria-hidden="true">01</div>
-      <div class="ttc-entry-copy">
-        <p class="ttc-eyebrow">FIRST-TIME SETUP</p>
-        <h3 id="ttc-pat-setup-title">Connect your Jira account</h3>
-        <p>Ticket Template needs your Jira Personal Access Token to read metadata and create tickets. Your PAT stays in the desktop credential store.</p>
-        <div class="ttc-entry-note"><span class="ttc-entry-note-icon" aria-hidden="true">↗</span><span>After saving the PAT, come back here. Your Jira project and saved features will be ready to choose.</span></div>
-      </div>
-      <div class="ttc-entry-action">
-        <span id="ttc-pat-status" class="ttc-status-badge" data-state="checking">Checking PAT…</span>
-        <button id="ttc-open-settings" class="btn btn-primary" type="button">Set up Jira PAT</button>
-      </div>
+    <section id="ttc-pat-setup" class="ttc-panel ttc-inline-state" data-tutorial-target="pat" hidden aria-labelledby="ttc-pat-setup-title">
+      <div><p class="ttc-eyebrow">JIRA PAT REQUIRED</p><h3 id="ttc-pat-setup-title">Set up Jira once to start</h3><p id="ttc-pat-copy">Your Jira PAT is stored securely in the desktop credential store.</p></div>
+      <div class="ttc-inline-state-action"><span id="ttc-pat-status" class="ttc-status-badge" data-state="checking">Checking PAT…</span><button id="ttc-open-settings" class="btn btn-primary" type="button">Set up Jira PAT</button></div>
     </section>
 
-    <section id="ttc-project-setup" class="ttc-panel ttc-entry-state" data-entry-state="project" data-tutorial-target="project" hidden aria-labelledby="ttc-project-setup-title">
-      <div class="ttc-entry-mark" aria-hidden="true">02</div>
-      <div class="ttc-entry-copy">
-        <p class="ttc-eyebrow">JIRA PROJECT</p>
-        <h3 id="ttc-project-setup-title">Which project are you working in?</h3>
-        <p>Enter the project key once. We’ll load the live Jira fields and then show the feature profiles saved for this project.</p>
-      </div>
-      <div class="ttc-project-form">
-        <label class="ttc-field"><span>Project key</span><input id="ttc-project-key" type="text" autocomplete="off" maxlength="32" placeholder="e.g. PMT or EVDF" /></label>
-        <label class="ttc-field ttc-project-url"><span>Jira URL</span><input id="ttc-base-url" type="url" autocomplete="off" spellcheck="false" /></label>
-        <details class="ttc-advanced-details">
-          <summary>Connection safety</summary>
-          <label class="ttc-tls-option">
-            <input id="ttc-allow-invalid-tls" type="checkbox" />
-            <span><strong>Allow untrusted Jira certificate</strong><small>Use only while the corporate CA is unavailable.</small></span>
-          </label>
-        </details>
-        <button id="ttc-discover" class="btn btn-primary ttc-full-button" type="button">Load Jira metadata</button>
-        <span class="ttc-entry-footnote"><span id="ttc-project-pat-state">PAT configured</span> · No Jira changes are made while loading metadata.</span>
-      </div>
+    <section id="ttc-workspace-empty" class="ttc-panel ttc-workspace-empty" aria-live="polite">
+      <span class="ttc-workspace-empty-mark" aria-hidden="true">↳</span>
+      <div><strong id="ttc-workspace-empty-title">Choose a project to load Jira metadata</strong><p id="ttc-workspace-empty-copy">Use the Project dropdown above to add a project or select a saved one. Then use ↻ to refresh its Jira fields.</p></div>
     </section>
 
-    <section id="ttc-feature-setup" class="ttc-panel ttc-feature-setup" data-entry-state="feature" data-tutorial-target="feature" hidden aria-labelledby="ttc-feature-setup-title">
-      <div class="ttc-section-heading ttc-feature-setup-heading">
-        <div>
-          <p class="ttc-eyebrow">FEATURE LIBRARY</p>
-          <h3 id="ttc-feature-setup-title">Choose a feature to start</h3>
-          <p>These saved profiles carry the defaults you use when creating tickets. Choose one to continue, or create a new profile.</p>
+    <dialog id="ttc-project-dialog" class="ttc-dialog" aria-labelledby="ttc-project-dialog-title">
+      <form id="ttc-project-form" class="ttc-dialog-form">
+        <div class="ttc-dialog-header"><div><p class="ttc-eyebrow">PROJECT</p><h3 id="ttc-project-dialog-title">Add a Jira project</h3><p>Enter the project key. We’ll validate it against Jira before saving it locally.</p></div><button class="ttc-dialog-close" data-dialog-close type="button" aria-label="Close project dialog">×</button></div>
+        <label class="ttc-field"><span>Project key</span><input id="ttc-project-key-entry" type="text" autocomplete="off" maxlength="32" placeholder="e.g. PMT or EVDF" /></label>
+        <input id="ttc-base-url" type="hidden" />
+        <input id="ttc-allow-invalid-tls" type="checkbox" hidden />
+        <div class="ttc-dialog-actions"><button class="btn btn-secondary" data-dialog-close type="button">Cancel</button><button id="ttc-project-save" class="btn btn-primary" type="submit">Validate and save</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="ttc-feature-dialog" class="ttc-dialog ttc-feature-dialog" aria-labelledby="ttc-feature-dialog-title">
+      <form id="ttc-feature-form" class="ttc-dialog-form">
+        <div class="ttc-dialog-header"><div><p class="ttc-eyebrow">FEATURE</p><h3 id="ttc-feature-dialog-title">Edit feature</h3><p>Keep the Jira requirements here so the ticket flow can stay focused.</p></div><button class="ttc-dialog-close" data-dialog-close type="button" aria-label="Close feature dialog">×</button></div>
+        <div class="ttc-dialog-grid">
+          <label class="ttc-field"><span>Feature name</span><input id="ttc-feature-name" type="text" placeholder="e.g. Payment Redeem Point" maxlength="100" /></label>
+          <label class="ttc-field"><span>Feature Epic</span><input id="ttc-feature-epic" type="text" placeholder="PMT-1234 or Jira link" /></label>
+          <label class="ttc-field ttc-wide"><span>Stories and Improvements</span><textarea id="ttc-feature-parent-sources" rows="4" placeholder="One Jira key or link per line"></textarea></label>
+          <label class="ttc-field ttc-wide"><span>Known bugs for this feature</span><textarea id="ttc-feature-bug-sources" rows="3" placeholder="Optional: one bug key or link per line"></textarea></label>
         </div>
-        <div class="ttc-feature-setup-actions"><span id="ttc-feature-status" class="ttc-status-badge" data-state="checking">Loading features…</span><button id="ttc-feature-create" class="btn btn-secondary" type="button">New feature</button></div>
-      </div>
-      <div id="ttc-feature-list" class="ttc-feature-list"></div>
-      <div id="ttc-feature-empty" class="ttc-feature-empty" hidden>
-        <div class="ttc-empty-icon" aria-hidden="true">+</div>
-        <div><strong>No saved features yet</strong><p>Create your first feature profile and reuse its ticket defaults next time.</p></div>
-        <button id="ttc-feature-new" class="btn btn-primary" type="button">Create new feature</button>
-      </div>
-      <div id="ttc-new-feature-form" class="ttc-new-feature-form" hidden>
-        <div><span class="ttc-step-label">NEW FEATURE</span><h4>Name this feature profile</h4><p>You can configure defaults after it’s created.</p></div>
-        <label class="ttc-field"><span>Feature name</span><input id="ttc-feature-name" type="text" placeholder="e.g. Payment Redeem Point" maxlength="100" /></label>
-        <div class="ttc-template-actions">
-          <button id="ttc-feature-cancel" class="btn btn-secondary" type="button">Back to features</button>
-          <button id="ttc-feature-save" class="btn btn-primary" type="button">Create feature</button>
-        </div>
-      </div>
-      <div class="ttc-combobox-compat" hidden>${customCombobox({ field: "feature-select", label: "Saved feature", placeholder: "Choose a feature", id: "ttc-feature-select" })}</div>
-    </section>
+        <div class="ttc-dialog-actions"><button class="btn btn-secondary" data-dialog-close type="button">Cancel</button><button id="ttc-feature-save" class="btn btn-primary" type="submit">Save feature</button></div>
+      </form>
+    </dialog>
 
     <div id="ttc-workbench-shell" class="ttc-workbench-grid" hidden>
-      <aside class="ttc-rail" aria-label="Selected feature and reusable defaults">
-        <section class="ttc-panel ttc-rail-card ttc-feature-context" data-tutorial-target="feature" aria-labelledby="ttc-feature-title">
-          <div class="ttc-step-label">FEATURE</div>
-          <div class="ttc-feature-context-header">
-            <div>
-              <h3 id="ttc-feature-title" data-feature-context-name>Selected feature</h3>
-              <p id="ttc-feature-context-project">Defaults are prefilled for this ticket run.</p>
-            </div>
-            <span id="ttc-feature-context-status" class="ttc-status-badge" data-state="ready">Ready</span>
-          </div>
-          <div class="ttc-feature-context-actions">
-            <button id="ttc-feature-change" class="btn btn-secondary" type="button">Change feature</button>
-          </div>
-          <div class="ttc-feature-config-actions" aria-label="Feature configuration">
-            <button id="ttc-global-config-open" class="ttc-config-button" type="button"><span>Global config</span><small>All tickets</small><b aria-hidden="true">→</b></button>
-            <button id="ttc-feature-config-open" class="ttc-config-button" type="button"><span>Feature config</span><small>This feature</small><b aria-hidden="true">→</b></button>
-          </div>
-          <div class="ttc-feature-context-meta"><span>Project</span><strong id="ttc-feature-context-key">—</strong><span>Prefill</span><strong id="ttc-feature-context-prefill">Global defaults</strong></div>
-          <div class="ttc-template-actions ttc-context-secondary-actions">
-            <button id="ttc-feature-duplicate" class="btn btn-secondary" type="button">Duplicate</button>
-            <button id="ttc-feature-delete" class="btn btn-quiet" type="button">Delete</button>
-          </div>
-        </section>
-
+      <aside class="ttc-rail" aria-label="Ticket template configuration">
         <div id="ttc-config-stack" class="ttc-config-stack" hidden>
+        <div class="ttc-config-stack-header"><strong>Configuration</strong><button class="ttc-dialog-close" data-config-close type="button" aria-label="Close configuration">×</button></div>
         <details id="ttc-global-panel" class="ttc-panel ttc-defaults-panel" data-tutorial-target="global" data-post-discovery>
           <summary class="ttc-panel-summary">
             <span><span class="ttc-step-label">03 · GLOBAL CONFIG</span><strong>Global config</strong><small>Set the starting values used for every new ticket. Feature-level config can override them.</small></span>
@@ -260,17 +229,17 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
 
       <main class="ttc-main-column">
         <section id="ttc-create-workflow" class="ttc-create-workflow" hidden>
-          <section class="ttc-panel ttc-flow-panel" data-tutorial-target="parent">
+          <section class="ttc-panel ttc-flow-panel" data-tutorial-target="parent" data-ticket-mode-panel>
             <div class="ttc-step-label">01 · JIRA PARENT</div>
             <div class="ttc-panel-header">
               <div>
                 <h3>Choose the Jira ticket to create under</h3>
-                <p>Paste a Story, Improvement, or Bug key or URL. Epic children are also supported and merged into one list.</p>
+                <p data-parent-mode-copy>Paste a Story, Improvement, or Bug key or URL. Epic children are also supported and merged into one list.</p>
               </div>
               <span class="ttc-flow-status">Read first · write later</span>
             </div>
             <div class="ttc-parent-lookup">
-              <label class="ttc-field"><span>Jira parent</span><textarea id="ttc-parent-input" data-field="parent-sources" rows="3" placeholder="Paste one key or URL\nEVDEV-350436"></textarea></label>
+              <label class="ttc-field"><span data-parent-mode-label>Jira parent</span><textarea id="ttc-parent-input" data-field="parent-sources" rows="3" placeholder="Paste one key or URL\nEVDEV-350436"></textarea></label>
               <button id="ttc-resolve-parent" class="btn btn-primary" type="button">Find parent</button>
             </div>
             <div id="ttc-parent-result" class="ttc-parent-result" hidden>
@@ -290,9 +259,10 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
             </div>
 
             <div class="ttc-prefill-summary" id="ttc-prefill-summary">
-              <div><strong>Config prefill</strong><span id="ttc-prefill-source">Global config · feature uses inherited values</span></div>
+              <div><strong>Config prefill</strong><span id="ttc-prefill-source">Choose a feature to apply its defaults</span></div>
               <a href="#ttc-feature-config" data-feature-config-link>View config <span aria-hidden="true">→</span></a>
             </div>
+            <div class="ttc-prefill-legend" aria-label="Prefill source legend"><span data-source="global">Global config</span><span data-source="feature">Feature config</span><span data-source="user">Your input</span></div>
 
             <fieldset class="ttc-stream-picker">
               <legend>Ticket stream</legend>

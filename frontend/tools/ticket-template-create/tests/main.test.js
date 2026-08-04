@@ -38,21 +38,22 @@ function createLookupHarness() {
 }
 
 describe("Ticket Template lookup controls", () => {
-  it("starts with PAT setup and defers project, feature, and ticket work", () => {
+  it("starts with a compact project workspace and defers ticket work", () => {
     const host = document.createElement("div");
     host.innerHTML = TICKET_TEMPLATE_CREATE_TEMPLATE;
     const root = host.querySelector(".ticket-template-create");
 
     expect(root.dataset.templateState).toBe("locked");
-    expect(host.querySelectorAll("#ttc-discover")).toHaveLength(1);
-    expect(host.querySelectorAll("[data-empty-discover]")).toHaveLength(0);
+    expect(host.querySelectorAll("#ttc-project-select")).toHaveLength(1);
+    expect(host.querySelectorAll("#ttc-feature-select")).toHaveLength(1);
+    expect(host.querySelectorAll("#ttc-ticket-type")).toHaveLength(1);
+    expect(host.querySelectorAll("#ttc-project-reload")).toHaveLength(1);
+    expect(host.querySelectorAll("#ttc-project-dialog, #ttc-feature-dialog")).toHaveLength(2);
     expect(host.querySelectorAll("[data-post-discovery]")).toHaveLength(2);
-    expect(host.querySelector("#ttc-pat-setup").hidden).toBe(false);
-    expect(host.querySelector("#ttc-project-setup").hidden).toBe(true);
-    expect(host.querySelector("#ttc-feature-setup").hidden).toBe(true);
+    expect(host.querySelector("#ttc-pat-setup").hidden).toBe(true);
+    expect(host.querySelector("#ttc-workspace-empty").hidden).toBe(false);
     expect(host.querySelector("#ttc-workbench-shell").hidden).toBe(true);
     expect(host.querySelector("#ttc-create-workflow").hidden).toBe(true);
-    expect(host.querySelector("#ttc-ticket-form").hidden).toBe(false);
     expect(host.querySelector("#ttc-feature-config").textContent).toContain("Feature-level config");
     expect(host.querySelector("[data-feature-config-link]")?.getAttribute("href")).toBe("#ttc-feature-config");
     expect(host.querySelector("#ttc-feature-config").open).toBe(false);
@@ -68,6 +69,18 @@ describe("Ticket Template lookup controls", () => {
     expect(tool.templateRoot()).toBe(mount.querySelector(".ticket-template-create"));
     tool.templateRoot().dataset.templateState = "ready";
     expect(mount.querySelector(".ticket-template-create").dataset.templateState).toBe("ready");
+  });
+
+  it("binds the project combobox value instead of a removed project text input", () => {
+    const mount = document.createElement("div");
+    mount.innerHTML = TICKET_TEMPLATE_CREATE_TEMPLATE;
+    const tool = Object.create(TicketTemplateCreateTool.prototype);
+    tool.container = mount;
+
+    tool.bindElements();
+
+    expect(tool.elements.projectKey).toBe(mount.querySelector('[data-field="project-key"]'));
+    expect(tool.elements.projectKey?.id).toBe("ttc-project-select");
   });
 
   it("schedules Jira user lookup for boolean data-user-lookup attributes", () => {
@@ -194,7 +207,17 @@ describe("Ticket Template lookup controls", () => {
     `;
     tool.container.append(wrapper);
     tool.comboboxStates = new Map([
-      ["priority", { options: [{ value: "low", label: "Low" }, { value: "high", label: "High" }], filtered: [], activeIndex: -1 }],
+      [
+        "priority",
+        {
+          options: [
+            { value: "low", label: "Low" },
+            { value: "high", label: "High" },
+          ],
+          filtered: [],
+          activeIndex: -1,
+        },
+      ],
     ]);
     tool.filterCombobox(wrapper, "");
     const search = wrapper.querySelector("[data-combobox-search]");

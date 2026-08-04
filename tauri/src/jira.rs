@@ -13,6 +13,7 @@ pub struct JiraDiscovery {
     pub server: ServerSummary,
     pub user: UserSummary,
     pub project_key: String,
+    pub project_name: Option<String>,
     pub issue_types: Vec<IssueTypeDiscovery>,
     pub samples: Vec<SampleIssue>,
 }
@@ -141,6 +142,8 @@ pub async fn discover(
 
     let server_json = get_json(client, &base_url, "/rest/api/2/serverInfo", pat).await?;
     let user_json = get_json(client, &base_url, "/rest/api/2/myself", pat).await?;
+    let project_path = format!("/rest/api/2/project/{}", urlencoding::encode(&project_key));
+    let project_json = get_json(client, &base_url, &project_path, pat).await.ok();
     let issue_types_path = format!(
         "/rest/api/2/issue/createmeta/{}/issuetypes",
         urlencoding::encode(&project_key)
@@ -224,6 +227,7 @@ pub async fn discover(
         server,
         user,
         project_key,
+        project_name: project_json.and_then(|project| project.get("name").and_then(Value::as_str).map(ToString::to_string)),
         issue_types,
         samples,
     })

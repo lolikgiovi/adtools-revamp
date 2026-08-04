@@ -34,6 +34,9 @@ const SHARED_DEFAULT_FIELDS = [
 
 const PEOPLE_STREAMS = ["ios", "android", "web", "be"];
 const TUTORIAL_STORAGE_KEY = "ticket-template:tutorial-seen";
+const PROJECTS_STORAGE_KEY = "ticket-template:projects";
+const NEW_PROJECT_VALUE = "__new_project__";
+const NEW_FEATURE_VALUE = "__new_feature__";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -46,7 +49,12 @@ function globalDefaultsFromStorage(value) {
     ...defaults,
     ...value,
     labels: { ...defaults.labels, ...value.labels, be: { ...defaults.labels.be, ...value.labels?.be } },
-    people: { ...defaults.people, ...value.people, common: { ...defaults.people.common, ...value.people?.common }, streams: { ...defaults.people.streams } },
+    people: {
+      ...defaults.people,
+      ...value.people,
+      common: { ...defaults.people.common, ...value.people?.common },
+      streams: { ...defaults.people.streams },
+    },
     shared: { ...defaults.shared, ...value.shared },
     dateRule: { ...defaults.dateRule, ...value.dateRule },
   };
@@ -71,8 +79,13 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements = {};
     this.discovery = null;
     this.parentResolution = null;
+    this.projects = [];
+    this.selectedProject = null;
     this.features = [];
+    this.allFeatures = [];
     this.currentFeature = null;
+    this.patConfigured = false;
+    this.ticketType = "ad-task";
     this.globalDefaults = createDefaultGlobalDefaults();
     this.lookupTimers = new Map();
     this.lookupActiveIndexes = new Map();
@@ -167,21 +180,24 @@ export class TicketTemplateCreateTool extends BaseTool {
     const query = (selector) => this.container.querySelector(selector);
     this.elements = {
       baseUrl: query("#ttc-base-url"),
-      projectKey: query("#ttc-project-key"),
+      projectKey: query('[data-field="project-key"]'),
       allowInvalidTls: query("#ttc-allow-invalid-tls"),
       patStatus: query("#ttc-pat-status"),
       jiraSyncStatus: query("#ttc-jira-sync-status"),
       jiraSyncDetail: query("#ttc-jira-sync-detail"),
       patSetup: query("#ttc-pat-setup"),
-      projectSetup: query("#ttc-project-setup"),
-      featureSetup: query("#ttc-feature-setup"),
-      featureList: query("#ttc-feature-list"),
-      featureEmpty: query("#ttc-feature-empty"),
-      newFeatureForm: query("#ttc-new-feature-form"),
-      featureCancel: query("#ttc-feature-cancel"),
-      featureCreate: query("#ttc-feature-create"),
+      projectStatus: query("#ttc-project-status"),
+      featureStatus: query("#ttc-feature-status"),
       workbench: query("#ttc-workbench-shell"),
-      discover: query("#ttc-discover"),
+      discover: query("#ttc-project-reload"),
+      projectReload: query("#ttc-project-reload"),
+      projectDialog: query("#ttc-project-dialog"),
+      projectForm: query("#ttc-project-form"),
+      projectKeyEntry: query("#ttc-project-key-entry"),
+      projectSave: query("#ttc-project-save"),
+      workspaceEmpty: query("#ttc-workspace-empty"),
+      workspaceEmptyTitle: query("#ttc-workspace-empty-title"),
+      workspaceEmptyCopy: query("#ttc-workspace-empty-copy"),
       openSettings: query("#ttc-open-settings"),
       error: query("#ttc-error"),
       workflow: query("#ttc-create-workflow"),
@@ -199,20 +215,25 @@ export class TicketTemplateCreateTool extends BaseTool {
       globalStatus: query("#ttc-global-status"),
       globalPanel: query("#ttc-global-panel"),
       configStack: query("#ttc-config-stack"),
+      configClose: query("[data-config-close]"),
       globalConfigOpen: query("#ttc-global-config-open"),
       featureConfigOpen: query("#ttc-feature-config-open"),
-      featureChange: query("#ttc-feature-change"),
       globalSave: query("#ttc-global-save"),
-      featureStatus: query("#ttc-feature-status"),
       featureConfig: query("#ttc-feature-config"),
       featureConfigStatus: query("#ttc-feature-config-status"),
       featureConfigSave: query("#ttc-feature-config-save"),
       featureSelect: query("#ttc-feature-select"),
+      featureEdit: query("#ttc-feature-edit"),
+      featureDialog: query("#ttc-feature-dialog"),
+      featureForm: query("#ttc-feature-form"),
       featureName: query("#ttc-feature-name"),
-      featureNew: query("#ttc-feature-new"),
+      featureEpic: query("#ttc-feature-epic"),
+      featureParentSources: query("#ttc-feature-parent-sources"),
+      featureBugSources: query("#ttc-feature-bug-sources"),
       featureSave: query("#ttc-feature-save"),
       featureDuplicate: query("#ttc-feature-duplicate"),
       featureDelete: query("#ttc-feature-delete"),
+      ticketType: query("#ttc-ticket-type"),
       results: query("#ttc-results"),
       resultTime: query("#ttc-result-time"),
       summary: query("#ttc-summary"),
@@ -230,7 +251,13 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.container.querySelectorAll("[data-people-stream]").forEach((container) => {
       const stream = container.dataset.peopleStream;
       const scope = container.dataset.peopleScope || "feature";
-      const fields = stream === "common" ? [["sa-ad-lead", "AD / SA Lead Jira user *"], ["sa-ad-sub-leads", "AD / SA Sub-Lead Jira user(s) *"]] : PEOPLE_FIELDS;
+      const fields =
+        stream === "common"
+          ? [
+              ["sa-ad-lead", "AD / SA Lead Jira user *"],
+              ["sa-ad-sub-leads", "AD / SA Sub-Lead Jira user(s) *"],
+            ]
+          : PEOPLE_FIELDS;
       const prefix = scope === "global" ? "global-" : "";
       container.innerHTML = fields
         .map(([field, label]) => {
@@ -252,14 +279,50 @@ export class TicketTemplateCreateTool extends BaseTool {
       const field = wrapper.dataset.comboboxField;
       this.comboboxStates.set(field, { options: [], filtered: [], activeIndex: -1, placeholder: "Choose an option", disabled: false });
     });
-    this.setComboboxOptions("feature-select", [{ value: "", label: "New feature" }], { selectedValue: "", placeholder: "New feature" });
+    this.setComboboxOptions(
+      "project-key",
+      [
+        { value: "", label: "Choose a project" },
+        { value: NEW_PROJECT_VALUE, label: "+ Create new project" },
+      ],
+      { selectedValue: "", placeholder: "Choose a project" },
+    );
+    this.setComboboxOptions(
+      "feature-select",
+      [
+        { value: "", label: "Choose a feature" },
+        { value: NEW_FEATURE_VALUE, label: "+ Create new feature" },
+      ],
+      { selectedValue: "", placeholder: "Choose a feature" },
+    );
+    this.setComboboxOptions(
+      "ticket-type",
+      [
+        { value: "ad-task", label: "AD task" },
+        { value: "bug-fixing", label: "Bug fixing task" },
+      ],
+      { selectedValue: "ad-task", placeholder: "AD task" },
+    );
     this.setComboboxOptions("parent-select", [], { placeholder: "Find eligible parents first", disabled: true });
     this.setComboboxOptions(
       "be-component",
       Object.keys(BE_COMPONENTS).map((component) => ({ value: component, label: component })),
       { selectedValue: "API", placeholder: "API" },
     );
-    ["ad-story-point", "dev-story-point", "priority", "release", "squad", "task-trigger", "global-ad-story-point", "global-dev-story-point", "global-priority", "global-release", "global-squad", "global-task-trigger"].forEach((field) => {
+    [
+      "ad-story-point",
+      "dev-story-point",
+      "priority",
+      "release",
+      "squad",
+      "task-trigger",
+      "global-ad-story-point",
+      "global-dev-story-point",
+      "global-priority",
+      "global-release",
+      "global-squad",
+      "global-task-trigger",
+    ].forEach((field) => {
       this.setComboboxOptions(field, [], { placeholder: "Load Jira metadata first", disabled: true });
     });
   }
@@ -299,7 +362,8 @@ export class TicketTemplateCreateTool extends BaseTool {
     const valueElement = wrapper?.querySelector("[data-combobox-value]");
     if (!wrapper || !state || !valueElement) return;
     const selected = state.options.find((option) => option.value === valueElement.value);
-    const fallback = state.fallbackLabel || (state.disabled && valueElement.value ? "Saved Jira value · load metadata to verify" : valueElement.value);
+    const fallback =
+      state.fallbackLabel || (state.disabled && valueElement.value ? "Saved Jira value · load metadata to verify" : valueElement.value);
     wrapper.querySelector("[data-combobox-search]").value = selected?.label || (valueElement.value ? fallback : "");
   }
 
@@ -308,19 +372,23 @@ export class TicketTemplateCreateTool extends BaseTool {
     const field = wrapper.dataset.comboboxField;
     const state = this.comboboxStates.get(field);
     if (!state) return;
-    const normalizedQuery = String(query || "").trim().toLocaleLowerCase();
+    const normalizedQuery = String(query || "")
+      .trim()
+      .toLocaleLowerCase();
     state.filtered = state.options.filter((option) => option.label.toLocaleLowerCase().includes(normalizedQuery));
     state.activeIndex = -1;
     const options = wrapper.querySelector("[data-combobox-options]");
     const heading = `<div class="ttc-combobox-options-header" aria-hidden="true">${this.escapeHtml(wrapper.dataset.comboboxHeading || "Options")}</div>`;
-    options.innerHTML = heading + (state.filtered.length
-      ? state.filtered
-          .map(
-            (option, index) =>
-              `<button class="ttc-combobox-option${index === state.activeIndex ? " is-active" : ""}" data-combobox-option data-value="${this.escapeHtml(option.value)}" type="button" role="option" aria-selected="${String(option.value === wrapper.querySelector("[data-combobox-value]").value)}"><span>${this.escapeHtml(option.label)}</span></button>`,
-          )
-          .join("")
-      : `<div class="ttc-combobox-empty">${this.escapeHtml(state.emptyMessage)}</div>`);
+    options.innerHTML =
+      heading +
+      (state.filtered.length
+        ? state.filtered
+            .map(
+              (option, index) =>
+                `<button class="ttc-combobox-option${index === state.activeIndex ? " is-active" : ""}" data-combobox-option data-value="${this.escapeHtml(option.value)}" type="button" role="option" aria-selected="${String(option.value === wrapper.querySelector("[data-combobox-value]").value)}"><span>${this.escapeHtml(option.label)}</span></button>`,
+            )
+            .join("")
+        : `<div class="ttc-combobox-empty">${this.escapeHtml(state.emptyMessage)}</div>`);
   }
 
   openCombobox(wrapper, { clearQuery = false } = {}) {
@@ -374,7 +442,30 @@ export class TicketTemplateCreateTool extends BaseTool {
     valueElement.value = option.dataset.value || "";
     wrapper.querySelector("[data-combobox-search]").value = option.textContent.trim() || "";
     this.closeCombobox(wrapper);
-    if (field === "feature-select") void this.selectFeature(valueElement.value);
+    if (field === "project-key") {
+      if (valueElement.value === NEW_PROJECT_VALUE) {
+        valueElement.value = "";
+        this.syncComboboxValue("project-key");
+        this.openProjectDialog();
+        return;
+      }
+      void this.selectProject(valueElement.value);
+      return;
+    }
+    if (field === "feature-select") {
+      if (valueElement.value === NEW_FEATURE_VALUE) {
+        valueElement.value = "";
+        this.syncComboboxValue("feature-select");
+        this.newFeature();
+        return;
+      }
+      void this.selectFeature(valueElement.value);
+      return;
+    }
+    if (field === "ticket-type") {
+      this.setTicketType(valueElement.value);
+      return;
+    }
     if (field === "be-component") {
       const prefix = this.container.querySelector("[data-be-prefix]");
       if (prefix) prefix.textContent = `[${valueElement.value || "API"}]`;
@@ -470,31 +561,42 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   loadConnection() {
     const connection = this.service.loadConnection();
-    this.elements.baseUrl.value = connection.baseUrl;
-    this.elements.projectKey.value = connection.projectKey;
-    this.elements.allowInvalidTls.checked = connection.allowInvalidTls;
+    if (this.elements.baseUrl) this.elements.baseUrl.value = connection.baseUrl;
+    if (this.elements.projectKey) this.elements.projectKey.value = "";
+    if (this.elements.allowInvalidTls) this.elements.allowInvalidTls.checked = connection.allowInvalidTls;
+    this.legacyConnection = connection;
   }
 
   bindActions() {
-    this.elements.discover.addEventListener("click", () => void this.runDiscovery());
-    this.elements.resolveParent.addEventListener("click", () => void this.resolveParent());
-    this.elements.create.addEventListener("click", () => void this.createTickets());
-    this.elements.featureNew.addEventListener("click", () => this.newFeature());
-    this.elements.featureCreate?.addEventListener("click", () => this.newFeature());
-    this.elements.featureCancel?.addEventListener("click", () => this.showFeatureLibrary());
-    this.elements.featureChange?.addEventListener("click", () => this.showFeatureLibrary());
+    this.elements.discover?.addEventListener("click", () => void this.runDiscovery());
+    this.elements.resolveParent?.addEventListener("click", () => void this.resolveParent());
+    this.elements.create?.addEventListener("click", () => void this.createTickets());
+    this.elements.featureEdit?.addEventListener("click", () => this.openFeatureDialog());
+    this.elements.projectForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.saveProjectFromDialog();
+    });
+    this.elements.featureForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.saveFeature();
+    });
     this.elements.globalConfigOpen?.addEventListener("click", () => this.openConfigPanel("global"));
     this.elements.featureConfigOpen?.addEventListener("click", () => this.openConfigPanel("feature"));
-    this.elements.featureSave.addEventListener("click", () => void this.saveFeature());
-    this.elements.featureConfigSave?.addEventListener("click", () => void this.saveFeature());
-    this.elements.featureDuplicate.addEventListener("click", () => void this.duplicateFeature());
-    this.elements.featureDelete.addEventListener("click", () => void this.deleteFeature());
-    this.elements.globalSave.addEventListener("click", () => void this.saveGlobalDefaults());
+    this.elements.featureConfigSave?.addEventListener("click", () => void this.saveFeatureConfig());
+    this.elements.featureDuplicate?.addEventListener("click", () => void this.duplicateFeature());
+    this.elements.featureDelete?.addEventListener("click", () => void this.deleteFeature());
+    this.elements.globalSave?.addEventListener("click", () => void this.saveGlobalDefaults());
+    this.container.querySelectorAll("[data-dialog-close]").forEach((button) => {
+      button.addEventListener("click", () => this.closeDialog(button.closest("dialog")));
+    });
+    this.container.querySelectorAll("[data-config-close]").forEach((button) => {
+      button.addEventListener("click", () => this.closeConfigPanel());
+    });
     this.container.querySelector("[data-tutorial-trigger]")?.addEventListener("click", () => this.openTutorial());
     this.container.querySelector("[data-tutorial-close]")?.addEventListener("click", () => this.closeTutorial());
     this.container.querySelector("[data-tutorial-back]")?.addEventListener("click", () => this.moveTutorial(-1));
     this.container.querySelector("[data-tutorial-next]")?.addEventListener("click", () => this.moveTutorial(1));
-    this.elements.openSettings.addEventListener("click", () => {
+    this.elements.openSettings?.addEventListener("click", () => {
       if (window.app?.router?.navigate) window.app.router.navigate("settings");
       else window.location.hash = "#settings";
     });
@@ -589,48 +691,126 @@ export class TicketTemplateCreateTool extends BaseTool {
   }
 
   async initializeEntryFlow() {
-    const configured = await this.refreshPatStatus();
-    this.setTemplateStage(configured ? "project" : "pat");
+    this.patConfigured = await this.refreshPatStatus();
+    this.loadProjects();
+    this.renderProjectOptions();
+    const lastProject = this.projects[0] || null;
+    if (lastProject && this.patConfigured) {
+      await this.selectProject(lastProject.key, { discover: false, project: lastProject });
+    } else {
+      this.updateWorkspaceVisibility();
+    }
   }
 
   setTemplateStage(stage) {
+    this.updateWorkspaceVisibility(stage);
+  }
+
+  updateWorkspaceVisibility() {
     const root = this.templateRoot();
     if (!root) return;
-    root.dataset.templateStage = stage;
-    root.dataset.templateState = stage === "ready" ? "ready" : "locked";
-    const visibility = [
-      [this.elements.patSetup, stage === "pat"],
-      [this.elements.projectSetup, stage === "project"],
-      [this.elements.featureSetup, stage === "feature"],
-      [this.elements.workbench, stage === "ready"],
-    ];
-    visibility.forEach(([element, visible]) => {
-      if (element) element.hidden = !visible;
-    });
-    if (this.elements.workflow) this.elements.workflow.hidden = stage !== "ready";
-    if (stage !== "ready") {
-      if (this.elements.configStack) this.elements.configStack.hidden = true;
-      this.elements.globalPanel?.removeAttribute("open");
-      this.elements.featureConfig?.removeAttribute("open");
+    const hasProject = Boolean(this.elements.projectKey?.value?.trim());
+    const hasFeature = Boolean(this.currentFeature);
+    const ready = this.patConfigured && hasProject && hasFeature && Boolean(this.discovery);
+    root.dataset.templateStage = !this.patConfigured ? "pat" : ready ? "ready" : hasProject ? "project" : "select";
+    root.dataset.templateState = ready ? "ready" : "locked";
+    if (this.elements.patSetup) this.elements.patSetup.hidden = this.patConfigured;
+    if (this.elements.workbench) this.elements.workbench.hidden = !ready;
+    if (this.elements.workflow) this.elements.workflow.hidden = !ready;
+    if (this.elements.workspaceEmpty) this.elements.workspaceEmpty.hidden = !this.patConfigured || ready;
+    if (this.elements.featureEdit) this.elements.featureEdit.disabled = !hasFeature;
+    if (this.elements.featureConfigOpen) this.elements.featureConfigOpen.disabled = !hasFeature;
+    if (this.elements.projectStatus) {
+      this.elements.projectStatus.dataset.state = !this.patConfigured
+        ? "missing"
+        : hasProject
+          ? this.discovery
+            ? "ready"
+            : "idle"
+          : "idle";
+      this.elements.projectStatus.textContent = !this.patConfigured
+        ? "PAT required"
+        : hasProject
+          ? this.discovery
+            ? "Metadata ready"
+            : "Reload Jira metadata"
+          : "Choose a project";
+    }
+    if (this.elements.featureStatus && hasProject) {
+      this.elements.featureStatus.dataset.state = hasFeature ? "ready" : this.features.length ? "idle" : "missing";
+      this.elements.featureStatus.textContent = hasFeature
+        ? "Selected"
+        : this.features.length
+          ? `${this.features.length} saved`
+          : "No saved features";
+    }
+    if (this.elements.workspaceEmptyTitle && this.elements.workspaceEmptyCopy) {
+      if (!hasProject) {
+        this.elements.workspaceEmptyTitle.textContent = "Choose a project to load Jira metadata";
+        this.elements.workspaceEmptyCopy.textContent =
+          "Use the Project dropdown above to add a project or select a saved one. Then use ↻ to refresh its Jira fields.";
+      } else if (!this.discovery) {
+        this.elements.workspaceEmptyTitle.textContent = "Load Jira metadata for this project";
+        this.elements.workspaceEmptyCopy.textContent =
+          "Use ↻ to validate the project key and load the Jira fields used by the ticket form.";
+      } else if (!hasFeature) {
+        this.elements.workspaceEmptyTitle.textContent = this.features.length ? "Choose a feature to begin" : "Create your first feature";
+        this.elements.workspaceEmptyCopy.textContent = this.features.length
+          ? "Select a saved feature from the header, or create a new one to capture its Epic, Stories, Improvements, and known bugs."
+          : "Open the Feature dropdown and choose Create new feature. The feature details will be saved locally for the next ticket run.";
+      }
     }
   }
 
   showFeatureLibrary() {
     if (!this.discovery) return;
-    this.setTemplateStage("feature");
-    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
-    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = this.features.length > 0;
     this.renderFeatureOptions(this.currentFeature?.id || "");
   }
 
   openConfigPanel(scope = "feature") {
     if (!this.elements.configStack) return;
+    if (this.elements.workbench?.hidden) this.elements.workbench.hidden = false;
     this.elements.configStack.hidden = false;
+    this.elements.configStack.dataset.open = "true";
     const panel = scope === "global" ? this.elements.globalPanel : this.elements.featureConfig;
     const other = scope === "global" ? this.elements.featureConfig : this.elements.globalPanel;
     other?.removeAttribute("open");
     if (panel) panel.open = true;
     panel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
+  closeConfigPanel() {
+    if (!this.elements.configStack) return;
+    this.elements.configStack.hidden = true;
+    delete this.elements.configStack.dataset.open;
+    this.elements.globalPanel?.removeAttribute("open");
+    this.elements.featureConfig?.removeAttribute("open");
+    this.updateWorkspaceVisibility();
+  }
+
+  openDialog(dialog) {
+    if (!dialog) return;
+    const main = this.container?.closest(".main");
+    const mainBounds = main?.getBoundingClientRect?.();
+    if (mainBounds?.width && mainBounds?.height) {
+      dialog.style.setProperty("--ttc-dialog-center-x", `${mainBounds.left + mainBounds.width / 2}px`);
+      dialog.style.setProperty("--ttc-dialog-center-y", `${mainBounds.top + mainBounds.height / 2}px`);
+      dialog.style.setProperty("--ttc-dialog-max-height", `${Math.max(280, mainBounds.height - 32)}px`);
+    }
+    try {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    } catch (_) {
+      dialog.setAttribute("open", "");
+    }
+    dialog.hidden = false;
+  }
+
+  closeDialog(dialog) {
+    if (!dialog) return;
+    if (typeof dialog.close === "function" && dialog.open) dialog.close();
+    dialog.removeAttribute("open");
+    dialog.hidden = true;
   }
 
   openTutorial(step = 0, firstUse = false) {
@@ -679,8 +859,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     next.textContent = this.tutorialStep === this.tutorialSteps.length - 1 ? "Done" : "Next";
     this.container.querySelectorAll(".ttc-tutorial-target").forEach((target) => target.classList.remove("ttc-tutorial-target"));
     const target = this.container.querySelector(`[data-tutorial-target="${step.target}"]`);
-    const targetDeferred =
-      target?.hasAttribute("data-post-discovery") && this.templateRoot()?.dataset.templateState !== "ready";
+    const targetDeferred = target?.hasAttribute("data-post-discovery") && this.templateRoot()?.dataset.templateState !== "ready";
     if (target && !targetDeferred && !target.closest("[hidden]")) {
       target.classList.add("ttc-tutorial-target");
       target.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
@@ -770,17 +949,146 @@ export class TicketTemplateCreateTool extends BaseTool {
     return this.service.saveConnection(this.elements.baseUrl.value, this.elements.projectKey.value, this.elements.allowInvalidTls.checked);
   }
 
+  loadProjects() {
+    try {
+      const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      this.projects = Array.isArray(parsed) ? parsed.filter((project) => project && project.key) : [];
+    } catch (_) {
+      this.projects = [];
+    }
+    let hasStoredConnection = false;
+    try {
+      hasStoredConnection = Boolean(localStorage.getItem("config.jira.projectKey"));
+    } catch (_) {
+      hasStoredConnection = false;
+    }
+    const legacy = hasStoredConnection ? this.legacyConnection?.projectKey : "";
+    if (legacy && !this.projects.some((project) => project.key === legacy)) {
+      this.projects.push({
+        key: legacy,
+        name: legacy,
+        baseUrl: this.legacyConnection.baseUrl,
+        allowInvalidTls: this.legacyConnection.allowInvalidTls,
+        lastUsedAt: "",
+      });
+    }
+    this.projects.sort((left, right) => String(right.lastUsedAt || "").localeCompare(String(left.lastUsedAt || "")));
+  }
+
+  saveProjects() {
+    try {
+      localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(this.projects));
+    } catch (_) {
+      // Local project history is a convenience; the Jira connection remains in the service settings.
+    }
+  }
+
+  renderProjectOptions(selectedKey = this.elements.projectKey?.value || "") {
+    const options = [
+      { value: "", label: "Choose a project" },
+      ...this.projects.map((project) => ({
+        value: project.key,
+        label: project.name && project.name !== project.key ? `${project.name} · ${project.key}` : project.key,
+      })),
+      { value: NEW_PROJECT_VALUE, label: "+ Create new project" },
+    ];
+    this.setComboboxOptions("project-key", options, {
+      selectedValue: selectedKey,
+      placeholder: "Choose a project",
+      disabled: !this.patConfigured,
+    });
+  }
+
+  rememberProject(project) {
+    if (!project?.key) return;
+    const now = new Date().toISOString();
+    const record = {
+      key: project.key,
+      name: project.name || project.projectName || project.key,
+      baseUrl: project.baseUrl || this.elements.baseUrl.value,
+      allowInvalidTls: project.allowInvalidTls ?? this.elements.allowInvalidTls.checked,
+      lastUsedAt: now,
+    };
+    this.projects = [record, ...this.projects.filter((candidate) => candidate.key !== record.key)];
+    this.selectedProject = record;
+    this.saveProjects();
+    this.renderProjectOptions(record.key);
+  }
+
+  async selectProject(key, { discover = false, project = null } = {}) {
+    if (!key) {
+      this.elements.projectKey.value = "";
+      this.selectedProject = null;
+      this.discovery = null;
+      this.currentFeature = null;
+      this.features = [];
+      this.renderProjectOptions("");
+      this.renderFeatureOptions("");
+      this.updateWorkspaceVisibility();
+      return;
+    }
+    const record = project || this.projects.find((candidate) => candidate.key === key);
+    this.elements.baseUrl.value = record?.baseUrl || this.legacyConnection?.baseUrl || this.service.loadConnection().baseUrl;
+    this.elements.allowInvalidTls.checked = Boolean(record?.allowInvalidTls ?? this.legacyConnection?.allowInvalidTls);
+    const connection = this.service.saveConnection(this.elements.baseUrl.value, key, this.elements.allowInvalidTls.checked);
+    this.elements.projectKey.value = connection.projectKey;
+    this.selectedProject = record || { key: connection.projectKey, name: connection.projectKey };
+    this.rememberProject({ ...(record || {}), ...connection, name: record?.name || connection.projectKey });
+    this.discovery = null;
+    this.currentFeature = null;
+    this.resetParentResolution();
+    this.refreshFeatureScope();
+    this.renderProjectOptions(connection.projectKey);
+    this.renderFeatureOptions("");
+    this.updateWorkspaceVisibility();
+    if (discover) await this.runDiscovery();
+  }
+
+  openProjectDialog() {
+    if (!this.patConfigured) {
+      this.showInlineError("Add your Jira PAT in Settings before adding a project.");
+      return;
+    }
+    if (this.elements.projectKeyEntry) this.elements.projectKeyEntry.value = this.elements.projectKey.value || "";
+    this.openDialog(this.elements.projectDialog);
+    requestAnimationFrame(() => this.elements.projectKeyEntry?.focus());
+  }
+
+  async saveProjectFromDialog() {
+    if (this.busy) return;
+    const key = this.elements.projectKeyEntry?.value.trim();
+    if (!key) {
+      this.showInlineError("Project key is required.");
+      return;
+    }
+    try {
+      const normalized = this.service.saveConnection(this.elements.baseUrl.value, key, this.elements.allowInvalidTls.checked);
+      this.elements.projectKey.value = normalized.projectKey;
+      await this.runDiscovery();
+      if (this.discovery) this.closeDialog(this.elements.projectDialog);
+    } catch (error) {
+      this.showInlineError(String(error || "Unable to save project."));
+    }
+  }
+
   async refreshPatStatus() {
     try {
       const configured = await this.service.hasPat();
+      this.patConfigured = configured;
       this.elements.patStatus.dataset.state = configured ? "ready" : "missing";
       this.elements.patStatus.textContent = configured ? "PAT configured" : "PAT required";
       if (this.elements.projectPatState) this.elements.projectPatState.textContent = configured ? "PAT configured" : "PAT required";
+      this.renderProjectOptions(this.elements.projectKey?.value || "");
+      this.updateWorkspaceVisibility();
       return configured;
     } catch (_) {
+      this.patConfigured = false;
       this.elements.patStatus.dataset.state = "missing";
       this.elements.patStatus.textContent = "PAT unavailable";
       if (this.elements.projectPatState) this.elements.projectPatState.textContent = "PAT unavailable";
+      this.renderProjectOptions("");
+      this.updateWorkspaceVisibility();
       return false;
     }
   }
@@ -792,22 +1100,33 @@ export class TicketTemplateCreateTool extends BaseTool {
       this.showInlineError("Add your Jira PAT in Settings before loading the form.");
       return;
     }
+    if (!this.elements.projectKey.value.trim()) {
+      this.openProjectDialog();
+      return;
+    }
     this.setBusy(true, "Loading Jira metadata…");
     this.setJiraSyncStatus("checking", "Fetching Jira metadata", "Reading create fields, allowed values, and the PAT owner…");
     try {
       this.discovery = await this.service.discover({
         ...this.connection(),
       });
+      const connection = this.connection();
+      this.rememberProject({ ...connection, name: this.discovery.project_name || this.discovery.project_key || connection.projectKey });
       this.populateCreateOptions();
       this.renderDiscovery(this.discovery);
       this.applyGlobalDefaults();
       if (this.currentFeature) this.applyFeature(this.currentFeature);
       this.renderFeatureOptions();
-      this.setTemplateStage("feature");
+      this.refreshFeatureScope();
+      this.updateWorkspaceVisibility();
       this.elements.contractDetails.hidden = false;
-      this.setJiraSyncStatus("ready", "Jira metadata loaded", `Fetched ${new Date().toLocaleString()}. Option filtering is local; user and label lookup fetches on typing.`);
-      this.showSuccess(`Jira metadata loaded for ${this.connection().projectKey}. Choose a feature to continue.`);
-      this.elements.featureList?.focus?.();
+      this.setJiraSyncStatus(
+        "ready",
+        "Jira metadata loaded",
+        `Fetched ${new Date().toLocaleString()}. Option filtering is local; user and label lookup fetches on typing.`,
+      );
+      this.showSuccess(`Jira metadata loaded for ${connection.projectKey}. Choose a feature to continue.`);
+      this.elements.featureSelect?.focus?.();
     } catch (error) {
       this.setJiraSyncStatus("missing", "Jira metadata unavailable", "Fix the connection or PAT, then try again.");
       this.showInlineError(String(error || "Jira discovery failed."));
@@ -842,7 +1161,10 @@ export class TicketTemplateCreateTool extends BaseTool {
         ...options.map((option) => ({ value: option.id, label: formatFieldValue(option) })),
       ];
       [elementName, globalElementName].forEach((name) => {
-        this.setComboboxOptions(name, comboboxOptions, { placeholder: keepEmpty ? "Use Jira default (0)" : "Choose an option", disabled: !metadata });
+        this.setComboboxOptions(name, comboboxOptions, {
+          placeholder: keepEmpty ? "Use Jira default (0)" : "Choose an option",
+          disabled: !metadata,
+        });
       });
       if (elementName === "priority" && !this.globalDefaults.shared.priorityId) {
         const low = options.find((option) => option.id === "4" || option.name === "Low" || option.value === "Low");
@@ -927,7 +1249,10 @@ export class TicketTemplateCreateTool extends BaseTool {
     const mobileSummary = this.container.querySelector("[data-mobile-summary]");
     if (mobileSummary) mobileSummary.hidden = !this.selectedStreams().some((selected) => selected === "ios" || selected === "android");
     const modeNote = this.container.querySelector("#ttc-mode-note");
-    if (modeNote) modeNote.textContent = this.selectedStreams().includes("be") ? "BE mode creates one backend ticket." : "FE mode supports iOS, Android, iOS + Android, or Web alone.";
+    if (modeNote)
+      modeNote.textContent = this.selectedStreams().includes("be")
+        ? "BE mode creates one backend ticket."
+        : "FE mode supports iOS, Android, iOS + Android, or Web alone.";
     ["ios", "android", "web", "be"].forEach((name) => {
       const current = this.container.querySelector(`[data-stream-toggle="${name}"]`)?.checked;
       const streamCard = this.container.querySelector(`[data-stream-card="${name}"]`);
@@ -1036,15 +1361,25 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.initializeGlobalDefaults();
     try {
       await this.templateStorage.init();
-      this.features = await this.templateStorage.list();
-      this.elements.featureStatus.dataset.state = "ready";
-      this.elements.featureStatus.textContent = this.features.length ? `${this.features.length} saved feature${this.features.length === 1 ? "" : "s"}` : "No saved features";
-      this.renderFeatureOptions();
+      this.allFeatures = await this.templateStorage.list();
+      this.refreshFeatureScope();
     } catch (error) {
-      this.elements.featureStatus.dataset.state = "missing";
-      this.elements.featureStatus.textContent = "Storage unavailable";
+      if (this.elements.featureStatus) {
+        this.elements.featureStatus.dataset.state = "missing";
+        this.elements.featureStatus.textContent = "Storage unavailable";
+      }
       this.showInlineError(String(error || "Unable to initialize feature storage."));
     }
+  }
+
+  refreshFeatureScope() {
+    const projectKey = this.elements.projectKey?.value?.trim();
+    this.features = this.allFeatures.filter((feature) => !projectKey || !feature.projectKey || feature.projectKey === projectKey);
+    if (this.elements.featureStatus) {
+      this.elements.featureStatus.dataset.state = this.features.length ? "ready" : "missing";
+      this.elements.featureStatus.textContent = this.features.length ? `${this.features.length} saved` : "No saved features";
+    }
+    this.renderFeatureOptions(this.currentFeature?.id || "");
   }
 
   collectGlobalDefaults() {
@@ -1094,23 +1429,13 @@ export class TicketTemplateCreateTool extends BaseTool {
   renderFeatureOptions(selectedId = this.currentFeature?.id || "") {
     this.setComboboxOptions(
       "feature-select",
-      [{ value: "", label: "New feature" }, ...this.features.map((feature) => ({ value: feature.id, label: feature.name }))],
-      { selectedValue: selectedId, placeholder: "New feature" },
+      [
+        { value: "", label: "Choose a feature" },
+        ...this.features.map((feature) => ({ value: feature.id, label: feature.name })),
+        { value: NEW_FEATURE_VALUE, label: "+ Create new feature" },
+      ],
+      { selectedValue: selectedId, placeholder: "Choose a feature", disabled: !this.discovery },
     );
-    if (this.elements.featureList) {
-      this.elements.featureList.innerHTML = this.features.length
-        ? this.features
-            .map(
-              (feature) => `
-                <article class="ttc-feature-option${feature.id === selectedId ? " is-selected" : ""}">
-                  <div class="ttc-feature-option-copy"><span class="ttc-feature-option-marker" aria-hidden="true">↳</span><div><strong>${this.escapeHtml(feature.name)}</strong><small>Saved ${this.escapeHtml(this.formatFeatureDate(feature.updatedAt || feature.createdAt))}</small></div></div>
-                  <button class="btn btn-primary" type="button" data-feature-choice="${this.escapeHtml(feature.id)}">Use feature <span aria-hidden="true">→</span></button>
-                </article>`,
-            )
-            .join("")
-        : "";
-    }
-    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = this.features.length > 0 || !this.elements.newFeatureForm?.hidden;
   }
 
   formatFeatureDate(value) {
@@ -1122,37 +1447,59 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   async selectFeature(id) {
     if (!id) {
-      this.newFeature();
+      this.currentFeature = null;
+      this.renderFeatureOptions("");
+      this.updateWorkspaceVisibility();
       return;
     }
     this.resetParentResolution();
     this.resetCreationDraft();
     this.currentFeature = id ? await this.templateStorage.get(id) : null;
-    this.elements.featureName.value = this.currentFeature?.name || "";
+    this.applyFeatureMetadata(this.currentFeature);
     this.renderFeatureOptions(id);
     this.applyGlobalDefaults();
     if (this.currentFeature) this.applyFeature(this.currentFeature);
-    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
-    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
-    this.setTemplateStage("ready");
+    this.setTicketType(this.ticketType);
     this.renderFeatureContext();
+    this.updateWorkspaceVisibility();
   }
 
   newFeature() {
     this.resetParentResolution();
     this.resetCreationDraft();
     this.currentFeature = null;
-    this.elements.featureName.value = "";
+    this.applyFeatureMetadata(null);
     this.renderFeatureOptions("");
     this.setLookupValue("feature-labels", []);
     this.applyGlobalDefaults();
     this.refreshStreamCards();
     this.renderOverrideNotice();
     this.renderCreatePreview();
-    if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = false;
-    if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
-    this.setTemplateStage("feature");
+    this.updateWorkspaceVisibility();
+    this.openFeatureDialog({ isNew: true });
+  }
+
+  openFeatureDialog({ isNew = false } = {}) {
+    if (!isNew && !this.currentFeature) {
+      this.newFeature();
+      return;
+    }
+    if (isNew) this.applyFeatureMetadata(null);
+    else this.applyFeatureMetadata(this.currentFeature);
+    const title = this.elements.featureDialog?.querySelector("#ttc-feature-dialog-title");
+    if (title) title.textContent = isNew ? "Create a feature" : "Edit feature";
+    if (this.elements.featureSave) this.elements.featureSave.textContent = isNew ? "Create feature" : "Save feature";
+    this.openDialog(this.elements.featureDialog);
     requestAnimationFrame(() => this.elements.featureName?.focus());
+  }
+
+  applyFeatureMetadata(feature) {
+    if (this.elements.featureName) this.elements.featureName.value = feature?.name || "";
+    if (this.elements.featureEpic) this.elements.featureEpic.value = feature?.featureEpic || "";
+    if (this.elements.featureParentSources) this.elements.featureParentSources.value = feature?.parentSources || "";
+    if (this.elements.featureBugSources) this.elements.featureBugSources.value = feature?.bugSources || "";
+    const scopeName = this.container.querySelector("[data-feature-scope-name]");
+    if (scopeName) scopeName.textContent = feature?.name || "New feature";
   }
 
   resetCreationDraft() {
@@ -1167,6 +1514,31 @@ export class TicketTemplateCreateTool extends BaseTool {
     }
     ["ios", "android", "web", "be"].forEach((stream) => this.setStreamChecked(stream, stream === "ios" || stream === "android"));
     this.refreshStreamCards();
+    this.setTicketType(this.ticketType, { preserveParent: true });
+  }
+
+  setTicketType(type, { preserveParent = false } = {}) {
+    this.ticketType = type === "bug-fixing" ? "bug-fixing" : "ad-task";
+    const isBug = this.ticketType === "bug-fixing";
+    const copy = this.container.querySelector("[data-parent-mode-copy]");
+    const label = this.container.querySelector("[data-parent-mode-label]");
+    const input = this.elements.parentInput;
+    const resolve = this.elements.resolveParent;
+    if (copy)
+      copy.textContent = isBug
+        ? "Paste the bug key or Jira link. Bug-fixing tickets are created under that bug."
+        : "Choose a Story or Improvement saved in this feature, or add another Jira key or link.";
+    if (label) label.textContent = isBug ? "Bug key or link" : "Story or Improvement";
+    if (input) {
+      input.placeholder = isBug ? "Paste a bug key or URL\nEVDEV-350436" : "Paste one key or URL\nEVDEV-350436";
+      if (!preserveParent) {
+        const saved = isBug ? this.currentFeature?.bugSources : this.currentFeature?.parentSources;
+        input.value = saved || "";
+      }
+    }
+    if (resolve) resolve.textContent = isBug ? "Find bug" : "Find parent";
+    this.resetParentResolution();
+    this.renderCreatePreview();
   }
 
   collectPeopleOverrides() {
@@ -1175,7 +1547,8 @@ export class TicketTemplateCreateTool extends BaseTool {
     const currentCommonLead = this.field("sa-ad-lead").value.trim();
     const currentCommonSubLeads = splitValues(this.field("sa-ad-sub-leads").value);
     if (currentCommonLead && currentCommonLead !== global.common.saAdLead) overrides.common.saAdLead = currentCommonLead;
-    if (currentCommonSubLeads.length && JSON.stringify(currentCommonSubLeads) !== JSON.stringify(global.common.saAdSubLeads)) overrides.common.saAdSubLeads = currentCommonSubLeads;
+    if (currentCommonSubLeads.length && JSON.stringify(currentCommonSubLeads) !== JSON.stringify(global.common.saAdSubLeads))
+      overrides.common.saAdSubLeads = currentCommonSubLeads;
     PEOPLE_STREAMS.forEach((stream) => {
       const current = {
         developer: this.field(`${stream}-developer`).value.trim(),
@@ -1186,7 +1559,8 @@ export class TicketTemplateCreateTool extends BaseTool {
       const override = {};
       if (current.developer && current.developer !== source.developer) override.developer = current.developer;
       if (current.developerLead && current.developerLead !== source.developerLead) override.developerLead = current.developerLead;
-      if (current.developerSubLeads.length && JSON.stringify(current.developerSubLeads) !== JSON.stringify(source.developerSubLeads)) override.developerSubLeads = current.developerSubLeads;
+      if (current.developerSubLeads.length && JSON.stringify(current.developerSubLeads) !== JSON.stringify(source.developerSubLeads))
+        override.developerSubLeads = current.developerSubLeads;
       overrides.streams[stream] = override;
     });
     return overrides;
@@ -1208,6 +1582,10 @@ export class TicketTemplateCreateTool extends BaseTool {
       id: this.currentFeature?.id,
       createdAt: this.currentFeature?.createdAt,
       name,
+      projectKey: this.elements.projectKey?.value?.trim() || "",
+      featureEpic: this.elements.featureEpic?.value?.trim() || "",
+      parentSources: this.elements.featureParentSources?.value?.trim() || "",
+      bugSources: this.elements.featureBugSources?.value?.trim() || "",
       featureLabels: normalizeLabels(this.field("feature-labels").value),
       overrides,
     };
@@ -1218,17 +1596,20 @@ export class TicketTemplateCreateTool extends BaseTool {
     try {
       const wasExisting = Boolean(this.currentFeature?.id);
       const feature = this.collectFeature();
-      const duplicate = this.features.find((candidate) => candidate.id !== feature.id && candidate.name.toLowerCase() === feature.name.toLowerCase());
+      const duplicate = this.features.find(
+        (candidate) => candidate.id !== feature.id && candidate.name.toLowerCase() === feature.name.toLowerCase(),
+      );
       if (duplicate) throw new Error(`A feature named “${duplicate.name}” already exists.`);
       this.currentFeature = await this.templateStorage.save(feature);
-      this.features = await this.templateStorage.list();
+      this.allFeatures = await this.templateStorage.list();
+      this.refreshFeatureScope();
       this.renderFeatureOptions(this.currentFeature.id);
-      if (this.elements.newFeatureForm) this.elements.newFeatureForm.hidden = true;
-      if (this.elements.featureEmpty) this.elements.featureEmpty.hidden = true;
-      this.setTemplateStage("ready");
+      this.applyFeatureMetadata(this.currentFeature);
+      this.closeDialog(this.elements.featureDialog);
       this.renderFeatureContext();
       this.renderOverrideNotice();
       this.showSuccess(`${wasExisting ? "Saved" : "Created"} feature “${this.currentFeature.name}”. Choose a Jira parent to continue.`);
+      this.updateWorkspaceVisibility();
     } catch (error) {
       this.showInlineError(String(error || "Unable to save feature."));
     }
@@ -1241,8 +1622,9 @@ export class TicketTemplateCreateTool extends BaseTool {
     }
     try {
       this.currentFeature = await this.templateStorage.duplicate(this.currentFeature.id);
-      this.features = await this.templateStorage.list();
-      this.elements.featureName.value = this.currentFeature.name;
+      this.allFeatures = await this.templateStorage.list();
+      this.refreshFeatureScope();
+      this.applyFeatureMetadata(this.currentFeature);
       this.renderFeatureOptions(this.currentFeature.id);
       this.renderFeatureContext();
       this.showSuccess(`Duplicated as “${this.currentFeature.name}”.`);
@@ -1259,8 +1641,11 @@ export class TicketTemplateCreateTool extends BaseTool {
     const name = this.currentFeature.name;
     if (!window.confirm(`Delete feature “${name}”? Jira tickets are not affected.`)) return;
     await this.templateStorage.delete(this.currentFeature.id);
-    this.features = await this.templateStorage.list();
-    this.newFeature();
+    this.allFeatures = await this.templateStorage.list();
+    this.currentFeature = null;
+    this.refreshFeatureScope();
+    this.renderFeatureOptions("");
+    this.updateWorkspaceVisibility();
     this.showSuccess(`Deleted feature “${name}”.`);
   }
 
@@ -1348,12 +1733,22 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.renderCreatePreview();
   }
 
+  async saveFeatureConfig() {
+    if (!this.currentFeature) {
+      this.showInlineError("Choose or create a feature before saving feature config.");
+      return;
+    }
+    await this.saveFeature();
+    this.closeConfigPanel();
+  }
+
   renderOverrideNotice() {
     if (!this.elements.overrideNotice) return;
     const messages = [];
     const feature = this.currentFeature;
     const overrides = feature?.overrides;
-    if (overrides?.shared && Object.keys(overrides.shared).length) messages.push(`Feature overrides: ${Object.keys(overrides.shared).join(", ")}.`);
+    if (overrides?.shared && Object.keys(overrides.shared).length)
+      messages.push(`Feature overrides: ${Object.keys(overrides.shared).join(", ")}.`);
     if (overrides?.people?.common && Object.keys(overrides.people.common).length) messages.push("Feature overrides AD / SA people.");
     const streamOverrides = PEOPLE_STREAMS.filter((stream) => Object.keys(overrides?.people?.streams?.[stream] || {}).length);
     if (streamOverrides.length) messages.push(`Feature overrides people for ${streamOverrides.join(", ")}.`);
@@ -1376,8 +1771,12 @@ export class TicketTemplateCreateTool extends BaseTool {
     };
     const peopleChanged = (stream) => {
       const source = stream === "common" ? this.globalDefaults.people.common : this.globalDefaults.people.streams[stream];
-      const names = stream === "common" ? ["sa-ad-lead", "sa-ad-sub-leads"] : [`${stream}-developer`, `${stream}-developer-lead`, `${stream}-developer-sub-leads`];
-      const expected = stream === "common" ? [source.saAdLead, source.saAdSubLeads] : [source.developer, source.developerLead, source.developerSubLeads];
+      const names =
+        stream === "common"
+          ? ["sa-ad-lead", "sa-ad-sub-leads"]
+          : [`${stream}-developer`, `${stream}-developer-lead`, `${stream}-developer-sub-leads`];
+      const expected =
+        stream === "common" ? [source.saAdLead, source.saAdSubLeads] : [source.developer, source.developerLead, source.developerSubLeads];
       return names.some((name, index) => {
         const actual = this.field(name)?.value || "";
         const expectedValue = Array.isArray(expected[index]) ? expected[index].join(", ") : expected[index] || "";
@@ -1385,7 +1784,10 @@ export class TicketTemplateCreateTool extends BaseTool {
       });
     };
     const featureLabelCount = normalizeLabels(this.field("feature-labels")?.value).length;
-    origin("feature-labels", featureLabelCount ? "Feature labels · Global labels still apply" : "No feature labels · Global labels still apply");
+    origin(
+      "feature-labels",
+      featureLabelCount ? "Feature labels · Global labels still apply" : "No feature labels · Global labels still apply",
+    );
 
     const peopleKeys = ["common", ...PEOPLE_STREAMS];
     const peopleOverride = peopleKeys.some((stream) => {
@@ -1422,13 +1824,46 @@ export class TicketTemplateCreateTool extends BaseTool {
     this.elements.prefillSource.textContent = hasFeatureValues
       ? "Global config + Feature-level overrides"
       : "Global config · feature uses inherited values";
+    this.renderPrefillSources();
     this.renderFeatureContext(hasFeatureValues);
   }
 
-  renderFeatureContext(hasFeatureValues = this.currentFeature ? Boolean(this.currentFeature.overrides && Object.keys(this.currentFeature.overrides).some((key) => Object.keys(this.currentFeature.overrides[key] || {}).length)) : false) {
+  renderPrefillSources() {
+    const featureOverrides = this.currentFeature?.overrides || {};
+    const hasFeatureOverride = (group, key) => Boolean(featureOverrides?.[group]?.[key] !== undefined);
+    const mark = (selector, source) => {
+      const element = this.container.querySelector(selector);
+      if (element) element.dataset.prefillSource = source;
+    };
+    SHARED_DEFAULT_FIELDS.forEach(([featureField, , key]) => {
+      mark(`[data-combobox-field="${featureField}"]`, hasFeatureOverride("shared", key) ? "feature" : "global");
+    });
+    ["start-offset-days", "deadline-offset-days"].forEach((field) => {
+      mark(
+        `[data-field="${field}"]`,
+        hasFeatureOverride("dateRule", field === "start-offset-days" ? "startOffsetDays" : "deadlineOffsetDays") ? "feature" : "global",
+      );
+    });
+    ["summary-mobile", "summary-web", "summary-be", "description", "confluence-page", "parent-sources"].forEach((field) => {
+      const element = this.field(field);
+      const wrapper = element?.closest(".ttc-field") || element;
+      if (wrapper) wrapper.dataset.prefillSource = "user";
+    });
+  }
+
+  renderFeatureContext(
+    hasFeatureValues = this.currentFeature
+      ? Boolean(
+          this.currentFeature.overrides &&
+          Object.keys(this.currentFeature.overrides).some((key) => Object.keys(this.currentFeature.overrides[key] || {}).length),
+        )
+      : false,
+  ) {
     if (this.elements.featureContextName) this.elements.featureContextName.textContent = this.currentFeature?.name || "New feature";
-    if (this.elements.featureContextKey) this.elements.featureContextKey.textContent = this.elements.projectKey?.value?.trim()?.toUpperCase() || "—";
-    if (this.elements.featureContextPrefill) this.elements.featureContextPrefill.textContent = hasFeatureValues ? "Global + feature" : "Global defaults";
+    if (this.elements.featureContextKey)
+      this.elements.featureContextKey.textContent = this.elements.projectKey?.value?.trim()?.toUpperCase() || "—";
+    if (this.elements.featureContextPrefill)
+      this.elements.featureContextPrefill.textContent = hasFeatureValues ? "Global + feature" : "Global defaults";
   }
 
   lookupQuery(input) {
@@ -1452,7 +1887,8 @@ export class TicketTemplateCreateTool extends BaseTool {
         const users = await this.service.searchUsers({ ...this.connection(), query });
         if (this.lookupQuery(input) === query) this.renderUserSuggestions(input, users);
       } catch {
-        if (this.lookupQuery(input) === query) this.renderLookupError(input, "Unable to fetch Jira users. Check the PAT or Jira connection.");
+        if (this.lookupQuery(input) === query)
+          this.renderLookupError(input, "Unable to fetch Jira users. Check the PAT or Jira connection.");
       }
     }, 250);
     this.lookupTimers.set(key, timer);
@@ -1472,7 +1908,8 @@ export class TicketTemplateCreateTool extends BaseTool {
         const labels = await this.service.searchLabels({ ...this.connection(), query });
         if (this.lookupQuery(input) === query) this.renderLabelSuggestions(input, labels);
       } catch {
-        if (this.lookupQuery(input) === query) this.renderLookupError(input, "Unable to fetch Jira labels. Check the PAT or Jira connection.");
+        if (this.lookupQuery(input) === query)
+          this.renderLookupError(input, "Unable to fetch Jira labels. Check the PAT or Jira connection.");
       }
     }, 250);
     this.lookupTimers.set(key, timer);
@@ -1481,9 +1918,16 @@ export class TicketTemplateCreateTool extends BaseTool {
   renderUserSuggestions(input, users) {
     const menu = this.lookupMenu(input);
     if (!menu) return;
-    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira users</div>${users.length
-      ? users.map((user) => `<button data-lookup-option data-lookup-value="${this.escapeHtml(user.username)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(user.display_name)}</strong><small>${this.escapeHtml(user.username)}</small></button>`).join("")
-      : '<div class="ttc-lookup-empty">No Jira users found.</div>'}`;
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira users</div>${
+      users.length
+        ? users
+            .map(
+              (user) =>
+                `<button data-lookup-option data-lookup-value="${this.escapeHtml(user.username)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(user.display_name)}</strong><small>${this.escapeHtml(user.username)}</small></button>`,
+            )
+            .join("")
+        : '<div class="ttc-lookup-empty">No Jira users found.</div>'
+    }`;
     this.resetLookupActiveOption(input);
     menu.hidden = false;
   }
@@ -1499,9 +1943,16 @@ export class TicketTemplateCreateTool extends BaseTool {
   renderLabelSuggestions(input, labels) {
     const menu = this.lookupMenu(input);
     if (!menu) return;
-    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira labels</div>${labels.length
-      ? labels.map((label) => `<button data-lookup-option data-lookup-value="${this.escapeHtml(label)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(label)}</strong></button>`).join("")
-      : '<div class="ttc-lookup-empty">No Jira labels found.</div>'}`;
+    menu.innerHTML = `<div class="ttc-lookup-header" aria-hidden="true">Jira labels</div>${
+      labels.length
+        ? labels
+            .map(
+              (label) =>
+                `<button data-lookup-option data-lookup-value="${this.escapeHtml(label)}" type="button" role="option" aria-selected="false"><strong>${this.escapeHtml(label)}</strong></button>`,
+            )
+            .join("")
+        : '<div class="ttc-lookup-empty">No Jira labels found.</div>'
+    }`;
     this.resetLookupActiveOption(input);
     menu.hidden = false;
   }
@@ -1639,7 +2090,8 @@ export class TicketTemplateCreateTool extends BaseTool {
     [this.elements.discover, this.elements.resolveParent, this.elements.create].forEach((button) => {
       if (button) button.disabled = busy;
     });
-    this.elements.discover.textContent = busy && label ? label : "Load Jira metadata";
+    if (this.elements.projectStatus && busy && label) this.elements.projectStatus.textContent = label;
+    if (!busy) this.updateWorkspaceVisibility();
   }
 
   showInlineError(message) {
@@ -1659,7 +2111,7 @@ export class TicketTemplateCreateTool extends BaseTool {
       ["Server", result.server?.server_title || "Jira"],
       ["Version", result.server?.version || "Unknown"],
       ["Authenticated as", result.user?.display_name || result.user?.username || "Unknown"],
-      ["Project", result.project_key || "Unknown"],
+      ["Project", result.project_name ? `${result.project_name} · ${result.project_key}` : result.project_key || "Unknown"],
     ]
       .map(
         ([label, value]) =>
