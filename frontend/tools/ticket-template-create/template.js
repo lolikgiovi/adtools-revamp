@@ -125,6 +125,7 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
     <div id="ttc-workbench-shell" class="ttc-workbench-grid" hidden>
       <aside class="ttc-rail" aria-label="Ticket template configuration">
         <div id="ttc-config-stack" class="ttc-config-stack" hidden>
+        <div class="ttc-config-overlay-panel">
         <div class="ttc-config-stack-header"><strong>Configuration</strong><button class="ttc-dialog-close" data-config-close type="button" aria-label="Close configuration">×</button></div>
         <details id="ttc-global-panel" class="ttc-panel ttc-defaults-panel" data-tutorial-target="global" data-post-discovery>
           <summary class="ttc-panel-summary">
@@ -230,6 +231,7 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
             <button id="ttc-feature-config-save" class="btn btn-secondary ttc-full-button" type="button">Save feature config</button>
           </div>
         </details>
+        </div>
         </div>
       </aside>
 

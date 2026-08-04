@@ -2106,31 +2106,51 @@
 }
 
 .ttc-config-stack:not([hidden]) {
-  background: color-mix(in srgb, var(--ttc-ink) 28%, transparent);
-  display: block;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
   inset: 0;
+  justify-content: center;
   overflow: auto;
-  padding: 22px;
+  padding: 16px;
   position: fixed;
-  z-index: 80;
+  z-index: 950;
+}
+
+.ttc-config-overlay-panel {
+  background: var(--ttc-surface);
+  border: 1px solid var(--ttc-border-strong);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px hsl(var(--shadow));
+  display: flex;
+  flex-direction: column;
+  max-height: min(860px, calc(100vh - 32px));
+  max-width: 860px;
+  overflow: hidden;
+  width: min(860px, 100%);
 }
 
 .ttc-config-stack-header {
   align-items: center;
   background: var(--ttc-surface-raised);
-  border: 1px solid var(--ttc-border-strong);
-  border-bottom: 0;
+  border-bottom: 1px solid var(--ttc-border-strong);
   display: flex;
   justify-content: space-between;
-  margin: 0 auto;
-  max-width: 860px;
+  flex: 0 0 auto;
+  margin: 0;
   padding: 13px 16px;
 }
 
 .ttc-config-stack .ttc-defaults-panel {
-  border-radius: 0 0 10px 10px;
-  margin: 0 auto 12px;
-  max-width: 860px;
+  border: 0;
+  border-radius: 0 0 12px 12px;
+  margin: 0;
+  max-height: calc(100vh - 88px);
+  max-width: none;
+  overflow: auto;
 }
 
 .ttc-config-stack .ttc-defaults-panel:not([open]) {
@@ -2153,9 +2173,9 @@
 }
 
 .ttc-dialog::backdrop {
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  background: color-mix(in srgb, var(--ttc-ink) 16%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .ttc-dialog:not([open]) {
@@ -2640,10 +2660,11 @@
 }
 
 .ticket-template-create .ttc-dialog {
-  background: var(--ttc-surface);
-  color: var(--ttc-ink);
-  border-radius: 8px;
-  box-shadow: 0 14px 30px hsl(var(--shadow));
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  box-shadow: 0 12px 32px hsl(var(--shadow));
+  color: hsl(var(--popover-foreground));
 }
 
 .ticket-template-create .ttc-dialog-form {
@@ -2660,7 +2681,8 @@
 }
 
 .ticket-template-create .ttc-config-stack .ttc-defaults-panel {
-  border-radius: 0 0 8px 8px;
+  border: 0;
+  border-radius: 0 0 12px 12px;
 }
 
 .ticket-template-create .ttc-feature-option:hover {
