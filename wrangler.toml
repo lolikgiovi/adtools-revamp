@@ -6,11 +6,16 @@ workers_dev = true
 # Serve built assets from Vite's dist directory
 assets = { directory = "./dist", binding = "ASSETS" }
 
+# Cloudflare Send Email binding for OTP messages
+[[send_email]]
+name = "EMAIL"
+remote = true
+
 # Environment variables
 [vars]
 DEV_MODE = "false"
 SECRET_SALT = "change-me-in-production"
-MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_FROM = "otp-adtools@lolik.site"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_ORIGINS = "http://localhost:5173,tauri://localhost"
@@ -26,7 +31,7 @@ bucket_name = "adtools-updates"
 [env.production]
 [env.production.vars]
 DEV_MODE = "false"
-MAIL_FROM = "otp-adtools@lolik.cloud"
+MAIL_FROM = "otp-adtools@lolik.site"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"

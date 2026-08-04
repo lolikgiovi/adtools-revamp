@@ -81,7 +81,7 @@ export async function handleRegisterRequestOtp(request, env) {
       } catch (_) {}
     }
 
-    // Try to send via MailChannels; capture status for dev
+    // Try to send via Cloudflare's Send Email binding; capture the result for dev
     let sendResult = null;
     try {
       sendResult = await sendOtpEmail(env, normalized, code);

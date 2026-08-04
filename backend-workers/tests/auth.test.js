@@ -12,6 +12,12 @@ function createKvMock(values = {}) {
   };
 }
 
+function createEmailMock() {
+  return {
+    send: vi.fn(async () => ({ messageId: "message-1" })),
+  };
+}
+
 function createVerifyDbMock() {
   const executed = [];
   return {
@@ -45,14 +51,12 @@ describe("registration and config access", () => {
   });
 
   it("allows non-Bank Mandiri email to request registration OTP", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("{}", { status: 200 })),
-    );
+    const email = createEmailMock();
     const env = {
       ALLOWED_EMAIL_DOMAINS: "bankmandiri.co.id",
       DEV_MODE: "false",
-      RESEND_API_KEY: "test",
+      MAIL_FROM: "otp-adtools@example.com",
+      EMAIL: email,
       adtools: createKvMock(),
     };
 
@@ -67,6 +71,12 @@ describe("registration and config access", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true });
+    expect(email.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "person@example.com",
+        from: "otp-adtools@example.com",
+      }),
+    );
   });
 
   it("allows non-Bank Mandiri email to verify registration OTP", async () => {

@@ -39,38 +39,29 @@ export function isEmailDomainAllowed(email, env) {
 }
 
 /**
- * Sends OTP verification email via Resend
+ * Sends OTP verification email via Cloudflare's Send Email binding
  * @param {object} env - Environment bindings
  * @param {string} to - Recipient email address
  * @param {string} code - OTP code to send
- * @returns {Promise<{ok: boolean, status?: number, body?: string, error?: string}>}
+ * @returns {Promise<{ok: boolean, messageId?: string, error?: string}>}
  */
 export async function sendOtpEmail(env, to, code) {
   try {
     const subjectPrefix = String(env.MAIL_SUBJECT_PREFIX || "[AD Tools]");
     const subject = `${subjectPrefix} OTP for AD Tools`;
-    const fromEmail = String(env.MAIL_FROM || "no-reply@adtools.local");
-    const fromName = String(env.MAIL_FROM_NAME || "AD Tools");
+    const from = String(env.MAIL_FROM || "no-reply@adtools.local");
+    const text = `Your verification code is ${code}. It expires in 10 minutes.`;
+    const html = `<p>Your verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes.</p>`;
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `${fromName} <${fromEmail}>`,
-        to: [to],
-        subject,
-        text: `Your verification code is ${code}. It expires in 10 minutes. Email sent via Resend service.`,
-      }),
+    const response = await env.EMAIL.send({
+      to,
+      from,
+      subject,
+      html,
+      text,
     });
 
-    let text = "";
-    try {
-      text = await res.text();
-    } catch (_) {}
-    return { ok: res.ok, status: res.status, body: text };
+    return { ok: true, messageId: response?.messageId };
   } catch (e) {
     return { ok: false, error: String(e) };
   }

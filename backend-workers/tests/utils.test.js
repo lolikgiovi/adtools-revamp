@@ -2,10 +2,10 @@
  * Unit tests for utility functions
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { corsHeaders, isOriginAllowed, methodNotAllowed } from '../src/utils/cors.js';
 import { tsGmt7Plain, dayGmt7, parseTsFlexible, tsToGmt7Plain } from '../src/utils/timestamps.js';
-import { allowedEmailDomains, isEmailDomainAllowed } from '../src/utils/email.js';
+import { allowedEmailDomains, isEmailDomainAllowed, sendOtpEmail } from '../src/utils/email.js';
 
 describe('CORS utilities', () => {
   describe('corsHeaders', () => {
@@ -102,6 +102,27 @@ describe('Timestamp utilities', () => {
 });
 
 describe('Email utilities', () => {
+  it('sends OTP email through the Cloudflare Email binding', async () => {
+    const send = vi.fn(async () => ({ messageId: 'message-1' }));
+    const env = {
+      EMAIL: { send },
+      MAIL_FROM: 'otp-adtools@example.com',
+      MAIL_SUBJECT_PREFIX: '[AD Tools]',
+    };
+
+    await expect(sendOtpEmail(env, 'person@example.com', '123456')).resolves.toEqual({
+      ok: true,
+      messageId: 'message-1',
+    });
+    expect(send).toHaveBeenCalledWith({
+      to: 'person@example.com',
+      from: 'otp-adtools@example.com',
+      subject: '[AD Tools] OTP for AD Tools',
+      html: '<p>Your verification code is <strong>123456</strong>.</p><p>It expires in 10 minutes.</p>',
+      text: 'Your verification code is 123456. It expires in 10 minutes.',
+    });
+  });
+
   describe('allowedEmailDomains', () => {
     it('parses comma-separated domains', () => {
       const env = { ALLOWED_EMAIL_DOMAINS: 'example.com, test.com' };
