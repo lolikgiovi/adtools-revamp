@@ -12,12 +12,6 @@
       "requiresTauri": true
     },
     {
-      "id": "jira",
-      "name": "Jira",
-      "order": 17,
-      "requiresTauri": true
-    },
-    {
       "id": "general",
       "name": "General",
       "order": 20
