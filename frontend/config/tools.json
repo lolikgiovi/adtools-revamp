@@ -112,7 +112,7 @@
       "requiresTauri": true,
       "showInSidebar": true,
       "showOnHome": true,
-      "enabled": true,
+      "enabled": false,
       "order": 53
     },
     {
@@ -144,7 +144,7 @@
       "icon": "ticket-template",
       "showInSidebar": true,
       "showOnHome": true,
-      "enabled": true,
+      "enabled": false,
       "requiresTauri": true,
       "order": 10
     },
