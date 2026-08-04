@@ -56,42 +56,59 @@ export async function sendOtpEmail(env, to, code) {
     const text = `Your AD Tools verification code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes. If you did not request this code, ignore this email.`;
     const html = `<!doctype html>
 <html lang="en">
-  <body style="margin:0;padding:0;background:#f3f5f8;color:#172033;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+  <body style="margin:0;padding:0;background:#e9e6de;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your AD Tools verification code is ${code}.</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f5f8;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#e9e6de;">
       <tr>
-        <td align="center" style="padding:40px 16px;">
+        <td align="center" style="padding:36px 14px;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-            style="max-width:560px;background:#ffffff;border:1px solid #dfe4ec;border-radius:16px;overflow:hidden;">
+            style="max-width:440px;background:#fffdf6;border:1px solid #bdb9ae;">
             <tr>
-              <td style="height:6px;background:#3157d5;font-size:0;line-height:0;">&nbsp;</td>
-            </tr>
-            <tr>
-              <td style="padding:36px 40px 12px;">
-                <p style="margin:0 0 12px;color:#3157d5;font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">
-                  AD Tools · Secure sign-in
-                </p>
-                <h1 style="margin:0;color:#172033;font-size:28px;line-height:1.25;font-weight:700;">Your verification code</h1>
+              <td style="padding:22px 28px;border-bottom:1px dashed #aaa69c;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="color:#1c1c1a;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:13px;
+                      line-height:1;font-weight:700;letter-spacing:1.5px;">AD / TOOLS</td>
+                    <td align="right" style="color:#77736b;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+                      font-size:10px;line-height:1;letter-spacing:1px;">SIGN-IN RECEIPT</td>
+                  </tr>
+                </table>
               </td>
             </tr>
             <tr>
-              <td style="padding:18px 40px 24px;">
-                <div style="padding:22px 16px;background:#f5f7ff;border:1px solid #ccd6ff;border-radius:12px;text-align:center;">
-                  <span style="color:#173489;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:36px;
-                    line-height:1;font-weight:700;letter-spacing:8px;user-select:all;">${code}</span>
-                </div>
+              <td style="padding:30px 28px 24px;">
+                <h1 style="margin:0 0 7px;color:#1c1c1a;font-size:25px;line-height:1.25;font-weight:700;letter-spacing:-0.35px;">
+                  Here's your OTP.
+                </h1>
+                <p style="margin:0;color:#68645d;font-size:14px;line-height:1.55;">Use it to finish signing in while it's still fresh.</p>
               </td>
             </tr>
             <tr>
-              <td style="padding:12px 40px 36px;">
-                <p style="margin:0;color:#38445a;font-size:15px;line-height:1.65;">
-                  This code expires in <strong>${OTP_EXPIRY_MINUTES} minutes</strong>. If you did not request it, you can safely ignore this email.
-                </p>
+              <td style="padding:0 28px 30px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                  style="background:#ffffff;border:2px solid #1c1c1a;">
+                  <tr>
+                    <td align="center" style="padding:20px 16px 8px;color:#77736b;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+                      font-size:10px;line-height:1;letter-spacing:1.4px;">ONE-TIME PASSCODE</td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding:10px 12px 22px;color:#1c1c1a;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+                      font-size:42px;line-height:1;font-weight:700;letter-spacing:8px;user-select:all;">${code}</td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding:11px 16px;background:#e24a35;color:#ffffff;font-family:'SFMono-Regular',Consolas,
+                      'Liberation Mono',monospace;font-size:11px;line-height:1;font-weight:700;letter-spacing:1.1px;">
+                      USE WITHIN ${OTP_EXPIRY_MINUTES} MINUTES
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
             <tr>
-              <td style="padding:20px 40px;background:#f8f9fb;border-top:1px solid #e7eaf0;color:#7b8495;font-size:12px;line-height:1.5;">
-                Sent automatically by AD Tools. Never share your verification code with anyone.
+              <td style="padding:20px 28px 22px;border-top:1px dashed #aaa69c;color:#706c64;font-family:'SFMono-Regular',Consolas,
+                'Liberation Mono',monospace;font-size:11px;line-height:1.65;">
+                NOT YOUR REQUEST? IGNORE THIS RECEIPT.<br>
+                KEEP THE CODE PRIVATE.
               </td>
             </tr>
           </table>

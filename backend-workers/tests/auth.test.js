@@ -75,9 +75,9 @@ describe("registration and config access", () => {
       to: ["person@example.com"],
       subject: "[AD Tools] OTP for AD Tools",
     });
-    expect(emailPayload.html).toContain("Your verification code");
-    expect(emailPayload.html).toMatch(/>\d{6}<\/span>/);
-    expect(emailPayload.html).toContain("30 minutes");
+    expect(emailPayload.html).toContain("Here's your OTP");
+    expect(emailPayload.html).toMatch(/>\d{6}<\/td>/);
+    expect(emailPayload.html).toContain("USE WITHIN 30 MINUTES");
     expect(emailPayload.html).not.toContain("Select the code");
     expect(emailPayload.text).toMatch(/verification code is \d{6}/);
     expect(emailPayload.text).toContain("30 minutes");
