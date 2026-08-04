@@ -2,20 +2,23 @@
   --ttc-control-height: 36px;
   --ttc-control-font: 0.82rem;
   --ttc-label-font: 0.68rem;
-  --ttc-accent: var(--primary-color, #159bb5);
+  --ttc-accent: #087f8c;
   --ttc-accent-soft: color-mix(in srgb, var(--ttc-accent) 10%, transparent);
-  --ttc-border: color-mix(in srgb, var(--border-color, #64748b) 28%, transparent);
-  --ttc-border-strong: color-mix(in srgb, var(--border-color, #64748b) 48%, transparent);
-  --ttc-muted: var(--text-secondary, #64748b);
-  --ttc-ink: var(--text-color, inherit);
-  --ttc-surface: var(--card-bg, var(--surface-color, #fff));
-  --ttc-surface-raised: color-mix(in srgb, var(--ttc-surface) 92%, var(--ttc-accent));
-  --ttc-control: var(--input-bg, color-mix(in srgb, var(--ttc-surface) 94%, #000));
+  --ttc-border: hsl(var(--border) / 0.85);
+  --ttc-border-strong: hsl(var(--border));
+  --ttc-muted: hsl(var(--muted-foreground));
+  --ttc-ink: hsl(var(--foreground));
+  --ttc-surface: hsl(var(--card));
+  --ttc-surface-raised: hsl(var(--muted));
+  --ttc-control: hsl(var(--card));
+  --ttc-warning: hsl(var(--warning));
+  --ttc-success: hsl(var(--success));
+  --ttc-danger: hsl(var(--destructive));
+  background: hsl(var(--background));
   color: var(--ttc-ink);
   display: grid;
   gap: 14px;
   max-width: 1480px;
-  padding: 16px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -1329,10 +1332,6 @@
 }
 
 @media (max-width: 720px) {
-  .ticket-template-create {
-    padding: 16px;
-  }
-
   .ttc-hero,
   .ttc-panel-header,
   .ttc-section-heading,
@@ -1391,11 +1390,10 @@
 .ticket-template-create {
   --ttc-accent: #087f8c;
   --ttc-accent-soft: color-mix(in srgb, var(--ttc-accent) 10%, transparent);
-  --ttc-border: color-mix(in srgb, var(--border-color, #64748b) 24%, transparent);
-  --ttc-border-strong: color-mix(in srgb, var(--border-color, #64748b) 42%, transparent);
+  --ttc-border: hsl(var(--border) / 0.85);
+  --ttc-border-strong: hsl(var(--border));
   gap: 18px;
   max-width: 1220px;
-  padding: 24px clamp(16px, 3vw, 36px) 42px;
 }
 
 .ttc-hero {
@@ -1817,10 +1815,6 @@
 }
 
 @media (max-width: 560px) {
-  .ticket-template-create {
-    padding: 16px 12px 32px;
-  }
-
   .ttc-entry-state {
     gap: 15px;
     grid-template-columns: 1fr;
@@ -1867,7 +1861,8 @@
   display: grid;
   gap: 12px;
   max-width: none;
-  padding: 16px;
+  /* The app shell owns the page inset via .main-content. */
+  padding: 0;
 }
 
 .ttc-hero {
@@ -2308,10 +2303,6 @@
 }
 
 @media (max-width: 620px) {
-  .ticket-template-create {
-    padding: 12px;
-  }
-
   .ttc-workspace-header-left,
   .ttc-workspace-header-right,
   .ttc-header-control {
@@ -2354,5 +2345,231 @@
 
   .ttc-inline-state-action {
     justify-content: space-between;
+  }
+}
+
+/* Shared app alignment: compact tool chrome, theme-aware surfaces, and quiet depth. */
+.ticket-template-create {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ticket-template-create .ttc-panel,
+.ticket-template-create .ttc-contract-details {
+  border-radius: 8px;
+}
+
+.ticket-template-create .ttc-panel {
+  padding: 12px;
+}
+
+.ticket-template-create .ttc-contract-details {
+  padding: 12px;
+}
+
+.ticket-template-create .ttc-default-card,
+.ticket-template-create .ttc-ticket-card,
+.ticket-template-create .ttc-summary-card,
+.ticket-template-create .ttc-issue-type-card {
+  border-radius: 8px;
+}
+
+.ticket-template-create .ttc-default-card,
+.ticket-template-create .ttc-ticket-card {
+  padding: 10px;
+}
+
+.ticket-template-create .ttc-field input,
+.ticket-template-create .ttc-field textarea,
+.ticket-template-create .ttc-combobox-search,
+.ticket-template-create .ttc-form-grid input,
+.ticket-template-create .ttc-form-grid textarea,
+.ticket-template-create .ttc-parent-lookup textarea,
+.ticket-template-create .ttc-prefixed-input,
+.ticket-template-create .ttc-lookup-control {
+  border-radius: 6px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-control,
+.ticket-template-create .ttc-workspace-header .ttc-combobox-search,
+.ticket-template-create .ttc-workspace-header .ttc-combobox-trigger {
+  min-height: 36px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-search {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-trigger,
+.ticket-template-create .ttc-icon-button {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--ttc-surface-raised);
+  border: 1px solid var(--ttc-border);
+  height: 36px;
+  width: 36px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-trigger {
+  border-left: 0;
+}
+
+.ticket-template-create .ttc-icon-button {
+  border-radius: 6px;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.ticket-template-create .ttc-parent-lookup {
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ticket-template-create .ttc-parent-lookup > button {
+  min-height: 36px;
+}
+
+.ticket-template-create .ttc-parent-result {
+  border-radius: 8px;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.ticket-template-create .ttc-stream-picker {
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+
+.ticket-template-create .ttc-mode-option {
+  border-radius: 6px;
+  min-height: 48px;
+  padding: 8px 10px;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.ticket-template-create .ttc-mode-option:hover {
+  transform: none;
+}
+
+.ticket-template-create .ttc-mode-option:focus-within {
+  border-color: var(--ttc-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ttc-accent) 14%, transparent);
+}
+
+.ticket-template-create .ttc-mobile-summary {
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.ticket-template-create .ttc-ticket-grid {
+  gap: 10px;
+}
+
+.ticket-template-create .ttc-ticket-card {
+  gap: 10px;
+}
+
+.ticket-template-create .ttc-prefixed-input {
+  border-radius: 6px;
+}
+
+.ticket-template-create .ttc-section-divider {
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+.ticket-template-create .ttc-preview-panel {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.ticket-template-create .ttc-create-preview article {
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.ticket-template-create .ttc-final-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.ticket-template-create .ttc-status-badge[data-state="checking"] {
+  background: color-mix(in srgb, var(--ttc-warning) 14%, transparent);
+  color: var(--ttc-warning);
+}
+
+.ticket-template-create .ttc-status-badge[data-state="ready"] {
+  background: color-mix(in srgb, var(--ttc-success) 13%, transparent);
+  color: var(--ttc-success);
+}
+
+.ticket-template-create .ttc-status-badge[data-state="missing"] {
+  background: color-mix(in srgb, var(--ttc-danger) 12%, transparent);
+  color: var(--ttc-danger);
+}
+
+.ticket-template-create .ttc-header-status[data-state="missing"] {
+  color: var(--ttc-warning);
+}
+
+.ticket-template-create .ttc-combobox-menu,
+.ticket-template-create .ttc-lookup-menu {
+  border-radius: 6px;
+  box-shadow: 0 4px 16px hsl(var(--shadow));
+}
+
+.ticket-template-create .ttc-dialog {
+  background: var(--ttc-surface);
+  color: var(--ttc-ink);
+  border-radius: 8px;
+  box-shadow: 0 14px 30px hsl(var(--shadow));
+}
+
+.ticket-template-create .ttc-dialog-form {
+  gap: 16px;
+  padding: 16px;
+}
+
+.ticket-template-create .ttc-config-stack:not([hidden]) {
+  padding: 16px;
+}
+
+.ticket-template-create .ttc-config-stack-header {
+  padding: 10px 12px;
+}
+
+.ticket-template-create .ttc-config-stack .ttc-defaults-panel {
+  border-radius: 0 0 8px 8px;
+}
+
+.ticket-template-create .ttc-feature-option:hover {
+  transform: none;
+}
+
+.ticket-template-create .btn:focus-visible,
+.ticket-template-create .ttc-header-action:focus-visible,
+.ticket-template-create .ttc-help-link:focus-visible {
+  outline: 2px solid var(--ttc-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .ticket-template-create .ttc-config-stack:not([hidden]) {
+    padding: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-template-create .ttc-icon-button,
+  .ticket-template-create .ttc-mode-option,
+  .ticket-template-create .ttc-feature-option {
+    transition: none;
   }
 }
