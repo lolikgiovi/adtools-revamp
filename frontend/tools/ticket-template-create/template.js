@@ -2,7 +2,7 @@ const customCombobox = ({ field, label, placeholder = "Choose an option", id = `
   <div class="ttc-control-group ttc-combobox-field" data-combobox data-combobox-field="${field}" data-combobox-heading="${label}">
     <div class="ttc-control-heading"><span>${label}</span>${hint ? `<small>${hint}</small>` : ""}</div>
     <div class="ttc-combobox-control">
-      <input id="${id}-search" class="ttc-combobox-search" data-combobox-search type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="${id}-options" placeholder="${placeholder}" autocomplete="off" spellcheck="false" />
+      <input id="${id}-search" class="ttc-combobox-search" data-combobox-search type="text" role="combobox" aria-label="${label}" aria-expanded="false" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="${id}-options" placeholder="${placeholder}" autocomplete="off" spellcheck="false" />
       <button id="${id}-trigger" class="ttc-combobox-trigger" data-combobox-trigger type="button" aria-label="Show ${label} options" aria-expanded="false" aria-haspopup="listbox" aria-controls="${id}-options">▼</button>
       <div class="ttc-combobox-menu" data-combobox-menu hidden>
         <div id="${id}-options" class="ttc-combobox-options" data-combobox-options role="listbox"></div>
@@ -11,6 +11,12 @@ const customCombobox = ({ field, label, placeholder = "Choose an option", id = `
     <input id="${id}" data-field="${field}" data-combobox-value type="hidden" />
   </div>
 `;
+
+const TICKET_TEMPLATE_HEADER_ICONS = {
+  reload: `<svg class="ttc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.8-4.2L3 9"></path><path d="M3 4v5h5"></path><path d="M4 13a8.1 8.1 0 0 0 14.8 4.2L21 15"></path><path d="M21 20v-5h-5"></path></svg>`,
+  global: `<svg class="ttc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3z"></path></svg>`,
+  feature: `<svg class="ttc-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="9" cy="6" r="2"></circle><circle cx="15" cy="12" r="2"></circle><circle cx="10" cy="18" r="2"></circle></svg>`,
+};
 
 const featureConfigField = (markup, key) => `
   <div class="ttc-config-field" data-feature-config-field="${key}">
@@ -52,7 +58,7 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
       <div class="ttc-workspace-header-left">
         <div class="ttc-header-control ttc-project-control">
           ${customCombobox({ field: "project-key", label: "Project", placeholder: "Choose a project", id: "ttc-project-select" })}
-          <button id="ttc-project-reload" class="ttc-icon-button" type="button" aria-label="Reload Jira project metadata" title="Reload Jira project metadata">↻</button>
+          <button id="ttc-project-reload" class="ttc-icon-button ttc-header-button" type="button" aria-label="Reload Jira project metadata" title="Reload Jira project metadata">${TICKET_TEMPLATE_HEADER_ICONS.reload}<span>Reload Jira metadata</span></button>
           <span id="ttc-project-status" class="ttc-header-status" data-state="idle">Choose a project</span>
         </div>
         <div class="ttc-header-control ttc-feature-control">
@@ -62,8 +68,8 @@ export const TICKET_TEMPLATE_CREATE_TEMPLATE = /*html*/ `
         </div>
       </div>
       <div class="ttc-workspace-header-right">
-        <button id="ttc-feature-config-open" class="ttc-header-action" type="button" disabled><span>Feature config</span><small>Selected feature</small></button>
-        <button id="ttc-global-config-open" class="ttc-header-action" type="button"><span>Global config</span><small>All tickets</small></button>
+        <button id="ttc-feature-config-open" class="ttc-header-action" type="button" disabled>${TICKET_TEMPLATE_HEADER_ICONS.feature}<span>Feature config</span><small>Selected feature</small></button>
+        <button id="ttc-global-config-open" class="ttc-header-action" type="button">${TICKET_TEMPLATE_HEADER_ICONS.global}<span>Global config</span><small>All tickets</small></button>
         ${customCombobox({ field: "ticket-type", label: "Ticket type", placeholder: "Choose ticket type", id: "ttc-ticket-type" })}
       </div>
     </section>

@@ -1860,9 +1860,11 @@
   box-sizing: border-box;
   display: grid;
   gap: 12px;
-  max-width: none;
+  margin: 0 auto;
+  max-width: 1480px;
   /* The app shell owns the page inset via .main-content. */
   padding: 0;
+  width: 100%;
 }
 
 .ttc-hero {
@@ -2415,12 +2417,124 @@
   border-left: 0;
 }
 
+.ticket-template-create .ttc-workspace-header {
+  align-items: center;
+  border-bottom: 0;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.ticket-template-create .ttc-workspace-header-left,
+.ticket-template-create .ttc-workspace-header-right,
+.ticket-template-create .ttc-header-control {
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-control-heading {
+  display: none;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-control {
+  min-height: 36px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-search {
+  border-radius: 12px 0 0 12px;
+  font-size: 0.9rem;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.ticket-template-create .ttc-workspace-header .ttc-combobox-trigger {
+  border-radius: 0 12px 12px 0;
+  font-size: 0.78rem;
+  min-height: 36px;
+  width: 36px;
+}
+
+.ticket-template-create .ttc-project-control .ttc-combobox-field {
+  width: 180px;
+}
+
+.ticket-template-create .ttc-feature-control .ttc-combobox-field {
+  width: 220px;
+}
+
+.ticket-template-create .ttc-header-button {
+  align-items: center;
+  background: var(--ttc-surface);
+  border: 1px solid var(--ttc-border);
+  border-radius: 12px;
+  color: var(--ttc-ink);
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+  width: auto;
+}
+
+.ticket-template-create .ttc-header-button:hover:not(:disabled),
+.ticket-template-create .ttc-header-button:focus-visible {
+  background: var(--ttc-surface-raised);
+  border-color: var(--ttc-border-strong);
+  color: var(--ttc-ink);
+  outline: 0;
+}
+
+.ticket-template-create .ttc-button-icon {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.ticket-template-create .ttc-header-action {
+  align-items: center;
+  background: var(--ttc-surface);
+  border: 1px solid var(--ttc-border);
+  border-radius: 12px;
+  display: inline-flex;
+  gap: 8px;
+  height: 36px;
+  min-width: 120px;
+  padding: 0 12px;
+}
+
+.ticket-template-create .ttc-header-action > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ticket-template-create .ttc-header-action small {
+  display: none;
+}
+
+.ticket-template-create .ttc-header-status {
+  display: none;
+}
+
+.ticket-template-create .ttc-header-action:hover:not(:disabled),
+.ticket-template-create .ttc-header-action:focus-visible {
+  background: var(--ttc-surface-raised);
+  border-color: var(--ttc-border-strong);
+}
+
 .ticket-template-create .ttc-icon-button {
   border-radius: 6px;
   transition:
     border-color 120ms ease,
     color 120ms ease,
     background-color 120ms ease;
+}
+
+.ticket-template-create .ttc-header-button {
+  height: 36px;
+  width: auto;
 }
 
 .ticket-template-create .ttc-parent-lookup {
@@ -2571,5 +2685,100 @@
   .ticket-template-create .ttc-mode-option,
   .ticket-template-create .ttc-feature-option {
     transition: none;
+  }
+}
+
+/* Keep the workspace inside the available width as the app shell narrows. */
+.ticket-template-create,
+.ticket-template-create .ttc-workspace-header,
+.ticket-template-create .ttc-workspace-header-left,
+.ticket-template-create .ttc-workspace-header-right,
+.ticket-template-create .ttc-header-control,
+.ticket-template-create .ttc-combobox-field,
+.ticket-template-create .ttc-combobox-control {
+  min-width: 0;
+}
+
+.ticket-template-create .ttc-workspace-header,
+.ticket-template-create .ttc-workspace-header-left,
+.ticket-template-create .ttc-workspace-header-right {
+  flex-wrap: nowrap;
+}
+
+.ticket-template-create .ttc-header-control {
+  flex: 0 1 auto;
+}
+
+.ticket-template-create .ttc-project-control .ttc-combobox-field,
+.ticket-template-create .ttc-feature-control .ttc-combobox-field,
+.ticket-template-create .ttc-workspace-header-right .ttc-combobox-field {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 1050px) {
+  .ticket-template-create .ttc-workspace-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ticket-template-create .ttc-workspace-header-left,
+  .ticket-template-create .ttc-workspace-header-right {
+    width: 100%;
+  }
+
+  .ticket-template-create .ttc-header-control {
+    flex: 1 1 320px;
+    width: auto;
+  }
+
+  .ticket-template-create .ttc-project-control .ttc-combobox-field,
+  .ticket-template-create .ttc-feature-control .ttc-combobox-field,
+  .ticket-template-create .ttc-workspace-header-right .ttc-combobox-field {
+    width: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .ticket-template-create .ttc-workspace-header-left {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ticket-template-create .ttc-workspace-header-right {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ticket-template-create .ttc-header-control {
+    width: 100%;
+  }
+
+  .ticket-template-create .ttc-workspace-header-right .ttc-combobox-field {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+
+  .ticket-template-create .ttc-header-button {
+    min-width: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .ticket-template-create .ttc-header-action {
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticket-template-create .ttc-workspace-header-right {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ticket-template-create .ttc-header-action,
+  .ticket-template-create .ttc-workspace-header-right .ttc-combobox-field {
+    grid-column: 1;
   }
 }
