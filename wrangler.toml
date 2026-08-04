@@ -6,11 +6,6 @@ workers_dev = true
 # Serve built assets from Vite's dist directory
 assets = { directory = "./dist", binding = "ASSETS" }
 
-# Cloudflare Send Email binding for OTP messages
-[[send_email]]
-name = "EMAIL"
-remote = true
-
 # Environment variables
 [vars]
 DEV_MODE = "false"

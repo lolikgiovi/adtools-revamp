@@ -5,7 +5,9 @@
 
 import { corsHeaders, isOriginAllowed } from "../utils/cors.js";
 import { tsGmt7, tsGmt7Plain, parseTsFlexible } from "../utils/timestamps.js";
-import { allowedEmailDomains, sendOtpEmail } from "../utils/email.js";
+import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail } from "../utils/email.js";
+
+const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
 
 function isConfigEmailAllowed(email, env) {
   const domain = String(email || "")
@@ -71,17 +73,17 @@ export async function handleRegisterRequestOtp(request, env) {
     } catch (_) {}
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresTs = tsGmt7(10 * 60 * 1000); // +10 minutes
+    const expiresTs = tsGmt7(OTP_EXPIRY_MS);
 
     if (env.DB) {
       try {
         await env.DB.prepare("INSERT INTO otp (email, code, expires_at) VALUES (?, ?, ?)")
-          .bind(normalized, code, tsGmt7Plain(10 * 60 * 1000))
+          .bind(normalized, code, tsGmt7Plain(OTP_EXPIRY_MS))
           .run();
       } catch (_) {}
     }
 
-    // Try to send via Cloudflare's Send Email binding; capture the result for dev
+    // Try to send via Resend; capture the result for dev
     let sendResult = null;
     try {
       sendResult = await sendOtpEmail(env, normalized, code);

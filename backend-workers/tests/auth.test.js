@@ -12,12 +12,6 @@ function createKvMock(values = {}) {
   };
 }
 
-function createEmailMock() {
-  return {
-    send: vi.fn(async () => ({ messageId: "message-1" })),
-  };
-}
-
 function createVerifyDbMock() {
   const executed = [];
   return {
@@ -51,12 +45,13 @@ describe("registration and config access", () => {
   });
 
   it("allows non-Bank Mandiri email to request registration OTP", async () => {
-    const email = createEmailMock();
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     const env = {
       ALLOWED_EMAIL_DOMAINS: "bankmandiri.co.id",
       DEV_MODE: "false",
       MAIL_FROM: "otp-adtools@example.com",
-      EMAIL: email,
+      RESEND_API_KEY: "test",
       adtools: createKvMock(),
     };
 
@@ -71,12 +66,21 @@ describe("registration and config access", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true });
-    expect(email.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "person@example.com",
-        from: "otp-adtools@example.com",
-      }),
-    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, requestOptions] = fetchMock.mock.calls[0];
+    const emailPayload = JSON.parse(requestOptions.body);
+    expect(emailPayload).toMatchObject({
+      from: "AD Tools <otp-adtools@example.com>",
+      to: ["person@example.com"],
+      subject: "[AD Tools] OTP for AD Tools",
+    });
+    expect(emailPayload.html).toContain("Your verification code");
+    expect(emailPayload.html).toMatch(/>\d{6}<\/span>/);
+    expect(emailPayload.html).toContain("30 minutes");
+    expect(emailPayload.html).not.toContain("Select the code");
+    expect(emailPayload.text).toMatch(/verification code is \d{6}/);
+    expect(emailPayload.text).toContain("30 minutes");
   });
 
   it("allows non-Bank Mandiri email to verify registration OTP", async () => {
