@@ -14,7 +14,7 @@ MAIL_FROM = "otp-adtools@lolik.site"
 MAIL_SUBJECT_PREFIX = "[AD Tools]"
 WHITELIST_ENABLED = "false"
 ALLOWED_ORIGINS = "http://localhost:5173,tauri://localhost"
-ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id"
+ALLOWED_EMAIL_DOMAINS = "bankmandiri.co.id, gmail.com"
 SEND_LIVE_USER_LOG = "true"
 
 # R2 bucket for updater manifests and artifacts
