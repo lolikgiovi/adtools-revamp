@@ -2,8 +2,6 @@
  * Email utilities for domain validation and OTP sending
  */
 
-import { tsGmt7 } from "./timestamps.js";
-
 export const OTP_EXPIRY_MINUTES = 30;
 
 /**
@@ -41,11 +39,11 @@ export function isEmailDomainAllowed(email, env) {
 }
 
 /**
- * Sends OTP verification email via Resend
+ * Sends OTP verification email via Postmark
  * @param {object} env - Environment bindings
  * @param {string} to - Recipient email address
  * @param {string} code - OTP code to send
- * @returns {Promise<{ok: boolean, status?: number, body?: string, error?: string}>}
+ * @returns {Promise<{ok: boolean, status?: number, body?: string, messageId?: string, error?: string}>}
  */
 export async function sendOtpEmail(env, to, code) {
   try {
@@ -118,26 +116,40 @@ export async function sendOtpEmail(env, to, code) {
   </body>
 </html>`;
 
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        Accept: "application/json",
         "Content-Type": "application/json",
+        "X-Postmark-Server-Token": String(env.POSTMARK_SERVER_TOKEN || ""),
       },
       body: JSON.stringify({
-        from: `${fromName} <${fromEmail}>`,
-        to: [to],
-        subject,
-        html,
-        text,
+        From: `${fromName} <${fromEmail}>`,
+        To: to,
+        Subject: subject,
+        HtmlBody: html,
+        TextBody: text,
+        MessageStream: "outbound",
+        Tag: "otp",
+        TrackOpens: false,
+        TrackLinks: "None",
       }),
     });
 
     let responseBody = "";
+    let responseData = null;
     try {
       responseBody = await res.text();
+      responseData = responseBody ? JSON.parse(responseBody) : null;
     } catch (_) {}
-    return { ok: res.ok, status: res.status, body: responseBody };
+
+    const postmarkAccepted = responseData?.ErrorCode === undefined || responseData.ErrorCode === 0;
+    return {
+      ok: res.ok && postmarkAccepted,
+      status: res.status,
+      body: responseBody,
+      messageId: responseData?.MessageID,
+    };
   } catch (e) {
     return { ok: false, error: String(e) };
   }

@@ -83,7 +83,7 @@ export async function handleRegisterRequestOtp(request, env) {
       } catch (_) {}
     }
 
-    // Try to send via Resend; capture the result for dev
+    // Try to send via Postmark; capture the result for dev
     let sendResult = null;
     try {
       sendResult = await sendOtpEmail(env, normalized, code);
