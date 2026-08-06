@@ -211,6 +211,10 @@
 }
 
 /* Oracle Sidecar Status Indicator (global header) */
+.main-header[data-runtime="web"] .sidecar-status-indicator {
+  display: none;
+}
+
 .sidecar-status-indicator {
   display: flex;
   align-items: center;

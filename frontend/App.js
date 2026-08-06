@@ -1415,10 +1415,11 @@ class App {
     const reloadBtn = document.querySelector(".header-reload");
 
     const applyRuntime = () => {
-      const rt = isTauri() ? "tauri" : "web";
+      const tauriRuntime = isTauri();
+      const rt = tauriRuntime ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
       if (reloadBtn) reloadBtn.title = rt === "tauri" ? "Reload window" : "Reload";
-      OracleConnectionService.bindHeaderStatus({ eventBus: this.eventBus });
+      if (tauriRuntime) OracleConnectionService.bindHeaderStatus({ eventBus: this.eventBus });
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init

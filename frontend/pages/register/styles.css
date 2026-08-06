@@ -63,6 +63,26 @@
   margin-top: 10px;
 }
 
+.register-method-notice {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.45);
+}
+
+.register-method-notice strong {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+
+.register-method-notice span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}
+
 /* Uses global btn btn-primary classes */
 
 .register-error {
