@@ -1165,18 +1165,24 @@ async function getTabConfigs(env) {
   return value;
 }
 
-/**
- * Simple token generation - base64 encoded timestamp with 24h validity
- */
-function generateToken() {
-  const payload = { exp: Date.now() + 24 * 60 * 60 * 1000 };
-  return btoa(JSON.stringify(payload));
+async function signDashboardToken(exp, nonce, env) {
+  const secret = `${String(env.ANALYTICS_DASHBOARD_PASSWORD || "")}:${String(env.SECRET_SALT || "")}`;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${exp}.${nonce}`));
+  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function generateToken(env) {
+  const exp = Date.now() + 24 * 60 * 60 * 1000;
+  const nonce = crypto.randomUUID();
+  const signature = await signDashboardToken(exp, nonce, env);
+  return btoa(JSON.stringify({ exp, nonce, signature }));
 }
 
 /**
  * Validate token from Authorization header
  */
-function validateToken(request) {
+export async function validateDashboardToken(request, env) {
   const authHeader = request.headers.get("Authorization") || "";
   const token = authHeader.replace("Bearer ", "");
 
@@ -1184,7 +1190,12 @@ function validateToken(request) {
 
   try {
     const payload = JSON.parse(atob(token));
-    return payload.exp && payload.exp > Date.now();
+    if (!payload.exp || payload.exp <= Date.now() || !payload.nonce || !payload.signature) return false;
+    const expected = await signDashboardToken(payload.exp, payload.nonce, env);
+    if (expected.length !== payload.signature.length) return false;
+    let mismatch = 0;
+    for (let index = 0; index < expected.length; index += 1) mismatch |= expected.charCodeAt(index) ^ payload.signature.charCodeAt(index);
+    return mismatch === 0;
   } catch {
     return false;
   }
@@ -1195,7 +1206,7 @@ function validateToken(request) {
  */
 function withAuth(handler) {
   return async (request, env) => {
-    if (!validateToken(request)) {
+    if (!(await validateDashboardToken(request, env))) {
       return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -1228,7 +1239,7 @@ export async function handleDashboardVerify(request, env) {
       });
     }
 
-    const token = generateToken();
+    const token = await generateToken(env);
     return new Response(JSON.stringify({ ok: true, token }), { headers: { "Content-Type": "application/json", ...corsHeaders() } });
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {

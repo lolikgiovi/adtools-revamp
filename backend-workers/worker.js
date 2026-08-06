@@ -14,6 +14,7 @@ import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, 
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
 import { handleWhitelist } from './src/routes/whitelist.js';
 import { handleDeviceVersionUpdate } from './src/routes/device.js';
+import { handleManualApprovalRequest, handleManualApprovalStatus, handleApprovalList, handleApprovalApprove } from './src/routes/approval.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -84,6 +85,14 @@ export default {
       if (method !== "POST") return methodNotAllowed();
       return handleRegisterVerify(request, env);
     }
+    if (url.pathname === "/register/request-manual-approval") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleManualApprovalRequest(request, env);
+    }
+    if (url.pathname === "/register/manual-approval-status") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleManualApprovalStatus(request, env);
+    }
 
     // Secure KV fetch (requires OTP session token)
     if (url.pathname === "/api/kv/get") {
@@ -128,6 +137,14 @@ export default {
     if (url.pathname === "/dashboard/query") {
       if (method !== "POST") return methodNotAllowed();
       return handleDashboardQuery(request, env);
+    }
+    if (url.pathname === "/approval/requests") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleApprovalList(request, env);
+    }
+    if (url.pathname === "/approval/approve") {
+      if (method !== "POST") return methodNotAllowed();
+      return handleApprovalApprove(request, env);
     }
     if (url.pathname === "/dashboard/stats/tools") {
       if (method !== "GET") return methodNotAllowed();

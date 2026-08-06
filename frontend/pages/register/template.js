@@ -2,7 +2,7 @@ export const RegisterTemplate = /* html */ `
   <div class="register-page">
     <div class="register-card">
       <h2 class="register-title">Welcome</h2>
-      <p class="register-desc">Enter your details, then verify via email OTP.</p>
+      <p class="register-desc">Enter your details, then choose email verification or request a manual review.</p>
       <form class="register-form" novalidate>
         <div class="register-field">
           <label for="reg-username">Display Name</label>
@@ -18,11 +18,20 @@ export const RegisterTemplate = /* html */ `
           <div class="register-hint">We sent a code to your email. Enter it to continue.</div>
         </div>
         <div class="register-actions">
-          <button type="submit" class="btn btn-primary" data-role="submit-btn">Continue</button>
+          <button type="button" class="btn btn-secondary" data-role="manual-approval-btn">Request Manual Approval</button>
+          <button type="submit" class="btn btn-primary" data-role="submit-btn">Request OTP</button>
         </div>
         <div class="register-error" aria-live="polite"></div>
       </form>
-      <p class="register-note">We verify your email via OTP. Bank Mandiri email is required for managed config access.</p>
+      <div class="approval-status" data-role="approval-status" hidden>
+        <div class="approval-status-mark" aria-hidden="true"></div>
+        <div class="approval-status-copy">
+          <strong>Approval requested</strong>
+          <span>An administrator needs to approve this device before you can continue.</span>
+        </div>
+        <button type="button" class="btn btn-secondary" data-role="check-approval-btn">Check Status</button>
+      </div>
+      <p class="register-note">Manual requests include device and browser details so an administrator can recognize the request. Bank Mandiri email is required for managed config access.</p>
     </div>
   </div>
 `;

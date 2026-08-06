@@ -9,6 +9,59 @@ import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail } from "../utils/
 
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
 
+export function detectRegistrationPlatform(data, request) {
+  const ua = request.headers.get("User-Agent") || "";
+  const payloadPlatform = String(data.platform || "").trim();
+  if (/^desktop\s*\(tauri\)$/i.test(payloadPlatform) || /tauri/i.test(payloadPlatform)) {
+    return payloadPlatform || "Desktop (Tauri)";
+  }
+  return /Firefox\//i.test(ua)
+    ? "Firefox"
+    : /Edg\//i.test(ua)
+      ? "Edge"
+      : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
+        ? "Chrome"
+        : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
+          ? "Safari"
+          : /Chromium\//i.test(ua)
+            ? "Chromium"
+            : payloadPlatform || "Unknown";
+}
+
+export async function completeRegistration(data, request, env) {
+  const email = String(data.email || "")
+    .trim()
+    .toLowerCase();
+  const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || "").trim();
+  const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
+  const platform = detectRegistrationPlatform(data, request);
+
+  const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+  const newUserId = existingUser?.id || crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen",
+  )
+    .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain())
+    .run();
+  const userRow = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+  const userId = userRow?.id || newUserId;
+
+  await env.DB.prepare(
+    "INSERT INTO device (device_id, user_id, platform, created_time, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen",
+  )
+    .bind(deviceId, userId, platform, tsGmt7Plain(), tsGmt7Plain())
+    .run();
+
+  const token = crypto.randomUUID();
+  try {
+    if (env.adtools) {
+      await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 6 * 60 * 60 });
+    }
+  } catch (_) {}
+
+  return { userId, token, deviceId, platform };
+}
+
 function isConfigEmailAllowed(email, env) {
   const domain = String(email || "")
     .trim()
@@ -118,28 +171,6 @@ export async function handleRegisterVerify(request, env) {
       .trim()
       .toLowerCase();
     const code = String(data.code || "").trim();
-    const deviceIdRaw = String(data.deviceId || data.device_id || data.installId || "").trim();
-    const ua = request.headers.get("User-Agent") || "";
-    const payloadPlatform = String(data.platform || "").trim();
-
-    // Decide platform label
-    let platform;
-    if (/^desktop\s*\(tauri\)$/i.test(payloadPlatform) || /tauri/i.test(payloadPlatform)) {
-      platform = payloadPlatform || "Desktop (Tauri)";
-    } else {
-      platform = /Firefox\//i.test(ua)
-        ? "Firefox"
-        : /Edg\//i.test(ua)
-          ? "Edge"
-          : /Chrome\//i.test(ua) && !/Chromium\//i.test(ua)
-            ? "Chrome"
-            : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
-              ? "Safari"
-              : /Chromium\//i.test(ua)
-                ? "Chromium"
-                : "Unknown";
-    }
-    const deviceId = deviceIdRaw || (data.displayName ? `${String(data.displayName).trim()}-${crypto.randomUUID()}` : crypto.randomUUID());
 
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
@@ -182,30 +213,7 @@ export async function handleRegisterVerify(request, env) {
     // Consume the code
     await env.DB.prepare("UPDATE otp SET consumed_at = ? WHERE id = ?").bind(tsGmt7Plain(), row.id).run();
 
-    // Upsert user (unique by email) with UUID id
-    const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
-    const newUserId = existingUser?.id || crypto.randomUUID();
-    await env.DB.prepare(
-      "INSERT INTO users (id, email, created_time, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET last_seen = excluded.last_seen",
-    )
-      .bind(newUserId, email, tsGmt7Plain(), tsGmt7Plain())
-      .run();
-    const userRow = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
-    const userId = userRow?.id || newUserId;
-
-    await env.DB.prepare(
-      "INSERT INTO device (device_id, user_id, platform, created_time, last_seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen",
-    )
-      .bind(deviceId, userId, platform, tsGmt7Plain(), tsGmt7Plain())
-      .run();
-
-    // Create short-lived session token to authorize KV access (6-hour TTL)
-    let token = crypto.randomUUID();
-    try {
-      if (env.adtools) {
-        await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 6 * 60 * 60 });
-      }
-    } catch (_) {}
+    const { userId, token } = await completeRegistration(data, request, env);
 
     return new Response(JSON.stringify({ ok: true, userId, token }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },

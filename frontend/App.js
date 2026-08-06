@@ -295,6 +295,13 @@ class App {
       });
     });
 
+    // Manual account approvals (no sidebar entry, direct #approval access)
+    this.router.register("approval", () => {
+      this.showApproval().catch((error) => {
+        console.error("Failed to show approval dashboard:", error);
+      });
+    });
+
     // Set default route based on registration state
     const registered = localStorage.getItem("user.registered") === "true";
     this.router.setDefaultRoute(registered ? "home" : "register");
@@ -464,6 +471,16 @@ class App {
       eventName: "analytics-dashboard",
       loader: () => import("./pages/analytics-dashboard/main.js").then((module) => module.AnalyticsDashboardPage),
       createOptions: () => ({ eventBus: this.eventBus }),
+    });
+  }
+
+  showApproval() {
+    return this.showShellPage({
+      pageId: "approval",
+      title: "Account Approval",
+      eventName: "approval",
+      loader: () => import("./pages/approval/main.js").then((module) => module.ApprovalPage),
+      createOptions: () => ({}),
     });
   }
 

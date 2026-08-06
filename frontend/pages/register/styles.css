@@ -58,6 +58,7 @@
 
 .register-actions {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
   margin-top: 10px;
 }
@@ -68,6 +69,72 @@
   margin-top: 10px;
   color: hsl(var(--destructive));
   min-height: 18px;
+}
+
+.register-error.is-info {
+  color: hsl(var(--muted-foreground));
+}
+
+.register-error.is-success {
+  color: hsl(var(--success, 142 71% 35%));
+}
+
+.approval-status {
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--muted) / 0.45);
+}
+
+.approval-status:not([hidden]) {
+  display: flex;
+}
+
+.approval-status-mark {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: hsl(var(--warning, 38 92% 50%));
+  box-shadow: 0 0 0 4px hsl(var(--warning, 38 92% 50%) / 0.14);
+}
+
+.approval-status-copy {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-status-copy strong {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+
+.approval-status-copy span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 560px) {
+  .register-actions,
+  .approval-status:not([hidden]) {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .register-actions .btn,
+  .approval-status .btn {
+    width: 100%;
+  }
+
+  .approval-status-mark {
+    display: none;
+  }
 }
 
 .register-note {
