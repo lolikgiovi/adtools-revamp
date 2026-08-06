@@ -2559,7 +2559,7 @@ export class QuickQueryUI {
     event?.stopPropagation();
 
     if (this.isUuidGeneratorOpen()) {
-      this.closeUuidGenerator();
+      this.generateQuickQueryUuids();
       return;
     }
 
@@ -2567,7 +2567,7 @@ export class QuickQueryUI {
   }
 
   openUuidGenerator() {
-    const { quickQueryUuidButton, quickQueryUuidPopover, quickQueryUuidQuantity, quickQueryUuidOutput } = this.elements;
+    const { quickQueryUuidButton, quickQueryUuidPopover, quickQueryUuidQuantity } = this.elements;
     if (!quickQueryUuidPopover) return;
 
     quickQueryUuidPopover.classList.remove("hidden");
@@ -2576,9 +2576,7 @@ export class QuickQueryUI {
 
     this.trackQuickQueryEvent("open_uuid_generator", this.getCurrentQuickQueryContext(), { flush: true });
 
-    if (!quickQueryUuidOutput?.value) {
-      this.generateQuickQueryUuids({ track: false });
-    }
+    this.generateQuickQueryUuids({ track: false });
 
     setTimeout(() => {
       quickQueryUuidQuantity?.focus();
