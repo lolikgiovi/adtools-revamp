@@ -1,6 +1,6 @@
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
-import { QueryGenerationService } from "./services/QueryGenerationService.js";
-import { SchemaValidationService, isDbeaverSchema } from "./services/SchemaValidationService.js";
+import { columnIndexToLetter } from "./services/QueryGenerationService.js";
+import { isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
@@ -16,7 +16,7 @@ import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
-import { QueryWorkerService } from "./services/QueryWorkerService.js";
+import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
 import { TableAutosaveService } from "./services/TableAutosaveService.js";
 import { isTabDraftContentEmpty } from "./services/TabDraftStateService.js";
@@ -87,11 +87,9 @@ export class QuickQueryUI {
     this.elements = {};
     this.storageService = new IndexedDBStorageService();
     this._storageReady = false;
-    this.schemaValidationService = new SchemaValidationService();
-    this.queryGenerationService = new QueryGenerationService();
     this.attachmentProcessorService = new AttachmentProcessorService();
     this.excelImportService = new ExcelImportWorkerService();
-    this.queryWorkerService = new QueryWorkerService();
+    this.queryExecutionService = new QueryExecutionService();
     this.splitWorkerService = new SplitWorkerService();
     this.dataAutosave = new TableAutosaveService({
       delayMs: 800,
@@ -816,7 +814,7 @@ export class QuickQueryUI {
     const columnCount = schemaData.length;
     const currentData = this.dataTable.getData();
 
-    const columnHeaders = Array.from({ length: columnCount }, (_, i) => this.queryGenerationService.columnIndexToLetter(i));
+    const columnHeaders = Array.from({ length: columnCount }, (_, i) => columnIndexToLetter(i));
 
     this.dataTable.updateSettings({
       colHeaders: columnHeaders,
@@ -1354,7 +1352,7 @@ export class QuickQueryUI {
       this.dataTable = null;
     }
     try {
-      this.queryWorkerService?.cancel?.();
+      this.queryExecutionService?.cancel?.();
     } catch (_) {}
     try {
       this.excelImportService?.dispose?.();
@@ -1540,10 +1538,6 @@ export class QuickQueryUI {
         throw new Error("Schema data adjusted from DBeaver to SQL Developer format. Please refill the data sheet.");
       }
 
-      // Validate before processing (same for both sync and async)
-      this.schemaValidationService.validateSchema(schemaData, tableName);
-      this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
-
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
       if (!hasExcelData) {
         await this.storageService.saveSchema(tableName, schemaData, inputData, { queryType });
@@ -1567,47 +1561,14 @@ export class QuickQueryUI {
 
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked };
 
-      // Check if we should use the worker (1000+ rows)
-      if (this.queryWorkerService.shouldUseWorker(inputData)) {
-        this._generateQueryAsync(tableName, queryType, schemaData, inputData, dataSource, options);
-      } else {
-        this._generateQuerySync(tableName, queryType, schemaData, inputData, dataSource, options);
-      }
+      await this._generateQuery(tableName, queryType, schemaData, inputData, dataSource, options);
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
     }
   }
 
-  /**
-   * Synchronous query generation for small datasets (< 1000 rows)
-   */
-  _generateQuerySync(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {
-    try {
-      const query = this.queryGenerationService.generateQuery(tableName, queryType, schemaData, inputData, this.processedFiles, options);
-
-      this.editor.setValue(query);
-      this.clearError();
-
-      // Check for duplicate primary keys
-      const duplicateResult = this.queryGenerationService.detectDuplicatePrimaryKeys(schemaData, inputData, tableName);
-      if (duplicateResult.hasDuplicates && duplicateResult.warningMessage) {
-        this.showWarning(duplicateResult.warningMessage);
-      }
-
-      this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, false);
-      this.scheduleActiveTabDraftSave();
-    } catch (error) {
-      this.showError(error.message);
-      this.editor.setValue("");
-      this.scheduleActiveTabDraftSave();
-    }
-  }
-
-  /**
-   * Asynchronous query generation using Web Worker for large datasets (1000+ rows)
-   */
-  async _generateQueryAsync(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {
+  async _generateQuery(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {
     const rowCount = inputData.length - 1; // Exclude header
 
     // Increment request ID to track this specific generation request
@@ -1618,20 +1579,20 @@ export class QuickQueryUI {
       this.isGenerating = true;
       this._showProgress(`Processing ${rowCount.toLocaleString()} rows...`, 0);
 
-      const result = await this.queryWorkerService.generateQuery(
+      const result = await this.queryExecutionService.generateQuery({
         tableName,
         queryType,
         schemaData,
         inputData,
-        this.processedFiles,
+        attachments: this.processedFiles,
         options,
-        (percent, message) => {
+        onProgress: (percent, message) => {
           // Only update progress if this is still the current request
           if (currentReqId === this._genReqId) {
             this._updateProgress(message, percent);
           }
         },
-      );
+      });
 
       // Guard against stale results - discard if a newer request was initiated
       if (currentReqId !== this._genReqId) {
@@ -1650,7 +1611,7 @@ export class QuickQueryUI {
         this.showWarning(result.duplicateResult.warningMessage);
       }
 
-      this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, true);
+      this._trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, result.usedWorker);
       this.scheduleActiveTabDraftSave();
     } catch (error) {
       // Only handle error if this is still the current request
@@ -1677,7 +1638,7 @@ export class QuickQueryUI {
    */
   handleCancelGeneration() {
     if (this.isGenerating) {
-      this.queryWorkerService.cancel();
+      this.queryExecutionService.cancel();
       this._hideProgress();
       this.isGenerating = false;
     }

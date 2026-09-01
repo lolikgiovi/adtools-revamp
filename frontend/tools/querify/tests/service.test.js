@@ -34,17 +34,13 @@ function createService(overrides = {}) {
       rowCount: 1,
     }),
   };
-  const schemaValidationService = overrides.schemaValidationService || {
-    validateSchema: vi.fn(),
-    matchSchemaWithData: vi.fn(),
-  };
-  const queryGenerationService = overrides.queryGenerationService || {
-    generateQuery: vi.fn().mockReturnValue("SET DEFINE OFF;\n\nMERGE INTO INHOUSE_FOREX.RATE_TIERING tgt;"),
-    detectDuplicatePrimaryKeys: vi.fn().mockReturnValue({ hasDuplicates: false }),
-  };
-  const queryWorkerService = overrides.queryWorkerService || {
-    shouldUseWorker: vi.fn().mockReturnValue(false),
-    generateQuery: vi.fn(),
+  const queryExecutionService = overrides.queryExecutionService || {
+    generateQuery: vi.fn().mockResolvedValue({
+      sql: "SET DEFINE OFF;\n\nMERGE INTO INHOUSE_FOREX.RATE_TIERING tgt;",
+      duplicateResult: { hasDuplicates: false },
+      rowCount: 2,
+      usedWorker: false,
+    }),
     terminate: vi.fn(),
   };
 
@@ -52,15 +48,11 @@ function createService(overrides = {}) {
     service: new QuerifyService({
       storageService,
       excelImportServiceFactory: () => excelImportService,
-      schemaValidationService,
-      queryGenerationService,
-      queryWorkerService,
+      queryExecutionService,
     }),
     storageService,
     excelImportService,
-    schemaValidationService,
-    queryGenerationService,
-    queryWorkerService,
+    queryExecutionService,
   };
 }
 
@@ -96,12 +88,12 @@ describe("QuerifyService schema lookup", () => {
   });
 
   it("fails when a filename has no saved schema", async () => {
-    const { service, queryGenerationService } = createService();
+    const { service, queryExecutionService } = createService();
 
     await expect(service.generateFile({ name: "missing_schema.missing_table.xlsx" }, "merge")).rejects.toThrow(
       /Schema not found in Quick Query/,
     );
-    expect(queryGenerationService.generateQuery).not.toHaveBeenCalled();
+    expect(queryExecutionService.generateQuery).not.toHaveBeenCalled();
   });
 
   it("fails when multiple saved schemas differ only by case", async () => {
@@ -119,30 +111,24 @@ describe("QuerifyService schema lookup", () => {
 
 describe("QuerifyService generation", () => {
   it("reuses Quick Query validation and generation services", async () => {
-    const { service, storageService, excelImportService, schemaValidationService, queryGenerationService } = createService();
+    const { service, storageService, excelImportService, queryExecutionService } = createService();
 
     const result = await service.generateFile({ name: "inhouse_forex.rate_tiering.xlsx" }, "merge");
 
     expect(storageService.loadSchema).toHaveBeenCalledWith("INHOUSE_FOREX.RATE_TIERING");
     expect(excelImportService.processFromFile).toHaveBeenCalledWith({ name: "inhouse_forex.rate_tiering.xlsx" });
-    expect(schemaValidationService.validateSchema).toHaveBeenCalledWith(expect.any(Array), "INHOUSE_FOREX.RATE_TIERING");
-    expect(schemaValidationService.matchSchemaWithData).toHaveBeenCalledWith(expect.any(Array), [
-      ["ID", "NAME"],
-      ["1", "Alpha"],
-      ["2", "Beta"],
-    ]);
-    expect(queryGenerationService.generateQuery).toHaveBeenCalledWith(
-      "INHOUSE_FOREX.RATE_TIERING",
-      "merge",
-      expect.any(Array),
-      [
+    expect(queryExecutionService.generateQuery).toHaveBeenCalledWith({
+      tableName: "INHOUSE_FOREX.RATE_TIERING",
+      queryType: "merge",
+      schemaData: expect.any(Array),
+      inputData: [
         ["ID", "NAME"],
         ["1", "Alpha"],
         ["2", "Beta"],
       ],
-      [],
-      { defaultSysdate: true },
-    );
+      options: { defaultSysdate: true },
+      onProgress: undefined,
+    });
     expect(result).toMatchObject({
       fileName: "inhouse_forex.rate_tiering.xlsx",
       tableName: "INHOUSE_FOREX.RATE_TIERING",
@@ -175,24 +161,28 @@ describe("QuerifyService generation", () => {
   });
 
   it("can generate from Tauri-read Uint8Array data without browser File APIs", async () => {
-    const { service, excelImportService, queryGenerationService } = createService();
+    const queryExecutionService = {
+      generateQuery: vi.fn().mockResolvedValue({ sql: "INSERT SQL", rowCount: 1, duplicateResult: null, usedWorker: false }),
+      terminate: vi.fn(),
+    };
+    const { service, excelImportService } = createService({ queryExecutionService });
     const uint8Array = new Uint8Array([1, 2, 3]);
 
     const result = await service.generateFile({ name: "inhouse_forex.rate_tiering.xlsx", uint8Array }, "insert");
 
     expect(excelImportService.processFromUint8Array).toHaveBeenCalledWith(uint8Array);
     expect(excelImportService.processFromFile).not.toHaveBeenCalled();
-    expect(queryGenerationService.generateQuery).toHaveBeenCalledWith(
-      "INHOUSE_FOREX.RATE_TIERING",
-      "insert",
-      expect.any(Array),
-      [
+    expect(queryExecutionService.generateQuery).toHaveBeenCalledWith({
+      tableName: "INHOUSE_FOREX.RATE_TIERING",
+      queryType: "insert",
+      schemaData: expect.any(Array),
+      inputData: [
         ["ID", "NAME"],
         ["3", "Gamma"],
       ],
-      [],
-      { defaultSysdate: true },
-    );
+      options: { defaultSysdate: true },
+      onProgress: undefined,
+    });
     expect(result).toMatchObject({
       rowCount: 1,
       usedWorker: false,
@@ -200,7 +190,11 @@ describe("QuerifyService generation", () => {
   });
 
   it("reads Tauri path files lazily during generation", async () => {
-    const { service, excelImportService, queryGenerationService } = createService();
+    const queryExecutionService = {
+      generateQuery: vi.fn().mockResolvedValue({ sql: "INSERT SQL", rowCount: 1, duplicateResult: null, usedWorker: false }),
+      terminate: vi.fn(),
+    };
+    const { service, excelImportService } = createService({ queryExecutionService });
     const uint8Array = new Uint8Array([4, 5, 6]);
     const readFile = vi.fn().mockResolvedValue(uint8Array);
 
@@ -215,17 +209,17 @@ describe("QuerifyService generation", () => {
     expect(readFile).toHaveBeenCalledWith("/tmp/inhouse_forex.rate_tiering.xlsx");
     expect(excelImportService.processFromUint8Array).toHaveBeenCalledWith(uint8Array);
     expect(excelImportService.processFromFile).not.toHaveBeenCalled();
-    expect(queryGenerationService.generateQuery).toHaveBeenCalledWith(
-      "INHOUSE_FOREX.RATE_TIERING",
-      "insert",
-      expect.any(Array),
-      [
+    expect(queryExecutionService.generateQuery).toHaveBeenCalledWith({
+      tableName: "INHOUSE_FOREX.RATE_TIERING",
+      queryType: "insert",
+      schemaData: expect.any(Array),
+      inputData: [
         ["ID", "NAME"],
         ["3", "Gamma"],
       ],
-      [],
-      { defaultSysdate: true },
-    );
+      options: { defaultSysdate: true },
+      onProgress: undefined,
+    });
     expect(result).toMatchObject({
       rowCount: 1,
       usedWorker: false,

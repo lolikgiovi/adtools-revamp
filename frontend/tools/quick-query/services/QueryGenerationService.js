@@ -3,6 +3,15 @@ import { oracleReservedWords } from "../constants.js";
 import { AttachmentValidationService } from "./AttachmentValidationService.js";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 
+export function columnIndexToLetter(index) {
+  let letter = "";
+  while (index >= 0) {
+    letter = String.fromCharCode(65 + (index % 26)) + letter;
+    index = Math.floor(index / 26) - 1;
+  }
+  return letter;
+}
+
 export class QueryGenerationService {
   constructor() {
     this.ValueProcessorService = new ValueProcessorService();
@@ -89,12 +98,7 @@ export class QueryGenerationService {
    * @returns {string} Excel-style column letter
    */
   columnIndexToLetter(index) {
-    let letter = "";
-    while (index >= 0) {
-      letter = String.fromCharCode(65 + (index % 26)) + letter;
-      index = Math.floor(index / 26) - 1;
-    }
-    return letter;
+    return columnIndexToLetter(index);
   }
 
   detectDuplicatePrimaryKeys(schemaData, inputData, tableName) {

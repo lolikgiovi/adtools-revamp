@@ -3,11 +3,13 @@ import {
   JiraDiscoveryService,
   BE_COMPONENTS,
   addDaysIso,
-  buildSummary,
+  buildTicketBundle,
+  buildTicketPreview,
   createDefaultGlobalDefaults,
   formatFieldValue,
-  labelsForStream,
+  mergeGlobalDefaults,
   normalizeLabels,
+  resolveFeatureConfiguration,
   splitValues,
   todayIso,
   GLOBAL_DEFAULTS_KEY,
@@ -40,28 +42,6 @@ const NEW_FEATURE_VALUE = "__new_feature__";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function globalDefaultsFromStorage(value) {
-  const defaults = createDefaultGlobalDefaults();
-  if (!value || typeof value !== "object") return defaults;
-  const merged = {
-    ...defaults,
-    ...value,
-    labels: { ...defaults.labels, ...value.labels, be: { ...defaults.labels.be, ...value.labels?.be } },
-    people: {
-      ...defaults.people,
-      ...value.people,
-      common: { ...defaults.people.common, ...value.people?.common },
-      streams: { ...defaults.people.streams },
-    },
-    shared: { ...defaults.shared, ...value.shared },
-    dateRule: { ...defaults.dateRule, ...value.dateRule },
-  };
-  PEOPLE_STREAMS.forEach((stream) => {
-    merged.people.streams[stream] = { ...defaults.people.streams[stream], ...(value.people?.streams?.[stream] || {}) };
-  });
-  return merged;
 }
 
 export class TicketTemplateCreateTool extends BaseTool {
@@ -961,7 +941,7 @@ export class TicketTemplateCreateTool extends BaseTool {
     try {
       hasStoredConnection = Boolean(localStorage.getItem("config.jira.projectKey"));
     } catch (_) {
-      hasStoredConnection = false;
+      // localStorage may be unavailable; the initialized false value is the fallback.
     }
     const legacy = hasStoredConnection ? this.legacyConnection?.projectKey : "";
     if (legacy && !this.projects.some((project) => project.key === legacy)) {
@@ -1267,63 +1247,69 @@ export class TicketTemplateCreateTool extends BaseTool {
 
   collectTickets() {
     const streams = this.selectedStreams();
-    if (!streams.length) throw new Error("Select at least one ticket to create.");
-    if (streams.includes("be") && streams.length > 1) throw new Error("Choose either FE or BE mode, not both.");
-    if (streams.includes("web") && streams.length > 1) throw new Error("Web is a standalone FE mode. Deselect iOS and Android.");
-    const shared = {
-      priorityId: this.field("priority").value || null,
-      adStoryPointId: this.requiredValue("ad-story-point", "AD Story Point"),
-      devStoryPointId: this.field("dev-story-point").value || null,
-      squadId: this.requiredValue("squad", "Squad"),
-      releaseId: this.requiredValue("release", "Release Number"),
-      startDate: this.requiredValue("start-date", "Start Development On"),
-      deadline: this.requiredValue("deadline", "Deadline"),
-      saAdLead: this.requiredValue("sa-ad-lead", "SA/AD Lead"),
-      saAdSubLeads: splitValues(this.requiredValue("sa-ad-sub-leads", "SA/AD Sub-Lead")),
-      taskTriggerId: this.requiredValue("task-trigger", "Task Trigger By"),
-      description: this.field("description").value.trim(),
-      confluencePage: this.field("confluence-page").value.trim(),
-    };
-    const featureLabels = normalizeLabels(this.field("feature-labels").value);
-    return streams.map((stream) => {
-      const component = this.field("be-component").value;
-      const summaryField = stream === "ios" || stream === "android" ? "summary-mobile" : `summary-${stream}`;
-      const summary = buildSummary(stream, this.field(summaryField).value, component);
-      const labels = labelsForStream(this.globalDefaults, stream, component, featureLabels);
-      if (!labels.length) throw new Error("At least one label is required.");
-      return {
-        issueTypeId: this.issueTypeId(stream),
-        stream,
-        summary,
-        labels,
-        ...shared,
-        developer: this.requiredValue(`${stream}-developer`, `${stream} Developer`),
-        developerLead: this.requiredValue(`${stream}-developer-lead`, `${stream} Developer Lead`),
-        developerSubLeads: splitValues(this.requiredValue(`${stream}-developer-sub-leads`, `${stream} Developer Sub-Lead`)),
-      };
+    return buildTicketBundle({
+      streams,
+      component: this.field("be-component").value,
+      summaries: {
+        mobile: this.field("summary-mobile").value,
+        web: this.field("summary-web").value,
+        be: this.field("summary-be").value,
+      },
+      issueTypeIds: Object.fromEntries(streams.map((stream) => [stream, this.issueTypeId(stream)])),
+      globalDefaults: this.globalDefaults,
+      featureLabels: this.field("feature-labels").value,
+      shared: {
+        priorityId: this.field("priority").value || null,
+        adStoryPointId: this.field("ad-story-point").value,
+        devStoryPointId: this.field("dev-story-point").value || null,
+        squadId: this.field("squad").value,
+        releaseId: this.field("release").value,
+        startDate: this.field("start-date").value,
+        deadline: this.field("deadline").value,
+        taskTriggerId: this.field("task-trigger").value,
+        description: this.field("description").value.trim(),
+        confluencePage: this.field("confluence-page").value.trim(),
+      },
+      people: {
+        common: {
+          saAdLead: this.field("sa-ad-lead").value,
+          saAdSubLeads: this.field("sa-ad-sub-leads").value,
+        },
+        streams: Object.fromEntries(
+          streams.map((stream) => [
+            stream,
+            {
+              developer: this.field(`${stream}-developer`).value,
+              developerLead: this.field(`${stream}-developer-lead`).value,
+              developerSubLeads: this.field(`${stream}-developer-sub-leads`).value,
+            },
+          ]),
+        ),
+      },
     });
-  }
-
-  requiredValue(fieldName, label) {
-    const value = this.field(fieldName)?.value?.trim();
-    if (!value) throw new Error(`${label} is required.`);
-    return value;
   }
 
   renderCreatePreview() {
     if (!this.elements.preview || this.elements.ticketForm.hidden) return;
     const parent = this.elements.parentSelect.value;
     const streams = this.selectedStreams();
-    const component = this.field("be-component").value;
     this.elements.preview.innerHTML = streams.length
-      ? streams
-          .map((stream) => {
-            const summaryField = stream === "ios" || stream === "android" ? "summary-mobile" : `summary-${stream}`;
-            const body = this.field(summaryField).value.trim() || "Summary required";
-            const summary = body === "Summary required" ? body : buildSummary(stream, body, component);
-            const labels = labelsForStream(this.globalDefaults, stream, component, this.field("feature-labels").value);
-            return `<article><strong>${this.escapeHtml(summary)}</strong><span>Parent ${this.escapeHtml(parent || "not selected")}</span><small>${this.escapeHtml(labels.join(" · "))}</small></article>`;
-          })
+      ? buildTicketPreview({
+          streams,
+          component: this.field("be-component").value,
+          summaries: {
+            mobile: this.field("summary-mobile").value,
+            web: this.field("summary-web").value,
+            be: this.field("summary-be").value,
+          },
+          globalDefaults: this.globalDefaults,
+          featureLabels: this.field("feature-labels").value,
+          parentKey: parent,
+        })
+          .map(
+            (ticket) =>
+              `<article><strong>${this.escapeHtml(ticket.summary)}</strong><span>Parent ${this.escapeHtml(ticket.parentKey || "not selected")}</span><small>${this.escapeHtml(ticket.labels.join(" · "))}</small></article>`,
+          )
           .join("")
       : '<div class="ttc-empty">Select at least one ticket.</div>';
   }
@@ -1345,7 +1331,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   initializeGlobalDefaults() {
     try {
       const raw = localStorage.getItem(GLOBAL_DEFAULTS_KEY);
-      this.globalDefaults = globalDefaultsFromStorage(raw ? JSON.parse(raw) : null);
+      this.globalDefaults = mergeGlobalDefaults(raw ? JSON.parse(raw) : null);
       this.elements.globalStatus.dataset.state = "ready";
       this.elements.globalStatus.textContent = "Local defaults ready";
     } catch (error) {
@@ -1416,7 +1402,7 @@ export class TicketTemplateCreateTool extends BaseTool {
   async saveGlobalDefaults() {
     this.clearError();
     try {
-      this.globalDefaults = globalDefaultsFromStorage(this.collectGlobalDefaults());
+      this.globalDefaults = mergeGlobalDefaults(this.collectGlobalDefaults());
       localStorage.setItem(GLOBAL_DEFAULTS_KEY, JSON.stringify(this.globalDefaults));
       this.applyGlobalDefaults();
       if (this.currentFeature) this.applyFeature(this.currentFeature);
@@ -1708,24 +1694,18 @@ export class TicketTemplateCreateTool extends BaseTool {
         if (element.dataset.comboboxValue !== undefined) this.syncComboboxValue(name);
       }
     };
-    set("feature-labels", feature.featureLabels || feature.shared?.extraLabels || []);
-    const overrides = feature.overrides || {
-      shared: feature.shared || {},
-      people: { common: {}, streams: feature.people || {} },
-      dateRule: feature.dateRule || {},
-    };
-    SHARED_DEFAULT_FIELDS.forEach(([featureField, , key]) => set(featureField, overrides.shared?.[key] ?? this.globalDefaults.shared[key]));
-    set("start-offset-days", overrides.dateRule?.startOffsetDays ?? this.globalDefaults.dateRule.startOffsetDays);
-    set("deadline-offset-days", overrides.dateRule?.deadlineOffsetDays ?? this.globalDefaults.dateRule.deadlineOffsetDays);
-    const common = overrides.people?.common || {};
-    set("sa-ad-lead", common.saAdLead ?? this.globalDefaults.people.common.saAdLead);
-    set("sa-ad-sub-leads", common.saAdSubLeads ?? this.globalDefaults.people.common.saAdSubLeads);
+    const effective = resolveFeatureConfiguration(this.globalDefaults, feature);
+    set("feature-labels", effective.featureLabels);
+    SHARED_DEFAULT_FIELDS.forEach(([featureField, , key]) => set(featureField, effective.shared[key]));
+    set("start-offset-days", effective.dateRule.startOffsetDays);
+    set("deadline-offset-days", effective.dateRule.deadlineOffsetDays);
+    set("sa-ad-lead", effective.people.common.saAdLead);
+    set("sa-ad-sub-leads", effective.people.common.saAdSubLeads);
     PEOPLE_STREAMS.forEach((stream) => {
-      const people = overrides.people?.streams?.[stream] || overrides.people?.[stream] || {};
-      const globalPeople = this.globalDefaults.people.streams[stream];
-      set(`${stream}-developer`, people.developer ?? globalPeople.developer);
-      set(`${stream}-developer-lead`, people.developerLead ?? globalPeople.developerLead);
-      set(`${stream}-developer-sub-leads`, people.developerSubLeads ?? globalPeople.developerSubLeads);
+      const people = effective.people.streams[stream];
+      set(`${stream}-developer`, people.developer);
+      set(`${stream}-developer-lead`, people.developerLead);
+      set(`${stream}-developer-sub-leads`, people.developerSubLeads);
     });
     this.applyDateRule();
     this.updateDateHint();

@@ -20,6 +20,8 @@ export const BE_COMPONENTS = {
   Batch: "be_batch",
 };
 
+const PEOPLE_STREAMS = ["ios", "android", "web", "be"];
+
 export function createDefaultGlobalDefaults() {
   return {
     version: 2,
@@ -33,10 +35,7 @@ export function createDefaultGlobalDefaults() {
     people: {
       common: { saAdLead: "", saAdSubLeads: [] },
       streams: Object.fromEntries(
-        ["ios", "android", "web", "be"].map((stream) => [
-          stream,
-          { developer: "", developerLead: "", developerSubLeads: [] },
-        ]),
+        ["ios", "android", "web", "be"].map((stream) => [stream, { developer: "", developerLead: "", developerSubLeads: [] }]),
       ),
     },
     shared: {
@@ -48,6 +47,53 @@ export function createDefaultGlobalDefaults() {
       taskTriggerId: "",
     },
     dateRule: { startOffsetDays: 0, deadlineOffsetDays: 3 },
+  };
+}
+
+export function mergeGlobalDefaults(value) {
+  const defaults = createDefaultGlobalDefaults();
+  if (!value || typeof value !== "object") return defaults;
+  const merged = {
+    ...defaults,
+    ...value,
+    labels: { ...defaults.labels, ...value.labels, be: { ...defaults.labels.be, ...value.labels?.be } },
+    people: {
+      ...defaults.people,
+      ...value.people,
+      common: { ...defaults.people.common, ...value.people?.common },
+      streams: { ...defaults.people.streams },
+    },
+    shared: { ...defaults.shared, ...value.shared },
+    dateRule: { ...defaults.dateRule, ...value.dateRule },
+  };
+  PEOPLE_STREAMS.forEach((stream) => {
+    merged.people.streams[stream] = { ...defaults.people.streams[stream], ...(value.people?.streams?.[stream] || {}) };
+  });
+  return merged;
+}
+
+export function resolveFeatureConfiguration(globalDefaults, feature = {}) {
+  const global = mergeGlobalDefaults(globalDefaults);
+  const overrides = feature.overrides || {
+    shared: feature.shared || {},
+    people: { common: {}, streams: feature.people || {} },
+    dateRule: feature.dateRule || {},
+  };
+  const people = {
+    common: { ...global.people.common, ...(overrides.people?.common || {}) },
+    streams: {},
+  };
+  PEOPLE_STREAMS.forEach((stream) => {
+    people.streams[stream] = {
+      ...global.people.streams[stream],
+      ...(overrides.people?.streams?.[stream] || overrides.people?.[stream] || {}),
+    };
+  });
+  return {
+    featureLabels: normalizeLabels(feature.featureLabels || feature.shared?.extraLabels || []),
+    shared: { ...global.shared, ...(overrides.shared || {}) },
+    people,
+    dateRule: { ...global.dateRule, ...(overrides.dateRule || {}) },
   };
 }
 
@@ -139,6 +185,81 @@ export function buildSummary(stream, summaryBody, beComponent = "API") {
   const prefix = stream === "be" ? `[${beComponent}]` : STREAMS[stream]?.prefix;
   if (!prefix) throw new Error(`Unknown ticket stream: ${stream}`);
   return `${prefix} ${body}`;
+}
+
+function validateStreams(streams) {
+  const selected = [...new Set(streams || [])];
+  if (!selected.length) throw new Error("Select at least one ticket to create.");
+  if (selected.some((stream) => !PEOPLE_STREAMS.includes(stream))) throw new Error("Unknown ticket stream.");
+  if (selected.includes("be") && selected.length > 1) throw new Error("Choose either FE or BE mode, not both.");
+  if (selected.includes("web") && selected.length > 1) throw new Error("Web is a standalone FE mode. Deselect iOS and Android.");
+  return selected;
+}
+
+function required(value, label) {
+  const normalized = String(value || "").trim();
+  if (!normalized) throw new Error(`${label} is required.`);
+  return normalized;
+}
+
+function summaryBodyFor(stream, summaries = {}) {
+  return stream === "ios" || stream === "android" ? summaries.mobile : summaries[stream];
+}
+
+export function buildTicketPreview({ streams, component = "API", summaries, globalDefaults, featureLabels, parentKey }) {
+  return validateStreams(streams).map((stream) => {
+    const body = String(summaryBodyFor(stream, summaries) || "").trim();
+    return {
+      stream,
+      summary: body ? buildSummary(stream, body, component) : "Summary required",
+      parentKey: String(parentKey || "").trim(),
+      labels: labelsForStream(globalDefaults, stream, component, featureLabels),
+    };
+  });
+}
+
+export function buildTicketBundle({
+  streams,
+  component = "API",
+  summaries,
+  issueTypeIds,
+  globalDefaults,
+  featureLabels,
+  shared = {},
+  people = {},
+}) {
+  const selected = validateStreams(streams);
+  const common = people.common || {};
+  const normalizedShared = {
+    priorityId: shared.priorityId || null,
+    adStoryPointId: required(shared.adStoryPointId, "AD Story Point"),
+    devStoryPointId: shared.devStoryPointId || null,
+    squadId: required(shared.squadId, "Squad"),
+    releaseId: required(shared.releaseId, "Release Number"),
+    startDate: required(shared.startDate, "Start Development On"),
+    deadline: required(shared.deadline, "Deadline"),
+    saAdLead: required(common.saAdLead, "SA/AD Lead"),
+    saAdSubLeads: splitValues(required(common.saAdSubLeads, "SA/AD Sub-Lead")),
+    taskTriggerId: required(shared.taskTriggerId, "Task Trigger By"),
+    description: String(shared.description || "").trim(),
+    confluencePage: String(shared.confluencePage || "").trim(),
+  };
+
+  return selected.map((stream) => {
+    const streamPeople = people.streams?.[stream] || {};
+    const labels = labelsForStream(globalDefaults, stream, component, featureLabels);
+    if (!labels.length) throw new Error("At least one label is required.");
+    return {
+      issueTypeId: required(issueTypeIds?.[stream], `${STREAMS[stream].label} issue type`),
+      stream,
+      summary: buildSummary(stream, summaryBodyFor(stream, summaries), component),
+      labels,
+      ...normalizedShared,
+      developer: required(streamPeople.developer, `${stream} Developer`),
+      developerLead: required(streamPeople.developerLead, `${stream} Developer Lead`),
+      developerSubLeads: splitValues(required(streamPeople.developerSubLeads, `${stream} Developer Sub-Lead`)),
+    };
+  });
 }
 
 export class JiraDiscoveryService {

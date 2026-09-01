@@ -1,8 +1,6 @@
 import { ExcelImportWorkerService } from "../quick-query/services/ExcelImportWorkerService.js";
 import { IndexedDBStorageService } from "../quick-query/services/IndexedDBStorageService.js";
-import { QueryGenerationService } from "../quick-query/services/QueryGenerationService.js";
-import { QueryWorkerService } from "../quick-query/services/QueryWorkerService.js";
-import { SchemaValidationService } from "../quick-query/services/SchemaValidationService.js";
+import { QueryExecutionService } from "../quick-query/services/QueryExecutionService.js";
 
 const EXCEL_EXTENSION_REGEX = /\.(xlsx|xls)$/i;
 
@@ -10,9 +8,7 @@ export class QuerifyService {
   constructor(options = {}) {
     this.storageService = options.storageService || new IndexedDBStorageService();
     this.excelImportServiceFactory = options.excelImportServiceFactory || (() => new ExcelImportWorkerService());
-    this.schemaValidationService = options.schemaValidationService || new SchemaValidationService();
-    this.queryGenerationService = options.queryGenerationService || new QueryGenerationService();
-    this.queryWorkerService = options.queryWorkerService || new QueryWorkerService();
+    this.queryExecutionService = options.queryExecutionService || new QueryExecutionService();
     this.defaultGenerationOptions = options.defaultGenerationOptions || { defaultSysdate: true };
     this._storageReady = false;
   }
@@ -47,7 +43,9 @@ export class QuerifyService {
   }
 
   normalizeFullName(fullName) {
-    return String(fullName || "").trim().toLowerCase();
+    return String(fullName || "")
+      .trim()
+      .toLowerCase();
   }
 
   async buildSchemaLookup() {
@@ -98,43 +96,21 @@ export class QuerifyService {
       ...(options.generationOptions || {}),
     };
 
-    options.onProgress?.(30, "Validating schema...");
-    this.schemaValidationService.validateSchema(schemaData, schemaRecord.fullName);
-    this.schemaValidationService.matchSchemaWithData(schemaData, inputData);
-
-    if (this.queryWorkerService.shouldUseWorker(inputData)) {
-      const result = await this.queryWorkerService.generateQuery(
-        schemaRecord.fullName,
-        queryType,
-        schemaData,
-        inputData,
-        [],
-        generationOptions,
-        options.onProgress || null,
-      );
-
-      return {
-        fileName: file.name,
-        tableName: schemaRecord.fullName,
-        queryType,
-        sql: result.sql,
-        rowCount: result.rowCount,
-        duplicateResult: result.duplicateResult || null,
-        usedWorker: true,
-      };
-    }
-
-    const sql = this.queryGenerationService.generateQuery(schemaRecord.fullName, queryType, schemaData, inputData, [], generationOptions);
-    const duplicateResult = this.queryGenerationService.detectDuplicatePrimaryKeys(schemaData, inputData, schemaRecord.fullName);
+    options.onProgress?.(30, "Generating query...");
+    const result = await this.queryExecutionService.generateQuery({
+      tableName: schemaRecord.fullName,
+      queryType,
+      schemaData,
+      inputData,
+      options: generationOptions,
+      onProgress: options.onProgress,
+    });
 
     return {
       fileName: file.name,
       tableName: schemaRecord.fullName,
       queryType,
-      sql,
-      rowCount: inputData.length - 1,
-      duplicateResult,
-      usedWorker: false,
+      ...result,
     };
   }
 
@@ -168,6 +144,6 @@ export class QuerifyService {
   }
 
   dispose() {
-    this.queryWorkerService?.terminate?.();
+    this.queryExecutionService?.terminate?.();
   }
 }

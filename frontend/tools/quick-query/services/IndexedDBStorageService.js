@@ -21,7 +21,7 @@ const MAX_CACHED_ROWS = 1000;
 
 /**
  * IndexedDB-based storage service for Quick Query tool.
- * Replaces LocalStorageService to avoid quota_exceeded errors.
+ * Stores Quick Query state outside localStorage to avoid quota_exceeded errors.
  * Maintains the same public API but with async methods.
  */
 export class IndexedDBStorageService {

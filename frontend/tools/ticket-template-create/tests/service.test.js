@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   addDaysIso,
   buildSummary,
+  buildTicketBundle,
+  buildTicketPreview,
   createDefaultGlobalDefaults,
   createDiscoveryRequest,
   formatFieldValue,
   labelsForStream,
+  mergeGlobalDefaults,
   mandatoryLabels,
   normalizeBaseUrl,
   normalizeIssueKey,
   normalizeProjectKey,
   normalizeLabels,
+  resolveFeatureConfiguration,
   splitValues,
 } from "../service.js";
 
@@ -75,5 +79,67 @@ describe("Ticket Template service", () => {
       "feature_name",
     ]);
     expect(labelsForStream(defaults, "be", "Service", ["feature_name"])).toContain("be_service");
+  });
+
+  it("resolves sparse feature overrides over complete global defaults", () => {
+    const defaults = mergeGlobalDefaults({
+      shared: { priorityId: "4", squadId: "squad-global" },
+      people: { streams: { ios: { developer: "global-dev", developerLead: "global-lead" } } },
+    });
+    const effective = resolveFeatureConfiguration(defaults, {
+      featureLabels: ["feature-one"],
+      overrides: {
+        shared: { squadId: "squad-feature" },
+        people: { streams: { ios: { developer: "feature-dev" } } },
+        dateRule: { deadlineOffsetDays: 5 },
+      },
+    });
+
+    expect(effective.shared).toMatchObject({ priorityId: "4", squadId: "squad-feature" });
+    expect(effective.people.streams.ios).toMatchObject({ developer: "feature-dev", developerLead: "global-lead" });
+    expect(effective.dateRule).toEqual({ startOffsetDays: 0, deadlineOffsetDays: 5 });
+    expect(effective.featureLabels).toEqual(["feature-one"]);
+  });
+
+  it("uses the same stream, summary, and label rules for preview and Jira bundles", () => {
+    const defaults = createDefaultGlobalDefaults();
+    const preview = buildTicketPreview({
+      streams: ["ios", "android"],
+      summaries: { mobile: "Build transfer flow" },
+      globalDefaults: defaults,
+      featureLabels: ["transfer"],
+      parentKey: "EVDEV-123",
+    });
+    const bundle = buildTicketBundle({
+      streams: ["ios", "android"],
+      summaries: { mobile: "Build transfer flow" },
+      issueTypeIds: { ios: "fe", android: "fe" },
+      globalDefaults: defaults,
+      featureLabels: ["transfer"],
+      shared: {
+        adStoryPointId: "3",
+        squadId: "1",
+        releaseId: "2",
+        startDate: "2026-09-01",
+        deadline: "2026-09-04",
+        taskTriggerId: "5",
+      },
+      people: {
+        common: { saAdLead: "lead", saAdSubLeads: "sublead" },
+        streams: {
+          ios: { developer: "ios-dev", developerLead: "ios-lead", developerSubLeads: "ios-sub" },
+          android: { developer: "android-dev", developerLead: "android-lead", developerSubLeads: "android-sub" },
+        },
+      },
+    });
+
+    expect(bundle.map(({ summary, labels }) => ({ summary, labels }))).toEqual(preview.map(({ summary, labels }) => ({ summary, labels })));
+    expect(bundle[0]).toMatchObject({ summary: "[iOS] Build transfer flow", developer: "ios-dev" });
+    expect(bundle[1].summary).toBe("[Android] Build transfer flow");
+  });
+
+  it("enforces mutually exclusive stream modes at the module interface", () => {
+    expect(() => buildTicketPreview({ streams: ["be", "ios"] })).toThrow("either FE or BE");
+    expect(() => buildTicketPreview({ streams: ["web", "android"] })).toThrow("Web is a standalone");
   });
 });
