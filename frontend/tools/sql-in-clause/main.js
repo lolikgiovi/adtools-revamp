@@ -10,15 +10,7 @@ import "./styles.css";
 
 class SQLInClauseTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "sql-in-clause",
-      name: "SQL IN Clause",
-      description: "Convert newline lists into SQL IN clause formats",
-      icon: "sql-in",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "sql-in-clause", eventBus, isHeavyTool: true });
     this.editor = null;
     this.format = "single"; // single | multi | select
     this.tableInput = null;

@@ -132,20 +132,6 @@ class GlobalSearch {
       this.eventBus.on("escape:pressed", () => {
         if (this.isOpen) this.close();
       });
-
-      // Update index if new tools are registered
-      this.eventBus.on("tool:registered", (data) => {
-        const tool = data.tool;
-        const md = tool.getMetadata();
-        this._addToIndex({
-          id: md.id,
-          name: md.name,
-          description: md.description || "",
-          route: md.id,
-          type: "tool",
-          icon: md.icon || null,
-        });
-      });
     }
   }
 
@@ -336,12 +322,7 @@ class GlobalSearch {
   }
 
   _escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 }
 

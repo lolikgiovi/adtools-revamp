@@ -70,10 +70,6 @@ class Sidebar {
    */
   bindEvents() {
     if (this.eventBus) {
-      this.eventBus.on("tool:registered", (data) => {
-        this.addTool(data.tool);
-      });
-
       this.eventBus.on("route:changed", (data) => {
         this.updateActiveItem(data.path);
       });
@@ -234,8 +230,8 @@ class Sidebar {
           ? "Close sidebar"
           : "Open sidebar"
         : this.state.isCollapsed
-        ? "Expand sidebar"
-        : "Collapse sidebar"
+          ? "Expand sidebar"
+          : "Collapse sidebar",
     );
   }
 
@@ -259,7 +255,7 @@ class Sidebar {
           isCollapsed: this.state.isCollapsed,
           isMobile: this.state.isMobile,
         },
-      })
+      }),
     );
   }
 
@@ -328,17 +324,6 @@ class Sidebar {
     if (this.eventBus) {
       this.eventBus.emit("sidebar:collapsed");
     }
-  }
-
-  /**
-   * Add a tool to the sidebar
-   * @param {BaseTool} tool - Tool instance
-   */
-  addTool(tool) {
-    const metadata = typeof tool?.getMetadata === "function" ? tool.getMetadata() : tool;
-    if (!metadata?.id) return;
-    this.tools.push(metadata);
-    this.renderTools();
   }
 
   /**
@@ -436,8 +421,8 @@ class Sidebar {
         this.router && typeof this.router.getCurrentRoute === "function"
           ? this.router.getCurrentRoute()
           : window.location.hash
-          ? window.location.hash.slice(1).split("/")[0]
-          : "";
+            ? window.location.hash.slice(1).split("/")[0]
+            : "";
       if (current) this.updateActiveItem(current);
     } catch (_) {}
   }
@@ -492,8 +477,8 @@ class Sidebar {
             item.type === "tool"
               ? `data-tool="${item.id}"`
               : item.type === "action"
-              ? `data-action="${item.id}"`
-              : `data-page="${item.id}"`;
+                ? `data-action="${item.id}"`
+                : `data-page="${item.id}"`;
           return `
             <div class=\"sidebar-menu-item\" ${dataAttr}>
               <button class=\"sidebar-menu-button\" type=\"button\">
@@ -522,8 +507,8 @@ class Sidebar {
         this.router && typeof this.router.getCurrentRoute === "function"
           ? this.router.getCurrentRoute()
           : window.location.hash
-          ? window.location.hash.slice(1).split("/")[0]
-          : "";
+            ? window.location.hash.slice(1).split("/")[0]
+            : "";
       if (current) this.updateActiveItem(current);
     } catch (_) {}
   }
@@ -574,10 +559,6 @@ class Sidebar {
 
     if (this.router) {
       this.router.navigate(toolId);
-    }
-
-    if (this.eventBus) {
-      this.eventBus.emit("tool:activate", { toolId });
     }
 
     // Close sidebar on mobile after selection

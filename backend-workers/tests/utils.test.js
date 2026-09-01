@@ -20,19 +20,19 @@ describe('CORS utilities', () => {
   describe('isOriginAllowed', () => {
     it('returns true when no origin header', () => {
       const request = { headers: { get: () => null } };
-      const env = { ALLOWED_ORIGINS: 'http://localhost:5173' };
+      const env = { ALLOWED_ORIGINS: 'http://localhost:1234' };
       expect(isOriginAllowed(request, env)).toBe(true);
     });
 
     it('returns true when origin is in allowed list', () => {
-      const request = { headers: { get: (h) => h === 'Origin' ? 'http://localhost:5173' : null } };
-      const env = { ALLOWED_ORIGINS: 'http://localhost:5173,tauri://localhost' };
+      const request = { headers: { get: (h) => h === 'Origin' ? 'http://localhost:1234' : null } };
+      const env = { ALLOWED_ORIGINS: 'http://localhost:1234,tauri://localhost' };
       expect(isOriginAllowed(request, env)).toBe(true);
     });
 
     it('returns false when origin is not in allowed list', () => {
       const request = { headers: { get: (h) => h === 'Origin' ? 'http://evil.com' : null } };
-      const env = { ALLOWED_ORIGINS: 'http://localhost:5173' };
+      const env = { ALLOWED_ORIGINS: 'http://localhost:1234' };
       expect(isOriginAllowed(request, env)).toBe(false);
     });
 

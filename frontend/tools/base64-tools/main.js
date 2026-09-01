@@ -11,14 +11,7 @@ import "./styles.css";
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "base64-tools",
-      name: "Base64 Tools",
-      description: "Encode and decode Base64 with text and file support",
-      icon: "base64",
-      category: "application",
-      eventBus: eventBus,
-    });
+    super({ id: "base64-tools", eventBus });
     this.currentMode = "encode";
     this.selectedFiles = new Map();
   }
@@ -47,12 +40,12 @@ class Base64Tools extends BaseTool {
 
     for (const [fileId, { file, mode }] of this.selectedFiles) {
       this.displayFileCard(file, fileId, mode);
-      if (mode === 'encode') hasEncodeFiles = true;
-      if (mode === 'decode') hasDecodeFiles = true;
+      if (mode === "encode") hasEncodeFiles = true;
+      if (mode === "decode") hasDecodeFiles = true;
     }
 
-    if (hasEncodeFiles) this.showInputFileContainer('encode');
-    if (hasDecodeFiles) this.showInputFileContainer('decode');
+    if (hasEncodeFiles) this.showInputFileContainer("encode");
+    if (hasDecodeFiles) this.showInputFileContainer("decode");
   }
 
   async onMount() {

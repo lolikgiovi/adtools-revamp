@@ -15,15 +15,7 @@ import "./styles.css";
 
 class HTMLTemplateTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "html-template",
-      name: "HTML Template",
-      description: "Edit and preview HTML templates with live rendering",
-      icon: "html",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "html-template", eventBus, isHeavyTool: true });
 
     this.editor = null;
     this.minifyWorker = null;

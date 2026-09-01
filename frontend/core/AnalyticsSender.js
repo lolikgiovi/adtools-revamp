@@ -1,3 +1,5 @@
+import { SessionTokenStore } from "./SessionTokenStore.js";
+
 class AnalyticsSender {
   static _debug = null;
 
@@ -51,7 +53,7 @@ class AnalyticsSender {
 
   static async _postJson(path, payload = {}, extraHeaders = {}) {
     const urls = this._resolveUrls(path);
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", ...SessionTokenStore.getAuthHeader() };
     Object.entries(extraHeaders || {}).forEach(([key, value]) => {
       if (value !== undefined && value !== null && String(value)) headers[key] = String(value);
     });

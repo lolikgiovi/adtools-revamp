@@ -12,14 +12,7 @@ import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 
 export class RunBatch extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "run-batch",
-      name: "Run Batch",
-      description: "Trigger Jenkins batch jobs with configurable parameters",
-      icon: "jenkins-batch",
-      category: "jenkins",
-      eventBus,
-    });
+    super({ id: "run-batch", eventBus });
     this.service = new RunBatchService();
     this.state = {
       jenkinsUrl: "",

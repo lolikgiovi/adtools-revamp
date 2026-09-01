@@ -8,7 +8,7 @@ import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 
 // Routes
 import { handleAnalyticsBatchPost, handleAnalyticsLogPost, handleAnalyticsErrorPost } from './src/routes/analytics.js';
-import { handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
+import { getSession, handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
 import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
@@ -113,15 +113,15 @@ export default {
     }
 
     if (url.pathname === "/analytics/batch") {
-      if (method === "POST") return handleAnalyticsBatchPost(request, env);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsBatchPost);
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/log") {
-      if (method === "POST") return handleAnalyticsLogPost(request, env);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsLogPost);
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/error") {
-      if (method === "POST") return handleAnalyticsErrorPost(request, env);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsErrorPost);
       return methodNotAllowed();
     }
 
@@ -192,3 +192,20 @@ export default {
     return new Response("Not Found", { status: 404, headers: corsHeaders() });
   },
 };
+
+async function handleAuthenticatedAnalytics(request, env, handler) {
+  if (Number(request.headers.get("Content-Length") || 0) > 1_000_000) {
+    return new Response(JSON.stringify({ ok: false, error: "Analytics payload too large" }), {
+      status: 413,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+  const session = await getSession(request, env);
+  if (!session?.email || !session?.deviceId) {
+    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+  return handler(request, env, session);
+}

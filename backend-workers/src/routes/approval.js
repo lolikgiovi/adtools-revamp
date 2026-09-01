@@ -75,20 +75,44 @@ export async function handleManualApprovalStatus(request, env) {
     if (!requestId || !email || !deviceId) return json({ ok: false, error: "Request identity is required" }, 400);
 
     const row = await env.DB.prepare(
-      "SELECT id, email, display_name, device_id, platform, status FROM manual_approval_requests WHERE id = ? AND email = ? AND device_id = ?",
+      "SELECT id, email, display_name, device_id, platform, status, completed_at, session_token FROM manual_approval_requests WHERE id = ? AND email = ? AND device_id = ?",
     )
       .bind(requestId, email, deviceId)
       .first();
     if (!row) return json({ ok: false, error: "Approval request not found" }, 404);
+    if (row.completed_at) {
+      return row.session_token
+        ? json({ ok: true, status: "approved", token: row.session_token })
+        : json({ ok: false, error: "Approval was already completed" }, 409);
+    }
     if (row.status !== "approved") return json({ ok: true, status: "pending" });
 
-    const registration = await completeRegistration(
-      { email: row.email, displayName: row.display_name, deviceId: row.device_id, platform: row.platform },
-      request,
-      env,
-    );
-    await env.DB.prepare("UPDATE manual_approval_requests SET completed_at = ? WHERE id = ?").bind(tsGmt7Plain(), row.id).run();
-    return json({ ok: true, status: "approved", userId: registration.userId, token: registration.token });
+    const claimId = crypto.randomUUID();
+    const claim = await env.DB.prepare(
+      "UPDATE manual_approval_requests SET claim_id = ?, claimed_at = ? WHERE id = ? AND completed_at IS NULL AND (claim_id IS NULL OR claimed_at < ?)",
+    )
+      .bind(claimId, tsGmt7Plain(), row.id, tsGmt7Plain(-2 * 60 * 1000))
+      .run();
+    if (Number(claim?.meta?.changes || 0) !== 1) return json({ ok: true, status: "pending" }, 202);
+
+    try {
+      const registration = await completeRegistration(
+        { email: row.email, displayName: row.display_name, deviceId: row.device_id, platform: row.platform },
+        request,
+        env,
+      );
+      await env.DB.prepare(
+        "UPDATE manual_approval_requests SET completed_at = ?, session_token = ?, claim_id = NULL, claimed_at = NULL WHERE id = ? AND claim_id = ?",
+      )
+        .bind(tsGmt7Plain(), registration.token, row.id, claimId)
+        .run();
+      return json({ ok: true, status: "approved", userId: registration.userId, token: registration.token });
+    } catch (error) {
+      await env.DB.prepare("UPDATE manual_approval_requests SET claim_id = NULL, claimed_at = NULL WHERE id = ? AND claim_id = ?")
+        .bind(row.id, claimId)
+        .run();
+      throw error;
+    }
   } catch (err) {
     return json({ ok: false, error: String(err) }, 400);
   }

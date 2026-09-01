@@ -5,17 +5,7 @@
  * The sidecar provides Oracle database connectivity without requiring
  * Oracle Instant Client to be installed.
  *
- * Usage:
- *   import { OracleSidecarClient } from './lib/oracle-sidecar-client.js';
- *
- *   const client = new OracleSidecarClient();
- *   await client.start();
- *
- *   const result = await client.query({
- *     connection: { name: 'DEV', connect_string: 'host:1521/service', username: 'user', password: 'pass' },
- *     sql: 'SELECT * FROM my_table',
- *     max_rows: 1000
- *   });
+ * Database requests are proxied by Rust so keychain passwords never enter JavaScript.
  */
 
 const SIDECAR_PORT = 21522;
@@ -245,130 +235,6 @@ export class OracleSidecarClient {
       return response.ok;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Get sidecar status including pool info
-   */
-  async getStatus() {
-    const response = await this._fetchSidecar(`${this._baseUrl}/health`);
-    if (!response.ok) {
-      throw new Error("Sidecar not responding");
-    }
-    return response.json();
-  }
-
-  /**
-   * Test a database connection
-   * @param {Object} connection - Connection config { name, connect_string, username, password }
-   */
-  async testConnection(connection) {
-    const response = await this._fetchSidecar(`${this._baseUrl}/test-connection`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ connection }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new OracleSidecarError(error.detail || error);
-    }
-
-    const result = await response.json();
-    this._resetIdleTimer();
-    return result;
-  }
-
-  /**
-   * Execute a SQL query
-   * @param {Object} options - Query options
-   * @param {Object} options.connection - Connection config { name, connect_string, username, password }
-   * @param {string} options.sql - SQL query to execute
-   * @param {number} [options.max_rows=1000] - Maximum rows to return
-   * @returns {Promise<{columns: string[], rows: any[][], row_count: number, execution_time_ms: number}>}
-   */
-  async query({ connection, sql, max_rows = 1000 }) {
-    const response = await this._fetchSidecar(`${this._baseUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ connection, sql, max_rows }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new OracleSidecarError(error.detail || error);
-    }
-
-    const result = await response.json();
-    this._resetIdleTimer();
-    return result;
-  }
-
-  /**
-   * Execute a SQL query and return results as array of objects
-   * @param {Object} options - Query options
-   * @param {Object} options.connection - Connection config { name, connect_string, username, password }
-   * @param {string} options.sql - SQL query to execute
-   * @param {number} [options.max_rows=1000] - Maximum rows to return
-   * @returns {Promise<{columns: string[], rows: Object[], row_count: number, execution_time_ms: number}>}
-   */
-  async queryAsDict({ connection, sql, max_rows = 1000 }) {
-    const response = await this._fetchSidecar(`${this._baseUrl}/query-dict`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ connection, sql, max_rows }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new OracleSidecarError(error.detail || error);
-    }
-
-    const result = await response.json();
-    this._resetIdleTimer();
-    return result;
-  }
-
-  /**
-   * Execute multiple queries in a single HTTP request (parallel execution on sidecar).
-   * @param {Array<{connection: Object, sql: string, max_rows?: number}>} queries
-   * @returns {Promise<{results: Array<{columns: string[], rows: any[][], row_count: number, execution_time_ms: number} | {error: string}>}>}
-   */
-  async queryBatch(queries) {
-    const response = await this._fetchSidecar(`${this._baseUrl}/query-batch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new OracleSidecarError(error.detail || error);
-    }
-
-    const result = await response.json();
-    this._resetIdleTimer();
-    return result;
-  }
-
-  /**
-   * List active connection pools (for debugging)
-   */
-  async listPools() {
-    const response = await this._fetchSidecar(`${this._baseUrl}/pools`);
-    if (!response.ok) {
-      throw new Error("Failed to list pools");
-    }
-    return response.json();
-  }
-
-  async _fetchSidecar(url, options) {
-    try {
-      return await fetch(url, options);
-    } catch (error) {
-      this._setStatus(SidecarStatus.ERROR);
-      throw new OracleSidecarError(error?.message?.includes("fetch") ? "Sidecar not responding" : error);
     }
   }
 }

@@ -253,8 +253,10 @@ export class IndexedDBStorageService {
 
   async addHistoryEntry(entry) {
     try {
+      const { _id, ...record } = entry;
       await this._putRecord(HISTORY_STORE, {
-        ...entry,
+        ...record,
+        ...(_id == null ? {} : { id: _id }),
         timestamp: entry.timestamp || new Date().toISOString(),
       });
       return true;

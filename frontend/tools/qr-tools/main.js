@@ -7,14 +7,7 @@ import "./styles.css";
 
 class QRTools extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "qr-tools",
-      name: "QR Tools",
-      description: "Generate static QR codes from text or URLs",
-      icon: "qr",
-      category: "application",
-      eventBus,
-    });
+    super({ id: "qr-tools", eventBus });
     this.service = new QRToolsService();
     this.state = {
       mode: "text",

@@ -7,7 +7,6 @@ const originalStartSidecar = OracleConnectionService.startSidecar;
 const originalEnsureSidecarStarted = OracleConnectionService.ensureSidecarStarted;
 const originalQueryViaSidecar = OracleConnectionService.queryViaSidecar;
 const originalQueryBatchViaSidecar = OracleConnectionService.queryBatchViaSidecar;
-const originalGetOracleCredentials = OracleConnectionService.getOracleCredentials;
 const originalHasOracleCredentials = OracleConnectionService.hasOracleCredentials;
 
 describe("CompareConfigService Oracle delegation", () => {
@@ -31,7 +30,6 @@ describe("CompareConfigService Oracle delegation", () => {
         { error: "ORA-00942" },
       ],
     });
-    OracleConnectionService.getOracleCredentials = vi.fn().mockResolvedValue(["user", "pass"]);
     OracleConnectionService.hasOracleCredentials = vi.fn().mockResolvedValue(true);
   });
 
@@ -40,7 +38,6 @@ describe("CompareConfigService Oracle delegation", () => {
     OracleConnectionService.ensureSidecarStarted = originalEnsureSidecarStarted;
     OracleConnectionService.queryViaSidecar = originalQueryViaSidecar;
     OracleConnectionService.queryBatchViaSidecar = originalQueryBatchViaSidecar;
-    OracleConnectionService.getOracleCredentials = originalGetOracleCredentials;
     OracleConnectionService.hasOracleCredentials = originalHasOracleCredentials;
   });
 
@@ -52,11 +49,9 @@ describe("CompareConfigService Oracle delegation", () => {
     expect(OracleConnectionService.ensureSidecarStarted).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps existing credential methods backed by the shared Oracle service", async () => {
-    await expect(CompareConfigService.getOracleCredentials("SIT")).resolves.toEqual(["user", "pass"]);
+  it("checks credentials through the shared Oracle service", async () => {
     await expect(CompareConfigService.hasOracleCredentials("SIT")).resolves.toBe(true);
 
-    expect(OracleConnectionService.getOracleCredentials).toHaveBeenCalledWith("SIT");
     expect(OracleConnectionService.hasOracleCredentials).toHaveBeenCalledWith("SIT");
   });
 

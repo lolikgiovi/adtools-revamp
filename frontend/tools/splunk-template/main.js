@@ -15,15 +15,7 @@ import "handsontable/dist/handsontable.full.css";
 
 class SplunkVTLEditor extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "splunk-template",
-      name: "Splunk Template",
-      description: "Edit Splunk templates with formatting, minify, syntax highlighting, and field review",
-      icon: "splunk-template",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "splunk-template", eventBus, isHeavyTool: true });
     this.editor = null;
     this.table = null;
     this._storageKey = "tool:splunk-template:editor";

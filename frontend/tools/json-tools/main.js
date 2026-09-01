@@ -15,15 +15,7 @@ import "./styles.css";
 
 class JSONTools extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "json-tools",
-      name: "JSON Tools",
-      description: "JSON Tools for validation, formatting, and manipulation",
-      icon: "json",
-      category: "application",
-      eventBus: eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "json-tools", eventBus, isHeavyTool: true });
     this.editor = null;
     this.outputEditor = null;
     this.currentTab = "validator";

@@ -5,41 +5,10 @@
 class BaseTool {
   constructor(config = {}) {
     this.id = config.id || this.constructor.name.toLowerCase();
-    this.name = config.name || "Unnamed Tool";
-    this.description = config.description || "";
-    this.icon = config.icon || "tool";
-    this.category = config.category || "general";
     this.container = null;
     this.isActive = false;
     this.eventBus = config.eventBus;
     this.isHeavyTool = Boolean(config.isHeavyTool);
-
-    this.init();
-  }
-
-  /**
-   * Initialize the tool
-   * Override in child classes for custom initialization
-   */
-  init() {
-    // Default initialization
-    this.bindEvents();
-  }
-
-  /**
-   * Bind event listeners
-   * Override in child classes for custom events
-   */
-  bindEvents() {
-    if (this.eventBus) {
-      this.eventBus.on("tool:activate", (data) => {
-        if (data.toolId === this.id) {
-          this.activate();
-        } else {
-          this.deactivate();
-        }
-      });
-    }
   }
 
   /**
@@ -60,10 +29,6 @@ class BaseTool {
     this.isActive = true;
     this.onWarmResume();
     this.onActivate();
-
-    if (this.eventBus) {
-      this.eventBus.emit("tool:activated", { toolId: this.id });
-    }
   }
 
   /**
@@ -75,10 +40,6 @@ class BaseTool {
     this.isActive = false;
     this.onSoftDeactivate();
     this.onDeactivate();
-
-    if (this.eventBus) {
-      this.eventBus.emit("tool:deactivated", { toolId: this.id });
-    }
   }
 
   /**
@@ -163,20 +124,6 @@ class BaseTool {
    */
   onUnmount() {
     // Default behavior
-  }
-
-  /**
-   * Get tool metadata
-   * @returns {Object} Tool metadata
-   */
-  getMetadata() {
-    return {
-      id: this.id,
-      name: this.name,
-      description: this.description,
-      icon: this.icon,
-      category: this.category,
-    };
   }
 
   /**

@@ -66,16 +66,6 @@ export class OracleEnvImportService {
   }
 
   /**
-   * Build a full connection object by fetching credentials from the keychain.
-   * @param {string} name - Connection name
-   * @param {{ name: string, connect_string: string }} config
-   * @returns {Promise<{ name: string, connect_string: string, username: string, password: string }>}
-   */
-  static async buildConnection(name, config) {
-    return OracleConnectionService.buildSidecarConnection(name, config);
-  }
-
-  /**
    * Ensure the Oracle sidecar is started and healthy.
    * @returns {Promise<boolean>}
    */
@@ -90,10 +80,9 @@ export class OracleEnvImportService {
    * @returns {Promise<string[]>}
    */
   static async fetchSchemas(name, config) {
-    const connection = await this.buildConnection(name, config);
     const inList = SYSTEM_SCHEMAS.map((s) => `'${s}'`).join(",");
     const sql = `SELECT DISTINCT OWNER FROM ALL_TABLES WHERE OWNER NOT IN (${inList}) ORDER BY OWNER`;
-    const result = await OracleConnectionService.queryWithConnection(connection, sql, 1000);
+    const result = await OracleConnectionService.queryViaSidecar(name, config, sql, 1000);
     return result.rows.map((row) => row[0]);
   }
 
@@ -105,11 +94,10 @@ export class OracleEnvImportService {
    * @returns {Promise<{ schema: string, table: string }[]>}
    */
   static async fetchTables(name, config, schemaNames) {
-    const connection = await this.buildConnection(name, config);
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
     const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
     const sql = `SELECT OWNER, TABLE_NAME FROM ALL_TABLES WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList}) ORDER BY OWNER, TABLE_NAME`;
-    const result = await OracleConnectionService.queryWithConnection(connection, sql, 100000);
+    const result = await OracleConnectionService.queryViaSidecar(name, config, sql, 100000);
     return result.rows.map((row) => ({ schema: row[0], table: row[1] }));
   }
 
@@ -123,7 +111,6 @@ export class OracleEnvImportService {
    * @returns {Promise<Object>} Canonical payload { schema: { tables: { table: { columns, pk } } } }
    */
   static async fetchAllMetadata(name, config, schemaNames, onProgress, selectedTables) {
-    const connection = await this.buildConnection(name, config);
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
 
     if (onProgress) onProgress("Fetching column metadata...", 20);
@@ -139,7 +126,7 @@ export class OracleEnvImportService {
         grouped[schema].push(`'${table.replace(/'/g, "''")}'`);
       }
       const clauses = Object.entries(grouped).map(
-        ([schema, tables]) => `(OWNER = '${schema.replace(/'/g, "''")}' AND TABLE_NAME IN (${tables.join(",")}))`
+        ([schema, tables]) => `(OWNER = '${schema.replace(/'/g, "''")}' AND TABLE_NAME IN (${tables.join(",")}))`,
       );
       tableFilter = ` AND (${clauses.join(" OR ")})`;
     }
@@ -150,7 +137,7 @@ FROM ALL_TAB_COLUMNS
 WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList})${tableFilter}
 ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
 
-    const columnsResult = await OracleConnectionService.queryWithConnection(connection, columnsSql, 100000);
+    const columnsResult = await OracleConnectionService.queryViaSidecar(name, config, columnsSql, 100000);
 
     if (onProgress) onProgress("Fetching primary keys...", 60);
 
@@ -160,7 +147,7 @@ JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.
 WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND cons.TABLE_NAME NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
 ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
 
-    const pkResult = await OracleConnectionService.queryWithConnection(connection, pkSql, 100000);
+    const pkResult = await OracleConnectionService.queryViaSidecar(name, config, pkSql, 100000);
 
     if (onProgress) onProgress("Building schema payload...", 80);
 

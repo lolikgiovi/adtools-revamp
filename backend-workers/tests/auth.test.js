@@ -9,6 +9,9 @@ function createKvMock(values = {}) {
     put: vi.fn(async (key, value) => {
       values[key] = value;
     }),
+    delete: vi.fn(async (key) => {
+      delete values[key];
+    }),
   };
 }
 
@@ -20,7 +23,7 @@ function createVerifyDbMock() {
       bind: (...args) => ({
         run: vi.fn(async () => {
           executed.push({ sql, args });
-          return { success: true };
+          return { success: true, meta: { changes: 1 } };
         }),
         first: vi.fn(async () => {
           executed.push({ sql, args });
@@ -59,6 +62,11 @@ describe("registration and config access", () => {
       MAIL_FROM: "otp-adtools@example.com",
       POSTMARK_SERVER_TOKEN: "test-token",
       adtools: createKvMock(),
+      DB: {
+        prepare: vi.fn(() => ({
+          bind: () => ({ run: vi.fn(async () => ({ success: true })) }),
+        })),
+      },
     };
 
     const response = await handleRegisterRequestOtp(

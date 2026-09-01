@@ -964,12 +964,17 @@ fn csv_escape(value: &serde_json::Value) -> String {
 
 #[tauri::command]
 pub fn set_oracle_credentials(name: String, username: String, password: String) -> Result<(), String> {
+    let password = if password.is_empty() {
+        get_credentials(&name)?.1
+    } else {
+        password
+    };
     set_credentials(&name, &username, &password)
 }
 
 #[tauri::command]
-pub fn get_oracle_credentials(name: String) -> Result<(String, String), String> {
-    get_credentials(&name)
+pub fn get_oracle_username(name: String) -> Result<String, String> {
+    Ok(get_credentials(&name)?.0)
 }
 
 #[tauri::command]

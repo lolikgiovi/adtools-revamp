@@ -7,14 +7,7 @@ import "./styles.css";
 
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "check-image",
-      name: "Check Image",
-      description: "Verify image IDs across CDN environments",
-      icon: "check-image",
-      category: "application",
-      eventBus,
-    });
+    super({ id: "check-image", eventBus });
     // Blend UI responsibilities directly into the tool
     this.baseUrlService = new BaseUrlService();
     this.imageCheckerService = new ImageCheckerService(this.baseUrlService);

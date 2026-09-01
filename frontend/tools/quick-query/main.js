@@ -32,15 +32,7 @@ import "./styles.css";
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "quick-query",
-      name: "Quick Query",
-      description: "Generate Oracle SQL from schema/data with attachments and previews",
-      icon: "database",
-      category: "application",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "quick-query", eventBus, isHeavyTool: true });
     this.ui = null;
   }
 

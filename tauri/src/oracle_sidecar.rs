@@ -7,6 +7,8 @@
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
@@ -159,6 +161,86 @@ pub async fn check_oracle_sidecar_status() -> Result<bool, String> {
 #[tauri::command]
 pub fn get_oracle_sidecar_url() -> String {
     format!("http://127.0.0.1:{}", SIDECAR_PORT)
+}
+
+#[derive(Deserialize)]
+pub struct SidecarQueryInput {
+    pub connection_name: String,
+    pub config: crate::oracle::ConnectionConfig,
+    pub sql: String,
+    pub max_rows: Option<u32>,
+}
+
+fn connection_payload(connection_name: &str, config: &crate::oracle::ConnectionConfig) -> Result<Value, String> {
+    let (username, password) = crate::oracle::get_credentials(connection_name)?;
+    Ok(json!({
+        "name": config.name,
+        "connect_string": config.connect_string,
+        "username": username,
+        "password": password,
+    }))
+}
+
+async fn post_sidecar(path: &str, payload: Value) -> Result<Value, String> {
+    let response = sidecar_http_client()
+        .post(format!("http://127.0.0.1:{}{}", SIDECAR_PORT, path))
+        .timeout(Duration::from_secs(300))
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Sidecar not responding: {}", e))?;
+    let status = response.status();
+    let body: Value = response.json().await.map_err(|e| format!("Invalid sidecar response: {}", e))?;
+    if status.is_success() { Ok(body) } else { Err(body.get("detail").unwrap_or(&body).to_string()) }
+}
+
+#[tauri::command]
+pub async fn oracle_sidecar_test_connection(
+    connection_name: String,
+    config: crate::oracle::ConnectionConfig,
+    username: Option<String>,
+    password: Option<String>,
+) -> Result<Value, String> {
+    let supplied_username = username.filter(|value| !value.is_empty());
+    let supplied_password = password.filter(|value| !value.is_empty());
+    let saved = if supplied_username.is_none() || supplied_password.is_none() {
+        Some(crate::oracle::get_credentials(&connection_name)?)
+    } else {
+        None
+    };
+    let connection = json!({
+        "name": config.name,
+        "connect_string": config.connect_string,
+        "username": supplied_username.or_else(|| saved.as_ref().map(|value| value.0.clone())).unwrap(),
+        "password": supplied_password.or_else(|| saved.map(|value| value.1)).unwrap(),
+    });
+    post_sidecar("/test-connection", json!({ "connection": connection })).await
+}
+
+#[tauri::command]
+pub async fn oracle_sidecar_query(
+    connection_name: String,
+    config: crate::oracle::ConnectionConfig,
+    sql: String,
+    max_rows: Option<u32>,
+    as_dict: Option<bool>,
+) -> Result<Value, String> {
+    let connection = connection_payload(&connection_name, &config)?;
+    let path = if as_dict.unwrap_or(false) { "/query-dict" } else { "/query" };
+    post_sidecar(path, json!({ "connection": connection, "sql": sql, "max_rows": max_rows.unwrap_or(1000) })).await
+}
+
+#[tauri::command]
+pub async fn oracle_sidecar_query_batch(queries: Vec<SidecarQueryInput>) -> Result<Value, String> {
+    let mut payloads = Vec::with_capacity(queries.len());
+    for query in queries {
+        payloads.push(json!({
+            "connection": connection_payload(&query.connection_name, &query.config)?,
+            "sql": query.sql,
+            "max_rows": query.max_rows.unwrap_or(1000),
+        }));
+    }
+    post_sidecar("/query-batch", json!({ "queries": payloads })).await
 }
 
 /// Internal health check

@@ -8,14 +8,7 @@ import "./styles.css";
 
 class TLVViewer extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "tlv-viewer",
-      name: "TLV Viewer",
-      description: "Parse QRIS & BER-TLV payloads with tree and table views",
-      icon: "tlv",
-      category: "general",
-      eventBus,
-    });
+    super({ id: "tlv-viewer", eventBus });
 
     this.currentView = "tree";
     this.lastResult = null;

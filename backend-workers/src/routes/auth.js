@@ -6,6 +6,7 @@
 import { corsHeaders, isOriginAllowed } from "../utils/cors.js";
 import { tsGmt7, tsGmt7Plain, parseTsFlexible } from "../utils/timestamps.js";
 import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail } from "../utils/email.js";
+import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
 
@@ -53,11 +54,10 @@ export async function completeRegistration(data, request, env) {
     .run();
 
   const token = crypto.randomUUID();
-  try {
-    if (env.adtools) {
-      await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, createdAt: tsGmt7() }), { expirationTtl: 6 * 60 * 60 });
-    }
-  } catch (_) {}
+  if (!env.adtools) throw new Error("Session storage unavailable");
+  await env.adtools.put(`session:${token}`, JSON.stringify({ email, userId, deviceId, createdAt: tsGmt7() }), {
+    expirationTtl: 6 * 60 * 60,
+  });
 
   return { userId, token, deviceId, platform };
 }
@@ -109,32 +109,20 @@ export async function handleRegisterRequestOtp(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
 
-    // Rate-limit OTP requests per email using KV (10 min window, max 3)
-    try {
-      if (env.adtools) {
-        const rlKey = `otp:rl:${normalized}`;
-        const rlRaw = await env.adtools.get(rlKey);
-        const rl = rlRaw ? JSON.parse(rlRaw) : { count: 0 };
-        if (rl.count >= 3) {
-          return new Response(JSON.stringify({ ok: false, error: "Too many OTP requests. Try later." }), {
-            status: 429,
-            headers: { "Content-Type": "application/json", ...corsHeaders() },
-          });
-        }
-        await env.adtools.put(rlKey, JSON.stringify({ count: rl.count + 1, updatedAt: tsGmt7() }), { expirationTtl: 10 * 60 });
-      }
-    } catch (_) {}
+    if (await consumeRateLimit(env.adtools, `otp:request:${normalized}`, 3, 10 * 60)) {
+      return new Response(JSON.stringify({ ok: false, error: "Too many OTP requests. Try later." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
     const expiresTs = tsGmt7(OTP_EXPIRY_MS);
 
-    if (env.DB) {
-      try {
-        await env.DB.prepare("INSERT INTO otp (email, code, expires_at) VALUES (?, ?, ?)")
-          .bind(normalized, code, tsGmt7Plain(OTP_EXPIRY_MS))
-          .run();
-      } catch (_) {}
-    }
+    if (!env.DB) throw new Error("OTP storage unavailable");
+    await env.DB.prepare("INSERT INTO otp (email, code, expires_at) VALUES (?, ?, ?)")
+      .bind(normalized, code, tsGmt7Plain(OTP_EXPIRY_MS))
+      .run();
 
     // Try to send via Postmark; capture the result for dev
     let sendResult = null;
@@ -144,6 +132,7 @@ export async function handleRegisterRequestOtp(request, env) {
       sendResult = { ok: false, error: String(e) };
     }
     const sent = !!(sendResult && sendResult.ok);
+    if (!sent && String(env.DEV_MODE || "") !== "true") throw new Error("OTP delivery unavailable");
 
     const payload =
       String(env.DEV_MODE || "") === "true"
@@ -171,6 +160,8 @@ export async function handleRegisterVerify(request, env) {
       .trim()
       .toLowerCase();
     const code = String(data.code || "").trim();
+    const requester = String(request.headers.get("CF-Connecting-IP") || data.deviceId || data.device_id || "unknown").slice(0, 120);
+    const verifyLimitKey = `otp:verify:${email}:${requester}`;
 
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: "Missing email or code" }), {
@@ -184,6 +175,13 @@ export async function handleRegisterVerify(request, env) {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
+
+    if (await consumeRateLimit(env.adtools, verifyLimitKey, 5, 10 * 60)) {
+      return new Response(JSON.stringify({ ok: false, error: "Too many verification attempts. Try later." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
 
     const nowMs = Date.now();
     const row = await env.DB.prepare("SELECT id, expires_at, consumed_at FROM otp WHERE email = ? AND code = ? ORDER BY id DESC LIMIT 1")
@@ -211,9 +209,26 @@ export async function handleRegisterVerify(request, env) {
     }
 
     // Consume the code
-    await env.DB.prepare("UPDATE otp SET consumed_at = ? WHERE id = ?").bind(tsGmt7Plain(), row.id).run();
+    const consumedAt = tsGmt7Plain();
+    const consumed = await env.DB.prepare("UPDATE otp SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL")
+      .bind(consumedAt, row.id)
+      .run();
+    if (Number(consumed?.meta?.changes || 0) !== 1) {
+      return new Response(JSON.stringify({ ok: false, error: "Code already used" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
 
-    const { userId, token } = await completeRegistration(data, request, env);
+    let registration;
+    try {
+      registration = await completeRegistration(data, request, env);
+    } catch (error) {
+      await env.DB.prepare("UPDATE otp SET consumed_at = NULL WHERE id = ? AND consumed_at = ?").bind(row.id, consumedAt).run();
+      throw error;
+    }
+    const { userId, token } = registration;
+    await clearRateLimit(env.adtools, verifyLimitKey);
 
     return new Response(JSON.stringify({ ok: true, userId, token }), {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -223,6 +238,16 @@ export async function handleRegisterVerify(request, env) {
       status: 400,
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
+  }
+}
+
+export async function getSession(request, env) {
+  const token = (request.headers.get("Authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token || !env.adtools) return null;
+  try {
+    return JSON.parse((await env.adtools.get(`session:${token}`)) || "null");
+  } catch (_) {
+    return null;
   }
 }
 
@@ -237,26 +262,8 @@ export async function handleKvGet(request, env) {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
-    const auth = request.headers.get("Authorization") || "";
-    const m = auth.match(/^Bearer\s+(.+)$/i);
-    const token = m ? m[1] : "";
-    if (!token || !env.adtools) {
-      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
-      });
-    }
-    const sessionRaw = await env.adtools.get(`session:${token}`);
-    if (!sessionRaw) {
-      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
-      });
-    }
-    let session;
-    try {
-      session = JSON.parse(sessionRaw);
-    } catch (_) {
+    const session = await getSession(request, env);
+    if (!session) {
       return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },

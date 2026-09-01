@@ -38,15 +38,7 @@ import {
 
 class CompareConfigTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "compare-config",
-      name: "Compare Config",
-      description: "Compare Oracle database configs between environments",
-      icon: "database-compare",
-      category: "database",
-      eventBus: eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "compare-config", eventBus, isHeavyTool: true });
 
     // State
     this.oracleClientReady = false;

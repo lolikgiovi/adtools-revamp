@@ -3,7 +3,6 @@ import { getIconSvg as getSettingsIconSvg } from "../pages/settings/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "../pages/signout/icon.js";
 import { getIconSvg as getBase64IconSvg } from "../tools/base64-tools/icon.js";
 import { getIconSvg as getCompareConfigIconSvg } from "../tools/compare-config/icon.js";
-import { getIconSvg as getExportContentIconSvg } from "../tools/export-content/icon.js";
 import { getIconSvg as getHtmlIconSvg } from "../tools/html-editor/icon.js";
 import { getIconSvg as getImageCheckerIconSvg } from "../tools/image-checker/icon.js";
 import { getIconSvg as getJsonIconSvg } from "../tools/json-tools/icon.js";
@@ -17,7 +16,6 @@ import { getIconSvg as getRunQueryIconSvg } from "../tools/run-query/icon.js";
 import { getIconSvg as getSplunkIconSvg } from "../tools/splunk-template/icon.js";
 import { getIconSvg as getSqlInIconSvg } from "../tools/sql-in-clause/icon.js";
 import { getIconSvg as getTlvIconSvg } from "../tools/tlv-viewer/icon.js";
-import { getIconSvg as getTicketTemplateIconSvg } from "../tools/ticket-template-create/icon.js";
 import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
 
 const ICON_REGISTRY = new Map([
@@ -27,7 +25,6 @@ const ICON_REGISTRY = new Map([
   ["base64", getBase64IconSvg],
   ["database", getQuickQueryIconSvg],
   ["database-compare", getCompareConfigIconSvg],
-  ["export-content", getExportContentIconSvg],
   ["html", getHtmlIconSvg],
   ["image-check", getImageCheckerIconSvg],
   ["json", getJsonIconSvg],
@@ -40,7 +37,6 @@ const ICON_REGISTRY = new Map([
   ["splunk-template", getSplunkIconSvg],
   ["sql-in", getSqlInIconSvg],
   ["tlv", getTlvIconSvg],
-  ["ticket-template", getTicketTemplateIconSvg],
   ["uuid", getUuidIconSvg],
 ]);
 

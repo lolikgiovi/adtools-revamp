@@ -14,15 +14,7 @@ import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
 
 export class JenkinsRunner extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "run-query",
-      name: "Jenkins Query Runner",
-      description: "Run Oracle SQL Query via Jenkins job and stream the build logs",
-      icon: "jenkins-query",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "run-query", eventBus, isHeavyTool: true });
     this.service = new JenkinsRunnerService();
     this.storageService = new IndexedDBStorageService();
     this.state = {
@@ -2768,10 +2760,10 @@ export class JenkinsRunner extends BaseTool {
 
                       const chunkSql = chunks[idx];
                       // Seed a history entry per chunk with table-derived title
-                      const arrSeed = loadHistory();
+                      const chunkTimestamp = new Date().toISOString();
                       const chunkTitle = deriveChunkTitle(chunkSql, idx);
-                      arrSeed.push({
-                        timestamp: new Date().toISOString(),
+                      await addHistoryEntry({
+                        timestamp: chunkTimestamp,
                         job,
                         env,
                         sql: chunkSql,
@@ -2779,9 +2771,7 @@ export class JenkinsRunner extends BaseTool {
                         buildNumber: null,
                         buildUrl: null,
                       });
-                      const histIndex = arrSeed.length - 1;
-                      saveHistory(arrSeed);
-                      renderHistory();
+                      await renderHistory();
                       this.state.split.statuses[idx] = "running";
                       renderSplitChunksList();
                       appendLog(`\n=== Running chunk ${idx + 1}/${chunks.length} (${bytesToKB(calcUtf8Bytes(chunkSql))}) ===\n`);
@@ -2829,12 +2819,13 @@ export class JenkinsRunner extends BaseTool {
                       }
                       // Update this chunk’s history entry with build info
                       try {
-                        const arrUpdate = loadHistory();
-                        if (arrUpdate[histIndex]) {
-                          arrUpdate[histIndex].buildNumber = buildNumber || null;
-                          arrUpdate[histIndex].buildUrl = executableUrl || arrUpdate[histIndex].buildUrl;
-                          saveHistory(arrUpdate);
-                          renderHistory();
+                        const arrUpdate = await loadHistory();
+                        const historyEntry = arrUpdate.find((entry) => entry.timestamp === chunkTimestamp);
+                        if (historyEntry) {
+                          historyEntry.buildNumber = buildNumber || null;
+                          historyEntry.buildUrl = executableUrl || historyEntry.buildUrl;
+                          await addHistoryEntry(historyEntry);
+                          await renderHistory();
                         }
                       } catch (_) {}
                       if (splitProgressEl) splitProgressEl.textContent = `Chunk ${idx + 1}/${chunks.length} streaming…`;

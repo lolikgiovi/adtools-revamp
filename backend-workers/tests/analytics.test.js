@@ -49,12 +49,19 @@ function createDbMock() {
 }
 
 function createEnv() {
+  const session = JSON.stringify({
+    email: "analytics-test@bankmandiri.co.id",
+    deviceId: "analytics-test-device",
+    userId: "user-1",
+  });
   return {
     SEND_LIVE_USER_LOG: "true",
     ANALYTICS_DASHBOARD_PASSWORD: "testpassword123",
     DB: createDbMock(),
     adtools: {
-      get: vi.fn(async () => null),
+      get: vi.fn(async (key) => (key === "session:test-token" ? session : null)),
+      put: vi.fn(async () => {}),
+      delete: vi.fn(async () => {}),
     },
     ASSETS: {
       fetch: vi.fn(async () => new Response("Not Found", { status: 404 })),
@@ -94,6 +101,19 @@ describe("Analytics endpoints", () => {
     env = createEnv();
   });
 
+  it("rejects analytics without a registration session", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool_id: "json-tools", action: "open" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(401);
+  });
+
   it("rejects GET analytics ingestion", async () => {
     const batch = await worker.fetch(
       new Request("http://localhost/analytics/batch?device_id=d1&tool_id=json-tools&action=open&count=1"),
@@ -112,7 +132,7 @@ describe("Analytics endpoints", () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/batch", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
         body: JSON.stringify({
           device_id: "analytics-test-device",
           user_email: "analytics-test@bankmandiri.co.id",
@@ -169,7 +189,7 @@ describe("Analytics endpoints", () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/log", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
         body: JSON.stringify({
           user_email: "analytics-test@bankmandiri.co.id",
           device_id: "analytics-test-device",
@@ -191,7 +211,7 @@ describe("Analytics endpoints", () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/error", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
         body: JSON.stringify({
           user_email: "analytics-test@bankmandiri.co.id",
           device_id: "analytics-test-device",
@@ -673,7 +693,9 @@ describe("Analytics endpoints", () => {
   });
 
   it("merges new default insight tabs with stored dashboard config", async () => {
-    env.adtools.get.mockResolvedValueOnce([{ id: "custom-tab", name: "Custom Tab", query: "SELECT 1 AS ok" }]);
+    env.adtools.get.mockImplementation(async (key) =>
+      key === "analytics-dashboard-config" ? [{ id: "custom-tab", name: "Custom Tab", query: "SELECT 1 AS ok" }] : null,
+    );
 
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {

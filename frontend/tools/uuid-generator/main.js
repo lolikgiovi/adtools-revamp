@@ -7,14 +7,7 @@ import "./styles.css";
 
 class UUIDGenerator extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "uuid-generator",
-      name: "UUID Generator",
-      description: "Generate UUID v4 strings for unique identifiers",
-      icon: "uuid",
-      category: "application",
-      eventBus,
-    });
+    super({ id: "uuid-generator", eventBus });
   }
 
   getIconSvg() {

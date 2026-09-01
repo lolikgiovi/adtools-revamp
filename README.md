@@ -59,9 +59,10 @@ npm install
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite dev server (http://localhost:5173) |
+| `npm run dev` | Start Vite dev server (http://localhost:1234) |
 | `npm run test` | Run tests in watch mode |
 | `npm run test:ci` | Run tests once |
+| `npm run verify` | Run frontend/Worker tests and Rust tests serially |
 | `npm run build` | Build for production |
 | `npm run cf:dev` | Build + run Wrangler locally (http://localhost:8787) |
 | `npm run cf:publish` | Build, deploy to Cloudflare Workers, and apply production D1 migrations |
@@ -91,6 +92,7 @@ Tauri WebView → Same frontend code → API calls to CF Workers
 ## Documentation
 
 - [AD Tools architecture](docs/AD_TOOLS_ARCHITECTURE.md)
+- [Performance baseline](docs/PERFORMANCE.md)
 - [Jira 9.17 REST integration notes](docs/JIRA-INTEGRATION.md)
 
 ## Adding a New Tool
@@ -102,7 +104,7 @@ Tauri WebView → Same frontend code → API calls to CF Workers
    - `styles.css` - Tool-specific styles
    - `*.test.js` - Tests (colocated)
 3. Register in `frontend/config/tools.json`
-4. Add stylesheet link in `frontend/index.html`
+4. Import the stylesheet from the tool's `main.js`
 
 ## Database Migrations
 

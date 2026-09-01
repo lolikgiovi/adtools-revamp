@@ -279,7 +279,7 @@ class SettingsPage {
             const ok = await performUpdate(
               (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
               (stage) => this.eventBus?.emit?.("update:stage", { stage }),
-              policy.channel
+              policy.channel,
             );
             if (!ok) {
               this.eventBus?.emit?.("update:error", { message: "Update not available or install failed" });
@@ -521,7 +521,7 @@ class SettingsPage {
 
       // Local escape function for HTML content
       const esc = (s) =>
-        String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+        String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
 
       const renderList = () => {
         const conns = this.service.getValue(storageKey, "oracle-connections", []);
@@ -550,7 +550,7 @@ class SettingsPage {
               <button class="btn btn-outline btn-sm btn-danger oracle-delete-conn" data-index="${i}">Delete</button>
             </div>
           </div>
-        `
+        `,
           )
           .join("");
       };
@@ -571,13 +571,12 @@ class SettingsPage {
           wrapper.appendChild(formEl);
         }
         formEl.style.display = "block";
-        // If editing, fetch credentials and populate
+        // If editing, show only the non-secret username. A blank password retains the saved value.
         if (conn) {
           (async () => {
             try {
-              const [user, pass] = await invoke("get_oracle_credentials", { name: conn.name });
+              const user = await OracleConnectionService.getOracleUsername(conn.name);
               formEl.querySelector(".oracle-username").value = user || "";
-              formEl.querySelector(".oracle-password").value = pass || "";
             } catch (_) {}
           })();
         }
@@ -604,6 +603,13 @@ class SettingsPage {
           statusEl.className = "oracle-form-status error";
           return;
         }
+        const savedConnections = this.service.getValue(storageKey, "oracle-connections", []);
+        const oldName = editingIndex >= 0 && Array.isArray(savedConnections) ? savedConnections[editingIndex]?.name : null;
+        if ((!oldName || oldName !== name) && !password) {
+          statusEl.textContent = oldName ? "Password is required when renaming a connection" : "Password is required for a new connection";
+          statusEl.className = "oracle-form-status error";
+          return;
+        }
 
         // Save credentials to keychain
         try {
@@ -621,10 +627,10 @@ class SettingsPage {
         const connData = { name, connect_string: connectString };
         if (editingIndex >= 0) {
           // If name changed, delete old credentials
-          const oldName = conns[editingIndex]?.name;
-          if (oldName && oldName !== name) {
+          const previousName = conns[editingIndex]?.name;
+          if (previousName && previousName !== name) {
             try {
-              await invoke("delete_oracle_credentials", { name: oldName });
+              await invoke("delete_oracle_credentials", { name: previousName });
             } catch (_) {}
           }
           conns[editingIndex] = connData;
@@ -650,8 +656,8 @@ class SettingsPage {
         const username = formEl.querySelector(".oracle-username").value.trim();
         const password = formEl.querySelector(".oracle-password").value;
 
-        if (!connectString || !username) {
-          statusEl.textContent = "Connect String and Username are required for testing";
+        if (!connectString || !username || (editingIndex < 0 && !password)) {
+          statusEl.textContent = "Connect String, Username, and a saved or entered Password are required for testing";
           statusEl.className = "oracle-form-status error";
           return;
         }
@@ -662,27 +668,14 @@ class SettingsPage {
 
         try {
           const connName = name || "test";
-          // Try sidecar first (preferred) — ensure it's running
-          try {
-            await OracleConnectionService.testConnectionWithCredentials({
-              name: connName,
-              connect_string: connectString,
-              username,
-              password,
-            });
-            statusEl.textContent = "✓ Connection successful";
-            statusEl.className = "oracle-form-status success";
-          } catch (fetchErr) {
-            // Fallback to Tauri backend if sidecar not available
-            if (this.isSidecarUnavailableError(fetchErr)) {
-              const config = { name: connName, connect_string: connectString };
-              await invoke("test_oracle_connection", { config, username, password });
-              statusEl.textContent = "✓ Connection successful";
-              statusEl.className = "oracle-form-status success";
-            } else {
-              throw fetchErr;
-            }
-          }
+          await OracleConnectionService.testConnectionWithCredentials({
+            name: connName,
+            connect_string: connectString,
+            username,
+            password,
+          });
+          statusEl.textContent = "✓ Connection successful";
+          statusEl.className = "oracle-form-status success";
         } catch (err) {
           statusEl.textContent = `✗ Connection failed: ${err.message || err}`;
           statusEl.className = "oracle-form-status error";
@@ -717,46 +710,15 @@ class SettingsPage {
           }
 
           try {
-            // Fetch credentials from keychain
-            const [username, password] = await invoke("get_oracle_credentials", { name: connName });
-            if (!username) {
-              throw new Error("No credentials found. Edit the connection to add credentials.");
-            }
-
             // Get connection config
             const conns = this.service.getValue(storageKey, "oracle-connections", []);
             const conn = conns[idx];
             if (!conn) throw new Error("Connection not found");
 
-            // Test connection via sidecar or Tauri backend
-            try {
-              // Try sidecar first (preferred) — ensure it's running
-              await OracleConnectionService.testConnectionWithCredentials({
-                name: connName,
-                connect_string: conn.connect_string,
-                username,
-                password,
-              });
-              // Success via sidecar
-              if (statusEl) {
-                statusEl.textContent = "✓ Connected";
-                statusEl.className = "oracle-conn-status success";
-              }
-            } catch (fetchErr) {
-              // Fallback to Tauri backend if sidecar not available
-              if (this.isSidecarUnavailableError(fetchErr)) {
-                await invoke("test_oracle_connection", {
-                  config: { name: connName, connect_string: conn.connect_string },
-                  username,
-                  password,
-                });
-                if (statusEl) {
-                  statusEl.textContent = "✓ Connected";
-                  statusEl.className = "oracle-conn-status success";
-                }
-              } else {
-                throw fetchErr;
-              }
+            await OracleConnectionService.testConnectionViaSidecar(connName, conn);
+            if (statusEl) {
+              statusEl.textContent = "✓ Connected";
+              statusEl.className = "oracle-conn-status success";
             }
           } catch (err) {
             const errMsg = String(err.message || err);
@@ -822,8 +784,8 @@ class SettingsPage {
     // Non-boolean: direct inline editing when clicking the value
     row.innerHTML = `
       <div class="setting-name">${item.label}${
-      isRequired ? ' <span class="setting-required" title="Required" aria-hidden="true">*</span>' : ""
-    }</div>
+        isRequired ? ' <span class="setting-required" title="Required" aria-hidden="true">*</span>' : ""
+      }</div>
       <div class="setting-value editable" data-value tabindex="0" role="button" aria-label="Edit ${item.label}">
         ${displayValue}
       </div>
@@ -1117,7 +1079,7 @@ class SettingsPage {
   #kvPreviewHTML(pairs) {
     if (!pairs || pairs.length === 0) return "(Empty, add new one)";
     const esc = (s) =>
-      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
     return `
       <table class="kvlist-table">
         <tbody>
@@ -1128,7 +1090,7 @@ class SettingsPage {
               <td class="kvlist-key">${esc(p.key)}</td>
               <td class="kvlist-value">${esc(p.value)}</td>
             </tr>
-          `
+          `,
             )
             .join("")}
         </tbody>
@@ -1139,7 +1101,7 @@ class SettingsPage {
   #stringListPreviewHTML(values) {
     if (!values || values.length === 0) return "(Empty, add new one)";
     const esc = (s) =>
-      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
     return `
       <div class="string-list-preview">
         ${values.map((value) => `<span class="string-list-chip">${esc(value)}</span>`).join("")}
@@ -1150,7 +1112,7 @@ class SettingsPage {
   #jsonPreviewHTML(value) {
     if (value === undefined || value === null || value === "") return "—";
     const esc = (s) =>
-      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+      String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
     let text = String(value);
     try {
       text = JSON.stringify(JSON.parse(text), null, 2);

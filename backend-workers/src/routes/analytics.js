@@ -3,9 +3,9 @@
  * Handles POST-only analytics ingestion endpoints
  */
 
-import { corsHeaders } from '../utils/cors.js';
-import { ensureErrorEventsSchema } from '../utils/analyticsSchema.js';
-import { tsGmt7Plain, tsToGmt7Plain } from '../utils/timestamps.js';
+import { corsHeaders } from "../utils/cors.js";
+import { ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
+import { tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
 /**
  * Handle POST /analytics/batch - batch insert events/usage logs and upsert device_usage
@@ -13,19 +13,21 @@ import { tsGmt7Plain, tsToGmt7Plain } from '../utils/timestamps.js';
  * - Uses env.DB.batch() for single transaction (performance)
  * - Removed legacy daily_usage and user_usage writes
  */
-export async function handleAnalyticsBatchPost(request, env) {
+export async function handleAnalyticsBatchPost(request, env, session) {
   try {
     const data = await request.json();
-    const deviceId = String(data.device_id || data.deviceId || "");
-    const userEmail = String(data.user_email || "").trim().toLowerCase() || null;
+    const deviceId = String(session.deviceId);
+    const userEmail = String(session.email).trim().toLowerCase();
     const events = Array.isArray(data.events) ? data.events : [];
-    const usageLogs = Array.isArray(data.usage_log)
-      ? data.usage_log
-      : Array.isArray(data.usage_logs)
-        ? data.usage_logs
-        : [];
+    const usageLogs = Array.isArray(data.usage_log) ? data.usage_log : Array.isArray(data.usage_logs) ? data.usage_logs : [];
     const errorEvents = Array.isArray(data.error_events) ? data.error_events : [];
     const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
+    if (events.length + usageLogs.length + errorEvents.length + deviceUsage.length > 500) {
+      return new Response(JSON.stringify({ ok: false, error: "Analytics batch exceeds 500 items" }), {
+        status: 413,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
 
     let insertedEvents = 0;
     let insertedUsageLogs = 0;
@@ -49,11 +51,16 @@ export async function handleAnalyticsBatchPost(request, env) {
             : ev.properties;
         const props =
           typeof properties === "string" ? safeString(properties, 4000) : JSON.stringify(sanitizeObject(properties || {}, 4000));
-        const dev = String(ev.device_id || deviceId || "") || null;
-        
+        const dev = deviceId;
+
         eventStatements.push(
-          env.DB.prepare("INSERT INTO events (device_id, feature_id, action, properties, created_time) VALUES (?, ?, ?, ?, ?)")
-            .bind(dev, featureId, action, props, createdTime)
+          env.DB.prepare("INSERT INTO events (device_id, feature_id, action, properties, created_time) VALUES (?, ?, ?, ?, ?)").bind(
+            dev,
+            featureId,
+            action,
+            props,
+            createdTime,
+          ),
         );
       }
 
@@ -62,8 +69,8 @@ export async function handleAnalyticsBatchPost(request, env) {
         await ensureErrorEventsSchema(env);
       }
       for (const err of errorEvents) {
-        const userEmailForError = safeString(err.user_email || "", 160).trim().toLowerCase() || null;
-        const deviceIdForError = safeString(err.device_id || deviceId || "unknown", 120);
+        const userEmailForError = userEmail;
+        const deviceIdForError = deviceId;
         const runtime = safeString(err.runtime || data.runtime || "unknown", 40);
         const appVersion = safeString(err.app_version || data.app_version || "", 60) || null;
         const route = safeString(err.route || "", 160) || null;
@@ -86,55 +93,58 @@ export async function handleAnalyticsBatchPost(request, env) {
               user_email, device_id, runtime, app_version, route, tool_id, process_area,
               error_kind, error_name, message, stack, source, lineno, colno, user_agent,
               metadata, created_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          )
-            .bind(
-              userEmailForError,
-              deviceIdForError,
-              runtime,
-              appVersion,
-              route,
-              toolId || null,
-              processArea,
-              errorKind,
-              errorName,
-              message,
-              stack,
-              source,
-              lineno,
-              colno,
-              userAgent,
-              metadata,
-              createdTime
-            )
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).bind(
+            userEmailForError,
+            deviceIdForError,
+            runtime,
+            appVersion,
+            route,
+            toolId || null,
+            processArea,
+            errorKind,
+            errorName,
+            message,
+            stack,
+            source,
+            lineno,
+            colno,
+            userAgent,
+            metadata,
+            createdTime,
+          ),
         );
       }
 
       const usageLogStatements = [];
       for (const log of usageLogs) {
-        const email = String(log.user_email || userEmail || "").trim().toLowerCase();
-        if (!email) continue;
-        const dev = String(log.device_id || deviceId || "unknown");
+        const email = userEmail;
+        const dev = deviceId;
         const toolId = normalizeFeatureId(log.tool_id || "unknown");
         const action = String(log.action || "unknown");
         const createdTime = String(log.created_time || tsGmt7Plain());
 
         usageLogStatements.push(
-          env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
-            .bind(email, dev, toolId, action, createdTime)
+          env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)").bind(
+            email,
+            dev,
+            toolId,
+            action,
+            createdTime,
+          ),
         );
       }
 
       // Build batch statements for device_usage (idempotent - replaces counts)
       const usageStatements = [];
       for (const du of deviceUsage) {
-        const devId = String(du.device_id || deviceId || "");
-        const email = String(du.user_email || userEmail || "").trim().toLowerCase() || null;
+        const devId = deviceId;
+        const email = userEmail;
         const toolId = normalizeFeatureId(du.tool_id || "unknown");
         const action = String(du.action || "unknown");
         const count = Number(du.count || 0) || 0;
         const updatedTime = String(du.updated_time || tsGmt7Plain());
-        
+
         usageStatements.push(
           env.DB.prepare(
             `INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time)
@@ -142,8 +152,8 @@ export async function handleAnalyticsBatchPost(request, env) {
              ON CONFLICT(device_id, tool_id, action) DO UPDATE SET
                user_email = excluded.user_email,
                count = excluded.count,
-               updated_time = excluded.updated_time`
-          ).bind(devId, email, toolId, action, count, updatedTime)
+               updated_time = excluded.updated_time`,
+          ).bind(devId, email, toolId, action, count, updatedTime),
         );
       }
 
@@ -194,7 +204,7 @@ export async function handleAnalyticsBatchPost(request, env) {
       }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },
-      }
+      },
     );
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
@@ -207,33 +217,23 @@ export async function handleAnalyticsBatchPost(request, env) {
 /**
  * Handle POST /analytics/log - live usage log insert
  */
-export async function handleAnalyticsLogPost(request, env) {
+export async function handleAnalyticsLogPost(request, env, session) {
   try {
     // Check if live logging is enabled
     const enabled = String(env.SEND_LIVE_USER_LOG || "").toLowerCase() === "true";
     if (!enabled) {
-      return new Response(
-        JSON.stringify({ ok: false, message: "Live logging disabled" }),
-        {
-          status: 200, // Return 200 to avoid client errors
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
-    }
-
-    const data = await request.json();
-    const userEmail = String(data.user_email || "").trim().toLowerCase();
-    const deviceId = String(data.device_id || "unknown");
-    const toolId = normalizeFeatureId(data.tool_id || "unknown");
-    const action = String(data.action || "unknown");
-    const createdTime = String(data.created_time || tsGmt7Plain());
-
-    if (!userEmail) {
-      return new Response(JSON.stringify({ ok: false, error: "user_email required" }), {
-        status: 400,
+      return new Response(JSON.stringify({ ok: false, message: "Live logging disabled" }), {
+        status: 200, // Return 200 to avoid client errors
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
+
+    const data = await request.json();
+    const userEmail = String(session.email).trim().toLowerCase();
+    const deviceId = String(session.deviceId);
+    const toolId = normalizeFeatureId(data.tool_id || "unknown");
+    const action = String(data.action || "unknown");
+    const createdTime = String(data.created_time || tsGmt7Plain());
 
     let inserted = 0;
     let dbError = null;
@@ -249,19 +249,16 @@ export async function handleAnalyticsLogPost(request, env) {
     }
 
     if (inserted === 1) {
-      return new Response(
-        JSON.stringify({ ok: true, inserted: 1, message: "Usage log recorded successfully" }),
-        {
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
-      );
+      return new Response(JSON.stringify({ ok: true, inserted: 1, message: "Usage log recorded successfully" }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
     } else {
       return new Response(
         JSON.stringify({ ok: false, inserted: 0, error: dbError || "Database unavailable", message: "Failed to record usage log" }),
         {
           status: 500,
           headers: { "Content-Type": "application/json", ...corsHeaders() },
-        }
+        },
       );
     }
   } catch (err) {
@@ -275,11 +272,11 @@ export async function handleAnalyticsLogPost(request, env) {
 /**
  * Handle POST /analytics/error - immediate uncaught error insert
  */
-export async function handleAnalyticsErrorPost(request, env) {
+export async function handleAnalyticsErrorPost(request, env, session) {
   try {
     const data = await request.json();
-    const userEmail = safeString(data.user_email || "", 160).trim().toLowerCase() || null;
-    const deviceId = safeString(data.device_id || "unknown", 120);
+    const userEmail = String(session.email).trim().toLowerCase();
+    const deviceId = String(session.deviceId);
     const runtime = safeString(data.runtime || "unknown", 40);
     const appVersion = safeString(data.app_version || "", 60) || null;
     const route = safeString(data.route || "", 160) || null;
@@ -310,7 +307,7 @@ export async function handleAnalyticsErrorPost(request, env) {
         user_email, device_id, runtime, app_version, route, tool_id, process_area,
         error_kind, error_name, message, stack, source, lineno, colno, user_agent,
         metadata, created_time
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         userEmail,
@@ -329,7 +326,7 @@ export async function handleAnalyticsErrorPost(request, env) {
         colno,
         userAgent,
         metadata,
-        createdTime
+        createdTime,
       )
       .run();
 
@@ -362,7 +359,9 @@ function safeString(value, limit = 120) {
 }
 
 function isAllowedMetaKey(key) {
-  const normalized = String(key || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalized = String(key || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
   const denied = new Set([
     "sql",
     "rawsql",

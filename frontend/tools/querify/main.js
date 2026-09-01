@@ -9,15 +9,7 @@ import { QUERIFY_TEMPLATE } from "./template.js";
 
 export class QuerifyTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "querify",
-      name: "Querify",
-      description: "Generate SQL in bulk from Excel files using Quick Query schemas",
-      icon: "querify",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "querify", eventBus, isHeavyTool: true });
 
     this.service = new QuerifyService();
     this.files = [];

@@ -10,6 +10,11 @@ import {
 import { handleDashboardVerify } from "../src/routes/dashboard.js";
 
 async function dashboardToken(env) {
+  env.adtools ??= {
+    get: vi.fn(async () => null),
+    put: vi.fn(async () => {}),
+    delete: vi.fn(async () => {}),
+  };
   const response = await handleDashboardVerify(
     new Request("https://example.test/dashboard/verify", {
       method: "POST",
@@ -27,7 +32,7 @@ function statement({ first = null, results = [], onRun } = {}) {
       first: vi.fn(async () => (typeof first === "function" ? first(args) : first)),
       run: vi.fn(async () => {
         onRun?.(args);
-        return { success: true };
+        return { success: true, meta: { changes: 1 } };
       }),
     }),
     all: vi.fn(async () => ({ results })),
@@ -84,6 +89,37 @@ describe("manual approval", () => {
       env,
     );
     expect(response.status).toBe(404);
+  });
+
+  it("replays the completed approval session instead of registering twice", async () => {
+    const env = {
+      DB: {
+        prepare: vi.fn(() =>
+          statement({
+            first: {
+              id: "request-1",
+              email: "person@example.com",
+              device_id: "device-1",
+              status: "approved",
+              completed_at: "2026-01-01 10:00:00",
+              session_token: "session-1",
+            },
+          }),
+        ),
+      },
+    };
+    const response = await handleManualApprovalStatus(
+      new Request("https://example.test/register/manual-approval-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: "request-1", email: "person@example.com", deviceId: "device-1" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, status: "approved", token: "session-1" });
+    expect(env.DB.prepare).toHaveBeenCalledTimes(1);
   });
 
   it("requires dashboard authentication to list and approve requests", async () => {

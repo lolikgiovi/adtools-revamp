@@ -17,15 +17,7 @@ import html2canvas from "html2canvas";
 
 export class MergeSqlTool extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "merge-sql",
-      name: "Merge SQL",
-      description: "Merge multiple SQL files into combined MERGE/INSERT/UPDATE and SELECT files",
-      icon: "merge-sql",
-      category: "config",
-      eventBus,
-      isHeavyTool: true,
-    });
+    super({ id: "merge-sql", eventBus, isHeavyTool: true });
 
     this.files = [];
     this.sortOrder = "asc";

@@ -13,14 +13,7 @@ import "./styles.css";
 
 class MasterLockey extends BaseTool {
   constructor(eventBus) {
-    super({
-      id: "master-lockey",
-      name: "Master Lockey",
-      description: "View and search localization keys from configured domains",
-      icon: "language",
-      category: "application",
-      eventBus,
-    });
+    super({ id: "master-lockey", eventBus });
 
     this.service = new MasterLockeyService();
     this.currentDomain = null;
@@ -673,7 +666,7 @@ class MasterLockey extends BaseTool {
       const idealStart = Math.max(0, topRowIndex - this.virtualScroll.overscan);
       const idealEnd = Math.min(
         this.filteredRows.length,
-        topRowIndex + Math.ceil(containerHeight / this.virtualScroll.rowHeight) + this.virtualScroll.overscan
+        topRowIndex + Math.ceil(containerHeight / this.virtualScroll.rowHeight) + this.virtualScroll.overscan,
       );
 
       // Only re-render if we've scrolled outside the overscan buffer
@@ -688,7 +681,7 @@ class MasterLockey extends BaseTool {
         this.virtualScroll.startIndex = idealStart;
         this.virtualScroll.endIndex = Math.min(
           idealStart + this.virtualScroll.coreRows + 2 * this.virtualScroll.overscan,
-          this.filteredRows.length
+          this.filteredRows.length,
         );
         this.renderTableBody(this.filteredRows, this.parsedData.languages);
       }
@@ -850,7 +843,7 @@ class MasterLockey extends BaseTool {
     // Update results count
     this.els.resultsCount.style.display = "block";
     this.els.resultsText.textContent = `${this.formatNumber(this.filteredRows.length)} of ${this.formatNumber(
-      this.parsedData.rows.length
+      this.parsedData.rows.length,
     )} results`;
   }
 
@@ -1156,7 +1149,7 @@ class MasterLockey extends BaseTool {
 
       if (lockeys.length === 0) {
         this.showConfluenceError(
-          "No lockey table found on this page. Make sure the table has a column named 'Localization Key', 'Lockey', or 'Loc Key'."
+          "No lockey table found on this page. Make sure the table has a column named 'Localization Key', 'Lockey', or 'Loc Key'.",
         );
         return;
       }
@@ -2054,7 +2047,7 @@ class MasterLockey extends BaseTool {
           }
 
           htmlRows.push(
-            `<tr><td><a href="${escapedUrl}" style="color: #3b82f6; text-decoration: underline;">${escapedName}</a></td><td ${lockeyStyle}>${escapedLockey}</td><td>${escapedEn}</td><td>${escapedId}</td></tr>`
+            `<tr><td><a href="${escapedUrl}" style="color: #3b82f6; text-decoration: underline;">${escapedName}</a></td><td ${lockeyStyle}>${escapedLockey}</td><td>${escapedEn}</td><td>${escapedId}</td></tr>`,
           );
         });
       }

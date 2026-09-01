@@ -9,11 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { OracleConnectionService, OracleSidecarError } from "../../core/OracleConnectionService.js";
-import {
-  generateQueryCacheKey,
-  getQueryCache,
-  setQueryCache,
-} from './lib/indexed-db-manager.js';
+import { generateQueryCacheKey, getQueryCache, setQueryCache } from "./lib/indexed-db-manager.js";
 
 export class CompareConfigService {
   // NOTE: checkOracleClientReady, primeOracleClient, and debugOracleSetup
@@ -130,15 +126,6 @@ export class CompareConfigService {
   }
 
   /**
-   * Retrieves Oracle credentials from the keychain
-   * @param {string} name - Connection name
-   * @returns {Promise<[string, string]>} [username, password]
-   */
-  static async getOracleCredentials(name) {
-    return OracleConnectionService.getOracleCredentials(name);
-  }
-
-  /**
    * Deletes Oracle credentials from the keychain
    * @param {string} name - Connection name
    * @returns {Promise<void>}
@@ -205,16 +192,6 @@ export class CompareConfigService {
    */
   static isSidecarReady() {
     return OracleConnectionService.isSidecarReady();
-  }
-
-  /**
-   * Build a connection object for sidecar queries by retrieving credentials from keychain
-   * @param {string} connectionName - Connection name for credential lookup
-   * @param {Object} config - Connection config { name, connect_string }
-   * @returns {Promise<{name: string, connect_string: string, username: string, password: string}>}
-   */
-  static async buildSidecarConnection(connectionName, config) {
-    return OracleConnectionService.buildSidecarConnection(connectionName, config);
   }
 
   /**
@@ -353,18 +330,13 @@ export class CompareConfigService {
     }
 
     // Generate cache key
-    const cacheKey = await generateQueryCacheKey(
-      connection_name,
-      config.connect_string,
-      querySql,
-      max_rows
-    );
+    const cacheKey = await generateQueryCacheKey(connection_name, config.connect_string, querySql, max_rows);
 
     // Check cache first (unless bypassed)
     if (!bypassCache) {
       const cached = await getQueryCache(cacheKey);
       if (cached) {
-        console.debug('[QueryCache] HIT:', cacheKey.slice(0, 16));
+        console.debug("[QueryCache] HIT:", cacheKey.slice(0, 16));
         return cached;
       }
     }
@@ -385,7 +357,7 @@ export class CompareConfigService {
 
     // Cache the result
     setQueryCache(cacheKey, response).catch((err) => {
-      console.warn('[QueryCache] Failed to cache:', err);
+      console.warn("[QueryCache] Failed to cache:", err);
     });
 
     return response;

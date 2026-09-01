@@ -62,7 +62,7 @@ pub fn run() {
       oracle::fetch_table_metadata,
       oracle::export_comparison_result,
       oracle::set_oracle_credentials,
-      oracle::get_oracle_credentials,
+      oracle::get_oracle_username,
       oracle::delete_oracle_credentials,
       oracle::has_oracle_credentials,
       // Oracle connection pool commands
@@ -75,7 +75,10 @@ pub fn run() {
       oracle_sidecar::start_oracle_sidecar,
       oracle_sidecar::stop_oracle_sidecar,
       oracle_sidecar::check_oracle_sidecar_status,
-      oracle_sidecar::get_oracle_sidecar_url
+      oracle_sidecar::get_oracle_sidecar_url,
+      oracle_sidecar::oracle_sidecar_test_connection,
+      oracle_sidecar::oracle_sidecar_query,
+      oracle_sidecar::oracle_sidecar_query_batch
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -386,12 +389,9 @@ fn jira_http_client(allow_invalid_tls: bool) -> Result<Client, String> {
     .map_err(|_| "Failed to initialize the Jira HTTP client.".to_string())
 }
 
-// HTTP client for Confluence that accepts invalid/self-signed SSL certs
-// Needed for Confluence instances on IP addresses or with internal certs
 fn confluence_http_client() -> Client {
   Client::builder()
     .timeout(Duration::from_secs(30))
-    .danger_accept_invalid_certs(true)
     .build()
     .expect("failed to build confluence http client")
 }
@@ -585,10 +585,8 @@ fn get_arch() -> String {
 // Used by Master Lockey tool to fetch localization data
 #[tauri::command]
 async fn fetch_lockey_json(url: String) -> Result<String, String> {
-  // Build a more permissive client for development (accepts invalid SSL certs)
   let client = Client::builder()
     .timeout(Duration::from_secs(30))
-    .danger_accept_invalid_certs(true) // Allow self-signed/invalid SSL certs
     .build()
     .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
   

@@ -85,7 +85,7 @@ export class QueryGenerationService {
     const identifierPattern = /^[A-Za-z][A-Za-z0-9_$#]*$/;
     if (!identifierPattern.test(part)) {
       throw new Error(
-        `Invalid ${type}: "${part}" must start with a letter and contain only letters, digits, underscore (_), dollar ($), or hash (#)`
+        `Invalid ${type}: "${part}" must start with a letter and contain only letters, digits, underscore (_), dollar ($), or hash (#)`,
       );
     }
 
@@ -163,21 +163,15 @@ export class QueryGenerationService {
         // Add to duplicates array if this is the first time we detect this duplicate
         if (existing.rows.length === 2) {
           duplicates.push({
-            pkValues: pkValues,
+            pkValues,
             pkFields: primaryKeys,
-            rows: [...existing.rows],
+            rows: existing.rows,
           });
-        } else {
-          // Update existing duplicate entry
-          const duplicateEntry = duplicates.find((d) => d.pkValues.join("|") === pkKey);
-          if (duplicateEntry) {
-            duplicateEntry.rows = [...existing.rows];
-          }
         }
       } else {
         // First occurrence of this primary key combination
         pkCombinations.set(pkKey, {
-          pkValues: pkValues,
+          pkValues,
           rows: [actualRowNumber],
         });
       }
@@ -264,7 +258,7 @@ export class QueryGenerationService {
               const columnLetter = this.columnIndexToLetter(colIndex);
               throw new Error(
                 `Column "${fieldName}" (column ${columnLetter}) exists in data but not in schema definition. ` +
-                  `Please add this field to the schema or remove it from the data.`
+                  `Please add this field to the schema or remove it from the data.`,
               );
             }
 
@@ -279,7 +273,7 @@ export class QueryGenerationService {
               dataType.replace(/\([^)]*\)/g, ""), // Remove any length specifiers (e.g., VARCHAR(100) -> VARCHAR)
               this.getMaxLength(dataType),
               attachments,
-              tableName
+              tableName,
             );
 
             // Use attachment value if found, otherwise use original value
@@ -451,7 +445,7 @@ export class QueryGenerationService {
                 table_name: tableName,
               });
               throw new Error(
-                `Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`
+                `Error in Cell ${columnLetter}${rowIndex + 2}, Field "${pk}": Primary key must have a value for UPDATE operation.`,
               );
             }
             return `${this.formatFieldName(pk)} = ${pkField.formattedValue}`;

@@ -6,6 +6,7 @@
 
 import { corsHeaders } from "../utils/cors.js";
 import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
+import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
@@ -1224,10 +1225,19 @@ export async function handleDashboardVerify(request, env) {
     const data = await request.json();
     const password = String(data.password || "");
     const expectedPassword = String(env.ANALYTICS_DASHBOARD_PASSWORD || "");
+    const requester = String(request.headers.get("CF-Connecting-IP") || "unknown").slice(0, 64);
+    const limitKey = `dashboard:verify:${requester}`;
 
     if (!expectedPassword) {
       return new Response(JSON.stringify({ ok: false, error: "Dashboard password not configured" }), {
         status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    if (await consumeRateLimit(env.adtools, limitKey, 5, 10 * 60)) {
+      return new Response(JSON.stringify({ ok: false, error: "Too many attempts. Try later." }), {
+        status: 429,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
       });
     }
@@ -1239,6 +1249,7 @@ export async function handleDashboardVerify(request, env) {
       });
     }
 
+    await clearRateLimit(env.adtools, limitKey);
     const token = await generateToken(env);
     return new Response(JSON.stringify({ ok: true, token }), { headers: { "Content-Type": "application/json", ...corsHeaders() } });
   } catch (err) {

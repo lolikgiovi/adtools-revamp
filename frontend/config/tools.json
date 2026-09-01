@@ -23,9 +23,6 @@
       "name": "UUID Generator",
       "category": "general",
       "icon": "uuid",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 10
     },
     {
@@ -33,9 +30,6 @@
       "name": "JSON Tools",
       "category": "general",
       "icon": "json",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 20
     },
     {
@@ -43,9 +37,6 @@
       "name": "Base64 Tools",
       "category": "general",
       "icon": "base64",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 30
     },
     {
@@ -53,9 +44,6 @@
       "name": "TLV Viewer",
       "category": "general",
       "icon": "tlv",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 35
     },
     {
@@ -63,9 +51,6 @@
       "name": "QR Tools",
       "category": "general",
       "icon": "qr",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 40
     },
     {
@@ -73,9 +58,6 @@
       "name": "Quick Query",
       "category": "config",
       "icon": "database",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 50
     },
     {
@@ -83,9 +65,6 @@
       "name": "Querify",
       "category": "config",
       "icon": "querify",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 52
     },
     {
@@ -93,30 +72,13 @@
       "name": "Compare Config",
       "category": "config",
       "icon": "database-compare",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 51
-    },
-    {
-      "id": "export-content",
-      "name": "Export Content",
-      "category": "config",
-      "icon": "export-content",
-      "requiresTauri": true,
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": false,
-      "order": 53
     },
     {
       "id": "run-query",
       "name": "Run Query",
       "category": "jenkins",
       "icon": "jenkins-query",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "requiresTauri": true,
       "order": 55
     },
@@ -125,32 +87,14 @@
       "name": "Run Batch",
       "category": "jenkins",
       "icon": "jenkins-batch",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "requiresTauri": true,
       "order": 56
     },
-    {
-      "id": "ticket-template-create",
-      "name": "Ticket Template",
-      "category": "jira",
-      "icon": "ticket-template",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": false,
-      "requiresTauri": true,
-      "order": 10
-    },
-
     {
       "id": "html-template",
       "name": "HTML Template",
       "category": "config",
       "icon": "html",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 60
     },
     {
@@ -158,9 +102,6 @@
       "name": "Splunk Template",
       "category": "config",
       "icon": "splunk-template",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 70
     },
     {
@@ -168,9 +109,6 @@
       "name": "Query IN",
       "category": "config",
       "icon": "sql-in",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 80
     },
     {
@@ -178,9 +116,6 @@
       "name": "Merge SQL",
       "category": "config",
       "icon": "merge-sql",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 85
     },
     {
@@ -188,9 +123,6 @@
       "name": "Check Image",
       "category": "config",
       "icon": "image-check",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "order": 90
     },
     {
@@ -198,9 +130,6 @@
       "name": "Master Lockey",
       "category": "config",
       "icon": "language",
-      "showInSidebar": true,
-      "showOnHome": true,
-      "enabled": true,
       "requiresTauri": true,
       "order": 100
     }

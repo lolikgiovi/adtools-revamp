@@ -37,8 +37,8 @@ export class OracleConnectionService {
     return this.getSidecarClient().restart();
   }
 
-  static async getOracleCredentials(name) {
-    return this.invokeTauri("get_oracle_credentials", { name });
+  static async getOracleUsername(name) {
+    return this.invokeTauri("get_oracle_username", { name });
   }
 
   static async setOracleCredentials(name, username, password) {
@@ -58,40 +58,31 @@ export class OracleConnectionService {
     return invoke(command, args);
   }
 
-  static async buildSidecarConnection(connectionName, config) {
-    const [username, password] = await this.getOracleCredentials(connectionName);
-    return {
-      name: config.name || connectionName,
-      connect_string: config.connect_string,
-      username,
-      password,
-    };
-  }
-
   static async testConnectionWithCredentials(connection) {
     const started = await this.ensureSidecarStarted();
     if (!started) {
       throw new OracleSidecarError("Sidecar not responding");
     }
-    return this.getSidecarClient().testConnection(connection);
+    return this.invokeTauri("oracle_sidecar_test_connection", {
+      connectionName: connection.name,
+      config: { name: connection.name, connect_string: connection.connect_string },
+      username: connection.username || null,
+      password: connection.password || null,
+    });
   }
 
   static async testConnectionViaSidecar(connectionName, config) {
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return this.testConnectionWithCredentials(connection);
+    const started = await this.ensureSidecarStarted();
+    if (!started) throw new OracleSidecarError("Sidecar not responding");
+    return this.invokeTauri("oracle_sidecar_test_connection", { connectionName, config, username: null, password: null });
   }
 
   static async queryViaSidecar(connectionName, config, sql, maxRows = 1000) {
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return this.queryWithConnection(connection, sql, maxRows);
-  }
-
-  static async queryWithConnection(connection, sql, maxRows = 1000) {
     const started = await this.ensureSidecarStarted();
     if (!started) {
       throw new OracleSidecarError("Sidecar not responding");
     }
-    return this.getSidecarClient().query({ connection, sql, max_rows: maxRows });
+    return this.invokeTauri("oracle_sidecar_query", { connectionName, config, sql, maxRows, asDict: false });
   }
 
   static async queryAsDictViaSidecar(connectionName, config, sql, maxRows = 1000) {
@@ -99,8 +90,7 @@ export class OracleConnectionService {
     if (!started) {
       throw new OracleSidecarError("Sidecar not responding");
     }
-    const connection = await this.buildSidecarConnection(connectionName, config);
-    return this.getSidecarClient().queryAsDict({ connection, sql, max_rows: maxRows });
+    return this.invokeTauri("oracle_sidecar_query", { connectionName, config, sql, maxRows, asDict: true });
   }
 
   static async queryBatchViaSidecar(queries) {
@@ -109,14 +99,7 @@ export class OracleConnectionService {
       throw new OracleSidecarError("Sidecar not responding");
     }
 
-    const queryRequests = await Promise.all(
-      queries.map(async ({ connection_name, config, sql, max_rows = 1000 }) => {
-        const connection = await this.buildSidecarConnection(connection_name, config);
-        return { connection, sql, max_rows };
-      }),
-    );
-
-    return this.getSidecarClient().queryBatch(queryRequests);
+    return this.invokeTauri("oracle_sidecar_query_batch", { queries });
   }
 
   static updateHeaderStatus(status = this.getSidecarStatus()) {
@@ -158,9 +141,12 @@ export class OracleConnectionService {
     this.updateHeaderStatus();
 
     if (!this._headerStatusUnsubscribe) {
-      this._headerStatusUnsubscribe = this.onStatusChange((status) => {
-        this.updateHeaderStatus(status);
-      }, { emitCurrent: false });
+      this._headerStatusUnsubscribe = this.onStatusChange(
+        (status) => {
+          this.updateHeaderStatus(status);
+        },
+        { emitCurrent: false },
+      );
     }
 
     const restartBtn = document.getElementById("btn-sidecar-restart");

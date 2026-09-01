@@ -8,30 +8,30 @@ AD Tools is a client-side, modular web application built with Vite that hosts mu
 
 ## Core Modules
 
-- App (`app/App.js`)
+- App (`frontend/App.js`)
   - Initializes the application, sets up DOM, components, routes, and notifications.
   - Registers tools and manages activation/mounting via `showTool(toolId)`.
   - Coordinates global events with the `EventBus`.
-  - Uses ES module imports to load all tools and core components.
-- EventBus (`app/core/EventBus.js`)
+  - Lazy-loads the selected tool from the central tool definitions.
+- EventBus (`frontend/core/EventBus.js`)
   - Lightweight pub/sub mechanism to decouple components and tools.
-  - Common events include `tool:registered`, `tool:activate`, `page:changed`, `route:change`, and `route:changed`.
-- Router (`app/core/Router.js`)
+  - Common events include `page:changed`, `route:change`, `route:changed`, and notification events.
+- Router (`frontend/core/Router.js`)
   - Hash-based navigation (`#<route>`). Registers handlers per path and emits route change events.
   - Provides `navigate(path)`, `handleRouteChange()`, `setDefaultRoute()`, and query parsing.
-- ThemeManager (`app/core/ThemeManager.js`)
+- ThemeManager (`frontend/core/ThemeManager.js`)
   - Controls light/dark theme by toggling CSS variables/classes at the root.
-- BaseTool (`app/core/BaseTool.js`)
+- BaseTool (`frontend/core/BaseTool.js`)
   - Shared lifecycle contracts (activate, mount, deactivate) and notification helpers (`showSuccess`, `showError`) that emit via EventBus with inline toast fallback.
 - UI Components
-  - Sidebar (`app/components/Sidebar.js`): Lists tools by category, handles selection, mobile toggle, and navigation.
-  - Breadcrumb (`app/components/Breadcrumb.js`): Reflects current location/tool.
+  - Sidebar (`frontend/components/Sidebar.js`): Lists tools by category, handles selection, mobile toggle, and navigation.
+  - Breadcrumb (`frontend/components/Breadcrumb.js`): Reflects current location/tool.
 
 ## Tool Architecture
 
-Each tool is implemented as a class that exports from its module and is imported by App for registration and routing. Tools follow a common pattern:
+Each tool is implemented as a class that exports from its module and is lazy-loaded from `frontend/config/toolDefinitions.js`.
 
-- Files per tool (under `app/tools/<tool-name>/`):
+- Files per tool (under `frontend/tools/<tool-name>/`):
   - `template.js`: Defines HTML template for the tool UI as a string (exported as a module).
   - `styles.css`: Scoped styles for the tool.
   - `main.js`: Tool class implementing lifecycle, DOM bindings, and logic (exported as ES module).
@@ -87,7 +87,7 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 
 - App registers routes for special pages and each tool ID.
 - On navigation, App deactivates the current tool, activates the target tool, and mounts its UI.
-- Sidebar navigates via `router.navigate(toolId)` and emits `tool:activate`.
+- Sidebar navigates via `router.navigate(toolId)`; routing owns activation.
 
 ## Security
 
@@ -110,21 +110,24 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 - Vanilla JS and CSS; no external framework dependency.
 
 ### Editor Migration
+
 - CodeMirror usage has been removed. Editor functionality is now provided by Monaco Editor across tools (e.g., JSON Tools, Quick Query). This ensures consistent ESM-based loading and worker configuration under Vite.
 
 ## Build Process & Development
 
 ### Development
+
 - `npm run dev`: Starts Vite development server with hot module replacement (HMR)
 - Vite serves the application with ES module support and fast refresh
 - Monaco Editor workers are handled via Vite's worker bundling
 
 ### Build
+
 - `npm run build`: Creates optimized production build in `dist/` directory
 - `npm run preview`: Serves the built application for testing
-- Post-build step copies `app/` directory to `dist/app` for compatibility
 
 ### Testing
+
 - `npm run test`: Runs Vitest with JSDOM environment
 - Unit tests focus on service logic with coverage reporting
 - Tests are located in `tests/` directory
@@ -132,12 +135,14 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 ## Module System & Application Loading
 
 ### ES Module Architecture
+
 - Application uses ES modules (`import`/`export`) throughout the codebase
 - Main application entry point is `index.html` with a module script that imports `App.js`
-- All tools, components, and core modules are imported as ES modules
+- Components and core modules use ES modules; tool modules are dynamically imported on first use
 - No reliance on global `window` assignments for application logic
 
 ### Application Initialization
+
 ```javascript
 // index.html
 <script type="module">
@@ -150,7 +155,8 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 ```
 
 ### Tool Registration
-- Tools are imported directly in `App.js` and instantiated with dependency injection
+
+- Tool metadata comes from `frontend/config/tools.json`; loaders live in `frontend/config/toolDefinitions.js`
 - Each tool exports its main class from `main.js`
 - Services are imported by tools as needed, promoting modularity and testability
 
@@ -167,10 +173,10 @@ This split is recommended for tools with meaningful processing (e.g., JSON/Base6
 
 To add a new tool:
 
-1. Create `app/tools/<tool>/template.js`, `styles.css`, `main.js` (and `service.js` if needed).
+1. Create `frontend/tools/<tool>/template.js`, `styles.css`, `main.js` (and `service.js` if needed).
 2. Export the tool class from `main.js` as an ES module.
-3. Import and register the tool in `App.js` by adding it to the imports and `registerTools()` method.
-4. The Sidebar will render it via `tool:registered` metadata emitted during registration.
+3. Add its metadata to `frontend/config/tools.json` and loader to `frontend/config/toolDefinitions.js`.
+4. Add its icon to `frontend/config/iconRegistry.js`.
 
 ## Design Principles
 
@@ -187,7 +193,6 @@ To add a new tool:
 - **Development server**: Use `npm run dev` for development with HMR enabled.
 - **Production builds**: Use `npm run build` for optimized production artifacts.
 - Add light integration tests for routing and tool activation.
-- Evaluate lazy-loading of heavy dependencies (e.g., Monaco) to improve initial load times.
 - If needed, further standardize the Tool base class (`BaseTool`) usage across tools.
 
 ## Migration from Previous Architecture
@@ -195,6 +200,7 @@ To add a new tool:
 This application was migrated from a vanilla JS setup without a build tool to the current Vite-based architecture:
 
 ### Key Changes Made:
+
 - **Build System**: Migrated from static file serving to Vite development server and build process
 - **Module System**: Converted from global `window` assignments to ES module imports/exports
 - **Dependencies**: Moved from vendored libraries to npm packages (Monaco Editor, QRCode)
@@ -202,6 +208,7 @@ This application was migrated from a vanilla JS setup without a build tool to th
 - **Development Experience**: Gained HMR, fast refresh, and modern development tooling
 
 ### Benefits Achieved:
+
 - **Faster Development**: HMR provides instant feedback during development
 - **Better Testing**: Isolated unit tests with coverage reporting
 - **Improved Maintainability**: ES modules eliminate global dependencies
