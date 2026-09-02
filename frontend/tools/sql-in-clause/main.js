@@ -1,6 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { SQLInClauseTemplate } from "./template.js";
 import { SQLInClauseService } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -55,11 +56,7 @@ class SQLInClauseTool extends BaseTool {
   }
 
   async initializeMonacoEditor() {
-    self.MonacoEnvironment = {
-      getWorker() {
-        return new editorWorker();
-      },
-    };
+    configureMonacoWorkers(self, { editor: editorWorker });
 
     const container = document.getElementById("sqlInEditor");
     this.editor = monaco.editor.create(container, {

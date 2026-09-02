@@ -18,8 +18,6 @@ class GlobalSearch {
     this.activeIndex = -1;
     this.isOpen = false;
     this.previousActiveElement = null;
-    this._debounceTimer = null;
-
     this.overlayEl = null;
     this.modalEl = null;
     this.inputEl = null;
@@ -99,7 +97,7 @@ class GlobalSearch {
     // Input events
     this.inputEl.addEventListener("input", () => {
       const query = this.inputEl.value.trim();
-      this._scheduleFilter(query);
+      this._filter(query);
     });
 
     // Keyboard navigation within modal
@@ -191,12 +189,6 @@ class GlobalSearch {
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === "function") {
       this.previousActiveElement.focus({ preventScroll: true });
     }
-  }
-
-  /** Schedule filter with small debounce for smoothness */
-  _scheduleFilter(query) {
-    clearTimeout(this._debounceTimer);
-    this._debounceTimer = setTimeout(() => this._filter(query), 80);
   }
 
   /** Filter index by query */

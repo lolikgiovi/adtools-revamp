@@ -1,16 +1,13 @@
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { configureMonacoWorkers } from "./MonacoWorkers.js";
 
 export const ORACLE_LANGUAGE_ID = "oracle-dml";
 export const ORACLE_THEME = "oracle-dml-dark";
 
 export function ensureMonacoWorkers() {
   try {
-    self.MonacoEnvironment = {
-      getWorker() {
-        return new editorWorker();
-      },
-    };
+    configureMonacoWorkers(self, { editor: editorWorker });
   } catch (e) {
     console.warn("Failed to configure Monaco workers", e);
   }

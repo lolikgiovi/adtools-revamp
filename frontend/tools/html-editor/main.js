@@ -1,9 +1,9 @@
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import "monaco-editor/esm/vs/language/html/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
-import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import MinifyWorker from "./minify.worker.js?worker";
 import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
@@ -86,22 +86,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   async initializeMonacoEditor() {
-    // Configure Monaco workers for Vite ESM builds
-    self.MonacoEnvironment = {
-      getWorker(_, label) {
-        switch (label) {
-          case "css":
-            return new cssWorker();
-          case "html":
-            return new htmlWorker();
-          case "typescript":
-          case "javascript":
-            return new tsWorker();
-          default:
-            return new editorWorker();
-        }
-      },
-    };
+    configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker });
 
     const container = document.getElementById("htmlEditor");
     this.editor = monaco.editor.create(container, {

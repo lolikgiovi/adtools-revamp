@@ -1,9 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
-import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
-import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
 import { formatVtlTemplate, minifyVtlTemplate, extractFieldsFromTemplate, splitByPipesSafely } from "./service.js";
@@ -68,22 +66,7 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   async registerVtlLanguage() {
-    // Configure Monaco workers
-    self.MonacoEnvironment = {
-      getWorker(_, label) {
-        switch (label) {
-          case "css":
-            return new cssWorker();
-          case "html":
-            return new htmlWorker();
-          case "typescript":
-          case "javascript":
-            return new tsWorker();
-          default:
-            return new editorWorker();
-        }
-      },
-    };
+    configureMonacoWorkers(self, { editor: editorWorker });
 
     monaco.languages.register({ id: "vtl-splunk" });
     monaco.languages.setLanguageConfiguration("vtl-splunk", {

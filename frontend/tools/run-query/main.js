@@ -28,6 +28,8 @@ export class JenkinsRunner extends BaseTool {
     this.editor = null;
     this.templateEditor = null;
     this._beforeUnloadHandler = null;
+    this._editorLayoutFrame = null;
+    this._cancelEditorLayout = null;
   }
 
   /**
@@ -556,7 +558,7 @@ export class JenkinsRunner extends BaseTool {
     setupMonacoOracle();
     this.editor = createOracleEditor(sqlEditorContainer, {
       value: lastState.sql || "",
-      automaticLayout: true,
+      automaticLayout: false,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "on",
@@ -593,7 +595,7 @@ export class JenkinsRunner extends BaseTool {
     if (templateSqlEditorContainer) {
       this.templateEditor = createOracleEditor(templateSqlEditorContainer, {
         value: "",
-        automaticLayout: true,
+        automaticLayout: false,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         wordWrap: "on",
@@ -613,12 +615,25 @@ export class JenkinsRunner extends BaseTool {
 
     // Ensure editors re-layout when the sidebar collapses/expands or window resizes
     const relayoutEditors = () => {
-      try {
-        if (this.editor && typeof this.editor.layout === "function") this.editor.layout();
-      } catch (_) {}
-      try {
-        if (this.templateEditor && typeof this.templateEditor.layout === "function") this.templateEditor.layout();
-      } catch (_) {}
+      if (!this.isActive) return;
+      if (this._editorLayoutFrame !== null) return;
+      const schedule = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
+      const cancel = typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout;
+      this._editorLayoutFrame = schedule(() => {
+        this._editorLayoutFrame = null;
+        this._cancelEditorLayout = null;
+        for (const editor of [this.editor, this.templateEditor, this.splitEditor]) {
+          try {
+            editor?.layout?.();
+          } catch (_) {}
+        }
+      });
+      this._cancelEditorLayout = () => {
+        if (this._editorLayoutFrame === null) return;
+        cancel(this._editorLayoutFrame);
+        this._editorLayoutFrame = null;
+        this._cancelEditorLayout = null;
+      };
     };
 
     // Listen for EventBus sidebar events if available
@@ -931,9 +946,7 @@ export class JenkinsRunner extends BaseTool {
       if (splitChunkLabel) splitChunkLabel.textContent = `Chunk ${index + 1} of ${chunks.length}`;
       if (this.splitEditor && chunks[index] != null) {
         this.splitEditor.setValue(chunks[index]);
-        try {
-          this.splitEditor.layout();
-        } catch (_) {}
+        relayoutEditors();
       }
       renderSplitChunksList();
     };
@@ -959,7 +972,7 @@ export class JenkinsRunner extends BaseTool {
       if (splitEditorContainer && !this.splitEditor) {
         this.splitEditor = createOracleEditor(splitEditorContainer, {
           value: chunks[0] || "",
-          automaticLayout: true,
+          automaticLayout: false,
           readOnly: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
@@ -1051,7 +1064,7 @@ export class JenkinsRunner extends BaseTool {
             if (!self.splitEditor && editorContainer && chunks.length > 0) {
               self.splitEditor = createOracleEditor(editorContainer, {
                 value: chunks[index] || "",
-                automaticLayout: true,
+                automaticLayout: false,
                 readOnly: true,
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
@@ -1139,7 +1152,7 @@ export class JenkinsRunner extends BaseTool {
       if (!this.splitEditor && splitEditorContainer && chunks.length > 0) {
         this.splitEditor = createOracleEditor(splitEditorContainer, {
           value: chunks[index] || "",
-          automaticLayout: true,
+          automaticLayout: false,
           readOnly: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
@@ -1171,9 +1184,7 @@ export class JenkinsRunner extends BaseTool {
       }
 
       if (this.splitEditor) {
-        try {
-          this.splitEditor.layout();
-        } catch (_) {}
+        relayoutEditors();
       }
     };
 
@@ -1506,12 +1517,7 @@ export class JenkinsRunner extends BaseTool {
       if (templatesTab) templatesTab.style.display = "none";
       hideSqlPreview();
       // Ensure Monaco editor recalculates dimensions when Run tab becomes visible
-      try {
-        // Use microtask to run after style changes apply
-        Promise.resolve().then(() => {
-          if (this.editor && typeof this.editor.layout === "function") this.editor.layout();
-        });
-      } catch (_) {}
+      relayoutEditors();
     };
     const switchToHistory = () => {
       if (!runTabBtn || !historyTabBtn || !runTab || !historyTab) return;
@@ -2913,6 +2919,7 @@ export class JenkinsRunner extends BaseTool {
         document.removeEventListener("sidebarStateChange", this._sidebarDomListener);
         this._sidebarDomListener = null;
       }
+      this._cancelEditorLayout?.();
       if (this._resizeListener) {
         window.removeEventListener("resize", this._resizeListener);
         this._resizeListener = null;

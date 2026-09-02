@@ -1,12 +1,11 @@
 import { JSONToolsService } from "./service.js";
 import { JSONToolsTemplate } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
-import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
-import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta, getObjectShapeMeta, summarizeText } from "../../core/AnalyticsMeta.js";
@@ -66,24 +65,7 @@ class JSONTools extends BaseTool {
   }
 
   async initializeMonacoEditor() {
-    // Configure Monaco workers for Vite ESM builds
-    self.MonacoEnvironment = {
-      getWorker(_, label) {
-        switch (label) {
-          case "json":
-            return new jsonWorker();
-          case "css":
-            return new cssWorker();
-          case "html":
-            return new htmlWorker();
-          case "typescript":
-          case "javascript":
-            return new tsWorker();
-          default:
-            return new editorWorker();
-        }
-      },
-    };
+    configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
 
     // Create Monaco Editor instance via ESM import (left/input)
     this.editor = monaco.editor.create(document.getElementById("json-editor"), {
