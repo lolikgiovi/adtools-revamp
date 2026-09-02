@@ -225,6 +225,7 @@ class App {
       app: this,
       getIcon: this.getToolIcon.bind(this),
     });
+    document.querySelector(".sidebar-search")?.addEventListener("click", () => this.globalSearch.open());
 
     // Setup notification system
     this.setupNotifications();
@@ -1006,8 +1007,8 @@ class App {
       this.sidebar.toggle();
     }
 
-    // Cmd/Ctrl + P: Open global search
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+    // Cmd/Ctrl + K: Open global search
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       this.globalSearch?.open();
     }

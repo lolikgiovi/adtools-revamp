@@ -39,8 +39,10 @@ class Router {
    * @param {Object} data - Optional data to pass
    */
   navigate(path, data = {}) {
+    const isCurrentRoute = window.location.hash === `#${path}`;
     window.location.hash = path;
     this.eventBus.emit("route:change", { path, data });
+    if (isCurrentRoute) this.handleRouteChange();
   }
 
   /**

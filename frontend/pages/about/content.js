@@ -90,7 +90,7 @@ For Oracle database comparison (Compare Config):
 
 ## You're Ready! 🎉
 
-Start exploring the tools from the sidebar. Use \`Cmd + P\` (or \`Ctrl + P\`) to quickly navigate between features.
+Start exploring the tools from the sidebar. Use \`Cmd + K\` (or \`Ctrl + K\`) to quickly navigate between features.
           `,
         },
         {
@@ -105,7 +105,7 @@ Master these shortcuts to work faster with AD Tools.
 
 | Shortcut | Action |
 |----------|--------|
-| \`Cmd/Ctrl + P\` | Open global search to navigate between features |
+| \`Cmd/Ctrl + K\` | Open global search to navigate between features |
 | \`Cmd/Ctrl + /\` | Toggle sidebar visibility |
 | \`Cmd/Ctrl + R\` | Refresh the current page |
 | \`Escape\` | Close modals and overlays |
@@ -127,7 +127,7 @@ Most text editors in AD Tools uses Monaco Editor, it's the same editor used in V
 
 - Use \`Tab\` to navigate between form fields
 - Press \`Enter\` to confirm actions in modals
-- The global search (\`Cmd + P\`) supports fuzzy matching
+- The global search (\`Cmd + K\`) supports ranked matching, \`tool:\` / \`page:\` filters, and \`quick: schema.table\`
           `,
         },
       ],

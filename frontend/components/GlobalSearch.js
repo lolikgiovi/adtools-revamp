@@ -1,6 +1,6 @@
 /**
  * GlobalSearch - Universal search overlay similar to Notion/Spotlight
- * - Cmd+P opens the search
+ * - Cmd+K opens the search
  * - Real-time filtering of feature names and pages
  * - Keyboard navigation (Up/Down, Enter)
  * - Click outside or Escape closes
@@ -59,7 +59,7 @@ class GlobalSearch {
     this.inputEl.type = "text";
     this.inputEl.id = "global-search-input";
     this.inputEl.className = "global-search-input";
-    this.inputEl.placeholder = "Search tools and pages";
+    this.inputEl.placeholder = "Search tools and pages...";
     this.inputEl.setAttribute("autocomplete", "off");
     this.inputEl.setAttribute("aria-controls", "global-search-results");
     container.appendChild(this.inputEl);
@@ -74,7 +74,7 @@ class GlobalSearch {
     // Help footer
     this.helpEl = document.createElement("div");
     this.helpEl.className = "global-search-help";
-    this.helpEl.textContent = "Arrow keys to navigate • Enter to open • Esc to close";
+    this.helpEl.textContent = "Filters: quick:, tool:, page: • ↑↓ navigate • Enter open • Esc close";
     container.appendChild(this.helpEl);
 
     this.modalEl.appendChild(container);
@@ -193,12 +193,36 @@ class GlobalSearch {
 
   /** Filter index by query */
   _filter(query) {
-    if (!query) {
-      this.filtered = this.index.slice(0, 8);
+    const quickMatch = query.match(/^quick:\s*(.+)$/i);
+    if (quickMatch) {
+      const tableName = quickMatch[1].trim().toUpperCase();
+      this.filtered = /^[A-Z][A-Z0-9_$#]*(\.[A-Z][A-Z0-9_$#]*)?$/.test(tableName)
+        ? [
+            {
+              id: `quick-${tableName}`,
+              name: `Open ${tableName} in Quick Query`,
+              description: "Switch to its existing tab, or create a new tab",
+              route: "quick-query",
+              type: "action",
+              data: { tableName },
+            },
+          ]
+        : [];
+      this.activeIndex = this.filtered.length ? 0 : -1;
+      this._renderResults(this.filtered);
+      return;
+    }
+
+    const scopeMatch = query.match(/^(tools?|pages?):(.*)$/i);
+    const scope = scopeMatch ? (scopeMatch[1].toLowerCase().startsWith("tool") ? "tool" : "page") : null;
+    const q = (scopeMatch ? scopeMatch[2] : query).trim().toLowerCase();
+    const candidates = scope ? this.index.filter((item) => item.type === scope) : this.index;
+
+    if (!q) {
+      this.filtered = candidates.slice(0, 8);
     } else {
-      const q = query.toLowerCase();
       // Simple scoring: name startsWith > includes in name > includes in description/id
-      const scored = this.index
+      const scored = candidates
         .map((item) => {
           const name = item.name.toLowerCase();
           const desc = (item.description || "").toLowerCase();
@@ -279,12 +303,7 @@ class GlobalSearch {
     // Close first to avoid flicker
     this.close();
 
-    // Navigate
-    if (item.type === "tool") {
-      this.router.navigate(item.route);
-    } else if (item.type === "page") {
-      this.router.navigate(item.route);
-    }
+    this.router.navigate(item.route, item.data);
   }
 
   /** Icon helper */

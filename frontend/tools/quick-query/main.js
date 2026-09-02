@@ -65,6 +65,10 @@ export class QuickQuery extends BaseTool {
   onWarmResume() {
     this.ui?.refreshLayouts?.();
   }
+
+  onRouteData({ tableName } = {}) {
+    if (tableName) void this.ui?.openTableTab(tableName);
+  }
 }
 
 export class QuickQueryUI {
@@ -132,7 +136,7 @@ export class QuickQueryUI {
       copied_count: 0,
     };
 
-    this.init();
+    this.ready = this.init();
   }
 
   async init() {
@@ -1156,6 +1160,32 @@ export class QuickQueryUI {
     await this.storageService.saveQueryTab(tab);
     await this.saveTabSession();
     this.renderTabs();
+    return tab;
+  }
+
+  async openTableTab(fullName) {
+    await this.ready;
+    const tableName = this.sanitizeTableInputValue(fullName);
+    if (!tableName || tableName !== String(fullName).trim().toUpperCase()) return null;
+
+    await this.saveActiveTabDraft();
+    const existing = this.tabs.find((tab) => tab.tableName.toUpperCase() === tableName);
+    if (existing) {
+      await this.switchTab(existing.id);
+      return existing;
+    }
+
+    const tab = await this.createNewTab();
+    if (!tab) {
+      this.eventBus?.emit("notification:error", { message: "Quick Query already has 15 tabs." });
+      return null;
+    }
+
+    const loaded = await this.handleLoadSchema(tableName, { mode: "schema-data", skipChoice: true, silentMissing: true });
+    if (!loaded) {
+      this.elements.tableNameInput.value = tableName;
+      await this.saveActiveTabDraft();
+    }
     return tab;
   }
 
@@ -3153,8 +3183,10 @@ export class QuickQueryUI {
         { flush: true },
       );
       await this.saveActiveTabDraft();
+      return true;
     } else {
-      this.showError(`Failed to load schema for ${fullName}`);
+      if (!options.silentMissing) this.showError(`Failed to load schema for ${fullName}`);
+      return false;
     }
   }
 
