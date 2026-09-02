@@ -225,7 +225,7 @@ class App {
       app: this,
       getIcon: this.getToolIcon.bind(this),
     });
-    document.querySelector(".sidebar-search")?.addEventListener("click", () => this.globalSearch.open());
+    document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open());
 
     // Setup notification system
     this.setupNotifications();
@@ -718,13 +718,7 @@ class App {
       el.className = "update-banner";
       el.setAttribute("role", "status");
       el.setAttribute("aria-live", "polite");
-      // Insert before reload button to appear left of it
-      const reloadBtn = container.querySelector(".header-reload");
-      if (reloadBtn) {
-        container.insertBefore(el, reloadBtn);
-      } else {
-        container.appendChild(el);
-      }
+      container.appendChild(el);
       this._updateBannerEl = el;
     }
 
@@ -1413,13 +1407,11 @@ class App {
   }
   setupHeaderRuntime() {
     const header = document.querySelector(".main-header");
-    const reloadBtn = document.querySelector(".header-reload");
 
     const applyRuntime = () => {
       const tauriRuntime = isTauri();
       const rt = tauriRuntime ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
-      if (reloadBtn) reloadBtn.title = rt === "tauri" ? "Reload window" : "Reload";
       if (tauriRuntime) OracleConnectionService.bindHeaderStatus({ eventBus: this.eventBus });
     };
 
@@ -1430,28 +1422,6 @@ class App {
       this.updateGlobalSearchIndex();
     }, 200);
 
-    // Wire reload behavior
-    if (reloadBtn) {
-      reloadBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        try {
-          // Attempt a standard reload
-          window.location.reload();
-        } catch (err) {
-          // Fallback to hard navigation
-          try {
-            window.location.href = window.location.href;
-          } catch (_) {}
-        }
-      });
-      // Keyboard accessibility for div[role="button"]
-      reloadBtn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          reloadBtn.click();
-        }
-      });
-    }
   }
 
   async syncDeviceVersion() {
