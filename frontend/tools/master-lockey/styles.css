@@ -78,10 +78,8 @@
   font-size: 0.6rem;
   font-family: monospace;
   color: hsl(var(--muted-foreground));
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Header Controls */
