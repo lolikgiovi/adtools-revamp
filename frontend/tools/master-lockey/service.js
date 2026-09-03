@@ -74,14 +74,14 @@ class MasterLockeyService {
     });
 
     // Transform data into rows with key + language values
-    const rows = Object.entries(keyCentricData).map(([key, translations]) => {
+    const rows = Object.entries(keyCentricData).map(([key, translations], keyIndex) => {
       const row = { key };
 
       languages.forEach((lang) => {
         const value = translations[lang];
 
         // Debug logging for first few rows
-        if (Object.keys(keyCentricData).indexOf(key) < 3) {
+        if (keyIndex < 3) {
           console.log(`Key: ${key}, Lang: ${lang}, Value:`, value, `Type: ${typeof value}, Length: ${value?.length}`);
         }
 
