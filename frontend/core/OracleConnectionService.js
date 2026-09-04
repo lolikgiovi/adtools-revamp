@@ -4,6 +4,7 @@ export { OracleSidecarError, SidecarStatus };
 
 export class OracleConnectionService {
   static _headerStatusUnsubscribe = null;
+  static _headerStatusInitPromise = null;
 
   static getSidecarClient() {
     return getOracleSidecarClient();
@@ -11,6 +12,27 @@ export class OracleConnectionService {
 
   static getSidecarStatus() {
     return this.getSidecarClient().status;
+  }
+
+  static async initializeHeaderStatus({ eventBus } = {}) {
+    this.bindHeaderStatus({ eventBus });
+
+    if (this._headerStatusInitPromise) return this._headerStatusInitPromise;
+
+    this._headerStatusInitPromise = this.ensureSidecarStarted()
+      .then((ready) => {
+        this.updateHeaderStatus(this.getSidecarStatus());
+        return ready;
+      })
+      .catch(() => {
+        this.updateHeaderStatus(SidecarStatus.ERROR);
+        return false;
+      })
+      .finally(() => {
+        this._headerStatusInitPromise = null;
+      });
+
+    return this._headerStatusInitPromise;
   }
 
   static onStatusChange(listener, { emitCurrent = true } = {}) {
@@ -113,16 +135,16 @@ export class OracleConnectionService {
     if (statusText) {
       switch (status) {
         case SidecarStatus.STARTING:
-          statusText.textContent = "Oracle: Starting...";
+          statusText.textContent = "Oracle bridge: Starting…";
           break;
         case SidecarStatus.READY:
-          statusText.textContent = "Oracle: Connected";
+          statusText.textContent = "Oracle bridge: Ready";
           break;
         case SidecarStatus.ERROR:
-          statusText.textContent = "Oracle: Error";
+          statusText.textContent = "Oracle bridge: Error";
           break;
         default:
-          statusText.textContent = "Oracle: Disconnected";
+          statusText.textContent = "Oracle bridge: Offline";
       }
     }
 
@@ -157,14 +179,12 @@ export class OracleConnectionService {
       restartBtn.disabled = true;
       try {
         const success = await this.restartSidecar();
-        eventBus?.emit?.("notification:show", {
-          type: success ? "success" : "error",
+        eventBus?.emit?.(success ? "notification:success" : "notification:error", {
           message: success ? "Oracle sidecar restarted successfully" : "Failed to restart Oracle sidecar. Try restarting the app.",
         });
       } catch (error) {
         console.error("Sidecar restart error:", error);
-        eventBus?.emit?.("notification:show", {
-          type: "error",
+        eventBus?.emit?.("notification:error", {
           message: "Failed to restart Oracle sidecar",
         });
       } finally {

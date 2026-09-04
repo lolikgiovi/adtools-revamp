@@ -14,6 +14,7 @@ describe('CORS utilities', () => {
       expect(headers['Access-Control-Allow-Origin']).toBe('*');
       expect(headers['Access-Control-Allow-Methods']).toContain('POST');
       expect(headers['Access-Control-Allow-Methods']).toContain('GET');
+      expect(headers['Access-Control-Allow-Methods']).toContain('PATCH');
     });
   });
 

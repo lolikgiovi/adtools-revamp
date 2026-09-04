@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       "/register": "http://localhost:8787",
       "/analytics": "http://localhost:8787",
+      "/feedback": "http://localhost:8787",
       "/whitelist.json": "http://localhost:8787",
       "/api": "http://localhost:8787",
       "/request-otp": "http://localhost:8787",

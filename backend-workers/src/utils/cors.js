@@ -8,7 +8,7 @@
 export function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,HEAD,POST,PATCH,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Range, If-None-Match, If-Range, X-ADTOOLS-Update-Channel, X-Device-Id, Authorization",
     "Access-Control-Expose-Headers": "ETag, Content-Length, Accept-Ranges, Content-Range",
     Vary: "Origin",

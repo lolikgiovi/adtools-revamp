@@ -128,6 +128,65 @@ describe("Analytics endpoints", () => {
     expect(log.status).toBe(405);
   });
 
+  it("requires a registration session for the usage overview", async () => {
+    const response = await worker.fetch(new Request("http://localhost/analytics/overview"), env);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns personal and aggregate usage views from the analytics API", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/overview", {
+        headers: { Authorization: "Bearer test-token" },
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.source).toBe("analytics-api");
+    expect(data.period).toEqual({ totals: "all-time", daily: "last-7-days" });
+    expect(data.user).toMatchObject({ totalActivities: 0, toolsUsed: 0, tools: [], daily: [] });
+    expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0, tools: [], daily: [] });
+    expect(env.DB.executed.filter((item) => item.sql.includes("FROM device_usage")).length).toBe(4);
+    expect(env.DB.executed.filter((item) => item.sql.includes("FROM usage_log")).length).toBe(2);
+  });
+
+  it("accepts an authenticated improvement note without exposing identity in the payload", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/feedback/improvement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+        body: JSON.stringify({ tool_id: "quick-query", message: "The empty state could explain what to do next." }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    const insert = env.DB.executed.find((item) => item.sql.includes("INSERT INTO improvement_feedback"));
+    expect(response.status).toBe(201);
+    expect(data.ok).toBe(true);
+    expect(insert.args.slice(0, 4)).toEqual([
+      "analytics-test@bankmandiri.co.id",
+      "analytics-test-device",
+      "quick-query",
+      "The empty state could explain what to do next.",
+    ]);
+  });
+
+  it("rejects an empty improvement note", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/feedback/improvement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+        body: JSON.stringify({ tool_id: "quick-query", message: "   " }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("accepts POST /analytics/batch", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/batch", {

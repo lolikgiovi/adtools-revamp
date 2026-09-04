@@ -253,6 +253,18 @@ ORDER BY count DESC, last_seen DESC
 LIMIT 150`,
   },
   {
+    id: "improvement-notes",
+    name: "Improvement Notes",
+    query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,
+      SUBSTR(user_email, 1, INSTR(user_email, '@') - 1) AS user,
+      COALESCE(tool_id, 'Any tool') AS tool,
+      message,
+      created_time
+      FROM improvement_feedback
+      ORDER BY created_time DESC
+      LIMIT 200`,
+  },
+  {
     id: "errors",
     name: "Error Details",
     query: `SELECT STRFTIME('%m-%d / %H:%M', created_time) AS time,

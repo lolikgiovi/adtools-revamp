@@ -5,7 +5,153 @@
 
 import { corsHeaders } from "../utils/cors.js";
 import { ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
-import { tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
+import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
+
+const OVERVIEW_DAILY_SQL = `
+  SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
+  FROM usage_log
+  WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+    {{USER_FILTER}}
+  GROUP BY day
+  ORDER BY day ASC
+`;
+
+/**
+ * Handle GET /analytics/overview - privacy-safe personal and aggregate usage overview.
+ * Cumulative totals come from device_usage; the seven-day pulse comes from usage_log.
+ */
+export async function handleAnalyticsOverviewGet(request, env, session) {
+  try {
+    if (!env.DB) {
+      return analyticsJson({ ok: false, error: "Analytics database unavailable" }, 503);
+    }
+
+    const userEmail = String(session.email).trim().toLowerCase();
+    const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
+      env.DB
+        .prepare(
+          `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+           FROM device_usage
+           WHERE LOWER(COALESCE(user_email, '')) = ?
+           GROUP BY tool_id
+           HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
+           ORDER BY count DESC, tool_id ASC
+           LIMIT 100`,
+        )
+        .bind(userEmail)
+        .all(),
+      env.DB
+        .prepare(
+          `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+           FROM device_usage
+           GROUP BY tool_id
+           HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
+           ORDER BY count DESC, tool_id ASC
+           LIMIT 100`,
+        )
+        .all(),
+      env.DB
+        .prepare(
+          `SELECT
+             COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
+             COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
+             MAX(updated_time) AS last_updated
+           FROM device_usage
+           WHERE LOWER(COALESCE(user_email, '')) = ?`,
+        )
+        .bind(userEmail)
+        .first(),
+      env.DB
+        .prepare(
+          `SELECT
+             COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
+             COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
+             COUNT(DISTINCT CASE WHEN count > 0 THEN LOWER(user_email) END) AS active_users,
+             MAX(updated_time) AS last_updated
+           FROM device_usage`,
+        )
+        .first(),
+      env.DB
+        .prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "AND LOWER(user_email) = ?"))
+        .bind(userEmail)
+        .all(),
+      env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "")).all(),
+    ]);
+
+    return analyticsJson({
+      ok: true,
+      source: "analytics-api",
+      generatedAt: tsGmt7(),
+      period: { totals: "all-time", daily: "last-7-days" },
+      user: buildOverviewScope(userSummary, userToolsResult?.results, userDailyResult?.results),
+      global: buildOverviewScope(globalSummary, globalToolsResult?.results, globalDailyResult?.results),
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ message: "analytics overview failed", error: String(err) }));
+    return analyticsJson({ ok: false, error: "Analytics overview unavailable" }, 500);
+  }
+}
+
+/**
+ * Handle POST /feedback/improvement - store a low-friction improvement note.
+ * Identity comes from the authenticated session; the client only supplies the note.
+ */
+export async function handleImprovementFeedbackPost(request, env, session) {
+  try {
+    if (!env.DB) return analyticsJson({ ok: false, error: "Feedback storage unavailable" }, 503);
+
+    const data = await request.json();
+    const message = String(data?.message || "").trim();
+    const toolId = safeString(data?.tool_id || "", 80).trim() || null;
+    if (!message) return analyticsJson({ ok: false, error: "A short note is required" }, 400);
+    if (message.length > 4_000) return analyticsJson({ ok: false, error: "Keep the note under 4,000 characters" }, 413);
+
+    await env.DB.prepare(
+      `INSERT INTO improvement_feedback (user_email, device_id, tool_id, message, created_time)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(String(session.email).trim().toLowerCase(), String(session.deviceId), toolId, message, tsGmt7Plain())
+      .run();
+
+    return analyticsJson({ ok: true, message: "Improvement note received" }, 201);
+  } catch (err) {
+    console.error(JSON.stringify({ message: "improvement feedback failed", error: String(err) }));
+    return analyticsJson({ ok: false, error: "Could not save the improvement note" }, 500);
+  }
+}
+
+function buildOverviewScope(summary, toolRows = [], dailyRows = []) {
+  const tools = (Array.isArray(toolRows) ? toolRows : [])
+    .map((row) => ({ toolId: String(row?.tool_id || "unknown"), count: toCount(row?.count) }))
+    .filter((row) => row.count > 0);
+  const daily = (Array.isArray(dailyRows) ? dailyRows : [])
+    .map((row) => ({ day: String(row?.day || ""), count: toCount(row?.count) }))
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.day));
+  const summaryTotal = toCount(summary?.total_activities);
+  const summaryTools = Number(summary?.tools_used);
+
+  return {
+    totalActivities: summaryTotal || tools.reduce((sum, row) => sum + row.count, 0),
+    toolsUsed: Number.isFinite(summaryTools) && summaryTools >= 0 ? summaryTools : tools.length,
+    activeDays: daily.filter((row) => row.count > 0).length,
+    activeUsers: toCount(summary?.active_users),
+    lastUpdated: summary?.last_updated ? String(summary.last_updated) : null,
+    tools,
+    daily,
+  };
+}
+
+function toCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
+}
+
+function analyticsJson(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...corsHeaders() },
+  });
+}
 
 /**
  * Handle POST /analytics/batch - batch insert events/usage logs and upsert device_usage

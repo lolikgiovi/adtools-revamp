@@ -12,9 +12,12 @@ import toolsConfig from "./config/tools.json";
 import { getIconSvg } from "./config/iconRegistry.js";
 import { buildToolDefinitions, getToolDefinition, getToolDefinitionsList } from "./config/toolDefinitions.js";
 import { UsageTracker } from "./core/UsageTracker.js";
+import { UsageOverviewErrorCode, UsageOverviewService } from "./core/UsageOverviewService.js";
+import { normalizeUsageScope } from "./core/UsageOverviewModel.js";
+import { SessionTokenStore } from "./core/SessionTokenStore.js";
+import { openOtpOverlay } from "./components/OtpOverlay.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
-import { categorizeTool } from "./core/Categories.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { OracleConnectionService } from "./core/OracleConnectionService.js";
 
@@ -45,6 +48,9 @@ class App {
     this.mainContent = null;
     this.toolsConfigMap = new Map();
     this.categoriesConfigMap = new Map();
+    this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: false };
+    this.usageOverviewRequestId = 0;
+    this._oracleHeaderInitRequested = false;
     // Temporary store for route navigation data payloads
     this._routeData = {};
 
@@ -362,55 +368,30 @@ class App {
     this.clearCurrentTool();
     this.setMainContentFlush(false);
 
-    const runtimeIsTauri = isTauri();
-    if (!runtimeIsTauri && !this._runtimeRetryHome) {
+    if (!isTauri() && !this._runtimeRetryHome) {
       this._runtimeRetryHome = true;
       setTimeout(() => {
         if (this.isNavigationCurrent(navigationId, "home")) this.showHome(navigationId);
       }, 150);
     }
-    const eligibleTools = this.getVisibleToolDefinitions({ runtimeIsTauri, forHome: true });
-
-    const grouped = eligibleTools.reduce((acc, definition) => {
-      const cat = categorizeTool(definition);
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(definition);
-      return acc;
-    }, {});
-
-    const sortedCategoryIds = Array.from(this.categoriesConfigMap.values())
-      .sort((a, b) => a.order - b.order)
-      .map((c) => c.id);
-
-    const toolCards = sortedCategoryIds
-      .flatMap((catId) => {
-        const toolsInCat = grouped[catId] || [];
-        return toolsInCat
-          .sort((a, b) => a.order - b.order)
-          .map((definition) => {
-            return `
-              <div class="tool-card" data-tool="${definition.id}" onclick="app.navigateToTool('${definition.id}')">
-                <div class="tool-card-icon">
-                  ${this.getToolIcon(definition.icon)}
-                </div>
-                <h3 class="tool-card-title">${definition.name}</h3>
-                <p class="tool-card-description">${definition.description}</p>
-              </div>
-            `;
-          });
-      })
-      .join("");
 
     if (this.mainContent) {
       this.mainContent.innerHTML = `
         <div class="home-container">
-          <div class="home-header">
-            <div id="usage-panel"></div>
-          </div>
-          <div class="tools-grid">${toolCards}</div>
+          <div id="usage-panel"></div>
         </div>
       `;
+      const requestId = ++this.usageOverviewRequestId;
+      const hasAnalyticsSession = Boolean(SessionTokenStore.getToken());
+      this.usageOverviewState = {
+        data: null,
+        source: "local",
+        loading: hasAnalyticsSession,
+        error: null,
+        authRequired: !hasAnalyticsSession,
+      };
       this.renderUsagePanel();
+      if (hasAnalyticsSession) this.loadUsageOverview(navigationId, requestId).catch(() => {});
     }
 
     if (this.isNavigationCurrent(navigationId, "home")) {
@@ -1434,81 +1415,415 @@ class App {
       ],
     };
   }
-  renderUsagePanel() {
-    const container = document.getElementById("usage-panel");
-    if (!container) return;
 
+  async loadUsageOverview(navigationId = null, requestId = this.usageOverviewRequestId) {
+    if (!SessionTokenStore.getToken()) {
+      if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
+      if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
+      this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: true };
+      this.renderUsagePanel();
+      return;
+    }
+
+    try {
+      const data = await UsageOverviewService.fetchOverview();
+      if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
+      if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
+      this.usageOverviewState = { data, source: "api", loading: false, error: null, authRequired: false };
+      this.renderUsagePanel();
+    } catch (error) {
+      if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
+      if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
+      const authRequired = error?.code === UsageOverviewErrorCode.AUTH_REQUIRED || !SessionTokenStore.getToken();
+      this.usageOverviewState = {
+        data: null,
+        source: "local",
+        loading: false,
+        error: authRequired ? null : String(error?.message || "Analytics sync is unavailable"),
+        authRequired,
+      };
+      this.renderUsagePanel();
+    }
+  }
+
+  refreshUsageOverview() {
+    if (!document.querySelector(".home-container")) return;
+    const requestId = ++this.usageOverviewRequestId;
+    if (!SessionTokenStore.getToken()) {
+      this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: true };
+      this.renderUsagePanel();
+      return;
+    }
+    this.usageOverviewState = { data: null, source: "local", loading: true, error: null, authRequired: false };
+    this.renderUsagePanel();
+    this.loadUsageOverview(null, requestId).catch(() => {});
+  }
+
+  async openUsageSession(button = null) {
+    const email = this.#getUsageEmail();
+    if (!this.#canStartUsageSession()) {
+      this.eventBus.emit("notification:info", {
+        message: email === "dev@localhost" ? "Team comparison is unavailable for the local development account." : "Register an email before signing in to sync analytics.",
+      });
+      return;
+    }
+
+    const originalLabel = button?.textContent || "Sign in";
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Opening sign-in…";
+    }
+
+    try {
+      await openOtpOverlay({
+        email,
+        storageScope: "usage-overview",
+        preferCachedToken: false,
+      });
+      this.refreshUsageOverview();
+    } catch (error) {
+      if (String(error?.message || error) !== "Closed") {
+        this.eventBus.emit("notification:error", {
+          message: String(error?.message || error || "Could not sign in to sync analytics."),
+        });
+      }
+    } finally {
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+  }
+
+  async submitUsageFeedback(form) {
+    const status = form?.querySelector("[data-feedback-status]");
+    const submitButton = form?.querySelector("button[type='submit']");
+    if (!form || !status || !submitButton) return;
+
+    const toolId = form.querySelector("[name='tool_id']")?.value || "";
+    const message = form.querySelector("[name='message']")?.value || "";
+    submitButton.disabled = true;
+    status.textContent = "Sending your note…";
+    status.dataset.state = "pending";
+
+    try {
+      await UsageOverviewService.submitImprovement({ toolId, message });
+      form.reset();
+      status.textContent = "Feedback sent.";
+      status.dataset.state = "success";
+    } catch (error) {
+      status.textContent =
+        error?.code === UsageOverviewErrorCode.AUTH_REQUIRED
+          ? "Your sign-in expired. Sign in again before sending feedback."
+          : String(error?.message || "Could not send feedback. Try again.");
+      status.dataset.state = "error";
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
+  #normalizeUsageScope(scope = {}) {
+    return normalizeUsageScope(scope, (id) => this.#getUsageToolName(id));
+  }
+
+  #getUsageToolName(id) {
+    const name = this.getToolNameById(id);
+    return id === "unknown" || name === "unknown" ? "Unknown tool" : name;
+  }
+
+  #getLocalUsageScope() {
     const { totalEvents, totalsByFeature, daily } = UsageTracker.getAggregatedStats();
+    return {
+      totalActivities: totalEvents,
+      tools: Object.entries(totalsByFeature).map(([toolId, count]) => ({ toolId, count })),
+      daily,
+    };
+  }
 
-    // Build features list first, so we can decide to hide if empty
-    const featuresHtml = Object.entries(totalsByFeature)
-      .filter(([id]) => this.toolsConfigMap.has(id))
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([id, count]) => {
-        const name = this.getToolNameById(id);
+  #getUsageDays(scope) {
+    const daily = new Map((scope?.daily || []).map((row) => [row.day, Number(row.count) || 0]));
+    const days = [];
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    for (let index = 6; index >= 0; index -= 1) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - index);
+      const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      days.push({
+        day,
+        label: date.toLocaleDateString(undefined, { weekday: "short" }),
+        dateLabel: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        value: daily.get(day) || 0,
+      });
+    }
+    return days;
+  }
+
+  #renderFeatureList(scope) {
+    if (!scope.tools.length) return '<p class="usage-empty">No activity yet. Open a tool to start tracking.</p>';
+    const maxCount = Math.max(1, ...scope.tools.map((tool) => tool.count));
+    return scope.tools
+      .map(({ name, count }) => {
+        const width = Math.max(8, Math.round((count / maxCount) * 100));
         return `
-          <div class="usage-feature-row">
-            <span class="usage-feature-name">${name}</span>
-            <span class="usage-feature-count">${count}</span>
+          <div class="usage-feature-row" role="listitem" aria-label="${this.#escapeHtml(`${name}: ${count.toLocaleString()} ${count === 1 ? "use" : "uses"}`)}">
+            <div class="usage-feature-main">
+              <span class="usage-feature-name">${this.#escapeHtml(name)}</span>
+              <span class="usage-feature-count">${count.toLocaleString()}</span>
+            </div>
+            <div class="usage-feature-track" aria-hidden="true">
+              <span class="usage-feature-fill" style="width:${width}%"></span>
+            </div>
           </div>
         `;
       })
       .join("");
+  }
 
-    const featuresEmpty = featuresHtml.trim() === "";
-
-    // Hide the entire usage overview when there is no data or no feature rows
-    if (totalEvents === 0 || featuresEmpty) {
-      try {
-        container.style.display = "none";
-        container.innerHTML = "";
-      } catch (_) {}
-      return;
-    } else {
-      try {
-        container.style.display = "block";
-      } catch (_) {}
-    }
-
-    const now = new Date();
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const dayStr = d.toISOString().slice(0, 10);
-      const value = Object.values(daily[dayStr] || {}).reduce((s, v) => s + v, 0);
-      const label = d.toLocaleDateString(undefined, { weekday: "short" });
-      days.push({ label, value });
-    }
-    const max = Math.max(1, ...days.map((d) => d.value));
-    const barsHtml = days
-      .map((d) => {
-        const h = Math.round((d.value / max) * 100);
-        return `<div class="usage-bar" style="height:${h}%" title="${d.label}: ${d.value}" aria-label="${d.label} ${d.value} events"><span class="usage-bar-value">${d.value}</span><span class="usage-bar-label">${d.label}</span></div>`;
-      })
+  #renderScopeCard(scope, { kind, title, subtitle }) {
+    const days = this.#getUsageDays(scope);
+    const activeDays = days.filter((day) => day.value > 0).length;
+    const stats = [
+      { label: "Tools used", value: scope.toolsUsed.toLocaleString(), note: "all time" },
+      kind === "global"
+        ? { label: "People active", value: scope.activeUsers.toLocaleString(), note: "all tools" }
+        : { label: "Active days", value: `${activeDays}/7`, note: "last seven days" },
+    ];
+    const statsHtml = stats
+      .map(
+        ({ label, value, note }) => `
+          <div class="usage-scope-stat">
+            <span>${this.#escapeHtml(label)}</span>
+            <strong title="${this.#escapeHtml(value)}">${this.#escapeHtml(value)}</strong>
+            <small>${this.#escapeHtml(note)}</small>
+          </div>
+        `,
+      )
       .join("");
 
+    return `
+      <section class="usage-scope-card usage-scope-card-${kind}" aria-labelledby="usage-${kind}-title">
+        <div class="usage-scope-header">
+          <div class="usage-scope-heading">
+            <h2 id="usage-${kind}-title">${this.#escapeHtml(title)}</h2>
+            <p>${this.#escapeHtml(subtitle)}</p>
+          </div>
+          <div class="usage-scope-total">
+            <strong>${scope.totalActivities.toLocaleString()}</strong>
+            <span>activities</span>
+          </div>
+        </div>
+        <div class="usage-scope-stat-grid">${statsHtml}</div>
+        <div class="usage-scope-tools">
+          <div class="usage-section-header">
+            <h3>Tools used</h3>
+            <span class="usage-section-count">${scope.tools.length.toLocaleString()} ${scope.tools.length === 1 ? "tool" : "tools"}</span>
+          </div>
+          <div class="usage-feature-list" role="list">${this.#renderFeatureList(scope)}</div>
+        </div>
+      </section>
+    `;
+  }
+
+  #renderScopeUnavailable(state, { canStartSession = false } = {}) {
+    const authRequired = Boolean(state.authRequired);
+    const localDevAccount = authRequired && this.#isLocalDevelopmentAccount();
+    let statusLabel = "Unavailable";
+    if (state.loading) statusLabel = "Syncing";
+    else if (authRequired) statusLabel = localDevAccount ? "Local only" : "Sign-in required";
+    let description = "We could not reach synced analytics. Your local activity is still available.";
+    if (state.loading) description = "Loading team activity.";
+    else if (authRequired && localDevAccount) description = "Team activity is disabled for the local development account.";
+    else if (authRequired && canStartSession) description = "Sign in to compare your activity with the team.";
+    else if (authRequired) description = "Register an account email before syncing team activity.";
+
+    let action = `<button class="usage-secondary-button" type="button" data-usage-refresh>Retry sync</button>`;
+    if (state.loading) action = `<button class="usage-secondary-button" type="button" data-usage-refresh disabled>Syncing…</button>`;
+    else if (authRequired && canStartSession) action = `<button class="usage-primary-button" type="button" data-usage-auth>Sign in to compare</button>`;
+    else if (authRequired) action = "";
+    return `
+      <aside class="usage-compare-card ${authRequired ? "usage-compare-card-auth" : ""}" aria-labelledby="usage-global-title">
+        <div class="usage-compare-card-content">
+          <span class="usage-compare-status">${this.#escapeHtml(statusLabel)}</span>
+          <h2 id="usage-global-title">Compare usage</h2>
+          <p>${this.#escapeHtml(description)}</p>
+          ${action}
+        </div>
+      </aside>
+    `;
+  }
+
+  #renderComparison(scope, globalScope) {
+    if (!globalScope) return "";
+    const userDays = this.#getUsageDays(scope);
+    const globalDays = this.#getUsageDays(globalScope);
+    const maxValue = Math.max(1, ...userDays.map((day) => day.value), ...globalDays.map((day) => day.value));
+    const bars = userDays
+      .map((day, index) => {
+        const globalValue = globalDays[index]?.value || 0;
+        const userHeight = day.value > 0 ? Math.max(7, Math.round((day.value / maxValue) * 100)) : 0;
+        const globalHeight = globalValue > 0 ? Math.max(7, Math.round((globalValue / maxValue) * 100)) : 0;
+        return `
+          <div class="usage-comparison-column" title="${this.#escapeHtml(`${day.dateLabel}: you ${day.value}, team ${globalValue}`)}">
+            <div class="usage-comparison-values"><span>${day.value.toLocaleString()}</span><span>${globalValue.toLocaleString()}</span></div>
+            <div class="usage-comparison-track" aria-hidden="true">
+              <span class="usage-comparison-fill usage-comparison-fill-user" style="height:${userHeight}%"></span>
+              <span class="usage-comparison-fill usage-comparison-fill-global" style="height:${globalHeight}%"></span>
+            </div>
+            <span class="usage-bar-label">${this.#escapeHtml(day.label)}</span>
+          </div>
+        `;
+      })
+      .join("");
+    const label = userDays.map((day, index) => `${day.dateLabel}: you ${day.value}, team ${globalDays[index]?.value || 0}`).join(", ");
+    return `<div class="usage-comparison-chart" role="img" aria-label="${this.#escapeHtml(`Your and team activity over the last seven days: ${label}`)}">${bars}</div>`;
+  }
+
+  #renderFeedbackOptions() {
+    return this.getToolDefinitions()
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((definition) => `<option value="${this.#escapeHtml(definition.id)}">${this.#escapeHtml(definition.name)}</option>`)
+      .join("");
+  }
+
+  #getUsageEmail() {
+    try {
+      return String(localStorage.getItem("user.email") || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  #canStartUsageSession() {
+    const email = this.#getUsageEmail();
+    return Boolean(email && email !== "dev@localhost");
+  }
+
+  #isLocalDevelopmentAccount() {
+    return this.#getUsageEmail() === "dev@localhost";
+  }
+
+  #renderFeedbackSection({ canSubmit = false, canStartSession = false } = {}) {
+    if (!canSubmit) {
+      const action = canStartSession
+        ? '<button class="usage-secondary-button" type="button" data-usage-auth>Sign in to send feedback</button>'
+        : '<span class="usage-feedback-locked-note">Available after account sign-in.</span>';
+      return `
+        <section class="usage-feedback-section usage-feedback-section-locked" aria-labelledby="usage-feedback-title">
+          <div class="usage-feedback-copy">
+            <h2 id="usage-feedback-title">Have feedback?</h2>
+            <p>Sign in to send a note about a tool that needs attention.</p>
+          </div>
+          <div class="usage-feedback-locked-action">${action}</div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="usage-feedback-section" aria-labelledby="usage-feedback-title">
+        <div class="usage-feedback-copy">
+          <h2 id="usage-feedback-title">Send feedback</h2>
+          <p>Tell us what blocked you in a tool.</p>
+        </div>
+        <form class="usage-feedback-form" data-usage-feedback-form>
+          <div class="usage-feedback-fields">
+            <label class="usage-form-field">
+              <span>Tool <small>optional</small></span>
+              <select name="tool_id">
+                <option value="">Choose a tool</option>
+                ${this.#renderFeedbackOptions()}
+              </select>
+            </label>
+            <label class="usage-form-field">
+              <span>What should be better?</span>
+              <textarea name="message" rows="3" maxlength="4000" required placeholder="Example: the next step is hard to find."></textarea>
+            </label>
+          </div>
+          <div class="usage-feedback-actions">
+            <span class="usage-feedback-hint">Your note goes to the AD Tools team.</span>
+            <button class="usage-primary-button" type="submit">Send feedback</button>
+          </div>
+          <div class="usage-feedback-status" data-feedback-status role="status" aria-live="polite"></div>
+        </form>
+      </section>
+    `;
+  }
+
+  renderUsagePanel() {
+    const container = document.getElementById("usage-panel");
+    if (!container) return;
+    const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null, authRequired: true };
+    const localScope = this.#getLocalUsageScope();
+    const apiData = state.source === "api" ? state.data : null;
+    const userScope = this.#normalizeUsageScope(apiData?.user || localScope);
+    const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
+    const hasSession = Boolean(SessionTokenStore.getToken());
+    const canStartSession = this.#canStartUsageSession();
+    const sourceLabel = apiData ? "Synced" : state.loading ? "Syncing" : "On this device";
+    let sourceNote = "Local data is available";
+    if (apiData) sourceNote = "Personal and team data";
+    else if (state.authRequired) {
+      const isLocalDevelopmentAccount = this.#isLocalDevelopmentAccount();
+      if (isLocalDevelopmentAccount) sourceNote = "Local development data only";
+      else if (canStartSession) sourceNote = "Sign in to compare with the team";
+      else sourceNote = "Sign-in required";
+    }
+    else if (state.error) sourceNote = "Sync unavailable · showing local data";
+    const refreshButton = hasSession
+      ? `<button class="usage-secondary-button usage-refresh-button" type="button" data-usage-refresh ${state.loading ? "disabled" : ""}>${state.loading ? "Syncing…" : "Refresh"}</button>`
+      : "";
+    const comparisonHtml = globalScope
+      ? `
+        <section class="usage-section usage-comparison-section" aria-labelledby="usage-comparison-title">
+          <div class="usage-section-header">
+            <div>
+              <h2 id="usage-comparison-title">Last 7 days</h2>
+              <p>Your activity compared with the team.</p>
+            </div>
+            <div class="usage-comparison-legend" aria-label="Chart legend"><span><i class="usage-legend-swatch usage-legend-user"></i>You</span><span><i class="usage-legend-swatch usage-legend-global"></i>Team</span></div>
+          </div>
+          ${this.#renderComparison(userScope, globalScope)}
+        </section>
+      `
+      : "";
+
+    container.style.display = "block";
     container.innerHTML = /*html*/ `
       <div class="usage-panel">
-        <div class="usage-panel-header">
-          <h2>Usage Overview</h2>
-          <div class="usage-total">Total activities: <strong>${totalEvents}</strong></div>
-        </div>
-        <div class="usage-grid">
-          <div class="usage-card">
-            <h3>By Feature</h3>
-            <div class="usage-feature-list">${featuresHtml}</div>
+        <header class="usage-panel-header">
+          <div class="usage-heading">
+            <h1 id="usage-overview-title">Usage</h1>
           </div>
-          <div class="usage-card">
-            <h3>7-day Activity</h3>
-            <div class="usage-trend">
-              ${barsHtml}
-            </div>
+          <div class="usage-source">
+            <span class="usage-source-status"><span class="usage-source-dot" data-state="${apiData ? "synced" : state.loading ? "loading" : state.error ? "warning" : "local"}"></span><span>${this.#escapeHtml(sourceLabel)}</span></span>
+            <span>${this.#escapeHtml(sourceNote)}</span>
+            ${refreshButton}
           </div>
+        </header>
+
+        <div class="usage-overview-grid">
+          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your activity", subtitle: "Tracked on this device" })}
+          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team activity", subtitle: "Across signed-in users" }) : this.#renderScopeUnavailable(state, { canStartSession })}
         </div>
+
+        ${comparisonHtml}
+        ${this.#renderFeedbackSection({ canSubmit: hasSession, canStartSession })}
       </div>
     `;
+
+    container.querySelectorAll("[data-usage-refresh]").forEach((button) => {
+      button.addEventListener("click", () => this.refreshUsageOverview());
+    });
+    container.querySelectorAll("[data-usage-auth]").forEach((button) => {
+      button.addEventListener("click", () => void this.openUsageSession(button));
+    });
+    const feedbackForm = container.querySelector("[data-usage-feedback-form]");
+    feedbackForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.submitUsageFeedback(feedbackForm);
+    });
   }
   setupHeaderRuntime() {
     const header = document.querySelector(".main-header");
@@ -1517,7 +1832,10 @@ class App {
       const tauriRuntime = isTauri();
       const rt = tauriRuntime ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
-      if (tauriRuntime) OracleConnectionService.bindHeaderStatus({ eventBus: this.eventBus });
+      if (tauriRuntime && !this._oracleHeaderInitRequested) {
+        this._oracleHeaderInitRequested = true;
+        void OracleConnectionService.initializeHeaderStatus({ eventBus: this.eventBus });
+      }
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init

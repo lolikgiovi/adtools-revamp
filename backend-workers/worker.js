@@ -7,7 +7,13 @@
 import { corsHeaders, methodNotAllowed } from './src/utils/cors.js';
 
 // Routes
-import { handleAnalyticsBatchPost, handleAnalyticsLogPost, handleAnalyticsErrorPost } from './src/routes/analytics.js';
+import {
+  handleAnalyticsBatchPost,
+  handleAnalyticsLogPost,
+  handleAnalyticsErrorPost,
+  handleAnalyticsOverviewGet,
+  handleImprovementFeedbackPost,
+} from './src/routes/analytics.js';
 import { getSession, handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
 import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
@@ -105,7 +111,7 @@ export default {
       return handleRegister(request, env);
     }
 
-    // Analytics routes (batch and live log only)
+    // Analytics routes (authenticated ingestion and user-facing overview)
     // Device routes
     if (url.pathname === "/device/version") {
       if (method !== "PATCH") return methodNotAllowed();
@@ -122,6 +128,14 @@ export default {
     }
     if (url.pathname === "/analytics/error") {
       if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsErrorPost);
+      return methodNotAllowed();
+    }
+    if (url.pathname === "/analytics/overview") {
+      if (method === "GET") return handleAuthenticatedAnalytics(request, env, handleAnalyticsOverviewGet);
+      return methodNotAllowed();
+    }
+    if (url.pathname === "/feedback/improvement") {
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleImprovementFeedbackPost);
       return methodNotAllowed();
     }
 

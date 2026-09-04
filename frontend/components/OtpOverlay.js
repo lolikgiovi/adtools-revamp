@@ -115,6 +115,7 @@ export async function openOtpOverlay({
           return 0;
         }
       };
+      let countdownTimer = null;
 
       // Initialize status
       if (!email) {
@@ -131,7 +132,6 @@ export async function openOtpOverlay({
         }
       }
 
-      let countdownTimer = null;
       function disableWithCountdown(button, ms) {
         clearInterval(countdownTimer);
         let remain = Math.ceil(ms / 1000);
