@@ -13,7 +13,20 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta, summarizeFiles, summarizeText } from "../../core/AnalyticsMeta.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import * as IndexedDBManager from "./indexeddb-manager.js";
-import html2canvas from "html2canvas";
+
+let html2canvasPromise = null;
+
+function loadHtml2Canvas() {
+  if (!html2canvasPromise) {
+    html2canvasPromise = import("html2canvas")
+      .then((module) => module.default || module)
+      .catch((error) => {
+        html2canvasPromise = null;
+        throw error;
+      });
+  }
+  return html2canvasPromise;
+}
 
 export class MergeSqlTool extends BaseTool {
   constructor(eventBus) {
@@ -40,6 +53,7 @@ export class MergeSqlTool extends BaseTool {
     this.draggedCard = null;
     this.dragCardStartY = null;
     this.saveDebounceTimer = null;
+    this.reportImageActionPromises = new Map();
   }
 
   getIconSvg() {
@@ -84,6 +98,7 @@ export class MergeSqlTool extends BaseTool {
   }
 
   onUnmount() {
+    this.reportImageActionPromises?.clear();
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
     }
@@ -2105,6 +2120,7 @@ export class MergeSqlTool extends BaseTool {
     const bgColor = computedBg && computedBg !== "rgba(0, 0, 0, 0)" ? computedBg : "#ffffff";
 
     try {
+      const html2canvas = await loadHtml2Canvas();
       const canvas = await html2canvas(reportContent, {
         backgroundColor: bgColor,
         scale: 2,
@@ -2131,7 +2147,31 @@ export class MergeSqlTool extends BaseTool {
     }
   }
 
+  async runReportImageAction(actionId, action) {
+    if (!this.reportImageActionPromises) this.reportImageActionPromises = new Map();
+    const existingAction = this.reportImageActionPromises.get(actionId);
+    if (existingAction) return existingAction;
+
+    const buttonId = actionId === "copy" ? "merge-sql-copy-report-image-btn" : "merge-sql-download-report-image-btn";
+    const button = this.container?.querySelector(`#${buttonId}`) || document.getElementById(buttonId);
+    const wasDisabled = button?.disabled;
+    if (button) button.disabled = true;
+
+    const operation = Promise.resolve().then(action);
+    this.reportImageActionPromises.set(actionId, operation);
+    try {
+      return await operation;
+    } finally {
+      if (button) button.disabled = wasDisabled ?? false;
+      if (this.reportImageActionPromises.get(actionId) === operation) this.reportImageActionPromises.delete(actionId);
+    }
+  }
+
   async handleCopyReportImage() {
+    return this.runReportImageAction("copy", () => this._handleCopyReportImage());
+  }
+
+  async _handleCopyReportImage() {
     if (!this.result?.report) {
       this.showError("No report data to capture");
       return;
@@ -2141,27 +2181,32 @@ export class MergeSqlTool extends BaseTool {
       const canvas = await this.captureReportImage();
       if (!canvas) return;
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          this.showError("Failed to generate image");
-          return;
-        }
-        try {
-          if (window.__TAURI__) {
-            const { Image } = await import("@tauri-apps/api/image");
-            const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
-            const pngBytes = new Uint8Array(await blob.arrayBuffer());
-            const tauriImage = await Image.fromBytes(pngBytes);
-            await writeImage(tauriImage);
-          } else {
-            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      await new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            this.showError("Failed to generate image");
+            resolve();
+            return;
           }
-          this.showSuccess("Report image copied to clipboard!");
-        } catch (clipboardError) {
-          console.error("Clipboard image write failed:", clipboardError);
-          this.showError("Failed to copy image to clipboard. Try Download instead.");
-        }
-      }, "image/png");
+          try {
+            if (window.__TAURI__) {
+              const { Image } = await import("@tauri-apps/api/image");
+              const { writeImage } = await import("@tauri-apps/plugin-clipboard-manager");
+              const pngBytes = new Uint8Array(await blob.arrayBuffer());
+              const tauriImage = await Image.fromBytes(pngBytes);
+              await writeImage(tauriImage);
+            } else {
+              await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+            }
+            this.showSuccess("Report image copied to clipboard!");
+          } catch (clipboardError) {
+            console.error("Clipboard image write failed:", clipboardError);
+            this.showError("Failed to copy image to clipboard. Try Download instead.");
+          } finally {
+            resolve();
+          }
+        }, "image/png");
+      });
     } catch (error) {
       console.error("Image capture failed:", error);
       this.showError("Failed to capture report image");
@@ -2169,6 +2214,10 @@ export class MergeSqlTool extends BaseTool {
   }
 
   async handleDownloadReportImage() {
+    return this.runReportImageAction("download", () => this._handleDownloadReportImage());
+  }
+
+  async _handleDownloadReportImage() {
     if (!this.result?.report) {
       this.showError("No report data to download");
       return;

@@ -7,6 +7,7 @@ class Router {
     this.eventBus = eventBus;
     this.routes = new Map();
     this.currentRoute = null;
+    this.navigationId = 0;
     this.defaultRoute = "home";
 
     this.init();
@@ -49,6 +50,7 @@ class Router {
    * Handle route changes
    */
   handleRouteChange() {
+    const navigationId = ++this.navigationId;
     const hash = window.location.hash.slice(1) || this.defaultRoute;
     const hashParts = hash.split("/");
     const path = hashParts[0];
@@ -59,7 +61,7 @@ class Router {
       const handler = this.routes.get(path);
 
       try {
-        handler({ path, params, query: this.parseQuery() });
+        handler({ path, params, query: this.parseQuery(), navigationId });
         this.eventBus.emit("route:changed", {
           path,
           params,
@@ -99,6 +101,16 @@ class Router {
    */
   getCurrentRoute() {
     return this.currentRoute;
+  }
+
+  /**
+   * Get the monotonically increasing identity of the current navigation.
+   * Async route handlers use this to ignore work that completed after a
+   * newer navigation started.
+   * @returns {number}
+   */
+  getCurrentNavigationId() {
+    return this.navigationId;
   }
 
   /**

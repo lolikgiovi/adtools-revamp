@@ -1,5 +1,18 @@
-import MinifyWorker from "../../html-editor/minify.worker.js?worker";
 import { UsageTracker } from "../../../core/UsageTracker.js";
+
+let minifyWorkerPromise = null;
+
+function loadMinifyWorker() {
+  if (!minifyWorkerPromise) {
+    minifyWorkerPromise = import("../../html-editor/minify.worker.js?worker")
+      .then((module) => module.default || module)
+      .catch((error) => {
+        minifyWorkerPromise = null;
+        throw error;
+      });
+  }
+  return minifyWorkerPromise;
+}
 export class AttachmentProcessorService {
   constructor() {
     this.attachmentsContainer = null;
@@ -184,6 +197,7 @@ export class AttachmentProcessorService {
   }
 
   async #minifyHtmlWithWorker(html, tableName) {
+    const MinifyWorker = await loadMinifyWorker();
     return new Promise((resolve, reject) => {
       const worker = new MinifyWorker();
       const cleanup = () => {

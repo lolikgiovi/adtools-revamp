@@ -1,10 +1,22 @@
 /**
  * Unit tests for file-parser.js
  */
-import { describe, it, expect } from "vitest";
-import { parseCSVText, getFileExtension, isSupported, filterSupportedFiles, SUPPORTED_EXTENSIONS } from "../lib/file-parser.js";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import {
+  parseCSV,
+  parseCSVText,
+  parseExcel,
+  getFileExtension,
+  isSupported,
+  filterSupportedFiles,
+  SUPPORTED_EXTENSIONS,
+} from "../lib/file-parser.js";
 
 describe("FileParser", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   describe("getFileExtension", () => {
     it("extracts extension from filename", () => {
       expect(getFileExtension("data.xlsx")).toBe("xlsx");
@@ -143,6 +155,81 @@ describe("FileParser", () => {
       const result = parseCSVText(csv);
 
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe("worker and fallback parsing", () => {
+    it("falls back to the core parser when workers are unavailable", async () => {
+      vi.stubGlobal("Worker", undefined);
+      const result = await parseCSV({ name: "fallback.csv", text: async () => "name,value\nAda,1" });
+
+      expect(result.headers).toEqual(["name", "value"]);
+      expect(result.rows).toEqual([{ name: "Ada", value: "1" }]);
+      expect(result.metadata.fileName).toBe("fallback.csv");
+    });
+
+    it("transfers Excel input to a short-lived worker", async () => {
+      const arrayBuffer = new ArrayBuffer(8);
+      const workerCalls = [];
+      let workerInstance;
+      class FakeWorker {
+        constructor(url, options) {
+          workerInstance = this;
+          this.url = url;
+          this.options = options;
+        }
+
+        postMessage(message, transferList) {
+          workerCalls.push({ message, transferList });
+          queueMicrotask(() => {
+            this.onmessage?.({
+              data: {
+                ok: true,
+                result: {
+                  headers: ["id"],
+                  rows: [{ id: "1" }],
+                  metadata: { fileName: message.fileName, rowCount: 1, columnCount: 1 },
+                },
+              },
+            });
+          });
+        }
+
+        terminate() {
+          this.terminated = true;
+        }
+      }
+
+      vi.stubGlobal("Worker", FakeWorker);
+      const result = await parseExcel({ name: "data.xlsx", arrayBuffer: async () => arrayBuffer });
+
+      expect(workerCalls[0].message.operation).toBe("excel");
+      expect(workerCalls[0].message.arrayBuffer).toBe(arrayBuffer);
+      expect(workerCalls[0].transferList).toEqual([arrayBuffer]);
+      expect(workerInstance.options).toEqual({ type: "module" });
+      expect(workerInstance.terminated).toBe(true);
+      expect(result.metadata.fileName).toBe("data.xlsx");
+    });
+
+    it("keeps worker parse failures as parse failures", async () => {
+      let workerInstance;
+      class FailingWorker {
+        constructor() {
+          workerInstance = this;
+        }
+
+        postMessage() {
+          queueMicrotask(() => this.onerror?.({ message: "malformed workbook" }));
+        }
+
+        terminate() {
+          this.terminated = true;
+        }
+      }
+
+      vi.stubGlobal("Worker", FailingWorker);
+      await expect(parseCSV({ name: "bad.csv", text: async () => "a,b\n1,2" })).rejects.toThrow("malformed workbook");
+      expect(workerInstance.terminated).toBe(true);
     });
   });
 });

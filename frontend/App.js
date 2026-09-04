@@ -39,6 +39,7 @@ class App {
     this.pageComponents = new Map();
     this.pendingAssetRecoveryReload = false;
     this.currentTool = null;
+    this.currentShellPage = null;
     this.mainContent = null;
     this.toolsConfigMap = new Map();
     this.categoriesConfigMap = new Map();
@@ -236,20 +237,51 @@ class App {
     return getIconSvg(iconName) || this.sidebar?.getToolIcon(iconName);
   }
 
+  isNavigationCurrent(navigationId, expectedPath) {
+    if (navigationId === undefined || navigationId === null) return true;
+
+    const currentNavigationId = this.router?.getCurrentNavigationId?.();
+    const currentRoute = this.router?.getCurrentRoute?.();
+    const hashPath = window.location.hash.slice(1).split("/")[0] || this.router?.defaultRoute || "home";
+
+    return currentNavigationId === navigationId && currentRoute === expectedPath && hashPath === expectedPath;
+  }
+
+  clearCurrentShellPage() {
+    const page = this.currentShellPage;
+    if (!page) return;
+
+    this.currentShellPage = null;
+    this.disposeShellPage(page);
+  }
+
+  disposeShellPage(page) {
+    if (!page) return;
+    try {
+      page.deactivate?.();
+    } catch (_) {}
+    try {
+      page.unmount?.();
+    } catch (_) {}
+  }
+
   /**
    * Setup routing
    */
   setupRoutes() {
     // Home route
-    this.router.register("home", () => {
-      this.showHome();
+    this.router.register("home", ({ navigationId } = {}) => {
+      this.showHome(navigationId);
     });
 
     // Tool routes
     this.toolDefinitions.forEach((definition, toolId) => {
-      this.router.register(toolId, () => {
+      this.router.register(toolId, ({ navigationId } = {}) => {
         const data = this._routeData?.[toolId] || null;
-        this.showTool(toolId, data).catch((error) => {
+        this.showTool(toolId, data, navigationId).catch((error) => {
+          if (!this.isNavigationCurrent(navigationId, toolId)) {
+            return;
+          }
           if (this.isAssetRecoveryHandled(error)) {
             return;
           }
@@ -263,15 +295,17 @@ class App {
     });
 
     // Settings route
-    this.router.register("settings", () => {
-      this.showSettings().catch((error) => {
+    this.router.register("settings", ({ navigationId } = {}) => {
+      this.showSettings(navigationId).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "settings")) return;
         console.error("Failed to show settings page:", error);
       });
     });
 
     // About route
-    this.router.register("about", () => {
-      this.showAbout().catch((error) => {
+    this.router.register("about", ({ navigationId } = {}) => {
+      this.showAbout(navigationId).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "about")) return;
         console.error("Failed to show about page:", error);
       });
     });
@@ -279,26 +313,29 @@ class App {
     // Feedback route removed
 
     // Register route for onboarding
-    this.router.register("register", () => {
+    this.router.register("register", ({ navigationId } = {}) => {
       if (localStorage.getItem("user.registered") === "true") {
         this.router.navigate("home");
         return;
       }
-      this.showRegister().catch((error) => {
+      this.showRegister(navigationId).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "register")) return;
         console.error("Failed to show register page:", error);
       });
     });
 
     // Analytics dashboard (no sidebar entry, direct URL access only)
-    this.router.register("analytics-dashboard", () => {
-      this.showAnalyticsDashboard().catch((error) => {
+    this.router.register("analytics-dashboard", ({ navigationId } = {}) => {
+      this.showAnalyticsDashboard(navigationId).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "analytics-dashboard")) return;
         console.error("Failed to show analytics dashboard:", error);
       });
     });
 
     // Manual account approvals (no sidebar entry, direct #approval access)
-    this.router.register("approval", () => {
-      this.showApproval().catch((error) => {
+    this.router.register("approval", ({ navigationId } = {}) => {
+      this.showApproval(navigationId).catch((error) => {
+        if (!this.isNavigationCurrent(navigationId, "approval")) return;
         console.error("Failed to show approval dashboard:", error);
       });
     });
@@ -311,19 +348,23 @@ class App {
   /**
    * Show home page
    */
-  showHome() {
+  showHome(navigationId = null) {
+    if (!this.isNavigationCurrent(navigationId, "home")) return;
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
     }
     this.updateBreadcrumb("Home", true);
+    this.clearCurrentShellPage();
     this.clearCurrentTool();
     this.setMainContentFlush(false);
 
     const runtimeIsTauri = isTauri();
     if (!runtimeIsTauri && !this._runtimeRetryHome) {
       this._runtimeRetryHome = true;
-      setTimeout(() => this.showHome(), 150);
+      setTimeout(() => {
+        if (this.isNavigationCurrent(navigationId, "home")) this.showHome(navigationId);
+      }, 150);
     }
     const eligibleTools = this.getVisibleToolDefinitions({ runtimeIsTauri, forHome: true });
 
@@ -369,10 +410,13 @@ class App {
       this.renderUsagePanel();
     }
 
-    this.eventBus.emit("page:changed", { page: "home" });
+    if (this.isNavigationCurrent(navigationId, "home")) {
+      this.eventBus.emit("page:changed", { page: "home" });
+    }
   }
 
-  async showTool(toolId, routeData = null) {
+  async showTool(toolId, routeData = null, navigationId = null) {
+    if (!this.isNavigationCurrent(navigationId, toolId)) return;
     if (localStorage.getItem("user.registered") !== "true") {
       this.router.navigate("register");
       return;
@@ -395,6 +439,7 @@ class App {
       return;
     }
 
+    this.clearCurrentShellPage();
     if (this.currentTool && this.currentTool.id !== toolId) {
       this.clearCurrentTool();
     }
@@ -409,14 +454,16 @@ class App {
     const tool = await this.loadWithAssetRecovery(() => this.ensureToolLoaded(toolId), {
       id: toolId,
       label: definition.name,
+      isCurrent: () => this.isNavigationCurrent(navigationId, toolId),
     });
+    if (!tool || !this.isNavigationCurrent(navigationId, toolId)) return;
     this.cancelWarmToolDisposal(toolId);
     this.clearAssetRecoveryState(toolId);
     this.updateBreadcrumb(definition.name);
 
     this.currentTool = tool;
 
-    if (this.mainContent) {
+    if (this.mainContent && this.isNavigationCurrent(navigationId, toolId)) {
       const toolRoot = this.ensureToolRoot(toolId);
       const canReuseWarmDom = tool.container === toolRoot && toolRoot.childNodes.length > 0;
 
@@ -441,63 +488,72 @@ class App {
       } catch (_) {}
     }
 
-    this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
-    UsageTracker.trackFeature(toolId, "open", { route: `#${toolId}` }, 2000);
+    if (this.isNavigationCurrent(navigationId, toolId)) {
+      this.eventBus.emit("page:changed", { page: "tool", toolId, title: definition.name });
+      UsageTracker.trackFeature(toolId, "open", { route: `#${toolId}` }, 2000);
+    }
   }
 
-  showSettings() {
+  showSettings(navigationId = null) {
     return this.showShellPage({
       pageId: "settings",
       title: "Settings",
       eventName: "settings",
+      navigationId,
       loader: () => import("./pages/settings/main.js").then((module) => module.SettingsPage),
       createOptions: () => ({ eventBus: this.eventBus, themeManager: this.themeManager }),
     });
   }
 
-  showAbout() {
+  showAbout(navigationId = null) {
     return this.showShellPage({
       pageId: "about",
       title: "About",
       eventName: "about",
+      navigationId,
       loader: () => import("./pages/about/main.js").then((module) => module.AboutPage),
       createOptions: () => ({ eventBus: this.eventBus }),
     });
   }
 
-  showAnalyticsDashboard() {
+  showAnalyticsDashboard(navigationId = null) {
     return this.showShellPage({
       pageId: "analytics-dashboard",
       title: "Analytics Dashboard",
       eventName: "analytics-dashboard",
+      navigationId,
       loader: () => import("./pages/analytics-dashboard/main.js").then((module) => module.AnalyticsDashboardPage),
       createOptions: () => ({ eventBus: this.eventBus }),
     });
   }
 
-  showApproval() {
+  showApproval(navigationId = null) {
     return this.showShellPage({
       pageId: "approval",
       title: "Account Approval",
       eventName: "approval",
+      navigationId,
       loader: () => import("./pages/approval/main.js").then((module) => module.ApprovalPage),
       createOptions: () => ({}),
     });
   }
 
-  showRegister() {
+  showRegister(navigationId = null) {
     return this.showShellPage({
       pageId: "register",
       title: "Register",
       eventName: "register",
+      navigationId,
       loader: () => import("./pages/register/main.js").then((module) => module.RegisterPage),
       createOptions: () => ({ eventBus: this.eventBus }),
     });
   }
 
-  async showShellPage({ pageId, title, eventName, loader, createOptions }) {
+  async showShellPage({ pageId, title, eventName, loader, createOptions, navigationId = null }) {
+    if (!this.isNavigationCurrent(navigationId, pageId)) return;
     // Update breadcrumb for settings
     this.updateBreadcrumb(title);
+    this.clearCurrentShellPage();
     this.clearCurrentTool();
     this.setMainContentFlush(false);
     this.renderLoadingState({
@@ -508,14 +564,28 @@ class App {
     const PageClass = await this.loadWithAssetRecovery(() => this.loadPageComponent(pageId, loader), {
       id: pageId,
       label: title,
+      isCurrent: () => this.isNavigationCurrent(navigationId, pageId),
     });
+    if (!PageClass || !this.isNavigationCurrent(navigationId, pageId)) return;
     this.clearAssetRecoveryState(pageId);
     if (this.mainContent) {
       const page = new PageClass(createOptions?.() || {});
-      page.mount(this.mainContent);
+      try {
+        await page.mount(this.mainContent);
+      } catch (error) {
+        this.disposeShellPage(page);
+        throw error;
+      }
+      if (!this.isNavigationCurrent(navigationId, pageId)) {
+        this.disposeShellPage(page);
+        return;
+      }
+      this.currentShellPage = page;
     }
 
-    this.eventBus.emit("page:changed", { page: eventName, title });
+    if (this.isNavigationCurrent(navigationId, pageId)) {
+      this.eventBus.emit("page:changed", { page: eventName, title });
+    }
   }
 
   // Feedback page removed
@@ -1100,14 +1170,17 @@ class App {
     return PageClass;
   }
 
-  async loadWithAssetRecovery(loadFn, { id, label }) {
+  async loadWithAssetRecovery(loadFn, { id, label, isCurrent = () => true }) {
     let lastError;
 
     for (let attempt = 0; attempt <= ASSET_LOAD_MAX_RETRIES; attempt++) {
+      if (!isCurrent()) return null;
       try {
-        return await loadFn();
+        const result = await loadFn();
+        return isCurrent() ? result : null;
       } catch (error) {
         lastError = error;
+        if (!isCurrent()) return null;
         if (!this.shouldRecoverAssetLoad(error)) {
           throw error;
         }
@@ -1121,6 +1194,7 @@ class App {
         }
 
         const nextAttempt = attempt + 1;
+        if (!isCurrent()) return null;
         console.warn(
           `[AssetLoadRecovery] Failed to load assets for ${id}; retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}`,
           error
@@ -1130,6 +1204,7 @@ class App {
           message: `Network hiccup while loading assets. Retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}...`,
         });
         await this.wait(ASSET_LOAD_RETRY_DELAY_MS);
+        if (!isCurrent()) return null;
       }
     }
 
@@ -1268,6 +1343,8 @@ class App {
       this.currentTool.deactivate();
       this.currentTool.unmount();
     }
+    this.currentTool = null;
+    this.clearCurrentShellPage();
     this.disposeAllWarmTools("app-destroy");
 
     console.log("AD Tools app destroyed");

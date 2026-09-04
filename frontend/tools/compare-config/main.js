@@ -46,6 +46,8 @@ class CompareConfigTool extends BaseTool {
     this.savedConnections = [];
     this._sidecarStatusUnsubscribe = null;
     this._documentListenerCleanups = [];
+    this._unifiedLoadRequestId = 0;
+    this._unifiedParseControllers = new Map();
 
     this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
     this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
@@ -1176,6 +1178,7 @@ class CompareConfigTool extends BaseTool {
   }
 
   onUnmount() {
+    this.invalidateUnifiedLoadRequests();
     this._documentListenerCleanups.splice(0).forEach((cleanup) => {
       try {
         cleanup();
@@ -1214,6 +1217,21 @@ class CompareConfigTool extends BaseTool {
     } catch (_) {
       // Status UI is optional while resuming.
     }
+  }
+
+  invalidateUnifiedLoadRequests() {
+    this._unifiedLoadRequestId = (this._unifiedLoadRequestId || 0) + 1;
+    const controllers = this._unifiedParseControllers;
+    for (const controller of controllers?.values?.() || []) {
+      try {
+        controller.abort();
+      } catch (_) {}
+    }
+    controllers?.clear?.();
+  }
+
+  isUnifiedLoadCurrent(requestId) {
+    return requestId === this._unifiedLoadRequestId && Boolean(this.container);
   }
 
   // =============================================================================
@@ -2753,6 +2771,8 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
+    this.invalidateUnifiedLoadRequests();
+
     // Show loading indicator for file upload (especially for multiple files)
     const showLoadingIndicator = supportedFiles.length > 1;
     if (showLoadingIndicator) {
@@ -2812,6 +2832,7 @@ class CompareConfigTool extends BaseTool {
    * @param {string} sourceKey - 'sourceA' or 'sourceB'
    */
   async clearUnifiedExcelFiles(sourceKey) {
+    this.invalidateUnifiedLoadRequests();
     // Clear from IndexedDB
     if (IndexedDBManager.isIndexedDBAvailable()) {
       for (const fileWrapper of this.unified[sourceKey].excelFiles) {
@@ -2858,6 +2879,7 @@ class CompareConfigTool extends BaseTool {
 
     // Clear selection if removed file was selected
     if (this.unified[sourceKey].selectedExcelFile?.id === fileId) {
+      this.invalidateUnifiedLoadRequests();
       this.unified[sourceKey].selectedExcelFile = null;
       this.unified[sourceKey].file = null;
       this.unified[sourceKey].parsedData = null;
@@ -3148,6 +3170,7 @@ class CompareConfigTool extends BaseTool {
     const file = this.unified[sourceKey].excelFiles.find((f) => f.id === fileId);
     if (!file) return;
 
+    this.invalidateUnifiedLoadRequests();
     this.unified[sourceKey].selectedExcelFile = file;
     this.unified[sourceKey].file = file.file; // For backward compat
     this.unified[sourceKey].parsedData = null; // Will be parsed on load
@@ -3226,6 +3249,8 @@ class CompareConfigTool extends BaseTool {
    * Load data from both sources
    */
   async loadUnifiedData() {
+    this.invalidateUnifiedLoadRequests();
+    const requestId = this._unifiedLoadRequestId;
     if (!this.canLoadUnifiedData()) {
       this.eventBus.emit("notification:show", {
         type: "warning",
@@ -3267,9 +3292,10 @@ class CompareConfigTool extends BaseTool {
     try {
       // Load both sources in parallel (schema for oracle-table, full data for others)
       const [dataA, dataB] = await Promise.all([
-        isSchemaFirstA ? this.fetchUnifiedSourceSchema("A") : this.fetchUnifiedSourceData("A"),
-        isSchemaFirstB ? this.fetchUnifiedSourceSchema("B") : this.fetchUnifiedSourceData("B"),
+        isSchemaFirstA ? this.fetchUnifiedSourceSchema("A") : this.fetchUnifiedSourceData("A", { requestId }),
+        isSchemaFirstB ? this.fetchUnifiedSourceSchema("B") : this.fetchUnifiedSourceData("B", { requestId }),
       ]);
+      if (!this.isUnifiedLoadCurrent(requestId)) return;
 
       this.unified.sourceA.data = dataA;
       this.unified.sourceA.dataLoaded = !isSchemaFirstA;
@@ -3353,6 +3379,7 @@ class CompareConfigTool extends BaseTool {
 
       // Load saved preferences for this table (if any)
       await this.loadUnifiedTablePrefsFromIndexedDB();
+      if (!this.isUnifiedLoadCurrent(requestId)) return;
 
       this.updateUnifiedProgressStep("reconcile", "done", `${this.unified.fields.common.length} common fields`);
 
@@ -3361,9 +3388,11 @@ class CompareConfigTool extends BaseTool {
 
       // Show field reconciliation UI
       await new Promise((r) => setTimeout(r, 300));
+      if (!this.isUnifiedLoadCurrent(requestId)) return;
       this.hideUnifiedProgress();
       this.showUnifiedFieldReconciliation();
     } catch (error) {
+      if (!this.isUnifiedLoadCurrent(requestId)) return;
       console.error("Failed to load unified data:", error);
       this.hideUnifiedProgress();
 
@@ -3541,9 +3570,15 @@ class CompareConfigTool extends BaseTool {
   /**
    * Fetch data from a unified source
    */
-  async fetchUnifiedSourceData(source) {
+  async fetchUnifiedSourceData(source, { requestId = null } = {}) {
     const sourceKey = source === "A" ? "sourceA" : "sourceB";
     const config = this.unified[sourceKey];
+
+    if (requestId !== null && !this.isUnifiedLoadCurrent(requestId)) {
+      const error = new Error("Unified source load was cancelled");
+      error.name = "AbortError";
+      throw error;
+    }
 
     if (config.type === "oracle") {
       const sourceConfig = {
@@ -3564,7 +3599,20 @@ class CompareConfigTool extends BaseTool {
       }
       // Parse the file if not already parsed
       if (!config.parsedData) {
-        config.parsedData = await FileParser.parseFile(excelFile);
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const controllerKey = `${requestId ?? "direct"}:${sourceKey}`;
+        if (controller) this._unifiedParseControllers.set(controllerKey, controller);
+        try {
+          const parsedData = await FileParser.parseFile(excelFile, { signal: controller?.signal });
+          if (requestId !== null && !this.isUnifiedLoadCurrent(requestId)) {
+            const error = new Error("Unified source load was cancelled");
+            error.name = "AbortError";
+            throw error;
+          }
+          config.parsedData = parsedData;
+        } finally {
+          this._unifiedParseControllers.delete(controllerKey);
+        }
       }
       return await UnifiedDataService.fetchData({
         type: SourceType.EXCEL,

@@ -16,3 +16,18 @@ it("handles route data when navigating to the current route", () => {
     data: { tableName: "CONFIG.APP_CONFIG" },
   });
 });
+
+it("assigns a new navigation identity to every route invocation", () => {
+  window.location.hash = "home";
+  const eventBus = { emit: vi.fn() };
+  const router = new Router(eventBus);
+  const contexts = [];
+  router.register("home", (context) => contexts.push(context));
+
+  router.handleRouteChange();
+  router.handleRouteChange();
+
+  expect(contexts.map(({ navigationId }) => navigationId)).toEqual([1, 2]);
+  expect(router.getCurrentNavigationId()).toBe(2);
+  expect(contexts[0]).toMatchObject({ path: "home", params: [], query: {} });
+});

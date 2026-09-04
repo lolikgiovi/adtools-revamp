@@ -1120,9 +1120,11 @@ LIMIT 150`,
 
 const KV_KEY = "analytics-dashboard-config";
 const CACHE_TTL_MS = 60 * 1000;
+const DASHBOARD_CACHE_MAX_ENTRIES = 32;
 const OWNER_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
+const dashboardQueryInFlight = new Map();
 
 function getDefaultTab(id) {
   return DEFAULT_TABS.find((tab) => tab.id === id) || DEFAULT_TABS[0];
@@ -1322,6 +1324,17 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v1`, rangeConfig);
     }
 
+    if (tab.id === "daily" || tab.id === "events") {
+      if (tab.query !== getDefaultTab(tab.id).query) {
+        return dashboardJson(
+          { ok: false, error: `The ${tab.id} tab configuration does not support the built-in pagination contract` },
+          409,
+        );
+      }
+      const pagination = normalizeDashboardPagination(body);
+      return executePaginatedDashboardQuery(env, tab.id, pagination);
+    }
+
     if (tab.id === "tools") {
       return executeToolsQuery(env, "tab:tools:v2", tab.query);
     }
@@ -1380,20 +1393,49 @@ export const handleStatsQuickQueryErrors = withAuth(async (request, env) => {
  * Helper to execute a query and return response
  */
 function getCachedDashboardQueryBody(cacheKey) {
+  const now = Date.now();
+  for (const [key, cachedEntry] of dashboardQueryCache) {
+    if (cachedEntry.expiresAt <= now) dashboardQueryCache.delete(key);
+  }
   const cached = dashboardQueryCache.get(cacheKey);
   if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    dashboardQueryCache.delete(cacheKey);
-    return null;
-  }
+  // Touch the entry so the fixed-size policy is LRU-like for active tabs.
+  dashboardQueryCache.delete(cacheKey);
+  dashboardQueryCache.set(cacheKey, cached);
   return cached.body;
 }
 
 function setCachedDashboardQueryBody(cacheKey, body) {
+  for (const [key, cachedEntry] of dashboardQueryCache) {
+    if (cachedEntry.expiresAt <= Date.now()) dashboardQueryCache.delete(key);
+  }
+  dashboardQueryCache.delete(cacheKey);
   dashboardQueryCache.set(cacheKey, {
     body,
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
+  while (dashboardQueryCache.size > DASHBOARD_CACHE_MAX_ENTRIES) {
+    const oldestKey = dashboardQueryCache.keys().next().value;
+    dashboardQueryCache.delete(oldestKey);
+  }
+}
+
+async function coalesceDashboardQuery(cacheKey, compute) {
+  const cachedBody = getCachedDashboardQueryBody(cacheKey);
+  if (cachedBody) return cachedBody;
+
+  const inFlight = dashboardQueryInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const computation = Promise.resolve().then(compute);
+  dashboardQueryInFlight.set(cacheKey, computation);
+  try {
+    const body = await computation;
+    if (typeof body === "string") setCachedDashboardQueryBody(cacheKey, body);
+    return body;
+  } finally {
+    if (dashboardQueryInFlight.get(cacheKey) === computation) dashboardQueryInFlight.delete(cacheKey);
+  }
 }
 
 function dashboardJson(body, status = 200) {
@@ -1409,20 +1451,14 @@ async function executeOverviewQuery(env, cacheKey) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "overview" }, 200);
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
-    if (cachedBody) {
-      return new Response(cachedBody, {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
-
-    const tables = await getDashboardTables(env);
-    const normalizedUsage7d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("7d"));
-    const normalizedUsage30d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("30d"));
-    const data = [
+    const body = await coalesceDashboardQuery(cacheKey, async () => {
+      const tables = await getDashboardTables(env);
+      const normalizedUsage7d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("7d"));
+      const normalizedUsage30d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("30d"));
+      const metricDefinitions = [
       {
         metric: "Active users today",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["usage_log"],
@@ -1436,7 +1472,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Active users 7d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["usage_log"],
@@ -1450,7 +1486,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Tool opens 7d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["usage_log"],
@@ -1465,7 +1501,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Tracked actions 7d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["usage_log"],
@@ -1480,7 +1516,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Uncaught errors 24h",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["error_events"],
@@ -1494,7 +1530,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Affected users 7d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["error_events"],
@@ -1508,7 +1544,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Most used tool 30d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["usage_log"],
@@ -1526,7 +1562,7 @@ async function executeOverviewQuery(env, cacheKey) {
       },
       {
         metric: "Noisiest error 7d",
-        value: await safeDashboardScalar(
+        value: safeDashboardScalar(
           env,
           tables,
           ["error_events"],
@@ -1541,10 +1577,15 @@ async function executeOverviewQuery(env, cacheKey) {
         ),
         context: "Top uncaught error cluster",
       },
-    ];
-
-    const body = JSON.stringify({ ok: true, data, mode: "computed-overview" });
-    setCachedDashboardQueryBody(cacheKey, body);
+      ];
+      const data = await Promise.all(
+        metricDefinitions.map(async (metric) => ({
+          ...metric,
+          value: await metric.value,
+        })),
+      );
+      return JSON.stringify({ ok: true, data, mode: "computed-overview" });
+    });
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
@@ -2026,24 +2067,114 @@ async function executeQuery(env, cacheKey, query) {
       });
     }
 
-    const cachedBody = getCachedDashboardQueryBody(cacheKey);
-    if (cachedBody) {
-      return new Response(cachedBody, {
-        headers: { "Content-Type": "application/json", ...corsHeaders() },
-      });
-    }
-
-    await prepareDashboardSchema(env, query);
-
-    const result = await env.DB.prepare(query).all();
-    const body = JSON.stringify({ ok: true, data: result.results || [] });
-    setCachedDashboardQueryBody(cacheKey, body);
+    const body = await coalesceDashboardQuery(cacheKey, async () => {
+      await prepareDashboardSchema(env, query);
+      const result = await env.DB.prepare(query).all();
+      return JSON.stringify({ ok: true, data: result.results || [] });
+    });
 
     return new Response(body, {
       headers: { "Content-Type": "application/json", ...corsHeaders() },
     });
   } catch (err) {
     return dashboardJson({ ok: false, error: `Dashboard query failed: ${String(err)}` }, 200);
+  }
+}
+
+function normalizeDashboardPagination(body = {}) {
+  const parsedPage = Number(body.page);
+  const parsedPageSize = Number(body.pageSize);
+  const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? Math.floor(parsedPage) : 1;
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize >= 1 ? Math.min(Math.floor(parsedPageSize), 200) : 100;
+  const search = String(body.search || "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 120);
+  return { page, pageSize, search };
+}
+
+function buildPaginatedDashboardQuery(tabId, pagination) {
+  const { page, pageSize, search } = pagination;
+  const offset = (page - 1) * pageSize;
+  const searchPattern = `%${search}%`;
+  const limit = pageSize + 1;
+
+  if (tabId === "daily") {
+    const query = `SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+      SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
+      COALESCE(d.platform, 'unknown') AS platform,
+      COALESCE(d.app_version, '-') AS app_version,
+      u.tool_id,
+      u.action
+      FROM usage_log u
+      LEFT JOIN device d ON u.device_id = d.device_id
+      WHERE u.user_email != '${OWNER_EMAIL}'
+        AND (
+          ? = ''
+          OR LOWER(STRFTIME('%m-%d / %H:%M', u.created_time)) LIKE ?
+          OR LOWER(SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1)) LIKE ?
+          OR LOWER(COALESCE(d.platform, 'unknown')) LIKE ?
+          OR LOWER(COALESCE(d.app_version, '-')) LIKE ?
+          OR LOWER(COALESCE(u.tool_id, '')) LIKE ?
+          OR LOWER(COALESCE(u.action, '')) LIKE ?
+        )
+      ORDER BY u.created_time DESC
+      LIMIT ? OFFSET ?`;
+    return {
+      query,
+      args: [search, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset],
+    };
+  }
+
+  const query = `SELECT STRFTIME('%m-%d / %H:%M', e.created_time) AS time,
+      u.email, d.platform, e.feature_id, e.action, e.properties
+      FROM events e
+      JOIN device d ON e.device_id = d.device_id
+      JOIN users u ON d.user_id = u.id
+      WHERE u.email != '${OWNER_EMAIL}'
+        AND (
+          ? = ''
+          OR LOWER(STRFTIME('%m-%d / %H:%M', e.created_time)) LIKE ?
+          OR LOWER(COALESCE(u.email, '')) LIKE ?
+          OR LOWER(COALESCE(d.platform, '')) LIKE ?
+          OR LOWER(COALESCE(e.feature_id, '')) LIKE ?
+          OR LOWER(COALESCE(e.action, '')) LIKE ?
+          OR LOWER(COALESCE(e.properties, '')) LIKE ?
+        )
+      ORDER BY e.created_time DESC
+      LIMIT ? OFFSET ?`;
+  return {
+    query,
+    args: [search, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset],
+  };
+}
+
+async function executePaginatedDashboardQuery(env, tabId, pagination) {
+  if (!env.DB) return dashboardJson({ ok: false, error: "Database not available", tabId }, 200);
+
+  const { query, args } = buildPaginatedDashboardQuery(tabId, pagination);
+  const cacheKey = `tab:${tabId}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}`;
+  try {
+    const body = await coalesceDashboardQuery(cacheKey, async () => {
+      await prepareDashboardSchema(env, query);
+      const statement = env.DB.prepare(query);
+      const result = await (typeof statement.bind === "function" ? statement.bind(...args) : statement).all();
+      const rows = result.results || [];
+      return JSON.stringify({
+        ok: true,
+        data: rows.slice(0, pagination.pageSize),
+        pagination: {
+          page: pagination.page,
+          pageSize: pagination.pageSize,
+          hasMore: rows.length > pagination.pageSize,
+        },
+      });
+    });
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Dashboard query failed: ${String(err)}`, tabId }, 200);
   }
 }
 

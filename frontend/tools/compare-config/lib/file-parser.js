@@ -1,9 +1,8 @@
 /**
  * FileParser - Parse Excel (.xlsx, .xls) and CSV files
- * Uses SheetJS (xlsx) for Excel parsing and native FileReader for CSV
+ * Uses a short-lived module worker for parsing, with a lazy main-thread
+ * fallback for constrained runtimes.
  */
-
-import * as XLSX from "xlsx";
 
 /**
  * Supported file extensions
@@ -15,15 +14,15 @@ export const SUPPORTED_EXTENSIONS = ["xlsx", "xls", "csv"];
  * @param {File} file - File object from input or drag-drop
  * @returns {Promise<ParseResult>} Parsed data with headers, rows, and metadata
  */
-export async function parseFile(file) {
+export async function parseFile(file, options = {}) {
   const ext = getFileExtension(file.name);
 
   switch (ext) {
     case "xlsx":
     case "xls":
-      return parseExcel(file);
+      return parseExcel(file, options);
     case "csv":
-      return parseCSV(file);
+      return parseCSV(file, options);
     default:
       throw new Error(`Unsupported file format: .${ext}. Supported formats: ${SUPPORTED_EXTENSIONS.join(", ")}`);
   }
@@ -34,50 +33,19 @@ export async function parseFile(file) {
  * @param {File} file - Excel file
  * @returns {Promise<ParseResult>}
  */
-export async function parseExcel(file) {
+export async function parseExcel(file, options = {}) {
   const arrayBuffer = await file.arrayBuffer();
-  const workbook = XLSX.read(arrayBuffer, { type: "array" });
+  throwIfAborted(options.signal);
+  const workerResult = await parseWithWorker(
+    { operation: "excel", fileName: file.name, arrayBuffer },
+    [arrayBuffer],
+    options.signal,
+  );
+  if (workerResult !== WORKER_UNAVAILABLE) return workerResult;
 
-  // Always use first sheet by index
-  const firstSheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[firstSheetName];
-
-  if (!sheet) {
-    throw new Error(`No sheets found in file: ${file.name}`);
-  }
-
-  // Parse sheet to array of arrays (header: 1 means first row is data, not headers)
-  const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-  if (rawData.length === 0) {
-    return createEmptyResult(file.name, firstSheetName, workbook.SheetNames);
-  }
-
-  // First row is headers
-  const headers = rawData[0].map((h, i) => normalizeHeader(h, i));
-  const dataRows = rawData.slice(1);
-
-  // Convert to array of objects
-  const rows = dataRows.map((row) => {
-    const obj = {};
-    headers.forEach((header, i) => {
-      obj[header] = row[i] ?? "";
-    });
-    return obj;
-  });
-
-  return {
-    headers,
-    rows,
-    metadata: {
-      fileName: file.name,
-      sheetName: firstSheetName,
-      totalSheets: workbook.SheetNames.length,
-      allSheetNames: workbook.SheetNames,
-      rowCount: rows.length,
-      columnCount: headers.length,
-    },
-  };
+  const { parseExcelBuffer } = await import("./file-parser-core.js");
+  throwIfAborted(options.signal);
+  return parseExcelBuffer(arrayBuffer, file.name);
 }
 
 /**
@@ -85,39 +53,78 @@ export async function parseExcel(file) {
  * @param {File} file - CSV file
  * @returns {Promise<ParseResult>}
  */
-export async function parseCSV(file) {
+export async function parseCSV(file, options = {}) {
   const text = await file.text();
-  const lines = parseCSVText(text);
+  throwIfAborted(options.signal);
+  const workerResult = await parseWithWorker({ operation: "csv", fileName: file.name, text }, [], options.signal);
+  if (workerResult !== WORKER_UNAVAILABLE) return workerResult;
 
-  if (lines.length === 0) {
-    return createEmptyResult(file.name, null, []);
+  const { parseCSVTextResult } = await import("./file-parser-core.js");
+  throwIfAborted(options.signal);
+  return parseCSVTextResult(text, file.name);
+}
+
+const WORKER_UNAVAILABLE = Symbol("worker-unavailable");
+
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("File parsing was cancelled");
+  error.name = "AbortError";
+  throw error;
+}
+
+function parseWithWorker(message, transferList, signal) {
+  if (typeof Worker === "undefined") return Promise.resolve(WORKER_UNAVAILABLE);
+
+  let worker;
+  try {
+    worker = new Worker(new URL("./file-parser.worker.js", import.meta.url), { type: "module" });
+  } catch (_) {
+    return Promise.resolve(WORKER_UNAVAILABLE);
   }
 
-  // First row is headers
-  const headers = lines[0].map((h, i) => normalizeHeader(h, i));
-  const dataRows = lines.slice(1);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let onAbort;
+    const cleanup = () => {
+      signal?.removeEventListener?.("abort", onAbort);
+      try {
+        worker.terminate();
+      } catch (_) {}
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+    onAbort = () => {
+      const error = new Error("File parsing was cancelled");
+      error.name = "AbortError";
+      finish(reject, error);
+    };
 
-  // Convert to array of objects
-  const rows = dataRows.map((row) => {
-    const obj = {};
-    headers.forEach((header, i) => {
-      obj[header] = row[i] ?? "";
-    });
-    return obj;
+    worker.onmessage = (event) => {
+      const data = event.data || {};
+      if (!data.ok) {
+        finish(reject, new Error(data.error || "File parsing failed"));
+        return;
+      }
+      finish(resolve, data.result);
+    };
+    worker.onerror = (event) => {
+      finish(reject, event instanceof Error ? event : new Error(event?.message || "File parser worker failed"));
+    };
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+
+    try {
+      worker.postMessage(message, transferList);
+    } catch (_) {
+      // A construction/post failure before a usable worker handoff can use
+      // the lazy core fallback. The input buffer is still usable in this path.
+      finish(resolve, WORKER_UNAVAILABLE);
+    }
   });
-
-  return {
-    headers,
-    rows,
-    metadata: {
-      fileName: file.name,
-      sheetName: null,
-      totalSheets: 0,
-      allSheetNames: [],
-      rowCount: rows.length,
-      columnCount: headers.length,
-    },
-  };
 }
 
 /**
@@ -188,42 +195,6 @@ export function parseCSVText(text) {
 export function getFileExtension(filename) {
   const parts = filename.split(".");
   return parts.length > 1 ? parts.pop().toLowerCase() : "";
-}
-
-/**
- * Normalize header name
- * - Converts to string
- * - Trims whitespace
- * - Assigns placeholder for empty headers
- * @param {any} header - Raw header value
- * @param {number} index - Column index (for placeholder)
- * @returns {string}
- */
-function normalizeHeader(header, index) {
-  const str = String(header ?? "").trim();
-  return str || `Column_${String.fromCharCode(65 + (index % 26))}${index >= 26 ? Math.floor(index / 26) : ""}`;
-}
-
-/**
- * Create empty result structure
- * @param {string} fileName
- * @param {string|null} sheetName
- * @param {string[]} allSheetNames
- * @returns {ParseResult}
- */
-function createEmptyResult(fileName, sheetName, allSheetNames) {
-  return {
-    headers: [],
-    rows: [],
-    metadata: {
-      fileName,
-      sheetName,
-      totalSheets: allSheetNames.length,
-      allSheetNames,
-      rowCount: 0,
-      columnCount: 0,
-    },
-  };
 }
 
 /**

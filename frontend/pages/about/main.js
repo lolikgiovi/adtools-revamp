@@ -117,6 +117,8 @@ class AboutPage {
     this.currentItem = null;
     this.searchItems = [];
     this.openDropdown = null;
+    this._documentClickListener = null;
+    this._searchBlurTimer = null;
   }
 
   mount(root) {
@@ -215,19 +217,25 @@ class AboutPage {
       searchInput.addEventListener("keydown", (e) => this.handleSearchKeydown(e));
       searchInput.addEventListener("blur", () => {
         // Delay to allow click on results
-        setTimeout(() => this.closeSearchResults(), 150);
+        if (this._searchBlurTimer) clearTimeout(this._searchBlurTimer);
+        this._searchBlurTimer = setTimeout(() => {
+          this._searchBlurTimer = null;
+          this.closeSearchResults();
+        }, 150);
       });
     }
 
     // Close dropdowns on outside click
-    document.addEventListener("click", (e) => {
+    if (this._documentClickListener) document.removeEventListener("click", this._documentClickListener);
+    this._documentClickListener = (e) => {
       if (!e.target.closest(".tutorial-tab-dropdown")) {
         this.closeAllDropdowns();
       }
       if (!e.target.closest(".tutorial-search-wrapper")) {
         this.closeSearchResults();
       }
-    });
+    };
+    document.addEventListener("click", this._documentClickListener);
   }
 
   handleTabClick(e) {
@@ -271,6 +279,7 @@ class AboutPage {
   }
 
   closeAllDropdowns() {
+    if (!this.container) return;
     this.container.querySelectorAll(".tutorial-tab-dropdown").forEach((dropdown) => {
       const menu = dropdown.querySelector(".tutorial-dropdown-menu");
       const tab = dropdown.querySelector(".tutorial-tab");
@@ -434,6 +443,7 @@ class AboutPage {
   }
 
   closeSearchResults() {
+    if (!this.container) return;
     const resultsContainer = this.container.querySelector("#tutorial-search-results");
     if (resultsContainer) {
       resultsContainer.style.display = "none";
@@ -441,8 +451,23 @@ class AboutPage {
   }
 
   deactivate() {
-    this.closeAllDropdowns();
-    this.closeSearchResults();
+    if (this.container) {
+      this.closeAllDropdowns();
+      this.closeSearchResults();
+    }
+  }
+
+  unmount() {
+    if (this._documentClickListener) {
+      document.removeEventListener("click", this._documentClickListener);
+      this._documentClickListener = null;
+    }
+    if (this._searchBlurTimer) {
+      clearTimeout(this._searchBlurTimer);
+      this._searchBlurTimer = null;
+    }
+    this.container = null;
+    this.openDropdown = null;
   }
 }
 

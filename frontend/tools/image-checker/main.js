@@ -3,6 +3,7 @@ import { ImageCheckerService, BaseUrlService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
+import { IMAGE_CHECK_CONCURRENCY, runWithConcurrency } from "./concurrency.js";
 import "./styles.css";
 
 class CheckImageTool extends BaseTool {
@@ -13,6 +14,7 @@ class CheckImageTool extends BaseTool {
     this.imageCheckerService = new ImageCheckerService(this.baseUrlService);
     this.root = null;
     this.elements = null;
+    this.checkRunId = 0;
     // Track timeout cells for "Retry All Timeouts" feature
     this.timeoutCells = new Map(); // Map<cellId, { originalPath, env, rowIndex, colIndex }>
   }
@@ -33,6 +35,8 @@ class CheckImageTool extends BaseTool {
   }
 
   onUnmount() {
+    this.checkRunId += 1;
+    this.timeoutCells.clear();
     this.root = null;
     this.elements = null;
   }
@@ -172,17 +176,30 @@ class CheckImageTool extends BaseTool {
     } catch (_) {}
 
     // Render the table structure first with loading states
-    this.renderProgressiveTable(imagePaths, baseUrls);
+    const runId = this.beginCheckRun();
+    this.renderProgressiveTable(imagePaths, baseUrls, runId);
 
     // Then fetch each cell progressively
-    this.fetchAllCellsProgressively(imagePaths, baseUrls);
+    this.fetchAllCellsProgressively(imagePaths, baseUrls, runId);
+  }
+
+  beginCheckRun() {
+    this.checkRunId += 1;
+    this.timeoutCells.clear();
+    return this.checkRunId;
+  }
+
+  isCheckRunCurrent(runId) {
+    return runId === this.checkRunId && Boolean(this.root && this.elements?.resultsContainer);
   }
 
   /**
    * Render the table structure with loading spinners in each cell
    */
-  renderProgressiveTable(imagePaths, baseUrls) {
-    this.clearResults();
+  renderProgressiveTable(imagePaths, baseUrls, runId = null) {
+    if (runId === null) runId = this.beginCheckRun();
+    if (!this.isCheckRunCurrent(runId)) return;
+    this.clearResults({ invalidate: false });
     this.timeoutCells.clear(); // Reset timeout tracking
     const resultsContainer = this.elements.resultsContainer;
 
@@ -261,28 +278,29 @@ class CheckImageTool extends BaseTool {
   /**
    * Fetch all cells progressively and update them as results come in
    */
-  async fetchAllCellsProgressively(imagePaths, baseUrls) {
-    const fetchPromises = [];
+  async fetchAllCellsProgressively(imagePaths, baseUrls, runId = this.checkRunId) {
+    if (!this.isCheckRunCurrent(runId)) return;
+    const tasks = [];
     const startTime = Date.now();
 
     imagePaths.forEach((path, rowIndex) => {
       const normalized = this.imageCheckerService.normalizeInput(path);
 
       baseUrls.forEach((env, colIndex) => {
-        const promise = this.fetchAndUpdateCell(path, normalized, env, rowIndex, colIndex);
-        fetchPromises.push(promise);
+        tasks.push(() => this.fetchAndUpdateCell(path, normalized, env, rowIndex, colIndex, runId));
       });
     });
 
     // Wait for all to complete (for analytics)
     try {
-      await Promise.all(fetchPromises);
+      await runWithConcurrency(tasks, IMAGE_CHECK_CONCURRENCY);
+      if (!this.isCheckRunCurrent(runId)) return;
 
       // Track check completion for performance insights
       const durationMs = Date.now() - startTime;
       const timeoutCount = this.timeoutCells.size;
       const totalCells = imagePaths.length * baseUrls.length;
-      const successCells = document.querySelectorAll(".status-cell.success").length;
+      const successCells = this.root.querySelectorAll(".status-cell.success").length;
       const failedCells = totalCells - successCells - timeoutCount;
 
       UsageTracker.trackEvent("check-image", "check_complete", {
@@ -301,24 +319,28 @@ class CheckImageTool extends BaseTool {
   /**
    * Fetch a single image and update its cell
    */
-  async fetchAndUpdateCell(originalPath, normalizedPath, env, rowIndex, colIndex) {
+  async fetchAndUpdateCell(originalPath, normalizedPath, env, rowIndex, colIndex, runId = this.checkRunId) {
+    if (!this.isCheckRunCurrent(runId)) return;
     const cellId = `cell-${rowIndex}-${colIndex}`;
     const cell = this.root.querySelector(`#${cellId}`);
     if (!cell) return;
 
     try {
       const result = await this.imageCheckerService.checkImage(env.url, normalizedPath);
+      if (!this.isCheckRunCurrent(runId)) return;
       result.name = env.name;
-      this.updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex);
+      this.updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex, runId);
     } catch (error) {
-      this.updateCellWithError(cell, error.message, originalPath, env, rowIndex, colIndex);
+      if (!this.isCheckRunCurrent(runId)) return;
+      this.updateCellWithError(cell, error.message, originalPath, env, rowIndex, colIndex, runId);
     }
   }
 
   /**
    * Update a cell with the check result
    */
-  updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex) {
+  updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex, runId = this.checkRunId) {
+    if (!this.isCheckRunCurrent(runId)) return;
     const cellId = `cell-${rowIndex}-${colIndex}`;
     cell.className = `status-cell ${result.exists ? "success" : result.timeout ? "timeout" : "error"}`;
 
@@ -351,7 +373,7 @@ class CheckImageTool extends BaseTool {
       cell.addEventListener("click", () => this.showImageDetails(result, originalPath));
     } else if (result.timeout) {
       // Track this timeout cell
-      this.timeoutCells.set(cellId, { originalPath, env, rowIndex, colIndex });
+      this.timeoutCells.set(cellId, { originalPath, env, rowIndex, colIndex, runId });
 
       // Timeout state with retry button
       cell.innerHTML = `
@@ -365,7 +387,7 @@ class CheckImageTool extends BaseTool {
       const retryBtn = cell.querySelector(".retry-button");
       retryBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        this.retryCell(originalPath, env, rowIndex, colIndex);
+        this.retryCell(originalPath, env, rowIndex, colIndex, runId);
       });
     } else {
       // Error/not found state
@@ -399,6 +421,8 @@ class CheckImageTool extends BaseTool {
    */
   async retryAllTimeouts() {
     if (this.timeoutCells.size === 0) return;
+    const runId = this.checkRunId;
+    if (!this.isCheckRunCurrent(runId)) return;
 
     // Track retry action
     const retryCount = this.timeoutCells.size;
@@ -409,11 +433,12 @@ class CheckImageTool extends BaseTool {
     this.updateRetryAllButtonVisibility();
 
     // Retry all timeout cells in parallel
-    const retryPromises = cellsToRetry.map(({ originalPath, env, rowIndex, colIndex }) =>
-      this.retryCell(originalPath, env, rowIndex, colIndex),
+    const retryTasks = cellsToRetry.map(({ originalPath, env, rowIndex, colIndex }) =>
+      () => this.retryCell(originalPath, env, rowIndex, colIndex, runId),
     );
 
-    await Promise.all(retryPromises);
+    await runWithConcurrency(retryTasks, IMAGE_CHECK_CONCURRENCY);
+    if (!this.isCheckRunCurrent(runId)) return;
 
     // Track retry completion for UX analysis
     UsageTracker.trackEvent("check-image", "retry_all", {
@@ -425,7 +450,8 @@ class CheckImageTool extends BaseTool {
   /**
    * Update a cell with an error state
    */
-  updateCellWithError(cell, errorMessage, originalPath, env, rowIndex, colIndex) {
+  updateCellWithError(cell, errorMessage, originalPath, env, rowIndex, colIndex, runId = this.checkRunId) {
+    if (!this.isCheckRunCurrent(runId)) return;
     cell.className = "status-cell error";
     cell.innerHTML = `
       <div class="cell-error-content">
@@ -438,14 +464,15 @@ class CheckImageTool extends BaseTool {
     const retryBtn = cell.querySelector(".retry-button");
     retryBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.retryCell(originalPath, env, rowIndex, colIndex);
+      this.retryCell(originalPath, env, rowIndex, colIndex, runId);
     });
   }
 
   /**
    * Retry fetching a specific cell
    */
-  async retryCell(originalPath, env, rowIndex, colIndex) {
+  async retryCell(originalPath, env, rowIndex, colIndex, runId = this.checkRunId) {
+    if (!this.isCheckRunCurrent(runId)) return;
     const cellId = `cell-${rowIndex}-${colIndex}`;
     const cell = this.root.querySelector(`#${cellId}`);
     if (!cell) return;
@@ -460,7 +487,7 @@ class CheckImageTool extends BaseTool {
     `;
 
     const normalized = this.imageCheckerService.normalizeInput(originalPath);
-    await this.fetchAndUpdateCell(originalPath, normalized, env, rowIndex, colIndex);
+    await this.fetchAndUpdateCell(originalPath, normalized, env, rowIndex, colIndex, runId);
   }
 
   /* ──────────────── Rendering ──────────────── */
@@ -702,8 +729,11 @@ class CheckImageTool extends BaseTool {
     this.elements.resultsContainer.innerHTML = `<div class="check-image-error-banner">${message}</div>`;
   }
 
-  clearResults() {
-    this.elements.resultsContainer.innerHTML = "";
+  clearResults({ invalidate = true } = {}) {
+    if (invalidate) this.checkRunId += 1;
+    this.timeoutCells.clear();
+    if (this.elements?.resultsContainer) this.elements.resultsContainer.innerHTML = "";
+    this.updateRetryAllButtonVisibility();
   }
 
   /* ──────────────── Persistence ──────────────── */

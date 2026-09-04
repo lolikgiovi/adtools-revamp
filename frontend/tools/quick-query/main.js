@@ -25,9 +25,34 @@ import {
   cleanQuickQueryAnalyticsMeta,
   summarizeQuickQueryAttachments,
 } from "./services/QuickQueryAnalyticsService.js";
-import JSZip from "jszip";
-import MinifyWorker from "../html-editor/minify.worker.js?worker";
 import "./styles.css";
+
+let jsZipPromise = null;
+let minifyWorkerPromise = null;
+
+function loadJsZip() {
+  if (!jsZipPromise) {
+    jsZipPromise = import("jszip")
+      .then((module) => module.default || module)
+      .catch((error) => {
+        jsZipPromise = null;
+        throw error;
+      });
+  }
+  return jsZipPromise;
+}
+
+function loadMinifyWorker() {
+  if (!minifyWorkerPromise) {
+    minifyWorkerPromise = import("../html-editor/minify.worker.js?worker")
+      .then((module) => module.default || module)
+      .catch((error) => {
+        minifyWorkerPromise = null;
+        throw error;
+      });
+  }
+  return minifyWorkerPromise;
+}
 
 // Architecture-compliant tool wrapper preserving existing QuickQueryUI
 export class QuickQuery extends BaseTool {
@@ -101,6 +126,8 @@ export class QuickQueryUI {
     this.isGenerating = false; // Track async generation state
     this.isSplitting = false; // Track async split state
     this.processedFiles = [];
+    this.splitDownloadPromise = null;
+    this.minifyOperationPromise = null;
 
     this._layoutState = { height: "auto", fixedRowsTop: 0, baseUpperHeight: null, upperHeight: null };
     this._layoutScheduled = false;
@@ -1787,6 +1814,17 @@ export class QuickQueryUI {
    * @returns {{ success: number, failures: Array<{ field: string, row: number, reason: string }> }}
    */
   async _minifyHtmlCells(inputData, fieldIndices) {
+    if (this.minifyOperationPromise) return this.minifyOperationPromise;
+    const operation = this._minifyHtmlCellsInternal(inputData, fieldIndices);
+    this.minifyOperationPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this.minifyOperationPromise === operation) this.minifyOperationPromise = null;
+    }
+  }
+
+  async _minifyHtmlCellsInternal(inputData, fieldIndices) {
     const htmlPattern = /<[a-z][\s\S]*>/i;
     const headers = inputData[0] || [];
     const failures = [];
@@ -1836,7 +1874,8 @@ export class QuickQueryUI {
   /**
    * Minify HTML using the minify worker.
    */
-  _minifyHtmlWithWorker(html) {
+  async _minifyHtmlWithWorker(html) {
+    const MinifyWorker = await loadMinifyWorker();
     return new Promise((resolve, reject) => {
       const worker = new MinifyWorker();
       const cleanup = () => {
@@ -2501,7 +2540,24 @@ export class QuickQueryUI {
   }
 
   async _downloadChunksAsZip() {
+    if (this.splitDownloadPromise) return this.splitDownloadPromise;
+
+    const button = document.getElementById("downloadAllChunks");
+    const wasDisabled = button?.disabled;
+    if (button) button.disabled = true;
+    const operation = this._downloadChunksAsZipInternal();
+    this.splitDownloadPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (button) button.disabled = wasDisabled;
+      if (this.splitDownloadPromise === operation) this.splitDownloadPromise = null;
+    }
+  }
+
+  async _downloadChunksAsZipInternal() {
     const { chunks, mode, value, tableName } = this._splitState;
+    const JSZip = await loadJsZip();
     const zip = new JSZip();
 
     // Derive base name from first chunk or table name

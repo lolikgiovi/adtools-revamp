@@ -11,14 +11,14 @@ honor STOP conditions, and update its status row when complete.
 
 | Plan | Title                                             | Priority | Effort | Depends on      | Status |
 | ---- | ------------------------------------------------- | -------- | ------ | --------------- | ------ |
-| 001  | Make asynchronous navigation commits route-scoped | P1       | M      | -               | TODO   |
-| 002  | Render Compare Config grid rows progressively     | P1       | L      | 001 recommended | TODO   |
-| 003  | Bound Image Checker request concurrency           | P1       | M      | 001 recommended | TODO   |
-| 004  | Bound and parallelize dashboard data work         | P1       | L      | 001             | TODO   |
-| 005  | Clean up shell pages and global listeners         | P1       | M      | 001             | TODO   |
-| 006  | Keep analytics batches within ingestion limits    | P1       | M      | -               | TODO   |
-| 007  | Offload large Compare Config file parsing         | P2       | L      | 001 recommended | TODO   |
-| 008  | Defer action-only tool dependencies               | P2       | M      | 007             | TODO   |
+| 001  | Make asynchronous navigation commits route-scoped | P1       | M      | -               | DONE   |
+| 002  | Render Compare Config grid rows progressively     | P1       | L      | 001 recommended | DONE   |
+| 003  | Bound Image Checker request concurrency           | P1       | M      | 001 recommended | DONE   |
+| 004  | Bound and parallelize dashboard data work         | P1       | L      | 001             | DONE   |
+| 005  | Clean up shell pages and global listeners         | P1       | M      | 001             | DONE   |
+| 006  | Keep analytics batches within ingestion limits    | P1       | M      | -               | DONE   |
+| 007  | Offload large Compare Config file parsing         | P2       | L      | 001 recommended | DONE   |
+| 008  | Defer action-only tool dependencies               | P2       | M      | 007             | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).

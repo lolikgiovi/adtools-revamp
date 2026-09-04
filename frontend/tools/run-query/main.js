@@ -30,6 +30,7 @@ export class JenkinsRunner extends BaseTool {
     this._beforeUnloadHandler = null;
     this._editorLayoutFrame = null;
     this._cancelEditorLayout = null;
+    this._suggestionsDocumentListener = null;
   }
 
   /**
@@ -2064,7 +2065,8 @@ export class JenkinsRunner extends BaseTool {
     }
 
     // Dismiss suggestions when clicking outside inputs/suggestion containers
-    document.addEventListener("click", (e) => {
+    if (this._suggestionsDocumentListener) document.removeEventListener("click", this._suggestionsDocumentListener);
+    this._suggestionsDocumentListener = (e) => {
       const target = e.target;
       // Modal tags suggestions
       if (templateTagsContainer && templateTagsSuggestionsEl) {
@@ -2078,7 +2080,8 @@ export class JenkinsRunner extends BaseTool {
           renderSuggestions(filterTagsContainer, filterTagsSuggestionsEl, []);
         }
       }
-    });
+    };
+    document.addEventListener("click", this._suggestionsDocumentListener);
 
     // Initial env load for Templates if URL present
     if (this.state.jenkinsUrl) {
@@ -2918,6 +2921,10 @@ export class JenkinsRunner extends BaseTool {
       if (this._sidebarDomListener) {
         document.removeEventListener("sidebarStateChange", this._sidebarDomListener);
         this._sidebarDomListener = null;
+      }
+      if (this._suggestionsDocumentListener) {
+        document.removeEventListener("click", this._suggestionsDocumentListener);
+        this._suggestionsDocumentListener = null;
       }
       this._cancelEditorLayout?.();
       if (this._resizeListener) {

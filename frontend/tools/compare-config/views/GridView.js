@@ -16,6 +16,7 @@ export class GridView {
     this.BATCH_SIZE = 100;
     this.renderedCount = 0;
     this.observer = null;
+    this.fallbackLoadTimer = null;
 
     // Cached state for lazy loading
     this.comparisons = [];
@@ -163,6 +164,7 @@ export class GridView {
               ${this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile, showStatus)}
             </tbody>
           </table>
+          ${this.renderedCount < comparisons.length ? '<div id="grid-load-more-sentinel" aria-hidden="true"></div>' : ""}
         </div>
 
 
@@ -179,8 +181,9 @@ export class GridView {
    * @returns {string} HTML for initial batch
    */
   renderInitialBatch(comparisons, fields, hasSourceFile, showStatus = true) {
-    this.renderedCount = comparisons.length;
-    return comparisons.map((comp, idx) => this.renderRow(comp, fields, hasSourceFile, showStatus, idx + 1)).join("");
+    const initialBatch = comparisons.slice(0, this.BATCH_SIZE);
+    this.renderedCount = initialBatch.length;
+    return initialBatch.map((comp, idx) => this.renderRow(comp, fields, hasSourceFile, showStatus, idx + 1)).join("");
   }
 
   /**
@@ -209,6 +212,11 @@ export class GridView {
 
     const sentinel = container.querySelector("#grid-load-more-sentinel");
     if (!sentinel) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      this.scheduleFallbackLoad(container);
+      return;
+    }
 
     this.observer = new IntersectionObserver(
       (entries) => {
@@ -273,6 +281,12 @@ export class GridView {
         rowCount.textContent = `Showing ${this.renderedCount} of ${this.comparisons.length} rows`;
       }
     }
+
+    if (this.renderedCount >= this.comparisons.length) {
+      this.cleanupObserver();
+      const sentinel = container.querySelector("#grid-load-more-sentinel");
+      if (sentinel) sentinel.remove();
+    }
   }
 
   /**
@@ -283,6 +297,20 @@ export class GridView {
       this.observer.disconnect();
       this.observer = null;
     }
+    if (this.fallbackLoadTimer !== null) {
+      clearTimeout(this.fallbackLoadTimer);
+      this.fallbackLoadTimer = null;
+    }
+  }
+
+  scheduleFallbackLoad(container) {
+    if (this.fallbackLoadTimer !== null || this.renderedCount >= this.comparisons.length) return;
+    this.fallbackLoadTimer = setTimeout(() => {
+      this.fallbackLoadTimer = null;
+      if (this.renderedCount >= this.comparisons.length) return;
+      this.loadMoreRows(container);
+      this.scheduleFallbackLoad(container);
+    }, 0);
   }
 
   /**

@@ -163,4 +163,86 @@ describe("UsageTracker analytics reliability", () => {
     setItemSpy.mockRestore();
     vi.useRealTimers();
   });
+
+  it("partitions batches by combined item count and preserves array order", () => {
+    const payload = {
+      device_id: "device-1",
+      user_email: "user@example.com",
+      runtime: "web",
+      app_version: "1.0.0",
+      events: Array.from({ length: 260 }, (_, index) => ({ id: `event-${index}` })),
+      usage_log: Array.from({ length: 180 }, (_, index) => ({ id: `log-${index}` })),
+      error_events: Array.from({ length: 70 }, (_, index) => ({ id: `error-${index}` })),
+      device_usage: Array.from({ length: 40 }, (_, index) => ({ id: `usage-${index}` })),
+    };
+
+    const chunks = UsageTracker._chunkBatchPayload(payload);
+    const keys = ["events", "usage_log", "error_events", "device_usage"];
+
+    expect(chunks.length).toBeGreaterThan(1);
+    chunks.forEach((chunk) => {
+      const itemCount = keys.reduce((total, key) => total + chunk[key].length, 0);
+      expect(itemCount).toBeLessThanOrEqual(UsageTracker.MAX_BATCH_ITEMS);
+      expect(UsageTracker._getSerializedByteLength(chunk)).toBeLessThanOrEqual(UsageTracker.MAX_BATCH_BYTES);
+    });
+    keys.forEach((key) => {
+      expect(chunks.flatMap((chunk) => chunk[key])).toEqual(payload[key]);
+    });
+  });
+
+  it("keeps newly queued rows when all snapshot chunks succeed", async () => {
+    const initialEvents = Array.from({ length: 501 }, (_, index) => ({
+      featureId: "tool",
+      action: `event-${index}`,
+      ts: new Date().toISOString(),
+      meta: {},
+    }));
+    UsageTracker._state.events = initialEvents;
+    UsageTracker._state.usageLogs = [];
+    UsageTracker._state.errorEvents = [];
+
+    let releaseFirstChunk;
+    let firstChunkStarted;
+    const firstChunkReady = new Promise((resolve) => {
+      firstChunkStarted = resolve;
+    });
+    const firstChunkRelease = new Promise((resolve) => {
+      releaseFirstChunk = resolve;
+    });
+    AnalyticsSender.sendBatch = vi.fn(async () => {
+      if (AnalyticsSender.sendBatch.mock.calls.length === 1) {
+        firstChunkStarted();
+        await firstChunkRelease;
+      }
+      return true;
+    });
+
+    const flushPromise = UsageTracker._flushBatch();
+    await firstChunkReady;
+    const newEvent = { featureId: "tool", action: "new-event", ts: new Date().toISOString(), meta: {} };
+    UsageTracker._state.events.push(newEvent);
+    releaseFirstChunk();
+    await flushPromise;
+
+    expect(AnalyticsSender.sendBatch).toHaveBeenCalledTimes(2);
+    expect(UsageTracker._state.events).toEqual([newEvent]);
+  });
+
+  it("removes only acknowledged chunks after a later chunk fails", async () => {
+    UsageTracker._state.events = Array.from({ length: 501 }, (_, index) => ({
+      featureId: "tool",
+      action: `event-${index}`,
+      ts: new Date().toISOString(),
+      meta: {},
+    }));
+    UsageTracker._state.usageLogs = [];
+    UsageTracker._state.errorEvents = [];
+    AnalyticsSender.sendBatch = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await UsageTracker._flushBatch();
+
+    expect(AnalyticsSender.sendBatch).toHaveBeenCalledTimes(2);
+    expect(UsageTracker._state.events).toHaveLength(1);
+    expect(UsageTracker._state.events[0].action).toBe("event-500");
+  });
 });

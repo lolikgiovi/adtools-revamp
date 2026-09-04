@@ -21,6 +21,15 @@ class AnalyticsDashboardPage {
     this.selectedRange = "30d";
     this.currentWhoSection = "users";
     this.lastRenderedData = [];
+    this.dataRequestId = 0;
+    this.dataAbortController = null;
+    this.tabsRequestId = 0;
+    this.authRequestId = 0;
+    this.documentKeydownListener = null;
+    this.pagination = {
+      daily: { page: 0, pageSize: 100, hasMore: false, search: "", rows: [], loading: false },
+      events: { page: 0, pageSize: 100, hasMore: false, search: "", rows: [], loading: false },
+    };
   }
 
   mount(root) {
@@ -52,18 +61,27 @@ class AnalyticsDashboardPage {
     // Refresh
     this.container.querySelector("#dashboard-refresh")?.addEventListener("click", () => {
       this.cache = {};
+      if (this.isPaginatedTab(this.currentTab)) this.resetPagination(this.currentTab, this.filterText);
+      this.invalidateDataRequests();
       this.loadCurrentTabData();
     });
 
     this.container.querySelector("#dashboard-search")?.addEventListener("input", (e) => {
-      this.filterText = e.target.value.trim().toLowerCase();
+      this.filterText = e.target.value.trim().toLowerCase().slice(0, 120);
       const content = this.container.querySelector("#dashboard-panel .panel-content");
-      this.renderTable(content, this.lastRenderedData);
+      if (this.isPaginatedTab(this.currentTab)) {
+        this.resetPagination(this.currentTab, this.filterText);
+        this.invalidateDataRequests();
+        this.loadCurrentTabData();
+      } else {
+        this.renderTable(content, this.lastRenderedData);
+      }
     });
 
     this.container.querySelector("#dashboard-range")?.addEventListener("change", (e) => {
       this.selectedRange = e.target.value || "30d";
       delete this.cache[this.getCacheKey(this.currentTab)];
+      this.invalidateDataRequests();
       this.loadCurrentTabData();
     });
 
@@ -80,9 +98,11 @@ class AnalyticsDashboardPage {
       if (e.target.id === "row-detail-overlay") this.closeRowDetail();
     });
     // Escape to close
-    document.addEventListener("keydown", (e) => {
+    if (this.documentKeydownListener) document.removeEventListener("keydown", this.documentKeydownListener);
+    this.documentKeydownListener = (e) => {
       if (e.key === "Escape") this.closeRowDetail();
-    });
+    };
+    document.addEventListener("keydown", this.documentKeydownListener);
   }
 
   async handleAuth(e) {
@@ -90,6 +110,8 @@ class AnalyticsDashboardPage {
     const passwordInput = this.container.querySelector("#dashboard-password");
     const errorEl = this.container.querySelector("#auth-error");
     const password = passwordInput?.value || "";
+    const container = this.container;
+    const authRequestId = ++this.authRequestId;
 
     errorEl.textContent = "";
 
@@ -101,6 +123,8 @@ class AnalyticsDashboardPage {
       });
 
       const data = await res.json();
+
+      if (this.container !== container || authRequestId !== this.authRequestId) return;
 
       if (data.ok && data.token) {
         this.token = data.token;
@@ -114,16 +138,22 @@ class AnalyticsDashboardPage {
         passwordInput.focus();
       }
     } catch (err) {
-      errorEl.textContent = "Connection error. Please try again.";
+      if (this.container === container && authRequestId === this.authRequestId) {
+        errorEl.textContent = "Connection error. Please try again.";
+      }
     }
   }
 
   showDashboard() {
+    if (!this.container) return;
     this.container.querySelector("#dashboard-auth").style.display = "none";
     this.container.querySelector("#dashboard-content").style.display = "flex";
   }
 
   logout() {
+    this.invalidateDataRequests();
+    this.tabsRequestId += 1;
+    this.authRequestId += 1;
     this.token = null;
     this.tabs = [];
     this.currentTab = null;
@@ -135,15 +165,23 @@ class AnalyticsDashboardPage {
     try {
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (_) {}
-    this.container.querySelector("#dashboard-auth").style.display = "flex";
-    this.container.querySelector("#dashboard-content").style.display = "none";
-    this.container.querySelector("#dashboard-password").value = "";
+    Object.keys(this.pagination).forEach((tabId) => this.resetPagination(tabId));
+    const authPanel = this.container?.querySelector("#dashboard-auth");
+    const dashboardContent = this.container?.querySelector("#dashboard-content");
+    if (authPanel) authPanel.style.display = "flex";
+    if (dashboardContent) dashboardContent.style.display = "none";
+    const passwordInput = this.container?.querySelector("#dashboard-password");
+    if (passwordInput) passwordInput.value = "";
   }
 
   async loadTabs() {
+    if (!this.container) return;
     const tabsContainer = this.container.querySelector("#dynamic-tabs");
     const sourceIndicator = this.container.querySelector("#config-source");
     if (!tabsContainer) return;
+    const container = this.container;
+    const tokenAtStart = this.token;
+    const tabsRequestId = ++this.tabsRequestId;
 
     tabsContainer.innerHTML = '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Loading tabs...</span>';
 
@@ -153,11 +191,13 @@ class AnalyticsDashboardPage {
       });
 
       if (res.status === 401) {
-        this.logout();
+        if (this.container === container && tabsRequestId === this.tabsRequestId && tokenAtStart === this.token) this.logout();
         return;
       }
 
       const data = await res.json();
+
+      if (this.container !== container || tabsRequestId !== this.tabsRequestId || tokenAtStart !== this.token) return;
 
       if (data.ok && Array.isArray(data.tabs)) {
         this.tabs = data.tabs;
@@ -177,7 +217,9 @@ class AnalyticsDashboardPage {
         tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">${data.error || "Failed to load tabs"}</span>`;
       }
     } catch (err) {
-      tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">Error: ${err.message}</span>`;
+      if (this.container === container && tabsRequestId === this.tabsRequestId && tokenAtStart === this.token) {
+        tabsContainer.innerHTML = `<span style="color: hsl(var(--destructive));">Error: ${err.message}</span>`;
+      }
     }
   }
 
@@ -199,10 +241,13 @@ class AnalyticsDashboardPage {
   }
 
   switchTab(tabId) {
+    if (!this.container) return;
     this.currentTab = tabId;
     this.filterText = "";
     const searchInput = this.container.querySelector("#dashboard-search");
     if (searchInput) searchInput.value = "";
+    if (this.isPaginatedTab(tabId)) this.resetPagination(tabId);
+    this.invalidateDataRequests();
     this.updateRangeVisibility();
 
     // Update active tab button
@@ -213,8 +258,40 @@ class AnalyticsDashboardPage {
     this.loadCurrentTabData();
   }
 
-  async loadCurrentTabData() {
-    if (!this.currentTab) return;
+  isPaginatedTab(tabId) {
+    return tabId === "daily" || tabId === "events";
+  }
+
+  resetPagination(tabId, search = "") {
+    const state = this.pagination[tabId];
+    if (!state) return;
+    state.page = 0;
+    state.hasMore = false;
+    state.search = search;
+    state.rows = [];
+    state.loading = false;
+  }
+
+  invalidateDataRequests() {
+    this.dataRequestId += 1;
+    try {
+      this.dataAbortController?.abort();
+    } catch (_) {}
+    this.dataAbortController = null;
+  }
+
+  isDataRequestCurrent(requestId, tabId, content) {
+    return (
+      requestId === this.dataRequestId &&
+      this.currentTab === tabId &&
+      this.container &&
+      content &&
+      content === this.container.querySelector("#dashboard-panel .panel-content")
+    );
+  }
+
+  async loadCurrentTabData({ append = false } = {}) {
+    if (!this.currentTab || !this.container) return;
 
     const panel = this.container.querySelector("#dashboard-panel");
     const loading = panel?.querySelector(".panel-loading");
@@ -222,15 +299,33 @@ class AnalyticsDashboardPage {
 
     if (!panel || !content) return;
 
-    // Check cache
-    const cacheKey = this.getCacheKey(this.currentTab);
-    if (this.cache[cacheKey]) {
-      this.renderTable(content, this.cache[cacheKey]);
+    const tabId = this.currentTab;
+    const paginated = this.isPaginatedTab(tabId);
+    const paginationState = paginated ? this.pagination[tabId] : null;
+    if (append && paginationState?.loading) return;
+    const page = paginated ? (append ? paginationState.page + 1 : 1) : null;
+    const search = paginated ? paginationState.search : "";
+    const cacheKey = this.getCacheKey(tabId, page);
+    const cached = this.cache[cacheKey];
+    if (cached) {
+      if (paginated) {
+        this.applyPaginatedPage(content, cached.data || [], cached.pagination || {}, append, paginationState);
+      } else {
+        this.renderTable(content, cached);
+      }
       return;
     }
 
-    loading.style.display = "block";
-    content.innerHTML = "";
+    this.dataAbortController?.abort?.();
+    const requestId = ++this.dataRequestId;
+    this.dataAbortController = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const signal = this.dataAbortController?.signal;
+    if (paginated) {
+      paginationState.loading = true;
+      this.updatePaginationControls(content, paginationState);
+    }
+    if (loading) loading.style.display = "block";
+    if (!append) content.innerHTML = "";
 
     try {
       const res = await fetch(`${API_BASE}/dashboard/query`, {
@@ -239,33 +334,82 @@ class AnalyticsDashboardPage {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.token}`,
         },
-        body: JSON.stringify({ tabId: this.currentTab, range: this.selectedRange }),
+        body: JSON.stringify(
+          paginated
+            ? { tabId, range: this.selectedRange, page, pageSize: paginationState.pageSize, search }
+            : { tabId, range: this.selectedRange },
+        ),
+        signal,
       });
 
       if (res.status === 401) {
-        this.logout();
+        if (this.isDataRequestCurrent(requestId, tabId, content)) this.logout();
         return;
       }
 
       const data = await res.json();
+      if (!this.isDataRequestCurrent(requestId, tabId, content)) return;
 
       if (data.ok && Array.isArray(data.data)) {
-        this.cache[cacheKey] = data.data;
-        this.renderTable(content, data.data);
+        if (paginated) {
+          const pageResult = { data: data.data, pagination: data.pagination || { page, pageSize: paginationState.pageSize, hasMore: false } };
+          this.cache[cacheKey] = pageResult;
+          this.applyPaginatedPage(content, pageResult.data, pageResult.pagination, append, paginationState);
+        } else {
+          this.cache[cacheKey] = data.data;
+          this.renderTable(content, data.data);
+        }
       } else {
         content.innerHTML = `<div class="panel-error">${data.error || "Failed to load data"}</div>`;
       }
     } catch (err) {
-      content.innerHTML = `<div class="panel-error">Connection error: ${err.message}</div>`;
+      if (this.isDataRequestCurrent(requestId, tabId, content)) {
+        content.innerHTML = `<div class="panel-error">Connection error: ${err.message}</div>`;
+      }
     } finally {
-      loading.style.display = "none";
+      if (this.isDataRequestCurrent(requestId, tabId, content)) {
+        if (paginated) {
+          paginationState.loading = false;
+          this.updatePaginationControls(content, paginationState);
+        }
+        if (loading) loading.style.display = "none";
+        this.dataAbortController = null;
+      }
     }
   }
 
-  renderTable(container, data) {
+  applyPaginatedPage(container, rows, pagination, append, state) {
+    const pageRows = Array.isArray(rows) ? rows : [];
+    state.rows = append ? [...state.rows, ...pageRows] : pageRows.slice();
+    state.page = Number(pagination.page) || (append ? state.page + 1 : 1);
+    state.pageSize = Number(pagination.pageSize) || state.pageSize;
+    state.hasMore = Boolean(pagination.hasMore);
+    this.renderTable(container, state.rows, { skipFilter: true });
+    this.updatePaginationControls(container, state);
+  }
+
+  updatePaginationControls(container, state) {
+    if (!container) return;
+    container.querySelector(".dashboard-pagination")?.remove();
+    if (!state?.hasMore) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "dashboard-pagination";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "dashboard-load-more";
+    button.className = "btn btn-secondary btn-sm";
+    button.disabled = Boolean(state.loading);
+    button.textContent = state.loading ? "Loading..." : "Load more";
+    button.addEventListener("click", () => this.loadCurrentTabData({ append: true }));
+    wrapper.appendChild(button);
+    container.appendChild(wrapper);
+  }
+
+  renderTable(container, data, { skipFilter = false } = {}) {
     if (!container) return;
     this.lastRenderedData = Array.isArray(data) ? data : [];
-    data = this.filterRows(this.lastRenderedData);
+    data = skipFilter || this.isPaginatedTab(this.currentTab) ? this.lastRenderedData : this.filterRows(this.lastRenderedData);
 
     if (!data.length) {
       const message = this.filterText ? "No matching rows" : "No data available";
@@ -665,7 +809,12 @@ class AnalyticsDashboardPage {
     return `Showing ${visibleCount} ${noun}`;
   }
 
-  getCacheKey(tabId) {
+  getCacheKey(tabId, page = null) {
+    if (this.isPaginatedTab(tabId)) {
+      const state = this.pagination[tabId];
+      const requestedPage = page || state?.page || 1;
+      return `${tabId}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
+    }
     return tabId === "who" ? `${tabId}:${this.selectedRange}` : tabId;
   }
 
@@ -725,6 +874,18 @@ class AnalyticsDashboardPage {
   }
 
   deactivate() {
+    this.invalidateDataRequests();
+    this.container = null;
+  }
+
+  unmount() {
+    this.invalidateDataRequests();
+    this.tabsRequestId += 1;
+    this.authRequestId += 1;
+    if (this.documentKeydownListener) {
+      document.removeEventListener("keydown", this.documentKeydownListener);
+      this.documentKeydownListener = null;
+    }
     this.container = null;
   }
 }

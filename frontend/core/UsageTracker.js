@@ -13,6 +13,8 @@ class UsageTracker {
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static MAX_USAGE_LOGS = 1500; // rolling buffer for batched usage_log rows
   static MAX_ERROR_EVENTS = 300; // rolling buffer for batched error_events rows
+  static MAX_BATCH_ITEMS = 500;
+  static MAX_BATCH_BYTES = 800_000;
   static FLUSH_DELAY_MS = 300; // debounce writes
   static BATCH_FLUSH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour remote flush
   static META_STRING_LIMIT = 120;
@@ -625,8 +627,8 @@ class UsageTracker {
   }
 
   // Build batch payload with absolute counts from state.counts (idempotent)
-  static _toBatchPayload() {
-    const s = this._state || this._createEmptyState();
+  static _toBatchPayload(sourceState = this._state) {
+    const s = sourceState || this._createEmptyState();
     const deviceId = s.deviceId || this.getDeviceId();
 
     // Get user email from localStorage
@@ -696,24 +698,152 @@ class UsageTracker {
     };
   }
 
+  static _getSerializedByteLength(value) {
+    const serialized = JSON.stringify(value);
+    try {
+      return new TextEncoder().encode(serialized).length;
+    } catch (_) {
+      return encodeURIComponent(serialized).replace(/%[0-9A-F]{2}/gi, "x").length;
+    }
+  }
+
+  /**
+   * Partition a batch without mutating its arrays or the objects they contain.
+   * When references are supplied, each returned chunk also identifies the
+   * source detail rows acknowledged by that chunk for partial-flush cleanup.
+   */
+  static _partitionBatchPayload(payload, references = null) {
+    const arrayKeys = ["events", "usage_log", "error_events", "device_usage"];
+    const sourceArrays = Object.fromEntries(arrayKeys.map((key) => [key, Array.isArray(payload?.[key]) ? payload[key] : []]));
+    const hasItems = arrayKeys.some((key) => sourceArrays[key].length > 0);
+    const makeChunk = () => ({
+      ...payload,
+      events: [],
+      usage_log: [],
+      error_events: [],
+      device_usage: [],
+    });
+    const makeReferences = () =>
+      references
+        ? { events: [], usage_log: [], error_events: [], device_usage: [] }
+        : null;
+
+    if (!hasItems) {
+      return [{ payload: makeChunk(), references: makeReferences() }];
+    }
+
+    const chunks = [];
+    let current = makeChunk();
+    let currentReferences = makeReferences();
+    let currentItemCount = 0;
+
+    const finishCurrent = () => {
+      if (currentItemCount === 0) return;
+      chunks.push({ payload: current, references: currentReferences });
+      current = makeChunk();
+      currentReferences = makeReferences();
+      currentItemCount = 0;
+    };
+
+    const append = (key, item, reference) => {
+      const candidate = {
+        ...current,
+        [key]: [...current[key], item],
+      };
+      const candidateItemCount = currentItemCount + 1;
+      const exceedsItems = candidateItemCount > this.MAX_BATCH_ITEMS;
+      const exceedsBytes = this._getSerializedByteLength(candidate) > this.MAX_BATCH_BYTES;
+
+      if ((exceedsItems || exceedsBytes) && currentItemCount > 0) {
+        finishCurrent();
+        append(key, item, reference);
+        return;
+      }
+
+      if (exceedsItems || exceedsBytes) {
+        throw new Error("Analytics batch item exceeds the client payload budget");
+      }
+
+      current[key].push(item);
+      if (currentReferences) currentReferences[key].push(reference);
+      currentItemCount = candidateItemCount;
+    };
+
+    for (const key of arrayKeys) {
+      const sourceReferences = references?.[key] || [];
+      sourceArrays[key].forEach((item, index) => append(key, item, sourceReferences[index]));
+    }
+    finishCurrent();
+    return chunks;
+  }
+
+  static _chunkBatchPayload(payload) {
+    return this._partitionBatchPayload(payload).map(({ payload: chunk }) => chunk);
+  }
+
+  static _removeAcknowledgedRows(rows, acknowledgedRows) {
+    const remaining = new Map();
+    (acknowledgedRows || []).forEach((row) => remaining.set(row, (remaining.get(row) || 0) + 1));
+    return (Array.isArray(rows) ? rows : []).filter((row) => {
+      const count = remaining.get(row) || 0;
+      if (count === 0) return true;
+      if (count === 1) remaining.delete(row);
+      else remaining.set(row, count - 1);
+      return false;
+    });
+  }
+
   // Send batch to backend (idempotent - sends absolute counts)
   static async _flushBatch() {
     if (!this._enabled) return;
     try {
-      const payload = this._toBatchPayload();
+      const currentState = this._state || this._createEmptyState();
+      const snapshot = {
+        ...currentState,
+        events: Array.isArray(currentState.events) ? currentState.events.slice() : [],
+        usageLogs: Array.isArray(currentState.usageLogs) ? currentState.usageLogs.slice() : [],
+        errorEvents: Array.isArray(currentState.errorEvents) ? currentState.errorEvents.slice() : [],
+      };
+      const payload = this._toBatchPayload(snapshot);
       if (
         (payload.events && payload.events.length) ||
         (payload.usage_log && payload.usage_log.length) ||
         (payload.error_events && payload.error_events.length) ||
         (payload.device_usage && payload.device_usage.length)
       ) {
-        const sent = await AnalyticsSender.sendBatch(payload);
-        if (sent) {
-          // After successful send, clear detail rows (counts remain for next sync)
-          this._state.events = [];
-          this._state.usageLogs = [];
-          this._state.errorEvents = [];
-          // Persist local storage changes immediately
+        const references = {
+          events: snapshot.events,
+          usage_log: snapshot.usageLogs,
+          error_events: snapshot.errorEvents,
+          device_usage: [],
+        };
+        const chunks = this._partitionBatchPayload(payload, references);
+        const acknowledged = {
+          events: [],
+          usageLogs: [],
+          errorEvents: [],
+        };
+
+        for (const chunk of chunks) {
+          let sent = false;
+          try {
+            sent = await AnalyticsSender.sendBatch(chunk.payload);
+          } catch (_) {
+            sent = false;
+          }
+          if (!sent) break;
+
+          acknowledged.events.push(...(chunk.references?.events || []));
+          acknowledged.usageLogs.push(...(chunk.references?.usage_log || []));
+          acknowledged.errorEvents.push(...(chunk.references?.error_events || []));
+        }
+
+        if (acknowledged.events.length || acknowledged.usageLogs.length || acknowledged.errorEvents.length) {
+          // Counts/device_usage are absolute values and remain in state for the
+          // next sync. Only remove detail rows from the original snapshot.
+          this._state.events = this._removeAcknowledgedRows(this._state.events, acknowledged.events);
+          this._state.usageLogs = this._removeAcknowledgedRows(this._state.usageLogs, acknowledged.usageLogs);
+          this._state.errorEvents = this._removeAcknowledgedRows(this._state.errorEvents, acknowledged.errorEvents);
           this.flushSync();
         }
       }

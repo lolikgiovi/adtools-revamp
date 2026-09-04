@@ -6,14 +6,28 @@ import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta, summarizeFiles, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
-import JSZip from "jszip";
 import "./styles.css";
+
+let jsZipPromise = null;
+
+function loadJsZip() {
+  if (!jsZipPromise) {
+    jsZipPromise = import("jszip")
+      .then((module) => module.default || module)
+      .catch((error) => {
+        jsZipPromise = null;
+        throw error;
+      });
+  }
+  return jsZipPromise;
+}
 
 class Base64Tools extends BaseTool {
   constructor(eventBus) {
     super({ id: "base64-tools", eventBus });
     this.currentMode = "encode";
     this.selectedFiles = new Map();
+    this.activeDownloadPromises = new Map();
   }
 
   getIconSvg() {
@@ -1194,6 +1208,24 @@ class Base64Tools extends BaseTool {
   }
 
   async downloadResult(mode) {
+    if (!this.activeDownloadPromises) this.activeDownloadPromises = new Map();
+    const existingDownload = this.activeDownloadPromises.get(mode);
+    if (existingDownload) return existingDownload;
+
+    const button = this.container?.querySelector(`#${mode}-download-btn`);
+    const wasDisabled = button?.disabled;
+    if (button) button.disabled = true;
+    const downloadPromise = this._downloadResult(mode);
+    this.activeDownloadPromises.set(mode, downloadPromise);
+    try {
+      return await downloadPromise;
+    } finally {
+      if (button) button.disabled = wasDisabled ?? false;
+      if (this.activeDownloadPromises.get(mode) === downloadPromise) this.activeDownloadPromises.delete(mode);
+    }
+  }
+
+  async _downloadResult(mode) {
     const container = this.validateContainer();
 
     // Check if processed cards are visible for encode mode
@@ -1209,6 +1241,7 @@ class Base64Tools extends BaseTool {
       }
 
       try {
+        const JSZip = await loadJsZip();
         const zip = new JSZip();
         const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "encode");
 
@@ -1254,6 +1287,7 @@ class Base64Tools extends BaseTool {
       }
 
       try {
+        const JSZip = await loadJsZip();
         const zip = new JSZip();
         const selectedFilesForMode = Array.from(this.selectedFiles.entries()).filter(([_, data]) => data.mode === "decode");
 
