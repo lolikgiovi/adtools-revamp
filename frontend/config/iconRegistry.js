@@ -1,4 +1,6 @@
 import { getIconSvg as getAboutIconSvg } from "../pages/about/icon.js";
+import { getIconSvg as getAnalyticsDashboardIconSvg } from "../pages/analytics-dashboard/icon.js";
+import { getIconSvg as getApprovalIconSvg } from "../pages/approval/icon.js";
 import { getIconSvg as getSettingsIconSvg } from "../pages/settings/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "../pages/signout/icon.js";
 import { getIconSvg as getBase64IconSvg } from "../tools/base64-tools/icon.js";
@@ -20,6 +22,8 @@ import { getIconSvg as getUuidIconSvg } from "../tools/uuid-generator/icon.js";
 
 const ICON_REGISTRY = new Map([
   ["about", getAboutIconSvg],
+  ["analytics-dashboard", getAnalyticsDashboardIconSvg],
+  ["approval", getApprovalIconSvg],
   ["settings", getSettingsIconSvg],
   ["signout", getSignoutIconSvg],
   ["base64", getBase64IconSvg],

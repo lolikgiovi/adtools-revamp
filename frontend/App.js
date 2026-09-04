@@ -25,6 +25,8 @@ const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
 const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
 const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
 const FLUSH_MAIN_CONTENT_TOOL_IDS = new Set(["querify"]);
+const PRIVILEGED_ADMIN_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
+const ADMINISTRATOR_STORAGE_KEY = "administrator";
 
 class App {
   constructor() {
@@ -205,6 +207,7 @@ class App {
       getIcon: this.getToolIcon.bind(this),
       tools: this.getToolDefinitions(),
       menuConfig: this.buildMenuConfig(),
+      getMenuConfig: this.buildMenuConfig.bind(this),
       toolsConfigMap: this.toolsConfigMap,
       categoriesMap: this.categoriesConfigMap,
     });
@@ -324,7 +327,7 @@ class App {
       });
     });
 
-    // Analytics dashboard (no sidebar entry, direct URL access only)
+    // Analytics dashboard (authorized desktop users also get a sidebar entry)
     this.router.register("analytics-dashboard", ({ navigationId } = {}) => {
       this.showAnalyticsDashboard(navigationId).catch((error) => {
         if (!this.isNavigationCurrent(navigationId, "analytics-dashboard")) return;
@@ -332,7 +335,7 @@ class App {
       });
     });
 
-    // Manual account approvals (no sidebar entry, direct #approval access)
+    // Manual account approvals (authorized desktop users also get a sidebar entry)
     this.router.register("approval", ({ navigationId } = {}) => {
       this.showApproval(navigationId).catch((error) => {
         if (!this.isNavigationCurrent(navigationId, "approval")) return;
@@ -720,6 +723,7 @@ class App {
       const titleEl = document.querySelector(".sidebar-title");
       const username = data?.username || localStorage.getItem("user.username");
       if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+      this.sidebar?.renderMenuGroups?.();
       this.syncDeviceVersion();
     });
 
@@ -1395,6 +1399,29 @@ class App {
 
     this.globalSearch.setIndex(items);
   }
+  /**
+   * Check whether the current local app state enables the privileged sidebar pages.
+   */
+  hasPrivilegedSidebarAccess() {
+    try {
+      const email = String(localStorage.getItem("user.email") || "")
+        .trim()
+        .toLowerCase();
+      return email === PRIVILEGED_ADMIN_EMAIL || localStorage.getItem(ADMINISTRATOR_STORAGE_KEY) === "true";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  getPrivilegedSidebarItems() {
+    if (!this.hasPrivilegedSidebarAccess()) return [];
+
+    return [
+      { id: "analytics-dashboard", name: "Analytics Dashboard", icon: "analytics-dashboard", type: "page", requiresTauri: true },
+      { id: "approval", name: "Approval OTP", icon: "approval", type: "page", requiresTauri: true },
+    ];
+  }
+
   /** Build app-level menu config for dynamic sidebar groups */
   buildMenuConfig() {
     return {
@@ -1403,6 +1430,7 @@ class App {
       footer: [
         { id: "about", name: "About", icon: "about", type: "page" },
         { id: "settings", name: "Settings", icon: "settings", type: "page" },
+        ...this.getPrivilegedSidebarItems(),
       ],
     };
   }

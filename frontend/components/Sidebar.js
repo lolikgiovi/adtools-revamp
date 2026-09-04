@@ -9,6 +9,7 @@ class Sidebar {
     this.tools = config.tools || [];
     this.getIcon = typeof config.getIcon === "function" ? config.getIcon : null;
     this.menuConfig = config.menuConfig || { app: [], config: [], footer: [] };
+    this.getMenuConfig = typeof config.getMenuConfig === "function" ? config.getMenuConfig : null;
     this.toolsConfigMap = config.toolsConfigMap || new Map();
     this.categoriesMap = config.categoriesMap || new Map();
 
@@ -23,6 +24,7 @@ class Sidebar {
     this.mobileBreakpoint = 768;
     // Runtime detection may initialize slightly after first render in Tauri
     this._runtimeRetry = false;
+    this._menuRuntimeRetry = false;
 
     this.init();
   }
@@ -433,8 +435,8 @@ class Sidebar {
     const runtimeIsTauri = isTauri();
 
     // If runtime detection might not be ready yet, re-render once shortly
-    if (!runtimeIsTauri && !this._runtimeRetry) {
-      this._runtimeRetry = true;
+    if (!runtimeIsTauri && !this._menuRuntimeRetry) {
+      this._menuRuntimeRetry = true;
       setTimeout(() => this.renderMenuGroups(), 150);
     }
 
@@ -450,7 +452,7 @@ class Sidebar {
         return svgString;
       };
 
-      let merged = [...(items || [])];
+      let merged = [...(items || [])].filter((item) => !(item?.requiresTauri && !runtimeIsTauri));
       if (groupName === "config") {
         const configTools = (this.tools || [])
           .filter((t) => {
@@ -496,8 +498,9 @@ class Sidebar {
     };
 
     // Category groups are rendered dynamically in renderTools(); only render non-category groups here
-    renderGroup("app", this.menuConfig?.app);
-    renderGroup("footer", this.menuConfig?.footer);
+    const menuConfig = this.getMenuConfig ? this.getMenuConfig() : this.menuConfig;
+    renderGroup("app", menuConfig?.app);
+    renderGroup("footer", menuConfig?.footer);
 
     // Category labels are set during dynamic group creation
 
