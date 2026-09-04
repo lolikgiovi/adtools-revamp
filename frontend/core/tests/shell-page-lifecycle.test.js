@@ -24,19 +24,18 @@ describe("shell page lifecycle", () => {
     expect(app.currentShellPage).toBeNull();
   });
 
-  it("removes About's exact outside-click listener and tolerates repeated unmounts", () => {
+  it("mounts About as a seamless flush page and tolerates repeated unmounts", () => {
     const page = new AboutPage();
     const root = document.createElement("div");
     page.mount(root);
-    const listener = page._documentClickListener;
-    const removeSpy = vi.spyOn(document, "removeEventListener");
+
+    expect(root.classList.contains("main-content-flush")).toBe(true);
+    expect(root.querySelector(".about-page")).not.toBeNull();
 
     page.unmount();
     page.unmount();
 
-    expect(listener).toEqual(expect.any(Function));
-    expect(removeSpy).toHaveBeenCalledWith("click", listener);
-    expect(removeSpy.mock.calls.filter(([eventName, callback]) => eventName === "click" && callback === listener)).toHaveLength(1);
+    expect(root.classList.contains("main-content-flush")).toBe(false);
     expect(page.container).toBeNull();
   });
 
