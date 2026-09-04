@@ -17,7 +17,6 @@ import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewMo
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
-import { OracleConnectionService } from "./core/OracleConnectionService.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
@@ -51,7 +50,6 @@ class App {
     this._quickQuerySearchServicePromise = null;
     this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: false };
     this.usageOverviewRequestId = 0;
-    this._oracleHeaderInitRequested = false;
     // Temporary store for route navigation data payloads
     this._routeData = {};
 
@@ -1680,10 +1678,6 @@ class App {
       const tauriRuntime = isTauri();
       const rt = tauriRuntime ? "tauri" : "web";
       if (header) header.setAttribute("data-runtime", rt);
-      if (tauriRuntime && !this._oracleHeaderInitRequested) {
-        this._oracleHeaderInitRequested = true;
-        void OracleConnectionService.initializeHeaderStatus({ eventBus: this.eventBus });
-      }
     };
 
     // Initial runtime set + delayed re-check to handle late Tauri init
@@ -1692,7 +1686,6 @@ class App {
       applyRuntime();
       this.updateGlobalSearchIndex();
     }, 200);
-
   }
 
   async syncDeviceVersion() {

@@ -1,7 +1,7 @@
 import { ApprovalTemplate } from "./template.js";
 import "./styles.css";
 
-const API_BASE = import.meta.env.DEV ? "http://localhost:8787" : "";
+const API_BASE = import.meta.env.DEV ? "http://localhost:8787" : String(import.meta.env.VITE_WORKER_BASE || "").replace(/\/$/, "");
 const TOKEN_KEY = "analytics.dashboard.token";
 
 export class ApprovalPage {
