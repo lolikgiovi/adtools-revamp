@@ -1407,7 +1407,7 @@ class App {
       const email = String(localStorage.getItem("user.email") || "")
         .trim()
         .toLowerCase();
-      return email === PRIVILEGED_ADMIN_EMAIL || localStorage.getItem(ADMINISTRATOR_STORAGE_KEY) === "true";
+      return email === PRIVILEGED_ADMIN_EMAIL && localStorage.getItem(ADMINISTRATOR_STORAGE_KEY) === "true";
     } catch (_) {
       return false;
     }

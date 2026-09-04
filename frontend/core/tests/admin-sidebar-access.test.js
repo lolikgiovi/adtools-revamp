@@ -11,28 +11,30 @@ afterEach(() => {
 });
 
 describe("privileged sidebar pages", () => {
-  it("shows the desktop-only pages for the configured administrator email", () => {
+  it("does not show the desktop-only pages for the configured email without the flag", () => {
     localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
     const app = Object.create(App.prototype);
 
-    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
+    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
   });
 
-  it("shows the desktop-only pages when the administrator override is enabled", () => {
+  it("does not show the desktop-only pages for the flag without the configured email", () => {
+    localStorage.setItem("administrator", "true");
+    const app = Object.create(App.prototype);
+
+    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
+  });
+
+  it("shows the desktop-only pages only when both conditions match", () => {
+    localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
 
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
   });
 
-  it("does not add the pages for other users", () => {
-    localStorage.setItem("user.email", "someone@bankmandiri.co.id");
-    const app = Object.create(App.prototype);
-
-    expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
-  });
-
   it("marks both pages as desktop-only sidebar entries", () => {
+    localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
     const privilegedItems = app.getPrivilegedSidebarItems();
@@ -46,6 +48,7 @@ describe("privileged sidebar pages", () => {
   });
 
   it("renders the privileged entries only in the desktop runtime", async () => {
+    localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
     const sidebar = Object.assign(Object.create(Sidebar.prototype), {
