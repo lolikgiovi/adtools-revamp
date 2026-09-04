@@ -39,6 +39,7 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   padding-right: 34px;
+  scroll-padding-inline: 40px;
 }
 
 .qq-tab-list::-webkit-scrollbar {

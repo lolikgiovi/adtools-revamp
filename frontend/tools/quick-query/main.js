@@ -1013,6 +1013,22 @@ export class QuickQueryUI {
       this.elements.addTabButton.disabled = this.tabs.length >= 15;
       this.elements.addTabButton.title = this.tabs.length >= 15 ? "Maximum 15 tabs" : "New tab";
     }
+
+    this.scrollActiveTabIntoView();
+  }
+
+  scrollActiveTabIntoView() {
+    const tabList = this.elements.tabList;
+    if (!tabList || !this.activeTabId) return;
+
+    const activeTab = Array.from(tabList.children).find((tab) => tab.dataset.tabId === this.activeTabId);
+    if (!activeTab) return;
+
+    activeTab.scrollIntoView?.({
+      behavior: "auto",
+      block: "nearest",
+      inline: "nearest",
+    });
   }
 
   openTabContextMenu(event, tabId) {

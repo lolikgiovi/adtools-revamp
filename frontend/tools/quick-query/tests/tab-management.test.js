@@ -97,6 +97,25 @@ describe("Quick Query tab management", () => {
     expect(ui.applyTabDraft).toHaveBeenCalledWith(ui.tabs[0]);
   });
 
+  it("scrolls the active tab into view after it is rendered", () => {
+    const tabList = document.createElement("div");
+    const activeTab = document.createElement("div");
+    activeTab.dataset.tabId = "tab-3";
+    activeTab.scrollIntoView = vi.fn();
+    tabList.appendChild(activeTab);
+
+    const ui = createUi([createTab("tab-1"), createTab("tab-2"), createTab("tab-3")], "tab-3");
+    ui.elements = { tabList };
+
+    ui.scrollActiveTabIntoView();
+
+    expect(activeTab.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "nearest",
+      inline: "nearest",
+    });
+  });
+
   it("shows browser-like bulk close actions in the tab context menu", async () => {
     const tabList = document.createElement("div");
     document.body.appendChild(tabList);
