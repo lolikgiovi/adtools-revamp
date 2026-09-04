@@ -62,6 +62,7 @@ npm install
 | `npm run dev` | Start Vite dev server (http://localhost:1234) |
 | `npm run test` | Run tests in watch mode |
 | `npm run test:ci` | Run tests once |
+| `npm run verify:web` | Run frontend and Worker tests serially |
 | `npm run verify` | Run frontend/Worker tests and Rust tests serially |
 | `npm run build` | Build for production |
 | `npm run cf:dev` | Build + run Wrangler locally (http://localhost:8787) |
