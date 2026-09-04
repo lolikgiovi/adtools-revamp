@@ -1,10 +1,11 @@
 /**
  * Analytics route handlers for usage tracking
- * Handles POST-only analytics ingestion endpoints
+ * Handles authenticated ingestion plus deliberately limited public overview/feedback endpoints.
  */
 
 import { corsHeaders } from "../utils/cors.js";
 import { ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
+import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
 const OVERVIEW_DAILY_SQL = `
@@ -17,77 +18,48 @@ const OVERVIEW_DAILY_SQL = `
 `;
 
 /**
- * Handle GET /analytics/overview - privacy-safe personal and aggregate usage overview.
+ * Handle GET /analytics/overview - authenticated personal and aggregate usage overview.
  * Cumulative totals come from device_usage; the seven-day pulse comes from usage_log.
  */
-export async function handleAnalyticsOverviewGet(request, env, session) {
+export async function handleAnalyticsOverviewGet(_request, env, session) {
   try {
     if (!env.DB) {
       return analyticsJson({ ok: false, error: "Analytics database unavailable" }, 503);
     }
 
-    const userEmail = String(session.email).trim().toLowerCase();
-    const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
-      env.DB
-        .prepare(
-          `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-           FROM device_usage
-           WHERE LOWER(COALESCE(user_email, '')) = ?
-           GROUP BY tool_id
-           HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
-           ORDER BY count DESC, tool_id ASC
-           LIMIT 100`,
-        )
-        .bind(userEmail)
-        .all(),
-      env.DB
-        .prepare(
-          `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-           FROM device_usage
-           GROUP BY tool_id
-           HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
-           ORDER BY count DESC, tool_id ASC
-           LIMIT 100`,
-        )
-        .all(),
-      env.DB
-        .prepare(
-          `SELECT
-             COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
-             COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
-             MAX(updated_time) AS last_updated
-           FROM device_usage
-           WHERE LOWER(COALESCE(user_email, '')) = ?`,
-        )
-        .bind(userEmail)
-        .first(),
-      env.DB
-        .prepare(
-          `SELECT
-             COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
-             COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
-             COUNT(DISTINCT CASE WHEN count > 0 THEN LOWER(user_email) END) AS active_users,
-             MAX(updated_time) AS last_updated
-           FROM device_usage`,
-        )
-        .first(),
-      env.DB
-        .prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "AND LOWER(user_email) = ?"))
-        .bind(userEmail)
-        .all(),
-      env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "")).all(),
-    ]);
-
-    return analyticsJson({
-      ok: true,
-      source: "analytics-api",
-      generatedAt: tsGmt7(),
-      period: { totals: "all-time", daily: "last-7-days" },
-      user: buildOverviewScope(userSummary, userToolsResult?.results, userDailyResult?.results),
-      global: buildOverviewScope(globalSummary, globalToolsResult?.results, globalDailyResult?.results),
-    });
+    return analyticsJson(await loadOverviewData(env, String(session.email).trim().toLowerCase(), "analytics-api"));
   } catch (err) {
     console.error(JSON.stringify({ message: "analytics overview failed", error: String(err) }));
+    return analyticsJson({ ok: false, error: "Analytics overview unavailable" }, 500);
+  }
+}
+
+/**
+ * Handle POST /analytics/public-overview - aggregate usage for the registered local identity.
+ * The email is an attribution key, not authentication. This endpoint returns only aggregate
+ * usage counters and never exposes raw usage rows, configuration, sessions, or dashboard data.
+ */
+export async function handlePublicAnalyticsOverviewPost(request, env) {
+  try {
+    if (!env.DB) return analyticsJson({ ok: false, error: "Analytics database unavailable" }, 503);
+
+    let data;
+    try {
+      data = await request.json();
+    } catch (_) {
+      return analyticsJson({ ok: false, error: "A valid JSON body is required" }, 400);
+    }
+
+    const userEmail = normalizeIdentityEmail(data?.email);
+    if (!userEmail) return analyticsJson({ ok: false, error: "A valid registered email is required" }, 400);
+
+    const rateLimit = await checkPublicRateLimit(request, env, "overview", userEmail, 60, 10 * 60);
+    if (rateLimit === null) return analyticsJson({ ok: false, error: "Public analytics temporarily unavailable" }, 503);
+    if (rateLimit) return analyticsJson({ ok: false, error: "Too many analytics requests. Try again shortly." }, 429);
+
+    return analyticsJson(await loadOverviewData(env, userEmail, "analytics-public-api"));
+  } catch (err) {
+    console.error(JSON.stringify({ message: "public analytics overview failed", error: String(err) }));
     return analyticsJson({ ok: false, error: "Analytics overview unavailable" }, 500);
   }
 }
@@ -118,6 +90,130 @@ export async function handleImprovementFeedbackPost(request, env, session) {
     console.error(JSON.stringify({ message: "improvement feedback failed", error: String(err) }));
     return analyticsJson({ ok: false, error: "Could not save the improvement note" }, 500);
   }
+}
+
+/**
+ * Handle POST /feedback/public-improvement - low-risk feedback from a registered local identity.
+ * The submitted email/device are attribution fields only; this route does not grant access to
+ * any authenticated resource. Rate limiting protects the write path from accidental abuse.
+ */
+export async function handlePublicImprovementFeedbackPost(request, env) {
+  try {
+    if (!env.DB) return analyticsJson({ ok: false, error: "Feedback storage unavailable" }, 503);
+
+    let data;
+    try {
+      data = await request.json();
+    } catch (_) {
+      return analyticsJson({ ok: false, error: "A valid JSON body is required" }, 400);
+    }
+
+    const userEmail = normalizeIdentityEmail(data?.email);
+    if (!userEmail) return analyticsJson({ ok: false, error: "A valid registered email is required" }, 400);
+
+    const rawMessage = String(data?.message || "").trim();
+    const rawToolId = safeString(data?.tool_id || "", 80).trim();
+    const toolId = rawToolId ? normalizeFeatureId(rawToolId) : null;
+    const deviceId = safeString(data?.device_id || data?.deviceId || "public-browser", 120).trim() || "public-browser";
+    if (!rawMessage) return analyticsJson({ ok: false, error: "A short note is required" }, 400);
+    if (rawMessage.length > 4_000) return analyticsJson({ ok: false, error: "Keep the note under 4,000 characters" }, 413);
+    const message = safeString(rawMessage, 4_000);
+
+    const rateLimit = await checkPublicRateLimit(request, env, "feedback", userEmail, 5, 60 * 60);
+    if (rateLimit === null) return analyticsJson({ ok: false, error: "Public feedback temporarily unavailable" }, 503);
+    if (rateLimit) return analyticsJson({ ok: false, error: "Too many feedback notes. Try again later." }, 429);
+
+    await env.DB.prepare(
+      `INSERT INTO improvement_feedback (user_email, device_id, tool_id, message, created_time)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(userEmail, deviceId, toolId, message, tsGmt7Plain())
+      .run();
+
+    return analyticsJson({ ok: true, message: "Improvement note received" }, 201);
+  } catch (err) {
+    console.error(JSON.stringify({ message: "public improvement feedback failed", error: String(err) }));
+    return analyticsJson({ ok: false, error: "Could not save the improvement note" }, 500);
+  }
+}
+
+async function loadOverviewData(env, userEmail, source) {
+  const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
+    env.DB
+      .prepare(
+        `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+         FROM device_usage
+         WHERE LOWER(COALESCE(user_email, '')) = ?
+         GROUP BY tool_id
+         HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
+         ORDER BY count DESC, tool_id ASC
+         LIMIT 100`,
+      )
+      .bind(userEmail)
+      .all(),
+    env.DB
+      .prepare(
+        `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+         FROM device_usage
+         GROUP BY tool_id
+         HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
+         ORDER BY count DESC, tool_id ASC
+         LIMIT 100`,
+      )
+      .all(),
+    env.DB
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
+           COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
+           MAX(updated_time) AS last_updated
+         FROM device_usage
+         WHERE LOWER(COALESCE(user_email, '')) = ?`,
+      )
+      .bind(userEmail)
+      .first(),
+    env.DB
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
+           COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
+           COUNT(DISTINCT CASE WHEN count > 0 THEN LOWER(user_email) END) AS active_users,
+           MAX(updated_time) AS last_updated
+         FROM device_usage`,
+      )
+      .first(),
+    env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "AND LOWER(user_email) = ?")).bind(userEmail).all(),
+    env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "")).all(),
+  ]);
+
+  return {
+    ok: true,
+    source,
+    generatedAt: tsGmt7(),
+    period: { totals: "all-time", daily: "last-7-days" },
+    user: buildOverviewScope(userSummary, userToolsResult?.results, userDailyResult?.results),
+    global: buildOverviewScope(globalSummary, globalToolsResult?.results, globalDailyResult?.results),
+  };
+}
+
+function normalizeIdentityEmail(value) {
+  const email = safeString(value || "", 254).trim().toLowerCase();
+  return email === "dev@localhost" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+async function checkPublicRateLimit(request, env, scope, email, limit, expirationTtl) {
+  const clientKey = getPublicClientKey(request);
+  try {
+    return await consumeRateLimit(env.adtools, `public:${scope}:${clientKey}:${email}`, limit, expirationTtl);
+  } catch (err) {
+    console.error(JSON.stringify({ message: "public analytics rate limit unavailable", scope, error: String(err) }));
+    return null;
+  }
+}
+
+function getPublicClientKey(request) {
+  const forwarded = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
+  return safeString(String(forwarded).split(",")[0], 80).replace(/[^a-zA-Z0-9:._-]/g, "_") || "unknown";
 }
 
 function buildOverviewScope(summary, toolRows = [], dailyRows = []) {

@@ -1,4 +1,5 @@
 import { UsageTracker } from "../../../core/UsageTracker.js";
+import { scoreFuzzyTerm } from "../../../core/FuzzySearch.js";
 
 // Database constants
 const DB_NAME = "QuickQueryDatabase";
@@ -673,22 +674,7 @@ export class IndexedDBStorageService {
   }
 
   scorePlainTerm(term, { name, abbrs = [], collapsed }) {
-    const q = (term || "").toLowerCase();
-    if (!q) return 0;
-    const nm = (name || "").toLowerCase();
-    const cl = (collapsed || nm).toLowerCase();
-
-    let score = 0;
-
-    if (abbrs.some((a) => a === q)) score = Math.max(score, 100);
-    if (abbrs.some((a) => a.startsWith(q))) score = Math.max(score, 90);
-    if (nm.startsWith(q)) score = Math.max(score, 85);
-    if (nm.includes(q)) score = Math.max(score, 75);
-    if (cl.startsWith(q)) score = Math.max(score, 80);
-    if (cl.includes(q)) score = Math.max(score, 70);
-    if (q.length >= 3 && this.isSubsequence(q, cl)) score = Math.max(score, 60);
-
-    return score;
+    return scoreFuzzyTerm(term, { name, abbrs, collapsed });
   }
 
   getSchemaAbbreviations(schemaName) {
@@ -860,7 +846,9 @@ export class IndexedDBStorageService {
   /**
    * Search saved schemas by term.
    */
-  async searchSavedSchemas(searchTerm) {
+  async searchSavedSchemas(searchTerm, options = {}) {
+    if (options?.refresh) this._index.dirty = true;
+
     // Return recent tables when search is empty
     if (!searchTerm) {
       const tables = await this.getAllTables();

@@ -1,17 +1,20 @@
+import { collapseSearchName, getSearchAbbreviations, scoreFuzzyTerm } from "../core/FuzzySearch.js";
+
 /**
  * GlobalSearch - Universal search overlay similar to Notion/Spotlight
  * - Cmd+K opens the search
- * - Real-time filtering of feature names and pages
+ * - Real-time filtering of feature names, pages, and Quick Query tables
  * - Keyboard navigation (Up/Down, Enter)
  * - Click outside or Escape closes
  * - Accessible dialog semantics and focus management
  */
 class GlobalSearch {
-  constructor({ eventBus, router, app, getIcon } = {}) {
+  constructor({ eventBus, router, app, getIcon, searchQuickQuery } = {}) {
     this.eventBus = eventBus;
     this.router = router;
     this.app = app;
     this.getIcon = typeof getIcon === "function" ? getIcon : null;
+    this.searchQuickQuery = typeof searchQuickQuery === "function" ? searchQuickQuery : null;
 
     this.index = []; // { id, name, description, route, type, icon }
     this.filtered = [];
@@ -23,6 +26,7 @@ class GlobalSearch {
     this.inputEl = null;
     this.resultsEl = null;
     this.helpEl = null;
+    this._filterRequestId = 0;
 
     this._buildDOM();
     this._bindEvents();
@@ -59,7 +63,7 @@ class GlobalSearch {
     this.inputEl.type = "text";
     this.inputEl.id = "global-search-input";
     this.inputEl.className = "global-search-input";
-    this.inputEl.placeholder = "Search tools and pages...";
+    this.inputEl.placeholder = "Search tools, pages, or qq:schema.table...";
     this.inputEl.setAttribute("autocomplete", "off");
     this.inputEl.setAttribute("aria-controls", "global-search-results");
     container.appendChild(this.inputEl);
@@ -74,7 +78,7 @@ class GlobalSearch {
     // Help footer
     this.helpEl = document.createElement("div");
     this.helpEl.className = "global-search-help";
-    this.helpEl.textContent = "Filters: quick:, tool:, page: • ↑↓ navigate • Enter open • Esc close";
+    this.helpEl.textContent = "Try qq:c.appc to open Quick Query with config.app_config table • ↑↓ navigate • Enter open • Esc close";
     container.appendChild(this.helpEl);
 
     this.modalEl.appendChild(container);
@@ -97,7 +101,7 @@ class GlobalSearch {
     // Input events
     this.inputEl.addEventListener("input", () => {
       const query = this.inputEl.value.trim();
-      this._filter(query);
+      void this._filter(query);
     });
 
     // Keyboard navigation within modal
@@ -173,6 +177,7 @@ class GlobalSearch {
   close() {
     if (!this.isOpen) return;
     this.isOpen = false;
+    this._filterRequestId += 1;
 
     this.overlayEl.classList.remove("open");
     this.modalEl.classList.remove("open");
@@ -193,24 +198,11 @@ class GlobalSearch {
 
   /** Filter index by query */
   _filter(query) {
-    const quickMatch = query.match(/^quick:\s*(.+)$/i);
+    const requestId = (this._filterRequestId || 0) + 1;
+    this._filterRequestId = requestId;
+    const quickMatch = query.match(/^(?:qq|quick):\s*(.*)$/i);
     if (quickMatch) {
-      const tableName = quickMatch[1].trim().toUpperCase();
-      this.filtered = /^[A-Z][A-Z0-9_$#]*(\.[A-Z][A-Z0-9_$#]*)?$/.test(tableName)
-        ? [
-            {
-              id: `quick-${tableName}`,
-              name: `Open ${tableName} in Quick Query`,
-              description: "Switch to its existing tab, or create a new tab",
-              route: "quick-query",
-              type: "action",
-              data: { tableName },
-            },
-          ]
-        : [];
-      this.activeIndex = this.filtered.length ? 0 : -1;
-      this._renderResults(this.filtered);
-      return;
+      return this._filterQuickQuery(quickMatch[1], requestId);
     }
 
     const scopeMatch = query.match(/^(tools?|pages?):(.*)$/i);
@@ -221,15 +213,17 @@ class GlobalSearch {
     if (!q) {
       this.filtered = candidates.slice(0, 8);
     } else {
-      // Simple scoring: name startsWith > includes in name > includes in description/id
+      // Quick Query-style scoring: abbreviations/subsequences supplement exact and name matches.
       const scored = candidates
         .map((item) => {
-          const name = item.name.toLowerCase();
+          const name = String(item.name || "").toLowerCase();
           const desc = (item.description || "").toLowerCase();
-          const id = item.id.toLowerCase();
-          let score = 0;
-          if (name.startsWith(q)) score += 3;
-          if (name.includes(q)) score += 2;
+          const id = String(item.id || "").toLowerCase();
+          let score = scoreFuzzyTerm(q, {
+            name,
+            abbrs: getSearchAbbreviations(name),
+            collapsed: collapseSearchName(name),
+          });
           if (id.includes(q)) score += 1;
           if (desc.includes(q)) score += 1;
           return { item, score };
@@ -242,6 +236,111 @@ class GlobalSearch {
     }
     this.activeIndex = this.filtered.length ? 0 : -1;
     this._renderResults(this.filtered);
+  }
+
+  /** Search the persisted Quick Query table catalog for a qq: or quick: query. */
+  _filterQuickQuery(rawTerm, requestId) {
+    const searchTerm = String(rawTerm || "").trim();
+
+    // Keep the command useful in tests, during migrations, or in older embeds
+    // that have not supplied a Quick Query search adapter yet.
+    if (!this.searchQuickQuery) {
+      this._setQuickQueryFallback(searchTerm, requestId);
+      return;
+    }
+
+    this.filtered = [];
+    this.activeIndex = -1;
+    this._renderStatus(searchTerm ? "Searching saved Quick Query schemas…" : "Loading recent Quick Query schemas…", "loading");
+
+    return Promise.resolve()
+      .then(() => this.searchQuickQuery(searchTerm))
+      .then((matches) => {
+        if (requestId !== this._filterRequestId) return;
+
+        const items = (Array.isArray(matches) ? matches : [])
+          .map((match) => this._createQuickQueryResult(match))
+          .filter(Boolean)
+          .slice(0, 8);
+
+        if (items.length > 0) {
+          this.filtered = items;
+          this.activeIndex = 0;
+          this._renderResults(items);
+          return;
+        }
+
+        this._setQuickQueryFallback(searchTerm, requestId);
+      })
+      .catch(() => {
+        if (requestId !== this._filterRequestId) return;
+
+        const fallback = this._buildQuickQueryFallback(searchTerm, "Quick Query search is unavailable; open a new tab anyway");
+        if (fallback) {
+          this.filtered = [fallback];
+          this.activeIndex = 0;
+          this._renderResults(this.filtered);
+        } else {
+          this.filtered = [];
+          this.activeIndex = -1;
+          this._renderStatus("Quick Query search is unavailable right now.", "error");
+        }
+      });
+  }
+
+  _createQuickQueryResult(match) {
+    const fullName = String(match?.fullName || `${match?.schemaName || ""}.${match?.tableName || ""}`)
+      .trim()
+      .toUpperCase();
+    if (!/^[A-Z][A-Z0-9_$#]*\.[A-Z][A-Z0-9_$#]*$/.test(fullName)) return null;
+
+    return {
+      id: `quick-table-${fullName}`,
+      name: fullName,
+      description: "Quick Query · Switch to an existing tab or create a new one",
+      route: "quick-query",
+      type: "action",
+      icon: "database",
+      data: { tableName: fullName },
+    };
+  }
+
+  _setQuickQueryFallback(searchTerm, requestId) {
+    if (requestId !== this._filterRequestId) return;
+
+    const fallback = this._buildQuickQueryFallback(searchTerm);
+    if (fallback) {
+      this.filtered = [fallback];
+      this.activeIndex = 0;
+      this._renderResults(this.filtered);
+      return;
+    }
+
+    this.filtered = [];
+    this.activeIndex = -1;
+    this._renderStatus(searchTerm ? `No saved Quick Query schemas match “${searchTerm}”.` : "No saved Quick Query schemas yet.", "empty");
+  }
+
+  _buildQuickQueryFallback(searchTerm, description = "No saved schema found · Open a new Quick Query tab") {
+    const tableName = String(searchTerm || "")
+      .trim()
+      .toUpperCase();
+    if (!/^[A-Z][A-Z0-9_$#]*\.[A-Z][A-Z0-9_$#]*$/.test(tableName)) return null;
+
+    return {
+      id: `quick-open-${tableName}`,
+      name: tableName,
+      description,
+      route: "quick-query",
+      type: "action",
+      icon: "database",
+      data: { tableName },
+    };
+  }
+
+  _renderStatus(message, state = "empty") {
+    this.resultsEl.innerHTML = `<li class="global-search-status global-search-status-${state}" role="status" aria-live="polite">${this._escapeHtml(message)}</li>`;
+    this.inputEl.removeAttribute("aria-activedescendant");
   }
 
   /** Render results list */
@@ -296,8 +395,7 @@ class GlobalSearch {
 
   /** Confirm selection and navigate */
   _confirmSelection() {
-    const list = this.filtered.length ? this.filtered : this.index;
-    const item = list[this.activeIndex] || list[0];
+    const item = this.filtered[this.activeIndex >= 0 ? this.activeIndex : 0];
     if (!item) return;
 
     // Close first to avoid flicker

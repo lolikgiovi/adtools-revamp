@@ -1,3 +1,14 @@
+export function getUsageAccessState({ registered = false, hasIdentity = false } = {}) {
+  const isRegistered = Boolean(registered);
+  const identityAvailable = Boolean(hasIdentity);
+  return {
+    isRegistered,
+    hasIdentity: identityAvailable,
+    canViewDashboard: isRegistered,
+    teamComparison: identityAvailable ? "available" : "unavailable",
+  };
+}
+
 /**
  * Normalize usage overview payloads from either the local tracker or the API.
  *

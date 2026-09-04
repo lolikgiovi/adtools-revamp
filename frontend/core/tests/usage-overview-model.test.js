@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from "vitest";
-import { normalizeUsageScope } from "../UsageOverviewModel.js";
+import { getUsageAccessState, normalizeUsageScope } from "../UsageOverviewModel.js";
 
 describe("usage overview model", () => {
   it("keeps local tool names when a normalized scope is rendered again", () => {
@@ -19,5 +19,14 @@ describe("usage overview model", () => {
 
     expect(renderedScope.tools).toEqual([{ id: "quick-query", count: 2, name: "Quick Query" }]);
     expect(renderedScope.totalActivities).toBe(2);
+  });
+
+  it("keeps the team view available for registered users with a local identity and no session token", () => {
+    expect(getUsageAccessState({ registered: true, hasIdentity: true })).toEqual({
+      isRegistered: true,
+      hasIdentity: true,
+      canViewDashboard: true,
+      teamComparison: "available",
+    });
   });
 });

@@ -23,3 +23,6 @@
 
 /* Tool-specific styles */
 @import "./tools/compare-config/styles.css";
+
+/* Shared custom searchable dropdowns */
+@import "./styles/searchable-dropdown.css";

@@ -451,10 +451,61 @@
   z-index: 200;
   display: none;
   overflow: hidden;
+  padding: 0.35rem;
 }
 
 .query-type-dropdown-menu.show {
   display: block;
+}
+
+.query-type-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 30px;
+  padding: 0 0.5rem;
+  margin-bottom: 0.3rem;
+  border: 1px solid hsl(var(--border) / 0.9);
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--background) / 0.62);
+  color: hsl(var(--muted-foreground));
+}
+
+.query-type-search-wrap:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
+}
+
+.query-type-search-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.query-type-search-wrap input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: hsl(var(--foreground)) !important;
+  font: inherit;
+  font-size: 12px;
+  box-shadow: none !important;
+}
+
+.query-type-search-wrap input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.query-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .query-type-option {
@@ -475,9 +526,31 @@
   background: hsl(var(--muted));
 }
 
+.query-type-option.keyboard-active {
+  background: hsl(var(--muted));
+  outline: 1px solid hsl(var(--ring) / 0.45);
+  outline-offset: -1px;
+}
+
 .query-type-option.active {
   background: hsl(var(--primary) / 0.15);
   color: hsl(var(--primary));
+}
+
+.query-type-option.active.keyboard-active {
+  background: hsl(var(--primary) / 0.2);
+}
+
+.query-type-option[hidden],
+.query-type-no-results[hidden] {
+  display: none;
+}
+
+.query-type-no-results {
+  padding: 0.5rem 0.65rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  text-align: center;
 }
 
 /* Bottom toolbar: wrap buttons and place tip on its own line */

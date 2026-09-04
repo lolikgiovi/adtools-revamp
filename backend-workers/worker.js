@@ -12,7 +12,9 @@ import {
   handleAnalyticsLogPost,
   handleAnalyticsErrorPost,
   handleAnalyticsOverviewGet,
+  handlePublicAnalyticsOverviewPost,
   handleImprovementFeedbackPost,
+  handlePublicImprovementFeedbackPost,
 } from './src/routes/analytics.js';
 import { getSession, handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
 import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
@@ -111,7 +113,7 @@ export default {
       return handleRegister(request, env);
     }
 
-    // Analytics routes (authenticated ingestion and user-facing overview)
+    // Analytics routes (authenticated ingestion plus limited public overview/feedback)
     // Device routes
     if (url.pathname === "/device/version") {
       if (method !== "PATCH") return methodNotAllowed();
@@ -134,8 +136,16 @@ export default {
       if (method === "GET") return handleAuthenticatedAnalytics(request, env, handleAnalyticsOverviewGet);
       return methodNotAllowed();
     }
+    if (url.pathname === "/analytics/public-overview") {
+      if (method === "POST") return handlePublicAnalytics(request, env, handlePublicAnalyticsOverviewPost);
+      return methodNotAllowed();
+    }
     if (url.pathname === "/feedback/improvement") {
       if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleImprovementFeedbackPost);
+      return methodNotAllowed();
+    }
+    if (url.pathname === "/feedback/public-improvement") {
+      if (method === "POST") return handlePublicAnalytics(request, env, handlePublicImprovementFeedbackPost);
       return methodNotAllowed();
     }
 
@@ -222,4 +232,14 @@ async function handleAuthenticatedAnalytics(request, env, handler) {
     });
   }
   return handler(request, env, session);
+}
+
+async function handlePublicAnalytics(request, env, handler) {
+  if (Number(request.headers.get("Content-Length") || 0) > 64_000) {
+    return new Response(JSON.stringify({ ok: false, error: "Public analytics payload too large" }), {
+      status: 413,
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  }
+  return handler(request, env);
 }

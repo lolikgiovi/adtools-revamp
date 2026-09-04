@@ -152,6 +152,41 @@ describe("Analytics endpoints", () => {
     expect(env.DB.executed.filter((item) => item.sql.includes("FROM usage_log")).length).toBe(2);
   });
 
+  it("returns the public overview for a registered email without authentication", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/public-overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "User@Example.com" }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.source).toBe("analytics-public-api");
+    expect(data.user).toMatchObject({ totalActivities: 0, toolsUsed: 0, tools: [], daily: [] });
+    expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0, tools: [], daily: [] });
+    expect(env.DB.executed.find((item) => item.sql.includes("LOWER(COALESCE(user_email, '')) = ?")).args).toEqual([
+      "user@example.com",
+    ]);
+  });
+
+  it("rejects public overview requests without a valid email", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/public-overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "not-an-email" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(env.DB.executed).toHaveLength(0);
+  });
+
   it("accepts an authenticated improvement note without exposing identity in the payload", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/feedback/improvement", {
@@ -172,6 +207,47 @@ describe("Analytics endpoints", () => {
       "quick-query",
       "The empty state could explain what to do next.",
     ]);
+  });
+
+  it("accepts public improvement feedback without authentication", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/feedback/public-improvement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "User@Example.com",
+          device_id: "device-123",
+          tool_id: "quick-query",
+          message: "The empty state could explain what to do next.",
+        }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    const insert = env.DB.executed.find((item) => item.sql.includes("INSERT INTO improvement_feedback"));
+    expect(response.status).toBe(201);
+    expect(data.ok).toBe(true);
+    expect(insert.args.slice(0, 4)).toEqual([
+      "user@example.com",
+      "device-123",
+      "quick-query",
+      "The empty state could explain what to do next.",
+    ]);
+  });
+
+  it("rejects public improvement feedback without a valid registered email", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/feedback/public-improvement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "", device_id: "device-123", message: "A note" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    expect(env.DB.executed).toHaveLength(0);
   });
 
   it("rejects an empty improvement note", async () => {

@@ -14,10 +14,20 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
-                        <div class="query-type-dropdown-menu" id="queryTypeDropdown">
-                            <button class="query-type-option active" data-value="merge">MERGE INTO</button>
-                            <button class="query-type-option" data-value="insert">INSERT</button>
-                            <button class="query-type-option" data-value="update">UPDATE</button>
+                        <div class="query-type-dropdown-menu" id="queryTypeDropdown" role="dialog" aria-label="Query type options" aria-hidden="true">
+                            <div class="query-type-search-wrap">
+                                <svg class="query-type-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="6.5"></circle>
+                                    <path d="m16 16 4 4"></path>
+                                </svg>
+                                <input id="queryTypeSearchInput" type="search" placeholder="Filter query types" autocomplete="off" spellcheck="false" aria-label="Filter query types" aria-controls="queryTypeOptions">
+                            </div>
+                            <div class="query-type-options" id="queryTypeOptions" role="listbox" aria-label="Query types">
+                                <button type="button" class="query-type-option active" data-value="merge" role="option" aria-selected="true">MERGE INTO</button>
+                                <button type="button" class="query-type-option" data-value="insert" role="option" aria-selected="false">INSERT</button>
+                                <button type="button" class="query-type-option" data-value="update" role="option" aria-selected="false">UPDATE</button>
+                            </div>
+                            <div class="query-type-no-results" id="queryTypeNoResults" role="status" hidden>No matching query types</div>
                         </div>
                     </div>
                     <input type="text" id="tableNameInput" placeholder="schema_name.table_name" value="">

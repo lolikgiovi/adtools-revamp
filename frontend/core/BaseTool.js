@@ -2,6 +2,8 @@
  * BaseTool - Base class for all tools
  * Provides common functionality and structure
  */
+import { enhanceSearchableDropdowns } from "../components/SearchableDropdown.js";
+
 class BaseTool {
   constructor(config = {}) {
     this.id = config.id || this.constructor.name.toLowerCase();
@@ -96,6 +98,7 @@ class BaseTool {
   mount(container) {
     this.container = container;
     container.innerHTML = this.render();
+    enhanceSearchableDropdowns(container);
     this.onMount();
   }
 

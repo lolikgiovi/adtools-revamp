@@ -12,14 +12,13 @@ import toolsConfig from "./config/tools.json";
 import { getIconSvg } from "./config/iconRegistry.js";
 import { buildToolDefinitions, getToolDefinition, getToolDefinitionsList } from "./config/toolDefinitions.js";
 import { UsageTracker } from "./core/UsageTracker.js";
-import { UsageOverviewErrorCode, UsageOverviewService } from "./core/UsageOverviewService.js";
-import { normalizeUsageScope } from "./core/UsageOverviewModel.js";
-import { SessionTokenStore } from "./core/SessionTokenStore.js";
-import { openOtpOverlay } from "./components/OtpOverlay.js";
+import { UsageOverviewService } from "./core/UsageOverviewService.js";
+import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewModel.js";
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { OracleConnectionService } from "./core/OracleConnectionService.js";
+import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 const ASSET_LOAD_MAX_RETRIES = 3;
@@ -48,6 +47,8 @@ class App {
     this.mainContent = null;
     this.toolsConfigMap = new Map();
     this.categoriesConfigMap = new Map();
+    this._quickQuerySearchService = null;
+    this._quickQuerySearchServicePromise = null;
     this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: false };
     this.usageOverviewRequestId = 0;
     this._oracleHeaderInitRequested = false;
@@ -69,6 +70,7 @@ class App {
    */
   init() {
     this.setupDOM();
+    installSearchableDropdowns(document);
     this.buildToolsConfigMap();
     this.buildCategoriesConfigMap();
     this.buildToolDefinitions();
@@ -234,6 +236,7 @@ class App {
       router: this.router,
       app: this,
       getIcon: this.getToolIcon.bind(this),
+      searchQuickQuery: this.searchQuickQueryTables.bind(this),
     });
     document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open());
 
@@ -382,16 +385,16 @@ class App {
         </div>
       `;
       const requestId = ++this.usageOverviewRequestId;
-      const hasAnalyticsSession = Boolean(SessionTokenStore.getToken());
+      const usageIdentity = this.#getUsageIdentity();
       this.usageOverviewState = {
         data: null,
         source: "local",
-        loading: hasAnalyticsSession,
+        loading: Boolean(usageIdentity),
         error: null,
-        authRequired: !hasAnalyticsSession,
+        authRequired: false,
       };
       this.renderUsagePanel();
-      if (hasAnalyticsSession) this.loadUsageOverview(navigationId, requestId).catch(() => {});
+      if (usageIdentity) this.loadUsageOverview(navigationId, requestId).catch(() => {});
     }
 
     if (this.isNavigationCurrent(navigationId, "home")) {
@@ -1380,6 +1383,31 @@ class App {
 
     this.globalSearch.setIndex(items);
   }
+
+  /**
+   * Search Quick Query's persisted schema catalog without loading the heavy tool UI.
+   * The search service is shared across command-palette queries and refreshes its
+   * in-memory index so changes made in Quick Query are visible immediately.
+   */
+  async searchQuickQueryTables(searchTerm) {
+    if (!this._quickQuerySearchServicePromise) {
+      this._quickQuerySearchServicePromise = import("./tools/quick-query/services/IndexedDBStorageService.js")
+        .then(({ IndexedDBStorageService }) => {
+          const service = new IndexedDBStorageService();
+          return service.init().then(() => {
+            this._quickQuerySearchService = service;
+            return service;
+          });
+        })
+        .catch((error) => {
+          this._quickQuerySearchServicePromise = null;
+          throw error;
+        });
+    }
+
+    const service = this._quickQuerySearchService || (await this._quickQuerySearchServicePromise);
+    return service.searchSavedSchemas(searchTerm, { refresh: true });
+  }
   /**
    * Check whether the current local app state enables the privileged sidebar pages.
    */
@@ -1417,16 +1445,17 @@ class App {
   }
 
   async loadUsageOverview(navigationId = null, requestId = this.usageOverviewRequestId) {
-    if (!SessionTokenStore.getToken()) {
+    const usageIdentity = this.#getUsageIdentity();
+    if (!usageIdentity) {
       if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
       if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
-      this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: true };
+      this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: false };
       this.renderUsagePanel();
       return;
     }
 
     try {
-      const data = await UsageOverviewService.fetchOverview();
+      const data = await UsageOverviewService.fetchPublicOverview(usageIdentity);
       if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
       if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
       this.usageOverviewState = { data, source: "api", loading: false, error: null, authRequired: false };
@@ -1434,65 +1463,14 @@ class App {
     } catch (error) {
       if (navigationId !== null && !this.isNavigationCurrent(navigationId, "home")) return;
       if (requestId !== this.usageOverviewRequestId || !document.querySelector(".home-container")) return;
-      const authRequired = error?.code === UsageOverviewErrorCode.AUTH_REQUIRED || !SessionTokenStore.getToken();
       this.usageOverviewState = {
         data: null,
         source: "local",
         loading: false,
-        error: authRequired ? null : String(error?.message || "Analytics sync is unavailable"),
-        authRequired,
+        error: String(error?.message || "Analytics sync is unavailable"),
+        authRequired: false,
       };
       this.renderUsagePanel();
-    }
-  }
-
-  refreshUsageOverview() {
-    if (!document.querySelector(".home-container")) return;
-    const requestId = ++this.usageOverviewRequestId;
-    if (!SessionTokenStore.getToken()) {
-      this.usageOverviewState = { data: null, source: "local", loading: false, error: null, authRequired: true };
-      this.renderUsagePanel();
-      return;
-    }
-    this.usageOverviewState = { data: null, source: "local", loading: true, error: null, authRequired: false };
-    this.renderUsagePanel();
-    this.loadUsageOverview(null, requestId).catch(() => {});
-  }
-
-  async openUsageSession(button = null) {
-    const email = this.#getUsageEmail();
-    if (!this.#canStartUsageSession()) {
-      this.eventBus.emit("notification:info", {
-        message: email === "dev@localhost" ? "Team comparison is unavailable for the local development account." : "Register an email before signing in to sync analytics.",
-      });
-      return;
-    }
-
-    const originalLabel = button?.textContent || "Sign in";
-
-    if (button) {
-      button.disabled = true;
-      button.textContent = "Opening sign-in…";
-    }
-
-    try {
-      await openOtpOverlay({
-        email,
-        storageScope: "usage-overview",
-        preferCachedToken: false,
-      });
-      this.refreshUsageOverview();
-    } catch (error) {
-      if (String(error?.message || error) !== "Closed") {
-        this.eventBus.emit("notification:error", {
-          message: String(error?.message || error || "Could not sign in to sync analytics."),
-        });
-      }
-    } finally {
-      if (button?.isConnected) {
-        button.disabled = false;
-        button.textContent = originalLabel;
-      }
     }
   }
 
@@ -1503,20 +1481,23 @@ class App {
 
     const toolId = form.querySelector("[name='tool_id']")?.value || "";
     const message = form.querySelector("[name='message']")?.value || "";
+    const usageIdentity = this.#getUsageIdentity();
+    if (!usageIdentity) {
+      status.textContent = "Register an email before sending feedback.";
+      status.dataset.state = "error";
+      return;
+    }
     submitButton.disabled = true;
     status.textContent = "Sending your note…";
     status.dataset.state = "pending";
 
     try {
-      await UsageOverviewService.submitImprovement({ toolId, message });
+      await UsageOverviewService.submitPublicImprovement({ ...usageIdentity, toolId, message });
       form.reset();
       status.textContent = "Feedback sent.";
       status.dataset.state = "success";
     } catch (error) {
-      status.textContent =
-        error?.code === UsageOverviewErrorCode.AUTH_REQUIRED
-          ? "Your sign-in expired. Sign in again before sending feedback."
-          : String(error?.message || "Could not send feedback. Try again.");
+      status.textContent = String(error?.message || "Could not send feedback. Try again.");
       status.dataset.state = "error";
     } finally {
       submitButton.disabled = false;
@@ -1541,25 +1522,6 @@ class App {
     };
   }
 
-  #getUsageDays(scope) {
-    const daily = new Map((scope?.daily || []).map((row) => [row.day, Number(row.count) || 0]));
-    const days = [];
-    const now = new Date();
-    now.setHours(12, 0, 0, 0);
-    for (let index = 6; index >= 0; index -= 1) {
-      const date = new Date(now);
-      date.setDate(now.getDate() - index);
-      const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      days.push({
-        day,
-        label: date.toLocaleDateString(undefined, { weekday: "short" }),
-        dateLabel: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        value: daily.get(day) || 0,
-      });
-    }
-    return days;
-  }
-
   #renderFeatureList(scope) {
     if (!scope.tools.length) return '<p class="usage-empty">No activity yet. Open a tool to start tracking.</p>';
     const maxCount = Math.max(1, ...scope.tools.map((tool) => tool.count));
@@ -1581,15 +1543,9 @@ class App {
       .join("");
   }
 
-  #renderScopeCard(scope, { kind, title, subtitle }) {
-    const days = this.#getUsageDays(scope);
-    const activeDays = days.filter((day) => day.value > 0).length;
-    const stats = [
-      { label: "Tools used", value: scope.toolsUsed.toLocaleString(), note: "all time" },
-      kind === "global"
-        ? { label: "People active", value: scope.activeUsers.toLocaleString(), note: "all tools" }
-        : { label: "Active days", value: `${activeDays}/7`, note: "last seven days" },
-    ];
+  #renderScopeCard(scope, { kind, title, subtitle = "" }) {
+    const stats = kind === "global" ? [{ label: "People active", value: scope.activeUsers.toLocaleString(), note: "all tools" }] : [];
+    const toolCount = `${scope.tools.length.toLocaleString()} ${scope.tools.length === 1 ? "tool" : "tools"}${scope.tools.length > 6 ? " · scroll for more" : ""}`;
     const statsHtml = stats
       .map(
         ({ label, value, note }) => `
@@ -1607,77 +1563,42 @@ class App {
         <div class="usage-scope-header">
           <div class="usage-scope-heading">
             <h2 id="usage-${kind}-title">${this.#escapeHtml(title)}</h2>
-            <p>${this.#escapeHtml(subtitle)}</p>
+            ${subtitle ? `<p>${this.#escapeHtml(subtitle)}</p>` : ""}
           </div>
           <div class="usage-scope-total">
             <strong>${scope.totalActivities.toLocaleString()}</strong>
             <span>activities</span>
           </div>
         </div>
-        <div class="usage-scope-stat-grid">${statsHtml}</div>
+        ${statsHtml ? `<div class="usage-scope-stat-grid">${statsHtml}</div>` : ""}
         <div class="usage-scope-tools">
           <div class="usage-section-header">
             <h3>Tools used</h3>
-            <span class="usage-section-count">${scope.tools.length.toLocaleString()} ${scope.tools.length === 1 ? "tool" : "tools"}</span>
+            <span class="usage-section-count">${this.#escapeHtml(toolCount)}</span>
           </div>
-          <div class="usage-feature-list" role="list">${this.#renderFeatureList(scope)}</div>
+          <div class="usage-feature-list" role="list" aria-label="${this.#escapeHtml(`${scope.tools.length.toLocaleString()} tools`)}">${this.#renderFeatureList(scope)}</div>
         </div>
       </section>
     `;
   }
 
-  #renderScopeUnavailable(state, { canStartSession = false } = {}) {
-    const authRequired = Boolean(state.authRequired);
-    const localDevAccount = authRequired && this.#isLocalDevelopmentAccount();
+  #renderScopeUnavailable(state, { hasIdentity = false, isRegistered = false } = {}) {
     let statusLabel = "Unavailable";
     if (state.loading) statusLabel = "Syncing";
-    else if (authRequired) statusLabel = localDevAccount ? "Local only" : "Sign-in required";
     let description = "We could not reach synced analytics. Your local activity is still available.";
     if (state.loading) description = "Loading team activity.";
-    else if (authRequired && localDevAccount) description = "Team activity is disabled for the local development account.";
-    else if (authRequired && canStartSession) description = "Sign in to compare your activity with the team.";
-    else if (authRequired) description = "Register an account email before syncing team activity.";
+    else if (!hasIdentity && isRegistered) description = "Add a valid account email before syncing team activity.";
+    else if (!isRegistered) description = "Register an account email before syncing team activity.";
 
-    let action = `<button class="usage-secondary-button" type="button" data-usage-refresh>Retry sync</button>`;
-    if (state.loading) action = `<button class="usage-secondary-button" type="button" data-usage-refresh disabled>Syncing…</button>`;
-    else if (authRequired && canStartSession) action = `<button class="usage-primary-button" type="button" data-usage-auth>Sign in to compare</button>`;
-    else if (authRequired) action = "";
     return `
-      <aside class="usage-compare-card ${authRequired ? "usage-compare-card-auth" : ""}" aria-labelledby="usage-global-title">
+      <aside class="usage-compare-card ${state.error ? "usage-compare-card-error" : ""}" aria-labelledby="usage-global-title">
         <div class="usage-compare-card-content">
           <span class="usage-compare-status">${this.#escapeHtml(statusLabel)}</span>
-          <h2 id="usage-global-title">Compare usage</h2>
+          <h2 id="usage-global-title">Team activity</h2>
           <p>${this.#escapeHtml(description)}</p>
-          ${action}
         </div>
       </aside>
     `;
-  }
-
-  #renderComparison(scope, globalScope) {
-    if (!globalScope) return "";
-    const userDays = this.#getUsageDays(scope);
-    const globalDays = this.#getUsageDays(globalScope);
-    const maxValue = Math.max(1, ...userDays.map((day) => day.value), ...globalDays.map((day) => day.value));
-    const bars = userDays
-      .map((day, index) => {
-        const globalValue = globalDays[index]?.value || 0;
-        const userHeight = day.value > 0 ? Math.max(7, Math.round((day.value / maxValue) * 100)) : 0;
-        const globalHeight = globalValue > 0 ? Math.max(7, Math.round((globalValue / maxValue) * 100)) : 0;
-        return `
-          <div class="usage-comparison-column" title="${this.#escapeHtml(`${day.dateLabel}: you ${day.value}, team ${globalValue}`)}">
-            <div class="usage-comparison-values"><span>${day.value.toLocaleString()}</span><span>${globalValue.toLocaleString()}</span></div>
-            <div class="usage-comparison-track" aria-hidden="true">
-              <span class="usage-comparison-fill usage-comparison-fill-user" style="height:${userHeight}%"></span>
-              <span class="usage-comparison-fill usage-comparison-fill-global" style="height:${globalHeight}%"></span>
-            </div>
-            <span class="usage-bar-label">${this.#escapeHtml(day.label)}</span>
-          </div>
-        `;
-      })
-      .join("");
-    const label = userDays.map((day, index) => `${day.dateLabel}: you ${day.value}, team ${globalDays[index]?.value || 0}`).join(", ");
-    return `<div class="usage-comparison-chart" role="img" aria-label="${this.#escapeHtml(`Your and team activity over the last seven days: ${label}`)}">${bars}</div>`;
   }
 
   #renderFeedbackOptions() {
@@ -1688,35 +1609,20 @@ class App {
       .join("");
   }
 
-  #getUsageEmail() {
-    try {
-      return String(localStorage.getItem("user.email") || "").trim();
-    } catch (_) {
-      return "";
-    }
+  #getUsageIdentity() {
+    if (localStorage.getItem("user.registered") !== "true") return null;
+    return UsageOverviewService.getRegisteredIdentity({ deviceId: UsageTracker.getDeviceId() });
   }
 
-  #canStartUsageSession() {
-    const email = this.#getUsageEmail();
-    return Boolean(email && email !== "dev@localhost");
-  }
-
-  #isLocalDevelopmentAccount() {
-    return this.#getUsageEmail() === "dev@localhost";
-  }
-
-  #renderFeedbackSection({ canSubmit = false, canStartSession = false } = {}) {
+  #renderFeedbackSection({ canSubmit = false } = {}) {
     if (!canSubmit) {
-      const action = canStartSession
-        ? '<button class="usage-secondary-button" type="button" data-usage-auth>Sign in to send feedback</button>'
-        : '<span class="usage-feedback-locked-note">Available after account sign-in.</span>';
       return `
         <section class="usage-feedback-section usage-feedback-section-locked" aria-labelledby="usage-feedback-title">
           <div class="usage-feedback-copy">
             <h2 id="usage-feedback-title">Have feedback?</h2>
-            <p>Sign in to send a note about a tool that needs attention.</p>
+            <p>Register your email to send a note about a tool that needs attention.</p>
           </div>
-          <div class="usage-feedback-locked-action">${action}</div>
+          <div class="usage-feedback-locked-action"><span class="usage-feedback-locked-note">Available after account registration.</span></div>
         </section>
       `;
     }
@@ -1729,7 +1635,7 @@ class App {
         </div>
         <form class="usage-feedback-form" data-usage-feedback-form>
           <div class="usage-feedback-fields">
-            <label class="usage-form-field">
+            <label class="usage-form-field usage-form-tool-field">
               <span>Tool <small>optional</small></span>
               <select name="tool_id">
                 <option value="">Choose a tool</option>
@@ -1742,7 +1648,6 @@ class App {
             </label>
           </div>
           <div class="usage-feedback-actions">
-            <span class="usage-feedback-hint">Your note goes to the AD Tools team.</span>
             <button class="usage-primary-button" type="submit">Send feedback</button>
           </div>
           <div class="usage-feedback-status" data-feedback-status role="status" aria-live="polite"></div>
@@ -1754,71 +1659,29 @@ class App {
   renderUsagePanel() {
     const container = document.getElementById("usage-panel");
     if (!container) return;
-    const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null, authRequired: true };
+    const state = this.usageOverviewState || { data: null, source: "local", loading: false, error: null, authRequired: false };
     const localScope = this.#getLocalUsageScope();
     const apiData = state.source === "api" ? state.data : null;
     const userScope = this.#normalizeUsageScope(apiData?.user || localScope);
     const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
-    const hasSession = Boolean(SessionTokenStore.getToken());
-    const canStartSession = this.#canStartUsageSession();
-    const sourceLabel = apiData ? "Synced" : state.loading ? "Syncing" : "On this device";
-    let sourceNote = "Local data is available";
-    if (apiData) sourceNote = "Personal and team data";
-    else if (state.authRequired) {
-      const isLocalDevelopmentAccount = this.#isLocalDevelopmentAccount();
-      if (isLocalDevelopmentAccount) sourceNote = "Local development data only";
-      else if (canStartSession) sourceNote = "Sign in to compare with the team";
-      else sourceNote = "Sign-in required";
-    }
-    else if (state.error) sourceNote = "Sync unavailable · showing local data";
-    const refreshButton = hasSession
-      ? `<button class="usage-secondary-button usage-refresh-button" type="button" data-usage-refresh ${state.loading ? "disabled" : ""}>${state.loading ? "Syncing…" : "Refresh"}</button>`
-      : "";
-    const comparisonHtml = globalScope
-      ? `
-        <section class="usage-section usage-comparison-section" aria-labelledby="usage-comparison-title">
-          <div class="usage-section-header">
-            <div>
-              <h2 id="usage-comparison-title">Last 7 days</h2>
-              <p>Your activity compared with the team.</p>
-            </div>
-            <div class="usage-comparison-legend" aria-label="Chart legend"><span><i class="usage-legend-swatch usage-legend-user"></i>You</span><span><i class="usage-legend-swatch usage-legend-global"></i>Team</span></div>
-          </div>
-          ${this.#renderComparison(userScope, globalScope)}
-        </section>
-      `
-      : "";
-
+    const usageIdentity = this.#getUsageIdentity();
+    const hasIdentity = Boolean(usageIdentity);
+    const usageAccess = getUsageAccessState({
+      registered: localStorage.getItem("user.registered") === "true",
+      hasIdentity,
+    });
     container.style.display = "block";
     container.innerHTML = /*html*/ `
       <div class="usage-panel">
-        <header class="usage-panel-header">
-          <div class="usage-heading">
-            <h1 id="usage-overview-title">Usage</h1>
-          </div>
-          <div class="usage-source">
-            <span class="usage-source-status"><span class="usage-source-dot" data-state="${apiData ? "synced" : state.loading ? "loading" : state.error ? "warning" : "local"}"></span><span>${this.#escapeHtml(sourceLabel)}</span></span>
-            <span>${this.#escapeHtml(sourceNote)}</span>
-            ${refreshButton}
-          </div>
-        </header>
-
         <div class="usage-overview-grid">
-          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your activity", subtitle: "Tracked on this device" })}
-          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team activity", subtitle: "Across signed-in users" }) : this.#renderScopeUnavailable(state, { canStartSession })}
+          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your activity" })}
+          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team activity", subtitle: "Across registered users" }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
         </div>
 
-        ${comparisonHtml}
-        ${this.#renderFeedbackSection({ canSubmit: hasSession, canStartSession })}
+        ${this.#renderFeedbackSection({ canSubmit: hasIdentity })}
       </div>
     `;
 
-    container.querySelectorAll("[data-usage-refresh]").forEach((button) => {
-      button.addEventListener("click", () => this.refreshUsageOverview());
-    });
-    container.querySelectorAll("[data-usage-auth]").forEach((button) => {
-      button.addEventListener("click", () => void this.openUsageSession(button));
-    });
     const feedbackForm = container.querySelector("[data-usage-feedback-form]");
     feedbackForm?.addEventListener("submit", (event) => {
       event.preventDefault();

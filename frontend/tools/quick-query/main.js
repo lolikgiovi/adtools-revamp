@@ -142,6 +142,7 @@ export class QuickQueryUI {
       }
     };
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
+    this._queryTypeDocumentClick = null;
     this._handleUuidGeneratorKeydown = (event) => {
       if (event.key === "Escape") {
         if (this._schemaLoadModeResolve) {
@@ -259,6 +260,8 @@ export class QuickQueryUI {
       queryTypeBtn: document.getElementById("queryTypeBtn"),
       queryTypeLabel: document.getElementById("queryTypeLabel"),
       queryTypeDropdown: document.getElementById("queryTypeDropdown"),
+      queryTypeSearchInput: document.getElementById("queryTypeSearchInput"),
+      queryTypeNoResults: document.getElementById("queryTypeNoResults"),
       schemaFileInput: document.getElementById("schemaFileInput"),
       savedSchemasSearch: document.getElementById("savedSchemasSearch"),
 
@@ -1456,6 +1459,10 @@ export class QuickQueryUI {
     this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
+    if (this._queryTypeDocumentClick) {
+      document.removeEventListener("click", this._queryTypeDocumentClick);
+      this._queryTypeDocumentClick = null;
+    }
     const persist = this.dataAutosave.destroy({ flush });
 
     if (this.editor) {
@@ -1575,6 +1582,7 @@ export class QuickQueryUI {
 
     this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option").forEach((opt) => {
       opt.classList.toggle("active", opt.dataset.value === queryType);
+      opt.setAttribute("aria-selected", String(opt.dataset.value === queryType));
     });
   }
 
@@ -1589,7 +1597,86 @@ export class QuickQueryUI {
   handleQueryTypeDropdownToggle(e) {
     e.preventDefault();
     e.stopPropagation();
-    this.elements.queryTypeDropdown?.classList.toggle("show");
+    const dropdown = this.elements.queryTypeDropdown;
+    if (!dropdown) return;
+
+    if (dropdown.classList.contains("show")) {
+      this.closeQueryTypeDropdown(false);
+    } else {
+      this.openQueryTypeDropdown();
+    }
+  }
+
+  getVisibleQueryTypeOptions() {
+    return Array.from(this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option") || []).filter(
+      (option) => !option.hidden,
+    );
+  }
+
+  updateQueryTypeActiveOption() {
+    const visibleOptions = this.getVisibleQueryTypeOptions();
+    if (!visibleOptions.length) {
+      this.queryTypeActiveIndex = -1;
+      return;
+    }
+
+    if (!Number.isInteger(this.queryTypeActiveIndex) || this.queryTypeActiveIndex < 0 || this.queryTypeActiveIndex >= visibleOptions.length) {
+      const selectedIndex = visibleOptions.findIndex((option) => option.classList.contains("active"));
+      this.queryTypeActiveIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    }
+
+    this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option").forEach((option) => {
+      option.classList.toggle("keyboard-active", visibleOptions[this.queryTypeActiveIndex] === option);
+    });
+  }
+
+  filterQueryTypeOptions(value = "") {
+    const query = String(value || "").trim().toLowerCase();
+    const options = Array.from(this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option") || []);
+    options.forEach((option) => {
+      const matches = !query || option.textContent.toLowerCase().includes(query);
+      option.hidden = !matches;
+      option.setAttribute("aria-hidden", String(!matches));
+    });
+
+    const visibleOptions = this.getVisibleQueryTypeOptions();
+    this.elements.queryTypeNoResults?.toggleAttribute("hidden", visibleOptions.length > 0);
+    this.queryTypeActiveIndex = visibleOptions.length ? 0 : -1;
+    this.updateQueryTypeActiveOption();
+  }
+
+  moveQueryTypeActive(direction) {
+    const visibleOptions = this.getVisibleQueryTypeOptions();
+    if (!visibleOptions.length) return;
+    const nextIndex = (this.queryTypeActiveIndex + direction + visibleOptions.length) % visibleOptions.length;
+    this.queryTypeActiveIndex = nextIndex;
+    this.updateQueryTypeActiveOption();
+  }
+
+  openQueryTypeDropdown() {
+    const dropdown = this.elements.queryTypeDropdown;
+    if (!dropdown) return;
+    dropdown.classList.add("show");
+    dropdown.setAttribute("aria-hidden", "false");
+    this.elements.queryTypeBtn?.setAttribute("aria-expanded", "true");
+    if (this.elements.queryTypeSearchInput) {
+      this.elements.queryTypeSearchInput.value = "";
+      this.filterQueryTypeOptions("");
+      this.elements.queryTypeSearchInput.focus();
+    }
+  }
+
+  closeQueryTypeDropdown(restoreFocus = false) {
+    const dropdown = this.elements.queryTypeDropdown;
+    if (!dropdown) return;
+    dropdown.classList.remove("show");
+    dropdown.setAttribute("aria-hidden", "true");
+    this.elements.queryTypeBtn?.setAttribute("aria-expanded", "false");
+    if (this.elements.queryTypeSearchInput) {
+      this.elements.queryTypeSearchInput.value = "";
+      this.filterQueryTypeOptions("");
+    }
+    if (restoreFocus) this.elements.queryTypeBtn?.focus();
   }
 
   /**
@@ -1598,8 +1685,13 @@ export class QuickQueryUI {
   setupQueryTypeDropdown() {
     const dropdown = this.elements.queryTypeDropdown;
     const btn = this.elements.queryTypeBtn;
+    const searchInput = this.elements.queryTypeSearchInput;
 
     if (!dropdown || !btn) return;
+
+    this.queryTypeActiveIndex = 0;
+    btn.setAttribute("aria-haspopup", "dialog");
+    btn.setAttribute("aria-expanded", "false");
 
     // Bind option click handlers
     dropdown.querySelectorAll(".query-type-option").forEach((opt) => {
@@ -1609,7 +1701,7 @@ export class QuickQueryUI {
         const value = opt.dataset.value;
         const previousQueryType = this.getQueryTypeValue();
         this.setQueryTypeValue(value);
-        dropdown.classList.remove("show");
+        this.closeQueryTypeDropdown(true);
         await this.persistCurrentQueryType();
         if (previousQueryType !== this.getQueryTypeValue()) {
           this.trackQuickQueryEvent(
@@ -1626,12 +1718,38 @@ export class QuickQueryUI {
       });
     });
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
-      if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.remove("show");
+    searchInput?.addEventListener("input", () => this.filterQueryTypeOptions(searchInput.value));
+    searchInput?.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        this.moveQueryTypeActive(1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        this.moveQueryTypeActive(-1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const option = this.getVisibleQueryTypeOptions()[this.queryTypeActiveIndex];
+        option?.click();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.closeQueryTypeDropdown(true);
       }
     });
+
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        this.openQueryTypeDropdown();
+      }
+    });
+
+    // Close dropdown when clicking outside
+    this._queryTypeDocumentClick = (e) => {
+      if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+        this.closeQueryTypeDropdown(false);
+      }
+    };
+    document.addEventListener("click", this._queryTypeDocumentClick);
   }
 
   async handleGenerateQuery() {
