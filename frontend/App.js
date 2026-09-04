@@ -1544,20 +1544,6 @@ class App {
   }
 
   #renderScopeCard(scope, { kind, title, subtitle = "" }) {
-    const stats = kind === "global" ? [{ label: "People active", value: scope.activeUsers.toLocaleString(), note: "all tools" }] : [];
-    const toolCount = `${scope.tools.length.toLocaleString()} ${scope.tools.length === 1 ? "tool" : "tools"}${scope.tools.length > 6 ? " · scroll for more" : ""}`;
-    const statsHtml = stats
-      .map(
-        ({ label, value, note }) => `
-          <div class="usage-scope-stat">
-            <span>${this.#escapeHtml(label)}</span>
-            <strong title="${this.#escapeHtml(value)}">${this.#escapeHtml(value)}</strong>
-            <small>${this.#escapeHtml(note)}</small>
-          </div>
-        `,
-      )
-      .join("");
-
     return `
       <section class="usage-scope-card usage-scope-card-${kind}" aria-labelledby="usage-${kind}-title">
         <div class="usage-scope-header">
@@ -1570,12 +1556,7 @@ class App {
             <span>activities</span>
           </div>
         </div>
-        ${statsHtml ? `<div class="usage-scope-stat-grid">${statsHtml}</div>` : ""}
         <div class="usage-scope-tools">
-          <div class="usage-section-header">
-            <h3>Tools used</h3>
-            <span class="usage-section-count">${this.#escapeHtml(toolCount)}</span>
-          </div>
           <div class="usage-feature-list" role="list" aria-label="${this.#escapeHtml(`${scope.tools.length.toLocaleString()} tools`)}">${this.#renderFeatureList(scope)}</div>
         </div>
       </section>
@@ -1591,9 +1572,12 @@ class App {
     else if (!isRegistered) description = "Register an account email before syncing team activity.";
 
     return `
-      <aside class="usage-compare-card ${state.error ? "usage-compare-card-error" : ""}" aria-labelledby="usage-global-title">
+      <aside class="usage-compare-card ${state.error ? "usage-compare-card-error" : ""}" aria-labelledby="usage-global-title" aria-busy="${state.loading ? "true" : "false"}">
         <div class="usage-compare-card-content">
-          <span class="usage-compare-status">${this.#escapeHtml(statusLabel)}</span>
+          <span class="usage-compare-status${state.loading ? " usage-compare-status-loading" : ""}" role="status" aria-live="polite">
+            ${state.loading ? '<span class="usage-compare-spinner" aria-hidden="true"></span>' : ""}
+            ${this.#escapeHtml(statusLabel)}
+          </span>
           <h2 id="usage-global-title">Team activity</h2>
           <p>${this.#escapeHtml(description)}</p>
         </div>
@@ -1664,6 +1648,7 @@ class App {
     const apiData = state.source === "api" ? state.data : null;
     const userScope = this.#normalizeUsageScope(apiData?.user || localScope);
     const globalScope = apiData?.global ? this.#normalizeUsageScope(apiData.global) : null;
+    const teamSubtitle = globalScope ? `Across ${globalScope.activeUsers.toLocaleString()} users` : "";
     const usageIdentity = this.#getUsageIdentity();
     const hasIdentity = Boolean(usageIdentity);
     const usageAccess = getUsageAccessState({
@@ -1675,7 +1660,7 @@ class App {
       <div class="usage-panel">
         <div class="usage-overview-grid">
           ${this.#renderScopeCard(userScope, { kind: "user", title: "Your activity" })}
-          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team activity", subtitle: "Across registered users" }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
+          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team activity", subtitle: teamSubtitle }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
         </div>
 
         ${this.#renderFeedbackSection({ canSubmit: hasIdentity })}

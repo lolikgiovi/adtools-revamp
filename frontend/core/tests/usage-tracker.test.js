@@ -98,6 +98,22 @@ describe("UsageTracker analytics reliability", () => {
     ]);
   });
 
+  it("preserves milliseconds in usage-log timestamps for retry-safe identities", () => {
+    UsageTracker._state.usageLogs = [
+      {
+        user_email: "user@example.com",
+        device_id: "device-1",
+        tool_id: "json-tools",
+        action: "prettify",
+        ts: "2026-09-04T03:00:00.123Z",
+      },
+    ];
+
+    const payload = UsageTracker._toBatchPayload();
+
+    expect(payload.usage_log[0].created_time).toBe("2026-09-04 10:00:00.123");
+  });
+
   it("queues error events for the next batch", () => {
     UsageTracker._state.errorEvents = [];
 
@@ -127,6 +143,27 @@ describe("UsageTracker analytics reliability", () => {
     expect(UsageTracker._state.counts["json-tools"].export_excel).toBe(1);
     expect(UsageTracker._state.counts.master_lockey).toBeUndefined();
     expect(UsageTracker._state.counts.json_tools).toBeUndefined();
+  });
+
+  it("ignores obsolete velocity-template tracking", () => {
+    UsageTracker._state.counts["velocity-template"] = { open: 9 };
+    UsageTracker._state.daily = { "2026-09-04": { "velocity-template.open": 9 } };
+    UsageTracker._state.events = [{ featureId: "velocity-template", action: "open", ts: new Date().toISOString() }];
+    UsageTracker._state.usageLogs = [{ tool_id: "velocity-template" }];
+    UsageTracker._state.errorEvents = [{ tool_id: "velocity-template" }];
+
+    UsageTracker.track("velocity-template", "open");
+    UsageTracker.trackFeature("velocity-template", "open");
+    UsageTracker.trackEvent("velocity-template", "open");
+    UsageTracker.queueErrorEvent({ tool_id: "velocity-template" });
+    UsageTracker.sanitizeCounts();
+
+    expect(UsageTracker.getAggregatedStats().totalsByFeature["velocity-template"]).toBeUndefined();
+    expect(UsageTracker._state.counts["velocity-template"]).toBeUndefined();
+    expect(UsageTracker._state.daily["2026-09-04"]).toEqual({});
+    expect(UsageTracker._state.events).toEqual([]);
+    expect(UsageTracker._state.usageLogs).toEqual([]);
+    expect(UsageTracker._state.errorEvents).toEqual([]);
   });
 
   it("allows longer sanitized error stacks without retaining sensitive fields", () => {

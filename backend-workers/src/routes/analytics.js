@@ -10,12 +10,65 @@ import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
 const OVERVIEW_DAILY_SQL = `
   SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
-  FROM usage_log
-  WHERE created_time >= datetime('now', '+7 hours', '-6 days')
-    {{USER_FILTER}}
+  FROM (
+    SELECT DISTINCT
+      LOWER(user_email) AS user_email,
+      device_id,
+      CASE
+        WHEN tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
+        WHEN tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
+        WHEN tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
+        ELSE tool_id
+      END AS tool_id,
+      action,
+      created_time
+    FROM usage_log
+    WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+      AND LOWER(TRIM(tool_id)) != 'velocity-template'
+      {{USER_FILTER}}
+  )
   GROUP BY day
   ORDER BY day ASC
 `;
+
+const LEGACY_DEVICE_USAGE_TOOL_IDS = "'jenkins-runner', 'master_lockey', 'json_tools'";
+const IGNORED_ANALYTICS_TOOL_ID = "velocity-template";
+
+/**
+ * Return one absolute snapshot per device/action/tool identity. Older clients wrote a few
+ * non-canonical tool IDs, while newer clients migrate those local counts into the canonical row.
+ * When both rows exist, the canonical row is authoritative; an alias is retained only when no
+ * canonical snapshot exists for the same device/action.
+ */
+function buildCanonicalDeviceUsageSql() {
+  return `
+    SELECT device_id, user_email, tool_id, action, count, updated_time
+    FROM device_usage
+    WHERE tool_id NOT IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
+      AND LOWER(TRIM(tool_id)) != '${IGNORED_ANALYTICS_TOOL_ID}'
+    UNION ALL
+    SELECT legacy.device_id, legacy.user_email,
+      CASE legacy.tool_id
+        WHEN 'jenkins-runner' THEN 'run-query'
+        WHEN 'master_lockey' THEN 'master-lockey'
+        WHEN 'json_tools' THEN 'json-tools'
+      END AS tool_id,
+      legacy.action, legacy.count, legacy.updated_time
+    FROM device_usage AS legacy
+    WHERE legacy.tool_id IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM device_usage AS canonical
+        WHERE canonical.device_id = legacy.device_id
+          AND canonical.action = legacy.action
+          AND canonical.tool_id = CASE legacy.tool_id
+            WHEN 'jenkins-runner' THEN 'run-query'
+            WHEN 'master_lockey' THEN 'master-lockey'
+            WHEN 'json_tools' THEN 'json-tools'
+          END
+      )
+  `;
+}
 
 /**
  * Handle GET /analytics/overview - authenticated personal and aggregate usage overview.
@@ -138,11 +191,13 @@ export async function handlePublicImprovementFeedbackPost(request, env) {
 }
 
 async function loadOverviewData(env, userEmail, source) {
+  const canonicalDeviceUsageSql = buildCanonicalDeviceUsageSql();
   const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
     env.DB
       .prepare(
-        `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-         FROM device_usage
+        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+         SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+         FROM canonical_device_usage
          WHERE LOWER(COALESCE(user_email, '')) = ?
          GROUP BY tool_id
          HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
@@ -153,8 +208,9 @@ async function loadOverviewData(env, userEmail, source) {
       .all(),
     env.DB
       .prepare(
-        `SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-         FROM device_usage
+        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+         SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
+         FROM canonical_device_usage
          GROUP BY tool_id
          HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
          ORDER BY count DESC, tool_id ASC
@@ -163,23 +219,25 @@ async function loadOverviewData(env, userEmail, source) {
       .all(),
     env.DB
       .prepare(
-        `SELECT
+        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+         SELECT
            COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
            COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
            MAX(updated_time) AS last_updated
-         FROM device_usage
+         FROM canonical_device_usage
          WHERE LOWER(COALESCE(user_email, '')) = ?`,
       )
       .bind(userEmail)
       .first(),
     env.DB
       .prepare(
-        `SELECT
+        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+         SELECT
            COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
            COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
            COUNT(DISTINCT CASE WHEN count > 0 THEN LOWER(user_email) END) AS active_users,
            MAX(updated_time) AS last_updated
-         FROM device_usage`,
+         FROM canonical_device_usage`,
       )
       .first(),
     env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "AND LOWER(user_email) = ?")).bind(userEmail).all(),
@@ -282,6 +340,7 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       for (const ev of events) {
         const createdTime = String(ev.created_time || tsGmt7Plain());
         const featureId = normalizeFeatureId(ev.feature_id || ev.type || "unknown");
+        if (isIgnoredAnalyticsTool(featureId)) continue;
         const action = String(ev.action || ev.event || "unknown");
         const properties =
           ev.properties && typeof ev.properties === "object"
@@ -317,6 +376,7 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const appVersion = safeString(err.app_version || data.app_version || "", 60) || null;
         const route = safeString(err.route || "", 160) || null;
         const toolId = normalizeFeatureId(err.tool_id || "");
+        if (isIgnoredAnalyticsTool(toolId)) continue;
         const processArea = safeString(err.process_area || "shell", 80);
         const errorKind = safeString(err.error_kind || "uncaught_error", 80);
         const errorName = safeString(err.error_name || "Error", 120);
@@ -363,17 +423,14 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const email = userEmail;
         const dev = deviceId;
         const toolId = normalizeFeatureId(log.tool_id || "unknown");
+        if (isIgnoredAnalyticsTool(toolId)) continue;
         const action = String(log.action || "unknown");
         const createdTime = String(log.created_time || tsGmt7Plain());
 
         usageLogStatements.push(
-          env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)").bind(
-            email,
-            dev,
-            toolId,
-            action,
-            createdTime,
-          ),
+          env.DB.prepare(
+            "INSERT OR IGNORE INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
+          ).bind(email, dev, toolId, action, createdTime),
         );
       }
 
@@ -383,6 +440,7 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const devId = deviceId;
         const email = userEmail;
         const toolId = normalizeFeatureId(du.tool_id || "unknown");
+        if (isIgnoredAnalyticsTool(toolId)) continue;
         const action = String(du.action || "unknown");
         const count = Number(du.count || 0) || 0;
         const updatedTime = String(du.updated_time || tsGmt7Plain());
@@ -474,6 +532,11 @@ export async function handleAnalyticsLogPost(request, env, session) {
     const userEmail = String(session.email).trim().toLowerCase();
     const deviceId = String(session.deviceId);
     const toolId = normalizeFeatureId(data.tool_id || "unknown");
+    if (isIgnoredAnalyticsTool(toolId)) {
+      return new Response(JSON.stringify({ ok: true, inserted: 0, ignored: true }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
     const action = String(data.action || "unknown");
     const createdTime = String(data.created_time || tsGmt7Plain());
 
@@ -481,7 +544,9 @@ export async function handleAnalyticsLogPost(request, env, session) {
     let dbError = null;
     if (env.DB) {
       try {
-        await env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)")
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
+        )
           .bind(userEmail, deviceId, toolId, action, createdTime)
           .run();
         inserted = 1;
@@ -523,6 +588,11 @@ export async function handleAnalyticsErrorPost(request, env, session) {
     const appVersion = safeString(data.app_version || "", 60) || null;
     const route = safeString(data.route || "", 160) || null;
     const toolId = normalizeFeatureId(data.tool_id || "");
+    if (isIgnoredAnalyticsTool(toolId)) {
+      return new Response(JSON.stringify({ ok: true, inserted: 0, ignored: true }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
     const processArea = safeString(data.process_area || "shell", 80);
     const errorKind = safeString(data.error_kind || "uncaught_error", 80);
     const errorName = safeString(data.error_name || "Error", 120);
@@ -589,6 +659,10 @@ function normalizeFeatureId(value) {
   if (id === "json_tools") return "json-tools";
   if (id === "jenkins-runner") return "run-query";
   return id || "unknown";
+}
+
+function isIgnoredAnalyticsTool(toolId) {
+  return String(toolId || "").trim().toLowerCase() === IGNORED_ANALYTICS_TOOL_ID;
 }
 
 function safeString(value, limit = 120) {

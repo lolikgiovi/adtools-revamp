@@ -756,7 +756,9 @@ describe("Analytics endpoints", () => {
     );
 
     const data = await response.json();
-    const activeUsersQuery = env.DB.executed.find((item) => item.sql.includes("WITH recent_usage AS ("));
+    const activeUsersQuery = env.DB.executed.find(
+      (item) => item.sql.includes("WITH deduplicated_usage AS (") && item.sql.includes("recent_usage AS ("),
+    );
     expect(response.status).toBe(200);
     expect(data.ok).toBe(true);
     expect(activeUsersQuery).toBeTruthy();

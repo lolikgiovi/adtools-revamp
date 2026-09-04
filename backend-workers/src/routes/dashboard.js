@@ -23,21 +23,35 @@ const DEFAULT_TABS = [
   {
     id: "active-users",
     name: "Active Users",
-    query: `WITH recent_usage AS (
-  SELECT LOWER(u.user_email) AS user_email,
+    query: `WITH deduplicated_usage AS (
+  SELECT DISTINCT LOWER(u.user_email) AS user_email,
     u.device_id,
-    CASE WHEN u.tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE u.tool_id END AS tool_id,
+    CASE
+      WHEN u.tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
+      WHEN u.tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
+      WHEN u.tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
+      ELSE u.tool_id
+    END AS tool_id,
     u.action,
     u.created_time
   FROM usage_log u
-  WHERE LOWER(u.user_email) != 'fashalli.bilhaq@bankmandiri.co.id'
+  WHERE LOWER(TRIM(u.tool_id)) != 'velocity-template'
+),
+recent_usage AS (
+  SELECT u.user_email,
+    u.device_id,
+    u.tool_id,
+    u.action,
+    u.created_time
+  FROM deduplicated_usage u
+  WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
     AND u.created_time >= datetime('now', '+7 hours', '-30 days')
     AND (
       u.action != 'open'
       OR NOT EXISTS (
         SELECT 1
-        FROM usage_log u2
-        WHERE LOWER(u2.user_email) = LOWER(u.user_email)
+        FROM deduplicated_usage u2
+        WHERE u2.user_email = u.user_email
           AND u2.device_id = u.device_id
           AND u2.tool_id = u.tool_id
           AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
@@ -89,6 +103,7 @@ LIMIT 200`,
     SUM(count) AS action_count
   FROM device_usage
   WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND LOWER(TRIM(tool_id)) != 'velocity-template'
   GROUP BY 1,2
 ),
 t AS (
@@ -119,6 +134,7 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
     updated_time
   FROM device_usage
   WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+    AND LOWER(TRIM(tool_id)) != 'velocity-template'
 ),
 totals AS (
   SELECT tool_id,
@@ -180,6 +196,7 @@ LIMIT 100`,
       FROM usage_log u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+        AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
       ORDER BY u.created_time DESC`,
   },
   {
@@ -206,6 +223,7 @@ LIMIT 100`,
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+        AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
       ORDER BY e.created_time DESC`,
   },
   {
@@ -1328,7 +1346,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     }
 
     if (tab.id === "overview") {
-      return executeOverviewQuery(env, "tab:overview:v2");
+      return executeOverviewQuery(env, "tab:overview:v3");
     }
 
     if (tab.id === "who") {
@@ -1348,11 +1366,11 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     }
 
     if (tab.id === "tools") {
-      return executeToolsQuery(env, "tab:tools:v2", tab.query);
+      return executeToolsQuery(env, "tab:tools:v3", tab.query);
     }
 
     if (tab.id === "tool-adoption") {
-      return executeToolAdoptionQuery(env, "tab:tool-adoption:v2", tab.query);
+      return executeToolAdoptionQuery(env, "tab:tool-adoption:v3", tab.query);
     }
 
     return executeQuery(env, `tab:${tab.id}:${tab.query}`, tab.query);
@@ -1368,7 +1386,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
 export const handleStatsTools = withAuth(async (request, env) => {
   const config = await getTabConfigs(env);
   const tab = config.tabs.find((t) => t.id === "tools") || getDefaultTab("tools");
-  return executeToolsQuery(env, "tab:tools:v2", tab.query);
+  return executeToolsQuery(env, "tab:tools:v3", tab.query);
 });
 
 export const handleStatsDaily = withAuth(async (request, env) => {
@@ -1465,6 +1483,8 @@ async function executeOverviewQuery(env, cacheKey) {
 
     const body = await coalesceDashboardQuery(cacheKey, async () => {
       const tables = await getDashboardTables(env);
+      const deduplicatedUsageToday = buildDeduplicatedUsageLogQuery(getDashboardRangeConfig("today"));
+      const deduplicatedUsage7d = buildDeduplicatedUsageLogQuery(getDashboardRangeConfig("7d"));
       const normalizedUsage7d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("7d"));
       const normalizedUsage30d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("30d"));
       const metricDefinitions = [
@@ -1474,10 +1494,11 @@ async function executeOverviewQuery(env, cacheKey) {
           env,
           tables,
           ["usage_log"],
-          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
-            FROM usage_log
-            WHERE user_email != '${OWNER_EMAIL}'
-              AND created_time >= datetime('now', '+7 hours', 'start of day')`,
+          `WITH deduplicated_usage AS (
+            ${deduplicatedUsageToday}
+          )
+          SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            FROM deduplicated_usage`,
           "0",
         ),
         context: "People with live usage today",
@@ -1488,10 +1509,11 @@ async function executeOverviewQuery(env, cacheKey) {
           env,
           tables,
           ["usage_log"],
-          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
-            FROM usage_log
-            WHERE user_email != '${OWNER_EMAIL}'
-              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+          `WITH deduplicated_usage AS (
+            ${deduplicatedUsage7d}
+          )
+          SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            FROM deduplicated_usage`,
           "0",
         ),
         context: "People with live usage in the last 7 days",
@@ -1502,11 +1524,12 @@ async function executeOverviewQuery(env, cacheKey) {
           env,
           tables,
           ["usage_log"],
-          `SELECT CAST(COUNT(*) AS TEXT) AS value
-            FROM usage_log
-            WHERE user_email != '${OWNER_EMAIL}'
-              AND action = 'open'
-              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+          `WITH deduplicated_usage AS (
+            ${deduplicatedUsage7d}
+          )
+          SELECT CAST(COUNT(*) AS TEXT) AS value
+            FROM deduplicated_usage
+            WHERE action = 'open'`,
           "0",
         ),
         context: "Shell-level tool open events",
@@ -1990,26 +2013,46 @@ function getWhoActivityBranches(tables, rangeConfig) {
   JOIN device d ON d.device_id = e.device_id
   JOIN users u ON u.id = d.user_id
   WHERE LOWER(u.email) != '${OWNER_EMAIL}'
+    AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
     ${rangeConfig.where("e.created_time")}`);
   }
   return branches;
 }
 
-function buildNormalizedUsageLogQuery(rangeConfig = null) {
+function buildDeduplicatedUsageLogQuery(rangeConfig = null) {
   const rangeClause = rangeConfig ? `\n    ${rangeConfig.where("u.created_time")}` : "";
-  return `SELECT LOWER(u.user_email) AS user_email,
+  return `SELECT DISTINCT LOWER(u.user_email) AS user_email,
     u.device_id,
-    CASE WHEN u.tool_id IN ('jenkins-runner','run-query') THEN 'run-query' ELSE u.tool_id END AS tool_id,
+    CASE
+      WHEN u.tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
+      WHEN u.tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
+      WHEN u.tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
+      ELSE u.tool_id
+    END AS tool_id,
     u.action,
     u.created_time
   FROM usage_log u
-  WHERE LOWER(u.user_email) != '${OWNER_EMAIL}'${rangeClause}
-    AND (
+  WHERE LOWER(u.user_email) != '${OWNER_EMAIL}'
+    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
+}
+
+function buildNormalizedUsageLogQuery(rangeConfig = null) {
+  return `WITH deduplicated_usage AS (
+  ${buildDeduplicatedUsageLogQuery(rangeConfig)}
+)
+SELECT u.user_email,
+    u.device_id,
+    u.tool_id,
+    u.action,
+    u.created_time
+  FROM deduplicated_usage u
+  WHERE
+    (
       u.action != 'open'
       OR NOT EXISTS (
         SELECT 1
-        FROM usage_log u2
-        WHERE LOWER(u2.user_email) = LOWER(u.user_email)
+        FROM deduplicated_usage u2
+        WHERE u2.user_email = u.user_email
           AND u2.device_id = u.device_id
           AND u2.tool_id = u.tool_id
           AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
@@ -2121,6 +2164,7 @@ function buildPaginatedDashboardQuery(tabId, pagination) {
       FROM usage_log u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != '${OWNER_EMAIL}'
+        AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
         AND (
           ? = ''
           OR LOWER(STRFTIME('%m-%d / %H:%M', u.created_time)) LIKE ?
@@ -2144,6 +2188,7 @@ function buildPaginatedDashboardQuery(tabId, pagination) {
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
       WHERE u.email != '${OWNER_EMAIL}'
+        AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
         AND (
           ? = ''
           OR LOWER(STRFTIME('%m-%d / %H:%M', e.created_time)) LIKE ?

@@ -21,6 +21,7 @@ class UsageTracker {
   static ERROR_MESSAGE_LIMIT = 300;
   static ERROR_STACK_LIMIT = 1500;
   static BACKUP_ENABLED_KEY = "usage.analytics.backup.enabled";
+  static IGNORED_FEATURE_IDS = new Set(["velocity-template"]);
   static _backupEnabled = true;
   static ENABLED_KEY = "usage.analytics.enabled";
   static _enabled = true;
@@ -108,6 +109,16 @@ class UsageTracker {
     const counts = this._state.counts;
     this._migrateCanonicalFeatureIds();
 
+    Object.keys(counts).forEach((feature) => {
+      if (this.isIgnoredFeatureId(feature)) delete counts[feature];
+    });
+    if (Array.isArray(this._state.usageLogs)) {
+      this._state.usageLogs = this._state.usageLogs.filter((log) => !this.isIgnoredFeatureId(log?.tool_id));
+    }
+    if (Array.isArray(this._state.errorEvents)) {
+      this._state.errorEvents = this._state.errorEvents.filter((error) => !this.isIgnoredFeatureId(error?.tool_id));
+    }
+
     // Quick Query: keep only actual query types (merge, insert, update)
     if (counts["quick-query"]) {
       const allowed = ["merge", "insert", "update", "open"];
@@ -137,6 +148,11 @@ class UsageTracker {
         if (dayData && typeof dayData === "object") {
           Object.keys(dayData).forEach((key) => {
             // Format: "featureId.action"
+            const [feature] = key.split(".");
+            if (this.isIgnoredFeatureId(feature)) {
+              delete dayData[key];
+              return;
+            }
             if (key.startsWith("quick-query.")) {
               const action = key.split(".")[1];
               if (!["merge", "insert", "update", "open"].includes(action)) {
@@ -170,6 +186,7 @@ class UsageTracker {
     if (!this._isValidTimestamp(now)) return;
 
     const featureKey = this.normalizeFeatureId(featureId);
+    if (this.isIgnoredFeatureId(featureKey)) return;
     const actionKey = String(action);
 
     const counts = this._state.counts;
@@ -196,6 +213,7 @@ class UsageTracker {
   static trackFeature(featureId, action, meta = {}, debounceMs) {
     if (!featureId || !action) return;
     const featureKey = this.normalizeFeatureId(featureId);
+    if (this.isIgnoredFeatureId(featureKey)) return;
     const actionKey = String(action);
     const ms = Number(debounceMs);
     if (Number.isFinite(ms) && ms > 0) {
@@ -254,6 +272,7 @@ class UsageTracker {
   // Add explicit event-level tracking with event detail persistence
   static trackEvent(featureId, event, meta = {}, debounceMs) {
     const featureKey = this.normalizeFeatureId(featureId);
+    if (this.isIgnoredFeatureId(featureKey)) return;
     const eventKey = String(event || "");
     const ms = Number(debounceMs);
     if (Number.isFinite(ms) && ms > 0) {
@@ -321,10 +340,12 @@ class UsageTracker {
     if (!this._enabled) return;
     try {
       if (!this._state) this._state = this._loadFromStorage();
+      const toolId = this.normalizeFeatureId(errorPayload.tool_id || "");
+      if (this.isIgnoredFeatureId(toolId)) return;
       const createdTime = String(errorPayload.created_time || new Date().toISOString());
       const errorEvent = {
         ...errorPayload,
-        tool_id: this.normalizeFeatureId(errorPayload.tool_id || ""),
+        tool_id: toolId,
         created_time: createdTime,
       };
       if (!this._validateErrorEvent(errorEvent)) return;
@@ -358,6 +379,7 @@ class UsageTracker {
     const totalsByFeature = {};
 
     Object.entries(counts).forEach(([feature, actions]) => {
+      if (this.isIgnoredFeatureId(feature)) return;
       const featureTotal = Object.values(actions || {}).reduce((sum, v) => sum + (v || 0), 0);
       totalsByFeature[feature] = featureTotal;
       totalEvents += featureTotal;
@@ -597,8 +619,9 @@ class UsageTracker {
     };
   }
 
-  // Convert ISO string to plain "YYYY-MM-DD HH:MM:SS" in GMT+7
-  static _isoToGmt7Plain(iso) {
+  // Convert ISO string to plain "YYYY-MM-DD HH:MM:SS" in GMT+7. Detail logs retain milliseconds
+  // so two real actions in the same second do not collide with the retry-safe database key.
+  static _isoToGmt7Plain(iso, includeMilliseconds = false) {
     try {
       const d = iso ? new Date(iso) : new Date();
       const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
@@ -608,7 +631,8 @@ class UsageTracker {
       const h = String(shifted.getUTCHours()).padStart(2, "0");
       const m = String(shifted.getUTCMinutes()).padStart(2, "0");
       const s = String(shifted.getUTCSeconds()).padStart(2, "0");
-      return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+      const ms = includeMilliseconds ? `.${String(shifted.getUTCMilliseconds()).padStart(3, "0")}` : "";
+      return `${Y}-${M}-${D} ${h}:${m}:${s}${ms}`;
     } catch (_) {
       const d = new Date();
       const shifted = new Date(d.getTime() + 7 * 60 * 60 * 1000);
@@ -618,7 +642,8 @@ class UsageTracker {
       const h = String(shifted.getUTCHours()).padStart(2, "0");
       const m = String(shifted.getUTCMinutes()).padStart(2, "0");
       const s = String(shifted.getUTCSeconds()).padStart(2, "0");
-      return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+      const ms = includeMilliseconds ? `.${String(shifted.getUTCMilliseconds()).padStart(3, "0")}` : "";
+      return `${Y}-${M}-${D} ${h}:${m}:${s}${ms}`;
     }
   }
 
@@ -654,7 +679,7 @@ class UsageTracker {
       device_id: log.device_id || deviceId,
       tool_id: this.normalizeFeatureId(log.tool_id),
       action: String(log.action || "unknown"),
-      created_time: this._isoToGmt7Plain(log.ts || new Date().toISOString()),
+      created_time: this._isoToGmt7Plain(log.ts || new Date().toISOString(), true),
     }));
 
     const error_events = (Array.isArray(s.errorEvents) ? s.errorEvents : []).map((err) => ({
@@ -886,6 +911,10 @@ class UsageTracker {
     return id;
   }
 
+  static isIgnoredFeatureId(featureId) {
+    return this.IGNORED_FEATURE_IDS.has(String(featureId || "").trim().toLowerCase());
+  }
+
   static _migrateCanonicalFeatureIds() {
     if (!this._state) return;
     const mergeCounts = (from, to) => {
@@ -907,6 +936,10 @@ class UsageTracker {
       Object.keys(dayData).forEach((key) => {
         const [feature, ...rest] = key.split(".");
         const canonical = this.normalizeFeatureId(feature);
+        if (this.isIgnoredFeatureId(feature)) {
+          delete dayData[key];
+          return;
+        }
         if (canonical === feature || !rest.length) return;
         const nextKey = `${canonical}.${rest.join(".")}`;
         dayData[nextKey] = (Number(dayData[nextKey] || 0) || 0) + (Number(dayData[key] || 0) || 0);
@@ -915,7 +948,9 @@ class UsageTracker {
     });
 
     if (Array.isArray(this._state.events)) {
-      this._state.events = this._state.events.map((ev) => ({ ...ev, featureId: this.normalizeFeatureId(ev.featureId) }));
+      this._state.events = this._state.events
+        .filter((ev) => !this.isIgnoredFeatureId(ev?.featureId))
+        .map((ev) => ({ ...ev, featureId: this.normalizeFeatureId(ev.featureId) }));
     }
   }
 
