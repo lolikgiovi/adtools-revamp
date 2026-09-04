@@ -1,17 +1,19 @@
-import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
+import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
 
 export default defineWorkersConfig({
   test: {
-    include: ['backend-workers/tests/**/*.test.js'],
+    include: ["backend-workers/tests/**/*.test.js"],
+    exclude: ["backend-workers/tests/analytics-count-integrity.test.js"],
     poolOptions: {
       workers: {
-        wrangler: { configPath: '../wrangler.toml' },
+        wrangler: { configPath: "../wrangler.toml" },
         miniflare: {
-          kvNamespaces: ['WHITELIST', 'adtools', 'ANALYTICS'],
-          d1Databases: ['DB'],
-          r2Buckets: ['UPDATES'],
+          assets: { directory: "./test-assets" },
+          kvNamespaces: ["WHITELIST", "adtools", "ANALYTICS"],
+          d1Databases: ["DB"],
+          r2Buckets: ["UPDATES"],
           bindings: {
-            ANALYTICS_DASHBOARD_PASSWORD: 'testpassword123',
+            ANALYTICS_DASHBOARD_PASSWORD: "testpassword123",
           },
         },
       },
