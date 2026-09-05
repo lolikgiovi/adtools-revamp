@@ -4,9 +4,9 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
-import { ensureErrorEventsSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
+import { ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
 import { DEVELOPMENT_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
-import { buildCanonicalToolUsageQuery } from "../utils/analyticsUsageSql.js";
+import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../utils/analyticsUsageSql.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
@@ -134,13 +134,15 @@ export async function handlePublicImprovementFeedbackPost(request, env) {
 
 async function loadOverviewData(env, userEmail, source) {
   await ensureToolUsageSchema(env);
+  await ensureLifetimeUsageBaselineSchema(env);
   const normalizedUsageSql = buildCanonicalToolUsageQuery();
+  const lifetimeUsageSql = buildLifetimeUsageRollupQuery();
   const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
     env.DB
       .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
-         SELECT tool_id, COUNT(*) AS count
-         FROM normalized_usage
+        `WITH lifetime_usage AS (${lifetimeUsageSql})
+         SELECT tool_id, SUM(count) AS count
+         FROM lifetime_usage
          WHERE user_email = ?
          GROUP BY tool_id
          ORDER BY count DESC, tool_id ASC
@@ -150,9 +152,9 @@ async function loadOverviewData(env, userEmail, source) {
       .all(),
     env.DB
       .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
-         SELECT tool_id, COUNT(*) AS count
-         FROM normalized_usage
+        `WITH lifetime_usage AS (${lifetimeUsageSql})
+         SELECT tool_id, SUM(count) AS count
+         FROM lifetime_usage
          GROUP BY tool_id
          ORDER BY count DESC, tool_id ASC
          LIMIT 100`,
@@ -160,25 +162,25 @@ async function loadOverviewData(env, userEmail, source) {
       .all(),
     env.DB
       .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
+        `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT
-           COUNT(*) AS total_activities,
+           COALESCE(SUM(count), 0) AS total_activities,
            COUNT(DISTINCT tool_id) AS tools_used,
-           MAX(created_time) AS last_updated
-         FROM normalized_usage
+           MAX(last_updated) AS last_updated
+         FROM lifetime_usage
          WHERE user_email = ?`,
       )
       .bind(userEmail)
       .first(),
     env.DB
       .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
+        `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT
-           COUNT(*) AS total_activities,
+           COALESCE(SUM(count), 0) AS total_activities,
            COUNT(DISTINCT tool_id) AS tools_used,
-           COUNT(DISTINCT user_email) AS active_users,
-           MAX(created_time) AS last_updated
-         FROM normalized_usage`,
+           COUNT(DISTINCT NULLIF(user_email, '')) AS active_users,
+           MAX(last_updated) AS last_updated
+         FROM lifetime_usage`,
       )
       .first(),
     env.DB

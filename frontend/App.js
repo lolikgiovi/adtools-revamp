@@ -1551,7 +1551,7 @@ class App {
           </div>
           <div class="usage-scope-total">
             <strong>${scope.totalActivities.toLocaleString()}</strong>
-            <span>successful uses</span>
+            <span>uses</span>
           </div>
         </div>
         <div class="usage-scope-tools">
@@ -1576,7 +1576,7 @@ class App {
             ${state.loading ? '<span class="usage-compare-spinner" aria-hidden="true"></span>' : ""}
             ${this.#escapeHtml(statusLabel)}
           </span>
-          <h2 id="usage-global-title">Team impact</h2>
+          <h2 id="usage-global-title">Team usage</h2>
           <p>${this.#escapeHtml(description)}</p>
         </div>
       </aside>
@@ -1657,8 +1657,8 @@ class App {
     container.innerHTML = /*html*/ `
       <div class="usage-panel">
         <div class="usage-overview-grid">
-          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your impact" })}
-          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team impact", subtitle: teamSubtitle }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
+          ${this.#renderScopeCard(userScope, { kind: "user", title: "Your usage" })}
+          ${globalScope ? this.#renderScopeCard(globalScope, { kind: "global", title: "Team usage", subtitle: teamSubtitle }) : this.#renderScopeUnavailable(state, { hasIdentity, isRegistered: usageAccess.isRegistered })}
         </div>
 
         ${this.#renderFeedbackSection({ canSubmit: hasIdentity })}

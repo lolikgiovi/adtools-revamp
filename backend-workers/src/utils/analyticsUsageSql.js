@@ -53,3 +53,32 @@ export function buildCanonicalToolUsageQuery(rangeConfig = null) {
   WHERE ${includedAnalyticsEmailSql("u.user_email")}
     AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
 }
+
+/**
+ * Return lifetime usage as weighted rollup rows. The immutable baseline already contains
+ * all legacy device counters at cutover, so only post-cutover client ledger rows are added.
+ * Historical ledger projections must stay excluded because they overlap the baseline.
+ */
+export function buildLifetimeUsageRollupQuery() {
+  return `SELECT LOWER(b.user_email) AS user_email,
+    b.tool_id,
+    b.action,
+    b.count,
+    b.last_updated
+  FROM lifetime_usage_baseline b
+  WHERE ${includedAnalyticsEmailSql("b.user_email")}
+    AND LOWER(TRIM(b.tool_id)) != 'velocity-template'
+
+  UNION ALL
+
+  SELECT LOWER(u.user_email) AS user_email,
+    u.tool_id,
+    u.action,
+    COUNT(*) AS count,
+    MAX(u.created_time) AS last_updated
+  FROM tool_usage u
+  WHERE u.source = 'client'
+    AND ${includedAnalyticsEmailSql("u.user_email")}
+    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
+  GROUP BY LOWER(u.user_email), u.tool_id, u.action`;
+}

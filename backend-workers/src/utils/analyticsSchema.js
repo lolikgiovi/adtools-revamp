@@ -1,6 +1,7 @@
 const readyDatabases = new WeakSet();
 const deviceVersionReadyDatabases = new WeakSet();
 const toolUsageReadyDatabases = new WeakSet();
+const lifetimeUsageBaselineReadyDatabases = new WeakSet();
 
 const ERROR_EVENTS_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS error_events (
@@ -74,6 +75,7 @@ const TOOL_USAGE_SCHEMA_STATEMENTS = [
   )`,
   "CREATE INDEX IF NOT EXISTS idx_tool_usage_email_time ON tool_usage(user_email, created_time DESC)",
   "CREATE INDEX IF NOT EXISTS idx_tool_usage_tool_action_time ON tool_usage(tool_id, action, created_time DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_tool_usage_source_email_tool_action_time ON tool_usage(source, user_email, tool_id, action, created_time DESC)",
 ];
 
 export async function ensureToolUsageSchema(env) {
@@ -82,4 +84,24 @@ export async function ensureToolUsageSchema(env) {
     await env.DB.prepare(statement).run();
   }
   toolUsageReadyDatabases.add(env.DB);
+}
+
+const LIFETIME_USAGE_BASELINE_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS lifetime_usage_baseline (
+    user_email TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    count INTEGER NOT NULL CHECK (count >= 0),
+    last_updated TEXT,
+    PRIMARY KEY (user_email, tool_id, action)
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_lifetime_usage_baseline_tool_action ON lifetime_usage_baseline(tool_id, action)",
+];
+
+export async function ensureLifetimeUsageBaselineSchema(env) {
+  if (!env?.DB || lifetimeUsageBaselineReadyDatabases.has(env.DB)) return;
+  for (const statement of LIFETIME_USAGE_BASELINE_SCHEMA_STATEMENTS) {
+    await env.DB.prepare(statement).run();
+  }
+  lifetimeUsageBaselineReadyDatabases.add(env.DB);
 }

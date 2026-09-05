@@ -178,7 +178,7 @@ describe("dashboard query performance boundaries", () => {
       "Active users today",
       "Active users 7d",
       "Tool opens 7d",
-      "Tracked actions 7d",
+      "Successful tool uses 7d",
       "Uncaught errors 24h",
       "Affected users 7d",
       "Most used tool 30d",

@@ -150,6 +150,7 @@ describe("Analytics endpoints", () => {
     expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0, tools: [], daily: [] });
     expect(env.DB.executed.filter((item) => item.sql.includes("FROM device_usage"))).toHaveLength(0);
     expect(env.DB.executed.filter((item) => item.sql.includes("FROM tool_usage"))).toHaveLength(6);
+    expect(env.DB.executed.filter((item) => item.sql.includes("FROM lifetime_usage_baseline"))).toHaveLength(4);
   });
 
   it("returns the public overview for a registered email without authentication", async () => {
@@ -650,8 +651,8 @@ describe("Analytics endpoints", () => {
     expect(whoQuery.sql).toContain("dev@localhost");
   });
 
-  it("uses canonical tool uses for impact and usage logs for adoption", async () => {
-    mockDashboardTables(env, ["tool_usage", "usage_log", "device_usage", "error_events"]);
+  it("uses lifetime usage for cumulative tools and usage logs for adoption", async () => {
+    mockDashboardTables(env, ["tool_usage", "lifetime_usage_baseline", "usage_log", "device_usage", "error_events"]);
 
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {
@@ -687,7 +688,7 @@ describe("Analytics endpoints", () => {
     );
 
     const toolsQuery = env.DB.executed.find(
-      (item) => item.sql.includes("WITH normalized_usage AS") && item.sql.includes("SELECT tool_id, action, total_count"),
+      (item) => item.sql.includes("WITH lifetime_usage AS") && item.sql.includes("SELECT tool_id, action, total_count"),
     );
     const toolAdoptionQuery = env.DB.executed.find(
       (item) => item.sql.includes("WITH normalized_usage AS") && item.sql.includes("top_action_count"),
@@ -697,7 +698,8 @@ describe("Analytics endpoints", () => {
     expect(toolAdoptionResponse.status).toBe(200);
     expect(toolsQuery).toBeTruthy();
     expect(toolAdoptionQuery).toBeTruthy();
-    expect(toolsQuery.sql).toContain("FROM tool_usage");
+    expect(toolsQuery.sql).toContain("FROM lifetime_usage_baseline");
+    expect(toolsQuery.sql).toContain("u.source = 'client'");
     expect(toolsQuery.sql).toContain("dev@localhost");
     expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
     expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");

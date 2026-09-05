@@ -6,8 +6,13 @@
 
 import { corsHeaders } from "../utils/cors.js";
 import { DEVELOPMENT_ANALYTICS_EMAIL, includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
-import { buildCanonicalToolUsageQuery, buildDeduplicatedUsageLogQuery, buildNormalizedUsageLogQuery } from "../utils/analyticsUsageSql.js";
-import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
+import {
+  buildCanonicalToolUsageQuery,
+  buildDeduplicatedUsageLogQuery,
+  buildLifetimeUsageRollupQuery,
+  buildNormalizedUsageLogQuery,
+} from "../utils/analyticsUsageSql.js";
+import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema } from "../utils/analyticsSchema.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
 // Default tab configurations (fallback when KV is empty)
@@ -1883,14 +1888,15 @@ async function executeToolsQuery(env, cacheKey, fallbackQuery) {
       return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
     }
 
-    const query = `WITH normalized_usage AS (
-  ${buildCanonicalToolUsageQuery()}
+    await ensureLifetimeUsageBaselineSchema(env);
+    const query = `WITH lifetime_usage AS (
+  ${buildLifetimeUsageRollupQuery()}
 ),
 n AS (
   SELECT tool_id,
     action,
-    COUNT(*) AS action_count
-  FROM normalized_usage
+    SUM(count) AS action_count
+  FROM lifetime_usage
   GROUP BY tool_id, action
 ),
 t AS (
