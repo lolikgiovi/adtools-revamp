@@ -10,7 +10,9 @@
 .merge-sql-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100dvh - 90px);
+  max-height: calc(100dvh - 90px);
+  min-height: 0;
   overflow: hidden;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
@@ -24,21 +26,25 @@
 
 .merge-sql-layout {
   display: grid;
-  grid-template-columns: 420px 1fr;
-  gap: 1rem;
+  grid-template-columns: minmax(300px, 0.7fr) minmax(0, 1.3fr);
+  gap: 0.75rem;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
 .merge-sql-left-col {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
 .merge-sql-right-col {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -53,6 +59,8 @@
 
 .mode-toggle-bar .mode-toggle-btn {
   flex: 1;
+  justify-content: center;
+  min-width: 0;
 }
 
 .mode-section {
@@ -397,8 +405,14 @@
 
 /* Result Tabs - uses shared .tabs-container / .tab-button from components.css */
 .merge-sql-result-tabs {
-  padding: 0 1rem;
+  min-height: 3.25rem;
+  padding: 0 0.75rem;
   border-radius: 0;
+  flex-shrink: 0;
+}
+
+.merge-sql-result-tabs .tabs-left {
+  width: 100%;
 }
 
 .merge-sql-result-tabs .merge-sql-result-tab svg {
@@ -1340,15 +1354,29 @@
    RESPONSIVE
    ============================================ */
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+  .merge-sql-container {
+    height: auto;
+    max-height: none;
+    min-height: calc(100dvh - 90px);
+    overflow: visible;
+  }
+
   .merge-sql-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(28rem, 1fr);
     gap: 0.75rem;
+    height: auto;
+    min-height: calc(100dvh - 90px);
+    overflow: visible;
   }
 
   .merge-sql-left-panel {
     max-height: 350px;
+  }
+
+  .merge-sql-right-col {
+    min-height: 28rem;
   }
 
   .merge-sql-result-actions {
