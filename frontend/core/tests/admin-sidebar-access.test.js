@@ -41,8 +41,8 @@ describe("privileged sidebar pages", () => {
 
     expect(privilegedItems).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "analytics-dashboard", name: "analytics", requiresTauri: false }),
-        expect.objectContaining({ id: "approval", name: "approval", requiresTauri: false }),
+        expect.objectContaining({ id: "analytics-dashboard", name: "Analytics", requiresTauri: false }),
+        expect.objectContaining({ id: "approval", name: "Approval", requiresTauri: false }),
       ]),
     );
   });

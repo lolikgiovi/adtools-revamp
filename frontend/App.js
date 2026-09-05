@@ -1424,8 +1424,8 @@ class App {
     if (!this.hasPrivilegedSidebarAccess()) return [];
 
     return [
-      { id: "analytics-dashboard", name: "analytics", icon: "analytics-dashboard", type: "page", requiresTauri: false },
-      { id: "approval", name: "approval", icon: "approval", type: "page", requiresTauri: false },
+      { id: "analytics-dashboard", name: "Analytics", icon: "analytics-dashboard", type: "page", requiresTauri: false },
+      { id: "approval", name: "Approval", icon: "approval", type: "page", requiresTauri: false },
     ];
   }
 
