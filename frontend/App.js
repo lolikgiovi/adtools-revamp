@@ -132,8 +132,9 @@ class App {
     // Build global search index after routes/tools are ready
     this.updateGlobalSearchIndex();
 
-    // Handle initial route after routes are registered
-    this.router.handleRouteChange();
+    // Always start on Home on initial load for both web and Tauri. The Home
+    // handler preserves the registration redirect for first-time users.
+    this.router.navigate("home");
 
     this.bindGlobalEvents();
 
