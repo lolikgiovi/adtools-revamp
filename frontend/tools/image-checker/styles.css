@@ -442,7 +442,7 @@
   --checker-warning: hsl(var(--warning));
   width: min(100%, 1440px);
   margin: 0 auto;
-  padding: clamp(1.25rem, 2.8vw, 2.75rem) clamp(0.25rem, 2vw, 1.5rem) 3rem;
+  padding: 0;
   color: var(--checker-text);
 }
 
@@ -454,44 +454,20 @@
   outline-offset: 2px;
 }
 
-.check-image-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.check-image-header h1 {
-  margin: 0 0 0.4rem;
-  color: var(--checker-text);
-  font-size: clamp(1.5rem, 2.5vw, 2rem);
-  font-weight: 650;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
-  text-wrap: balance;
-}
-
-.check-image-header p {
-  max-width: 54ch;
-  margin: 0;
-  color: var(--checker-muted);
-  font-size: 0.95rem;
-}
-
 .environment-status {
   flex: 0 0 auto;
-  padding-bottom: 0.15rem;
   color: var(--checker-muted);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.environment-status-group {
+.environment-control {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
+  min-height: 2.45rem;
 }
 
 .environment-status.is-empty {
@@ -649,6 +625,19 @@
   margin-top: 1rem;
 }
 
+.check-image-toolbar .btn,
+.check-image-toolbar .environment-select-field,
+.check-image-toolbar .env-selector {
+  min-height: 2.45rem;
+  box-sizing: border-box;
+}
+
+.check-image-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .check-image-input-actions,
 .check-image-run-actions {
   display: flex;
@@ -672,7 +661,7 @@
 
 .env-selector {
   min-width: 11rem;
-  height: 2.25rem;
+  height: 2.45rem;
   padding: 0.35rem 2rem 0.35rem 0.7rem;
   background-color: var(--checker-control);
   color: var(--checker-text);

@@ -6,6 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
 
+const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
+
 class SettingsPage {
   constructor({ eventBus, themeManager } = {}) {
     this.eventBus = eventBus;
@@ -100,6 +102,29 @@ class SettingsPage {
     await ensureUnifiedKeychain();
 
     await this.reloadConfig();
+    this.focusRequestedSetting();
+  }
+
+  focusRequestedSetting() {
+    let settingKey = null;
+    try {
+      settingKey = localStorage.getItem(SETTINGS_FOCUS_STORAGE_KEY);
+      if (settingKey) localStorage.removeItem(SETTINGS_FOCUS_STORAGE_KEY);
+    } catch (_) {}
+    if (!settingKey || !this.categoriesRoot) return;
+
+    const setting = Array.from(this.categoriesRoot.querySelectorAll(".setting-item")).find((item) => item.dataset.setting === settingKey);
+    if (!setting) return;
+
+    const category = setting.closest(".settings-category");
+    if (category?.getAttribute("aria-expanded") !== "true") {
+      category.querySelector(".settings-category-header")?.click();
+    }
+
+    setting.classList.add("settings-focus-highlight");
+    setting.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    setting.querySelector(".setting-value.editable")?.focus();
+    window.setTimeout(() => setting.classList.remove("settings-focus-highlight"), 3000);
   }
 
   /**

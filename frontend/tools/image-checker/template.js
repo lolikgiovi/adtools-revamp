@@ -1,23 +1,9 @@
 export const imageCheckerTemplate = /*html*/ `
   <div class="check-image-tool-container">
-    <header class="check-image-header">
-      <div>
-        <h1>Check image availability</h1>
-        <p>Verify one or many image IDs across your configured environments.</p>
-      </div>
-      <div class="environment-status-group">
-        <div id="environmentStatus" class="environment-status" aria-live="polite"></div>
-        <button id="configureEnvironmentsButton" class="reference-action-button" type="button" hidden>Configure</button>
-      </div>
-    </header>
-
     <section class="check-image-workspace" aria-labelledby="imageInputHeading">
       <div class="check-image-input-header">
         <div>
           <label id="imageInputHeading" class="check-image-field-label" for="batchImagePathsInput">Image IDs or paths</label>
-          <p id="imageInputHelp" class="check-image-field-help">
-            Paste one UUID or <code>/content/v1/image</code> path per line.
-          </p>
         </div>
         <button
           id="savedReferencesButton"
@@ -54,12 +40,17 @@ export const imageCheckerTemplate = /*html*/ `
           <button id="clearButton" class="btn btn-ghost btn-sm" type="button">Clear</button>
         </div>
         <div class="check-image-run-actions">
-          <label class="environment-select-field" for="envSelector">
-            <span>Environment</span>
-            <select id="envSelector" class="env-selector">
-              <option value="all">All environments</option>
-            </select>
-          </label>
+          <div class="environment-control">
+            <label class="environment-select-field" for="envSelector">
+              <select id="envSelector" class="env-selector">
+                <option value="all">All environments</option>
+              </select>
+            </label>
+            <span id="environmentStatus" class="environment-status" aria-live="polite" hidden></span>
+            <button id="configureEnvironmentsButton" class="btn btn-secondary btn-sm" type="button" hidden>
+              Set CDN Base URLs
+            </button>
+          </div>
           <button id="checkImageButton" class="btn btn-primary" type="button" disabled>Check images</button>
           <button id="cancelCheckButton" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>
           <button id="retryAllTimeoutsBtn" class="btn btn-secondary btn-sm" type="button" hidden>Retry timeouts</button>
@@ -143,7 +134,6 @@ export const imageCheckerTemplate = /*html*/ `
         <span><strong>2</strong> Choose scope</span>
         <span><strong>3</strong> Check images</span>
       </div>
-      <p class="empty-state-note">Save a label from any result to build your own image reference library.</p>
     </section>
 
     <div id="resultsContainer" class="results-container check-image-results-container" aria-live="polite"></div>

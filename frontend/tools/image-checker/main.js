@@ -8,6 +8,7 @@ import "./styles.css";
 
 const SAVED_REFERENCES_STORAGE_KEY = "image_checker_saved_references";
 const IMAGE_CHECK_HISTORY_STORAGE_KEY = "image_checker_history";
+const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 const MAX_REFERENCE_HISTORY = 24;
 
 class CheckImageTool extends BaseTool {
@@ -150,11 +151,7 @@ class CheckImageTool extends BaseTool {
     });
 
     this.elements.cancelCheckButton?.addEventListener("click", () => this.cancelCheck());
-    this.elements.configureEnvironmentsButton?.addEventListener("click", () => {
-      if (window.app?.navigateToTool) window.app.navigateToTool("html-template");
-      else if (this.eventBus) this.eventBus.emit("route:change", { path: "html-template" });
-      else this.showError("Open the HTML Template tool to configure environments.");
-    });
+    this.elements.configureEnvironmentsButton?.addEventListener("click", () => this.openEnvironmentSettings());
 
     this.elements.savedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary());
     this.elements.closeSavedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary(false));
@@ -246,7 +243,7 @@ class CheckImageTool extends BaseTool {
 
     const baseUrls = this.getSelectedEnvironments();
     if (baseUrls.length === 0) {
-      this.showInputValidation("No environments are configured. Add one in the HTML Template tool, then try again.");
+      this.showInputValidation("No environments are configured. Add one in Settings, then try again.");
       return;
     }
 
@@ -420,12 +417,31 @@ class CheckImageTool extends BaseTool {
 
   updateEnvironmentStatus() {
     const status = this.elements?.environmentStatus;
-    if (!status) return;
-
     const count = this.imageCheckerService.baseUrlService.getAllUrls().length;
-    status.className = `environment-status ${count === 0 ? "is-empty" : ""}`;
-    status.textContent = count === 0 ? "No environments configured" : `${count} environment${count === 1 ? "" : "s"} configured`;
-    if (this.elements?.configureEnvironmentsButton) this.elements.configureEnvironmentsButton.hidden = count !== 0;
+    const isEmpty = count === 0;
+
+    if (status) {
+      status.className = `environment-status ${isEmpty ? "is-empty" : ""}`;
+      status.hidden = !isEmpty;
+    }
+    if (this.elements?.envSelector) this.elements.envSelector.disabled = isEmpty;
+    if (this.elements?.configureEnvironmentsButton) this.elements.configureEnvironmentsButton.hidden = !isEmpty;
+  }
+
+  openEnvironmentSettings() {
+    try {
+      localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, "config.baseUrls");
+    } catch (_) {}
+
+    if (window.app?.router?.navigate) {
+      window.app.router.navigate("settings");
+      return;
+    }
+    if (this.eventBus) {
+      this.eventBus.emit("route:change", { path: "settings" });
+      return;
+    }
+    this.showError("Open Settings to configure CDN Base URLs.");
   }
 
   setCheckingState(isChecking) {

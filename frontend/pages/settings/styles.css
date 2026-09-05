@@ -80,6 +80,29 @@
   margin-bottom: 0.4rem;
 }
 
+.setting-item.settings-focus-highlight {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 0.25rem;
+  background: hsl(var(--ring) / 0.08);
+  animation: settings-focus-highlight 2.8s ease-out;
+}
+
+@keyframes settings-focus-highlight {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--ring) / 0);
+  }
+  20% {
+    box-shadow: 0 0 0 0.35rem hsl(var(--ring) / 0.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting-item.settings-focus-highlight {
+    animation: none;
+  }
+}
+
 .setting-row {
   display: flex;
   align-items: center;
@@ -219,7 +242,9 @@
   right: 0;
   bottom: 0;
   background-color: var(--toggle-off-bg, #e5e7eb);
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
   border-radius: 9999px;
 }
 
