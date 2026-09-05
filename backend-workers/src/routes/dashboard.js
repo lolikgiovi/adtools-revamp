@@ -5,7 +5,8 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
-import { includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
+import { DEVELOPMENT_ANALYTICS_EMAIL, includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
+import { buildCanonicalToolUsageQuery, buildDeduplicatedUsageLogQuery, buildNormalizedUsageLogQuery } from "../utils/analyticsUsageSql.js";
 import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
@@ -1152,13 +1153,21 @@ LIMIT 150`,
 const KV_KEY = "analytics-dashboard-config";
 const CACHE_TTL_MS = 60 * 1000;
 const DASHBOARD_CACHE_MAX_ENTRIES = 32;
-const OWNER_EMAIL = OWNER_ANALYTICS_EMAIL;
+const EXCLUDED_ANALYTICS_EMAIL = DEVELOPMENT_ANALYTICS_EMAIL;
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
 const dashboardQueryInFlight = new Map();
 
 function getDefaultTab(id) {
-  return DEFAULT_TABS.find((tab) => tab.id === id) || DEFAULT_TABS[0];
+  return applyAnalyticsIdentityPolicy(DEFAULT_TABS.find((tab) => tab.id === id) || DEFAULT_TABS[0]);
+}
+
+function applyAnalyticsIdentityPolicy(tab) {
+  if (!tab || typeof tab !== "object") return tab;
+  return {
+    ...tab,
+    query: typeof tab.query === "string" ? tab.query.replaceAll(OWNER_ANALYTICS_EMAIL, DEVELOPMENT_ANALYTICS_EMAIL) : tab.query,
+  };
 }
 
 function mergeStoredTabsWithDefaults(storedTabs) {
@@ -1166,7 +1175,7 @@ function mergeStoredTabsWithDefaults(storedTabs) {
   const merged = DEFAULT_TABS.map((defaultTab) => storedById.get(defaultTab.id) || defaultTab);
   const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
   const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
-  return [...merged, ...customTabs];
+  return [...merged, ...customTabs].map(applyAnalyticsIdentityPolicy);
 }
 
 /**
@@ -1180,7 +1189,7 @@ async function getTabConfigs(env) {
     return tabConfigCache.value;
   }
 
-  let value = { source: "defaults", tabs: DEFAULT_TABS };
+  let value = { source: "defaults", tabs: DEFAULT_TABS.map(applyAnalyticsIdentityPolicy) };
   try {
     if (env.adtools) {
       const stored = await env.adtools.get(KV_KEY, "json");
@@ -1484,19 +1493,19 @@ async function executeOverviewQuery(env, cacheKey) {
 
     const body = await coalesceDashboardQuery(cacheKey, async () => {
       const tables = await getDashboardTables(env);
-      const deduplicatedUsageToday = buildDeduplicatedUsageLogQuery(getDashboardRangeConfig("today"));
       const deduplicatedUsage7d = buildDeduplicatedUsageLogQuery(getDashboardRangeConfig("7d"));
-      const normalizedUsage7d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("7d"));
-      const normalizedUsage30d = buildNormalizedUsageLogQuery(getDashboardRangeConfig("30d"));
+      const canonicalUsageToday = buildCanonicalToolUsageQuery(getDashboardRangeConfig("today"));
+      const normalizedUsage7d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("7d"));
+      const normalizedUsage30d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("30d"));
       const metricDefinitions = [
       {
         metric: "Active users today",
         value: safeDashboardScalar(
           env,
           tables,
-          ["usage_log"],
+          ["tool_usage"],
           `WITH deduplicated_usage AS (
-            ${deduplicatedUsageToday}
+            ${canonicalUsageToday}
           )
           SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM deduplicated_usage`,
@@ -1509,9 +1518,9 @@ async function executeOverviewQuery(env, cacheKey) {
         value: safeDashboardScalar(
           env,
           tables,
-          ["usage_log"],
+          ["tool_usage"],
           `WITH deduplicated_usage AS (
-            ${deduplicatedUsage7d}
+            ${normalizedUsage7d}
           )
           SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM deduplicated_usage`,
@@ -1536,11 +1545,11 @@ async function executeOverviewQuery(env, cacheKey) {
         context: "Shell-level tool open events",
       },
       {
-        metric: "Tracked actions 7d",
+        metric: "Successful tool uses 7d",
         value: safeDashboardScalar(
           env,
           tables,
-          ["usage_log"],
+          ["tool_usage"],
           `WITH normalized_usage AS (
             ${normalizedUsage7d}
           )
@@ -1548,7 +1557,7 @@ async function executeOverviewQuery(env, cacheKey) {
             FROM normalized_usage`,
           "0",
         ),
-        context: "Normalized usage actions",
+        context: "Completed, value-producing tool uses",
       },
       {
         metric: "Uncaught errors 24h",
@@ -1558,7 +1567,7 @@ async function executeOverviewQuery(env, cacheKey) {
           ["error_events"],
           `SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM error_events
-            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+            WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-1 day')`,
           "0",
         ),
@@ -1572,7 +1581,7 @@ async function executeOverviewQuery(env, cacheKey) {
           ["error_events"],
           `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM error_events
-            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+            WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')`,
           "0",
         ),
@@ -1583,7 +1592,7 @@ async function executeOverviewQuery(env, cacheKey) {
         value: safeDashboardScalar(
           env,
           tables,
-          ["usage_log"],
+          ["tool_usage"],
           `WITH normalized_usage AS (
             ${normalizedUsage30d}
           )
@@ -1594,7 +1603,7 @@ async function executeOverviewQuery(env, cacheKey) {
             LIMIT 1`,
           "-",
         ),
-        context: "Tool with the most normalized usage actions",
+        context: "Tool with the most completed uses",
       },
       {
         metric: "Noisiest error 7d",
@@ -1604,7 +1613,7 @@ async function executeOverviewQuery(env, cacheKey) {
           ["error_events"],
           `SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')' AS value
             FROM error_events
-            WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+            WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')
             GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
             ORDER BY COUNT(*) DESC, MAX(created_time) DESC
@@ -1659,7 +1668,7 @@ async function executeWhoQuery(env, cacheKey, rangeConfig) {
       ? `SELECT LOWER(user_email) AS user_email,
     COUNT(*) AS errors
   FROM error_events
-  WHERE COALESCE(LOWER(user_email), '') != '${OWNER_EMAIL}'
+  WHERE COALESCE(LOWER(user_email), '') != '${EXCLUDED_ANALYTICS_EMAIL}'
     ${rangeConfig.where("created_time")}
   GROUP BY user_email`
       : "SELECT NULL AS user_email, 0 AS errors WHERE 0";
@@ -1870,12 +1879,12 @@ async function executeToolsQuery(env, cacheKey, fallbackQuery) {
     }
 
     const tables = await getDashboardTables(env);
-    if (!tables.has("usage_log")) {
+    if (!tables.has("tool_usage")) {
       return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
     }
 
     const query = `WITH normalized_usage AS (
-  ${buildNormalizedUsageLogQuery()}
+  ${buildCanonicalToolUsageQuery()}
 ),
 n AS (
   SELECT tool_id,
@@ -1961,7 +1970,7 @@ errors AS (
     COUNT(*) AS errors_7d,
     MAX(created_time) AS last_error
   FROM error_events
-  WHERE COALESCE(user_email, '') != '${OWNER_EMAIL}'
+  WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
     AND created_time >= datetime('now', '+7 hours', '-7 days')
   GROUP BY COALESCE(tool_id, route, 'unknown')
 )
@@ -1993,6 +2002,14 @@ LIMIT 100`;
 }
 
 function getWhoActivityBranches(tables, rangeConfig) {
+  if (tables.has("tool_usage")) {
+    return [
+      `SELECT user_email, device_id, tool_id, action, created_time, 'tool_use' AS source
+  FROM (
+    ${buildCanonicalToolUsageQuery(rangeConfig)}
+  )`,
+    ];
+  }
   if (tables.has("usage_log")) {
     return [
       `SELECT user_email, device_id, tool_id, action, created_time, 'live_usage' AS source
@@ -2013,53 +2030,11 @@ function getWhoActivityBranches(tables, rangeConfig) {
   FROM events e
   JOIN device d ON d.device_id = e.device_id
   JOIN users u ON u.id = d.user_id
-  WHERE LOWER(u.email) != '${OWNER_EMAIL}'
+  WHERE LOWER(u.email) != '${EXCLUDED_ANALYTICS_EMAIL}'
     AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
     ${rangeConfig.where("e.created_time")}`);
   }
   return branches;
-}
-
-function buildDeduplicatedUsageLogQuery(rangeConfig = null) {
-  const rangeClause = rangeConfig ? `\n    ${rangeConfig.where("u.created_time")}` : "";
-  return `SELECT DISTINCT LOWER(u.user_email) AS user_email,
-    u.device_id,
-    CASE
-      WHEN u.tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
-      WHEN u.tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
-      WHEN u.tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
-      ELSE u.tool_id
-    END AS tool_id,
-    u.action,
-    u.created_time
-  FROM usage_log u
-  WHERE ${includedAnalyticsEmailSql("u.user_email")}
-    AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
-}
-
-function buildNormalizedUsageLogQuery(rangeConfig = null) {
-  return `WITH deduplicated_usage AS (
-  ${buildDeduplicatedUsageLogQuery(rangeConfig)}
-)
-SELECT u.user_email,
-    u.device_id,
-    u.tool_id,
-    u.action,
-    u.created_time
-  FROM deduplicated_usage u
-  WHERE
-    (
-      u.action != 'open'
-      OR NOT EXISTS (
-        SELECT 1
-        FROM deduplicated_usage u2
-        WHERE u2.user_email = u.user_email
-          AND u2.device_id = u.device_id
-          AND u2.tool_id = u.tool_id
-          AND DATE(datetime(u2.created_time)) = DATE(datetime(u.created_time))
-          AND u2.action != 'open'
-      )
-    )`;
 }
 
 function getDashboardRangeConfig(range) {
@@ -2164,7 +2139,7 @@ function buildPaginatedDashboardQuery(tabId, pagination) {
       u.action
       FROM usage_log u
       LEFT JOIN device d ON u.device_id = d.device_id
-      WHERE u.user_email != '${OWNER_EMAIL}'
+      WHERE u.user_email != '${EXCLUDED_ANALYTICS_EMAIL}'
         AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
         AND (
           ? = ''
@@ -2188,7 +2163,7 @@ function buildPaginatedDashboardQuery(tabId, pagination) {
       FROM events e
       JOIN device d ON e.device_id = d.device_id
       JOIN users u ON d.user_id = u.id
-      WHERE u.email != '${OWNER_EMAIL}'
+      WHERE u.email != '${EXCLUDED_ANALYTICS_EMAIL}'
         AND LOWER(TRIM(e.feature_id)) != 'velocity-template'
         AND (
           ? = ''

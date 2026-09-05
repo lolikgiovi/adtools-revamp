@@ -4,79 +4,17 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
-import { ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
-import { includedAnalyticsEmailSql } from "../utils/analyticsIdentity.js";
+import { ensureErrorEventsSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
+import { DEVELOPMENT_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
+import { buildCanonicalToolUsageQuery } from "../utils/analyticsUsageSql.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
-const OVERVIEW_DAILY_SQL = `
-  SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
-  FROM (
-    SELECT DISTINCT
-      LOWER(user_email) AS user_email,
-      device_id,
-      CASE
-        WHEN tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
-        WHEN tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
-        WHEN tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
-        ELSE tool_id
-      END AS tool_id,
-      action,
-      created_time
-    FROM usage_log
-    WHERE created_time >= datetime('now', '+7 hours', '-6 days')
-      AND LOWER(TRIM(tool_id)) != 'velocity-template'
-      AND ${includedAnalyticsEmailSql("user_email")}
-      {{USER_FILTER}}
-  )
-  GROUP BY day
-  ORDER BY day ASC
-`;
-
-const LEGACY_DEVICE_USAGE_TOOL_IDS = "'jenkins-runner', 'master_lockey', 'json_tools'";
 const IGNORED_ANALYTICS_TOOL_ID = "velocity-template";
 
 /**
- * Return one absolute snapshot per device/action/tool identity. Older clients wrote a few
- * non-canonical tool IDs, while newer clients migrate those local counts into the canonical row.
- * When both rows exist, the canonical row is authoritative; an alias is retained only when no
- * canonical snapshot exists for the same device/action.
- */
-function buildCanonicalDeviceUsageSql() {
-  return `
-    SELECT device_id, user_email, tool_id, action, count, updated_time
-    FROM device_usage
-    WHERE tool_id NOT IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
-      AND LOWER(TRIM(tool_id)) != '${IGNORED_ANALYTICS_TOOL_ID}'
-      AND ${includedAnalyticsEmailSql("user_email")}
-    UNION ALL
-    SELECT legacy.device_id, legacy.user_email,
-      CASE legacy.tool_id
-        WHEN 'jenkins-runner' THEN 'run-query'
-        WHEN 'master_lockey' THEN 'master-lockey'
-        WHEN 'json_tools' THEN 'json-tools'
-      END AS tool_id,
-      legacy.action, legacy.count, legacy.updated_time
-    FROM device_usage AS legacy
-    WHERE legacy.tool_id IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
-      AND ${includedAnalyticsEmailSql("legacy.user_email")}
-      AND NOT EXISTS (
-        SELECT 1
-        FROM device_usage AS canonical
-        WHERE canonical.device_id = legacy.device_id
-          AND canonical.action = legacy.action
-          AND canonical.tool_id = CASE legacy.tool_id
-            WHEN 'jenkins-runner' THEN 'run-query'
-            WHEN 'master_lockey' THEN 'master-lockey'
-            WHEN 'json_tools' THEN 'json-tools'
-          END
-      )
-  `;
-}
-
-/**
  * Handle GET /analytics/overview - authenticated personal and aggregate usage overview.
- * Cumulative totals come from device_usage; the seven-day pulse comes from usage_log.
+ * Cumulative totals and the seven-day pulse use the canonical, success-only Tool Use ledger.
  */
 export async function handleAnalyticsOverviewGet(_request, env, session) {
   try {
@@ -195,16 +133,16 @@ export async function handlePublicImprovementFeedbackPost(request, env) {
 }
 
 async function loadOverviewData(env, userEmail, source) {
-  const canonicalDeviceUsageSql = buildCanonicalDeviceUsageSql();
+  await ensureToolUsageSchema(env);
+  const normalizedUsageSql = buildCanonicalToolUsageQuery();
   const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
     env.DB
       .prepare(
-        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
-         SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-         FROM canonical_device_usage
-         WHERE LOWER(COALESCE(user_email, '')) = ?
+        `WITH normalized_usage AS (${normalizedUsageSql})
+         SELECT tool_id, COUNT(*) AS count
+         FROM normalized_usage
+         WHERE user_email = ?
          GROUP BY tool_id
-         HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
          ORDER BY count DESC, tool_id ASC
          LIMIT 100`,
       )
@@ -212,40 +150,59 @@ async function loadOverviewData(env, userEmail, source) {
       .all(),
     env.DB
       .prepare(
-        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
-         SELECT tool_id, SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS count
-         FROM canonical_device_usage
+        `WITH normalized_usage AS (${normalizedUsageSql})
+         SELECT tool_id, COUNT(*) AS count
+         FROM normalized_usage
          GROUP BY tool_id
-         HAVING SUM(CASE WHEN count > 0 THEN count ELSE 0 END) > 0
          ORDER BY count DESC, tool_id ASC
          LIMIT 100`,
       )
       .all(),
     env.DB
       .prepare(
-        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+        `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT
-           COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
-           COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
-           MAX(updated_time) AS last_updated
-         FROM canonical_device_usage
-         WHERE LOWER(COALESCE(user_email, '')) = ?`,
+           COUNT(*) AS total_activities,
+           COUNT(DISTINCT tool_id) AS tools_used,
+           MAX(created_time) AS last_updated
+         FROM normalized_usage
+         WHERE user_email = ?`,
       )
       .bind(userEmail)
       .first(),
     env.DB
       .prepare(
-        `WITH canonical_device_usage AS (${canonicalDeviceUsageSql})
+        `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT
-           COALESCE(SUM(CASE WHEN count > 0 THEN count ELSE 0 END), 0) AS total_activities,
-           COUNT(DISTINCT CASE WHEN count > 0 THEN tool_id END) AS tools_used,
-           COUNT(DISTINCT CASE WHEN count > 0 THEN LOWER(user_email) END) AS active_users,
-           MAX(updated_time) AS last_updated
-         FROM canonical_device_usage`,
+           COUNT(*) AS total_activities,
+           COUNT(DISTINCT tool_id) AS tools_used,
+           COUNT(DISTINCT user_email) AS active_users,
+           MAX(created_time) AS last_updated
+         FROM normalized_usage`,
       )
       .first(),
-    env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "AND LOWER(user_email) = ?")).bind(userEmail).all(),
-    env.DB.prepare(OVERVIEW_DAILY_SQL.replace("{{USER_FILTER}}", "")).all(),
+    env.DB
+      .prepare(
+        `WITH normalized_usage AS (${normalizedUsageSql})
+         SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
+         FROM normalized_usage
+         WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+           AND user_email = ?
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .bind(userEmail)
+      .all(),
+    env.DB
+      .prepare(
+        `WITH normalized_usage AS (${normalizedUsageSql})
+         SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
+         FROM normalized_usage
+         WHERE created_time >= datetime('now', '+7 hours', '-6 days')
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .all(),
   ]);
 
   return {
@@ -326,7 +283,8 @@ export async function handleAnalyticsBatchPost(request, env, session) {
     const usageLogs = Array.isArray(data.usage_log) ? data.usage_log : Array.isArray(data.usage_logs) ? data.usage_logs : [];
     const errorEvents = Array.isArray(data.error_events) ? data.error_events : [];
     const deviceUsage = Array.isArray(data.device_usage) ? data.device_usage : [];
-    if (events.length + usageLogs.length + errorEvents.length + deviceUsage.length > 500) {
+    const toolUsage = Array.isArray(data.tool_usage) ? data.tool_usage : Array.isArray(data.tool_uses) ? data.tool_uses : [];
+    if (events.length + usageLogs.length + errorEvents.length + deviceUsage.length + toolUsage.length > 500) {
       return new Response(JSON.stringify({ ok: false, error: "Analytics batch exceeds 500 items" }), {
         status: 413,
         headers: { "Content-Type": "application/json", ...corsHeaders() },
@@ -336,7 +294,9 @@ export async function handleAnalyticsBatchPost(request, env, session) {
     let insertedEvents = 0;
     let insertedUsageLogs = 0;
     let insertedErrorEvents = 0;
+    let insertedToolUsage = 0;
     let upsertsDevice = 0;
+    const acknowledgedToolUsageIds = [];
 
     if (env.DB) {
       // Build batch statements for events
@@ -438,6 +398,31 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         );
       }
 
+      const toolUsageStatements = [];
+      const toolUsageStatementIds = [];
+      if (toolUsage.length > 0) await ensureToolUsageSchema(env);
+      for (const item of toolUsage) {
+        const eventId = safeString(item.event_id || item.eventId || "", 160).trim();
+        const toolId = normalizeFeatureId(item.tool_id || item.toolId || "");
+        const action = safeString(item.action || "", 80).trim();
+        if (!eventId || !toolId || toolId === "unknown" || !action) continue;
+        if (isIgnoredAnalyticsTool(toolId)) continue;
+        if (userEmail === DEVELOPMENT_ANALYTICS_EMAIL) {
+          acknowledgedToolUsageIds.push(eventId);
+          continue;
+        }
+        const properties = JSON.stringify(sanitizeObject(item.properties || item.meta || {}, 4000));
+        const createdTime = tsToGmt7Plain(item.created_time || item.ts) || tsGmt7Plain();
+        toolUsageStatements.push(
+          env.DB.prepare(
+            `INSERT OR IGNORE INTO tool_usage
+             (event_id, user_email, device_id, tool_id, action, properties, source, created_time)
+             VALUES (?, ?, ?, ?, ?, ?, 'client', ?)`,
+          ).bind(eventId, userEmail, deviceId, toolId, action, properties, createdTime),
+        );
+        toolUsageStatementIds.push(eventId);
+      }
+
       // Build batch statements for device_usage (idempotent - replaces counts)
       const usageStatements = [];
       for (const du of deviceUsage) {
@@ -462,7 +447,7 @@ export async function handleAnalyticsBatchPost(request, env, session) {
       }
 
       // Execute all statements in a single batch transaction
-      const allStatements = [...eventStatements, ...errorStatements, ...usageLogStatements, ...usageStatements];
+      const allStatements = [...eventStatements, ...errorStatements, ...usageLogStatements, ...toolUsageStatements, ...usageStatements];
       if (allStatements.length > 0) {
         try {
           await env.DB.batch(allStatements);
@@ -470,6 +455,8 @@ export async function handleAnalyticsBatchPost(request, env, session) {
           insertedEvents = eventStatements.length;
           insertedErrorEvents = errorStatements.length;
           insertedUsageLogs = usageLogStatements.length;
+          insertedToolUsage = toolUsageStatements.length;
+          acknowledgedToolUsageIds.push(...toolUsageStatementIds);
           upsertsDevice = usageStatements.length;
         } catch (batchErr) {
           // Fallback to individual inserts if batch fails
@@ -497,6 +484,13 @@ export async function handleAnalyticsBatchPost(request, env, session) {
               upsertsDevice++;
             } catch (_) {}
           }
+          for (const [index, stmt] of toolUsageStatements.entries()) {
+            try {
+              await stmt.run();
+              insertedToolUsage++;
+              acknowledgedToolUsageIds.push(toolUsageStatementIds[index]);
+            } catch (_) {}
+          }
         }
       }
     }
@@ -504,7 +498,14 @@ export async function handleAnalyticsBatchPost(request, env, session) {
     return new Response(
       JSON.stringify({
         ok: true,
-        inserted: { events: insertedEvents, error_events: insertedErrorEvents, usage_log: insertedUsageLogs, device_usage: upsertsDevice },
+        inserted: {
+          events: insertedEvents,
+          error_events: insertedErrorEvents,
+          usage_log: insertedUsageLogs,
+          tool_usage: insertedToolUsage,
+          device_usage: upsertsDevice,
+        },
+        acknowledged: { tool_usage: acknowledgedToolUsageIds },
       }),
       {
         headers: { "Content-Type": "application/json", ...corsHeaders() },

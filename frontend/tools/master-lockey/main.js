@@ -1472,6 +1472,7 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "confluence_copy_lockey", {
           rowCount: visibleResults.length,
         });
+        UsageTracker.trackToolUse("master-lockey", "confluence_copy_lockey", { row_count: visibleResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1523,6 +1524,7 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "confluence_copy_table", {
           rowCount: visibleResults.length,
         });
+        UsageTracker.trackToolUse("master-lockey", "confluence_copy_table", { row_count: visibleResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1649,6 +1651,10 @@ class MasterLockey extends BaseTool {
       foundCount: results.filter((r) => r.exists).length,
       domain: this.currentDomain,
     });
+    UsageTracker.trackToolUse("master-lockey", "bulk_search", {
+      input_count: keys.length,
+      found_count: results.filter((r) => r.exists).length,
+    });
 
     // Display results
     this.displayBulkSearchResults(results);
@@ -1742,6 +1748,7 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "bulk_search_copy", {
           rowCount: filteredResults.length,
         });
+        UsageTracker.trackToolUse("master-lockey", "bulk_search_copy", { row_count: filteredResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1773,6 +1780,7 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "bulk_search_copy_lockey", {
           rowCount: filteredResults.length,
         });
+        UsageTracker.trackToolUse("master-lockey", "bulk_search_copy_lockey", { row_count: filteredResults.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -1802,10 +1810,6 @@ class MasterLockey extends BaseTool {
     this.els.btnBulkConfluenceSearch.disabled = true;
     this.els.bulkConfluenceError.style.display = "none";
     this.els.bulkConfluenceResults.style.display = "none";
-
-    UsageTracker.trackEvent("master-lockey", "bulk_confluence_search", {
-      pageCount: pageInputs.length,
-    });
 
     const results = [];
 
@@ -1850,6 +1854,15 @@ class MasterLockey extends BaseTool {
 
     // Store results
     this.bulkConfluenceResults = results;
+
+    const successfulPages = results.filter((result) => !result.error).length;
+    if (successfulPages > 0) {
+      UsageTracker.trackEvent("master-lockey", "bulk_confluence_search", { pageCount: pageInputs.length, successfulPages });
+      UsageTracker.trackToolUse("master-lockey", "bulk_confluence_search", {
+        page_count: pageInputs.length,
+        successful_pages: successfulPages,
+      });
+    }
 
     // Display results
     this.displayBulkConfluenceResults(results);
@@ -1990,6 +2003,7 @@ class MasterLockey extends BaseTool {
         UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_lockey", {
           rowCount: lockeys.length,
         });
+        UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_lockey", { row_count: lockeys.length });
       })
       .catch((err) => {
         console.error("Copy failed:", err);
@@ -2075,6 +2089,7 @@ class MasterLockey extends BaseTool {
             rowCount: dataRowCount,
             format: "html",
           });
+          UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "html" });
         })
         .catch((err) => {
           console.error("HTML clipboard failed, falling back to plain text:", err);
@@ -2083,6 +2098,8 @@ class MasterLockey extends BaseTool {
             .writeText(plainText)
             .then(() => {
               this.showSuccess(`Copied ${dataRowCount} results to clipboard`);
+              UsageTracker.trackEvent("master-lockey", "bulk_confluence_copy_table", { rowCount: dataRowCount, format: "plain" });
+              UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "plain" });
             })
             .catch((err2) => {
               console.error("Copy failed:", err2);
@@ -2100,6 +2117,7 @@ class MasterLockey extends BaseTool {
             rowCount: dataRowCount,
             format: "plain",
           });
+          UsageTracker.trackToolUse("master-lockey", "bulk_confluence_copy_table", { row_count: dataRowCount, format: "plain" });
         })
         .catch((err2) => {
           console.error("Copy failed:", err2);

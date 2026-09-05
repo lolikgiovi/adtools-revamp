@@ -1,0 +1,18 @@
+{
+  "uuid-generator": { "actions": ["single", "multiple"], "boundary": "clipboard write succeeds" },
+  "json-tools": { "actions": ["prettify", "minify", "stringify", "unstringify", "escape", "unescape", "extract_keys", "json_to_table"], "boundary": "valid output is produced" },
+  "base64-tools": { "actions": ["encode", "decode"], "boundary": "at least one output is produced" },
+  "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render" },
+  "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },
+  "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
+  "querify": { "actions": ["generate"], "boundary": "at least one file generates successfully" },
+  "compare-config": { "actions": ["unified_*"], "boundary": "comparison completes and results render" },
+  "run-query": { "actions": ["run"], "boundary": "Jenkins reports the run complete" },
+  "run-batch": { "actions": ["run"], "boundary": "Jenkins reports the batch run complete" },
+  "html-template": { "actions": ["format", "minify", "copy"], "boundary": "transformation or clipboard write succeeds" },
+  "splunk-template": { "actions": ["format", "minify", "copy"], "boundary": "transformation or clipboard write succeeds" },
+  "sql-in-clause": { "actions": ["copy"], "boundary": "generated output is copied successfully" },
+  "merge-sql": { "actions": ["merge", "report_from_sql"], "boundary": "SQL result is generated and saved" },
+  "check-image": { "actions": ["check"], "boundary": "the requested image-check batch completes" },
+  "master-lockey": { "actions": ["bulk_search", "bulk_search_copy", "bulk_search_copy_lockey", "bulk_confluence_search", "bulk_confluence_copy_lockey", "bulk_confluence_copy_table", "confluence_copy_lockey", "confluence_copy_table"], "boundary": "search returns results or clipboard write succeeds" }
+}

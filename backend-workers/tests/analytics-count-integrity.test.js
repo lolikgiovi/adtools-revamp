@@ -84,7 +84,7 @@ describe("analytics overview count integrity", () => {
 
   afterEach(() => env?.DB.close());
 
-  it("does not add a repeated absolute batch snapshot to overview totals", async () => {
+  it("uses the idempotent success ledger instead of absolute snapshots for overview totals", async () => {
     env = createEnvironment();
     const payload = {
       device_id: "device-1",
@@ -98,6 +98,7 @@ describe("analytics overview count integrity", () => {
           created_time: "2026-09-04 10:00:00",
         },
       ],
+      tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify", created_time: "2026-09-04 10:00:00" }],
       device_usage: [
         {
           tool_id: "json-tools",
@@ -122,22 +123,24 @@ describe("analytics overview count integrity", () => {
     }
 
     const data = await readOverview(env);
-    expect(data.user).toMatchObject({ totalActivities: 2, toolsUsed: 1 });
-    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 2 }]);
-    expect(data.global).toMatchObject({ totalActivities: 2, toolsUsed: 1, activeUsers: 1 });
+    expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
+    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
+    expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
     expect(data.user.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
     expect(data.global.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
     const storedLogs = await env.DB.prepare("SELECT COUNT(*) AS count FROM usage_log").first();
     expect(storedLogs.count).toBe(1);
+    const storedUses = await env.DB.prepare("SELECT COUNT(*) AS count FROM tool_usage").first();
+    expect(storedUses.count).toBe(1);
   });
 
-  it("deduplicates historical exact usage-log rows in the daily pulse", async () => {
+  it("deduplicates retries by stable tool-use event id in the daily pulse", async () => {
     env = createEnvironment();
-    await env.DB.prepare("DROP INDEX usage_log_event_identity").run();
+    await readOverview(env);
     const insert = env.DB.prepare(
-      "INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
     );
-    const values = ["user@example.com", "device-1", "json-tools", "prettify", "2026-09-04 10:00:00"];
+    const values = ["stable-use", "user@example.com", "device-1", "json-tools", "prettify", "2026-09-04 10:00:00"];
     await insert.bind(...values).run();
     await insert.bind(...values).run();
 
@@ -147,47 +150,21 @@ describe("analytics overview count integrity", () => {
     expect(data.global.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
   });
 
-  it("prefers the canonical absolute snapshot when a legacy alias exists", async () => {
+  it("reports canonical tool ids from the success ledger", async () => {
     env = createEnvironment();
+    await readOverview(env);
     await env.DB.prepare(
-      "INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-      .bind("device-1", "user@example.com", "master_lockey", "mount", 2, "2026-09-04 10:00:00")
-      .run();
+      "INSERT INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
+    ).bind("use-master", "user@example.com", "device-1", "master-lockey", "bulk_search", "2026-09-04 10:00:00").run();
 
-    const response = await handleAnalyticsBatchPost(
-      new Request("http://localhost/analytics/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_id: "device-1",
-          user_email: "user@example.com",
-          events: [],
-          error_events: [],
-          usage_log: [],
-          device_usage: [
-            {
-              tool_id: "master-lockey",
-              action: "mount",
-              count: 2,
-              updated_time: "2026-09-04 11:00:00",
-            },
-          ],
-        }),
-      }),
-      env,
-      { email: "user@example.com", deviceId: "device-1" },
-    );
-
-    expect(response.status).toBe(200);
     const data = await readOverview(env);
 
-    expect(data.user.totalActivities).toBe(2);
+    expect(data.user.totalActivities).toBe(1);
     expect(data.user.toolsUsed).toBe(1);
-    expect(data.user.tools).toEqual([{ toolId: "master-lockey", count: 2 }]);
-    expect(data.global.totalActivities).toBe(2);
+    expect(data.user.tools).toEqual([{ toolId: "master-lockey", count: 1 }]);
+    expect(data.global.totalActivities).toBe(1);
     expect(data.global.toolsUsed).toBe(1);
-    expect(data.global.tools).toEqual([{ toolId: "master-lockey", count: 2 }]);
+    expect(data.global.tools).toEqual([{ toolId: "master-lockey", count: 1 }]);
   });
 
   it("includes the owner and excludes the development identity from overview totals", async () => {
@@ -203,21 +180,20 @@ describe("analytics overview count integrity", () => {
       .run();
     await insertUsage.bind("device-dev", "dev@localhost", "json-tools", "prettify", 50, createdTime).run();
 
-    const insertLog = env.DB.prepare(
-      "INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
+    await readOverview(env);
+    const insertUse = env.DB.prepare(
+      "INSERT INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
     );
-    await insertLog.bind("user@example.com", "device-user", "json-tools", "prettify", createdTime).run();
-    await insertLog
-      .bind("fashalli.bilhaq@bankmandiri.co.id", "device-owner", "json-tools", "prettify", createdTime)
-      .run();
-    await insertLog.bind("dev@localhost", "device-dev", "json-tools", "prettify", createdTime).run();
+    await insertUse.bind("use-user", "user@example.com", "device-user", "json-tools", "prettify", createdTime).run();
+    await insertUse.bind("use-owner", "fashalli.bilhaq@bankmandiri.co.id", "device-owner", "json-tools", "prettify", createdTime).run();
+    await insertUse.bind("use-dev", "dev@localhost", "device-dev", "json-tools", "prettify", createdTime).run();
 
     const data = await readOverview(env);
 
-    expect(data.user).toMatchObject({ totalActivities: 5, toolsUsed: 1 });
-    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 5 }]);
-    expect(data.global).toMatchObject({ totalActivities: 105, toolsUsed: 1, activeUsers: 2 });
-    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 105 }]);
+    expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
+    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
+    expect(data.global).toMatchObject({ totalActivities: 2, toolsUsed: 1, activeUsers: 2 });
+    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 2 }]);
     expect(data.global.daily).toEqual([{ day: todayGmt7, count: 2 }]);
   });
 

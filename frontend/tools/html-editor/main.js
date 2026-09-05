@@ -43,7 +43,10 @@ class HTMLTemplateTool extends BaseTool {
 
   trackAnalytics(event, meta = {}) {
     try {
-      UsageTracker.trackEvent("html-template", event, cleanAnalyticsMeta(meta));
+      const cleanMeta = cleanAnalyticsMeta(meta);
+      UsageTracker.trackEvent("html-template", event, cleanMeta);
+      const usageActions = { format_action: "format", minify_action: "minify", copy_html: "copy" };
+      if (usageActions[event]) UsageTracker.trackToolUse("html-template", usageActions[event], cleanMeta);
     } catch (_) {}
   }
 
@@ -161,6 +164,8 @@ class HTMLTemplateTool extends BaseTool {
       if (success && typeof result === "string") {
         this.editor.setValue(result);
         this.renderPreview(result);
+        this.trackAnalytics("minify_action", this.pendingMinifyMeta || summarizeText(result, "html"));
+        this.pendingMinifyMeta = null;
       } else if (!success && error) {
         this.showError(`Minify failed. Your HTML was left unchanged. ${error}`);
       }
@@ -217,8 +222,8 @@ class HTMLTemplateTool extends BaseTool {
         }
         const html = this.editor.getValue();
         btnMinify.disabled = true;
+        this.pendingMinifyMeta = summarizeText(html, "html");
         this.minifyWorker.postMessage({ type: "minify", html });
-        this.trackAnalytics("minify_action", summarizeText(html, "html"));
       });
     }
 

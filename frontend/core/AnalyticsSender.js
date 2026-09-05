@@ -80,11 +80,36 @@ class AnalyticsSender {
     return false;
   }
 
-  // Preferred batch sender for 3-hourly flushes. POST only.
+  static async _postJsonResult(path, payload = {}, extraHeaders = {}) {
+    const urls = this._resolveUrls(path);
+    const headers = { "Content-Type": "application/json", ...SessionTokenStore.getAuthHeader() };
+    Object.entries(extraHeaders || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && String(value)) headers[key] = String(value);
+    });
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          credentials: "omit",
+        });
+        if (!res.ok) continue;
+        const body = await res.json().catch(() => ({}));
+        return body && typeof body === "object" ? body : { ok: true };
+      } catch (err) {
+        this._log("POST failed:", url, "error:", err?.message || String(err));
+      }
+    }
+    return false;
+  }
+
+  // Preferred batch sender for periodic and success-triggered flushes. POST only.
   static async sendBatch(batch = {}) {
     const deviceId = String(batch.device_id || batch.deviceId || "");
     this._log("sendBatch called, usage entries:", batch.device_usage?.length || 0, "events:", batch.events?.length || 0);
-    return this._postJson("/analytics/batch", batch, deviceId ? { "X-Device-Id": deviceId } : {});
+    return this._postJsonResult("/analytics/batch", batch, deviceId ? { "X-Device-Id": deviceId } : {});
   }
 
   // Live usage log sender (fire-and-forget). POST only.

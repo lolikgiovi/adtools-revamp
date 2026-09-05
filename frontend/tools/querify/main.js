@@ -462,6 +462,7 @@ export class QuerifyTool extends BaseTool {
   trackEvent(event, meta = {}) {
     try {
       UsageTracker.trackEvent("querify", event, meta);
+      if (event === "generated" && Number(meta.success_count || 0) > 0) UsageTracker.trackToolUse("querify", "generate", meta);
     } catch (_) {}
   }
 }

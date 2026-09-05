@@ -145,7 +145,6 @@ class CheckImageTool extends BaseTool {
 
   /* ──────────────── Core actions ──────────────── */
   async checkImages() {
-    UsageTracker.trackFeature("check-image", "check");
     await this.checkBatchImages();
   }
 
@@ -304,6 +303,14 @@ class CheckImageTool extends BaseTool {
       const failedCells = totalCells - successCells - timeoutCount;
 
       UsageTracker.trackEvent("check-image", "check_complete", {
+        image_count: imagePaths.length,
+        env_count: baseUrls.length,
+        success_count: successCells,
+        failed_count: failedCells,
+        timeout_count: timeoutCount,
+        duration_ms: durationMs,
+      });
+      UsageTracker.trackToolUse("check-image", "check", {
         image_count: imagePaths.length,
         env_count: baseUrls.length,
         success_count: successCells,

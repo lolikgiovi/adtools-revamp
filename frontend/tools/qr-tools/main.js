@@ -189,11 +189,13 @@ class QRTools extends BaseTool {
           link.click();
           URL.revokeObjectURL(url);
           this.showSuccess("PNG downloaded");
+          UsageTracker.trackToolUse("qr-tools", "download_png", { size: this.state.size, mode: this.state.mode });
         });
       } else {
         link.href = canvas.toDataURL("image/png");
         link.click();
         this.showSuccess("PNG downloaded");
+        UsageTracker.trackToolUse("qr-tools", "download_png", { size: this.state.size, mode: this.state.mode });
       }
     } catch (e) {
       this.showError("Failed to download PNG");
@@ -217,6 +219,7 @@ class QRTools extends BaseTool {
       link.click();
       URL.revokeObjectURL(url);
       this.showSuccess("SVG downloaded");
+      UsageTracker.trackToolUse("qr-tools", "download_svg", { size: this.state.size, mode: this.state.mode });
     } catch (e) {
       this.showError("Failed to download SVG");
       console.error(e);

@@ -28,7 +28,9 @@ class SQLInClauseTool extends BaseTool {
 
   trackAnalytics(event, meta = {}, debounceMs) {
     try {
-      UsageTracker.trackEvent("sql-in-clause", event, cleanAnalyticsMeta(meta), debounceMs);
+      const cleanMeta = cleanAnalyticsMeta(meta);
+      UsageTracker.trackEvent("sql-in-clause", event, cleanMeta, debounceMs);
+      if (event === "copy_output") UsageTracker.trackToolUse("sql-in-clause", "copy", cleanMeta);
     } catch (_) {}
   }
 
@@ -117,12 +119,11 @@ class SQLInClauseTool extends BaseTool {
 
     const copyBtn = container.querySelector("#sqlInCopyBtn");
     if (copyBtn) {
-      copyBtn.addEventListener("click", () => {
+      copyBtn.addEventListener("click", async () => {
         const out = container.querySelector("#sqlInOutput");
         const text = out?.value || "";
         if (text) {
-          this.trackAnalytics("copy_output", this.buildAnalyticsMeta());
-          this.copyToClipboard(text, copyBtn);
+          if (await this.copyToClipboard(text, copyBtn)) this.trackAnalytics("copy_output", this.buildAnalyticsMeta());
         }
       });
     }

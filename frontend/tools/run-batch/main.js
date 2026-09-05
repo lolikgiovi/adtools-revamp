@@ -34,7 +34,9 @@ export class RunBatch extends BaseTool {
 
   trackAnalytics(event, meta = {}) {
     try {
-      UsageTracker.trackEvent("run-batch", event, cleanAnalyticsMeta(meta));
+      const cleanMeta = cleanAnalyticsMeta(meta);
+      UsageTracker.trackEvent("run-batch", event, cleanMeta);
+      if (event === "run_success") UsageTracker.trackToolUse("run-batch", "run", cleanMeta);
     } catch (_) {}
   }
 

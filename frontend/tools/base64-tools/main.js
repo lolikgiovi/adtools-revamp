@@ -40,7 +40,11 @@ class Base64Tools extends BaseTool {
 
   trackAnalytics(event, meta = {}) {
     try {
-      UsageTracker.trackEvent("base64-tools", event, cleanAnalyticsMeta(meta));
+      const cleanMeta = cleanAnalyticsMeta(meta);
+      UsageTracker.trackEvent("base64-tools", event, cleanMeta);
+      const producedOutput = !("output_file_count" in cleanMeta) || Number(cleanMeta.output_file_count) > 0;
+      if (producedOutput && event === "encode_success") UsageTracker.trackToolUse("base64-tools", "encode", cleanMeta);
+      if (producedOutput && event === "decode_success") UsageTracker.trackToolUse("base64-tools", "decode", cleanMeta);
     } catch (_) {}
   }
 
@@ -597,7 +601,6 @@ class Base64Tools extends BaseTool {
   }
 
   async encodeToBase64() {
-    UsageTracker.trackFeature("base64-tools", "encode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process
@@ -673,7 +676,6 @@ class Base64Tools extends BaseTool {
   }
 
   async decodeFromBase64() {
-    UsageTracker.trackFeature("base64-tools", "decode");
     const container = this.validateContainer();
 
     // Check if we have selected files to process

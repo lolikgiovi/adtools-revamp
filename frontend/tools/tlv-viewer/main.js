@@ -149,7 +149,7 @@ class TLVViewer extends BaseTool {
       this.clearError();
       this.renderResult(result);
       this.updateCopyButton();
-      UsageTracker.trackFeature("tlv-viewer", "parse");
+      UsageTracker.trackToolUse("tlv-viewer", "parse");
       this.trackAnalytics("parse", {
         format: result.format,
         node_count: result.summary.nodeCount,

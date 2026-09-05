@@ -2122,7 +2122,7 @@ export class QuickQueryUI {
   }
 
   _trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, usedWorker) {
-    UsageTracker.trackFeature("quick-query", queryType);
+    UsageTracker.trackToolUse("quick-query", queryType);
     this.trackQuickQueryEvent(
       "query_generated",
       buildQuickQueryGeneratedMeta({

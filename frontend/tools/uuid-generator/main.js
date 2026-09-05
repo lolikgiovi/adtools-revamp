@@ -115,21 +115,19 @@ class UUIDGenerator extends BaseTool {
   async copySingleUUID() {
     const resultInput = document.getElementById("singleUuidResult");
     if (resultInput && resultInput.value) {
-      UsageTracker.trackFeature("uuid-generator", "single");
       this.trackAnalytics("copy_action", { type: "single", count: 1 });
-      await this.copyToClipboard(resultInput.value);
+      if (await this.copyToClipboard(resultInput.value)) UsageTracker.trackToolUse("uuid-generator", "single");
     }
   }
 
   async copyMultipleUUIDs() {
     const resultTextarea = document.getElementById("multipleUuidResult");
     if (resultTextarea && resultTextarea.value) {
-      UsageTracker.trackFeature("uuid-generator", "multiple");
       this.trackAnalytics("copy_action", {
         type: "multiple",
         count: resultTextarea.value.split("\n").length,
       });
-      await this.copyToClipboard(resultTextarea.value);
+      if (await this.copyToClipboard(resultTextarea.value)) UsageTracker.trackToolUse("uuid-generator", "multiple");
     }
   }
 

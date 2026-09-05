@@ -1008,7 +1008,7 @@ export class MergeSqlTool extends BaseTool {
       this.updateDuplicatesInsight();
       this.showSuccess("SQL files merged successfully!");
       this.handleTabSwitch("report");
-      UsageTracker.trackFeature("merge-sql", "merge");
+      UsageTracker.trackToolUse("merge-sql", "merge");
       this.trackAnalytics("merge_success", this.buildResultAnalyticsMeta({ duration_ms: Date.now() - startTime }));
     } catch (error) {
       console.error("Merge failed:", error);
@@ -1132,7 +1132,7 @@ export class MergeSqlTool extends BaseTool {
       this.updateDuplicatesInsight();
       this.handleTabSwitch("report");
       this.showSuccess("Report and Validation SQL generated from merged SQL");
-      UsageTracker.trackFeature("merge-sql", "report_from_sql");
+      UsageTracker.trackToolUse("merge-sql", "report_from_sql");
       this.trackAnalytics(
         "sql_mode_refresh_success",
         this.buildResultAnalyticsMeta({ duration_ms: Date.now() - startTime, ...summarizeText(mergedSql, "input") }),

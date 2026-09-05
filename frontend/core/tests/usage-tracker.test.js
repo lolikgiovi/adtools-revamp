@@ -43,6 +43,7 @@ describe("UsageTracker analytics reliability", () => {
           created_time: new Date().toISOString(),
         },
       ],
+      toolUses: [],
       daily: {},
       integrity: null,
     };
@@ -96,6 +97,43 @@ describe("UsageTracker analytics reliability", () => {
         action: "prettify",
       }),
     ]);
+  });
+
+  it("queues a successful tool use before user registration and gives it a stable id", () => {
+    const flushSpy = vi.spyOn(UsageTracker, "flush").mockResolvedValue();
+    const eventId = UsageTracker.trackToolUse("json_tools", "prettify", { input_size: 42, sql: "sensitive" });
+
+    expect(eventId).toBeTruthy();
+    expect(UsageTracker._state.toolUses).toEqual([
+      expect.objectContaining({ event_id: eventId, tool_id: "json-tools", action: "prettify", meta: { input_size: 42 } }),
+    ]);
+    expect(UsageTracker._toBatchPayload().tool_usage[0].event_id).toBe(eventId);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    flushSpy.mockRestore();
+  });
+
+  it("removes only tool-use ids explicitly acknowledged by the server", async () => {
+    const first = { event_id: "use-1", tool_id: "json-tools", action: "prettify", ts: new Date().toISOString(), meta: {} };
+    const second = { event_id: "use-2", tool_id: "json-tools", action: "minify", ts: new Date().toISOString(), meta: {} };
+    UsageTracker._state.events = [];
+    UsageTracker._state.usageLogs = [];
+    UsageTracker._state.errorEvents = [];
+    UsageTracker._state.counts = {};
+    UsageTracker._state.toolUses = [first, second];
+    AnalyticsSender.sendBatch = vi.fn().mockResolvedValue({ ok: true, acknowledged: { tool_usage: ["use-1"] } });
+
+    await UsageTracker._flushBatch();
+
+    expect(UsageTracker._state.toolUses).toEqual([second]);
+  });
+
+  it("does not age-rotate unacknowledged tool uses", () => {
+    const oldUse = { event_id: "old-use", tool_id: "json-tools", action: "prettify", ts: "2020-01-01T00:00:00.000Z", meta: {} };
+    localStorage.setItem(UsageTracker.STORAGE_KEY, JSON.stringify({ ...UsageTracker._state, toolUses: [oldUse] }));
+
+    const loaded = UsageTracker._loadFromStorage();
+
+    expect(loaded.toolUses).toEqual([oldUse]);
   });
 
   it("preserves milliseconds in usage-log timestamps for retry-safe identities", () => {
@@ -210,11 +248,12 @@ describe("UsageTracker analytics reliability", () => {
       events: Array.from({ length: 260 }, (_, index) => ({ id: `event-${index}` })),
       usage_log: Array.from({ length: 180 }, (_, index) => ({ id: `log-${index}` })),
       error_events: Array.from({ length: 70 }, (_, index) => ({ id: `error-${index}` })),
+      tool_usage: [],
       device_usage: Array.from({ length: 40 }, (_, index) => ({ id: `usage-${index}` })),
     };
 
     const chunks = UsageTracker._chunkBatchPayload(payload);
-    const keys = ["events", "usage_log", "error_events", "device_usage"];
+    const keys = ["events", "usage_log", "error_events", "tool_usage", "device_usage"];
 
     expect(chunks.length).toBeGreaterThan(1);
     chunks.forEach((chunk) => {

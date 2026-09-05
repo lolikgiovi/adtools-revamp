@@ -31,7 +31,10 @@ class SplunkVTLEditor extends BaseTool {
 
   trackAnalytics(event, meta = {}) {
     try {
-      UsageTracker.trackEvent("splunk-template", event, cleanAnalyticsMeta(meta));
+      const cleanMeta = cleanAnalyticsMeta(meta);
+      UsageTracker.trackEvent("splunk-template", event, cleanMeta);
+      const usageActions = { format_action: "format", minify_action: "minify", copy_success: "copy" };
+      if (usageActions[event]) UsageTracker.trackToolUse("splunk-template", usageActions[event], cleanMeta);
     } catch (_) {}
   }
 

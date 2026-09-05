@@ -180,9 +180,11 @@ class BaseTool {
           // noop if targetEl does not support classList
         }
       }
+      return true;
     } catch (error) {
       this.showError("Failed to copy to clipboard");
       console.error("Clipboard error:", error);
+      return false;
     }
   }
 

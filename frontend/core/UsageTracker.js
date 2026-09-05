@@ -12,6 +12,7 @@ class UsageTracker {
   static INSTALL_ID_KEY = "usage.analytics.installId";
   static MAX_EVENTS = 1500; // rolling buffer to avoid quota issues
   static MAX_USAGE_LOGS = 1500; // rolling buffer for batched usage_log rows
+  static MAX_TOOL_USES = 10_000; // durable success-only queue; never age-rotated
   static MAX_ERROR_EVENTS = 300; // rolling buffer for batched error_events rows
   static MAX_BATCH_ITEMS = 500;
   static MAX_BATCH_BYTES = 800_000;
@@ -30,6 +31,7 @@ class UsageTracker {
   static _debounceTimers = new Map();
   static _eventBus = null;
   static _batchTimer = null;
+  static _remoteFlushTimer = null;
 
   /** Initialize tracker (optional), sets event bus and attaches lifecycle hooks */
   static init(eventBus = null) {
@@ -236,6 +238,38 @@ class UsageTracker {
   static _trackFeatureImmediate(featureKey, actionKey, meta = {}) {
     this.track(featureKey, actionKey, meta);
     this._queueUsageLog(featureKey, actionKey);
+  }
+
+  /** Record one completed, value-producing tool action. Safe to call before registration finishes. */
+  static trackToolUse(featureId, action, meta = {}) {
+    if (!this._enabled || !featureId || !action) return null;
+    const toolId = this.normalizeFeatureId(featureId);
+    if (!toolId || this.isIgnoredFeatureId(toolId)) return null;
+    if (!this._state) this._state = this._loadFromStorage();
+    const now = new Date();
+    if (!this._isValidTimestamp(now)) return null;
+    const eventId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now.getTime()}-${Math.random()}`;
+    const item = { event_id: eventId, tool_id: toolId, action: String(action), ts: now.toISOString(), meta: this._sanitizeMeta(meta) };
+    this._state.toolUses = Array.isArray(this._state.toolUses) ? this._state.toolUses : [];
+    this._state.toolUses.push(item);
+    if (this._state.toolUses.length > this.MAX_TOOL_USES) {
+      this._state.toolUses = this._state.toolUses.slice(this._state.toolUses.length - this.MAX_TOOL_USES);
+    }
+    this._state.lastUpdated = item.ts;
+    this._state.revision = (this._state.revision || 0) + 1;
+    // Persist the durable queue immediately; a crash before the remote flush must not erase a completed use.
+    this.flush().catch(() => {});
+    this._scheduleRemoteFlush();
+    return eventId;
+  }
+
+  static _scheduleRemoteFlush() {
+    const isDev = !!(import.meta && import.meta.env && import.meta.env.DEV);
+    if (isDev || this._remoteFlushTimer) return;
+    this._remoteFlushTimer = setTimeout(() => {
+      this._remoteFlushTimer = null;
+      this._flushBatch().catch(() => {});
+    }, 5_000);
   }
 
   static _queueUsageLog(featureKey, actionKey) {
@@ -524,7 +558,7 @@ class UsageTracker {
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
       } catch (_) {
         // Fall back to saving counts only
-        const minimal = { ...payload, events: [], usageLogs: [], errorEvents: [] };
+        const minimal = { ...payload, events: [], usageLogs: [], errorEvents: [], toolUses: payload.toolUses || [] };
         try {
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(minimal));
         } catch (_) {}
@@ -562,6 +596,7 @@ class UsageTracker {
           state.events = Array.isArray(state.events) ? state.events.filter((ev) => this._validateEvent(ev)) : [];
           state.usageLogs = Array.isArray(state.usageLogs) ? state.usageLogs.filter((log) => this._validateUsageLog(log)) : [];
           state.errorEvents = Array.isArray(state.errorEvents) ? state.errorEvents.filter((err) => this._validateErrorEvent(err)) : [];
+          state.toolUses = Array.isArray(state.toolUses) ? state.toolUses.filter((item) => this._validateToolUse(item)) : [];
 
           // Time-based rotation: drop events older than 7 days
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -587,6 +622,7 @@ class UsageTracker {
           if (state.errorEvents.length > this.MAX_ERROR_EVENTS) {
             state.errorEvents = state.errorEvents.slice(state.errorEvents.length - this.MAX_ERROR_EVENTS);
           }
+          if (state.toolUses.length > this.MAX_TOOL_USES) state.toolUses = state.toolUses.slice(-this.MAX_TOOL_USES);
           state.counts = state.counts && typeof state.counts === "object" ? state.counts : {};
           state.daily = state.daily && typeof state.daily === "object" ? state.daily : {};
           state.version = typeof state.version === "number" ? state.version : 1;
@@ -614,6 +650,7 @@ class UsageTracker {
       events: [],
       usageLogs: [],
       errorEvents: [],
+      toolUses: [],
       daily: {},
       integrity: null,
     };
@@ -689,6 +726,14 @@ class UsageTracker {
       tool_id: this.normalizeFeatureId(err.tool_id || ""),
     }));
 
+    const tool_usage = (Array.isArray(s.toolUses) ? s.toolUses : []).map((item) => ({
+      event_id: item.event_id,
+      tool_id: this.normalizeFeatureId(item.tool_id),
+      action: String(item.action || "unknown"),
+      properties: item.meta || {},
+      created_time: this._isoToGmt7Plain(item.ts || new Date().toISOString(), true),
+    }));
+
     // Build device_usage from absolute counts in state.counts
     const device_usage = [];
     const nowPlain = this._nowGmt7Plain();
@@ -719,6 +764,7 @@ class UsageTracker {
       events,
       usage_log,
       error_events,
+      tool_usage,
       device_usage,
     };
   }
@@ -738,7 +784,7 @@ class UsageTracker {
    * source detail rows acknowledged by that chunk for partial-flush cleanup.
    */
   static _partitionBatchPayload(payload, references = null) {
-    const arrayKeys = ["events", "usage_log", "error_events", "device_usage"];
+    const arrayKeys = ["events", "usage_log", "error_events", "tool_usage", "device_usage"];
     const sourceArrays = Object.fromEntries(arrayKeys.map((key) => [key, Array.isArray(payload?.[key]) ? payload[key] : []]));
     const hasItems = arrayKeys.some((key) => sourceArrays[key].length > 0);
     const makeChunk = () => ({
@@ -746,11 +792,12 @@ class UsageTracker {
       events: [],
       usage_log: [],
       error_events: [],
+      tool_usage: [],
       device_usage: [],
     });
     const makeReferences = () =>
       references
-        ? { events: [], usage_log: [], error_events: [], device_usage: [] }
+        ? { events: [], usage_log: [], error_events: [], tool_usage: [], device_usage: [] }
         : null;
 
     if (!hasItems) {
@@ -828,18 +875,21 @@ class UsageTracker {
         events: Array.isArray(currentState.events) ? currentState.events.slice() : [],
         usageLogs: Array.isArray(currentState.usageLogs) ? currentState.usageLogs.slice() : [],
         errorEvents: Array.isArray(currentState.errorEvents) ? currentState.errorEvents.slice() : [],
+        toolUses: Array.isArray(currentState.toolUses) ? currentState.toolUses.slice() : [],
       };
       const payload = this._toBatchPayload(snapshot);
       if (
         (payload.events && payload.events.length) ||
         (payload.usage_log && payload.usage_log.length) ||
         (payload.error_events && payload.error_events.length) ||
+        (payload.tool_usage && payload.tool_usage.length) ||
         (payload.device_usage && payload.device_usage.length)
       ) {
         const references = {
           events: snapshot.events,
           usage_log: snapshot.usageLogs,
           error_events: snapshot.errorEvents,
+          tool_usage: snapshot.toolUses,
           device_usage: [],
         };
         const chunks = this._partitionBatchPayload(payload, references);
@@ -847,28 +897,37 @@ class UsageTracker {
           events: [],
           usageLogs: [],
           errorEvents: [],
+          toolUses: [],
         };
 
         for (const chunk of chunks) {
-          let sent = false;
+          let result = null;
           try {
-            sent = await AnalyticsSender.sendBatch(chunk.payload);
+            result = await AnalyticsSender.sendBatch(chunk.payload);
           } catch (_) {
-            sent = false;
+            result = null;
           }
-          if (!sent) break;
+          if (!result || (typeof result === "object" && result.ok === false)) break;
 
           acknowledged.events.push(...(chunk.references?.events || []));
           acknowledged.usageLogs.push(...(chunk.references?.usage_log || []));
           acknowledged.errorEvents.push(...(chunk.references?.error_events || []));
+          const acceptedIds =
+            typeof result === "object"
+              ? new Set(Array.isArray(result.acknowledged?.tool_usage) ? result.acknowledged.tool_usage : [])
+              : null;
+          acknowledged.toolUses.push(
+            ...(chunk.references?.tool_usage || []).filter((item) => !acceptedIds || acceptedIds.has(item.event_id)),
+          );
         }
 
-        if (acknowledged.events.length || acknowledged.usageLogs.length || acknowledged.errorEvents.length) {
+        if (acknowledged.events.length || acknowledged.usageLogs.length || acknowledged.errorEvents.length || acknowledged.toolUses.length) {
           // Counts/device_usage are absolute values and remain in state for the
           // next sync. Only remove detail rows from the original snapshot.
           this._state.events = this._removeAcknowledgedRows(this._state.events, acknowledged.events);
           this._state.usageLogs = this._removeAcknowledgedRows(this._state.usageLogs, acknowledged.usageLogs);
           this._state.errorEvents = this._removeAcknowledgedRows(this._state.errorEvents, acknowledged.errorEvents);
+          this._state.toolUses = this._removeAcknowledgedRows(this._state.toolUses, acknowledged.toolUses);
           this.flushSync();
         }
       }
@@ -1043,6 +1102,13 @@ class UsageTracker {
     if (typeof log.user_email !== "string" || typeof log.device_id !== "string") return false;
     if (typeof log.tool_id !== "string" || typeof log.action !== "string" || typeof log.ts !== "string") return false;
     return this._validateTimestampString(log.ts);
+  }
+
+  static _validateToolUse(item) {
+    if (!item || typeof item !== "object") return false;
+    if (typeof item.event_id !== "string" || !item.event_id) return false;
+    if (typeof item.tool_id !== "string" || typeof item.action !== "string" || typeof item.ts !== "string") return false;
+    return this._validateTimestampString(item.ts);
   }
 
   static _validateErrorEvent(err) {

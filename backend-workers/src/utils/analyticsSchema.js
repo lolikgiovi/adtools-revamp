@@ -1,5 +1,6 @@
 const readyDatabases = new WeakSet();
 const deviceVersionReadyDatabases = new WeakSet();
+const toolUsageReadyDatabases = new WeakSet();
 
 const ERROR_EVENTS_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS error_events (
@@ -57,4 +58,28 @@ export async function ensureDeviceAppVersionSchema(env) {
 
   await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_device_app_version ON device(app_version)").run();
   deviceVersionReadyDatabases.add(env.DB);
+}
+
+const TOOL_USAGE_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS tool_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    user_email TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    tool_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    properties TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL,
+    created_time TEXT NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_tool_usage_email_time ON tool_usage(user_email, created_time DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_tool_usage_tool_action_time ON tool_usage(tool_id, action, created_time DESC)",
+];
+
+export async function ensureToolUsageSchema(env) {
+  if (!env?.DB || toolUsageReadyDatabases.has(env.DB)) return;
+  for (const statement of TOOL_USAGE_SCHEMA_STATEMENTS) {
+    await env.DB.prepare(statement).run();
+  }
+  toolUsageReadyDatabases.add(env.DB);
 }

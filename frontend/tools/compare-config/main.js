@@ -4165,7 +4165,7 @@ class CompareConfigTool extends BaseTool {
 
       // Track feature usage: one comparison = one usage
       const comparisonMode = `unified_${sourceA.type}_${sourceB.type}`;
-      UsageTracker.trackFeature("compare-config", comparisonMode, {
+      UsageTracker.trackToolUse("compare-config", comparisonMode, {
         rows_compared: viewResult.rows?.length || 0,
         pk_fields: selectedPkFields.length,
         compare_fields: selectedCompareFields.length,

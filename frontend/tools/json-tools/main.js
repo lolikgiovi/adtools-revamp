@@ -48,13 +48,15 @@ class JSONTools extends BaseTool {
     try {
       shapeMeta = getObjectShapeMeta(JSON.parse(input));
     } catch (_) {}
-    this.trackAnalytics("process_success", {
+    const analyticsMeta = {
       action,
       ...shapeMeta,
       ...summarizeText(input, "input"),
       ...summarizeText(output, "output"),
       ...meta,
-    });
+    };
+    UsageTracker.trackToolUse("json-tools", action, analyticsMeta);
+    this.trackAnalytics("process_success", analyticsMeta);
   }
 
   async onMount() {
@@ -410,7 +412,6 @@ class JSONTools extends BaseTool {
   }
 
   prettifyJSON() {
-    UsageTracker.trackFeature("json-tools", "prettify");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.prettify(content);
@@ -424,7 +425,6 @@ class JSONTools extends BaseTool {
   }
 
   minifyJSON() {
-    UsageTracker.trackFeature("json-tools", "minify");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.minify(content);
@@ -437,7 +437,6 @@ class JSONTools extends BaseTool {
   }
 
   stringifyJSON() {
-    UsageTracker.trackFeature("json-tools", "stringify");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.stringify(content);
@@ -450,7 +449,6 @@ class JSONTools extends BaseTool {
   }
 
   unstringifyJSON() {
-    UsageTracker.trackFeature("json-tools", "unstringify");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.unstringify(content);
@@ -464,7 +462,6 @@ class JSONTools extends BaseTool {
   }
 
   escapeJSON() {
-    UsageTracker.trackFeature("json-tools", "escape");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.escape(content);
@@ -477,7 +474,6 @@ class JSONTools extends BaseTool {
   }
 
   unescapeJSON() {
-    UsageTracker.trackFeature("json-tools", "unescape");
     const content = this.editor.getValue().trim();
 
     const res = JSONToolsService.unescape(content);
@@ -491,7 +487,6 @@ class JSONTools extends BaseTool {
   }
 
   extractKeys() {
-    UsageTracker.trackFeature("json-tools", "extract_keys");
     const content = this.editor.getValue().trim();
     const extractType = document.querySelector('input[name="extract-type"]:checked').value;
     const sortOrder = document.querySelector('input[name="sort-order"]:checked').value;
@@ -509,7 +504,6 @@ class JSONTools extends BaseTool {
   }
 
   jsonToTable() {
-    UsageTracker.trackFeature("json-tools", "json_to_table");
     const content = this.editor.getValue().trim();
     const tableOutput = document.getElementById("json-table-output");
 
@@ -535,6 +529,10 @@ class JSONTools extends BaseTool {
       row_count: flattenedPairs.length,
       transposed: this.isTransposed,
       sort_order: this.keySortOrder,
+    });
+    UsageTracker.trackToolUse("json-tools", "json_to_table", {
+      ...getObjectShapeMeta(this.validatedJson),
+      row_count: flattenedPairs.length,
     });
   }
 

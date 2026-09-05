@@ -148,8 +148,8 @@ describe("Analytics endpoints", () => {
     expect(data.period).toEqual({ totals: "all-time", daily: "last-7-days" });
     expect(data.user).toMatchObject({ totalActivities: 0, toolsUsed: 0, tools: [], daily: [] });
     expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0, tools: [], daily: [] });
-    expect(env.DB.executed.filter((item) => item.sql.includes("FROM device_usage")).length).toBe(4);
-    expect(env.DB.executed.filter((item) => item.sql.includes("FROM usage_log")).length).toBe(2);
+    expect(env.DB.executed.filter((item) => item.sql.includes("FROM device_usage"))).toHaveLength(0);
+    expect(env.DB.executed.filter((item) => item.sql.includes("FROM tool_usage"))).toHaveLength(6);
   });
 
   it("returns the public overview for a registered email without authentication", async () => {
@@ -168,9 +168,7 @@ describe("Analytics endpoints", () => {
     expect(data.source).toBe("analytics-public-api");
     expect(data.user).toMatchObject({ totalActivities: 0, toolsUsed: 0, tools: [], daily: [] });
     expect(data.global).toMatchObject({ totalActivities: 0, toolsUsed: 0, activeUsers: 0, tools: [], daily: [] });
-    expect(env.DB.executed.find((item) => item.sql.includes("LOWER(COALESCE(user_email, '')) = ?")).args).toEqual([
-      "user@example.com",
-    ]);
+    expect(env.DB.executed.find((item) => item.sql.includes("WHERE user_email = ?")).args).toEqual(["user@example.com"]);
   });
 
   it("rejects public overview requests without a valid email", async () => {
@@ -280,6 +278,15 @@ describe("Analytics endpoints", () => {
               created_time: "2026-01-01 10:00:00+07:00",
             },
           ],
+          tool_usage: [
+            {
+              event_id: "use-1",
+              tool_id: "json_tools",
+              action: "prettify",
+              properties: { input_size: 42, sql: "sensitive" },
+              created_time: "2026-01-01T03:00:00.000Z",
+            },
+          ],
           error_events: [
             {
               user_email: "analytics-test@bankmandiri.co.id",
@@ -316,6 +323,8 @@ describe("Analytics endpoints", () => {
     expect(data.ok).toBe(true);
     expect(data.inserted.error_events).toBe(1);
     expect(data.inserted.usage_log).toBe(1);
+    expect(data.inserted.tool_usage).toBe(1);
+    expect(data.acknowledged.tool_usage).toEqual(["use-1"]);
     expect(data.inserted.device_usage).toBe(1);
     expect(env.DB.batch).toHaveBeenCalledTimes(1);
   });
@@ -605,7 +614,7 @@ describe("Analytics endpoints", () => {
   });
 
   it("returns safe computed Who insights with a time range", async () => {
-    mockDashboardTables(env, ["usage_log", "events", "device", "users", "error_events"]);
+    mockDashboardTables(env, ["tool_usage", "usage_log", "events", "device", "users", "error_events"]);
 
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {
@@ -636,14 +645,13 @@ describe("Analytics endpoints", () => {
     expect(data.range).toBe("7d");
     expect(Array.isArray(data.data)).toBe(true);
     const whoQuery = env.DB.executed.find((item) => item.sql.includes("WITH activity AS ("));
-    expect(whoQuery.sql).toContain("FROM usage_log");
+    expect(whoQuery.sql).toContain("FROM tool_usage");
     expect(whoQuery.sql).not.toContain("FROM events e");
-    expect(whoQuery.sql).toContain("NOT EXISTS");
-    expect(whoQuery.sql).toContain("u2.action != 'open'");
+    expect(whoQuery.sql).toContain("dev@localhost");
   });
 
-  it("uses normalized usage log for tools and tool adoption instead of aggregated device counts", async () => {
-    mockDashboardTables(env, ["usage_log", "device_usage", "error_events"]);
+  it("uses canonical tool uses for impact and usage logs for adoption", async () => {
+    mockDashboardTables(env, ["tool_usage", "usage_log", "device_usage", "error_events"]);
 
     const login = await worker.fetch(
       new Request("http://localhost/dashboard/verify", {
@@ -689,15 +697,15 @@ describe("Analytics endpoints", () => {
     expect(toolAdoptionResponse.status).toBe(200);
     expect(toolsQuery).toBeTruthy();
     expect(toolAdoptionQuery).toBeTruthy();
-    expect(toolsQuery.sql).toContain("NOT EXISTS");
+    expect(toolsQuery.sql).toContain("FROM tool_usage");
     expect(toolsQuery.sql).toContain("dev@localhost");
     expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
     expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
   });
 
-  it("uses normalized usage log for overview action totals and top tool", async () => {
-    mockDashboardTables(env, ["usage_log", "error_events"]);
+  it("uses canonical tool uses for overview action totals and top tool", async () => {
+    mockDashboardTables(env, ["tool_usage", "usage_log", "error_events"]);
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
 
     try {
@@ -728,7 +736,7 @@ describe("Analytics endpoints", () => {
       expect(response.status).toBe(200);
       expect(data.ok).toBe(true);
       expect(normalizedOverviewQueries.length).toBeGreaterThanOrEqual(2);
-      expect(normalizedOverviewQueries.some((item) => item.sql.includes("NOT EXISTS"))).toBe(true);
+      expect(normalizedOverviewQueries.some((item) => item.sql.includes("FROM tool_usage"))).toBe(true);
     } finally {
       nowSpy.mockRestore();
     }

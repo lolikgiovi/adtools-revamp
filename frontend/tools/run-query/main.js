@@ -519,6 +519,7 @@ export class JenkinsRunner extends BaseTool {
           statusEl.textContent = "Complete";
           try {
             UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
+            UsageTracker.trackToolUse("run-query", "run", { build_number: this.state.buildNumber || null });
           } catch (_) {}
         }),
       );
