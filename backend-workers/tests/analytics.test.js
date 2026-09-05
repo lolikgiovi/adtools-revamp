@@ -691,7 +691,7 @@ describe("Analytics endpoints", () => {
     expect(toolAdoptionQuery).toBeTruthy();
     expect(toolsQuery.sql).toContain("NOT EXISTS");
     expect(toolsQuery.sql).toContain("dev@localhost");
-    expect(toolsQuery.sql).toContain("fashalli.bilhaq@bankmandiri.co.id");
+    expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
     expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
   });

@@ -190,7 +190,7 @@ describe("analytics overview count integrity", () => {
     expect(data.global.tools).toEqual([{ toolId: "master-lockey", count: 2 }]);
   });
 
-  it("excludes owner and development identities from overview totals", async () => {
+  it("includes the owner and excludes the development identity from overview totals", async () => {
     env = createEnvironment();
     const todayGmt7 = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const createdTime = `${todayGmt7} 10:00:00`;
@@ -216,9 +216,9 @@ describe("analytics overview count integrity", () => {
 
     expect(data.user).toMatchObject({ totalActivities: 5, toolsUsed: 1 });
     expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 5 }]);
-    expect(data.global).toMatchObject({ totalActivities: 5, toolsUsed: 1, activeUsers: 1 });
-    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 5 }]);
-    expect(data.global.daily).toEqual([{ day: todayGmt7, count: 1 }]);
+    expect(data.global).toMatchObject({ totalActivities: 105, toolsUsed: 1, activeUsers: 2 });
+    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 105 }]);
+    expect(data.global.daily).toEqual([{ day: todayGmt7, count: 2 }]);
   });
 
   it("ignores obsolete velocity-template rows in ingestion and overview totals", async () => {
