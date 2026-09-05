@@ -33,6 +33,52 @@ describe("GlobalSearch scopes", () => {
     expect(search.filtered[0]).toMatchObject({ id: "compare-config", name: "Compare Config" });
   });
 
+  it("orders the default result list by latest interaction", () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [
+      { id: "quick-query", name: "Quick Query", route: "quick-query", type: "tool" },
+      { id: "check-image", name: "Check Image", route: "check-image", type: "tool" },
+      { id: "json-tools", name: "JSON Tools", route: "json-tools", type: "tool" },
+    ];
+    search.recentInteractionStore = {
+      getRecencyMap: () =>
+        new Map([
+          ["tool:json-tools", { lastInteractedAt: 100, order: 1 }],
+          ["tool:check-image", { lastInteractedAt: 200, order: 0 }],
+          ["tool:quick-query", { lastInteractedAt: 300, order: 0 }],
+        ]),
+    };
+    search._renderResults = vi.fn();
+
+    search._filter("");
+
+    expect(search.filtered.map((item) => item.id)).toEqual(["quick-query", "check-image", "json-tools"]);
+  });
+
+  it("orders saved Quick Query table results by latest interaction", async () => {
+    const search = Object.create(GlobalSearch.prototype);
+    search.index = [];
+    search._filterRequestId = 0;
+    search.searchQuickQuery = vi.fn().mockResolvedValue([
+      { fullName: "CONFIG.APP_SETTINGS", schemaName: "CONFIG", tableName: "APP_SETTINGS" },
+      { fullName: "CONFIG.APP_CONFIG", schemaName: "CONFIG", tableName: "APP_CONFIG" },
+    ]);
+    search.recentInteractionStore = {
+      getRecencyMap: () =>
+        new Map([
+          ["quick-query-table:CONFIG.APP_CONFIG", { lastInteractedAt: 300, order: 0 }],
+          ["quick-query-table:CONFIG.APP_SETTINGS", { lastInteractedAt: 200, order: 1 }],
+        ]),
+    };
+    search.resultsEl = { innerHTML: "" };
+    search.inputEl = { removeAttribute: vi.fn(), setAttribute: vi.fn() };
+    search._renderResults = vi.fn();
+
+    await search._filter("qq:config");
+
+    expect(search.filtered.map((item) => item.name)).toEqual(["CONFIG.APP_CONFIG", "CONFIG.APP_SETTINGS"]);
+  });
+
   it("turns quick:table into a Quick Query action", () => {
     const search = Object.create(GlobalSearch.prototype);
     search.index = [];

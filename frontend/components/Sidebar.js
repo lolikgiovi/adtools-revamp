@@ -2,7 +2,13 @@
  * Sidebar - Modular sidebar component
  * Manages navigation and tool selection
  */
+import { UsageTracker } from "../core/UsageTracker.js";
+
 class Sidebar {
+  static PINNED_TOOLS_STORAGE_KEY = "sidebar.pinnedTools.v1";
+  static PIN_EDUCATION_STORAGE_KEY = "sidebar.pinEducationShown.v1";
+  static MAX_PIN_EDUCATION_SHOWN = 2;
+
   constructor(config = {}) {
     this.eventBus = config.eventBus;
     this.router = config.router;
@@ -22,6 +28,15 @@ class Sidebar {
 
     this.currentTool = null;
     this.mobileBreakpoint = 768;
+    this.storage = config.storage || null;
+    this.pinnedTools = this.normalizePinnedTools(config.pinnedTools ?? this.loadPinnedTools());
+    this.pinEducationShown = this.loadPinEducationShown();
+    this.contextMenuEl = null;
+    this.contextMenuToolId = null;
+    this.pinEducationEl = null;
+    this.pinEducationAnchor = null;
+    this.pinEducationTimer = null;
+    this.pinEducationSuppressed = false;
     // Runtime detection may initialize slightly after first render in Tauri
     this._runtimeRetry = false;
     this._menuRuntimeRetry = false;
@@ -76,6 +91,17 @@ class Sidebar {
         this.updateActiveItem(data.path);
       });
     }
+
+    this._handleDocumentPointerDown = (event) => {
+      if (this.contextMenuEl && !this.contextMenuEl.contains(event.target)) {
+        this.closeContextMenu();
+      }
+    };
+    document.addEventListener("pointerdown", this._handleDocumentPointerDown);
+
+    this._handleEducationReposition = () => this.positionPinEducation();
+    window.addEventListener("resize", this._handleEducationReposition);
+    window.addEventListener("scroll", this._handleEducationReposition, true);
   }
 
   /**
@@ -116,6 +142,20 @@ class Sidebar {
    * Handle keyboard events
    */
   handleKeydown(e) {
+    if (this.contextMenuEl) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closeContextMenu();
+        return;
+      }
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        this.moveContextMenuFocus(e.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+    }
+
     // ESC key closes sidebar on mobile
     if (e.key === "Escape" && this.state.isMobile && this.state.isOpen) {
       this.close();
@@ -160,6 +200,11 @@ class Sidebar {
     const main = document.querySelector(".main");
 
     if (!sidebar) return;
+
+    if ((this.state.isMobile && !this.state.isOpen) || (!this.state.isMobile && this.state.isCollapsed)) {
+      this.closeContextMenu();
+      this.hidePinEducation();
+    }
 
     // Update sidebar data attributes
     if (this.state.isMobile) {
@@ -359,7 +404,13 @@ class Sidebar {
       setTimeout(() => this.renderTools(), 150);
     }
 
-    const toolsByCategory = sourceTools.reduce((acc, tool) => {
+    const pinnedToolIds = this.getPinnedToolIds();
+    const toolById = new Map(sourceTools.map((tool) => [tool.id, tool]));
+    const pinnedTools = Array.from(pinnedToolIds)
+      .map((toolId) => toolById.get(toolId))
+      .filter(Boolean);
+    const unpinnedTools = sourceTools.filter((tool) => !pinnedToolIds.has(tool.id));
+    const toolsByCategory = unpinnedTools.reduce((acc, tool) => {
       const cat = categorizeTool(tool);
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(tool);
@@ -374,6 +425,31 @@ class Sidebar {
       return svgString;
     };
 
+    const renderToolItems = (menuEl, list) => {
+      menuEl.innerHTML = list
+        .map((tool) => {
+          const rawSvg = this.getIcon ? this.getIcon(tool.icon) : this.getToolIcon(tool.icon);
+          const svg = ensureSvgClass(rawSvg);
+          const toolId = this.escapeHtml(tool.id);
+          const toolName = this.escapeHtml(tool.name);
+          const isPinned = pinnedToolIds.has(tool.id);
+          return `
+            <div class="sidebar-menu-item" data-tool="${toolId}" data-pinned="${isPinned ? "true" : "false"}">
+              <button class="sidebar-menu-button" type="button">
+                ${isPinned ? `<span class="sidebar-pin-indicator" title="Pinned" aria-label="Pinned">${this.getPinIconSvg()}</span>` : ""}
+                ${svg}
+                <span class="sidebar-menu-label">${toolName}</span>
+              </button>
+            </div>
+          `;
+        })
+        .join("");
+
+      menuEl.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
+        this.bindMenuButton(button);
+      });
+    };
+
     // Build category groups dynamically based on categoriesMap order
     // Filter out categories that require Tauri if not running in Tauri
     const categoriesList = Array.from(this.categoriesMap.values())
@@ -382,6 +458,20 @@ class Sidebar {
 
     // Clear existing category groups inside sidebar-content
     sidebarContent.innerHTML = "";
+
+    if (pinnedTools.length > 0) {
+      const pinnedGroupEl = document.createElement("div");
+      pinnedGroupEl.className = "sidebar-group sidebar-pinned-group";
+      pinnedGroupEl.setAttribute("data-category", "pinned");
+      pinnedGroupEl.innerHTML = `
+        <div class="sidebar-group-label">Pinned</div>
+        <div class="sidebar-group-content">
+          <div class="sidebar-menu" data-category="pinned"></div>
+        </div>
+      `;
+      sidebarContent.appendChild(pinnedGroupEl);
+      renderToolItems(pinnedGroupEl.querySelector('.sidebar-menu[data-category="pinned"]'), pinnedTools);
+    }
 
     categoriesList.forEach((cat) => {
       const groupEl = document.createElement("div");
@@ -397,24 +487,7 @@ class Sidebar {
 
       const menuEl = groupEl.querySelector(".sidebar-menu");
       const list = toolsByCategory[cat.id] || [];
-      menuEl.innerHTML = list
-        .map((tool) => {
-          const rawSvg = this.getIcon ? this.getIcon(tool.icon) : this.getToolIcon(tool.icon);
-          const svg = ensureSvgClass(rawSvg);
-          return `
-            <div class="sidebar-menu-item" data-tool="${tool.id}">
-              <button class="sidebar-menu-button" type="button">
-                ${svg}
-                <span>${tool.name}</span>
-              </button>
-            </div>
-          `;
-        })
-        .join("");
-
-      menuEl.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
-        button.addEventListener("click", (e) => this.handleMenuClick(e));
-      });
+      renderToolItems(menuEl, list);
     });
 
     // After tools render, ensure the current route is highlighted (handles reload/deep links)
@@ -427,6 +500,8 @@ class Sidebar {
             : "";
       if (current) this.updateActiveItem(current);
     } catch (_) {}
+
+    this.maybeShowPinEducation();
   }
 
   async renderMenuGroups() {
@@ -475,17 +550,17 @@ class Sidebar {
         .map((item) => {
           const rawSvg = this.getIcon ? this.getIcon(item.icon) : this.getToolIcon(item.icon);
           const svg = ensureSvgClass(rawSvg);
+          const itemId = this.escapeHtml(item.id);
           const dataAttr =
-            item.type === "tool"
-              ? `data-tool="${item.id}"`
-              : item.type === "action"
-                ? `data-action="${item.id}"`
-                : `data-page="${item.id}"`;
+            item.type === "tool" ? `data-tool="${itemId}"` : item.type === "action" ? `data-action="${itemId}"` : `data-page="${itemId}"`;
+          const itemName = this.escapeHtml(item.name);
+          const isPinned = item.type === "tool" && this.getPinnedToolIds().has(item.id);
           return `
-            <div class=\"sidebar-menu-item\" ${dataAttr}>
+            <div class=\"sidebar-menu-item\" ${dataAttr} data-pinned=\"${isPinned ? "true" : "false"}\">
               <button class=\"sidebar-menu-button\" type=\"button\">
+                ${isPinned ? `<span class=\"sidebar-pin-indicator\" title=\"Pinned\" aria-label=\"Pinned\">${this.getPinIconSvg()}</span>` : ""}
                 ${svg}
-                <span>${item.name}</span>
+                <span class=\"sidebar-menu-label\">${itemName}</span>
               </button>
             </div>
           `;
@@ -493,7 +568,7 @@ class Sidebar {
         .join("");
 
       container.querySelectorAll(".sidebar-menu-item .sidebar-menu-button").forEach((button) => {
-        button.addEventListener("click", (e) => this.handleMenuClick(e));
+        this.bindMenuButton(button);
       });
     };
 
@@ -552,6 +627,288 @@ class Sidebar {
     return defaultSvg;
   }
 
+  escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  getPinIconSvg() {
+    return `<svg class="sidebar-pin-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16 9V4h1V2H7v2h1v5c0 1.66-1.34 3-3 3v2h5v8h2v-8h5v-2c-1.66 0-3-1.34-3-3Z" />
+    </svg>`;
+  }
+
+  getStorage() {
+    if (this.storage) return this.storage;
+    try {
+      return typeof localStorage !== "undefined" ? localStorage : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  normalizePinnedTools(value) {
+    const list = value instanceof Set ? Array.from(value) : Array.isArray(value) ? value : [];
+    return new Set(list.map((toolId) => String(toolId || "").trim()).filter(Boolean));
+  }
+
+  loadPinnedTools() {
+    const storage = this.getStorage();
+    if (!storage) return new Set();
+
+    try {
+      const value = JSON.parse(storage.getItem(Sidebar.PINNED_TOOLS_STORAGE_KEY) || "[]");
+      return this.normalizePinnedTools(value);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  getPinnedToolIds() {
+    if (!(this.pinnedTools instanceof Set)) {
+      this.pinnedTools = this.loadPinnedTools();
+    }
+    return this.pinnedTools;
+  }
+
+  savePinnedTools() {
+    const storage = this.getStorage();
+    if (!storage) return;
+
+    try {
+      storage.setItem(Sidebar.PINNED_TOOLS_STORAGE_KEY, JSON.stringify(Array.from(this.getPinnedToolIds())));
+    } catch (_) {}
+  }
+
+  loadPinEducationShown() {
+    const storage = this.getStorage();
+    if (!storage) return 0;
+
+    try {
+      const count = Number.parseInt(storage.getItem(Sidebar.PIN_EDUCATION_STORAGE_KEY) || "0", 10);
+      return Number.isFinite(count) && count > 0 ? Math.min(count, Sidebar.MAX_PIN_EDUCATION_SHOWN) : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  getPinEducationShown() {
+    if (!Number.isFinite(this.pinEducationShown)) {
+      this.pinEducationShown = this.loadPinEducationShown();
+    }
+    return this.pinEducationShown;
+  }
+
+  savePinEducationShown() {
+    const storage = this.getStorage();
+    if (!storage) return;
+
+    try {
+      storage.setItem(Sidebar.PIN_EDUCATION_STORAGE_KEY, String(this.getPinEducationShown()));
+    } catch (_) {}
+  }
+
+  maybeShowPinEducation() {
+    if (this.state?.isMobile || this.pinEducationSuppressed) return;
+
+    const anchor = document.querySelector(".sidebar-content .sidebar-menu-item[data-tool]");
+    if (!anchor) return;
+
+    if (this.pinEducationEl) {
+      if (!this.pinEducationAnchor || !document.body.contains(this.pinEducationAnchor)) {
+        this.pinEducationAnchor = anchor;
+        this.positionPinEducation();
+      }
+      return;
+    }
+
+    if (this.getPinEducationShown() >= Sidebar.MAX_PIN_EDUCATION_SHOWN) return;
+    this.showPinEducation(anchor);
+  }
+
+  showPinEducation(anchor) {
+    if (!anchor || this.state?.isMobile || this.getPinEducationShown() >= Sidebar.MAX_PIN_EDUCATION_SHOWN) return;
+
+    const education = document.createElement("div");
+    education.className = "sidebar-pin-education";
+    education.setAttribute("role", "status");
+    education.setAttribute("aria-live", "polite");
+    education.setAttribute("data-placement", "right");
+    education.innerHTML = `
+      <span class="sidebar-pin-education-copy">Tip: Right-click a tool to pin or unpin it.</span>
+      <button class="sidebar-pin-education-dismiss" type="button" aria-label="Dismiss pinning tip">×</button>
+    `;
+
+    document.body.appendChild(education);
+    this.pinEducationEl = education;
+    this.pinEducationAnchor = anchor;
+    this.pinEducationShown = this.getPinEducationShown() + 1;
+    this.savePinEducationShown();
+    this.positionPinEducation();
+
+    education.querySelector(".sidebar-pin-education-dismiss")?.addEventListener("click", () => {
+      this.pinEducationSuppressed = true;
+      this.hidePinEducation();
+    });
+
+    if (this.pinEducationTimer) clearTimeout(this.pinEducationTimer);
+    this.pinEducationTimer = setTimeout(() => this.hidePinEducation(), 6500);
+  }
+
+  positionPinEducation() {
+    if (!this.pinEducationEl || !this.pinEducationAnchor) return;
+
+    const anchorRect = this.pinEducationAnchor.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 768;
+    const tooltipWidth = Math.min(264, Math.max(220, viewportWidth - 16));
+    const tooltipHeight = this.pinEducationEl.offsetHeight || 54;
+    const gap = 8;
+    const canPlaceRight = anchorRect.right + gap + tooltipWidth <= viewportWidth - 8;
+    const left = canPlaceRight ? anchorRect.right + gap : Math.max(8, anchorRect.left);
+    const top = canPlaceRight
+      ? Math.min(Math.max(8, anchorRect.top + (anchorRect.height - tooltipHeight) / 2), viewportHeight - tooltipHeight - 8)
+      : Math.min(Math.max(8, anchorRect.bottom + gap), viewportHeight - tooltipHeight - 8);
+
+    this.pinEducationEl.dataset.placement = canPlaceRight ? "right" : "bottom";
+    this.pinEducationEl.style.left = `${Math.max(8, left)}px`;
+    this.pinEducationEl.style.top = `${Math.max(8, top)}px`;
+  }
+
+  hidePinEducation() {
+    if (this.pinEducationTimer) {
+      clearTimeout(this.pinEducationTimer);
+      this.pinEducationTimer = null;
+    }
+    this.pinEducationEl?.remove();
+    this.pinEducationEl = null;
+    this.pinEducationAnchor = null;
+  }
+
+  bindMenuButton(button) {
+    if (!button) return;
+    button.addEventListener("click", (e) => this.handleMenuClick(e));
+    button.addEventListener("contextmenu", (e) => this.handleMenuContextMenu(e));
+    button.addEventListener("keydown", (e) => {
+      if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
+
+      e.preventDefault();
+      const rect = button.getBoundingClientRect();
+      this.handleMenuContextMenu({
+        currentTarget: button,
+        preventDefault: () => {},
+        clientX: rect.left,
+        clientY: rect.bottom,
+      });
+    });
+  }
+
+  handleMenuContextMenu(e) {
+    const button = e.currentTarget;
+    const menuItem = button?.closest(".sidebar-menu-item");
+    const toolId = menuItem?.getAttribute("data-tool");
+    if (!toolId) return;
+
+    e.preventDefault();
+    this.pinEducationSuppressed = true;
+    this.hidePinEducation();
+    this.showContextMenu(toolId, e.clientX, e.clientY);
+  }
+
+  getToolName(toolId) {
+    const tool = (this.tools || []).find((item) => item?.id === toolId);
+    if (tool?.name) return String(tool.name);
+
+    const label = Array.from(document.querySelectorAll(".sidebar-menu-item[data-tool]"))
+      .find((item) => item.getAttribute("data-tool") === toolId)
+      ?.querySelector(".sidebar-menu-label");
+    return label?.textContent?.trim() || toolId;
+  }
+
+  showContextMenu(toolId, clientX = 0, clientY = 0) {
+    this.closeContextMenu();
+
+    const isPinned = this.getPinnedToolIds().has(toolId);
+    const action = isPinned ? "unpin" : "pin";
+    const actionLabel = isPinned ? "Unpin" : "Pin";
+    const menu = document.createElement("div");
+    menu.className = "sidebar-pin-context-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", `${actionLabel} ${this.getToolName(toolId)}`);
+    menu.innerHTML = `
+      <button type="button" role="menuitem" data-pin-action="${action}">
+        ${this.getPinIconSvg()}
+        <span>${actionLabel} <strong>${this.escapeHtml(this.getToolName(toolId))}</strong></span>
+      </button>
+    `;
+
+    document.body.appendChild(menu);
+    this.contextMenuEl = menu;
+    this.contextMenuToolId = toolId;
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 768;
+    const menuWidth = menu.offsetWidth || 220;
+    const menuHeight = menu.offsetHeight || 44;
+    const left = Math.min(Math.max(8, Number(clientX) || 0), Math.max(8, viewportWidth - menuWidth - 8));
+    const top = Math.min(Math.max(8, Number(clientY) || 0), Math.max(8, viewportHeight - menuHeight - 8));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+
+    const actionButton = menu.querySelector("[role='menuitem']");
+    actionButton?.addEventListener("click", () => this.togglePin(toolId));
+    actionButton?.focus({ preventScroll: true });
+  }
+
+  moveContextMenuFocus(direction) {
+    const items = Array.from(this.contextMenuEl?.querySelectorAll("[role='menuitem']") || []);
+    if (items.length === 0) return;
+
+    const currentIndex = items.indexOf(document.activeElement);
+    const nextIndex = currentIndex < 0 ? (direction > 0 ? 0 : items.length - 1) : (currentIndex + direction + items.length) % items.length;
+    items[nextIndex].focus({ preventScroll: true });
+  }
+
+  closeContextMenu() {
+    this.contextMenuEl?.remove();
+    this.contextMenuEl = null;
+    this.contextMenuToolId = null;
+  }
+
+  togglePin(toolId) {
+    const normalizedToolId = String(toolId || "").trim();
+    if (!normalizedToolId) return false;
+
+    const pinnedTools = this.getPinnedToolIds();
+    const isPinned = !pinnedTools.has(normalizedToolId);
+    if (isPinned) pinnedTools.add(normalizedToolId);
+    else pinnedTools.delete(normalizedToolId);
+    this.pinEducationSuppressed = true;
+    this.savePinnedTools();
+    this.closeContextMenu();
+    this.hidePinEducation();
+
+    try {
+      UsageTracker.trackEvent(normalizedToolId, isPinned ? "sidebar_pin" : "sidebar_unpin", {
+        tool_id: normalizedToolId,
+        source: "sidebar_context_menu",
+      });
+    } catch (_) {}
+
+    this.eventBus?.emit?.("sidebar:pinChanged", {
+      toolId: normalizedToolId,
+      isPinned,
+      source: "context_menu",
+    });
+
+    this.renderTools();
+    return isPinned;
+  }
+
   /**
    * Select a tool
    * @param {string} toolId - Tool ID
@@ -598,9 +955,7 @@ class Sidebar {
   setupMenuButtons() {
     const menuButtons = document.querySelectorAll(".sidebar-menu-button");
     menuButtons.forEach((button) => {
-      button.addEventListener("click", (e) => {
-        this.handleMenuClick(e);
-      });
+      this.bindMenuButton(button);
     });
   }
 

@@ -12,6 +12,7 @@ import "handsontable/styles/handsontable.css";
 import "handsontable/styles/ht-theme-main.css";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { getQuickQueryTableInteractionKey } from "../../core/RecentInteractionStore.js";
 import { isTauri } from "../../core/Runtime.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "./services/SchemaImportService.js";
@@ -2122,6 +2123,9 @@ export class QuickQueryUI {
   }
 
   _trackQueryGenerated(queryType, tableName, schemaData, inputData, dataSource, usedWorker) {
+    this.eventBus?.emit?.("search:interaction", {
+      interactionKey: getQuickQueryTableInteractionKey(tableName),
+    });
     UsageTracker.trackToolUse("quick-query", queryType);
     this.trackQuickQueryEvent(
       "query_generated",
@@ -3424,6 +3428,10 @@ export class QuickQueryUI {
 
       this.elements.schemaOverlay.classList.add("hidden");
       this.clearError();
+
+      this.eventBus?.emit?.("search:interaction", {
+        interactionKey: getQuickQueryTableInteractionKey(fullName),
+      });
 
       // Track schema load for usage insights
       this.trackQuickQueryEvent(

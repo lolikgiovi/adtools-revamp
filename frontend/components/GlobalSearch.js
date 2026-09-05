@@ -1,4 +1,5 @@
 import { collapseSearchName, getSearchAbbreviations, scoreFuzzyTerm } from "../core/FuzzySearch.js";
+import { getQuickQueryTableInteractionKey, getSearchInteractionKey, RecentInteractionStore } from "../core/RecentInteractionStore.js";
 
 /**
  * GlobalSearch - Universal search overlay similar to Notion/Spotlight
@@ -9,12 +10,13 @@ import { collapseSearchName, getSearchAbbreviations, scoreFuzzyTerm } from "../c
  * - Accessible dialog semantics and focus management
  */
 class GlobalSearch {
-  constructor({ eventBus, router, app, getIcon, searchQuickQuery } = {}) {
+  constructor({ eventBus, router, app, getIcon, searchQuickQuery, recentInteractionStore } = {}) {
     this.eventBus = eventBus;
     this.router = router;
     this.app = app;
     this.getIcon = typeof getIcon === "function" ? getIcon : null;
     this.searchQuickQuery = typeof searchQuickQuery === "function" ? searchQuickQuery : null;
+    this.recentInteractionStore = recentInteractionStore || new RecentInteractionStore();
 
     this.index = []; // { id, name, description, route, type, icon }
     this.filtered = [];
@@ -27,6 +29,7 @@ class GlobalSearch {
     this.resultsEl = null;
     this.helpEl = null;
     this._filterRequestId = 0;
+    this._eventUnsubscribers = [];
 
     this._buildDOM();
     this._bindEvents();
@@ -134,6 +137,11 @@ class GlobalSearch {
       this.eventBus.on("escape:pressed", () => {
         if (this.isOpen) this.close();
       });
+
+      const unsubscribePageChange = this.eventBus.on("page:changed", (data) => this._recordPageInteraction(data));
+      const unsubscribeInteraction = this.eventBus.on("search:interaction", (data) => this._recordInteraction(data));
+      if (typeof unsubscribePageChange === "function") this._eventUnsubscribers.push(unsubscribePageChange);
+      if (typeof unsubscribeInteraction === "function") this._eventUnsubscribers.push(unsubscribeInteraction);
     }
   }
 
@@ -168,9 +176,11 @@ class GlobalSearch {
     this.inputEl.focus({ preventScroll: true });
 
     // Initialize filtered list so keyboard nav works immediately
-    this.filtered = this.index.slice(0, 8);
+    const requestId = ++this._filterRequestId;
+    this.filtered = this._sortByRecent(this.index).slice(0, 8);
     this.activeIndex = this.filtered.length ? 0 : -1;
     this._renderResults(this.filtered);
+    void this._loadRecentQuickQueryResults(requestId);
   }
 
   /** Close the overlay */
@@ -211,7 +221,7 @@ class GlobalSearch {
     const candidates = scope ? this.index.filter((item) => item.type === scope) : this.index;
 
     if (!q) {
-      this.filtered = candidates.slice(0, 8);
+      this.filtered = this._sortByRecent(candidates).slice(0, 8);
     } else {
       // Quick Query-style scoring: abbreviations/subsequences supplement exact and name matches.
       const scored = candidates
@@ -232,10 +242,11 @@ class GlobalSearch {
         .sort((a, b) => b.score - a.score)
         .map((x) => x.item);
 
-      this.filtered = scored.slice(0, 8);
+      this.filtered = this._sortByRecent(scored).slice(0, 8);
     }
     this.activeIndex = this.filtered.length ? 0 : -1;
     this._renderResults(this.filtered);
+    if (!q && !scope) void this._loadRecentQuickQueryResults(requestId);
   }
 
   /** Search the persisted Quick Query table catalog for a qq: or quick: query. */
@@ -260,13 +271,12 @@ class GlobalSearch {
 
         const items = (Array.isArray(matches) ? matches : [])
           .map((match) => this._createQuickQueryResult(match))
-          .filter(Boolean)
-          .slice(0, 8);
+          .filter(Boolean);
 
         if (items.length > 0) {
-          this.filtered = items;
+          this.filtered = this._sortByRecent(items).slice(0, 8);
           this.activeIndex = 0;
-          this._renderResults(items);
+          this._renderResults(this.filtered);
           return;
         }
 
@@ -301,6 +311,7 @@ class GlobalSearch {
       route: "quick-query",
       type: "action",
       icon: "database",
+      interactionKey: getQuickQueryTableInteractionKey(fullName),
       data: { tableName: fullName },
     };
   }
@@ -334,8 +345,73 @@ class GlobalSearch {
       route: "quick-query",
       type: "action",
       icon: "database",
+      interactionKey: getQuickQueryTableInteractionKey(tableName),
       data: { tableName },
     };
+  }
+
+  /** Sort candidates by the user's latest interaction, preserving source order for untouched items. */
+  _sortByRecent(items = []) {
+    const recencyMap = this.recentInteractionStore?.getRecencyMap?.() || new Map();
+
+    return items
+      .map((item, sourceIndex) => {
+        const interaction = recencyMap.get(getSearchInteractionKey(item));
+        return { item, sourceIndex, interaction };
+      })
+      .sort((a, b) => {
+        const aTimestamp = a.interaction?.lastInteractedAt ?? Number.NEGATIVE_INFINITY;
+        const bTimestamp = b.interaction?.lastInteractedAt ?? Number.NEGATIVE_INFINITY;
+        if (bTimestamp !== aTimestamp) return bTimestamp - aTimestamp;
+
+        const aOrder = a.interaction?.order ?? Number.POSITIVE_INFINITY;
+        const bOrder = b.interaction?.order ?? Number.POSITIVE_INFINITY;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.sourceIndex - b.sourceIndex;
+      })
+      .map(({ item }) => item);
+  }
+
+  /** Add recently used Quick Query tables to the initial, unscoped command-palette list. */
+  _loadRecentQuickQueryResults(requestId) {
+    if (!this.searchQuickQuery) return;
+
+    return Promise.resolve()
+      .then(() => this.searchQuickQuery(""))
+      .then((matches) => {
+        if (!this.isOpen || requestId !== this._filterRequestId || this.inputEl.value.trim()) return;
+
+        const recentItems = (Array.isArray(matches) ? matches : [])
+          .map((match) => this._createQuickQueryResult(match))
+          .filter((item) => item && this.recentInteractionStore?.has?.(item.interactionKey));
+        if (recentItems.length === 0) return;
+
+        const candidates = [...this.index, ...recentItems];
+        this.filtered = this._sortByRecent(candidates).slice(0, 8);
+        this.activeIndex = this.filtered.length ? 0 : -1;
+        this._renderResults(this.filtered);
+      })
+      .catch(() => {
+        // Static tool/page results remain available when Quick Query storage is unavailable.
+      });
+  }
+
+  _recordPageInteraction(data = {}) {
+    if (data.toolId) {
+      this._recordInteraction({ type: "tool", route: data.toolId, id: data.toolId });
+      return;
+    }
+
+    // Home is rendered automatically during startup, so it should not displace a tool the user opened.
+    if (data.page && data.page !== "home" && data.page !== "tool") {
+      this._recordInteraction({ type: "page", route: data.page, id: data.page });
+    }
+  }
+
+  _recordInteraction(itemOrEvent) {
+    if (!itemOrEvent) return false;
+    const key = typeof itemOrEvent === "string" ? itemOrEvent : getSearchInteractionKey(itemOrEvent);
+    return this.recentInteractionStore?.touch?.(key) || false;
   }
 
   _renderStatus(message, state = "empty") {
@@ -397,6 +473,8 @@ class GlobalSearch {
   _confirmSelection() {
     const item = this.filtered[this.activeIndex >= 0 ? this.activeIndex : 0];
     if (!item) return;
+
+    this._recordInteraction(item);
 
     // Close first to avoid flicker
     this.close();
