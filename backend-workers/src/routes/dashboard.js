@@ -5,6 +5,7 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
+import { includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
 import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
 
@@ -102,7 +103,7 @@ LIMIT 200`,
     action,
     SUM(count) AS action_count
   FROM device_usage
-  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+  WHERE ${includedAnalyticsEmailSql("user_email")}
     AND LOWER(TRIM(tool_id)) != 'velocity-template'
   GROUP BY 1,2
 ),
@@ -133,7 +134,7 @@ ORDER BY tool_total DESC, tool_id, row_type, total_count DESC`,
     count,
     updated_time
   FROM device_usage
-  WHERE user_email != 'fashalli.bilhaq@bankmandiri.co.id'
+  WHERE ${includedAnalyticsEmailSql("user_email")}
     AND LOWER(TRIM(tool_id)) != 'velocity-template'
 ),
 totals AS (
@@ -1151,7 +1152,7 @@ LIMIT 150`,
 const KV_KEY = "analytics-dashboard-config";
 const CACHE_TTL_MS = 60 * 1000;
 const DASHBOARD_CACHE_MAX_ENTRIES = 32;
-const OWNER_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
+const OWNER_EMAIL = OWNER_ANALYTICS_EMAIL;
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
 const dashboardQueryInFlight = new Map();
@@ -2032,7 +2033,7 @@ function buildDeduplicatedUsageLogQuery(rangeConfig = null) {
     u.action,
     u.created_time
   FROM usage_log u
-  WHERE LOWER(u.user_email) != '${OWNER_EMAIL}'
+  WHERE ${includedAnalyticsEmailSql("u.user_email")}
     AND LOWER(TRIM(u.tool_id)) != 'velocity-template'${rangeClause}`;
 }
 

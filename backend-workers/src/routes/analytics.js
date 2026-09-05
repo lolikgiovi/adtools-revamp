@@ -5,6 +5,7 @@
 
 import { corsHeaders } from "../utils/cors.js";
 import { ensureErrorEventsSchema } from "../utils/analyticsSchema.js";
+import { includedAnalyticsEmailSql } from "../utils/analyticsIdentity.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
 
@@ -25,6 +26,7 @@ const OVERVIEW_DAILY_SQL = `
     FROM usage_log
     WHERE created_time >= datetime('now', '+7 hours', '-6 days')
       AND LOWER(TRIM(tool_id)) != 'velocity-template'
+      AND ${includedAnalyticsEmailSql("user_email")}
       {{USER_FILTER}}
   )
   GROUP BY day
@@ -46,6 +48,7 @@ function buildCanonicalDeviceUsageSql() {
     FROM device_usage
     WHERE tool_id NOT IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
       AND LOWER(TRIM(tool_id)) != '${IGNORED_ANALYTICS_TOOL_ID}'
+      AND ${includedAnalyticsEmailSql("user_email")}
     UNION ALL
     SELECT legacy.device_id, legacy.user_email,
       CASE legacy.tool_id
@@ -56,6 +59,7 @@ function buildCanonicalDeviceUsageSql() {
       legacy.action, legacy.count, legacy.updated_time
     FROM device_usage AS legacy
     WHERE legacy.tool_id IN (${LEGACY_DEVICE_USAGE_TOOL_IDS})
+      AND ${includedAnalyticsEmailSql("legacy.user_email")}
       AND NOT EXISTS (
         SELECT 1
         FROM device_usage AS canonical

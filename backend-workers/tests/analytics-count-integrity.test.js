@@ -190,6 +190,37 @@ describe("analytics overview count integrity", () => {
     expect(data.global.tools).toEqual([{ toolId: "master-lockey", count: 2 }]);
   });
 
+  it("excludes owner and development identities from overview totals", async () => {
+    env = createEnvironment();
+    const todayGmt7 = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const createdTime = `${todayGmt7} 10:00:00`;
+    const insertUsage = env.DB.prepare(
+      "INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    await insertUsage.bind("device-user", "user@example.com", "json-tools", "prettify", 5, createdTime).run();
+    await insertUsage
+      .bind("device-owner", "fashalli.bilhaq@bankmandiri.co.id", "json-tools", "prettify", 100, createdTime)
+      .run();
+    await insertUsage.bind("device-dev", "dev@localhost", "json-tools", "prettify", 50, createdTime).run();
+
+    const insertLog = env.DB.prepare(
+      "INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
+    );
+    await insertLog.bind("user@example.com", "device-user", "json-tools", "prettify", createdTime).run();
+    await insertLog
+      .bind("fashalli.bilhaq@bankmandiri.co.id", "device-owner", "json-tools", "prettify", createdTime)
+      .run();
+    await insertLog.bind("dev@localhost", "device-dev", "json-tools", "prettify", createdTime).run();
+
+    const data = await readOverview(env);
+
+    expect(data.user).toMatchObject({ totalActivities: 5, toolsUsed: 1 });
+    expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 5 }]);
+    expect(data.global).toMatchObject({ totalActivities: 5, toolsUsed: 1, activeUsers: 1 });
+    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 5 }]);
+    expect(data.global.daily).toEqual([{ day: todayGmt7, count: 1 }]);
+  });
+
   it("ignores obsolete velocity-template rows in ingestion and overview totals", async () => {
     env = createEnvironment();
     const insertLog = env.DB.prepare(
