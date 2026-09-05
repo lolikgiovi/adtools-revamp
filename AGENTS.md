@@ -5,6 +5,7 @@
 - `npm run test` — Run tests in watch mode (Vitest)
 - `npm run test:ci` — Run tests once
 - `npx vitest run frontend/tools/<tool>/tests/<file>.test.js` — Run a single test file
+- `npm run release:content:check` — Validate release tour metadata and bundled assets
 - `npm run build` — Build for production (runs tests first)
 - `npm run cf:dev` — Build + run Cloudflare Workers locally
 
@@ -12,6 +13,9 @@
 - **frontend/** — Vanilla JS SPA with Vite, class-based components extending `BaseTool`
 - **backend-workers/** — Cloudflare Workers API (D1, KV, R2); entry point: `worker.js`
 - **tauri/** — Rust desktop app (macOS) wrapping the same frontend
+
+## Release tour authoring
+When preparing release notes, a What's New experience, or Desktop/Web release metadata, read `docs/RELEASE-TOUR-AUTHORING.md` before editing `frontend/config/release-content.json`. Run `npm run release:content:check` before handing off release work.
 
 ## Code Style
 - 2-space indentation, no tabs, 140 char line width (see `.prettierrc`)

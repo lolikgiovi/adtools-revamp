@@ -65,6 +65,7 @@ npm install
 | `npm run verify:web` | Run frontend and Worker tests serially |
 | `npm run verify` | Run frontend/Worker tests and Rust tests serially |
 | `npm run build` | Build for production |
+| `npm run release:content:check` | Validate Desktop/Web release tour content |
 | `npm run cf:dev` | Build + run Wrangler locally (http://localhost:8787) |
 | `npm run cf:publish` | Build, deploy to Cloudflare Workers, and apply production D1 migrations |
 | `npm run cf:deploy` | Same as `cf:publish` |
@@ -95,6 +96,7 @@ Tauri WebView → Same frontend code → API calls to CF Workers
 - [AD Tools architecture](docs/AD_TOOLS_ARCHITECTURE.md)
 - [Performance baseline](docs/PERFORMANCE.md)
 - [Jira 9.17 REST integration notes](docs/JIRA-INTEGRATION.md)
+- [Release tour authoring](docs/RELEASE-TOUR-AUTHORING.md)
 
 ## Adding a New Tool
 
@@ -139,3 +141,13 @@ This keeps the order as build, deploy the new Worker, then apply production D1 m
 npm run release:build    # Build .dmg
 npm run release:upload   # Upload to R2 for auto-updates
 ```
+
+### Post-update release tour
+
+Both the web app and Desktop show a one-time “What’s new” overlay after an update has loaded successfully. The overlay can contain release notes, follow-up actions, and a short guided tooltip tour.
+
+- Shared release content lives in `frontend/config/release-content.json`; validate it with `npm run release:content:check`.
+- The normal `main` deployment runs `npm run build`, which embeds the release content into `web-build.json`. Desktop `npm run release:build` reads the same file and includes it in the updater manifest; the interactive notes prompt remains available as an override.
+- Put bundled screenshots or diagrams under `frontend/public/release-assets/<releaseId>/` and reference them with relative paths. Use `tour: []` to disable guided tips for a release.
+- During `npm run dev` or `npm run tauri:dev`, use the development-only `Preview What's New` header button, or open `http://localhost:1234/?release-tour=preview` for an automatic preview.
+- Keep `releaseId` stable for one release story and change it when a new story should be shown. Agents preparing release content should follow `docs/RELEASE-TOUR-AUTHORING.md` and the adjacent `release-content.schema.json`.

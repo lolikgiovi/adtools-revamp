@@ -37,6 +37,35 @@ describe("OracleEnvImportService shared Oracle connection usage", () => {
     expect(OracleConnectionService.queryViaSidecar.mock.calls[0][3]).toBe(1000);
   });
 
+  it("ignores flyway schema history tables during table discovery", async () => {
+    OracleConnectionService.queryViaSidecar.mockResolvedValue({
+      rows: [
+        ["CONTENT", "flyway_schema_history"],
+        ["CONTENT", "FLYWAY_SCHEMA_HISTORY"],
+        ["CONTENT", "MESSAGE_TEMPLATE"],
+      ],
+    });
+
+    await expect(OracleEnvImportService.fetchTables("SIT", config, ["CONTENT"])).resolves.toEqual([
+      { schema: "CONTENT", table: "MESSAGE_TEMPLATE" },
+    ]);
+
+    expect(OracleConnectionService.queryViaSidecar.mock.calls[0][2]).toContain("UPPER(TABLE_NAME) NOT IN ('FLYWAY_SCHEMA_HISTORY')");
+  });
+
+  it("does not add flyway schema history metadata to the canonical payload", () => {
+    const payload = OracleEnvImportService.buildCanonicalPayload(
+      [
+        ["CONTENT", "flyway_schema_history", "installed_rank", "NUMBER", null, 10, 0, "N", null],
+        ["CONTENT", "MESSAGE_TEMPLATE", "ID", "VARCHAR2", 36, null, null, "N", null],
+      ],
+      [["CONTENT", "flyway_schema_history", "installed_rank", 1]],
+    );
+
+    expect(payload.CONTENT.tables.flyway_schema_history).toBeUndefined();
+    expect(payload.CONTENT.tables.MESSAGE_TEMPLATE.columns.ID.type).toBe("VARCHAR2(36)");
+  });
+
   it("fetches table metadata through the shared query helper", async () => {
     OracleConnectionService.queryViaSidecar
       .mockResolvedValueOnce({

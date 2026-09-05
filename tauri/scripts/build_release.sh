@@ -18,6 +18,7 @@ BASE_URL="${BASE_URL:-https://adtools.lolik.workers.dev}"
 BASE_URL="${BASE_URL%/}"
 
 TAURI_CONF="$SRC_TAURI_DIR/tauri.conf.json"
+RELEASE_CONTENT_FILE="${RELEASE_CONTENT_FILE:-$ROOT_DIR/frontend/config/release-content.json}"
 
 # Globals for auto-revert handling
 FILES_MODIFIED=0
@@ -157,6 +158,18 @@ ensure_prereqs() {
   fi
 }
 
+read_release_notes() {
+  jq -r '
+    if (.notes | type) == "array" then
+      [.notes[] | select(type == "string")] | join("\n")
+    elif (.notes | type) == "string" then
+      .notes
+    else
+      ""
+    end
+  ' "$RELEASE_CONTENT_FILE"
+}
+
 # Validate JSON file using jq when available
 validate_json() {
   local conf="$1"
@@ -234,10 +247,11 @@ sign_file() {
   }
 
 write_manifest() {
-  local out_json="$1" version="$2" min_version="$3" channel="$4" notes="$5" sig_arm64="$6" sig_x64="$7" sha_arm64="$8" sha_x64="$9"
+  local out_json="$1" version="$2" min_version="$3" channel="$4" notes="$5" sig_arm64="$6" sig_x64="$7" sha_arm64="$8" sha_x64="$9" content_file="${10}"
   local pubdate
   pubdate="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   jq -n \
+    --slurpfile content "$content_file" \
     --arg base_url "$BASE_URL" \
     --arg version "$version" \
     --arg min_version "$min_version" \
@@ -248,7 +262,8 @@ write_manifest() {
     --arg sig_x64 "$sig_x64" \
     --arg sha_arm64 "$sha_arm64" \
     --arg sha_x64 "$sha_x64" \
-    '{
+    '($content[0] // {}) as $release |
+    {
       version: $version,
       minVersion: $min_version,
       notes: $notes,
@@ -271,15 +286,26 @@ write_manifest() {
           + ( if $sha_x64 != "" then { installer_sha256: $sha_x64 } else {} end )
         )
       }
-    }' > "$out_json"
+    }
+    + (if ($release | has("releaseId")) then { releaseId: $release.releaseId } else {} end)
+    + (if ($release | has("title")) then { title: $release.title } else {} end)
+    + (if ($release | has("summary")) then { summary: $release.summary } else {} end)
+    + (if ($release | has("image")) then { image: $release.image } else {} end)
+    + (if ($release | has("imageAlt")) then { imageAlt: $release.imageAlt } else {} end)
+    + (if ($release | has("imageCaption")) then { imageCaption: $release.imageCaption } else {} end)
+    + (if ($release | has("links")) then { links: $release.links } else {} end)
+    + (if ($release | has("action")) then { action: $release.action } else {} end)
+    + (if ($release | has("slides")) then { slides: $release.slides } else {} end)
+    + (if ($release | has("tour")) then { tour: $release.tour } else {} end)' > "$out_json"
 }
 
 main() {
   ensure_prereqs
+  node "$ROOT_DIR/backend-workers/scripts/validate-release-content.cjs" "$RELEASE_CONTENT_FILE"
 
   validate_json "$TAURI_CONF"
 
-  local version current_version selected_version timestamp_dir release_dir passphrase channel force min_version notes
+  local version current_version selected_version timestamp_dir release_dir passphrase channel force min_version notes content_notes
   # Read passphrase as raw text, preserve spaces, strip trailing newlines/CR
   passphrase="$(tr -d '\r\n' < "$PASSPHRASE_FILE")"
   current_version="$(read_version_from_conf "$TAURI_CONF")"
@@ -293,8 +319,11 @@ main() {
   selected_version="$(prompt_version "$current_version")"
   force="$(prompt_force_update)"  # y or n
   channel="$(prompt_channel)"     # stable | beta | both
-  # Default notes depend on channel selection
-  if [[ "$channel" == "both" ]]; then
+  # Prefer the structured release-content file while keeping the prompt as an override.
+  content_notes="$(read_release_notes)"
+  if [[ -n "$content_notes" ]]; then
+    notes="$content_notes"
+  elif [[ "$channel" == "both" ]]; then
     notes="Release $selected_version"
   else
     notes="$channel release $selected_version"
@@ -375,10 +404,10 @@ main() {
 
   # Write manifests according to selection
   if [[ "$channel" == "stable" || "$channel" == "both" ]]; then
-    write_manifest "$release_dir/stable.json" "$selected_version" "$min_version" "stable" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+    write_manifest "$release_dir/stable.json" "$selected_version" "$min_version" "stable" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64" "$RELEASE_CONTENT_FILE"
   fi
   if [[ "$channel" == "beta" || "$channel" == "both" ]]; then
-    write_manifest "$release_dir/beta.json" "$selected_version" "$min_version" "beta" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64"
+    write_manifest "$release_dir/beta.json" "$selected_version" "$min_version" "beta" "$notes" "$SIG_ARM64" "$SIG_X64" "$SHA_ARM64" "$SHA_X64" "$RELEASE_CONTENT_FILE"
   fi
 
   echo "Release built: $release_dir"

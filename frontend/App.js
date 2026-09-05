@@ -17,7 +17,9 @@ import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewMo
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
+import { ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
+import releaseContent from "./config/release-content.json";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 const ASSET_LOAD_MAX_RETRIES = 3;
@@ -27,6 +29,8 @@ const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
 const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
 const PRIVILEGED_ADMIN_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
 const ADMINISTRATOR_STORAGE_KEY = "administrator";
+const RELEASE_TOUR_PREVIEW_QUERY = "release-tour";
+const IS_DEV = import.meta.env.DEV;
 
 class App {
   constructor() {
@@ -58,6 +62,15 @@ class App {
     this._updateStage = null;
     this._updateLoaded = 0;
     this._updateTotal = 0;
+    this._updateResult = null;
+    this._releaseTour = null;
+    this._releaseTourPreviewButton = null;
+    this._previousAppVersion = null;
+    this._previousWebBuildId = null;
+    try {
+      this._previousAppVersion = localStorage.getItem("app.version") || null;
+      this._previousWebBuildId = localStorage.getItem("web.lastBuildId") || null;
+    } catch (_) {}
 
     this.init();
   }
@@ -137,6 +150,10 @@ class App {
     this.router.navigate("home");
 
     this.bindGlobalEvents();
+    this.setupDevReleaseTourPreview();
+
+    // Show a release tour only after a new build has loaded successfully.
+    const releaseTourInit = this.initializeReleaseTour(this._previousAppVersion, this._previousWebBuildId);
 
     // Setup auto-update checks and forced-update handling (Phase 2)
     (async () => {
@@ -148,13 +165,17 @@ class App {
       }
     })();
 
-    // Setup web-only update checker (hourly build checks)
+    // Setup web-only update checker (hourly build checks). The post-update
+    // tour gets first opportunity to compare the previous build before this
+    // checker starts its next polling cycle.
     if (!isTauri()) {
-      try {
-        WebUpdateChecker.init();
-      } catch (err) {
-        console.warn("WebUpdateChecker initialization failed:", err);
-      }
+      releaseTourInit.finally(() => {
+        try {
+          WebUpdateChecker.init();
+        } catch (err) {
+          console.warn("WebUpdateChecker initialization failed:", err);
+        }
+      });
     }
 
     console.log("AD Tools app initialized successfully");
@@ -763,9 +784,153 @@ class App {
     return document.querySelector(".header-actions");
   }
 
+  isReleaseTourPreviewRequested() {
+    if (!IS_DEV) return false;
+    try {
+      return new URLSearchParams(window.location.search).get(RELEASE_TOUR_PREVIEW_QUERY) === "preview";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  setupDevReleaseTourPreview() {
+    if (!IS_DEV || this._releaseTourPreviewButton) return;
+    const container = this.getHeaderActions();
+    if (!container) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-sm btn-outline release-tour-dev-preview";
+    button.textContent = "Preview What's New";
+    button.title = "Preview the current release tour without simulating an update";
+    button.addEventListener("click", () => this.openReleaseTourPreview());
+    container.appendChild(button);
+    this._releaseTourPreviewButton = button;
+  }
+
+  openReleaseTourPreview() {
+    if (!IS_DEV) return false;
+    const previewRelease = {
+      ...releaseContent,
+      surface: isTauri() ? "desktop" : "web",
+      releaseId: `${releaseContent.releaseId || "dev-release"}:preview`,
+    };
+    const tour = new ReleaseTour({
+      release: previewRelease,
+      preview: true,
+      onNavigate: (action) => this.handleReleaseTourAction(action),
+    });
+    if (tour.open()) {
+      this._releaseTour = tour;
+      return true;
+    }
+    return false;
+  }
+
+  async initializeReleaseTour(previousVersion, previousWebBuildId) {
+    try {
+      if (this.isReleaseTourPreviewRequested()) {
+        this.openReleaseTourPreview();
+        return;
+      }
+      let release = takePendingRelease();
+
+      if (release?.surface === "desktop") {
+        try {
+          const { getCurrentVersionSafe } = await import("./core/Updater.js");
+          const current = await getCurrentVersionSafe();
+          if (release.expectedVersion && current !== release.expectedVersion) {
+            release = null;
+          }
+        } catch (_) {
+          // Keep the pending release when the version API is temporarily unavailable.
+        }
+      }
+
+      // Fallback for updates performed by an older app build that could not
+      // persist the pending marker. The prior reported version/build is saved
+      // before syncDeviceVersion() updates it on startup.
+      if (!release && previousVersion) {
+        if (isTauri()) {
+          const { getCurrentVersionSafe, fetchManifest } = await import("./core/Updater.js");
+          const current = await getCurrentVersionSafe();
+          if (current && current !== previousVersion) {
+            const channel = localStorage.getItem("update.allowBeta") === "true" ? "beta" : "stable";
+            let manifest = null;
+            try {
+              const result = await fetchManifest(channel);
+              manifest = result?.manifest || null;
+            } catch (_) {}
+            release = {
+              surface: "desktop",
+              releaseId: manifest?.releaseId || `desktop:${channel}:${current}`,
+              expectedVersion: current,
+              version: current,
+              channel,
+              previousVersion,
+              manifest,
+            };
+          }
+        } else {
+          const response = await fetch("./web-build.json", { cache: "no-store" });
+          if (response.ok) {
+            const buildInfo = await response.json();
+            const currentBuild = buildInfo?.build ? String(buildInfo.build) : "";
+            const previousBuildCandidates = [
+              previousWebBuildId,
+              /^\d{10,}$/.test(String(previousVersion || "")) ? previousVersion : null,
+            ].filter(Boolean);
+            const changedBuild = previousBuildCandidates.some((buildId) => currentBuild !== String(buildId));
+            if (currentBuild && changedBuild) {
+              try {
+                localStorage.setItem("web.lastBuildId", currentBuild);
+              } catch (_) {}
+              release = {
+                surface: "web",
+                releaseId: buildInfo?.releaseId || `web:${currentBuild}`,
+                expectedBuild: currentBuild,
+                build: currentBuild,
+                version: buildInfo?.version,
+                title: buildInfo?.title,
+                summary: buildInfo?.summary,
+                notes: buildInfo?.notes,
+                image: buildInfo?.image,
+                imageAlt: buildInfo?.imageAlt,
+                imageCaption: buildInfo?.imageCaption,
+                links: buildInfo?.links,
+                action: buildInfo?.action,
+                slides: buildInfo?.slides,
+                tour: buildInfo?.tour,
+              };
+            }
+          }
+        }
+      }
+
+      if (!release) return;
+      const tour = new ReleaseTour({
+        release,
+        onNavigate: (action) => this.handleReleaseTourAction(action),
+      });
+      if (tour.open()) this._releaseTour = tour;
+    } catch (err) {
+      console.warn("Release tour initialization failed:", err);
+    }
+  }
+
+  handleReleaseTourAction(action) {
+    if (!action?.route) return;
+    try {
+      if (action.focus) localStorage.setItem("settings.focus", action.focus);
+    } catch (_) {}
+    try {
+      this.router.navigate(action.route);
+    } catch (_) {}
+  }
+
   renderUpdateBanner(result) {
     const container = this.getHeaderActions();
     if (!container) return;
+    this._updateResult = result || null;
     // Store channel for use when user clicks "Update Now"
     this._updateChannel = result?.channel || undefined;
     // Create banner if not exists
@@ -786,11 +951,7 @@ class App {
     this._updateBannerEl.innerHTML = /*html*/ `
       <div class="update-banner-content">
         <span class="update-banner-label">${label}</span>
-        ${
-          notes
-            ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="true">Hide notes</button>'
-            : ""
-        }
+        ${notes ? '<button type="button" class="btn btn-sm btn-text update-banner-toggle" aria-expanded="true">Hide notes</button>' : ""}
         <div class="update-banner-actions">
           <button type="button" class="btn btn-sm btn-primary update-banner-update">Update Now</button>
           <button type="button" class="btn btn-sm btn-outline update-banner-later">Later</button>
@@ -835,7 +996,8 @@ class App {
           const ok = await performUpdate(
             (loaded, total) => this.eventBus.emit("update:progress", { loaded, total }),
             (stage) => this.eventBus.emit("update:stage", { stage }),
-            this._updateChannel
+            this._updateChannel,
+            this._updateResult,
           );
           if (!ok) {
             this.eventBus.emit("update:error", { message: "Update not available or install failed" });
@@ -862,6 +1024,7 @@ class App {
       } catch (_) {}
     }
     this._updateBannerEl = null;
+    this._updateResult = null;
   }
 
   showForcedUpdateModal(policy, unsupported, manifest) {
@@ -992,14 +1155,9 @@ class App {
     }
   }
 
-#escapeHtml(str) {
+  #escapeHtml(str) {
     if (!str) return "";
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
   #renderMarkdown(markdown) {
@@ -1181,10 +1339,7 @@ class App {
 
         const nextAttempt = attempt + 1;
         if (!isCurrent()) return null;
-        console.warn(
-          `[AssetLoadRecovery] Failed to load assets for ${id}; retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}`,
-          error
-        );
+        console.warn(`[AssetLoadRecovery] Failed to load assets for ${id}; retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}`, error);
         this.renderLoadingState({
           title: label || "Loading",
           message: `Network hiccup while loading assets. Retrying ${nextAttempt}/${ASSET_LOAD_MAX_RETRIES}...`,
@@ -1231,11 +1386,7 @@ class App {
         title: label || "Loading failed",
         message: "Still unable to load required assets. Please reload once your connection is stable.",
       });
-      this.showNotification(
-        "Still unable to load required assets. Please reload once your connection is stable.",
-        "error",
-        5000
-      );
+      this.showNotification("Still unable to load required assets. Please reload once your connection is stable.", "error", 5000);
       return false;
     }
 

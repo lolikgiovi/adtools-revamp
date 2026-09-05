@@ -305,6 +305,7 @@ class SettingsPage {
               (loaded, total) => this.eventBus?.emit?.("update:progress", { loaded, total }),
               (stage) => this.eventBus?.emit?.("update:stage", { stage }),
               policy.channel,
+              { manifest, version: manifest?.version || policy.forceMinVersion, channel: policy.channel },
             );
             if (!ok) {
               this.eventBus?.emit?.("update:error", { message: "Update not available or install failed" });

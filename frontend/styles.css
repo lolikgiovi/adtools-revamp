@@ -18,6 +18,9 @@
 /* Components: notifications, search, modals, cards, etc. */
 @import "./styles/components.css";
 
+/* Post-update release tour and contextual tips */
+@import "./styles/release-tour.css";
+
 /* Responsive breakpoints and animation utilities */
 @import "./styles/utilities.css";
 

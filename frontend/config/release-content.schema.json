@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AD Tools release tour content",
+  "description": "Agent-authored content for the post-update What's new experience. Keep the story short, specific, and verifiable from the release diff.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint pointing to this JSON Schema file. Keep it as ./release-content.schema.json."
+    },
+    "releaseId": {
+      "type": "string",
+      "description": "Stable identity for this product release. Change it when a new release story should be shown again."
+    },
+    "version": {
+      "type": "string",
+      "description": "Optional human-readable release version. Desktop uses the updater version when available."
+    },
+    "title": {
+      "type": "string",
+      "description": "Short outcome-led title for the opening slide."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-sentence explanation of why this update matters."
+    },
+    "notes": {
+      "description": "Three to six concise release facts for the opening slide.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 8
+        }
+      ]
+    },
+    "image": {
+      "$ref": "#/$defs/media",
+      "description": "Optional opening-slide image. Prefer a bundled path under frontend/public/release-assets/."
+    },
+    "imageAlt": {
+      "type": "string",
+      "description": "Accessible alternative text when image is a string path."
+    },
+    "imageCaption": {
+      "type": "string",
+      "description": "Optional short caption shown below the opening-slide image."
+    },
+    "links": {
+      "type": "array",
+      "description": "Optional reading links for the opening slide.",
+      "items": { "$ref": "#/$defs/link" },
+      "maxItems": 2
+    },
+    "action": {
+      "$ref": "#/$defs/action",
+      "description": "Optional primary in-app action for the opening slide."
+    },
+    "slides": {
+      "type": "array",
+      "description": "Optional feature slides. Add one slide per meaningful user-visible change; keep this list to three or fewer.",
+      "items": { "$ref": "#/$defs/slide" },
+      "maxItems": 3
+    },
+    "tour": {
+      "type": "array",
+      "description": "Optional live UI tour. Use one to three steps and verify every target selector in the current app.",
+      "items": { "$ref": "#/$defs/tourStep" },
+      "maxItems": 3
+    }
+  },
+  "$defs": {
+    "media": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["src", "alt"],
+          "properties": {
+            "src": { "type": "string", "minLength": 1 },
+            "alt": { "type": "string", "minLength": 1 },
+            "caption": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "href": { "type": "string", "minLength": 1 },
+        "route": { "type": "string", "minLength": 1 },
+        "focus": { "type": "string" }
+      },
+      "anyOf": [{ "required": ["href"] }, { "required": ["route"] }]
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "route"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "route": { "type": "string", "minLength": 1 },
+        "focus": { "type": "string" }
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 },
+        "bullets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 5
+        },
+        "image": { "$ref": "#/$defs/media" },
+        "imageAlt": { "type": "string" },
+        "imageCaption": { "type": "string" },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/link" },
+          "maxItems": 2
+        },
+        "action": { "$ref": "#/$defs/action" }
+      }
+    },
+    "tourStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "title", "body"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CSS selector for a visible element in the app."
+        },
+        "placement": {
+          "type": "string",
+          "enum": ["top", "right", "bottom", "left"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

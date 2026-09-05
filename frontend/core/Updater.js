@@ -5,6 +5,7 @@
 import { isTauri } from "./Runtime.js";
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { clearPendingRelease, markPendingRelease } from "./ReleaseTour.js";
 
 function getBooleanSetting(key, fallback) {
   try {
@@ -152,7 +153,7 @@ export async function checkUpdate(opts = {}) {
   }
 }
 
-export async function performUpdate(progressCb, stageCb, channel) {
+export async function performUpdate(progressCb, stageCb, channel, releaseMeta = {}) {
   const setStage = (s) => {
     try {
       stageCb && stageCb(s);
@@ -181,33 +182,58 @@ export async function performUpdate(progressCb, stageCb, channel) {
         setStage("uptodate");
         return false;
       }
+      const manifest = releaseMeta?.manifest || releaseMeta?.release || {};
+      const pendingRelease = {
+        surface: "desktop",
+        releaseId: releaseMeta?.releaseId || manifest?.releaseId || `desktop:${ch}:${update.version || releaseMeta?.version || "latest"}`,
+        expectedVersion: update.version || releaseMeta?.version,
+        version: update.version || releaseMeta?.version,
+        channel: ch,
+        title: releaseMeta?.title || manifest?.title,
+        summary: releaseMeta?.summary || manifest?.summary,
+        notes: releaseMeta?.notes || manifest?.notes,
+        image: releaseMeta?.image || manifest?.image,
+        imageAlt: releaseMeta?.imageAlt || manifest?.imageAlt,
+        imageCaption: releaseMeta?.imageCaption || manifest?.imageCaption,
+        links: releaseMeta?.links || manifest?.links,
+        action: releaseMeta?.action || manifest?.action,
+        slides: releaseMeta?.slides || manifest?.slides,
+        tour: releaseMeta?.tour || manifest?.tour,
+      };
+      markPendingRelease(pendingRelease);
       setStage("downloading");
-      await update.downloadAndInstall((loaded, total) => {
-        setProgress(loaded || 0, total || 0);
-      });
-      setStage("restarting");
-      // Robust restart sequence: plugin-process → core app → window reload (dev fallback)
       try {
-        await relaunch();
-        return true;
-      } catch (e1) {
+        await update.downloadAndInstall((loaded, total) => {
+          setProgress(loaded || 0, total || 0);
+        });
+        setStage("restarting");
+        // Robust restart sequence: plugin-process → core app → window reload (dev fallback)
         try {
-          const appApi = await import(/* @vite-ignore */ "@tauri-apps/api/app");
-          if (appApi?.relaunch) {
-            await appApi.relaunch();
-            return true;
-          }
-        } catch (e2) {
-          // Dev-mode fallback: a full relaunch can fail when running under cargo
-          // Reloading the window keeps the session alive enough for local testing
-          console.warn("Relaunch failed; falling back to window reload", e1);
+          await relaunch();
+          return true;
+        } catch (e1) {
           try {
-            window.location.reload();
-            return true;
-          } catch (_) {}
+            const appApi = await import(/* @vite-ignore */ "@tauri-apps/api/app");
+            if (appApi?.relaunch) {
+              await appApi.relaunch();
+              return true;
+            }
+          } catch (_e2) {
+            // Dev-mode fallback: a full relaunch can fail when running under cargo
+            // Reloading the window keeps the session alive enough for local testing
+            console.warn("Relaunch failed; falling back to window reload", e1);
+            try {
+              window.location.reload();
+              return true;
+            } catch (_) {}
+          }
         }
+        return true;
+      } catch (err) {
+        // Do not show a success tour after a failed download/install.
+        clearPendingRelease(pendingRelease.releaseId);
+        throw err;
       }
-      return true;
     }
   } catch (_) {
     // fallthrough
@@ -261,7 +287,8 @@ export function setupAutoUpdate(options = {}) {
       const ok = await performUpdate(
         (loaded, total) => emit("update:progress", { loaded, total }),
         (stage) => emit("update:stage", { stage }),
-        policy.channel
+        policy.channel,
+        { manifest, version: manifest?.version || policy.forceMinVersion, channel: policy.channel },
       );
       if (!ok) emit("update:error", { message: "Update not available or install failed" });
       return ok;

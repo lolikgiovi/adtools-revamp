@@ -48,6 +48,14 @@ const SYSTEM_SCHEMAS = [
 
 const SKIPPED_TABLES = ["FLYWAY_SCHEMA_HISTORY"];
 
+function isSkippedTable(tableName) {
+  return SKIPPED_TABLES.includes(
+    String(tableName || "")
+      .trim()
+      .toUpperCase(),
+  );
+}
+
 export class OracleEnvImportService {
   /**
    * Load saved Oracle connections from localStorage.
@@ -96,9 +104,9 @@ export class OracleEnvImportService {
   static async fetchTables(name, config, schemaNames) {
     const inList = schemaNames.map((s) => `'${s.replace(/'/g, "''")}'`).join(",");
     const skipList = SKIPPED_TABLES.map((t) => `'${t}'`).join(",");
-    const sql = `SELECT OWNER, TABLE_NAME FROM ALL_TABLES WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList}) ORDER BY OWNER, TABLE_NAME`;
+    const sql = `SELECT OWNER, TABLE_NAME FROM ALL_TABLES WHERE OWNER IN (${inList}) AND UPPER(TABLE_NAME) NOT IN (${skipList}) ORDER BY OWNER, TABLE_NAME`;
     const result = await OracleConnectionService.queryViaSidecar(name, config, sql, 100000);
-    return result.rows.map((row) => ({ schema: row[0], table: row[1] }));
+    return result.rows.filter((row) => !isSkippedTable(row[1])).map((row) => ({ schema: row[0], table: row[1] }));
   }
 
   /**
@@ -134,7 +142,7 @@ export class OracleEnvImportService {
     const columnsSql = `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH,
        DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
 FROM ALL_TAB_COLUMNS
-WHERE OWNER IN (${inList}) AND TABLE_NAME NOT IN (${skipList})${tableFilter}
+WHERE OWNER IN (${inList}) AND UPPER(TABLE_NAME) NOT IN (${skipList})${tableFilter}
 ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
 
     const columnsResult = await OracleConnectionService.queryViaSidecar(name, config, columnsSql, 100000);
@@ -144,7 +152,7 @@ ORDER BY OWNER, TABLE_NAME, COLUMN_ID`;
     const pkSql = `SELECT cons.OWNER, cons.TABLE_NAME, cc.COLUMN_NAME, cc.POSITION
 FROM ALL_CONSTRAINTS cons
 JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
-WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND cons.TABLE_NAME NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
+WHERE cons.OWNER IN (${inList}) AND cons.CONSTRAINT_TYPE = 'P' AND UPPER(cons.TABLE_NAME) NOT IN (${skipList})${tableFilter.replace(/OWNER/g, "cons.OWNER").replace(/TABLE_NAME/g, "cons.TABLE_NAME")}
 ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
 
     const pkResult = await OracleConnectionService.queryViaSidecar(name, config, pkSql, 100000);
@@ -202,6 +210,7 @@ ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
     const pkLookup = {};
     for (const row of pkRows) {
       const [owner, tableName, columnName] = row;
+      if (isSkippedTable(tableName)) continue;
       const key = `${owner}.${tableName}`;
       if (!pkLookup[key]) pkLookup[key] = new Set();
       pkLookup[key].add(columnName);
@@ -210,6 +219,7 @@ ORDER BY cons.OWNER, cons.TABLE_NAME, cc.POSITION`;
     const payload = {};
     for (const row of columnsRows) {
       const [owner, tableName, columnName, dataType, dataLength, dataPrecision, dataScale, nullable, dataDefault] = row;
+      if (isSkippedTable(tableName)) continue;
 
       if (!payload[owner]) payload[owner] = { tables: {} };
       if (!payload[owner].tables[tableName]) {

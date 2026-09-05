@@ -1,0 +1,32 @@
+{
+  "$schema": "./release-content.schema.json",
+  "releaseId": "release-2026-09-05",
+  "title": "Meet the new update tour",
+  "summary": "After a Desktop or Web update, AD Tools now explains what changed and points you to a useful next step.",
+  "notes": [
+    "Desktop notes appear after the update installs successfully.",
+    "Web deployments refresh automatically when a new build is detected.",
+    "Use Next for follow-up actions, or start the short workspace tour."
+  ],
+  "slides": [
+    {
+      "title": "See the change, then keep moving",
+      "body": "Each release can include a focused explanation, an optional image, and a link or action into the updated workflow.",
+      "bullets": ["Use one slide for each meaningful change.", "Open a guide or use the primary action when you want more detail."]
+    }
+  ],
+  "tour": [
+    {
+      "target": ".header-search",
+      "placement": "bottom",
+      "title": "Search the workspace",
+      "body": "Use the search field or press ⌘K to jump to tools, pages, and saved Quick Query schemas."
+    },
+    {
+      "target": ".sidebar",
+      "placement": "right",
+      "title": "Keep frequent tools close",
+      "body": "Pin the tools you use most from the sidebar so they stay easy to reach."
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 // Checks for new deployments hourly and auto-reloads when detected
 
 import { isTauri } from "./Runtime.js";
+import { markPendingRelease } from "./ReleaseTour.js";
 
 const STORAGE_KEY = "web.lastBuildId";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -52,7 +53,7 @@ class WebUpdateChecker {
         method: "GET",
         cache: "no-cache", // Always get fresh version
         headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
         },
       });
 
@@ -81,9 +82,26 @@ class WebUpdateChecker {
 
       // Compare build IDs
       if (serverBuildId !== cachedBuildId) {
-        console.log(
-          `[WebUpdateChecker] New build detected! Old: ${cachedBuildId}, New: ${serverBuildId}`
-        );
+        console.log(`[WebUpdateChecker] New build detected! Old: ${cachedBuildId}, New: ${serverBuildId}`);
+        // Persist the release details before reloading so the new app can
+        // show a post-update release tour instead of a transient toast.
+        markPendingRelease({
+          surface: "web",
+          releaseId: buildInfo?.releaseId || `web:${serverBuildId}`,
+          expectedBuild: serverBuildId,
+          build: serverBuildId,
+          version: buildInfo?.version,
+          title: buildInfo?.title,
+          summary: buildInfo?.summary,
+          notes: buildInfo?.notes,
+          image: buildInfo?.image,
+          imageAlt: buildInfo?.imageAlt,
+          imageCaption: buildInfo?.imageCaption,
+          links: buildInfo?.links,
+          action: buildInfo?.action,
+          slides: buildInfo?.slides,
+          tour: buildInfo?.tour,
+        });
         this.performReload(serverBuildId);
       } else {
         console.log(`[WebUpdateChecker] Build is up to date: ${serverBuildId}`);
