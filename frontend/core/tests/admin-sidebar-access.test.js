@@ -11,21 +11,21 @@ afterEach(() => {
 });
 
 describe("privileged sidebar pages", () => {
-  it("does not show the desktop-only pages for the configured email without the flag", () => {
+  it("does not show the privileged pages for the configured email without the flag", () => {
     localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
     const app = Object.create(App.prototype);
 
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
   });
 
-  it("does not show the desktop-only pages for the flag without the configured email", () => {
+  it("does not show the privileged pages for the flag without the configured email", () => {
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
 
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings"]);
   });
 
-  it("shows the desktop-only pages only when both conditions match", () => {
+  it("shows the privileged pages only when both conditions match", () => {
     localStorage.setItem("user.email", "FASHALLI.BILHAQ@BANKMANDIRI.CO.ID");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
@@ -33,7 +33,7 @@ describe("privileged sidebar pages", () => {
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
   });
 
-  it("marks both pages as desktop-only sidebar entries", () => {
+  it("marks both pages as web sidebar entries", () => {
     localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
@@ -41,13 +41,13 @@ describe("privileged sidebar pages", () => {
 
     expect(privilegedItems).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "analytics-dashboard", requiresTauri: true }),
-        expect.objectContaining({ id: "approval", requiresTauri: true }),
+        expect.objectContaining({ id: "analytics-dashboard", name: "analytics", requiresTauri: false }),
+        expect.objectContaining({ id: "approval", name: "approval", requiresTauri: false }),
       ]),
     );
   });
 
-  it("renders the privileged entries only in the desktop runtime", async () => {
+  it("renders the privileged entries in the web runtime", async () => {
     localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
     localStorage.setItem("administrator", "true");
     const app = Object.create(App.prototype);
@@ -63,11 +63,6 @@ describe("privileged sidebar pages", () => {
     });
     document.body.innerHTML = '<div class="sidebar-menu" data-group="footer"></div>';
 
-    await sidebar.renderMenuGroups();
-    expect(document.querySelector('[data-page="analytics-dashboard"]')).toBeNull();
-    expect(document.querySelector('[data-page="approval"]')).toBeNull();
-
-    window.__TAURI__ = {};
     await sidebar.renderMenuGroups();
     expect(document.querySelector('[data-page="analytics-dashboard"]')).not.toBeNull();
     expect(document.querySelector('[data-page="approval"]')).not.toBeNull();
