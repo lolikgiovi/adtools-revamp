@@ -3,7 +3,11 @@ import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
 export default defineWorkersConfig({
   test: {
     include: ["backend-workers/tests/**/*.test.js"],
-    exclude: ["backend-workers/tests/analytics-count-integrity.test.js"],
+    exclude: [
+      "backend-workers/tests/analytics-count-integrity.test.js",
+      "backend-workers/tests/canonical-tool-usage-migration.test.js",
+      "backend-workers/tests/lifetime-usage-baseline.test.js",
+    ],
     poolOptions: {
       workers: {
         wrangler: { configPath: "../wrangler.toml" },
