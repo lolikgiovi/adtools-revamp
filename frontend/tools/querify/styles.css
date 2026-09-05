@@ -18,7 +18,7 @@
 
 .querify-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 340px) 6px minmax(0, 1fr);
   gap: 0.75rem;
   flex: 1;
   height: 100%;
@@ -36,6 +36,46 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--card));
+}
+
+.querify-resizer {
+  position: relative;
+  width: 6px;
+  min-width: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.querify-resizer::before {
+  position: absolute;
+  inset: 0 1px;
+  content: "";
+  border-radius: inherit;
+  background: hsl(var(--border));
+  opacity: 0.7;
+  transition: background-color 140ms ease, opacity 140ms ease, transform 140ms ease;
+}
+
+.querify-resizer:hover::before,
+.querify-resizer:focus-visible::before,
+.querify-resizer.is-dragging::before {
+  background: hsl(var(--ring));
+  opacity: 1;
+  transform: scaleX(1.35);
+}
+
+.querify-resizer:focus-visible {
+  outline: none;
+}
+
+body.is-resizing,
+body.is-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .querify-sidebar.drag-over {
@@ -260,6 +300,10 @@
 
   .querify-sidebar {
     max-height: 42vh;
+  }
+
+  .querify-resizer {
+    display: none;
   }
 
   .querify-results {

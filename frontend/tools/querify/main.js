@@ -18,6 +18,7 @@ export class QuerifyTool extends BaseTool {
     this.editor = null;
     this.elements = {};
     this.isGenerating = false;
+    this._resizerCleanup = null;
   }
 
   getIconSvg() {
@@ -34,12 +35,14 @@ export class QuerifyTool extends BaseTool {
     this.bindElements();
     this.initializeEditor();
     this.setupEventListeners();
+    this.initializeResizer();
     this.renderFiles();
     this.refreshEditor();
     this.trackEvent("mount");
   }
 
   onUnmount() {
+    this.cleanupResizer();
     this.editor?.dispose?.();
     this.editor = null;
     this.service.dispose();
@@ -47,6 +50,11 @@ export class QuerifyTool extends BaseTool {
 
   onWarmResume() {
     this.editor?.layout?.();
+    if (!this._resizerCleanup) this.initializeResizer();
+  }
+
+  onSoftDeactivate() {
+    this.cleanupResizer();
   }
 
   disposeHeavyResources() {
@@ -70,6 +78,7 @@ export class QuerifyTool extends BaseTool {
       message: document.getElementById("querify-message"),
       tabs: Array.from(document.querySelectorAll(".querify-tab")),
       editor: document.getElementById("querify-editor"),
+      resizer: this.container?.querySelector("#querify-resizer"),
     };
   }
 
@@ -129,6 +138,112 @@ export class QuerifyTool extends BaseTool {
         this.addFiles(Array.from(event.dataTransfer?.files || []));
       });
     }
+  }
+
+  initializeResizer() {
+    const layout = this.container?.querySelector(".querify-layout");
+    const resizer = this.elements.resizer || this.container?.querySelector("#querify-resizer");
+    if (!layout || !resizer || this._resizerCleanup) return;
+
+    const RESIZER_W = 6;
+    const MIN_LEFT = 280;
+    const MIN_RIGHT = 280;
+    let dragging = false;
+    let activePointerId = null;
+
+    const getMetrics = () => {
+      const rect = layout.getBoundingClientRect();
+      const styles = getComputedStyle(layout);
+      const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
+      const total = rect.width - RESIZER_W - gap * 2;
+      return { rect, gap, total };
+    };
+
+    const updateAria = (left, total) => {
+      resizer.setAttribute("aria-valuemin", String(MIN_LEFT));
+      resizer.setAttribute("aria-valuemax", String(Math.max(MIN_LEFT, Math.round(total - MIN_RIGHT))));
+      resizer.setAttribute("aria-valuenow", String(Math.round(left)));
+    };
+
+    const getCurrentLeft = () => {
+      const firstColumn = getComputedStyle(layout).gridTemplateColumns.split(" ")[0];
+      const current = Number.parseFloat(firstColumn);
+      return Number.isFinite(current) ? current : MIN_LEFT;
+    };
+
+    const applyLeft = (requestedLeft) => {
+      const { total } = getMetrics();
+      const maxLeft = total - MIN_RIGHT;
+      if (maxLeft < MIN_LEFT) return;
+
+      const left = Math.round(Math.max(MIN_LEFT, Math.min(requestedLeft, maxLeft)));
+      const right = Math.max(MIN_RIGHT, Math.round(total - left));
+      layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${right}px`;
+      updateAria(left, total);
+      this.editor?.layout?.();
+    };
+
+    const onMove = (event) => {
+      if (!dragging || (activePointerId !== null && event.pointerId !== activePointerId)) return;
+      const { rect, gap } = getMetrics();
+      applyLeft(event.clientX - rect.left - gap - RESIZER_W / 2);
+      event.preventDefault();
+    };
+
+    const onUp = (event) => {
+      if (!dragging || (activePointerId !== null && event?.pointerId !== activePointerId)) return;
+      if (activePointerId !== null && resizer.hasPointerCapture?.(activePointerId)) {
+        resizer.releasePointerCapture?.(activePointerId);
+      }
+      dragging = false;
+      activePointerId = null;
+      resizer.classList.remove("is-dragging");
+      document.body.classList.remove("is-resizing");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    const onDown = (event) => {
+      if (window.innerWidth <= 860) return;
+      dragging = true;
+      activePointerId = event.pointerId;
+      resizer.setPointerCapture?.(activePointerId);
+      resizer.classList.add("is-dragging");
+      document.body.classList.add("is-resizing");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+      event.preventDefault();
+    };
+
+    const onKeyDown = (event) => {
+      if (window.innerWidth <= 860) return;
+      const step = event.shiftKey ? 48 : 16;
+      const current = getCurrentLeft();
+      if (event.key === "ArrowLeft") applyLeft(current - step);
+      else if (event.key === "ArrowRight") applyLeft(current + step);
+      else if (event.key === "Home") applyLeft(MIN_LEFT);
+      else if (event.key === "End") applyLeft(getMetrics().total - MIN_RIGHT);
+      else return;
+      event.preventDefault();
+    };
+
+    const metrics = getMetrics();
+    updateAria(getCurrentLeft(), metrics.total);
+    resizer.addEventListener("pointerdown", onDown);
+    resizer.addEventListener("keydown", onKeyDown);
+
+    this._resizerCleanup = () => {
+      onUp({ pointerId: activePointerId });
+      resizer.removeEventListener("pointerdown", onDown);
+      resizer.removeEventListener("keydown", onKeyDown);
+    };
+  }
+
+  cleanupResizer() {
+    this._resizerCleanup?.();
+    this._resizerCleanup = null;
   }
 
   async handleAddFilesClick() {

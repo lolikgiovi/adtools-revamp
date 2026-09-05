@@ -45,6 +45,17 @@ export const QUERIFY_TEMPLATE = /* html */ `
       </div>
     </aside>
 
+    <div
+      id="querify-resizer"
+      class="querify-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize Querify panes"
+      aria-valuemin="280"
+      aria-valuenow="340"
+      tabindex="0"
+    ></div>
+
     <section class="querify-results">
       <div class="querify-result-header">
         <div class="querify-result-tabs">
