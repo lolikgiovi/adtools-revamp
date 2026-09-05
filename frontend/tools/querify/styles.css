@@ -1,8 +1,8 @@
 .querify-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 57px);
-  max-height: calc(100vh - 57px);
+  height: calc(100dvh - 90px);
+  max-height: calc(100dvh - 90px);
   min-height: 0;
   overflow: hidden;
   background: hsl(var(--background));
@@ -19,12 +19,12 @@
 .querify-layout {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 0.75rem;
   flex: 1;
   height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border-top: 1px solid hsl(var(--border));
 }
 
 .querify-sidebar {
@@ -33,12 +33,14 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid hsl(var(--border));
-  background: hsl(var(--bg-secondary));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
 }
 
 .querify-sidebar.drag-over {
   background: hsl(var(--accent));
+  border-color: hsl(var(--ring));
 }
 
 .querify-toolbar,
@@ -166,11 +168,15 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
 }
 
 .querify-result-header {
   min-height: 4rem;
-  padding: 0 1rem;
+  padding: 0 0.75rem;
   justify-content: space-between;
   background: hsl(var(--background));
 }
@@ -238,17 +244,22 @@
 }
 
 @media (max-width: 860px) {
+  .querify-container {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
   .querify-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(58vh, 1fr);
     height: auto;
-    min-height: calc(100vh - 4rem);
+    min-height: calc(100dvh - 90px);
     overflow: visible;
   }
 
   .querify-sidebar {
     max-height: 42vh;
-    border-right: 0;
-    border-bottom: 1px solid hsl(var(--border));
   }
 
   .querify-results {

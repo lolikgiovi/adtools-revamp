@@ -25,7 +25,6 @@ const ASSET_LOAD_MAX_RELOADS = 3;
 const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
 const WARM_TOOL_IDLE_DISPOSE_MS = 90 * 1000;
 const WARM_TOOL_MAX_HEAVY_TOOLS = 2;
-const FLUSH_MAIN_CONTENT_TOOL_IDS = new Set(["querify"]);
 const PRIVILEGED_ADMIN_EMAIL = "fashalli.bilhaq@bankmandiri.co.id";
 const ADMINISTRATOR_STORAGE_KEY = "administrator";
 
@@ -428,7 +427,7 @@ class App {
     if (this.currentTool && this.currentTool.id !== toolId) {
       this.clearCurrentTool();
     }
-    this.setMainContentFlush(FLUSH_MAIN_CONTENT_TOOL_IDS.has(toolId));
+    this.setMainContentFlush(false);
     const warmEntry = this.warmHeavyTools.get(toolId);
     if (!warmEntry) {
       this.renderLoadingState({
