@@ -64,7 +64,7 @@ class HTMLTemplateTool extends BaseTool {
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
     this.setupDebouncedRendering();
-    // Removed resizer for fixed split
+    this.initializeResizer();
     this.renderPreview(this.editor.getValue());
     try {
       UsageTracker.trackFeature("html-template", "mount", "", 5000);
@@ -72,7 +72,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   onUnmount() {
-    // Removed resizer cleanup for fixed split
+    this.cleanupResizer();
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -86,7 +86,12 @@ class HTMLTemplateTool extends BaseTool {
   onWarmResume() {
     try {
       this.editor?.layout?.();
+      if (!this._resizerCleanup) this.initializeResizer();
     } catch (_) {}
+  }
+
+  onSoftDeactivate() {
+    this.cleanupResizer();
   }
 
   async initializeMonacoEditor() {
@@ -588,54 +593,114 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   initializeResizer() {
-    const layout = document.querySelector(".html-template-layout");
-    const resizer = document.getElementById("splitResizer");
-    if (!layout || !resizer) return;
+    const layout = this.container?.querySelector(".html-template-layout");
+    const resizer = this.container?.querySelector("#splitResizer");
+    if (!layout || !resizer || this._resizerCleanup) return;
 
     const RESIZER_W = 6;
     const MIN_LEFT = 240;
     const MIN_RIGHT = 240;
     let dragging = false;
+    let activePointerId = null;
 
-    const onMove = (e) => {
-      if (!dragging) return;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const getMetrics = () => {
       const rect = layout.getBoundingClientRect();
-      const total = rect.width - RESIZER_W;
-      let left = clientX - rect.left;
-      left = Math.max(MIN_LEFT, Math.min(left, total - MIN_RIGHT));
-      layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${total - left}px`;
-      e.preventDefault();
+      const styles = getComputedStyle(layout);
+      const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
+      const total = rect.width - RESIZER_W - gap * 2;
+      return { rect, gap, total };
     };
 
-    const onUp = () => {
-      if (!dragging) return;
+    const updateAria = (left, total) => {
+      resizer.setAttribute("aria-valuemin", String(MIN_LEFT));
+      resizer.setAttribute("aria-valuemax", String(Math.max(MIN_LEFT, Math.round(total - MIN_RIGHT))));
+      resizer.setAttribute("aria-valuenow", String(Math.round(left)));
+    };
+
+    const getCurrentLeft = () => {
+      const firstColumn = getComputedStyle(layout).gridTemplateColumns.split(" ")[0];
+      const current = Number.parseFloat(firstColumn);
+      return Number.isFinite(current) ? current : MIN_LEFT;
+    };
+
+    const applyLeft = (requestedLeft, persist = true) => {
+      const { total } = getMetrics();
+      const maxLeft = total - MIN_RIGHT;
+      if (maxLeft < MIN_LEFT) return;
+
+      const left = Math.round(Math.max(MIN_LEFT, Math.min(requestedLeft, maxLeft)));
+      const right = Math.max(MIN_RIGHT, Math.round(total - left));
+      layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${right}px`;
+      updateAria(left, total);
+      if (persist) {
+        try {
+          localStorage.setItem(this._splitStorageKey, String(left / total));
+        } catch (_) {}
+      }
+      this.editor?.layout?.();
+    };
+
+    const onMove = (event) => {
+      if (!dragging || (activePointerId !== null && event.pointerId !== activePointerId)) return;
+      const { rect, gap } = getMetrics();
+      applyLeft(event.clientX - rect.left - gap - RESIZER_W / 2);
+      event.preventDefault();
+    };
+
+    const onUp = (event) => {
+      if (!dragging || (activePointerId !== null && event?.pointerId !== activePointerId)) return;
+      if (activePointerId !== null && resizer.hasPointerCapture?.(activePointerId)) {
+        resizer.releasePointerCapture?.(activePointerId);
+      }
       dragging = false;
+      activePointerId = null;
+      resizer.classList.remove("is-dragging");
       document.body.classList.remove("is-resizing");
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
 
-    const onDown = (e) => {
-      if (window.innerWidth <= 900) return; // disabled on mobile layout
+    const onDown = (event) => {
+      if (window.innerWidth <= 900) return;
       dragging = true;
+      activePointerId = event.pointerId;
+      resizer.setPointerCapture?.(activePointerId);
+      resizer.classList.add("is-dragging");
       document.body.classList.add("is-resizing");
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-      window.addEventListener("touchmove", onMove, { passive: false });
-      window.addEventListener("touchend", onUp);
-      e.preventDefault();
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+      event.preventDefault();
     };
 
-    resizer.addEventListener("mousedown", onDown);
-    resizer.addEventListener("touchstart", onDown, { passive: false });
+    const onKeyDown = (event) => {
+      if (window.innerWidth <= 900) return;
+      const step = event.shiftKey ? 48 : 16;
+      const current = getCurrentLeft();
+      if (event.key === "ArrowLeft") applyLeft(current - step);
+      else if (event.key === "ArrowRight") applyLeft(current + step);
+      else if (event.key === "Home") applyLeft(MIN_LEFT);
+      else if (event.key === "End") applyLeft(getMetrics().total - MIN_RIGHT);
+      else return;
+      event.preventDefault();
+    };
+
+    const metrics = getMetrics();
+    let savedRatio = null;
+    try {
+      const parsedRatio = Number.parseFloat(localStorage.getItem(this._splitStorageKey) || "");
+      if (Number.isFinite(parsedRatio) && parsedRatio > 0 && parsedRatio < 1) savedRatio = parsedRatio;
+    } catch (_) {}
+    if (savedRatio !== null) applyLeft(metrics.total * savedRatio, false);
+    updateAria(getCurrentLeft(), getMetrics().total);
+    resizer.addEventListener("pointerdown", onDown);
+    resizer.addEventListener("keydown", onKeyDown);
 
     this._resizerCleanup = () => {
-      resizer.removeEventListener("mousedown", onDown);
-      resizer.removeEventListener("touchstart", onDown);
-      onUp();
+      onUp({ pointerId: activePointerId });
+      resizer.removeEventListener("pointerdown", onDown);
+      resizer.removeEventListener("keydown", onKeyDown);
     };
   }
 

@@ -30,7 +30,16 @@ export const HTMLTemplateToolTemplate = /* html */ `
         </div>
       </div>
 
-      <!-- Removed resizer for fixed split -->
+      <div
+        id="splitResizer"
+        class="html-template-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize HTML Template panes"
+        aria-valuemin="240"
+        aria-valuenow="560"
+        tabindex="0"
+      ></div>
 
       <div class="pane renderer-pane">
         <div class="pane-header">
