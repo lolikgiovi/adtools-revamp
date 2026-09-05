@@ -93,7 +93,7 @@ body.is-resizing * {
 }
 
 .querify-toolbar {
-  min-height: 4rem;
+  min-height: 3.25rem;
   padding: 0 0.75rem;
   justify-content: space-between;
 }
@@ -215,7 +215,7 @@ body.is-resizing * {
 }
 
 .querify-result-header {
-  min-height: 4rem;
+  min-height: 3.25rem;
   padding: 0 0.75rem;
   justify-content: space-between;
   background: hsl(var(--background));

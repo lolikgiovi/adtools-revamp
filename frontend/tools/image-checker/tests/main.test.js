@@ -25,6 +25,7 @@ function result() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
   document.body.innerHTML = "";
 });
 
@@ -115,5 +116,48 @@ describe("CheckImageTool run scheduling", () => {
     expect(checkImage).toHaveBeenCalledOnce();
     expect(tool.root.querySelector("#cell-0-0").className).toContain("loading");
     expect(tool.root.querySelector("#cell-0-0").textContent).toContain("Checking");
+  });
+});
+
+describe("CheckImageTool image references", () => {
+  it("saves a named reference, keeps recent history, and can reuse the identifier", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const tool = new CheckImageTool();
+    tool.mount(host);
+
+    const identifier = "8f6c2f1a-4f2d-4a8f-9b1e-0fd1a75b21c4";
+    tool.recordReferenceHistory([identifier, identifier]);
+    tool.openReferenceEditor(identifier);
+    tool.elements.referenceLabelInput.value = "Homepage hero";
+    tool.elements.referenceNoteInput.value = "Approved campaign artwork";
+    tool.saveReferenceFromEditor();
+
+    expect(tool.referenceHistory).toHaveLength(1);
+    expect(tool.savedReferences).toHaveLength(1);
+    expect(tool.savedReferences[0]).toMatchObject({
+      key: `/content/v1/image/${identifier}.png`,
+      identifier,
+      label: "Homepage hero",
+      note: "Approved campaign artwork",
+    });
+    expect(JSON.parse(localStorage.getItem("image_checker_saved_references"))).toHaveLength(1);
+
+    tool.elements.batchImagePathsInput.value = "";
+    tool.appendInputValue(identifier);
+    expect(tool.elements.batchImagePathsInput.value).toBe(identifier);
+    expect(tool.createImagePathCell(identifier).textContent).toContain("Homepage hero");
+  });
+
+  it("deduplicates equivalent UUID and content-path entries before checking", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const tool = new CheckImageTool();
+    tool.mount(host);
+
+    const identifier = "8f6c2f1a-4f2d-4a8f-9b1e-0fd1a75b21c4";
+    tool.elements.batchImagePathsInput.value = `${identifier}\n/content/v1/image/${identifier}.png`;
+
+    expect(tool.getInputEntries()).toEqual({ imagePaths: [identifier], duplicateCount: 1 });
   });
 });

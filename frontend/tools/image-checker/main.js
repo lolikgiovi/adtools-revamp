@@ -6,17 +6,27 @@ import { getIconSvg } from "./icon.js";
 import { IMAGE_CHECK_CONCURRENCY, runWithConcurrency } from "./concurrency.js";
 import "./styles.css";
 
+const SAVED_REFERENCES_STORAGE_KEY = "image_checker_saved_references";
+const IMAGE_CHECK_HISTORY_STORAGE_KEY = "image_checker_history";
+const MAX_REFERENCE_HISTORY = 24;
+
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {
     super({ id: "check-image", eventBus });
-    // Blend UI responsibilities directly into the tool
     this.baseUrlService = new BaseUrlService();
     this.imageCheckerService = new ImageCheckerService(this.baseUrlService);
     this.root = null;
     this.elements = null;
     this.checkRunId = 0;
-    // Track timeout cells for "Retry All Timeouts" feature
-    this.timeoutCells = new Map(); // Map<cellId, { originalPath, env, rowIndex, colIndex }>
+    this.timeoutCells = new Map();
+    this.completedCells = new Set();
+    this.savedReferences = [];
+    this.referenceHistory = [];
+    this.activeReferenceKey = null;
+    this.activeReferenceIdentifier = null;
+    this.isChecking = false;
+    this.statusFilter = "all";
+    this.runProgress = null;
   }
 
   getIconSvg() {
@@ -37,6 +47,9 @@ class CheckImageTool extends BaseTool {
   onUnmount() {
     this.checkRunId += 1;
     this.timeoutCells.clear();
+    this.completedCells.clear();
+    this.runProgress = null;
+    this.isChecking = false;
     this.root = null;
     this.elements = null;
   }
@@ -54,6 +67,32 @@ class CheckImageTool extends BaseTool {
       clearButton: this.root.querySelector("#clearButton"),
       envSelector: this.root.querySelector("#envSelector"),
       retryAllTimeoutsBtn: this.root.querySelector("#retryAllTimeoutsBtn"),
+      cancelCheckButton: this.root.querySelector("#cancelCheckButton"),
+      environmentStatus: this.root.querySelector("#environmentStatus"),
+      configureEnvironmentsButton: this.root.querySelector("#configureEnvironmentsButton"),
+      inputMeta: this.root.querySelector("#inputMeta"),
+      inputValidationMessage: this.root.querySelector("#inputValidationMessage"),
+      savedReferencesButton: this.root.querySelector("#savedReferencesButton"),
+      savedReferencesCount: this.root.querySelector("#savedReferencesCount"),
+      closeSavedReferencesButton: this.root.querySelector("#closeSavedReferencesButton"),
+      referenceLibrary: this.root.querySelector("#referenceLibrary"),
+      savedReferencesList: this.root.querySelector("#savedReferencesList"),
+      savedReferencesListCount: this.root.querySelector("#savedReferencesListCount"),
+      recentReferencesList: this.root.querySelector("#recentReferencesList"),
+      recentReferencesListCount: this.root.querySelector("#recentReferencesListCount"),
+      referenceEditor: this.root.querySelector("#referenceEditor"),
+      referenceEditorHeading: this.root.querySelector("#referenceEditorHeading"),
+      referenceEditorPath: this.root.querySelector("#referenceEditorPath"),
+      referenceEditorForm: this.root.querySelector("#referenceEditorForm"),
+      referenceEditorCancel: this.root.querySelector("#referenceEditorCancel"),
+      referenceLabelInput: this.root.querySelector("#referenceLabelInput"),
+      referenceNoteInput: this.root.querySelector("#referenceNoteInput"),
+      checkProgress: this.root.querySelector("#checkProgress"),
+      progressLabel: this.root.querySelector("#progressLabel"),
+      progressCount: this.root.querySelector("#progressCount"),
+      progressBar: this.root.querySelector("#progressBar"),
+      progressTrack: this.root.querySelector(".progress-track"),
+      resultsEmptyState: this.root.querySelector("#resultsEmptyState"),
       resultsContainer: this.root.querySelector("#resultsContainer"),
     };
   }
@@ -67,6 +106,9 @@ class CheckImageTool extends BaseTool {
       this.clearResults();
       this.clearSavedValues();
       this.elements.batchImagePathsInput.value = "";
+      this.clearInputValidation();
+      this.updateInputMeta();
+      this.updateCheckButtonState();
       this.elements.batchImagePathsInput.focus();
     });
     this.elements.pasteButton.addEventListener("click", async () => {
@@ -75,15 +117,28 @@ class CheckImageTool extends BaseTool {
         const textarea = this.elements.batchImagePathsInput;
         const currentVal = textarea.value.trim();
         textarea.value = currentVal ? currentVal + "\n" + text : text;
+        this.saveValues();
+        this.updateInputMeta();
+        this.updateCheckButtonState();
+        this.clearInputValidation();
         textarea.focus();
       } catch (err) {
+        this.showInputValidation("Clipboard access was blocked. Paste the identifiers directly into the field.");
         console.error("Failed to read clipboard:", err);
       }
     });
 
-    // Batch mode enter key handler
-    this.elements.batchImagePathsInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter" && e.ctrlKey) {
+    this.elements.batchImagePathsInput.addEventListener("input", () => {
+      this.saveValues();
+      this.updateInputMeta();
+      this.updateCheckButtonState();
+      this.clearInputValidation();
+    });
+
+    // Batch mode shortcut: support both macOS and Windows/Linux conventions.
+    this.elements.batchImagePathsInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
         this.checkImages();
         this.saveValues();
       }
@@ -94,11 +149,42 @@ class CheckImageTool extends BaseTool {
       this.retryAllTimeouts();
     });
 
-    // Populate environment selector
-    this.populateEnvSelector();
+    this.elements.cancelCheckButton?.addEventListener("click", () => this.cancelCheck());
+    this.elements.configureEnvironmentsButton?.addEventListener("click", () => {
+      if (window.app?.navigateToTool) window.app.navigateToTool("html-template");
+      else if (this.eventBus) this.eventBus.emit("route:change", { path: "html-template" });
+      else this.showError("Open the HTML Template tool to configure environments.");
+    });
 
-    // Load saved values
+    this.elements.savedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary());
+    this.elements.closeSavedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary(false));
+    this.elements.referenceEditorCancel?.addEventListener("click", () => this.closeReferenceEditor());
+    this.elements.referenceEditorForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveReferenceFromEditor();
+    });
+
+    this.elements.resultsContainer?.addEventListener("click", (event) => {
+      const referenceButton = event.target.closest("[data-reference-action]");
+      if (referenceButton) {
+        event.stopPropagation();
+        if (referenceButton.dataset.referenceAction === "edit") {
+          this.openReferenceEditor(referenceButton.dataset.identifier);
+        }
+        return;
+      }
+
+      const filterButton = event.target.closest("[data-result-filter]");
+      if (filterButton) {
+        this.setResultFilter(filterButton.dataset.resultFilter);
+      }
+    });
+
+    this.populateEnvSelector();
     this.loadSavedValues();
+    this.loadReferenceData();
+    this.updateInputMeta();
+    this.updateCheckButtonState();
   }
 
   /**
@@ -121,6 +207,8 @@ class CheckImageTool extends BaseTool {
       option.textContent = env.name || `Environment ${index + 1}`;
       selector.appendChild(option);
     });
+
+    this.updateEnvironmentStatus();
   }
 
   /**
@@ -149,47 +237,234 @@ class CheckImageTool extends BaseTool {
   }
 
   async checkBatchImages() {
-    const batchInput = this.elements.batchImagePathsInput.value.trim();
-    if (!batchInput) {
-      this.showError("Please enter at least one image path or UUID");
-      return;
-    }
-
-    // Split by newlines and filter out empty lines
-    const imagePaths = batchInput.split(/\r?\n/).filter((line) => line.trim().length > 0);
-
+    const { imagePaths, duplicateCount } = this.getInputEntries();
     if (imagePaths.length === 0) {
-      this.showError("Please enter at least one valid image path or UUID");
+      this.showInputValidation("Add at least one image ID or content path to start a check.");
+      this.elements.batchImagePathsInput?.focus();
       return;
     }
 
-    // Get selected environments from dropdown
     const baseUrls = this.getSelectedEnvironments();
     if (baseUrls.length === 0) {
-      this.showError("No base URLs configured. Please add base URLs in the HTML Template tool.");
+      this.showInputValidation("No environments are configured. Add one in the HTML Template tool, then try again.");
       return;
     }
+
+    this.clearInputValidation();
+    this.recordReferenceHistory(imagePaths);
 
     try {
       UsageTracker.trackEvent("check-image", "check_start", { images: imagePaths.length, envs: baseUrls.length });
-    } catch (_) {}
+    } catch (_) {
+      // Analytics should never block an image check.
+    }
 
-    // Render the table structure first with loading states
     const runId = this.beginCheckRun();
+    this.isChecking = true;
+    this.runProgress = {
+      completed: 0,
+      total: imagePaths.length * baseUrls.length,
+      runId,
+    };
+    this.setCheckingState(true);
     this.renderProgressiveTable(imagePaths, baseUrls, runId);
 
-    // Then fetch each cell progressively
-    this.fetchAllCellsProgressively(imagePaths, baseUrls, runId);
+    try {
+      await this.fetchAllCellsProgressively(imagePaths, baseUrls, runId);
+    } finally {
+      if (this.isCheckRunCurrent(runId)) {
+        this.setCheckingState(false);
+        this.renderRunSummary(imagePaths.length, baseUrls.length, duplicateCount);
+      }
+    }
   }
 
   beginCheckRun() {
     this.checkRunId += 1;
     this.timeoutCells.clear();
+    if (!this.completedCells) this.completedCells = new Set();
+    this.completedCells.clear();
+    this.statusFilter = "all";
     return this.checkRunId;
   }
 
   isCheckRunCurrent(runId) {
     return runId === this.checkRunId && Boolean(this.root && this.elements?.resultsContainer);
+  }
+
+  getInputEntries() {
+    const rawInput = this.elements?.batchImagePathsInput?.value || "";
+    const seen = new Set();
+    const imagePaths = [];
+    let duplicateCount = 0;
+
+    rawInput.split(/\r?\n/).forEach((line) => {
+      const path = line.trim();
+      if (!path) return;
+
+      const key = this.getReferenceKey(path);
+      if (seen.has(key)) {
+        duplicateCount += 1;
+        return;
+      }
+
+      seen.add(key);
+      imagePaths.push(path);
+    });
+
+    return { imagePaths, duplicateCount };
+  }
+
+  getReferenceKey(identifier) {
+    const value = String(identifier || "").trim();
+    if (!value) return "";
+
+    try {
+      return this.imageCheckerService.normalizeInput(value).toLowerCase();
+    } catch (_) {
+      return value.toLowerCase();
+    }
+  }
+
+  formatImageIdentifier(identifier) {
+    const value = String(identifier || "").trim();
+    const uuidMatch = value.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}(?:\.png)?$/i);
+    return uuidMatch ? uuidMatch[0].replace(/\.png$/i, "") : value;
+  }
+
+  getSavedReference(identifier) {
+    const key = this.getReferenceKey(identifier);
+    return (this.savedReferences || []).find((reference) => reference.key === key) || null;
+  }
+
+  createImagePathCell(path) {
+    const cell = document.createElement("td");
+    cell.className = "image-path-cell";
+    cell.dataset.imageIdentifier = path;
+    cell.title = path;
+
+    const reference = this.getSavedReference(path);
+    const content = document.createElement("div");
+    content.className = "image-id-cell-content";
+
+    if (reference) {
+      const label = document.createElement("span");
+      label.className = "image-reference-label";
+      label.textContent = reference.label;
+      content.appendChild(label);
+    }
+
+    const identifier = document.createElement("code");
+    identifier.className = "image-id-value";
+    identifier.textContent = this.formatImageIdentifier(path);
+    content.appendChild(identifier);
+
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "reference-action-button";
+    action.dataset.referenceAction = "edit";
+    action.dataset.identifier = path;
+    action.textContent = reference ? "Edit label" : "Save as label";
+    action.setAttribute("aria-label", `${reference ? "Edit" : "Save"} reference for ${this.formatImageIdentifier(path)}`);
+    content.appendChild(action);
+
+    cell.appendChild(content);
+    return cell;
+  }
+
+  setEmptyStateVisible(visible) {
+    if (this.elements?.resultsEmptyState) {
+      this.elements.resultsEmptyState.hidden = !visible;
+    }
+  }
+
+  clearInputValidation() {
+    const message = this.elements?.inputValidationMessage;
+    if (!message) return;
+    message.hidden = true;
+    message.textContent = "";
+    message.className = "input-validation-message";
+  }
+
+  showInputValidation(message, type = "error") {
+    const validation = this.elements?.inputValidationMessage;
+    if (!validation) return;
+    validation.hidden = false;
+    validation.className = `input-validation-message ${type}`;
+    validation.textContent = message;
+  }
+
+  updateInputMeta() {
+    const meta = this.elements?.inputMeta;
+    if (!meta) return;
+
+    const { imagePaths, duplicateCount } = this.getInputEntries();
+    if (imagePaths.length === 0) {
+      meta.textContent = "Paste one identifier per line.";
+      return;
+    }
+
+    const identifierLabel = imagePaths.length === 1 ? "identifier" : "identifiers";
+    const details = [`${imagePaths.length} ${identifierLabel}`];
+    if (duplicateCount > 0) {
+      details.push(`${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} will be skipped`);
+    }
+    meta.textContent = details.join(" · ");
+  }
+
+  updateCheckButtonState() {
+    const button = this.elements?.checkImageButton;
+    if (!button) return;
+    button.disabled = this.isChecking || this.getInputEntries().imagePaths.length === 0;
+  }
+
+  updateEnvironmentStatus() {
+    const status = this.elements?.environmentStatus;
+    if (!status) return;
+
+    const count = this.imageCheckerService.baseUrlService.getAllUrls().length;
+    status.className = `environment-status ${count === 0 ? "is-empty" : ""}`;
+    status.textContent = count === 0 ? "No environments configured" : `${count} environment${count === 1 ? "" : "s"} configured`;
+    if (this.elements?.configureEnvironmentsButton) this.elements.configureEnvironmentsButton.hidden = count !== 0;
+  }
+
+  setCheckingState(isChecking) {
+    this.isChecking = isChecking;
+    const button = this.elements?.checkImageButton;
+    const cancelButton = this.elements?.cancelCheckButton;
+
+    if (button) {
+      button.textContent = isChecking ? "Checking…" : "Check images";
+    }
+    if (cancelButton) cancelButton.hidden = !isChecking;
+    if (this.elements?.checkProgress) this.elements.checkProgress.hidden = !isChecking;
+    this.updateCheckButtonState();
+  }
+
+  updateProgress(runId) {
+    if (!this.isCheckRunCurrent(runId) || !this.runProgress || this.runProgress.runId !== runId) return;
+
+    const completed = this.completedCells.size;
+    const total = this.runProgress.total;
+    const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    if (this.elements?.progressLabel) {
+      this.elements.progressLabel.textContent = completed >= total ? "Check complete" : "Checking images";
+    }
+    if (this.elements?.progressCount) this.elements.progressCount.textContent = `${completed} / ${total}`;
+    if (this.elements?.progressBar) this.elements.progressBar.style.transform = `scaleX(${progressPercent / 100})`;
+    if (this.elements?.progressTrack) {
+      this.elements.progressTrack.setAttribute("aria-valuemax", String(total));
+      this.elements.progressTrack.setAttribute("aria-valuenow", String(completed));
+    }
+  }
+
+  markCellComplete(cellId, runId) {
+    if (!this.isCheckRunCurrent(runId) || !this.runProgress || this.runProgress.runId !== runId) return;
+    if (!this.completedCells) this.completedCells = new Set();
+    if (this.completedCells.has(cellId)) return;
+    this.completedCells.add(cellId);
+    this.updateProgress(runId);
   }
 
   /**
@@ -199,11 +474,28 @@ class CheckImageTool extends BaseTool {
     if (runId === null) runId = this.beginCheckRun();
     if (!this.isCheckRunCurrent(runId)) return;
     this.clearResults({ invalidate: false });
-    this.timeoutCells.clear(); // Reset timeout tracking
+    this.timeoutCells.clear();
+    this.setEmptyStateVisible(false);
     const resultsContainer = this.elements.resultsContainer;
 
     const resultsWrapper = document.createElement("div");
     resultsWrapper.className = "results-wrapper batch-results";
+
+    const summary = document.createElement("div");
+    summary.className = "image-checker-run-summary";
+    summary.id = "runSummary";
+    summary.setAttribute("aria-live", "polite");
+    summary.innerHTML = `
+      <div class="run-summary-copy">
+        <strong>Checking images</strong>
+        <span class="run-summary-detail">Results will appear as each environment responds.</span>
+      </div>
+      <div class="run-summary-counts">
+        <span class="summary-count summary-count-found"><strong>0</strong> found</span>
+        <span class="summary-count summary-count-issues"><strong>0</strong> issues</span>
+      </div>
+    `;
+    resultsWrapper.appendChild(summary);
 
     const tableContainer = document.createElement("div");
     tableContainer.className = "batch-results-table-container";
@@ -218,12 +510,13 @@ class CheckImageTool extends BaseTool {
 
     let th = document.createElement("th");
     th.textContent = "Image ID";
+    th.scope = "col";
     headerRow.appendChild(th);
 
     baseUrls.forEach((env) => {
       th = document.createElement("th");
       th.textContent = env.name || "Unknown";
-      th.style.width = "200px";
+      th.scope = "col";
       headerRow.appendChild(th);
     });
 
@@ -236,23 +529,18 @@ class CheckImageTool extends BaseTool {
     imagePaths.forEach((path, rowIndex) => {
       const row = document.createElement("tr");
 
-      // Image path cell
-      let td = document.createElement("td");
-      td.className = "image-path-cell";
-      const uuidMatch = path.match(/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}(?:\.png)?$/i);
-      td.textContent = uuidMatch ? uuidMatch[0].replace(/\.png$/i, "") : path;
-      td.title = path;
-      row.appendChild(td);
+      row.appendChild(this.createImagePathCell(path));
 
       // Loading cells for each environment
       baseUrls.forEach((env, colIndex) => {
-        td = document.createElement("td");
+        const td = document.createElement("td");
         td.className = "status-cell loading";
         td.id = `cell-${rowIndex}-${colIndex}`;
+        td.setAttribute("aria-label", `Checking ${env.name || "environment"}`);
         td.innerHTML = `
           <div class="cell-loading-spinner">
-            <div class="spinner"></div>
-            <span class="loading-text">Checking...</span>
+            <div class="cell-skeleton" aria-hidden="true"></div>
+            <span class="loading-text">Checking</span>
           </div>
         `;
         row.appendChild(td);
@@ -268,7 +556,7 @@ class CheckImageTool extends BaseTool {
     // Add note
     const note = document.createElement("div");
     note.className = "batch-results-note";
-    note.textContent = "Click on an image preview to view full details";
+    note.textContent = "Select a preview to inspect dimensions and open the source image.";
     resultsWrapper.appendChild(note);
 
     resultsContainer.appendChild(resultsWrapper);
@@ -323,6 +611,79 @@ class CheckImageTool extends BaseTool {
     }
   }
 
+  renderRunSummary(imageCount, environmentCount, duplicateCount = 0) {
+    const summary = this.root?.querySelector("#runSummary");
+    if (!summary) return;
+
+    const totalCells = imageCount * environmentCount;
+    const found = this.root.querySelectorAll(".status-cell.success").length;
+    const timeouts = this.root.querySelectorAll(".status-cell.timeout").length;
+    const errors = this.root.querySelectorAll(".status-cell.error").length;
+    const issueCount = timeouts + errors;
+    const visibleResultCount = this.root.querySelectorAll(".batch-results-table tbody tr").length;
+
+    summary.innerHTML = `
+      <div class="run-summary-copy">
+        <strong>${imageCount} image${imageCount === 1 ? "" : "s"} checked</strong>
+        <span class="run-summary-detail">${found} of ${totalCells} environment checks found an image${duplicateCount ? ` · ${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped` : ""}</span>
+      </div>
+      <div class="run-summary-actions">
+        <div class="run-summary-counts">
+          <span class="summary-count summary-count-found"><strong>${found}</strong> found</span>
+          <span class="summary-count summary-count-issues"><strong>${issueCount}</strong> issue${issueCount === 1 ? "" : "s"}</span>
+        </div>
+        <div class="result-filter-group" role="group" aria-label="Filter image results">
+          <button class="result-filter is-active" type="button" data-result-filter="all" aria-pressed="true">All <span>${visibleResultCount}</span></button>
+          <button class="result-filter" type="button" data-result-filter="issues" aria-pressed="false">Issues only <span>${this.countIssueRows()}</span></button>
+        </div>
+      </div>
+    `;
+    this.statusFilter = "all";
+    this.updateProgress(this.runProgress?.runId);
+  }
+
+  countIssueRows() {
+    return [...(this.root?.querySelectorAll(".batch-results-table tbody tr") || [])].filter((row) =>
+      row.querySelector(".status-cell.error, .status-cell.timeout"),
+    ).length;
+  }
+
+  setResultFilter(filter) {
+    if (!this.root || !["all", "issues"].includes(filter)) return;
+    this.statusFilter = filter;
+
+    this.root.querySelectorAll("[data-result-filter]").forEach((button) => {
+      const isActive = button.dataset.resultFilter === filter;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
+
+    this.root.querySelectorAll(".batch-results-table tbody tr").forEach((row) => {
+      const hasIssue = Boolean(row.querySelector(".status-cell.error, .status-cell.timeout"));
+      row.hidden = filter === "issues" && !hasIssue;
+    });
+  }
+
+  cancelCheck() {
+    if (!this.isChecking) return;
+
+    this.checkRunId += 1;
+    this.isChecking = false;
+    this.timeoutCells.clear();
+    this.completedCells.clear();
+
+    this.root?.querySelectorAll(".status-cell.loading").forEach((cell) => {
+      cell.className = "status-cell canceled";
+      cell.innerHTML =
+        '<span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span class="error-text">Canceled</span></span>';
+      cell.setAttribute("aria-label", "Check canceled");
+    });
+
+    this.setCheckingState(false);
+    this.updateRetryAllButtonVisibility();
+    this.showInputValidation("Check canceled. You can update the identifiers and run it again.", "info");
+  }
+
   /**
    * Fetch a single image and update its cell
    */
@@ -355,18 +716,24 @@ class CheckImageTool extends BaseTool {
     this.timeoutCells.delete(cellId);
 
     if (result.exists) {
-      // Create success content with image preview
       const container = document.createElement("div");
-      container.style.cssText =
-        "text-align:center;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;";
+      container.className = "status-cell-content";
 
       const miniPreview = document.createElement("div");
       miniPreview.className = "mini-image-preview";
       const img = document.createElement("img");
       img.src = result.url;
-      img.alt = "Image Preview";
+      img.alt = `Preview for ${this.formatImageIdentifier(originalPath)}`;
       miniPreview.appendChild(img);
-      container.appendChild(miniPreview);
+
+      const previewButton = document.createElement("button");
+      previewButton.type = "button";
+      previewButton.className = "status-preview-button";
+      previewButton.title = "View image details";
+      previewButton.setAttribute("aria-label", `View ${this.formatImageIdentifier(originalPath)} in ${env.name || "this environment"}`);
+      previewButton.appendChild(miniPreview);
+      previewButton.addEventListener("click", () => this.showImageDetails(result, originalPath));
+      container.appendChild(previewButton);
 
       const sizeInfo = document.createElement("div");
       sizeInfo.className = "image-size-info";
@@ -376,37 +743,34 @@ class CheckImageTool extends BaseTool {
       cell.innerHTML = "";
       cell.appendChild(container);
       cell.title = `Dimensions: ${result.width}×${result.height}\nAspect Ratio: ${result.aspectRatio}:1\nURL: ${result.url}`;
-      cell.style.cursor = "pointer";
-      cell.addEventListener("click", () => this.showImageDetails(result, originalPath));
+      cell.setAttribute("aria-label", `${env.name || "Environment"}: image found, ${result.width} by ${result.height}`);
     } else if (result.timeout) {
-      // Track this timeout cell
       this.timeoutCells.set(cellId, { originalPath, env, rowIndex, colIndex, runId });
 
-      // Timeout state with retry button
       cell.innerHTML = `
         <div class="cell-timeout-content">
-          <span class="timeout-icon">⏱️</span>
-          <span class="timeout-text">Timeout</span>
+          <span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span class="timeout-text">Timed out</span></span>
           <button class="retry-button">Retry</button>
         </div>
       `;
-      cell.title = "Request timed out (after 5 attempts)";
+      cell.title = "Request timed out after 3 attempts";
+      cell.setAttribute("aria-label", `${env.name || "Environment"}: request timed out`);
       const retryBtn = cell.querySelector(".retry-button");
       retryBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.retryCell(originalPath, env, rowIndex, colIndex, runId);
       });
     } else {
-      // Error/not found state
       cell.innerHTML = `
         <div class="cell-error-content">
-          <span class="image-error-icon">❌</span>
-          <span class="error-text">Not found</span>
+          <span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span class="error-text">Missing</span></span>
         </div>
       `;
-      cell.title = "Image not found";
+      cell.title = result.error || "Image not found";
+      cell.setAttribute("aria-label", `${env.name || "Environment"}: image missing`);
     }
 
+    this.markCellComplete(cellId, runId);
     // Update retry all button visibility
     this.updateRetryAllButtonVisibility();
   }
@@ -418,7 +782,7 @@ class CheckImageTool extends BaseTool {
     const retryAllBtn = this.elements?.retryAllTimeoutsBtn;
     if (retryAllBtn) {
       const hasTimeouts = this.timeoutCells.size > 0;
-      retryAllBtn.style.display = hasTimeouts ? "inline-block" : "none";
+      retryAllBtn.hidden = !hasTimeouts;
       retryAllBtn.textContent = `Retry All Timeouts (${this.timeoutCells.size})`;
     }
   }
@@ -440,8 +804,10 @@ class CheckImageTool extends BaseTool {
     this.updateRetryAllButtonVisibility();
 
     // Retry all timeout cells in parallel
-    const retryTasks = cellsToRetry.map(({ originalPath, env, rowIndex, colIndex }) =>
-      () => this.retryCell(originalPath, env, rowIndex, colIndex, runId),
+    const retryTasks = cellsToRetry.map(
+      ({ originalPath, env, rowIndex, colIndex }) =>
+        () =>
+          this.retryCell(originalPath, env, rowIndex, colIndex, runId),
     );
 
     await runWithConcurrency(retryTasks, IMAGE_CHECK_CONCURRENCY);
@@ -462,17 +828,18 @@ class CheckImageTool extends BaseTool {
     cell.className = "status-cell error";
     cell.innerHTML = `
       <div class="cell-error-content">
-        <span class="image-error-icon">⚠️</span>
-        <span class="error-text">Error</span>
+        <span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span class="error-text">Error</span></span>
         <button class="retry-button">Retry</button>
       </div>
     `;
     cell.title = `Error: ${errorMessage}`;
+    cell.setAttribute("aria-label", `${env.name || "Environment"}: request error`);
     const retryBtn = cell.querySelector(".retry-button");
     retryBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       this.retryCell(originalPath, env, rowIndex, colIndex, runId);
     });
+    this.markCellComplete(`cell-${rowIndex}-${colIndex}`, runId);
   }
 
   /**
@@ -488,13 +855,251 @@ class CheckImageTool extends BaseTool {
     cell.className = "status-cell loading";
     cell.innerHTML = `
       <div class="cell-loading-spinner">
-        <div class="spinner"></div>
-        <span class="loading-text">Retrying...</span>
+        <div class="cell-skeleton" aria-hidden="true"></div>
+        <span class="loading-text">Retrying</span>
       </div>
     `;
 
     const normalized = this.imageCheckerService.normalizeInput(originalPath);
     await this.fetchAndUpdateCell(originalPath, normalized, env, rowIndex, colIndex, runId);
+  }
+
+  readStoredArray(storageKey) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  loadReferenceData() {
+    this.savedReferences = this.readStoredArray(SAVED_REFERENCES_STORAGE_KEY).filter(
+      (reference) => reference && reference.key && reference.identifier && reference.label,
+    );
+    this.referenceHistory = this.readStoredArray(IMAGE_CHECK_HISTORY_STORAGE_KEY).filter(
+      (reference) => reference && reference.key && reference.identifier,
+    );
+    this.renderReferenceLibrary();
+  }
+
+  persistReferenceData() {
+    try {
+      localStorage.setItem(SAVED_REFERENCES_STORAGE_KEY, JSON.stringify(this.savedReferences));
+      localStorage.setItem(IMAGE_CHECK_HISTORY_STORAGE_KEY, JSON.stringify(this.referenceHistory));
+    } catch (error) {
+      this.showError("Could not save image references in this browser.");
+      console.error("Error saving image references:", error);
+    }
+  }
+
+  recordReferenceHistory(imagePaths) {
+    const nextHistory = [];
+    const seen = new Set();
+    const addHistoryEntry = (entry) => {
+      if (!entry?.key || seen.has(entry.key)) return;
+      seen.add(entry.key);
+      nextHistory.push(entry);
+    };
+
+    imagePaths.forEach((identifier) => {
+      addHistoryEntry({
+        key: this.getReferenceKey(identifier),
+        identifier,
+        checkedAt: Date.now(),
+      });
+    });
+    this.referenceHistory.forEach(addHistoryEntry);
+
+    this.referenceHistory = nextHistory.slice(0, MAX_REFERENCE_HISTORY);
+    this.persistReferenceData();
+    this.renderReferenceLibrary();
+  }
+
+  renderReferenceLibrary() {
+    const savedCount = this.savedReferences.length;
+    const historyCount = this.referenceHistory.length;
+
+    if (this.elements?.savedReferencesCount) this.elements.savedReferencesCount.textContent = String(savedCount);
+    if (this.elements?.savedReferencesListCount) this.elements.savedReferencesListCount.textContent = String(savedCount);
+    if (this.elements?.recentReferencesListCount) this.elements.recentReferencesListCount.textContent = String(historyCount);
+
+    const savedList = this.elements?.savedReferencesList;
+    if (savedList) {
+      savedList.innerHTML = "";
+      if (savedCount === 0) {
+        savedList.innerHTML = '<p class="reference-list-empty">Save a label from a result to keep it here.</p>';
+      } else {
+        this.savedReferences.forEach((reference) => savedList.appendChild(this.createReferenceListItem(reference, "saved")));
+      }
+    }
+
+    const recentList = this.elements?.recentReferencesList;
+    if (recentList) {
+      recentList.innerHTML = "";
+      if (historyCount === 0) {
+        recentList.innerHTML = '<p class="reference-list-empty">Checked identifiers will appear here.</p>';
+      } else {
+        this.referenceHistory.forEach((reference) => recentList.appendChild(this.createReferenceListItem(reference, "recent")));
+      }
+    }
+  }
+
+  createReferenceListItem(reference, type) {
+    const item = document.createElement("article");
+    item.className = "reference-list-item";
+
+    const content = document.createElement("div");
+    content.className = "reference-list-item-content";
+
+    const savedReference = type === "recent" ? this.getSavedReference(reference.identifier) : reference;
+    const label = document.createElement("strong");
+    label.className = "reference-list-item-label";
+    label.textContent = savedReference?.label || (type === "recent" ? "Recent identifier" : reference.label);
+    content.appendChild(label);
+
+    const identifier = document.createElement("code");
+    identifier.className = "reference-list-item-identifier";
+    identifier.textContent = this.formatImageIdentifier(reference.identifier);
+    identifier.title = reference.identifier;
+    content.appendChild(identifier);
+
+    if (savedReference?.note) {
+      const note = document.createElement("span");
+      note.className = "reference-list-item-note";
+      note.textContent = savedReference.note;
+      content.appendChild(note);
+    }
+    item.appendChild(content);
+
+    const actions = document.createElement("div");
+    actions.className = "reference-list-item-actions";
+
+    const useButton = document.createElement("button");
+    useButton.type = "button";
+    useButton.className = "reference-list-action";
+    useButton.textContent = "Use";
+    useButton.addEventListener("click", () => this.appendInputValue(reference.identifier));
+    actions.appendChild(useButton);
+
+    if (type === "saved") {
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "reference-list-action";
+      editButton.textContent = "Edit";
+      editButton.addEventListener("click", () => this.openReferenceEditor(reference.identifier));
+      actions.appendChild(editButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "reference-list-action reference-list-action-danger";
+      deleteButton.textContent = "Remove";
+      deleteButton.addEventListener("click", () => this.deleteSavedReference(reference.key));
+      actions.appendChild(deleteButton);
+    }
+
+    item.appendChild(actions);
+    return item;
+  }
+
+  appendInputValue(identifier) {
+    const textarea = this.elements?.batchImagePathsInput;
+    if (!textarea) return;
+
+    const currentEntries = this.getInputEntries().imagePaths;
+    if (currentEntries.some((entry) => this.getReferenceKey(entry) === this.getReferenceKey(identifier))) {
+      this.showSuccess("That identifier is already in the input.");
+      textarea.focus();
+      return;
+    }
+
+    const currentValue = textarea.value.trim();
+    textarea.value = currentValue ? `${currentValue}\n${identifier}` : identifier;
+    this.saveValues();
+    this.updateInputMeta();
+    this.updateCheckButtonState();
+    this.clearInputValidation();
+    textarea.focus();
+  }
+
+  toggleReferenceLibrary(forceOpen) {
+    const library = this.elements?.referenceLibrary;
+    if (!library) return;
+
+    const open = typeof forceOpen === "boolean" ? forceOpen : library.hidden;
+    library.hidden = !open;
+    this.elements.savedReferencesButton?.setAttribute("aria-expanded", String(open));
+    if (open) this.renderReferenceLibrary();
+  }
+
+  openReferenceEditor(identifier) {
+    if (!identifier || !this.elements?.referenceEditor) return;
+
+    const existing = this.getSavedReference(identifier);
+    this.activeReferenceKey = this.getReferenceKey(identifier);
+    this.activeReferenceIdentifier = identifier;
+    this.elements.referenceEditor.hidden = false;
+    this.elements.referenceEditorHeading.textContent = existing ? "Edit image reference" : "Save image reference";
+    this.elements.referenceEditorPath.textContent = identifier;
+    this.elements.referenceLabelInput.value = existing?.label || "";
+    this.elements.referenceNoteInput.value = existing?.note || "";
+
+    this.elements.referenceEditor.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    this.elements.referenceLabelInput.focus();
+  }
+
+  closeReferenceEditor() {
+    if (!this.elements?.referenceEditor) return;
+    this.elements.referenceEditor.hidden = true;
+    this.activeReferenceKey = null;
+    this.activeReferenceIdentifier = null;
+  }
+
+  saveReferenceFromEditor() {
+    const label = this.elements?.referenceLabelInput?.value.trim();
+    const identifier = this.activeReferenceIdentifier;
+    if (!label || !identifier) {
+      this.elements?.referenceLabelInput?.focus();
+      return;
+    }
+
+    const now = Date.now();
+    const existingIndex = this.savedReferences.findIndex((reference) => reference.key === this.activeReferenceKey);
+    const existing = existingIndex >= 0 ? this.savedReferences[existingIndex] : null;
+    const nextReference = {
+      id: existing?.id || `${now}-${Math.random().toString(36).slice(2)}`,
+      key: this.activeReferenceKey,
+      identifier,
+      label,
+      note: this.elements.referenceNoteInput?.value.trim() || "",
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    if (existingIndex >= 0) this.savedReferences[existingIndex] = nextReference;
+    else this.savedReferences.unshift(nextReference);
+
+    this.persistReferenceData();
+    this.renderReferenceLibrary();
+    this.refreshRenderedReferenceCells();
+    this.closeReferenceEditor();
+    this.showSuccess(existing ? "Image reference updated." : "Image reference saved.");
+  }
+
+  deleteSavedReference(key) {
+    this.savedReferences = this.savedReferences.filter((reference) => reference.key !== key);
+    this.persistReferenceData();
+    this.renderReferenceLibrary();
+    this.refreshRenderedReferenceCells();
+    this.showSuccess("Image reference removed.");
+  }
+
+  refreshRenderedReferenceCells() {
+    this.root?.querySelectorAll(".image-path-cell[data-image-identifier]").forEach((oldCell) => {
+      const replacement = this.createImagePathCell(oldCell.dataset.imageIdentifier);
+      oldCell.parentElement?.replaceChild(replacement, oldCell);
+    });
   }
 
   /* ──────────────── Rendering ──────────────── */
@@ -564,6 +1169,7 @@ class CheckImageTool extends BaseTool {
     }
 
     const resultsContainer = this.elements.resultsContainer;
+    this.setEmptyStateVisible(false);
     const resultsWrapper = document.createElement("div");
     resultsWrapper.className = "results-wrapper batch-results";
 
@@ -688,58 +1294,112 @@ class CheckImageTool extends BaseTool {
 
   /* ──────────────── Modal ──────────────── */
   showImageDetails(result, imagePath) {
-    // Create a modal or overlay to show image details
     const modal = document.createElement("div");
     modal.className = "image-details-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "imageDetailsHeading");
 
     const modalContent = document.createElement("div");
     modalContent.className = "image-details-content";
 
-    // Add close button
     const closeButton = document.createElement("button");
     closeButton.className = "close-modal-button";
     closeButton.textContent = "×";
-    closeButton.addEventListener("click", () => {
-      document.body.removeChild(modal);
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close image details");
+
+    const closeModal = () => {
+      modal.remove();
+      document.removeEventListener("keydown", handleKeydown);
+    };
+    const handleKeydown = (event) => {
+      if (event.key === "Escape") closeModal();
+    };
+    closeButton.addEventListener("click", closeModal);
+
+    const heading = document.createElement("h3");
+    heading.id = "imageDetailsHeading";
+    heading.textContent = "Image details";
+    modalContent.appendChild(heading);
+
+    const details = [
+      ["Image ID", imagePath],
+      ["Environment", result.name || "Unknown"],
+      ["Dimensions", `${result.width}×${result.height} (${result.aspectRatio}:1)`],
+    ];
+    details.forEach(([label, value]) => {
+      const detail = document.createElement("p");
+      const detailLabel = document.createElement("strong");
+      detailLabel.textContent = `${label}: `;
+      detail.appendChild(detailLabel);
+      detail.appendChild(document.createTextNode(value));
+      modalContent.appendChild(detail);
     });
 
-    // Add image details
-    const content = `
-      <h3>Image Details</h3>
-      <p><strong>Image ID:</strong> ${imagePath}</p>
-      <p><strong>Environment:</strong> ${result.name || "Unknown"}</p>
-      <p><strong>Dimension:</strong> ${result.width}×${result.height} (${result.aspectRatio}:1)</p>
-      <p><a href="${result.url}" target="_blank" style="color: inherit;">Open Image in New Tab</a></p>
-      <div class="image-preview large"><img src="${result.url}" alt="Image Preview" /></div>
-    `;
+    const actions = document.createElement("div");
+    actions.className = "image-details-actions";
+    const openLink = document.createElement("a");
+    openLink.href = result.url;
+    openLink.target = "_blank";
+    openLink.rel = "noopener noreferrer";
+    openLink.className = "btn btn-secondary btn-sm";
+    openLink.textContent = "Open image";
+    actions.appendChild(openLink);
 
-    modalContent.innerHTML = content;
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "btn btn-ghost btn-sm";
+    copyButton.textContent = "Copy URL";
+    copyButton.addEventListener("click", () => this.copyToClipboard(result.url, copyButton));
+    actions.appendChild(copyButton);
+    modalContent.appendChild(actions);
+
+    const preview = document.createElement("div");
+    preview.className = "image-preview large";
+    const previewImage = document.createElement("img");
+    previewImage.src = result.url;
+    previewImage.alt = `Preview for ${this.formatImageIdentifier(imagePath)}`;
+    preview.appendChild(previewImage);
+    modalContent.appendChild(preview);
     modalContent.appendChild(closeButton);
     modal.appendChild(modalContent);
 
-    // Add click outside to close
     modal.addEventListener("click", (e) => {
       if (e.target === modal) {
-        document.body.removeChild(modal);
+        closeModal();
       }
     });
 
     document.body.appendChild(modal);
+    document.addEventListener("keydown", handleKeydown);
+    closeButton.focus();
   }
 
   /* ──────────────── Status helpers ──────────────── */
   showLoading() {
-    this.elements.resultsContainer.innerHTML = '<div class="check-image-loading">Checking images...</div>';
+    this.setEmptyStateVisible(false);
+    this.elements.resultsContainer.innerHTML = '<div class="check-image-loading">Checking images…</div>';
   }
 
   showError(message) {
-    this.elements.resultsContainer.innerHTML = `<div class="check-image-error-banner">${message}</div>`;
+    this.setEmptyStateVisible(false);
+    if (this.elements?.resultsContainer) {
+      const banner = document.createElement("div");
+      banner.className = "check-image-error-banner";
+      banner.textContent = message;
+      this.elements.resultsContainer.innerHTML = "";
+      this.elements.resultsContainer.appendChild(banner);
+    }
   }
 
   clearResults({ invalidate = true } = {}) {
     if (invalidate) this.checkRunId += 1;
     this.timeoutCells.clear();
-    if (this.elements?.resultsContainer) this.elements.resultsContainer.innerHTML = "";
+    if (this.elements?.resultsContainer) {
+      this.elements.resultsContainer.innerHTML = "";
+      this.setEmptyStateVisible(true);
+    }
     this.updateRetryAllButtonVisibility();
   }
 
