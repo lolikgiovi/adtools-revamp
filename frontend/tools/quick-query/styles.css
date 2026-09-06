@@ -299,18 +299,6 @@
   border-left: 1px solid hsl(var(--border));
 }
 
-/* Remove rounded corners from data spreadsheet header cells */
-#spreadsheet-data .handsontable.ht-theme-main th,
-#spreadsheet-data .handsontable.ht-theme-main thead th,
-#spreadsheet-data .handsontable .ht_clone_top_left_corner th,
-#spreadsheet-data .handsontable .ht_clone_top_left_corner table,
-#spreadsheet-data .handsontable .ht_clone_top th,
-#spreadsheet-data .handsontable .ht_clone_left th,
-#spreadsheet-data .handsontable .wtSpreader,
-#spreadsheet-data .handsontable table {
-  border-radius: 0 !important;
-}
-
 /* Hide scrollbar in spreadsheet-data */
 .handsontable .wtHolder::-webkit-scrollbar {
   display: none;
@@ -767,6 +755,8 @@
 /* Handsontable compact sizing overrides (scoped to quick-query) */
 .quick-query-tool-container .handsontable {
   font-size: 11px;
+  --ht-background-color: hsl(var(--background));
+  --ht-wrapper-border-radius: 4px;
   --ht-row-height: 20px;
   --ht-header-row-height: 20px;
   --ht-font-size: 11px;
@@ -893,15 +883,6 @@
 .handsontable .wtBorder,
 .handsontable .wtHolder {
   border-radius: 4px;
-}
-
-/* Remove rounded corners from data spreadsheet holders */
-#spreadsheet-data .handsontable .wtBorder,
-#spreadsheet-data .handsontable .wtHolder,
-#spreadsheet-data .handsontable .ht_clone_top_left_corner,
-#spreadsheet-data .handsontable .ht_clone_top_left_corner .wtHolder,
-#spreadsheet-data .handsontable .ht_clone_left .wtHolder {
-  border-radius: 0 !important;
 }
 
 #errorMessages {

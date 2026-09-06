@@ -6,6 +6,7 @@ import { AboutTemplate } from "./template.js";
 import "./styles.css";
 
 const APP_VERSION = String(appPackage?.version || "1.3.5");
+const MACOS_INSTALL_COMMAND = 'curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash';
 const TOOL_DEFINITIONS = buildToolDefinitions(toolsConfig?.tools || []);
 const TOOL_GROUPS = [
   { id: "config", label: "Configuration & SQL" },
@@ -43,6 +44,9 @@ class AboutPage {
     this.eventBus = eventBus;
     this.container = null;
     this.root = null;
+    this.copyInstallButton = null;
+    this.copyInstallResetTimer = null;
+    this.handleCopyInstallCommand = this.handleCopyInstallCommand.bind(this);
   }
 
   mount(root) {
@@ -64,6 +68,9 @@ class AboutPage {
     const content = this.container.querySelector(".about-content");
     if (content) content.innerHTML = this.renderPage();
 
+    this.copyInstallButton = this.container.querySelector("#about-copy-install-command");
+    this.copyInstallButton?.addEventListener("click", this.handleCopyInstallCommand);
+
     this.eventBus?.emit?.("page:changed", { page: "about" });
   }
 
@@ -74,6 +81,29 @@ class AboutPage {
 
     return `
       <article class="about-document">
+        <section class="about-install" aria-labelledby="about-install-title">
+          <div class="about-install-copy">
+            <span class="about-install-eyebrow">AD Tools Desktop · macOS</span>
+            <h1 id="about-install-title">Install the desktop app</h1>
+            <p>Open Terminal, run the command below, and follow the on-screen prompts to complete the installation.</p>
+          </div>
+          <ol class="about-install-steps" aria-label="macOS installation steps">
+            <li><span>1</span>Open Terminal on your Mac.</li>
+            <li><span>2</span>Copy and run the install command.</li>
+            <li><span>3</span>Follow the prompts in Terminal.</li>
+          </ol>
+          <div class="about-install-command">
+            <code>${escapeHtml(MACOS_INSTALL_COMMAND)}</code>
+            <button id="about-copy-install-command" type="button" aria-label="Copy macOS install command">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </section>
+
         <section class="about-guides" aria-labelledby="about-guides-title">
           <div class="about-section-heading">
             <h1 id="about-guides-title">Tool guide</h1>
@@ -85,6 +115,34 @@ class AboutPage {
         </section>
       </article>
     `;
+  }
+
+  async handleCopyInstallCommand() {
+    if (!this.copyInstallButton) return;
+
+    const label = this.copyInstallButton.querySelector("span");
+
+    try {
+      await navigator.clipboard.writeText(MACOS_INSTALL_COMMAND);
+      if (label) label.textContent = "Copied";
+      this.eventBus?.emit?.("notification:show", {
+        type: "success",
+        message: "Install command copied to clipboard",
+      });
+    } catch (error) {
+      console.error("Failed to copy macOS install command:", error);
+      if (label) label.textContent = "Copy failed";
+      this.eventBus?.emit?.("notification:show", {
+        type: "error",
+        message: "Unable to copy the install command",
+      });
+    }
+
+    clearTimeout(this.copyInstallResetTimer);
+    this.copyInstallResetTimer = setTimeout(() => {
+      if (label) label.textContent = "Copy";
+      this.copyInstallResetTimer = null;
+    }, 2000);
   }
 
   renderToolGroup(group, catalog) {
@@ -140,6 +198,10 @@ class AboutPage {
   deactivate() {}
 
   unmount() {
+    this.copyInstallButton?.removeEventListener("click", this.handleCopyInstallCommand);
+    clearTimeout(this.copyInstallResetTimer);
+    this.copyInstallButton = null;
+    this.copyInstallResetTimer = null;
     this.root?.classList.remove("main-content-flush");
     this.root = null;
     this.container = null;

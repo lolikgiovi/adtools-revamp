@@ -24,13 +24,29 @@ describe("shell page lifecycle", () => {
     expect(app.currentShellPage).toBeNull();
   });
 
-  it("mounts About as a seamless flush page and tolerates repeated unmounts", () => {
-    const page = new AboutPage();
+  it("mounts About with the macOS install tutorial and tolerates repeated unmounts", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const eventBus = { emit: vi.fn() };
+    const page = new AboutPage({ eventBus });
     const root = document.createElement("div");
     page.mount(root);
 
     expect(root.classList.contains("main-content-flush")).toBe(true);
     expect(root.querySelector(".about-page")).not.toBeNull();
+    expect(root.querySelector("#about-install-title")?.textContent).toBe("Install the desktop app");
+
+    root.querySelector("#about-copy-install-command").click();
+    await vi.waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('curl -fsSL "https://adtools.lolik.workers.dev/install.sh?q=0" | bash');
+    });
+    expect(eventBus.emit).toHaveBeenCalledWith("notification:show", {
+      type: "success",
+      message: "Install command copied to clipboard",
+    });
 
     page.unmount();
     page.unmount();
