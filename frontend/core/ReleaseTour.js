@@ -250,8 +250,9 @@ function appendCloseIcon(button) {
 
 function appendUpdateIcon(parent) {
   const icon = createElement("span", "release-tour-icon");
+  icon.dataset.icon = "circle-check";
   icon.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0 2 5.3" /><path d="M20 4v7h-7" /><path d="m8.5 12.5 2.2 2.2 4.8-5" /></svg>';
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.2 2.2 4.8-5" /></svg>';
   parent.appendChild(icon);
 }
 

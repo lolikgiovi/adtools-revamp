@@ -30,6 +30,10 @@ import "./styles.css";
 
 let jsZipPromise = null;
 let minifyWorkerPromise = null;
+const DATA_TABLE_MIN_HEIGHT = 200;
+const DATA_TABLE_MAX_HEIGHT = 480;
+const DATA_TABLE_BOTTOM_MARGIN = 24;
+const DATA_TABLE_ROW_HEIGHT = 20;
 
 function loadJsZip() {
   if (!jsZipPromise) {
@@ -133,6 +137,9 @@ export class QuickQueryUI {
     this._layoutState = { height: "auto", fixedRowsTop: 0, baseUpperHeight: null, upperHeight: null };
     this._layoutScheduled = false;
     this._cancelScheduledLayout = null;
+    this._dataTableLayoutScheduled = false;
+    this._cancelScheduledDataTableLayout = null;
+    this._handleDataTableViewportResize = () => this.scheduleDataTableLayoutRefresh();
     this._autosaveLifecycleListenersBound = false;
     this._handleAutosavePageHide = () => {
       void this.flushPendingDataAutosave();
@@ -216,6 +223,7 @@ export class QuickQueryUI {
       this.setupQueryTypeDropdown();
       this.setupTableNameSearch();
       this.setupAutosaveLifecycleListeners();
+      window.addEventListener("resize", this._handleDataTableViewportResize);
 
       await this.initializeTabs();
     } catch (error) {
@@ -737,10 +745,15 @@ export class QuickQueryUI {
     this.schemaTable = new Handsontable(this.elements.schemaContainer, schemaTableConfig);
     this.scheduleSchemaLayoutRefresh();
 
+    const wrapTextOn = Boolean(this.elements.toggleWrapText?.checked);
+    this.elements.dataContainer.classList.toggle("wrap-text-on", wrapTextOn);
+
     const dataTableConfig = {
       ...initialDataTableSpecification,
-      // Constrain the internal viewport height to keep headers visible while scrolling
-      height: "auto",
+      // A finite height keeps Handsontable virtualized instead of rendering every data row into the page.
+      height: this.getDataTableViewportHeight(),
+      autoRowSize: wrapTextOn,
+      rowHeights: wrapTextOn ? undefined : DATA_TABLE_ROW_HEIGHT,
       afterChange: (changes, source) => {
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
@@ -753,6 +766,44 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+  }
+
+  getDataTableViewportHeight() {
+    const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 800;
+    const containerTop = this.elements.dataContainer?.getBoundingClientRect?.().top;
+    const fallbackHeight = Math.floor(viewportHeight * 0.4);
+    const availableHeight =
+      Number.isFinite(containerTop) && containerTop > 0 ? viewportHeight - containerTop - DATA_TABLE_BOTTOM_MARGIN : fallbackHeight;
+
+    return Math.max(DATA_TABLE_MIN_HEIGHT, Math.min(DATA_TABLE_MAX_HEIGHT, Math.floor(availableHeight)));
+  }
+
+  syncDataTableLayout() {
+    if (!this.dataTable) return;
+
+    const wrapTextOn = Boolean(this.elements.toggleWrapText?.checked);
+    this.elements.dataContainer?.classList.toggle("wrap-text-on", wrapTextOn);
+    this.dataTable.updateSettings({
+      height: this.getDataTableViewportHeight(),
+      autoRowSize: wrapTextOn,
+      rowHeights: wrapTextOn ? undefined : DATA_TABLE_ROW_HEIGHT,
+    });
+  }
+
+  scheduleDataTableLayoutRefresh() {
+    if (this._dataTableLayoutScheduled) return;
+
+    this._dataTableLayoutScheduled = true;
+    const useAnimationFrame = typeof requestAnimationFrame === "function";
+    const scheduleFrame = useAnimationFrame ? requestAnimationFrame : (callback) => setTimeout(callback, 0);
+    const cancelFrame = useAnimationFrame && typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout;
+    const frameId = scheduleFrame(() => {
+      this._dataTableLayoutScheduled = false;
+      this._cancelScheduledDataTableLayout = null;
+      if (!this.elements.dataContainer?.isConnected) return;
+      this.syncDataTableLayout();
+    });
+    this._cancelScheduledDataTableLayout = () => cancelFrame(frameId);
   }
 
   scheduleSchemaLayoutRefresh() {
@@ -894,9 +945,15 @@ export class QuickQueryUI {
       this._cancelScheduledLayout = null;
     }
     this._layoutScheduled = false;
+    if (this._cancelScheduledDataTableLayout) {
+      this._cancelScheduledDataTableLayout();
+      this._cancelScheduledDataTableLayout = null;
+    }
+    this._dataTableLayoutScheduled = false;
   }
 
   refreshLayouts() {
+    this.syncDataTableLayout();
     try {
       this.editor?.layout?.();
     } catch (_) {}
@@ -1457,6 +1514,8 @@ export class QuickQueryUI {
 
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
+    window.removeEventListener("resize", this._handleDataTableViewportResize);
+    this.pauseHiddenWork();
     this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
@@ -2406,14 +2465,7 @@ export class QuickQueryUI {
     const container = document.getElementById("spreadsheet-data");
     if (!checkbox || !container) return;
 
-    const isOn = checkbox.checked;
-    container.classList.toggle("wrap-text-off", isOn);
-
-    // Re-render Handsontable so autoRowSize recalculates cell heights
-    // based on the new wrapping mode (pre-wrap vs nowrap)
-    if (this.dataTable) {
-      this.dataTable.render();
-    }
+    this.syncDataTableLayout();
   }
 
   // ===== Split Query Feature =====

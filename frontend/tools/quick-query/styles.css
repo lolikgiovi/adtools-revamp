@@ -267,11 +267,9 @@
 
 /* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
-  /* Keep the table within the visible viewport minus app header */
-  /* max-height: calc(100vh - 57px); */
-  overflow-x: auto;
-  /* enable vertical and horizontal scroll inside container */
-  /* overscroll-behavior: contain; */
+  min-height: 200px;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 /* Add left border to corner cell and first column in data table */
@@ -814,18 +812,18 @@
 #spreadsheet-data .handsontable .htCore td {
   padding: 0 6px !important;
   line-height: 15px !important;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Measuring variable-height rows is opt-in because it is expensive in Tauri's WebKit view. */
+#spreadsheet-data.wrap-text-on .handsontable .htCore td {
   white-space: pre-wrap !important;
   overflow-wrap: break-word !important;
   word-break: break-word !important;
   max-width: 300px;
-  /* text-overflow: ellipsis; */
-}
-
-/* Wrap Text OFF: single line with ellipsis */
-#spreadsheet-data.wrap-text-off .handsontable .htCore td {
-  white-space: nowrap !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 /* Ensure theme class selector also picks up compact vars */

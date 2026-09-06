@@ -154,4 +154,27 @@ describe("release tour", () => {
     expect(tour.open()).toBe(true);
     tour.finish();
   });
+
+  it("renders a complete update icon for the What's new context", () => {
+    const tour = new ReleaseTour({
+      release: {
+        releaseId: "web:update-icon",
+        title: "Icon check",
+        summary: "The icon should be recognizable.",
+        tour: [],
+      },
+    });
+
+    expect(tour.open()).toBe(true);
+
+    const icon = document.querySelector(".release-tour-icon");
+    const svg = icon?.querySelector("svg");
+
+    expect(icon?.dataset.icon).toBe("circle-check");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.getAttribute("focusable")).toBe("false");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg?.querySelector("circle")?.getAttribute("r")).toBe("9");
+    expect(svg?.querySelector("path")?.getAttribute("d")).toBe("m8.5 12 2.2 2.2 4.8-5");
+  });
 });
