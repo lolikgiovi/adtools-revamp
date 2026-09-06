@@ -888,16 +888,36 @@ export class QuickQueryUI {
   }
 
   getSchemaTableViewportHeight() {
-    const settings = this.schemaTable?.getSettings?.() || initialSchemaTableSpecification;
-    const rowHeight = Number.parseFloat(settings.rowHeights) || 20;
-    const headerHeight = Number.parseFloat(settings.columnHeaderHeight) || rowHeight;
-    const rowCount = Math.max(this.schemaTable?.countRows?.() || settings.data?.length || 0, settings.minRows || 1);
-    const contentHeight = rowCount * rowHeight + headerHeight + 2;
+    const { contentHeight } = this.getSchemaTableContentMetrics();
     const scrollAreaHeight = this.elements.leftScroll?.clientHeight || this.elements.contentA?.clientHeight || 320;
     const attachmentsHeight = this.elements.filesContainer?.offsetHeight || SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT;
     const availableHeight = Math.max(SCHEMA_TABLE_MIN_HEIGHT, scrollAreaHeight - attachmentsHeight - SCHEMA_TABLE_SECTION_GAP);
 
     return Math.min(contentHeight, availableHeight);
+  }
+
+  getSchemaTableContentMetrics() {
+    const settings = this.schemaTable?.getSettings?.() || initialSchemaTableSpecification;
+    const configuredRowHeight = Number.parseFloat(settings.rowHeights) || 20;
+    const rowCount = Math.max(this.schemaTable?.countRows?.() || settings.data?.length || 0, settings.minRows || 1);
+    const renderedRowHeight = this.elements.schemaContainer?.querySelector?.(".ht_master tbody tr")?.getBoundingClientRect?.().height || 0;
+    let rowsHeight = 0;
+    let maxRowHeight = Math.max(configuredRowHeight, renderedRowHeight);
+
+    for (let row = 0; row < rowCount; row += 1) {
+      const recognizedRowHeight = Number.parseFloat(this.schemaTable?.getRowHeight?.(row)) || configuredRowHeight;
+      const rowHeight = Math.max(recognizedRowHeight, renderedRowHeight);
+      rowsHeight += rowHeight;
+      maxRowHeight = Math.max(maxRowHeight, rowHeight);
+    }
+
+    const renderedHeaderHeight =
+      this.elements.schemaContainer?.querySelector?.(".ht_clone_top thead")?.getBoundingClientRect?.().height || 0;
+    const configuredHeaderHeight = Number.parseFloat(settings.columnHeaderHeight) || configuredRowHeight;
+    const headerHeight = Math.max(configuredHeaderHeight, renderedHeaderHeight, maxRowHeight);
+    const borderAllowance = 2;
+
+    return { contentHeight: rowsHeight + headerHeight + borderAllowance, headerHeight, rowCount, rowsHeight };
   }
 
   syncSchemaTableLayout() {
@@ -923,12 +943,7 @@ export class QuickQueryUI {
 
       const styles = getComputedStyle(schemaContainer);
       const settings = this.schemaTable.getSettings?.() || {};
-      const rowHeight = toPx(settings.rowHeights) || 20;
-      const headerHeight = toPx(settings.columnHeaderHeight) || rowHeight;
-      const rows = Math.max(this.schemaTable.countRows?.() || 0, settings.minRows || 1);
-      const tableBorderAllowance = 2;
-
-      const contentHeight = rows * rowHeight + headerHeight + tableBorderAllowance;
+      const { contentHeight } = this.getSchemaTableContentMetrics();
       const viewportHeight = toPx(settings.height);
       const renderedHeight = viewportHeight ? Math.min(contentHeight, viewportHeight) : contentHeight;
 

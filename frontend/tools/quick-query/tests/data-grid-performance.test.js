@@ -116,6 +116,17 @@ describe("Quick Query data-grid performance", () => {
     expect(updateSettings).not.toHaveBeenCalledWith({ height: "auto" });
   });
 
+  it("keeps every row fully visible when rendered rows are taller than the configured height", () => {
+    const { ui } = createUi();
+    ui.schemaTable = {
+      countRows: () => 2,
+      getRowHeight: () => 24,
+      getSettings: () => ({ minRows: 1, rowHeights: 20, columnHeaderHeight: 20 }),
+    };
+
+    expect(ui.getSchemaTableViewportHeight()).toBe(74);
+  });
+
   it("uses all remaining viewport height without imposing a small maximum", () => {
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 1200 });
     const { ui } = createUi();
