@@ -291,6 +291,7 @@ export function buildReleaseTourModel(payload = {}) {
   const notes = normalizeTextList(release.notes);
   const customSlides = release.slides || [];
   const tour = release.tour === undefined ? DEFAULT_TOUR_STEPS.map((step) => ({ ...step })) : release.tour;
+  const tips = release.tips || [];
 
   const slides = [
     {
@@ -307,7 +308,21 @@ export function buildReleaseTourModel(payload = {}) {
       links: release.links,
     },
     ...customSlides,
-    {
+  ];
+
+  if (tips.length > 0) {
+    slides.push({
+      kind: "tips",
+      title: "See the new features in place",
+      body: "Continue into a guided walkthrough. AD Tools will open each relevant screen and point to the updated control for you.",
+      bullets: [
+        `${tips.length} feature ${tips.length === 1 ? "tip" : "tips"}`,
+        "You can skip at any time and revisit unfinished tips later.",
+      ],
+      action: null,
+    });
+  } else {
+    slides.push({
       kind: "next",
       title: isDesktop ? "Pick up where you left off" : "Keep working in the browser",
       body: isDesktop
@@ -322,10 +337,10 @@ export function buildReleaseTourModel(payload = {}) {
       action: isDesktop
         ? { label: "Open update settings", route: "settings", focus: "update.autoCheck" }
         : { label: "Explore tools", route: "home", focus: "" },
-    },
-  ];
+    });
+  }
 
-  if (tour.length > 0) {
+  if (tour.length > 0 && tips.length === 0) {
     slides.push({
       kind: "tour",
       title: "A quick look around",
@@ -503,7 +518,14 @@ export class ReleaseTour {
     backButton.addEventListener("click", () => this.goBack());
     navigation.appendChild(backButton);
 
-    const nextLabel = slide.kind === "tour" ? "Start quick tour" : this.slideIndex === this.model.slides.length - 1 ? "Done" : "Next";
+    const nextLabel =
+      slide.kind === "tour"
+        ? "Start quick tour"
+        : slide.kind === "tips"
+          ? "Start feature tour"
+          : this.slideIndex === this.model.slides.length - 1
+            ? "Done"
+            : "Next";
     const nextButton = createElement("button", "btn btn-primary release-tour-next", nextLabel);
     nextButton.type = "button";
     nextButton.addEventListener("click", () => this.goNext());
@@ -529,6 +551,10 @@ export class ReleaseTour {
     }
     if (slide?.kind === "tour" && this.model.tour.length > 0) {
       this.startTour();
+      return;
+    }
+    if (slide?.kind === "tips" && this.model.tips.length > 0) {
+      this.finish(null, { startTips: true });
       return;
     }
     this.finish();
@@ -713,7 +739,7 @@ export class ReleaseTour {
     }
   }
 
-  finish(action) {
+  finish(action, result = {}) {
     if (!this.preview) markReleaseSeen(this.model.releaseId);
     document.removeEventListener("keydown", this.handleKeyDown, true);
     if (this.repositionTour) {
@@ -742,7 +768,7 @@ export class ReleaseTour {
       } catch (_) {}
     }
     try {
-      this.onFinish?.();
+      this.onFinish?.(result);
     } catch (_) {}
   }
 }
@@ -768,10 +794,11 @@ function markTipOpened(releaseId, tipId) {
 }
 
 export class ReleaseTips {
-  constructor({ release, eventBus, getRoute, preview = false } = {}) {
+  constructor({ release, eventBus, getRoute, onNavigate, preview = false } = {}) {
     this.release = normalizeReleasePayload(release || {});
     this.eventBus = eventBus || null;
     this.getRoute = typeof getRoute === "function" ? getRoute : () => window.location.hash.slice(1).split("/")[0] || "home";
+    this.onNavigate = typeof onNavigate === "function" ? onNavigate : null;
     this.preview = preview;
     this.activeTip = null;
     this.layerEl = null;
@@ -781,16 +808,77 @@ export class ReleaseTips {
     this.pendingTimer = null;
     this.unsubscribe = null;
     this.started = false;
+    this.guided = false;
+    this.guidedIndex = 0;
+    this.guidedTip = null;
+    this.guidedOpenAttempts = 0;
+    this.onGuidedComplete = null;
     this.handleKeyDown = this.handleKeyDown.bind(this);
   }
 
-  start() {
+  activate() {
     if (this.started || this.release.tips.length === 0) return false;
     this.started = true;
-    const unsubscribe = this.eventBus?.on?.("page:changed", () => this.schedule());
+    const unsubscribe = this.eventBus?.on?.("page:changed", () => this.schedule(this.guided ? 180 : 120));
     if (typeof unsubscribe === "function") this.unsubscribe = unsubscribe;
-    this.schedule();
     return true;
+  }
+
+  start() {
+    const activated = this.activate();
+    if (!this.started) return false;
+    this.schedule();
+    return activated;
+  }
+
+  startGuided({ onComplete } = {}) {
+    this.activate();
+    if (!this.started) return false;
+    if (this.pendingTimer) window.clearTimeout(this.pendingTimer);
+    this.pendingTimer = null;
+    this.guided = true;
+    this.guidedIndex = 0;
+    this.guidedTip = null;
+    this.guidedOpenAttempts = 0;
+    this.onGuidedComplete = typeof onComplete === "function" ? onComplete : null;
+    this.prepareGuidedTip();
+    return true;
+  }
+
+  prepareGuidedTip() {
+    while (
+      this.guidedIndex < this.release.tips.length &&
+      !this.preview &&
+      hasOpenedTip(this.release.releaseId, this.release.tips[this.guidedIndex].id)
+    ) {
+      this.guidedIndex += 1;
+    }
+    if (this.guidedIndex >= this.release.tips.length) {
+      this.finishGuided();
+      return;
+    }
+
+    this.guidedTip = this.release.tips[this.guidedIndex];
+    this.guidedOpenAttempts = 0;
+    const currentRoute = safeString(this.getRoute()) || "home";
+    if (currentRoute !== this.guidedTip.route) {
+      try {
+        this.onNavigate?.({ route: this.guidedTip.route });
+      } catch (_) {}
+    }
+    this.schedule(180);
+  }
+
+  finishGuided() {
+    this.guided = false;
+    this.guidedTip = null;
+    this.guidedOpenAttempts = 0;
+    const callback = this.onGuidedComplete;
+    this.onGuidedComplete = null;
+    try {
+      callback?.();
+    } catch (_) {}
+    this.schedule(300);
   }
 
   schedule(delay = 120) {
@@ -811,9 +899,11 @@ export class ReleaseTips {
       return false;
     }
     const route = safeString(this.getRoute()) || "home";
-    const candidates = this.release.tips.filter(
-      (item) => item.route === route && (this.preview || !hasOpenedTip(this.release.releaseId, item.id)),
-    );
+    const candidates = this.guided
+      ? this.guidedTip?.route === route
+        ? [this.guidedTip]
+        : []
+      : this.release.tips.filter((item) => item.route === route && (this.preview || !hasOpenedTip(this.release.releaseId, item.id)));
     let tip = null;
     let target = null;
     for (const candidate of candidates) {
@@ -843,7 +933,17 @@ export class ReleaseTips {
       target = candidateTarget;
       break;
     }
-    if (!tip || !target) return false;
+    if (!tip || !target) {
+      if (this.guided && this.guidedTip?.route === route) {
+        this.guidedOpenAttempts += 1;
+        if (this.guidedOpenAttempts < 3) this.schedule(160);
+        else {
+          this.guidedIndex += 1;
+          this.prepareGuidedTip();
+        }
+      }
+      return false;
+    }
 
     this.activeTip = tip;
     this.layerEl = createElement("div", "release-tour-layer release-feature-tip-layer");
@@ -863,11 +963,32 @@ export class ReleaseTips {
     this.tooltipEl.appendChild(body);
 
     const footer = createElement("div", "release-tour-tooltip-footer");
-    footer.appendChild(createElement("span", "release-tour-tooltip-count", `New in ${this.release.version || "this release"}`));
-    const done = createElement("button", "btn btn-primary btn-sm", "Got it");
+    footer.appendChild(
+      createElement(
+        "span",
+        "release-tour-tooltip-count",
+        this.guided ? `Tip ${this.guidedIndex + 1} of ${this.release.tips.length}` : `New in ${this.release.version || "this release"}`,
+      ),
+    );
+    const actions = createElement("div", "release-tour-tooltip-actions");
+    if (this.guided) {
+      const skip = createElement("button", "btn btn-ghost btn-sm", "Skip tour");
+      skip.type = "button";
+      skip.addEventListener("click", () => {
+        this.close();
+        this.finishGuided();
+      });
+      actions.appendChild(skip);
+    }
+    const done = createElement(
+      "button",
+      "btn btn-primary btn-sm",
+      this.guided ? (this.guidedIndex === this.release.tips.length - 1 ? "Done" : "Next") : "Got it",
+    );
     done.type = "button";
     done.addEventListener("click", () => this.close({ showNext: true }));
-    footer.appendChild(done);
+    actions.appendChild(done);
+    footer.appendChild(actions);
     this.tooltipEl.appendChild(footer);
     this.tooltipEl.setAttribute("aria-labelledby", title.id);
     this.tooltipEl.setAttribute("aria-describedby", body.id);
@@ -925,6 +1046,7 @@ export class ReleaseTips {
     event.preventDefault();
     event.stopPropagation();
     this.close();
+    if (this.guided) this.finishGuided();
   }
 
   close({ showNext = false } = {}) {
@@ -939,7 +1061,10 @@ export class ReleaseTips {
     this.tooltipEl = null;
     this.activeTip = null;
     this.reposition = null;
-    if (showNext) this.schedule(220);
+    if (showNext && this.guided) {
+      this.guidedIndex += 1;
+      this.prepareGuidedTip();
+    } else if (showNext) this.schedule(220);
   }
 
   destroy() {
@@ -948,6 +1073,9 @@ export class ReleaseTips {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.started = false;
+    this.guided = false;
+    this.guidedTip = null;
+    this.onGuidedComplete = null;
     this.close();
   }
 }

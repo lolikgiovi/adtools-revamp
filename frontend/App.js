@@ -156,6 +156,7 @@ class App {
       release: releaseContent,
       eventBus: this.eventBus,
       getRoute: () => this.router?.getCurrentRoute?.() || window.location.hash.slice(1).split("/")[0] || "home",
+      onNavigate: (action) => this.handleReleaseTourAction(action),
     });
 
     // Show a release tour only after a new build has loaded successfully.
@@ -820,10 +821,21 @@ class App {
       surface: isTauri() ? "desktop" : "web",
       releaseId: `${releaseContent.releaseId || "dev-release"}:preview`,
     };
+    const previewTips = new ReleaseTips({
+      release: previewRelease,
+      eventBus: this.eventBus,
+      getRoute: () => this.router?.getCurrentRoute?.() || window.location.hash.slice(1).split("/")[0] || "home",
+      onNavigate: (action) => this.handleReleaseTourAction(action),
+      preview: true,
+    });
     const tour = new ReleaseTour({
       release: previewRelease,
       preview: true,
       onNavigate: (action) => this.handleReleaseTourAction(action),
+      onFinish: ({ startTips } = {}) => {
+        if (startTips) previewTips.startGuided({ onComplete: () => previewTips.destroy() });
+        else previewTips.destroy();
+      },
     });
     if (tour.open()) {
       this._releaseTour = tour;
@@ -920,7 +932,10 @@ class App {
       const tour = new ReleaseTour({
         release,
         onNavigate: (action) => this.handleReleaseTourAction(action),
-        onFinish: () => this._releaseTips?.start(),
+        onFinish: ({ startTips } = {}) => {
+          if (startTips) this._releaseTips?.startGuided();
+          else this._releaseTips?.start();
+        },
       });
       if (tour.open()) this._releaseTour = tour;
       else this._releaseTips?.start();

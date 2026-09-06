@@ -5,7 +5,7 @@
   "title": "Faster everyday workflows",
   "summary": "AD Tools 1.3.6 makes saved work easier to reach, refreshes two core tools, and uses fewer resources in the background.",
   "notes": [
-    "Quick Query has a roomier data sheet, clearer wrap controls, safer database pasting, and improved tab handling.",
+    "Quick Query preserves JSON and HTML content pasted from DBeaver or SQL Developer, and can expand or collapse the Data Sheet.",
     "Pin favorite tools in the sidebar so they stay at the top.",
     "Press ⌘K to search tools, pages, and saved Quick Query tables.",
     "Home now shows your usage and includes a feedback field.",
@@ -14,14 +14,12 @@
   ],
   "slides": [
     {
-      "title": "Quick Query, with more working room",
-      "body": "Work with large schemas and data sets more comfortably, with a data sheet that sizes predictably and can expand when you need the space.",
+      "title": "Quick Query: safer paste, flexible Data Sheet",
+      "body": "Move database results into Quick Query without breaking structured values, then reshape the Data Sheet around the work in front of you.",
       "bullets": [
-        "Paste copied database rows with better handling for malformed TSV data.",
-        "Use clearer wrap controls for long SQL and cell values.",
-        "Keep multiple tasks organized with improved Quick Query tabs."
-      ],
-      "action": { "label": "Open Quick Query", "route": "quick-query" }
+        "Paste rows from DBeaver or SQL Developer without losing quotes inside JSON or HTML values.",
+        "Expand or collapse the Data Sheet to match the task."
+      ]
     },
     {
       "title": "Your shortcuts, wherever you are",
@@ -35,8 +33,7 @@
         "Save friendly labels for image identifiers you use often.",
         "Filter results, cancel a run, and retry timed-out checks.",
         "Configure CDN environment URLs from Settings."
-      ],
-      "action": { "label": "Open Check Image", "route": "check-image" }
+      ]
     }
   ],
   "tour": [],
@@ -44,10 +41,10 @@
     {
       "id": "pin-tools",
       "route": "home",
-      "target": ".sidebar-content .sidebar-menu-item[data-tool]",
-      "placement": "right",
+      "target": ".sidebar-trigger",
+      "placement": "bottom",
       "title": "Pin a favorite tool",
-      "body": "Right-click any tool in the sidebar and choose Pin. Pinned tools stay together at the top; repeat the action to unpin one."
+      "body": "Open the sidebar, then right-click any tool and choose Pin. Pinned tools stay together at the top; repeat the action to unpin one."
     },
     {
       "id": "global-search",
@@ -66,12 +63,20 @@
       "body": "Choose a tool if relevant, describe what should be better, and send your note without leaving Home."
     },
     {
-      "id": "quick-query-data-sheet",
+      "id": "quick-query-safe-paste",
       "route": "quick-query",
-      "target": ".quick-query-data-controls",
+      "target": "#spreadsheet-data",
       "placement": "top",
-      "title": "Shape the Quick Query data sheet",
-      "body": "Use Wrap Text for long values and Expand Data Sheet when you need more room. You can also paste copied database rows directly into the grid."
+      "title": "Paste JSON and HTML safely",
+      "body": "Copy rows from DBeaver or SQL Developer, then paste them directly into the Data Sheet. Quotes and multiline content inside JSON or HTML values are preserved."
+    },
+    {
+      "id": "quick-query-expand-data-sheet",
+      "route": "quick-query",
+      "target": "#toggleDataMaximize",
+      "placement": "bottom",
+      "title": "Expand or collapse the Data Sheet",
+      "body": "Select Expand Data Sheet to use the available workspace for table data. Select it again to return to the split Query and Data Sheet view."
     },
     {
       "id": "check-image-references",

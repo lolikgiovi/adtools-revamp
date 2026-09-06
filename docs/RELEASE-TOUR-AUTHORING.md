@@ -11,7 +11,7 @@ Use this walkthrough when preparing the post-update “What’s new” experienc
 - Web embedding: `npm run build` writes the content into `frontend/public/web-build.json`
 - Desktop embedding: `npm run release:build` copies the content into the generated updater manifest; `npm run release:upload` publishes that manifest
 
-The runtime creates an opening release slide, any authored feature slides, and a short “what you can do next” slide. If `tour` contains steps, it adds a live tooltip tour after the slides. Route-aware `tips` can teach a feature when the user reaches it; each tip is shown once per `releaseId`. The announcement is shown once per `releaseId` after a successful update or newly detected build.
+The runtime creates an opening release slide and any authored feature slides. If `tips` are present, the final slide offers a guided continuation that automatically opens each relevant route and highlights the feature in place. Skipped or unavailable tips remain eligible to appear contextually when the user reaches that route later, and each tip is remembered independently once opened. The legacy `tour` field remains available for startup-visible steps when no route-aware tips are authored. The announcement is shown once per `releaseId` after a successful update or newly detected build.
 
 ## Agent walkthrough
 
@@ -47,7 +47,7 @@ Edit `frontend/config/release-content.json`. Change `releaseId` for each intenti
 
 Add up to three `tour` steps only when the relevant UI is visible immediately after startup. Use stable selectors, keep each tooltip focused on one task, and verify the selector against the current markup. Set `tour: []` when there is no useful guided action; this disables the default search/sidebar tips for that release.
 
-Use `tips` for contextual guidance that belongs on a particular route. Each tip needs a stable lowercase `id`, an exact `route`, a visible `target`, a placement, a short title, and one actionable sentence. A tip is remembered as soon as it opens and will not be shown again for that `releaseId`. Keep the list to eight or fewer and omit tips for technical changes with no user action.
+Use `tips` for guidance that belongs on a particular route. After the slides, the app navigates through these tips in authored order; unfinished tips can still appear contextually later. Each tip needs a stable lowercase `id`, an exact `route`, a visible `target`, a placement, a short title, and one actionable sentence. A tip is remembered as soon as it opens and will not be shown again for that `releaseId`. Keep the list to eight or fewer and omit tips for technical changes with no user action.
 
 Keep the content direct and calm. Do not add internal ticket IDs, private URLs, secrets, unsupported promises, or decorative copy that does not help the user understand the update.
 
@@ -112,7 +112,7 @@ localStorage.setItem(
 location.reload();
 ```
 
-Check the opening slide, custom slide, Next/Back, Skip tour, Escape, keyboard focus, external link behavior, and the live tooltip. To replay it, remove the `releaseTour.seen.manual-release-test` key and set the pending payload again.
+Check the opening slide, custom slide, Next/Back, Skip tour, Escape, keyboard focus, external link behavior, automatic route changes, and each live tooltip. To replay it, remove the `releaseTour.seen.manual-release-test` key and the matching `releaseTip.opened.*` keys, then set the pending payload again.
 
 ## Release triggers
 

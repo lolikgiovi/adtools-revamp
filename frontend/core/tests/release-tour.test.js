@@ -63,6 +63,55 @@ describe("release tour", () => {
     expect(desktopModel.slides[1].action).toMatchObject({ route: "settings", focus: "update.autoCheck" });
   });
 
+  it("uses route-aware tips as the guided continuation of feature slides", () => {
+    const model = buildReleaseTourModel({
+      releaseId: "release-1.3.6",
+      slides: [{ title: "Quick Query", body: "See what changed." }],
+      tour: [],
+      tips: [
+        {
+          id: "quick-query-safe-paste",
+          route: "quick-query",
+          target: "#spreadsheet-data",
+          title: "Paste safely",
+          body: "JSON quotes are preserved.",
+        },
+      ],
+    });
+
+    expect(model.slides.map((slide) => slide.kind)).toEqual(["release", "custom", "tips"]);
+    expect(model.slides.at(-1)).toMatchObject({ title: "See the new features in place" });
+  });
+
+  it("starts feature tips from the final announcement step", () => {
+    let finishResult = null;
+    const tour = new ReleaseTour({
+      preview: true,
+      release: {
+        releaseId: "release-guided-start",
+        tour: [],
+        tips: [
+          {
+            id: "search",
+            route: "home",
+            target: ".header-search",
+            title: "Search",
+            body: "Press Command K.",
+          },
+        ],
+      },
+      onFinish: (result) => {
+        finishResult = result;
+      },
+    });
+
+    expect(tour.open()).toBe(true);
+    tour.slideIndex = tour.model.slides.length - 1;
+    tour.renderSlide();
+    document.querySelector(".release-tour-next").click();
+    expect(finishResult).toEqual({ startTips: true });
+  });
+
   it("persists a pending release exactly once", () => {
     expect(markPendingRelease({ surface: "web", build: "20260905120000" })).toBe(true);
 
@@ -168,6 +217,56 @@ describe("release tour", () => {
     expect(document.querySelector(".release-feature-tip")?.textContent).not.toContain("Hidden tip");
     tips.close();
     expect(tips.openForCurrentRoute()).toBe(false);
+    tips.destroy();
+  });
+
+  it("navigates through feature tips as one guided flow", () => {
+    document.body.innerHTML = '<div id="spreadsheet-data"></div><button id="savedReferencesButton">Saved references</button>';
+    document.querySelectorAll("#spreadsheet-data, #savedReferencesButton").forEach((element) => {
+      element.getBoundingClientRect = () => ({ width: 180, height: 40, top: 20, right: 200, bottom: 60, left: 20 });
+    });
+    let route = "home";
+    const navigated = [];
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "release-guided",
+        tips: [
+          {
+            id: "safe-paste",
+            route: "quick-query",
+            target: "#spreadsheet-data",
+            title: "Paste safely",
+            body: "Preserve JSON quotes.",
+          },
+          {
+            id: "saved-references",
+            route: "check-image",
+            target: "#savedReferencesButton",
+            title: "Save references",
+            body: "Reuse identifiers.",
+          },
+        ],
+      },
+      getRoute: () => route,
+      onNavigate: ({ route: nextRoute }) => {
+        route = nextRoute;
+        navigated.push(nextRoute);
+      },
+    });
+
+    expect(tips.startGuided()).toBe(true);
+    expect(navigated).toEqual(["quick-query"]);
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Tip 1 of 2");
+
+    document.querySelector(".release-feature-tip .btn-primary").click();
+    expect(navigated).toEqual(["quick-query", "check-image"]);
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Tip 2 of 2");
+    expect(document.querySelector(".release-feature-tip .btn-primary")?.textContent).toBe("Done");
+
+    document.querySelector(".release-feature-tip .btn-primary").click();
+    expect(tips.guided).toBe(false);
     tips.destroy();
   });
 
