@@ -29,20 +29,29 @@ vi.mock("../../../core/MonacoOracle.js", () => ({
 import { QuickQueryUI } from "../main.js";
 
 function createUi() {
+  const toolContainer = document.createElement("div");
+  const contentA = document.createElement("div");
   const dataContainer = document.createElement("div");
   const schemaContainer = document.createElement("div");
   const wrapToggle = document.createElement("input");
+  const maximizeButton = document.createElement("button");
+  toolContainer.className = "quick-query-tool-container";
+  contentA.className = "content-a";
   dataContainer.id = "spreadsheet-data";
   schemaContainer.id = "spreadsheet-schema";
   wrapToggle.id = "toggleWrapText";
+  maximizeButton.id = "toggleDataMaximize";
   wrapToggle.type = "checkbox";
-  dataContainer.getBoundingClientRect = () => ({ top: 500 });
-  document.body.append(schemaContainer, wrapToggle, dataContainer);
+  dataContainer.getBoundingClientRect = () => ({ top: toolContainer.classList.contains("data-maximized") ? 120 : 500 });
+  toolContainer.append(contentA, schemaContainer, wrapToggle, maximizeButton, dataContainer);
+  document.body.append(toolContainer);
 
   const ui = Object.create(QuickQueryUI.prototype);
-  ui.elements = { dataContainer, schemaContainer, toggleWrapText: wrapToggle };
+  ui.elements = { toolContainer, contentA, dataContainer, schemaContainer, toggleWrapText: wrapToggle, toggleDataMaximize: maximizeButton };
   ui.scheduleSchemaLayoutRefresh = vi.fn();
-  return { ui, dataContainer, wrapToggle };
+  ui.scheduleDataTableLayoutRefresh = vi.fn(() => ui.syncDataTableLayout());
+  ui.isDataMaximized = false;
+  return { ui, dataContainer, maximizeButton, toolContainer, wrapToggle };
 }
 
 describe("Quick Query data-grid performance", () => {
@@ -63,6 +72,15 @@ describe("Quick Query data-grid performance", () => {
     expect(dataTable.settings.rowHeights).toBe(20);
   });
 
+  it("uses all remaining viewport height without imposing a small maximum", () => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 1200 });
+    const { ui } = createUi();
+
+    ui.initializeSpreadsheets();
+
+    expect(handsontableInstances[1].settings.height).toBe(676);
+  });
+
   it("enables automatic row measurement only while wrapping is on", () => {
     const { ui, dataContainer, wrapToggle } = createUi();
     ui.initializeSpreadsheets();
@@ -78,5 +96,24 @@ describe("Quick Query data-grid performance", () => {
 
     expect(dataContainer.classList.contains("wrap-text-on")).toBe(false);
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ autoRowSize: false, rowHeights: 20 }));
+  });
+
+  it("maximizes the data workspace and restores the split workspace", () => {
+    const { ui, maximizeButton, toolContainer } = createUi();
+    ui.initializeSpreadsheets();
+
+    ui.toggleDataMaximize();
+
+    expect(toolContainer.classList.contains("data-maximized")).toBe(true);
+    expect(maximizeButton.textContent).toBe("Restore Split View");
+    expect(maximizeButton.getAttribute("aria-pressed")).toBe("true");
+    expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 656 }));
+
+    ui.handleDataMaximizeKeydown({ key: "Escape" });
+
+    expect(toolContainer.classList.contains("data-maximized")).toBe(false);
+    expect(maximizeButton.textContent).toBe("Maximize Data");
+    expect(maximizeButton.getAttribute("aria-pressed")).toBe("false");
+    expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 276 }));
   });
 });

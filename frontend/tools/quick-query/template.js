@@ -112,6 +112,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
                 <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
+                <button id="toggleDataMaximize" class="btn btn-outline btn-sm qq-data-maximize" type="button" aria-pressed="false"
+                    title="Use the available workspace for the data sheet">Maximize Data</button>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
                 <label class="switch sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
                     <input type="checkbox" id="defaultSysdate" checked />

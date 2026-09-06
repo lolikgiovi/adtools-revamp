@@ -253,6 +253,21 @@
   -ms-overflow-style: none;
 }
 
+.quick-query-tool-container.data-maximized .content-a {
+  display: none;
+}
+
+.quick-query-tool-container.data-maximized .content-b {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.qq-data-maximize[aria-pressed="true"] {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
 #spreadsheet-schema {
   flex: 0 0 auto;
   min-height: 0;

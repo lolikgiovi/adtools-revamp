@@ -31,7 +31,6 @@ import "./styles.css";
 let jsZipPromise = null;
 let minifyWorkerPromise = null;
 const DATA_TABLE_MIN_HEIGHT = 200;
-const DATA_TABLE_MAX_HEIGHT = 480;
 const DATA_TABLE_BOTTOM_MARGIN = 24;
 const DATA_TABLE_ROW_HEIGHT = 20;
 
@@ -140,6 +139,8 @@ export class QuickQueryUI {
     this._dataTableLayoutScheduled = false;
     this._cancelScheduledDataTableLayout = null;
     this._handleDataTableViewportResize = () => this.scheduleDataTableLayoutRefresh();
+    this.isDataMaximized = false;
+    this._handleDataMaximizeKeydown = (event) => this.handleDataMaximizeKeydown(event);
     this._autosaveLifecycleListenersBound = false;
     this._handleAutosavePageHide = () => {
       void this.flushPendingDataAutosave();
@@ -263,6 +264,7 @@ export class QuickQueryUI {
       tabStrip: document.getElementById("quickQueryTabStrip"),
       tabList: document.getElementById("quickQueryTabList"),
       addTabButton: document.getElementById("quickQueryAddTab"),
+      toolContainer: document.querySelector(".quick-query-tool-container"),
 
       // Input elements
       tableNameInput: document.getElementById("tableNameInput"),
@@ -277,6 +279,7 @@ export class QuickQueryUI {
       // Schema editor elements
       schemaContainer: document.getElementById("spreadsheet-schema"),
       dataContainer: document.getElementById("spreadsheet-data"),
+      toggleDataMaximize: document.getElementById("toggleDataMaximize"),
       contentA: document.querySelector(".content-a"),
       leftPanel: document.querySelector(".quick-query-left-panel"),
       rightPanel: document.querySelector(".quick-query-right-panel"),
@@ -444,6 +447,9 @@ export class QuickQueryUI {
       },
       toggleWrapText: {
         change: () => this.handleToggleWrapText(),
+      },
+      toggleDataMaximize: {
+        click: () => this.toggleDataMaximize(),
       },
       splitQuery: {
         click: () => this.handleOpenSplitOptions(),
@@ -679,6 +685,7 @@ export class QuickQueryUI {
 
     document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
+    document.addEventListener("keydown", this._handleDataMaximizeKeydown);
   }
 
   initializeEditor() {
@@ -775,7 +782,7 @@ export class QuickQueryUI {
     const availableHeight =
       Number.isFinite(containerTop) && containerTop > 0 ? viewportHeight - containerTop - DATA_TABLE_BOTTOM_MARGIN : fallbackHeight;
 
-    return Math.max(DATA_TABLE_MIN_HEIGHT, Math.min(DATA_TABLE_MAX_HEIGHT, Math.floor(availableHeight)));
+    return Math.max(DATA_TABLE_MIN_HEIGHT, Math.floor(availableHeight));
   }
 
   syncDataTableLayout() {
@@ -1519,6 +1526,7 @@ export class QuickQueryUI {
     this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
+    document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
     if (this._queryTypeDocumentClick) {
       document.removeEventListener("click", this._queryTypeDocumentClick);
       this._queryTypeDocumentClick = null;
@@ -2466,6 +2474,30 @@ export class QuickQueryUI {
     if (!checkbox || !container) return;
 
     this.syncDataTableLayout();
+  }
+
+  toggleDataMaximize() {
+    this.setDataMaximized(!this.isDataMaximized);
+  }
+
+  setDataMaximized(maximized) {
+    const toolContainer = this.elements.toolContainer || this.container?.querySelector?.(".quick-query-tool-container");
+    const button = this.elements.toggleDataMaximize || document.getElementById("toggleDataMaximize");
+    if (!toolContainer || !button) return;
+
+    this.isDataMaximized = Boolean(maximized);
+    toolContainer.classList.toggle("data-maximized", this.isDataMaximized);
+    button.textContent = this.isDataMaximized ? "Restore Split View" : "Maximize Data";
+    button.setAttribute("aria-pressed", String(this.isDataMaximized));
+    button.title = this.isDataMaximized ? "Restore schema and query panels" : "Use the available workspace for the data sheet";
+    this.scheduleDataTableLayoutRefresh();
+  }
+
+  handleDataMaximizeKeydown(event) {
+    if (event.key !== "Escape" || !this.isDataMaximized) return;
+    event.preventDefault?.();
+    this.setDataMaximized(false);
+    this.elements.toggleDataMaximize?.focus?.();
   }
 
   // ===== Split Query Feature =====
