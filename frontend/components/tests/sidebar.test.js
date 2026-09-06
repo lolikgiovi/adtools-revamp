@@ -85,21 +85,17 @@ describe("Sidebar pinning", () => {
     });
   });
 
-  it("shows the pin education at most twice", async () => {
+  it("shows the pin education only once", async () => {
     const sidebar = createSidebar({ pinEducationShown: 0 });
     await sidebar.renderTools();
+    sidebar.maybeShowPinEducation();
 
     expect(document.querySelector(".sidebar-pin-education").textContent).toContain("Right-click a tool to pin or unpin it");
     expect(localStorage.getItem(Sidebar.PIN_EDUCATION_STORAGE_KEY)).toBe("1");
 
     sidebar.hidePinEducation();
     sidebar.maybeShowPinEducation();
-    expect(document.querySelector(".sidebar-pin-education")).not.toBeNull();
-    expect(localStorage.getItem(Sidebar.PIN_EDUCATION_STORAGE_KEY)).toBe("2");
-
-    sidebar.hidePinEducation();
-    sidebar.maybeShowPinEducation();
     expect(document.querySelector(".sidebar-pin-education")).toBeNull();
-    expect(localStorage.getItem(Sidebar.PIN_EDUCATION_STORAGE_KEY)).toBe("2");
+    expect(localStorage.getItem(Sidebar.PIN_EDUCATION_STORAGE_KEY)).toBe("1");
   });
 });

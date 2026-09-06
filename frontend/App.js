@@ -17,7 +17,7 @@ import { getUsageAccessState, normalizeUsageScope } from "./core/UsageOverviewMo
 import { ErrorMonitor } from "./core/ErrorMonitor.js";
 import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
-import { ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
+import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 import releaseContent from "./config/release-content.json";
 
@@ -64,6 +64,7 @@ class App {
     this._updateTotal = 0;
     this._updateResult = null;
     this._releaseTour = null;
+    this._releaseTips = null;
     this._releaseTourPreviewButton = null;
     this._previousAppVersion = null;
     this._previousWebBuildId = null;
@@ -151,6 +152,11 @@ class App {
 
     this.bindGlobalEvents();
     this.setupDevReleaseTourPreview();
+    this._releaseTips = new ReleaseTips({
+      release: releaseContent,
+      eventBus: this.eventBus,
+      getRoute: () => this.router?.getCurrentRoute?.() || window.location.hash.slice(1).split("/")[0] || "home",
+    });
 
     // Show a release tour only after a new build has loaded successfully.
     const releaseTourInit = this.initializeReleaseTour(this._previousAppVersion, this._previousWebBuildId);
@@ -900,20 +906,27 @@ class App {
                 action: buildInfo?.action,
                 slides: buildInfo?.slides,
                 tour: buildInfo?.tour,
+                tips: buildInfo?.tips,
               };
             }
           }
         }
       }
 
-      if (!release) return;
+      if (!release) {
+        this._releaseTips?.start();
+        return;
+      }
       const tour = new ReleaseTour({
         release,
         onNavigate: (action) => this.handleReleaseTourAction(action),
+        onFinish: () => this._releaseTips?.start(),
       });
       if (tour.open()) this._releaseTour = tour;
+      else this._releaseTips?.start();
     } catch (err) {
       console.warn("Release tour initialization failed:", err);
+      this._releaseTips?.start();
     }
   }
 

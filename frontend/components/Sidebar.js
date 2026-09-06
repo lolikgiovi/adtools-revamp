@@ -7,7 +7,7 @@ import { UsageTracker } from "../core/UsageTracker.js";
 class Sidebar {
   static PINNED_TOOLS_STORAGE_KEY = "sidebar.pinnedTools.v1";
   static PIN_EDUCATION_STORAGE_KEY = "sidebar.pinEducationShown.v1";
-  static MAX_PIN_EDUCATION_SHOWN = 2;
+  static MAX_PIN_EDUCATION_SHOWN = 1;
 
   constructor(config = {}) {
     this.eventBus = config.eventBus;
@@ -500,8 +500,6 @@ class Sidebar {
             : "";
       if (current) this.updateActiveItem(current);
     } catch (_) {}
-
-    this.maybeShowPinEducation();
   }
 
   async renderMenuGroups() {

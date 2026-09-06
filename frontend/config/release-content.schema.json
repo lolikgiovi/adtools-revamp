@@ -69,6 +69,12 @@
       "description": "Optional live UI tour. Use one to three steps and verify every target selector in the current app.",
       "items": { "$ref": "#/$defs/tourStep" },
       "maxItems": 3
+    },
+    "tips": {
+      "type": "array",
+      "description": "Contextual feature tips shown on their matching route. Each tip is remembered independently after it opens.",
+      "items": { "$ref": "#/$defs/featureTip" },
+      "maxItems": 8
     }
   },
   "$defs": {
@@ -142,6 +148,27 @@
           "minLength": 1,
           "description": "CSS selector for a visible element in the app."
         },
+        "placement": {
+          "type": "string",
+          "enum": ["top", "right", "bottom", "left"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 }
+      }
+    },
+    "featureTip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "route", "target", "title", "body"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+          "description": "Stable identity used to remember that this tip has opened."
+        },
+        "route": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
         "placement": {
           "type": "string",
           "enum": ["top", "right", "bottom", "left"]

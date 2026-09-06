@@ -101,6 +101,7 @@ class WebUpdateChecker {
           action: buildInfo?.action,
           slides: buildInfo?.slides,
           tour: buildInfo?.tour,
+          tips: buildInfo?.tips,
         });
         this.performReload(serverBuildId);
       } else {

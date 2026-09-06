@@ -45,6 +45,7 @@ const buildInfo = {
   action: releaseInfo.action || undefined,
   slides: Array.isArray(releaseInfo.slides) ? releaseInfo.slides : undefined,
   tour: Array.isArray(releaseInfo.tour) ? releaseInfo.tour : undefined,
+  tips: Array.isArray(releaseInfo.tips) ? releaseInfo.tips : undefined,
 };
 
 Object.keys(buildInfo).forEach((key) => {

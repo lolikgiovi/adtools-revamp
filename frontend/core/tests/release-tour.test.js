@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from "vitest";
-import { ReleaseTour, buildReleaseTourModel, markPendingRelease, normalizeReleasePayload, takePendingRelease } from "../ReleaseTour.js";
+import {
+  ReleaseTips,
+  ReleaseTour,
+  buildReleaseTourModel,
+  markPendingRelease,
+  normalizeReleasePayload,
+  takePendingRelease,
+} from "../ReleaseTour.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -93,6 +100,75 @@ describe("release tour", () => {
       ],
       action: { label: "Open search", route: "home", focus: "header-search" },
     });
+  });
+
+  it("normalizes route-aware feature tips", () => {
+    const release = normalizeReleasePayload({
+      releaseId: "release-1.3.6",
+      tips: [
+        {
+          id: "quick-query-data-sheet",
+          route: "quick-query",
+          target: ".quick-query-data-controls",
+          placement: "top",
+          title: "Shape the data sheet",
+          body: "Expand it when you need more room.",
+        },
+        { id: "incomplete", route: "home" },
+      ],
+    });
+
+    expect(release.tips).toEqual([
+      {
+        id: "quick-query-data-sheet",
+        route: "quick-query",
+        target: ".quick-query-data-controls",
+        placement: "top",
+        title: "Shape the data sheet",
+        body: "Expand it when you need more room.",
+      },
+    ]);
+  });
+
+  it("shows a contextual tip once after it has opened", () => {
+    document.body.innerHTML = '<aside class="hidden-sidebar"></aside><button class="header-search">Search</button>';
+    document.querySelector(".header-search").getBoundingClientRect = () => ({
+      width: 160,
+      height: 36,
+      top: 20,
+      right: 180,
+      bottom: 56,
+      left: 20,
+    });
+    const release = {
+      releaseId: "release-1.3.6",
+      version: "1.3.6",
+      tips: [
+        {
+          id: "hidden-tip",
+          route: "home",
+          target: ".hidden-sidebar",
+          title: "Hidden tip",
+          body: "This should wait until its target is visible.",
+        },
+        {
+          id: "global-search",
+          route: "home",
+          target: ".header-search",
+          title: "Search with Command K",
+          body: "Find saved Quick Query tables.",
+        },
+      ],
+    };
+    const tips = new ReleaseTips({ release, getRoute: () => "home" });
+
+    expect(tips.start()).toBe(true);
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Search with Command K");
+    expect(document.querySelector(".release-feature-tip")?.textContent).not.toContain("Hidden tip");
+    tips.close();
+    expect(tips.openForCurrentRoute()).toBe(false);
+    tips.destroy();
   });
 
   it("renders safe text and remembers a dismissed release", () => {

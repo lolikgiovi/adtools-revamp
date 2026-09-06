@@ -11,7 +11,7 @@ Use this walkthrough when preparing the post-update “What’s new” experienc
 - Web embedding: `npm run build` writes the content into `frontend/public/web-build.json`
 - Desktop embedding: `npm run release:build` copies the content into the generated updater manifest; `npm run release:upload` publishes that manifest
 
-The runtime creates an opening release slide, any authored feature slides, and a short “what you can do next” slide. If `tour` contains steps, it adds a live tooltip tour after the slides. The experience is shown once per `releaseId` after a successful update or newly detected build.
+The runtime creates an opening release slide, any authored feature slides, and a short “what you can do next” slide. If `tour` contains steps, it adds a live tooltip tour after the slides. Route-aware `tips` can teach a feature when the user reaches it; each tip is shown once per `releaseId`. The announcement is shown once per `releaseId` after a successful update or newly detected build.
 
 ## Agent walkthrough
 
@@ -46,6 +46,8 @@ Done when every local media reference exists, every image has useful alternative
 Edit `frontend/config/release-content.json`. Change `releaseId` for each intentional release story; keep it unchanged when revising the same story. Add up to three authored `slides`. Each slide needs a `title` and `body`, and may include `bullets`, `image`, `imageAlt`, `imageCaption`, `links`, and `action`.
 
 Add up to three `tour` steps only when the relevant UI is visible immediately after startup. Use stable selectors, keep each tooltip focused on one task, and verify the selector against the current markup. Set `tour: []` when there is no useful guided action; this disables the default search/sidebar tips for that release.
+
+Use `tips` for contextual guidance that belongs on a particular route. Each tip needs a stable lowercase `id`, an exact `route`, a visible `target`, a placement, a short title, and one actionable sentence. A tip is remembered as soon as it opens and will not be shown again for that `releaseId`. Keep the list to eight or fewer and omit tips for technical changes with no user action.
 
 Keep the content direct and calm. Do not add internal ticket IDs, private URLs, secrets, unsupported promises, or decorative copy that does not help the user understand the update.
 
@@ -168,9 +170,10 @@ The example is illustrative; replace its claims, route, selector, URL, and asset
 
 - [ ] `releaseId` identifies this release story and is not changed during unrelated edits.
 - [ ] Every claim is user-visible and verified.
-- [ ] There are no more than three authored slides and three tour steps.
+- [ ] There are no more than three authored slides, three tour steps, and eight contextual tips.
 - [ ] Local media is under `frontend/public/release-assets/` and has alt text.
 - [ ] Links have labels and use safe `https://`, route, or local asset references.
 - [ ] Tour selectors are stable and visible after startup.
+- [ ] Contextual tip routes and selectors exist, and tip IDs are unique within the release.
 - [ ] `npm run release:content:check` passes without warnings.
 - [ ] Web metadata and Desktop manifests are both expected to include the same content.

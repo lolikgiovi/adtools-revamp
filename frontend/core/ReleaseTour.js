@@ -1,5 +1,6 @@
 const PENDING_STORAGE_KEY = "releaseTour.pending";
 const SEEN_STORAGE_KEY_PREFIX = "releaseTour.seen.";
+const OPENED_TIP_STORAGE_KEY_PREFIX = "releaseTip.opened.";
 
 const DEFAULT_TOUR_STEPS = [
   {
@@ -127,6 +128,24 @@ function normalizeTourStep(step) {
   };
 }
 
+function normalizeFeatureTip(tip) {
+  if (!isRecord(tip)) return null;
+  const id = safeString(tip.id);
+  const route = safeString(tip.route);
+  const target = safeString(tip.target);
+  const title = safeString(tip.title);
+  const body = safeString(tip.body || tip.description);
+  if (!id || !route || !target || !title || !body) return null;
+  return {
+    id,
+    route,
+    target,
+    placement: safeString(tip.placement) || "bottom",
+    title,
+    body,
+  };
+}
+
 function releaseSource(payload = {}) {
   const manifest = isRecord(payload.manifest) ? payload.manifest : {};
   const nestedRelease = isRecord(payload.release) ? payload.release : {};
@@ -143,6 +162,7 @@ export function normalizeReleasePayload(payload = {}) {
   const releaseId = safeString(source.releaseId) || `${surface}:${channel}:${version || build || "latest"}`;
   const rawSlides = Array.isArray(source.slides) ? source.slides : [];
   const rawTour = Array.isArray(source.tour) ? source.tour : undefined;
+  const rawTips = Array.isArray(source.tips) ? source.tips : [];
   const media = normalizeMedia(source.image || source.media, source.imageAlt || source.alt, source.imageCaption || source.caption);
   const links = normalizeLinks(source.links || source.link);
   const action = normalizeAction(source.action);
@@ -164,6 +184,7 @@ export function normalizeReleasePayload(payload = {}) {
     slides: rawSlides.map(normalizeSlide).filter(Boolean),
     // An explicit empty array disables the default tour for a release.
     tour: rawTour === undefined ? undefined : rawTour.map(normalizeTourStep).filter(Boolean),
+    tips: rawTips.map(normalizeFeatureTip).filter(Boolean),
   };
 }
 
@@ -324,9 +345,10 @@ export function buildReleaseTourModel(payload = {}) {
 }
 
 export class ReleaseTour {
-  constructor({ release, onNavigate, preview = false } = {}) {
+  constructor({ release, onNavigate, onFinish, preview = false } = {}) {
     this.model = buildReleaseTourModel(release || {});
     this.onNavigate = typeof onNavigate === "function" ? onNavigate : null;
+    this.onFinish = typeof onFinish === "function" ? onFinish : null;
     this.preview = preview;
     this.mode = "modal";
     this.slideIndex = 0;
@@ -719,11 +741,220 @@ export class ReleaseTour {
         this.onNavigate(action);
       } catch (_) {}
     }
+    try {
+      this.onFinish?.();
+    } catch (_) {}
+  }
+}
+
+function openedTipStorageKey(releaseId, tipId) {
+  return `${OPENED_TIP_STORAGE_KEY_PREFIX}${encodeURIComponent(safeString(releaseId))}.${encodeURIComponent(safeString(tipId))}`;
+}
+
+function hasOpenedTip(releaseId, tipId) {
+  if (!releaseId || !tipId) return true;
+  try {
+    return localStorage.getItem(openedTipStorageKey(releaseId, tipId)) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markTipOpened(releaseId, tipId) {
+  if (!releaseId || !tipId) return;
+  try {
+    localStorage.setItem(openedTipStorageKey(releaseId, tipId), "true");
+  } catch (_) {}
+}
+
+export class ReleaseTips {
+  constructor({ release, eventBus, getRoute, preview = false } = {}) {
+    this.release = normalizeReleasePayload(release || {});
+    this.eventBus = eventBus || null;
+    this.getRoute = typeof getRoute === "function" ? getRoute : () => window.location.hash.slice(1).split("/")[0] || "home";
+    this.preview = preview;
+    this.activeTip = null;
+    this.layerEl = null;
+    this.spotlightEl = null;
+    this.tooltipEl = null;
+    this.reposition = null;
+    this.pendingTimer = null;
+    this.unsubscribe = null;
+    this.started = false;
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+  }
+
+  start() {
+    if (this.started || this.release.tips.length === 0) return false;
+    this.started = true;
+    const unsubscribe = this.eventBus?.on?.("page:changed", () => this.schedule());
+    if (typeof unsubscribe === "function") this.unsubscribe = unsubscribe;
+    this.schedule();
+    return true;
+  }
+
+  schedule(delay = 120) {
+    if (!this.started || this.layerEl) return;
+    if (this.pendingTimer) window.clearTimeout(this.pendingTimer);
+    this.pendingTimer = window.setTimeout(() => {
+      this.pendingTimer = null;
+      this.openForCurrentRoute();
+    }, delay);
+  }
+
+  openForCurrentRoute() {
+    if (
+      !this.started ||
+      this.layerEl ||
+      document.querySelector(".release-tour-overlay, .release-tour-layer, .global-search-overlay.open")
+    ) {
+      return false;
+    }
+    const route = safeString(this.getRoute()) || "home";
+    const candidates = this.release.tips.filter(
+      (item) => item.route === route && (this.preview || !hasOpenedTip(this.release.releaseId, item.id)),
+    );
+    let tip = null;
+    let target = null;
+    for (const candidate of candidates) {
+      let candidateTarget = null;
+      try {
+        candidateTarget = document.querySelector(candidate.target);
+      } catch (_) {}
+      if (!candidateTarget) continue;
+
+      let targetRect = candidateTarget.getBoundingClientRect?.();
+      if (targetRect && (targetRect.bottom <= 0 || targetRect.top >= window.innerHeight)) {
+        try {
+          candidateTarget.scrollIntoView({ block: "center", behavior: "auto" });
+        } catch (_) {}
+        targetRect = candidateTarget.getBoundingClientRect?.();
+      }
+      const isVisible =
+        targetRect &&
+        targetRect.width > 0 &&
+        targetRect.height > 0 &&
+        targetRect.right > 0 &&
+        targetRect.bottom > 0 &&
+        targetRect.left < window.innerWidth &&
+        targetRect.top < window.innerHeight;
+      if (!isVisible) continue;
+      tip = candidate;
+      target = candidateTarget;
+      break;
+    }
+    if (!tip || !target) return false;
+
+    this.activeTip = tip;
+    this.layerEl = createElement("div", "release-tour-layer release-feature-tip-layer");
+    this.layerEl.setAttribute("role", "region");
+    this.layerEl.setAttribute("aria-label", `Feature tip: ${tip.title}`);
+    this.spotlightEl = createElement("div", "release-tour-spotlight");
+    this.tooltipEl = createElement("div", "release-tour-tooltip release-feature-tip");
+    this.layerEl.appendChild(this.spotlightEl);
+    this.layerEl.appendChild(this.tooltipEl);
+    document.body.appendChild(this.layerEl);
+
+    const title = createElement("h3", "release-tour-tooltip-title", tip.title);
+    const body = createElement("p", "release-tour-tooltip-body", tip.body);
+    title.id = `release-tip-title-${tip.id}`;
+    body.id = `release-tip-body-${tip.id}`;
+    this.tooltipEl.appendChild(title);
+    this.tooltipEl.appendChild(body);
+
+    const footer = createElement("div", "release-tour-tooltip-footer");
+    footer.appendChild(createElement("span", "release-tour-tooltip-count", `New in ${this.release.version || "this release"}`));
+    const done = createElement("button", "btn btn-primary btn-sm", "Got it");
+    done.type = "button";
+    done.addEventListener("click", () => this.close({ showNext: true }));
+    footer.appendChild(done);
+    this.tooltipEl.appendChild(footer);
+    this.tooltipEl.setAttribute("aria-labelledby", title.id);
+    this.tooltipEl.setAttribute("aria-describedby", body.id);
+
+    if (!this.preview) markTipOpened(this.release.releaseId, tip.id);
+    this.reposition = () => this.position(target);
+    window.addEventListener("resize", this.reposition);
+    window.addEventListener("scroll", this.reposition, true);
+    document.addEventListener("keydown", this.handleKeyDown, true);
+    window.setTimeout(() => {
+      this.position(target);
+      done.focus();
+    }, 40);
+    return true;
+  }
+
+  position(target) {
+    if (!target || !this.spotlightEl || !this.tooltipEl || !this.activeTip) return;
+    const rect = target.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const pad = 6;
+    this.spotlightEl.style.left = `${Math.max(4, rect.left - pad)}px`;
+    this.spotlightEl.style.top = `${Math.max(4, rect.top - pad)}px`;
+    this.spotlightEl.style.width = `${Math.min(viewportWidth - 8, rect.width + pad * 2)}px`;
+    this.spotlightEl.style.height = `${Math.min(viewportHeight - 8, rect.height + pad * 2)}px`;
+
+    const tooltipWidth = Math.min(340, viewportWidth - 24);
+    const tooltipHeight = this.tooltipEl.offsetHeight || 150;
+    const gap = 14;
+    let placement = this.activeTip.placement;
+    if (placement === "bottom" && rect.bottom + gap + tooltipHeight > viewportHeight - 8) placement = "top";
+    if (placement === "top" && rect.top - gap - tooltipHeight < 8) placement = "bottom";
+    if (placement === "right" && rect.right + gap + tooltipWidth > viewportWidth - 8) placement = "left";
+    if (placement === "left" && rect.left - gap - tooltipWidth < 8) placement = "right";
+
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    let top = rect.bottom + gap;
+    if (placement === "top") top = rect.top - gap - tooltipHeight;
+    else if (placement === "right") {
+      left = rect.right + gap;
+      top = rect.top + rect.height / 2 - tooltipHeight / 2;
+    } else if (placement === "left") {
+      left = rect.left - gap - tooltipWidth;
+      top = rect.top + rect.height / 2 - tooltipHeight / 2;
+    }
+    this.tooltipEl.style.width = `${tooltipWidth}px`;
+    this.tooltipEl.style.left = `${Math.max(12, Math.min(left, viewportWidth - tooltipWidth - 12))}px`;
+    this.tooltipEl.style.top = `${Math.max(12, Math.min(top, viewportHeight - tooltipHeight - 12))}px`;
+  }
+
+  handleKeyDown(event) {
+    if (event.key !== "Escape" || !this.layerEl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.close();
+  }
+
+  close({ showNext = false } = {}) {
+    document.removeEventListener("keydown", this.handleKeyDown, true);
+    if (this.reposition) {
+      window.removeEventListener("resize", this.reposition);
+      window.removeEventListener("scroll", this.reposition, true);
+    }
+    this.layerEl?.remove();
+    this.layerEl = null;
+    this.spotlightEl = null;
+    this.tooltipEl = null;
+    this.activeTip = null;
+    this.reposition = null;
+    if (showNext) this.schedule(220);
+  }
+
+  destroy() {
+    if (this.pendingTimer) window.clearTimeout(this.pendingTimer);
+    this.pendingTimer = null;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.started = false;
+    this.close();
   }
 }
 
 export default {
   ReleaseTour,
+  ReleaseTips,
   buildReleaseTourModel,
   clearPendingRelease,
   markPendingRelease,

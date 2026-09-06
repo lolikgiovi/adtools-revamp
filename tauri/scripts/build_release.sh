@@ -296,7 +296,8 @@ write_manifest() {
     + (if ($release | has("links")) then { links: $release.links } else {} end)
     + (if ($release | has("action")) then { action: $release.action } else {} end)
     + (if ($release | has("slides")) then { slides: $release.slides } else {} end)
-    + (if ($release | has("tour")) then { tour: $release.tour } else {} end)' > "$out_json"
+    + (if ($release | has("tour")) then { tour: $release.tour } else {} end)
+    + (if ($release | has("tips")) then { tips: $release.tips } else {} end)' > "$out_json"
 }
 
 main() {

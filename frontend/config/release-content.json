@@ -1,32 +1,85 @@
 {
   "$schema": "./release-content.schema.json",
-  "releaseId": "release-2026-09-05",
-  "title": "Meet the new update tour",
-  "summary": "After a Desktop or Web update, AD Tools now explains what changed and points you to a useful next step.",
+  "releaseId": "release-1.3.6",
+  "version": "1.3.6",
+  "title": "Faster everyday workflows",
+  "summary": "AD Tools 1.3.6 makes saved work easier to reach, refreshes two core tools, and uses fewer resources in the background.",
   "notes": [
-    "Desktop notes appear after the update installs successfully.",
-    "Web deployments refresh automatically when a new build is detected.",
-    "Use Next for follow-up actions, or start the short workspace tour."
+    "Quick Query has a roomier data sheet, clearer wrap controls, safer database pasting, and improved tab handling.",
+    "Pin favorite tools in the sidebar so they stay at the top.",
+    "Press ⌘K to search tools, pages, and saved Quick Query tables.",
+    "Home now shows your usage and includes a feedback field.",
+    "Check Image adds a clearer batch workflow, saved references, result filters, cancellation, and timeout retries.",
+    "Heavy tools and background work now release resources more efficiently to reduce RAM and compute usage."
   ],
   "slides": [
     {
-      "title": "See the change, then keep moving",
-      "body": "Each release can include a focused explanation, an optional image, and a link or action into the updated workflow.",
-      "bullets": ["Use one slide for each meaningful change.", "Open a guide or use the primary action when you want more detail."]
-    }
-  ],
-  "tour": [
-    {
-      "target": ".header-search",
-      "placement": "bottom",
-      "title": "Search the workspace",
-      "body": "Use the search field or press ⌘K to jump to tools, pages, and saved Quick Query schemas."
+      "title": "Quick Query, with more working room",
+      "body": "Work with large schemas and data sets more comfortably, with a data sheet that sizes predictably and can expand when you need the space.",
+      "bullets": [
+        "Paste copied database rows with better handling for malformed TSV data.",
+        "Use clearer wrap controls for long SQL and cell values.",
+        "Keep multiple tasks organized with improved Quick Query tabs."
+      ],
+      "action": { "label": "Open Quick Query", "route": "quick-query" }
     },
     {
-      "target": ".sidebar",
+      "title": "Your shortcuts, wherever you are",
+      "body": "Keep frequent tools pinned in the sidebar, or press ⌘K to jump directly to a tool, page, or saved Quick Query table.",
+      "bullets": ["Right-click a sidebar tool to pin or unpin it.", "Search remembers recent destinations and brings them forward."]
+    },
+    {
+      "title": "A more useful Home and Check Image",
+      "body": "Home now combines usage context with a direct feedback field, while Check Image makes repeated batch checks easier to manage.",
+      "bullets": [
+        "Save friendly labels for image identifiers you use often.",
+        "Filter results, cancel a run, and retry timed-out checks.",
+        "Configure CDN environment URLs from Settings."
+      ],
+      "action": { "label": "Open Check Image", "route": "check-image" }
+    }
+  ],
+  "tour": [],
+  "tips": [
+    {
+      "id": "pin-tools",
+      "route": "home",
+      "target": ".sidebar-content .sidebar-menu-item[data-tool]",
       "placement": "right",
-      "title": "Keep frequent tools close",
-      "body": "Pin the tools you use most from the sidebar so they stay easy to reach."
+      "title": "Pin a favorite tool",
+      "body": "Right-click any tool in the sidebar and choose Pin. Pinned tools stay together at the top; repeat the action to unpin one."
+    },
+    {
+      "id": "global-search",
+      "route": "home",
+      "target": ".header-search",
+      "placement": "bottom",
+      "title": "Search with ⌘K",
+      "body": "Press ⌘K from anywhere. Type qq: followed by a table name to open a saved Quick Query table directly."
+    },
+    {
+      "id": "home-feedback",
+      "route": "home",
+      "target": ".usage-feedback-section",
+      "placement": "top",
+      "title": "Send feedback from Home",
+      "body": "Choose a tool if relevant, describe what should be better, and send your note without leaving Home."
+    },
+    {
+      "id": "quick-query-data-sheet",
+      "route": "quick-query",
+      "target": ".quick-query-data-controls",
+      "placement": "top",
+      "title": "Shape the Quick Query data sheet",
+      "body": "Use Wrap Text for long values and Expand Data Sheet when you need more room. You can also paste copied database rows directly into the grid."
+    },
+    {
+      "id": "check-image-references",
+      "route": "check-image",
+      "target": ".saved-references-button",
+      "placement": "bottom",
+      "title": "Reuse image references",
+      "body": "Open Saved references to keep friendly labels beside identifiers you check often. Batch runs also support filtering, cancellation, and timeout retries."
     }
   ]
 }

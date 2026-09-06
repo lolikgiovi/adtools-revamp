@@ -167,6 +167,26 @@ function validateTourStep(step, index) {
   }
 }
 
+function validateFeatureTip(tip, index) {
+  const label = `tips[${index}]`;
+  if (!isRecord(tip)) {
+    errors.push(`${labelPath(label)} must be an object`);
+    return;
+  }
+  validateKeys(tip, ["id", "route", "target", "placement", "title", "body"], label);
+  requireString(tip.id, `${label}.id`);
+  requireString(tip.route, `${label}.route`);
+  requireString(tip.target, `${label}.target`);
+  requireString(tip.title, `${label}.title`);
+  requireString(tip.body, `${label}.body`);
+  if (typeof tip.id === "string" && !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(tip.id)) {
+    errors.push(`${labelPath(`${label}.id`)} must use lowercase letters, numbers, dots, or hyphens`);
+  }
+  if (tip.placement !== undefined && !["top", "right", "bottom", "left"].includes(tip.placement)) {
+    errors.push(`${labelPath(`${label}.placement`)} must be top, right, bottom, or left`);
+  }
+}
+
 function validateContent(content) {
   if (!isRecord(content)) {
     errors.push("release content must be a JSON object");
@@ -189,6 +209,7 @@ function validateContent(content) {
       "action",
       "slides",
       "tour",
+      "tips",
     ],
     "",
   );
@@ -230,6 +251,19 @@ function validateContent(content) {
     else {
       if (content.tour.length > 3) errors.push("release content may contain at most three guided-tour steps");
       content.tour.forEach(validateTourStep);
+    }
+  }
+
+  if (content.tips !== undefined) {
+    if (!Array.isArray(content.tips)) errors.push("release content tips must be an array");
+    else {
+      if (content.tips.length > 8) errors.push("release content may contain at most eight contextual tips");
+      const ids = new Set();
+      content.tips.forEach((tip, index) => {
+        validateFeatureTip(tip, index);
+        if (tip?.id && ids.has(tip.id)) errors.push(`${labelPath(`tips[${index}].id`)} must be unique`);
+        if (tip?.id) ids.add(tip.id);
+      });
     }
   }
 }

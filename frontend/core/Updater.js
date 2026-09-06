@@ -199,6 +199,7 @@ export async function performUpdate(progressCb, stageCb, channel, releaseMeta = 
         action: releaseMeta?.action || manifest?.action,
         slides: releaseMeta?.slides || manifest?.slides,
         tour: releaseMeta?.tour || manifest?.tour,
+        tips: releaseMeta?.tips || manifest?.tips,
       };
       markPendingRelease(pendingRelease);
       setStage("downloading");
