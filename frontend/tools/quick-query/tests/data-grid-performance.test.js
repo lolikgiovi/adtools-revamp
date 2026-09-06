@@ -52,6 +52,10 @@ function createUi() {
   wordWrapLabel.textContent = "Wrap";
   wordWrapButton.append(wordWrapLabel);
   maximizeButton.id = "toggleDataMaximize";
+  const maximizeButtonLabel = document.createElement("span");
+  maximizeButtonLabel.className = "qq-data-maximize-label";
+  maximizeButtonLabel.textContent = "Expand Data Sheet";
+  maximizeButton.append(maximizeButtonLabel);
   leftScroll.className = "quick-query-left-scroll";
   filesContainer.id = "files-container";
   wrapToggle.type = "checkbox";
@@ -243,15 +247,17 @@ describe("Quick Query data-grid performance", () => {
     ui.toggleDataMaximize();
 
     expect(toolContainer.classList.contains("data-maximized")).toBe(true);
-    expect(maximizeButton.textContent).toBe("Restore Split View");
+    expect(maximizeButton.querySelector(".qq-data-maximize-label").textContent).toBe("Restore Split View");
     expect(maximizeButton.getAttribute("aria-pressed")).toBe("true");
+    expect(maximizeButton.title).toBe("Restore schema and query panels");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 656 }));
 
     ui.handleDataMaximizeKeydown({ key: "Escape" });
 
     expect(toolContainer.classList.contains("data-maximized")).toBe(false);
-    expect(maximizeButton.textContent).toBe("Maximize Data");
+    expect(maximizeButton.querySelector(".qq-data-maximize-label").textContent).toBe("Expand Data Sheet");
     expect(maximizeButton.getAttribute("aria-pressed")).toBe("false");
+    expect(maximizeButton.title).toBe("Expand the data sheet to use the available workspace");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 276 }));
   });
 });

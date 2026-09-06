@@ -112,8 +112,16 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
                 <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
-                <button id="toggleDataMaximize" class="btn btn-outline btn-sm qq-data-maximize" type="button" aria-pressed="false"
-                    title="Use the available workspace for the data sheet">Maximize Data</button>
+                <button id="toggleDataMaximize" class="btn btn-sm qq-data-maximize" type="button" aria-pressed="false"
+                    title="Expand the data sheet to use the available workspace">
+                    <svg class="qq-data-maximize-icon qq-data-maximize-icon-expand" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4M2 6l4-4M10 2l4 4M2 10l4 4M10 14l4-4" />
+                    </svg>
+                    <svg class="qq-data-maximize-icon qq-data-maximize-icon-restore" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4M6 6 2 2M10 6l4-4M6 10l-4 4M10 10l4 4" />
+                    </svg>
+                    <span class="qq-data-maximize-label">Expand Data Sheet</span>
+                </button>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
                 <label class="switch sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
                     <input type="checkbox" id="defaultSysdate" checked />

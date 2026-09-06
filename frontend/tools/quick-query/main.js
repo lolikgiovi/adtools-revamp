@@ -2581,9 +2581,15 @@ export class QuickQueryUI {
 
     this.isDataMaximized = Boolean(maximized);
     toolContainer.classList.toggle("data-maximized", this.isDataMaximized);
-    button.textContent = this.isDataMaximized ? "Restore Split View" : "Maximize Data";
+    const buttonLabel = button.querySelector(".qq-data-maximize-label");
+    const label = this.isDataMaximized ? "Restore Split View" : "Expand Data Sheet";
+    if (buttonLabel) {
+      buttonLabel.textContent = label;
+    } else {
+      button.textContent = label;
+    }
     button.setAttribute("aria-pressed", String(this.isDataMaximized));
-    button.title = this.isDataMaximized ? "Restore schema and query panels" : "Use the available workspace for the data sheet";
+    button.title = this.isDataMaximized ? "Restore schema and query panels" : "Expand the data sheet to use the available workspace";
     this.scheduleDataTableLayoutRefresh();
   }
 
