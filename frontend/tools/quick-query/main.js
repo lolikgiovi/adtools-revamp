@@ -147,10 +147,6 @@ export class QuickQueryUI {
       this.scheduleDataTableLayoutRefresh();
     };
     this.isDataMaximized = false;
-    this.isDataAutoFocused = false;
-    this._dataAutoFocusSuppressed = false;
-    this._dataScrollHolder = null;
-    this._handleDataTableScroll = (event) => this.handleDataTableScroll(event);
     this._handleDataMaximizeKeydown = (event) => this.handleDataMaximizeKeydown(event);
     this._autosaveLifecycleListenersBound = false;
     this._handleAutosavePageHide = () => {
@@ -788,7 +784,6 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
-    this.bindDataTableAutoFocusScroll();
     this._handleDataTablePasteCapture ||= (event) => this.captureDataTablePaste(event);
     this.elements.dataContainer.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this.elements.dataContainer.addEventListener("paste", this._handleDataTablePasteCapture, true);
@@ -831,50 +826,6 @@ export class QuickQueryUI {
       Number.isFinite(containerTop) && containerTop > 0 ? viewportHeight - containerTop - DATA_TABLE_BOTTOM_MARGIN : fallbackHeight;
 
     return Math.max(DATA_TABLE_MIN_HEIGHT, Math.floor(availableHeight));
-  }
-
-  bindDataTableAutoFocusScroll() {
-    this.unbindDataTableAutoFocusScroll();
-    this._dataScrollHolder = this.elements.dataContainer?.querySelector?.(".ht_master .wtHolder") || null;
-    this._dataScrollHolder?.addEventListener("scroll", this._handleDataTableScroll, { passive: true });
-  }
-
-  unbindDataTableAutoFocusScroll() {
-    this._dataScrollHolder?.removeEventListener("scroll", this._handleDataTableScroll);
-    this._dataScrollHolder = null;
-  }
-
-  handleDataTableScroll(event) {
-    const holder = event.currentTarget;
-    const hasVerticalOverflow = holder.scrollHeight > holder.clientHeight + 1;
-    if (!hasVerticalOverflow) {
-      this._dataAutoFocusSuppressed = false;
-      return;
-    }
-    if (holder.scrollTop <= 0) {
-      this._dataAutoFocusSuppressed = false;
-      return;
-    }
-
-    if (!this.isDataMaximized && !this._dataAutoFocusSuppressed && !this.isDataAutoFocused) {
-      this.setDataAutoFocused(true);
-    }
-  }
-
-  setDataAutoFocused(focused, { suppress = false } = {}) {
-    const nextFocused = Boolean(focused) && !this.isDataMaximized;
-    if (suppress) this._dataAutoFocusSuppressed = true;
-    if (nextFocused === this.isDataAutoFocused) return;
-
-    this.isDataAutoFocused = nextFocused;
-    this.elements.toolContainer?.classList.toggle("data-auto-focused", nextFocused);
-    this.syncDataMaximizeButton();
-    this.scheduleDataTableLayoutRefresh();
-  }
-
-  restoreAutoFocusedSplitView() {
-    this.setDataAutoFocused(false, { suppress: true });
-    this.elements.toolContainer?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
   syncDataTableLayout() {
@@ -1660,7 +1611,6 @@ export class QuickQueryUI {
 
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
-    this.unbindDataTableAutoFocusScroll();
     window.removeEventListener("resize", this._handleDataTableViewportResize);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
@@ -2628,10 +2578,6 @@ export class QuickQueryUI {
   }
 
   toggleDataMaximize() {
-    if (this.isDataAutoFocused) {
-      this.restoreAutoFocusedSplitView();
-      return;
-    }
     this.setDataMaximized(!this.isDataMaximized);
   }
 
@@ -2641,39 +2587,23 @@ export class QuickQueryUI {
     if (!toolContainer || !button) return;
 
     this.isDataMaximized = Boolean(maximized);
-    if (this.isDataMaximized && this.isDataAutoFocused) {
-      this.isDataAutoFocused = false;
-      toolContainer.classList.remove("data-auto-focused");
-    }
     toolContainer.classList.toggle("data-maximized", this.isDataMaximized);
-    this.syncDataMaximizeButton();
-    this.scheduleDataTableLayoutRefresh();
-  }
-
-  syncDataMaximizeButton() {
-    const button = this.elements.toggleDataMaximize || document.getElementById("toggleDataMaximize");
-    if (!button) return;
-
-    const isFocused = this.isDataMaximized || this.isDataAutoFocused;
     const buttonLabel = button.querySelector(".qq-data-maximize-label");
-    const label = isFocused ? "Restore Split View" : "Expand Data Sheet";
+    const label = this.isDataMaximized ? "Restore Split View" : "Expand Data Sheet";
     if (buttonLabel) {
       buttonLabel.textContent = label;
     } else {
       button.textContent = label;
     }
-    button.setAttribute("aria-pressed", String(isFocused));
-    button.title = isFocused ? "Restore schema and query panels" : "Expand the data sheet to use the available workspace";
+    button.setAttribute("aria-pressed", String(this.isDataMaximized));
+    button.title = this.isDataMaximized ? "Restore schema and query panels" : "Expand the data sheet to use the available workspace";
+    this.scheduleDataTableLayoutRefresh();
   }
 
   handleDataMaximizeKeydown(event) {
-    if (event.key !== "Escape" || (!this.isDataMaximized && !this.isDataAutoFocused)) return;
+    if (event.key !== "Escape" || !this.isDataMaximized) return;
     event.preventDefault?.();
-    if (this.isDataAutoFocused) {
-      this.restoreAutoFocusedSplitView();
-    } else {
-      this.setDataMaximized(false);
-    }
+    this.setDataMaximized(false);
     this.elements.toggleDataMaximize?.focus?.();
   }
 

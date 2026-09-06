@@ -33,7 +33,6 @@ import { QuickQueryUI } from "../main.js";
 function createUi() {
   const toolContainer = document.createElement("div");
   const contentA = document.createElement("div");
-  const contentB = document.createElement("div");
   const leftScroll = document.createElement("div");
   const dataContainer = document.createElement("div");
   const schemaContainer = document.createElement("div");
@@ -45,7 +44,6 @@ function createUi() {
   const maximizeButton = document.createElement("button");
   toolContainer.className = "quick-query-tool-container";
   contentA.className = "content-a";
-  contentB.className = "content-b";
   dataContainer.id = "spreadsheet-data";
   schemaContainer.id = "spreadsheet-schema";
   wrapToggle.id = "toggleWrapText";
@@ -65,20 +63,17 @@ function createUi() {
   wrapToggle.type = "checkbox";
   Object.defineProperty(leftScroll, "clientHeight", { configurable: true, value: 320 });
   Object.defineProperty(filesContainer, "offsetHeight", { configurable: true, value: 56 });
-  toolContainer.scrollIntoView = vi.fn();
   dataContainer.getBoundingClientRect = () => ({
-    top: toolContainer.classList.contains("data-maximized") || toolContainer.classList.contains("data-auto-focused") ? 120 : 500,
+    top: toolContainer.classList.contains("data-maximized") ? 120 : 500,
   });
   leftScroll.append(schemaContainer, filesContainer);
-  contentB.append(dataContainer);
-  toolContainer.append(contentA, leftScroll, wrapToggle, wrapToggleLabel, wordWrapButton, maximizeButton, contentB);
+  toolContainer.append(contentA, leftScroll, wrapToggle, wrapToggleLabel, wordWrapButton, maximizeButton, dataContainer);
   document.body.append(toolContainer);
 
   const ui = Object.create(QuickQueryUI.prototype);
   ui.elements = {
     toolContainer,
     contentA,
-    contentB,
     leftScroll,
     dataContainer,
     schemaContainer,
@@ -91,8 +86,6 @@ function createUi() {
   ui.scheduleSchemaLayoutRefresh = vi.fn();
   ui.scheduleDataTableLayoutRefresh = vi.fn(() => ui.syncDataTableLayout());
   ui.isDataMaximized = false;
-  ui.isDataAutoFocused = false;
-  ui._dataAutoFocusSuppressed = false;
   return { ui, dataContainer, maximizeButton, toolContainer, wordWrapButton, wrapToggle, wrapToggleLabel };
 }
 
@@ -273,45 +266,5 @@ describe("Quick Query data-grid performance", () => {
     expect(maximizeButton.getAttribute("aria-pressed")).toBe("false");
     expect(maximizeButton.title).toBe("Expand the data sheet to use the available workspace");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 276 }));
-  });
-
-  it("automatically focuses an overflowing data sheet when its internal scrolling begins", () => {
-    const { ui, maximizeButton, toolContainer } = createUi();
-    ui.initializeSpreadsheets();
-    const holder = { scrollHeight: 2000, clientHeight: 200, scrollTop: 1 };
-
-    ui.handleDataTableScroll({ currentTarget: holder });
-
-    expect(ui.isDataAutoFocused).toBe(true);
-    expect(toolContainer.classList.contains("data-auto-focused")).toBe(true);
-    expect(maximizeButton.querySelector(".qq-data-maximize-label").textContent).toBe("Restore Split View");
-    expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 656 }));
-
-    ui.toggleDataMaximize();
-
-    expect(ui.isDataAutoFocused).toBe(false);
-    expect(toolContainer.classList.contains("data-auto-focused")).toBe(false);
-  });
-
-  it("keeps a non-overflowing data sheet in split view when it receives a scroll event", () => {
-    const { ui, toolContainer } = createUi();
-    ui.initializeSpreadsheets();
-
-    ui.handleDataTableScroll({ currentTarget: { scrollHeight: 200, clientHeight: 200, scrollTop: 1 } });
-
-    expect(ui.isDataAutoFocused).toBe(false);
-    expect(toolContainer.classList.contains("data-auto-focused")).toBe(false);
-  });
-
-  it("restores the split view from automatic focus without immediately re-entering it", () => {
-    const { ui, toolContainer } = createUi();
-    ui.initializeSpreadsheets();
-    ui.setDataAutoFocused(true);
-
-    ui.toggleDataMaximize();
-
-    expect(ui.isDataAutoFocused).toBe(false);
-    expect(ui._dataAutoFocusSuppressed).toBe(true);
-    expect(toolContainer.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 });
