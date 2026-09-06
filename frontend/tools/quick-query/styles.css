@@ -271,7 +271,12 @@
 #spreadsheet-schema {
   flex: 0 0 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
+}
+
+#spreadsheet-schema .ht_master .wtHolder {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Add left border to first column cells in schema table */
@@ -837,6 +842,7 @@
   white-space: pre-wrap !important;
   overflow-wrap: break-word !important;
   word-break: break-word !important;
+  vertical-align: top;
   max-width: 300px;
   text-overflow: clip;
 }

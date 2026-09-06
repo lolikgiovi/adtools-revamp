@@ -33,6 +33,9 @@ let minifyWorkerPromise = null;
 const DATA_TABLE_MIN_HEIGHT = 200;
 const DATA_TABLE_BOTTOM_MARGIN = 24;
 const DATA_TABLE_ROW_HEIGHT = 20;
+const SCHEMA_TABLE_MIN_HEIGHT = 120;
+const SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT = 56;
+const SCHEMA_TABLE_SECTION_GAP = 8;
 
 function loadJsZip() {
   if (!jsZipPromise) {
@@ -138,7 +141,10 @@ export class QuickQueryUI {
     this._cancelScheduledLayout = null;
     this._dataTableLayoutScheduled = false;
     this._cancelScheduledDataTableLayout = null;
-    this._handleDataTableViewportResize = () => this.scheduleDataTableLayoutRefresh();
+    this._handleDataTableViewportResize = () => {
+      this.scheduleSchemaLayoutRefresh();
+      this.scheduleDataTableLayoutRefresh();
+    };
     this.isDataMaximized = false;
     this._handleDataMaximizeKeydown = (event) => this.handleDataMaximizeKeydown(event);
     this._autosaveLifecycleListenersBound = false;
@@ -282,6 +288,7 @@ export class QuickQueryUI {
       toggleDataMaximize: document.getElementById("toggleDataMaximize"),
       contentA: document.querySelector(".content-a"),
       leftPanel: document.querySelector(".quick-query-left-panel"),
+      leftScroll: document.querySelector(".quick-query-left-scroll"),
       rightPanel: document.querySelector(".quick-query-right-panel"),
       rightControls: document.querySelector(".quick-query-right-controls"),
       queryEditor: document.getElementById("queryEditor"),
@@ -391,6 +398,7 @@ export class QuickQueryUI {
 
       // Wrap Text toggle
       toggleWrapText: document.getElementById("toggleWrapText"),
+      wrapTextToggleLabel: document.querySelector(".wrap-text-toggle-label"),
 
       // HTML Minify overlay elements
       htmlMinifyOverlay: document.getElementById("htmlMinifyOverlay"),
@@ -753,7 +761,7 @@ export class QuickQueryUI {
     this.scheduleSchemaLayoutRefresh();
 
     const wrapTextOn = Boolean(this.elements.toggleWrapText?.checked);
-    this.elements.dataContainer.classList.toggle("wrap-text-on", wrapTextOn);
+    this.syncDataWrapTextToggle(wrapTextOn);
 
     const dataTableConfig = {
       ...initialDataTableSpecification,
@@ -789,12 +797,22 @@ export class QuickQueryUI {
     if (!this.dataTable) return;
 
     const wrapTextOn = Boolean(this.elements.toggleWrapText?.checked);
-    this.elements.dataContainer?.classList.toggle("wrap-text-on", wrapTextOn);
+    this.syncDataWrapTextToggle(wrapTextOn);
     this.dataTable.updateSettings({
       height: this.getDataTableViewportHeight(),
       autoRowSize: wrapTextOn,
       rowHeights: wrapTextOn ? undefined : DATA_TABLE_ROW_HEIGHT,
     });
+  }
+
+  syncDataWrapTextToggle(wrapTextOn) {
+    const checkbox = this.elements.toggleWrapText || document.getElementById("toggleWrapText");
+    const label = this.elements.wrapTextToggleLabel || document.querySelector(".wrap-text-toggle-label");
+
+    this.elements.dataContainer?.classList.toggle("wrap-text-on", wrapTextOn);
+    if (label) label.textContent = "Wrap Text";
+    checkbox?.setAttribute("aria-label", "Wrap text in data preview cells");
+    checkbox?.closest(".switch")?.setAttribute("title", `Text wrapping: ${wrapTextOn ? "On" : "Off"}`);
   }
 
   scheduleDataTableLayoutRefresh() {
@@ -826,12 +844,30 @@ export class QuickQueryUI {
       if (!this.elements.contentA?.isConnected) return;
       if (!this.schemaTable) return;
 
-      this.schemaTable.updateSettings({ height: "auto" });
+      this.syncSchemaTableLayout();
       this.schemaTable.refreshDimensions?.();
       this.schemaTable.render();
       this.syncUpperLayoutHeight();
     });
     this._cancelScheduledLayout = () => cancelFrame(frameId);
+  }
+
+  getSchemaTableViewportHeight() {
+    const settings = this.schemaTable?.getSettings?.() || initialSchemaTableSpecification;
+    const rowHeight = Number.parseFloat(settings.rowHeights) || 20;
+    const headerHeight = Number.parseFloat(settings.columnHeaderHeight) || rowHeight;
+    const rowCount = Math.max(this.schemaTable?.countRows?.() || settings.data?.length || 0, settings.minRows || 1);
+    const contentHeight = rowCount * rowHeight + headerHeight + 2;
+    const scrollAreaHeight = this.elements.leftScroll?.clientHeight || this.elements.contentA?.clientHeight || 320;
+    const attachmentsHeight = this.elements.filesContainer?.offsetHeight || SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT;
+    const availableHeight = Math.max(SCHEMA_TABLE_MIN_HEIGHT, scrollAreaHeight - attachmentsHeight - SCHEMA_TABLE_SECTION_GAP);
+
+    return Math.min(contentHeight, availableHeight);
+  }
+
+  syncSchemaTableLayout() {
+    if (!this.schemaTable) return;
+    this.schemaTable.updateSettings({ height: this.getSchemaTableViewportHeight() });
   }
 
   syncUpperLayoutHeight() {
@@ -857,7 +893,11 @@ export class QuickQueryUI {
       const rows = Math.max(this.schemaTable.countRows?.() || 0, settings.minRows || 1);
       const tableBorderAllowance = 2;
 
-      return rows * rowHeight + headerHeight + tableBorderAllowance + toPx(styles.marginTop) + toPx(styles.marginBottom);
+      const contentHeight = rows * rowHeight + headerHeight + tableBorderAllowance;
+      const viewportHeight = toPx(settings.height);
+      const renderedHeight = viewportHeight ? Math.min(contentHeight, viewportHeight) : contentHeight;
+
+      return renderedHeight + toPx(styles.marginTop) + toPx(styles.marginBottom);
     };
 
     const leftStyles = getComputedStyle(leftPanel);
@@ -2461,10 +2501,12 @@ export class QuickQueryUI {
     const isOn = wordWrap === "on";
 
     if (wordWrapButton) {
+      const label = wordWrapButton.querySelector(".word-wrap-toggle-label");
       wordWrapButton.classList.toggle("is-on", isOn);
       wordWrapButton.setAttribute("aria-checked", String(isOn));
       wordWrapButton.setAttribute("aria-label", `Turn word wrap ${isOn ? "off" : "on"}`);
       wordWrapButton.setAttribute("title", `Word wrap: ${isOn ? "On" : "Off"}`);
+      if (label) label.textContent = isOn ? "Unwrap" : "Wrap";
     }
   }
 
