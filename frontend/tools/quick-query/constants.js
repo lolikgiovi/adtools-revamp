@@ -215,6 +215,7 @@ export const initialDataTableSpecification = {
   data: [[], []],
   colHeaders: true,
   rowHeaders: true,
+  fixedRowsTop: 1,
   height: 320,
   licenseKey: "non-commercial-and-evaluation",
   // Use modern Handsontable theme (auto dark/light)

@@ -6,6 +6,7 @@
   position: relative;
   max-width: none;
   width: 100%;
+  scroll-margin-top: 57px;
 }
 
 .quick-query-content .button-group {
@@ -253,11 +254,13 @@
   -ms-overflow-style: none;
 }
 
-.quick-query-tool-container.data-maximized .content-a {
+.quick-query-tool-container.data-maximized .content-a,
+.quick-query-tool-container.data-auto-focused .content-a {
   display: none;
 }
 
-.quick-query-tool-container.data-maximized .content-b {
+.quick-query-tool-container.data-maximized .content-b,
+.quick-query-tool-container.data-auto-focused .content-b {
   padding-top: 0;
   border-top: 0;
 }
@@ -859,7 +862,8 @@
 }
 
 /* Measuring variable-height rows is opt-in because it is expensive in Tauri's WebKit view. */
-#spreadsheet-data.wrap-text-on .handsontable .htCore td {
+#spreadsheet-data.wrap-text-on .handsontable .htCore td,
+.htGhostTable.htAutoSize.wrap-text-on .htCore td {
   white-space: pre-wrap !important;
   overflow-wrap: break-word !important;
   word-break: break-word !important;
