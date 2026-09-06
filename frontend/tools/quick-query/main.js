@@ -4,6 +4,7 @@ import { isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
+import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "./services/DatabaseClipboardService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { ensureMonacoWorkers, setupMonacoOracle, createOracleEditor, ORACLE_LANGUAGE_ID, ORACLE_THEME } from "../../core/MonacoOracle.js";
@@ -769,6 +770,8 @@ export class QuickQueryUI {
       height: this.getDataTableViewportHeight(),
       autoRowSize: wrapTextOn,
       rowHeights: wrapTextOn ? undefined : DATA_TABLE_ROW_HEIGHT,
+      beforeChange: (changes, source) => this.normalizeDataTablePasteChanges(changes, source),
+      beforePaste: (data) => this.restoreDatabaseClipboardJson(data),
       afterChange: (changes, source) => {
         // Persist data only for user edits (skip loadData)
         if (!changes || source === "loadData") return;
@@ -781,6 +784,38 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+    this._handleDataTablePasteCapture ||= (event) => this.captureDataTablePaste(event);
+    this.elements.dataContainer.removeEventListener("paste", this._handleDataTablePasteCapture, true);
+    this.elements.dataContainer.addEventListener("paste", this._handleDataTablePasteCapture, true);
+  }
+
+  captureDataTablePaste(event) {
+    const clipboardText = event?.clipboardData?.getData?.("text/plain");
+    this._pendingDataTableClipboard = hasMalformedQuotedField(clipboardText) ? clipboardText : null;
+  }
+
+  restoreDatabaseClipboardJson(pastedData) {
+    const clipboardText = this._pendingDataTableClipboard;
+    this._pendingDataTableClipboard = null;
+    recoverMalformedDatabaseClipboard(clipboardText, pastedData);
+  }
+
+  normalizeDataTablePasteChanges(changes, source) {
+    if (source !== "CopyPaste.paste" || !Array.isArray(changes)) return;
+
+    changes.forEach((change) => {
+      if (!Array.isArray(change)) return;
+
+      const nextValue = change[3];
+      if (nextValue === null || typeof nextValue !== "object") return;
+
+      try {
+        const serializedValue = JSON.stringify(nextValue);
+        if (serializedValue !== undefined) change[3] = serializedValue;
+      } catch (_) {
+        // Handsontable's internal clipboard data comes from JSON, so this is defensive only.
+      }
+    });
   }
 
   getDataTableViewportHeight() {
@@ -1562,6 +1597,8 @@ export class QuickQueryUI {
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
     window.removeEventListener("resize", this._handleDataTableViewportResize);
+    this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
+    this._pendingDataTableClipboard = null;
     this.pauseHiddenWork();
     this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);

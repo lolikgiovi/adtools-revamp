@@ -168,6 +168,63 @@ describe("Quick Query data-grid performance", () => {
     expect(wordWrapButton.getAttribute("aria-checked")).toBe("false");
   });
 
+  it("keeps JSON-looking text as text when Handsontable pastes source objects", () => {
+    const { ui } = createUi();
+    ui.initializeSpreadsheets();
+    const beforeChange = ui.dataTable.settings.beforeChange;
+    const pastedChanges = [
+      [1, 0, null, { accountId: 42 }],
+      [1, 1, null, ["alpha", "beta"]],
+      [1, 2, null, "ordinary text"],
+      [1, 3, null, null],
+    ];
+
+    beforeChange(pastedChanges, "CopyPaste.paste");
+
+    expect(pastedChanges.map((change) => change[3])).toEqual([
+      '{"accountId":42}',
+      '["alpha","beta"]',
+      "ordinary text",
+      null,
+    ]);
+
+    const directEdit = [[1, 0, null, { accountId: 42 }]];
+    beforeChange(directEdit, "edit");
+    expect(directEdit[0][3]).toEqual({ accountId: 42 });
+  });
+
+  it("preserves JSON quotes from database-style quoted TSV clipboard data", () => {
+    const { ui, dataContainer } = createUi();
+    ui.initializeSpreadsheets();
+    const rawClipboard = '1\t"{"name":"Ada","active":true}"';
+    const handsontableParsedData = [["1", "{name:Ada,active:true}"]];
+    const pasteEvent = new Event("paste", { bubbles: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: { getData: (type) => (type === "text/plain" ? rawClipboard : "") },
+    });
+
+    dataContainer.dispatchEvent(pasteEvent);
+    ui.dataTable.settings.beforePaste(handsontableParsedData);
+
+    expect(handsontableParsedData).toEqual([["1", '{"name":"Ada","active":true}']]);
+  });
+
+  it("does not rewrite ordinary or standards-compliant TSV fields", () => {
+    const { ui, dataContainer } = createUi();
+    ui.initializeSpreadsheets();
+    const rawClipboard = '"ordinary value"\t"{""name"":""Ada""}"';
+    const handsontableParsedData = [["ordinary value", '{"name":"Ada"}']];
+    const pasteEvent = new Event("paste", { bubbles: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: { getData: (type) => (type === "text/plain" ? rawClipboard : "") },
+    });
+
+    dataContainer.dispatchEvent(pasteEvent);
+    ui.dataTable.settings.beforePaste(handsontableParsedData);
+
+    expect(handsontableParsedData).toEqual([["ordinary value", '{"name":"Ada"}']]);
+  });
+
   it("maximizes the data workspace and restores the split workspace", () => {
     const { ui, maximizeButton, toolContainer } = createUi();
     ui.initializeSpreadsheets();
