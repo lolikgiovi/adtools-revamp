@@ -216,6 +216,9 @@ export const initialDataTableSpecification = {
   colHeaders: true,
   rowHeaders: true,
   fixedRowsTop: 1,
+  // Let object-shaped clipboard values reach beforeChange, where text cells serialize them.
+  // Without a setter, Handsontable silently drops valid JSON copied from another data-sheet cell.
+  valueSetter: (value) => value,
   height: 320,
   licenseKey: "non-commercial-and-evaluation",
   // Use modern Handsontable theme (auto dark/light)

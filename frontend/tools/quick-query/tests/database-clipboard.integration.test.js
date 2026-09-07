@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { initialDataTableSpecification } from "../constants.js";
 import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "../services/DatabaseClipboardService.js";
 
 describe("database clipboard Handsontable integration", () => {
@@ -95,6 +96,49 @@ describe("database clipboard Handsontable integration", () => {
     pasteTarget.dispatchEvent(pasteEvent);
 
     expect(table.getDataAtRow(0).slice(0, 2)).toEqual(["1", '{"name":"Ada","active":true}']);
+  });
+
+  it("preserves JSON text when copied from the data sheet and pasted into a blank row", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const json = '{\n  "fieldName": "fieldValue"\n}';
+
+    table = new Handsontable(container, {
+      data: [
+        ["QQ_CONTENT_003", json, "XML content"],
+        [null, null, null],
+      ],
+      columns: Array.from({ length: 3 }, () => ({ type: "text" })),
+      valueSetter: initialDataTableSpecification.valueSetter,
+      beforeChange: (changes, source) => {
+        if (source !== "CopyPaste.paste" || !Array.isArray(changes)) return;
+
+        changes.forEach((change) => {
+          const nextValue = change?.[3];
+          if (nextValue !== null && typeof nextValue === "object") change[3] = JSON.stringify(nextValue);
+        });
+      },
+      licenseKey: "non-commercial-and-evaluation",
+    });
+    table.listen();
+
+    const clipboard = new Map();
+    const clipboardData = {
+      setData: (type, value) => clipboard.set(type, value),
+      getData: (type) => clipboard.get(type) || "",
+    };
+
+    table.selectCell(0, 0, 0, 2);
+    const copyEvent = new Event("copy", { bubbles: true, cancelable: true });
+    Object.defineProperty(copyEvent, "clipboardData", { value: clipboardData });
+    (container.querySelector("[data-hot-input]") || container).dispatchEvent(copyEvent);
+
+    table.selectCell(1, 0);
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", { value: clipboardData });
+    (container.querySelector("[data-hot-input]") || container).dispatchEvent(pasteEvent);
+
+    expect(table.getDataAtRow(1).slice(0, 3)).toEqual(["QQ_CONTENT_003", '{"fieldName":"fieldValue"}', "XML content"]);
   });
 
   it("preserves multiline JSON and trailing columns from DBeaver TSV", () => {
