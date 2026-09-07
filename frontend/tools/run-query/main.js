@@ -31,6 +31,7 @@ export class JenkinsRunner extends BaseTool {
     this._editorLayoutFrame = null;
     this._cancelEditorLayout = null;
     this._suggestionsDocumentListener = null;
+    this._activeRunAnalytics = null;
   }
 
   /**
@@ -79,6 +80,30 @@ export class JenkinsRunner extends BaseTool {
     try {
       UsageTracker.trackEvent("run-query", event, cleanAnalyticsMeta(meta));
     } catch (_) {}
+  }
+
+  beginRunAnalytics(meta = {}) {
+    const startedAt = Date.now();
+    const attemptId =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${startedAt}-${Math.random().toString(36).slice(2)}`;
+    this._activeRunAnalytics = {
+      ...cleanAnalyticsMeta(meta),
+      attempt_id: attemptId,
+      started_at_ms: startedAt,
+    };
+    return this.getActiveRunAnalytics();
+  }
+
+  getActiveRunAnalytics(extra = {}) {
+    const active = this._activeRunAnalytics || {};
+    const startedAt = Number(active.started_at_ms);
+    const durationMs = Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : undefined;
+    const { started_at_ms: _startedAt, ...safeActive } = active;
+    return cleanAnalyticsMeta({
+      ...safeActive,
+      duration_ms: durationMs,
+      ...extra,
+    });
   }
 
   /**
@@ -518,8 +543,9 @@ export class JenkinsRunner extends BaseTool {
           console.log(`[jenkins:log-complete] Build #${payload.build_number} complete`);
           statusEl.textContent = "Complete";
           try {
-            UsageTracker.trackEvent("run-query", "run_success", { buildNumber: this.state.buildNumber || null });
-            UsageTracker.trackToolUse("run-query", "run", { build_number: this.state.buildNumber || null });
+            const successMeta = this.getActiveRunAnalytics({ build_number: this.state.buildNumber || payload.build_number || null });
+            UsageTracker.trackEvent("run-query", "run_success", successMeta);
+            UsageTracker.trackToolUse("run-query", "run", successMeta);
           } catch (_) {}
         }),
       );
@@ -2409,13 +2435,14 @@ export class JenkinsRunner extends BaseTool {
         return;
       }
 
-      this.trackAnalytics("run_started", {
+      const runAnalytics = this.beginRunAnalytics({
         env,
         source,
         over_size_limit: totalBytes > MAX_SQL_BYTES,
         sql_bytes: totalBytes,
         ...summarizeText(sql, "sql"),
       });
+      this.trackAnalytics("run_started", runAnalytics);
 
       // If the SQL is oversize, allow the user to preview and split first
       if (totalBytes > MAX_SQL_BYTES) {
@@ -2705,13 +2732,18 @@ export class JenkinsRunner extends BaseTool {
               }
               if (attempts > 30) {
                 statusEl.textContent = "Polling timeout";
+                this.trackAnalytics("run_timeout", this.getActiveRunAnalytics({ context: "polling" }));
                 runBtn.disabled = false;
                 return;
               }
             } catch (err) {
               statusEl.textContent = "Polling error";
               try {
-                UsageTracker.trackEvent("run-query", "run_error", UsageTracker.enrichErrorMeta(err, { context: "polling" }));
+                UsageTracker.trackEvent(
+                  "run-query",
+                  "run_error",
+                  UsageTracker.enrichErrorMeta(err, this.getActiveRunAnalytics({ context: "polling" })),
+                );
               } catch (_) {}
               this.showError(String(err));
               runBtn.disabled = false;
@@ -2897,7 +2929,11 @@ export class JenkinsRunner extends BaseTool {
       } catch (err) {
         statusEl.textContent = "Trigger failed";
         try {
-          UsageTracker.trackEvent("run-query", "run_error", UsageTracker.enrichErrorMeta(err, { job, env, context: "trigger" }));
+          UsageTracker.trackEvent(
+            "run-query",
+            "run_error",
+            UsageTracker.enrichErrorMeta(err, this.getActiveRunAnalytics({ job, env, context: "trigger" })),
+          );
         } catch (_) {}
         this.showError(errorMapping(err));
         runBtn.disabled = false;

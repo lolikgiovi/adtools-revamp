@@ -428,7 +428,8 @@ describe("Analytics endpoints", () => {
     const data = await response.json();
     const ids = data.tabs.map((tab) => tab.id);
     expect(response.status).toBe(200);
-    expect(ids.slice(0, 4)).toEqual(["overview", "who", "active-users", "tools"]);
+    expect(ids.slice(0, 5)).toEqual(["overview", "opportunities", "who", "active-users", "tools"]);
+    expect(ids).toContain("opportunities");
     expect(ids).toContain("who");
     expect(ids).toContain("friction");
     expect(ids).toContain("versions");
@@ -440,11 +441,13 @@ describe("Analytics endpoints", () => {
     expect(ids).toContain("run-query-summary");
     expect(ids).toContain("run-batch-summary");
     expect(ids).toContain("json-tools-summary");
+    expect(ids).toContain("json-outcomes");
     expect(ids).toContain("base64-summary");
     expect(ids).toContain("qr-summary");
     expect(ids).toContain("tlv-summary");
     expect(ids).toContain("image-checker-summary");
     expect(ids).toContain("template-editors-summary");
+    expect(ids).toContain("html-outcomes");
     expect(ids).toContain("uuid-sql-summary");
     expect(ids).toContain("merge-sql-summary");
     expect(ids).toContain("master-lockey-summary");
@@ -549,10 +552,12 @@ describe("Analytics endpoints", () => {
       "run-query-summary",
       "run-batch-summary",
       "json-tools-summary",
+      "json-outcomes",
       "base64-summary",
       "tlv-summary",
       "merge-sql-summary",
       "master-lockey-summary",
+      "html-outcomes",
     ];
 
     for (const tabId of tabIds) {
@@ -573,10 +578,14 @@ describe("Analytics endpoints", () => {
     expect(env.DB.executed.find((item) => item.sql.includes("WITH rq AS") && item.sql.includes("oversize_runs"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH rb AS") && item.sql.includes("configs_with_confluence"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH jt AS") && item.sql.includes("avg_output_size"))).toBeTruthy();
+    expect(env.DB.executed.find((item) => item.sql.includes("WITH json_events AS") && item.sql.includes("success_rate_pct"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH b64 AS") && item.sql.includes("output_kind"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH tlv AS") && item.sql.includes("valid_crc"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH ms AS") && item.sql.includes("dangerous_statements"))).toBeTruthy();
     expect(env.DB.executed.find((item) => item.sql.includes("WITH ml AS") && item.sql.includes("max_lockeys"))).toBeTruthy();
+    expect(
+      env.DB.executed.find((item) => item.sql.includes("WITH html_events AS") && item.sql.includes("avg_vtl_completion_pct")),
+    ).toBeTruthy();
   });
 
   it("returns a safe overview even when analytics tables are missing", async () => {
@@ -704,6 +713,47 @@ describe("Analytics endpoints", () => {
     expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
     expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
+  });
+
+  it("prioritizes improvement opportunities from successful uses, repeat usage, and friction", async () => {
+    mockDashboardTables(env, ["tool_usage", "events", "device", "users", "error_events"]);
+
+    const login = await worker.fetch(
+      new Request("http://localhost/dashboard/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "testpassword123" }),
+      }),
+      env,
+    );
+    const { token } = await login.json();
+
+    const response = await worker.fetch(
+      new Request("http://localhost/dashboard/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId: "opportunities", range: "7d" }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    const opportunityQuery = env.DB.executed.find(
+      (item) => item.sql.includes("WITH successful_use AS") && item.sql.includes("repeat_rate_pct"),
+    );
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.mode).toBe("computed-opportunities");
+    expect(data.range).toBe("7d");
+    expect(opportunityQuery).toBeTruthy();
+    expect(opportunityQuery.sql).toContain("FROM tool_usage");
+    expect(opportunityQuery.sql).toContain("LOWER(e.action) LIKE '%error%'");
+    expect(opportunityQuery.sql).toContain("'run_timeout'");
+    expect(opportunityQuery.sql).toContain("dev@localhost");
+    expect(opportunityQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
   });
 
   it("uses canonical tool uses for overview action totals and top tool", async () => {

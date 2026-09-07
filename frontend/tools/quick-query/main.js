@@ -442,7 +442,15 @@ export class QuickQueryUI {
         click: () => this.handleGenerateQuery(),
       },
       copySQL: {
-        click: (e) => this.copyToClipboard(this.editor.getValue(), e.target),
+        click: async (e) => {
+          const sql = this.editor.getValue();
+          if (await this.copyToClipboard(sql, e.target)) {
+            this.trackQuickQueryEvent("copy_sql", {
+              ...this.getCurrentQuickQueryContext(),
+              sql_size: sql.length,
+            });
+          }
+        },
       },
       clearAll: {
         click: () => this.handleClearAll(),
@@ -1797,9 +1805,7 @@ export class QuickQueryUI {
   }
 
   getVisibleQueryTypeOptions() {
-    return Array.from(this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option") || []).filter(
-      (option) => !option.hidden,
-    );
+    return Array.from(this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option") || []).filter((option) => !option.hidden);
   }
 
   updateQueryTypeActiveOption() {
@@ -1809,7 +1815,11 @@ export class QuickQueryUI {
       return;
     }
 
-    if (!Number.isInteger(this.queryTypeActiveIndex) || this.queryTypeActiveIndex < 0 || this.queryTypeActiveIndex >= visibleOptions.length) {
+    if (
+      !Number.isInteger(this.queryTypeActiveIndex) ||
+      this.queryTypeActiveIndex < 0 ||
+      this.queryTypeActiveIndex >= visibleOptions.length
+    ) {
       const selectedIndex = visibleOptions.findIndex((option) => option.classList.contains("active"));
       this.queryTypeActiveIndex = selectedIndex >= 0 ? selectedIndex : 0;
     }
@@ -1820,7 +1830,9 @@ export class QuickQueryUI {
   }
 
   filterQueryTypeOptions(value = "") {
-    const query = String(value || "").trim().toLowerCase();
+    const query = String(value || "")
+      .trim()
+      .toLowerCase();
     const options = Array.from(this.elements.queryTypeDropdown?.querySelectorAll(".query-type-option") || []);
     options.forEach((option) => {
       const matches = !query || option.textContent.toLowerCase().includes(query);
@@ -2551,6 +2563,11 @@ export class QuickQueryUI {
         this.showError("No SQL to execute. Please generate or write a query first.");
         return;
       }
+
+      this.trackQuickQueryEvent("execute_in_run_query", {
+        ...this.getCurrentQuickQueryContext(),
+        sql_size: sql.length,
+      });
 
       // Navigate to Jenkins Runner and pass current SQL via router data
       if (window?.app?.router) {

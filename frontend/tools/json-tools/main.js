@@ -8,7 +8,7 @@ import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { cleanAnalyticsMeta, getObjectShapeMeta, summarizeText } from "../../core/AnalyticsMeta.js";
+import { bucketSize, cleanAnalyticsMeta, getJsonComplexityMeta, getObjectShapeMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
@@ -27,6 +27,11 @@ class JSONTools extends BaseTool {
     this.searchMatches = [];
     this.currentMatchIndex = -1;
     this.isSearchOpen = false;
+    this.analyticsSessionId = this.createAnalyticsId();
+    this.activeProcessAnalytics = null;
+    this.lastProcessAnalytics = null;
+    this.inputSource = "manual";
+    this.programmaticInputChange = false;
   }
 
   getIconSvg() {
@@ -43,20 +48,85 @@ class JSONTools extends BaseTool {
     } catch (_) {}
   }
 
+  createAnalyticsId() {
+    const now = Date.now();
+    return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  analyticsNow() {
+    return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  }
+
+  beginProcessAnalytics(action) {
+    this.activeProcessAnalytics = {
+      action,
+      attempt_id: this.createAnalyticsId(),
+      started_at_ms: this.analyticsNow(),
+    };
+  }
+
+  getProcessTimingMeta() {
+    const startedAt = Number(this.activeProcessAnalytics?.started_at_ms);
+    return {
+      attempt_id: this.activeProcessAnalytics?.attempt_id || this.createAnalyticsId(),
+      duration_ms: Number.isFinite(startedAt) ? Math.round(Math.max(0, this.analyticsNow() - startedAt) * 10) / 10 : 0,
+    };
+  }
+
   trackProcessSuccess(action, input, output, meta = {}) {
     let shapeMeta = {};
+    let complexityMeta = {};
     try {
-      shapeMeta = getObjectShapeMeta(JSON.parse(input));
+      const parsed = JSON.parse(input);
+      shapeMeta = getObjectShapeMeta(parsed);
+      complexityMeta = getJsonComplexityMeta(parsed);
     } catch (_) {}
     const analyticsMeta = {
       action,
       ...shapeMeta,
+      ...complexityMeta,
       ...summarizeText(input, "input"),
       ...summarizeText(output, "output"),
+      input_size_bucket: bucketSize(String(input || "").length),
+      ...this.getProcessTimingMeta(),
+      input_source: this.inputSource,
+      session_id: this.analyticsSessionId,
       ...meta,
     };
     UsageTracker.trackToolUse("json-tools", action, analyticsMeta);
     this.trackAnalytics("process_success", analyticsMeta);
+    this.lastProcessAnalytics = analyticsMeta;
+    this.activeProcessAnalytics = null;
+  }
+
+  trackProcessError(action, input, errorType = "invalid_input", meta = {}) {
+    this.trackAnalytics("process_error", {
+      action,
+      error_type: String(errorType || "invalid_input").slice(0, 80),
+      ...summarizeText(input, "input"),
+      input_size_bucket: bucketSize(String(input || "").length),
+      ...this.getProcessTimingMeta(),
+      input_source: this.inputSource,
+      session_id: this.analyticsSessionId,
+      ...meta,
+    });
+    this.activeProcessAnalytics = null;
+  }
+
+  trackOutputUsed(target, meta = {}) {
+    const outputMeta = {
+      target,
+      source_action: this.lastProcessAnalytics?.action || this.currentTab,
+      source_attempt_id: this.lastProcessAnalytics?.attempt_id || null,
+      input_source: this.lastProcessAnalytics?.input_source || this.inputSource,
+      top_level_type: this.lastProcessAnalytics?.top_level_type || null,
+      max_depth_bucket: this.lastProcessAnalytics?.max_depth_bucket || null,
+      field_count_bucket: this.lastProcessAnalytics?.field_count_bucket || null,
+      session_id: this.analyticsSessionId,
+      ...meta,
+    };
+    this.trackAnalytics("output_used", outputMeta);
+    UsageTracker.trackToolUse("json-tools", target, outputMeta);
   }
 
   async onMount() {
@@ -108,12 +178,14 @@ class JSONTools extends BaseTool {
       const saved = localStorage.getItem(key);
       if (saved !== null) {
         this.editor.setValue(saved);
+        this.inputSource = "restored";
       }
     } catch (_) {}
 
     // Persist content changes with a light debounce
     this._persistTimer = null;
     this.editor.onDidChangeModelContent(() => {
+      if (!this.programmaticInputChange) this.inputSource = "manual";
       clearTimeout(this._persistTimer);
       this._persistTimer = setTimeout(() => {
         try {
@@ -139,6 +211,7 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-clear").addEventListener("click", () => {
       this.editor.setValue("");
+      this.inputSource = "empty";
       try {
         localStorage.setItem(this._jsonStorageKey || "tool:json-tools:editor", "");
       } catch (_) {}
@@ -148,7 +221,7 @@ class JSONTools extends BaseTool {
 
     document.querySelector(".btn-copy-input").addEventListener("click", () => {
       this.clearErrors();
-      this.copyToClipboard(this.editor.getValue());
+      this.copyToClipboard(this.editor.getValue(), "input");
     });
 
     document.querySelector(".btn-paste").addEventListener("click", () => {
@@ -166,7 +239,7 @@ class JSONTools extends BaseTool {
         }
       } else {
         const output = this.outputEditor ? this.outputEditor.getValue() : "";
-        this.copyToClipboard(output);
+        this.copyToClipboard(output, "output");
       }
     });
 
@@ -285,6 +358,7 @@ class JSONTools extends BaseTool {
       UsageTracker.trackEvent("json-tools", "tab_switch", {
         from_tab: previousTab,
         to_tab: tabName,
+        session_id: this.analyticsSessionId,
       });
     }
 
@@ -378,36 +452,45 @@ class JSONTools extends BaseTool {
     const content = this.editor.getValue().trim();
 
     if (!content) {
+      this.beginProcessAnalytics(this.currentTab);
+      this.trackProcessError(this.currentTab, content, "empty_input");
       this.clearOutput();
       this.clearErrors();
       return;
     }
 
-    switch (this.currentTab) {
-      case "prettify":
-        this.prettifyJSON();
-        break;
-      case "minify":
-        this.minifyJSON();
-        break;
-      case "stringify":
-        this.stringifyJSON();
-        break;
-      case "unstringify":
-        this.unstringifyJSON();
-        break;
-      case "escape":
-        this.escapeJSON();
-        break;
-      case "unescape":
-        this.unescapeJSON();
-        break;
-      case "extract-keys":
-        this.extractKeys();
-        break;
-      case "json-to-table":
-        this.jsonToTable();
-        break;
+    this.beginProcessAnalytics(this.currentTab);
+
+    try {
+      switch (this.currentTab) {
+        case "prettify":
+          this.prettifyJSON();
+          break;
+        case "minify":
+          this.minifyJSON();
+          break;
+        case "stringify":
+          this.stringifyJSON();
+          break;
+        case "unstringify":
+          this.unstringifyJSON();
+          break;
+        case "escape":
+          this.escapeJSON();
+          break;
+        case "unescape":
+          this.unescapeJSON();
+          break;
+        case "extract-keys":
+          this.extractKeys();
+          break;
+        case "json-to-table":
+          this.jsonToTable();
+          break;
+      }
+    } catch (error) {
+      this.trackProcessError(this.currentTab, content, error?.name || "processing_error");
+      this.showError("JSON processing failed", "The operation could not be completed.");
     }
   }
 
@@ -416,6 +499,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.prettify(content);
     if (res.error) {
+      this.trackProcessError("prettify", content, "invalid_json", { has_position: res.error.position != null });
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.showSuccess("JSON is valid ✅");
@@ -429,6 +513,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.minify(content);
     if (res.error) {
+      this.trackProcessError("minify", content, "invalid_json", { has_position: res.error.position != null });
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -441,6 +526,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.stringify(content);
     if (res.error) {
+      this.trackProcessError("stringify", content, "invalid_json", { has_position: res.error.position != null });
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -453,6 +539,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.unstringify(content);
     if (res.error) {
+      this.trackProcessError("unstringify", content, "invalid_stringified_json", { has_position: res.error.position != null });
       this.showError("JSON Unstringify Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -466,6 +553,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.escape(content);
     if (res.error) {
+      this.trackProcessError("escape", content, "invalid_json", { has_position: res.error.position != null });
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -478,6 +566,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.unescape(content);
     if (res.error) {
+      this.trackProcessError("unescape", content, "invalid_escaped_json", { has_position: res.error.position != null });
       this.showError("JSON Unescape Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -493,6 +582,7 @@ class JSONTools extends BaseTool {
 
     const res = JSONToolsService.extractKeys(content, extractType === "paths", sortOrder);
     if (res.error) {
+      this.trackProcessError("extract_keys", content, "invalid_json", { has_position: res.error.position != null });
       this.showError("JSON Syntax Error", res.error.message, res.error.position);
     } else {
       this.outputEditor.setValue(res.result || "");
@@ -514,25 +604,22 @@ class JSONTools extends BaseTool {
       this.keySortOrder = "natural"; // Reset sort order on new conversion
     } catch (error) {
       this.validatedJson = null;
-      UsageTracker.trackEvent("json-tools", "parse_error", UsageTracker.enrichErrorMeta(error, { action: "json_to_table" }));
+      this.trackProcessError("json_to_table", content, "invalid_json", { has_position: true });
       tableOutput.innerHTML = `<div class="table-error">Invalid JSON: ${error.message}</div>`;
       return;
     }
 
     // Render the table
-    this.renderTable();
+    if (!this.renderTable()) {
+      this.trackProcessError("json_to_table", content, "table_render_error");
+      return;
+    }
     const flattenedPairs = [];
     this.flattenObject(this.validatedJson, "", flattenedPairs);
-    this.trackAnalytics("json_to_table_success", {
-      ...getObjectShapeMeta(this.validatedJson),
-      ...summarizeText(content, "input"),
+    this.trackProcessSuccess("json_to_table", content, "", {
       row_count: flattenedPairs.length,
       transposed: this.isTransposed,
       sort_order: this.keySortOrder,
-    });
-    UsageTracker.trackToolUse("json-tools", "json_to_table", {
-      ...getObjectShapeMeta(this.validatedJson),
-      row_count: flattenedPairs.length,
     });
   }
 
@@ -540,12 +627,13 @@ class JSONTools extends BaseTool {
     const tableOutput = document.getElementById("json-table-output");
     if (!this.validatedJson) {
       tableOutput.innerHTML = '<div class="table-error">No valid JSON to display</div>';
-      return;
+      return false;
     }
 
     const res = JSONToolsService.jsonToTable(JSON.stringify(this.validatedJson), this.isTransposed, this.keySortOrder);
     if (res.error) {
       tableOutput.innerHTML = `<div class="table-error">${res.error.message}</div>`;
+      return false;
     } else {
       tableOutput.innerHTML = res.result || "";
 
@@ -559,6 +647,7 @@ class JSONTools extends BaseTool {
         }
       }
     }
+    return true;
   }
 
   cycleKeySortOrder() {
@@ -571,6 +660,11 @@ class JSONTools extends BaseTool {
       this.keySortOrder = "natural";
     }
     this.renderTable();
+    this.trackAnalytics("table_sort", {
+      sort_order: this.keySortOrder,
+      session_id: this.analyticsSessionId,
+      source_action: this.lastProcessAnalytics?.action || "json_to_table",
+    });
   }
 
   transposeTable() {
@@ -583,7 +677,11 @@ class JSONTools extends BaseTool {
 
     // Re-render table with new transpose state
     this.renderTable();
-    this.trackAnalytics("table_transpose", { transposed: this.isTransposed });
+    this.trackAnalytics("table_transpose", {
+      transposed: this.isTransposed,
+      session_id: this.analyticsSessionId,
+      source_action: this.lastProcessAnalytics?.action || "json_to_table",
+    });
   }
 
   toggleExpandTable() {
@@ -606,7 +704,11 @@ class JSONTools extends BaseTool {
       outputSection.classList.remove("expanded");
       expandBtn.textContent = "Expand";
     }
-    this.trackAnalytics("table_expand", { expanded: this.isExpanded });
+    this.trackAnalytics("table_expand", {
+      expanded: this.isExpanded,
+      session_id: this.analyticsSessionId,
+      source_action: this.lastProcessAnalytics?.action || "json_to_table",
+    });
   }
 
   searchTable(query) {
@@ -662,6 +764,8 @@ class JSONTools extends BaseTool {
       {
         query_length: query.length,
         match_count: this.searchMatches.length,
+        session_id: this.analyticsSessionId,
+        source_action: this.lastProcessAnalytics?.action || "json_to_table",
       },
       2000,
     ); // Debounce 2 seconds
@@ -777,6 +881,7 @@ class JSONTools extends BaseTool {
     const tableOutput = document.getElementById("json-table-output");
     const table = tableOutput?.querySelector(".json-table");
     if (!table) {
+      this.trackAnalytics("output_error", { target: "copy_table", error_type: "no_table" });
       this.showError("No table to copy");
       return null;
     }
@@ -835,7 +940,9 @@ class JSONTools extends BaseTool {
         await writeHtml(html, this.generateTSVFromData());
         console.log("[Clipboard] Tauri writeHtml SUCCESS");
         this.showSuccess("Copied to clipboard!");
-        this.trackAnalytics("copy_table", { format: "html", runtime: "tauri", ...summarizeText(html, "output") });
+        const meta = { format: "html", runtime: "tauri", ...summarizeText(html, "output") };
+        this.trackAnalytics("copy_table", meta);
+        this.trackOutputUsed("copy_table", meta);
         return;
       } catch (error) {
         console.warn("[Clipboard] Tauri clipboard failed, falling back to browser API:", error);
@@ -852,13 +959,16 @@ class JSONTools extends BaseTool {
       });
       await navigator.clipboard.write([clipboardItem]);
       this.showSuccess("Copied to clipboard!");
-      this.trackAnalytics("copy_table", { format: "html", runtime: "web", ...summarizeText(html, "output") });
+      const meta = { format: "html", runtime: "web", ...summarizeText(html, "output") };
+      this.trackAnalytics("copy_table", meta);
+      this.trackOutputUsed("copy_table", meta);
     } catch (error) {
       // Final fallback to plain text TSV
       console.warn("HTML clipboard failed, falling back to TSV:", error);
       const tsv = this.generateTSVFromData();
-      this.copyToClipboard(tsv);
-      this.trackAnalytics("copy_table", { format: "tsv_fallback", ...summarizeText(tsv, "output") });
+      if (await this.copyToClipboard(tsv, "table_fallback")) {
+        this.trackAnalytics("copy_table", { format: "tsv_fallback", ...summarizeText(tsv, "output") });
+      }
     }
   }
 
@@ -950,6 +1060,7 @@ class JSONTools extends BaseTool {
    */
   async exportToExcel() {
     if (!this.validatedJson) {
+      this.trackAnalytics("output_error", { target: "export_excel", error_type: "no_table" });
       this.showError("No data to export");
       return;
     }
@@ -963,6 +1074,7 @@ class JSONTools extends BaseTool {
       this.flattenObject(this.validatedJson, "", flattenedPairs);
 
       if (flattenedPairs.length === 0) {
+        this.trackAnalytics("output_error", { target: "export_excel", error_type: "empty_table" });
         this.showError("No data to export");
         return;
       }
@@ -996,27 +1108,47 @@ class JSONTools extends BaseTool {
         row_count: flattenedPairs.length,
         top_level_type: getObjectShapeMeta(this.validatedJson).top_level_type,
       });
+      this.trackOutputUsed("export_excel", {
+        row_count: flattenedPairs.length,
+        top_level_type: getObjectShapeMeta(this.validatedJson).top_level_type,
+      });
     } catch (error) {
       console.error("Export failed:", error);
+      this.trackAnalytics("output_error", { target: "export_excel", error_type: error?.name || "export_error" });
       this.showError("Failed to export to Excel");
     }
   }
 
-  async copyToClipboard(text) {
+  async copyToClipboard(text, target = "input") {
     try {
       await navigator.clipboard.writeText(text);
       this.showSuccess("Copied to clipboard!");
+      const meta = { ...summarizeText(text, "output"), session_id: this.analyticsSessionId };
+      if (target === "input") {
+        this.trackAnalytics("input_copied", meta);
+      } else {
+        this.trackOutputUsed(target === "table_fallback" ? "copy_table" : "copy_output", { ...meta, format: target });
+      }
+      return true;
     } catch (error) {
+      this.trackAnalytics("output_error", { target, error_type: error?.name || "clipboard_error" });
       this.showError("Failed to copy to clipboard");
       console.error("Clipboard error:", error);
+      return false;
     }
   }
 
   async pasteFromClipboard() {
     try {
       const text = await navigator.clipboard.readText();
+      this.programmaticInputChange = true;
       this.editor.setValue(text);
+      this.programmaticInputChange = false;
+      this.inputSource = "paste";
+      this.trackAnalytics("input_acquired", { source: "paste", ...summarizeText(text, "input"), session_id: this.analyticsSessionId });
     } catch (error) {
+      this.programmaticInputChange = false;
+      this.trackAnalytics("input_error", { source: "paste", error_type: error?.name || "clipboard_error" });
       this.showError("Failed to paste from clipboard", "Make sure you have granted clipboard permissions.");
       console.error("Clipboard error:", error);
     }

@@ -23,6 +23,12 @@ const DEFAULT_TABS = [
     query: "SELECT 'Overview is computed by the dashboard API' AS metric, '-' AS value, 'No direct SQL query is used' AS context",
   },
   {
+    id: "opportunities",
+    name: "Opportunities",
+    query:
+      "SELECT 'Opportunities are computed by the dashboard API' AS signal, '-' AS tool_id, 'Use the dashboard API time range filter' AS next_step",
+  },
+  {
     id: "who",
     name: "Who",
     query: "SELECT 'Who is computed by the dashboard API' AS section, '-' AS user, 'Use the dashboard API time range filter' AS details",
@@ -454,6 +460,8 @@ LIMIT 150`,
           'attachment_added',
           'attachment_removed',
           'attachment_minified',
+          'copy_sql',
+          'execute_in_run_query',
           'download_sql',
           'download_sql_as',
           'split_complete'
@@ -490,6 +498,8 @@ LIMIT 150`,
           'attachment_added',
           'attachment_removed',
           'attachment_minified',
+          'copy_sql',
+          'execute_in_run_query',
           'download_sql',
           'download_sql_as'
         )
@@ -513,6 +523,42 @@ LIMIT 150`,
         AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
       ORDER BY e.created_time DESC
       LIMIT 100`,
+  },
+  {
+    id: "qq-outcomes",
+    name: "QQ Outcomes",
+    query: `WITH qq AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    COALESCE(json_extract(e.properties, '$.query_type'), json_extract(e.properties, '$.queryType'), '-') AS query_type,
+    CAST(COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.rowCount'), 0) AS INTEGER) AS row_count,
+    COALESCE(json_extract(e.properties, '$.has_attachments'), 0) AS has_attachments
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'quick-query'
+    AND e.action IN ('query_generated', 'copy_sql', 'execute_in_run_query', 'download_sql', 'download_sql_as')
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT query_type,
+  SUM(CASE WHEN action = 'query_generated' THEN 1 ELSE 0 END) AS generations,
+  COUNT(DISTINCT CASE WHEN action = 'query_generated' THEN email END) AS users,
+  SUM(CASE WHEN action = 'copy_sql' THEN 1 ELSE 0 END) AS copies,
+  SUM(CASE WHEN action = 'execute_in_run_query' THEN 1 ELSE 0 END) AS sent_to_run_query,
+  SUM(CASE WHEN action IN ('download_sql', 'download_sql_as') THEN 1 ELSE 0 END) AS downloads,
+  ROUND(
+    100.0 * SUM(CASE WHEN action IN ('copy_sql', 'execute_in_run_query', 'download_sql', 'download_sql_as') THEN 1 ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN action = 'query_generated' THEN 1 ELSE 0 END), 0),
+    1
+  ) AS output_actions_per_100_generations,
+  ROUND(AVG(CASE WHEN action = 'query_generated' AND row_count > 0 THEN row_count END), 1) AS avg_rows,
+  SUM(CASE WHEN action = 'query_generated' AND has_attachments IN (1, '1', 'true') THEN 1 ELSE 0 END) AS attachment_generations,
+  MAX(created_time) AS last_seen
+FROM qq
+GROUP BY query_type
+ORDER BY generations DESC, last_seen DESC
+LIMIT 20`,
   },
   {
     id: "compare-config",
@@ -613,6 +659,7 @@ LIMIT 150`,
     COALESCE(json_extract(e.properties, '$.source'), '-') AS source,
     CAST(COALESCE(json_extract(e.properties, '$.sql_size'), json_extract(e.properties, '$.sql_length'), json_extract(e.properties, '$.sql_len'), 0) AS INTEGER) AS sql_size,
     CAST(COALESCE(json_extract(e.properties, '$.sql_bytes'), 0) AS INTEGER) AS sql_bytes,
+    CAST(COALESCE(json_extract(e.properties, '$.duration_ms'), 0) AS INTEGER) AS duration_ms,
     COALESCE(json_extract(e.properties, '$.over_size_limit'), 0) AS over_size_limit
   FROM events e
   JOIN device d ON e.device_id = d.device_id
@@ -627,6 +674,13 @@ SELECT env,
   SUM(CASE WHEN action = 'run_started' THEN 1 ELSE 0 END) AS runs_started,
   SUM(CASE WHEN action = 'run_success' THEN 1 ELSE 0 END) AS runs_success,
   SUM(CASE WHEN action = 'run_error' THEN 1 ELSE 0 END) AS run_errors,
+  SUM(CASE WHEN action = 'run_timeout' THEN 1 ELSE 0 END) AS run_timeouts,
+  ROUND(
+    100.0 * SUM(CASE WHEN action = 'run_success' THEN 1 ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN action = 'run_started' THEN 1 ELSE 0 END), 0),
+    1
+  ) AS success_rate_pct,
+  ROUND(AVG(CASE WHEN action = 'run_success' AND duration_ms > 0 THEN duration_ms END), 0) AS avg_success_ms,
   ROUND(AVG(CASE WHEN sql_size > 0 THEN sql_size END), 1) AS avg_sql_chars,
   MAX(sql_bytes) AS max_sql_bytes,
   SUM(CASE WHEN over_size_limit IN (1, '1', 'true') THEN 1 ELSE 0 END) AS oversize_runs,
@@ -712,6 +766,7 @@ LIMIT 100`,
     COALESCE(json_extract(e.properties, '$.action'), e.action) AS process_action,
     COALESCE(json_extract(e.properties, '$.top_level_type'), '-') AS top_level_type,
     CAST(COALESCE(json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    COALESCE(json_extract(e.properties, '$.input_size_bucket'), '-') AS input_size_bucket,
     CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size,
     CAST(COALESCE(json_extract(e.properties, '$.row_count'), json_extract(e.properties, '$.match_count'), 0) AS INTEGER) AS result_count
   FROM events e
@@ -731,6 +786,62 @@ SELECT process_action,
 FROM jt
 GROUP BY process_action, top_level_type
 ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
+    id: "json-outcomes",
+    name: "JSON Outcomes",
+    query: `WITH json_events AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    CASE
+      WHEN e.action IN ('process_success', 'process_error') THEN COALESCE(json_extract(e.properties, '$.action'), 'unknown')
+      WHEN e.action = 'output_used' THEN COALESCE(json_extract(e.properties, '$.source_action'), 'unknown')
+      ELSE e.action
+    END AS operation,
+    COALESCE(json_extract(e.properties, '$.input_source'), '-') AS input_source,
+    COALESCE(json_extract(e.properties, '$.top_level_type'), '-') AS top_level_type,
+    COALESCE(json_extract(e.properties, '$.max_depth_bucket'), '-') AS depth_bucket,
+    COALESCE(json_extract(e.properties, '$.field_count_bucket'), '-') AS field_count_bucket,
+    CAST(COALESCE(json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    COALESCE(json_extract(e.properties, '$.input_size_bucket'), '-') AS input_size_bucket,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size,
+    CAST(COALESCE(json_extract(e.properties, '$.duration_ms'), 0) AS INTEGER) AS duration_ms
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'json-tools'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT operation,
+  input_source,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action = 'process_success' THEN 1 ELSE 0 END) AS successes,
+  SUM(CASE WHEN action = 'process_error' THEN 1 ELSE 0 END) AS errors,
+  ROUND(
+    100.0 * SUM(CASE WHEN action = 'process_success' THEN 1 ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN action IN ('process_success', 'process_error') THEN 1 ELSE 0 END), 0),
+    1
+  ) AS success_rate_pct,
+  SUM(CASE WHEN action = 'output_used' THEN 1 ELSE 0 END) AS output_uses,
+  ROUND(
+    100.0 * SUM(CASE WHEN action = 'output_used' THEN 1 ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN action = 'process_success' THEN 1 ELSE 0 END), 0),
+    1
+  ) AS output_uses_per_100_successes,
+  GROUP_CONCAT(DISTINCT top_level_type) AS top_level_types,
+  GROUP_CONCAT(DISTINCT depth_bucket) AS depth_buckets,
+  GROUP_CONCAT(DISTINCT field_count_bucket) AS field_count_buckets,
+  GROUP_CONCAT(DISTINCT input_size_bucket) AS input_size_buckets,
+  ROUND(AVG(CASE WHEN duration_ms > 0 THEN duration_ms END), 1) AS avg_duration_ms,
+  ROUND(AVG(CASE WHEN input_size > 0 THEN input_size END), 1) AS avg_input_size,
+  ROUND(AVG(CASE WHEN output_size > 0 THEN output_size END), 1) AS avg_output_size,
+  MAX(created_time) AS last_seen
+FROM json_events
+GROUP BY operation, input_source
+ORDER BY successes DESC, output_uses DESC, errors DESC, last_seen DESC
 LIMIT 150`,
   },
   {
@@ -989,6 +1100,59 @@ SELECT feature_id AS tool,
 FROM tpl
 GROUP BY feature_id, action, env
 ORDER BY events DESC, last_seen DESC
+LIMIT 150`,
+  },
+  {
+    id: "html-outcomes",
+    name: "HTML Outcomes",
+    query: `WITH html_events AS (
+  SELECT e.created_time,
+    u.email,
+    e.action,
+    CASE
+      WHEN e.action = 'format_action' THEN 'format'
+      WHEN e.action = 'minify_action' THEN 'minify'
+      WHEN e.action = 'vtl_extract' THEN 'vtl_extract'
+      WHEN e.action = 'output_used' THEN COALESCE(json_extract(e.properties, '$.source_operation'), 'manual')
+      ELSE COALESCE(json_extract(e.properties, '$.operation'), e.action)
+    END AS operation,
+    COALESCE(json_extract(e.properties, '$.input_source'), json_extract(e.properties, '$.source'), '-') AS input_source,
+    CAST(COALESCE(json_extract(e.properties, '$.input_size'), 0) AS INTEGER) AS input_size,
+    COALESCE(json_extract(e.properties, '$.input_size_bucket'), '-') AS input_size_bucket,
+    CAST(COALESCE(json_extract(e.properties, '$.output_size'), 0) AS INTEGER) AS output_size,
+    CAST(COALESCE(json_extract(e.properties, '$.duration_ms'), 0) AS INTEGER) AS duration_ms,
+    CAST(COALESCE(json_extract(e.properties, '$.reduction_pct'), 0) AS REAL) AS reduction_pct,
+    CAST(COALESCE(json_extract(e.properties, '$.variable_count'), 0) AS INTEGER) AS variable_count,
+    CAST(COALESCE(json_extract(e.properties, '$.vtl_completion_pct'), 0) AS REAL) AS vtl_completion_pct
+  FROM events e
+  JOIN device d ON e.device_id = d.device_id
+  JOIN users u ON d.user_id = u.id
+  WHERE e.feature_id = 'html-template'
+    AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
+)
+SELECT operation,
+  input_source,
+  COUNT(*) AS events,
+  COUNT(DISTINCT email) AS users,
+  SUM(CASE WHEN action IN ('format_action', 'minify_action', 'vtl_extract') THEN 1 ELSE 0 END) AS successes,
+  SUM(CASE WHEN action IN ('process_error', 'preview_error', 'output_error', 'input_error') THEN 1 ELSE 0 END) AS errors,
+  SUM(CASE WHEN action = 'output_used' THEN 1 ELSE 0 END) AS output_uses,
+  ROUND(
+    100.0 * SUM(CASE WHEN action = 'output_used' THEN 1 ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN action IN ('format_action', 'minify_action', 'vtl_extract') THEN 1 ELSE 0 END), 0),
+    1
+  ) AS output_uses_per_100_successes,
+  ROUND(AVG(CASE WHEN duration_ms > 0 THEN duration_ms END), 1) AS avg_duration_ms,
+  GROUP_CONCAT(DISTINCT input_size_bucket) AS input_size_buckets,
+  ROUND(AVG(CASE WHEN action = 'minify_action' THEN reduction_pct END), 1) AS avg_minify_reduction_pct,
+  ROUND(AVG(CASE WHEN variable_count > 0 THEN variable_count END), 1) AS avg_vtl_variables,
+  ROUND(AVG(CASE WHEN variable_count > 0 THEN vtl_completion_pct END), 1) AS avg_vtl_completion_pct,
+  MAX(input_size) AS max_input_size,
+  MAX(output_size) AS max_output_size,
+  MAX(created_time) AS last_seen
+FROM html_events
+GROUP BY operation, input_source
+ORDER BY successes DESC, output_uses DESC, errors DESC, last_seen DESC
 LIMIT 150`,
   },
   {
@@ -1364,6 +1528,11 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
       return executeOverviewQuery(env, "tab:overview:v3");
     }
 
+    if (tab.id === "opportunities") {
+      const rangeConfig = getDashboardRangeConfig(range);
+      return executeOpportunitiesQuery(env, `tab:opportunities:${rangeConfig.id}:v1`, rangeConfig, tab.query);
+    }
+
     if (tab.id === "who") {
       const rangeConfig = getDashboardRangeConfig(range);
       return executeWhoQuery(env, `tab:who:${rangeConfig.id}:v1`, rangeConfig);
@@ -1503,102 +1672,102 @@ async function executeOverviewQuery(env, cacheKey) {
       const normalizedUsage7d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("7d"));
       const normalizedUsage30d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("30d"));
       const metricDefinitions = [
-      {
-        metric: "Active users today",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["tool_usage"],
-          `WITH deduplicated_usage AS (
+        {
+          metric: "Active users today",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["tool_usage"],
+            `WITH deduplicated_usage AS (
             ${canonicalUsageToday}
           )
           SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM deduplicated_usage`,
-          "0",
-        ),
-        context: "People with live usage today",
-      },
-      {
-        metric: "Active users 7d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["tool_usage"],
-          `WITH deduplicated_usage AS (
+            "0",
+          ),
+          context: "People with live usage today",
+        },
+        {
+          metric: "Active users 7d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["tool_usage"],
+            `WITH deduplicated_usage AS (
             ${normalizedUsage7d}
           )
           SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM deduplicated_usage`,
-          "0",
-        ),
-        context: "People with live usage in the last 7 days",
-      },
-      {
-        metric: "Tool opens 7d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["usage_log"],
-          `WITH deduplicated_usage AS (
+            "0",
+          ),
+          context: "People with live usage in the last 7 days",
+        },
+        {
+          metric: "Tool opens 7d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["usage_log"],
+            `WITH deduplicated_usage AS (
             ${deduplicatedUsage7d}
           )
           SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM deduplicated_usage
             WHERE action = 'open'`,
-          "0",
-        ),
-        context: "Shell-level tool open events",
-      },
-      {
-        metric: "Successful tool uses 7d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["tool_usage"],
-          `WITH normalized_usage AS (
+            "0",
+          ),
+          context: "Shell-level tool open events",
+        },
+        {
+          metric: "Successful tool uses 7d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["tool_usage"],
+            `WITH normalized_usage AS (
             ${normalizedUsage7d}
           )
           SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM normalized_usage`,
-          "0",
-        ),
-        context: "Completed, value-producing tool uses",
-      },
-      {
-        metric: "Uncaught errors 24h",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["error_events"],
-          `SELECT CAST(COUNT(*) AS TEXT) AS value
+            "0",
+          ),
+          context: "Completed, value-producing tool uses",
+        },
+        {
+          metric: "Uncaught errors 24h",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["error_events"],
+            `SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-1 day')`,
-          "0",
-        ),
-        context: "Immediate frontend error reports",
-      },
-      {
-        metric: "Affected users 7d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["error_events"],
-          `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
+            "0",
+          ),
+          context: "Immediate frontend error reports",
+        },
+        {
+          metric: "Affected users 7d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["error_events"],
+            `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')`,
-          "0",
-        ),
-        context: "Users with uncaught errors",
-      },
-      {
-        metric: "Most used tool 30d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["tool_usage"],
-          `WITH normalized_usage AS (
+            "0",
+          ),
+          context: "Users with uncaught errors",
+        },
+        {
+          metric: "Most used tool 30d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["tool_usage"],
+            `WITH normalized_usage AS (
             ${normalizedUsage30d}
           )
           SELECT tool_id || ' (' || COUNT(*) || ')' AS value
@@ -1606,27 +1775,27 @@ async function executeOverviewQuery(env, cacheKey) {
             GROUP BY tool_id
             ORDER BY COUNT(*) DESC
             LIMIT 1`,
-          "-",
-        ),
-        context: "Tool with the most completed uses",
-      },
-      {
-        metric: "Noisiest error 7d",
-        value: safeDashboardScalar(
-          env,
-          tables,
-          ["error_events"],
-          `SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')' AS value
+            "-",
+          ),
+          context: "Tool with the most completed uses",
+        },
+        {
+          metric: "Noisiest error 7d",
+          value: safeDashboardScalar(
+            env,
+            tables,
+            ["error_events"],
+            `SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')' AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
               AND created_time >= datetime('now', '+7 hours', '-7 days')
             GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
             ORDER BY COUNT(*) DESC, MAX(created_time) DESC
             LIMIT 1`,
-          "-",
-        ),
-        context: "Top uncaught error cluster",
-      },
+            "-",
+          ),
+          context: "Top uncaught error cluster",
+        },
       ];
       const data = await Promise.all(
         metricDefinitions.map(async (metric) => ({
@@ -2004,6 +2173,161 @@ LIMIT 100`;
     });
   } catch (err) {
     return dashboardJson({ ok: false, error: `Tool adoption failed: ${String(err)}`, tabId: "tool-adoption" }, 200);
+  }
+}
+
+async function executeOpportunitiesQuery(env, cacheKey, rangeConfig, fallbackQuery) {
+  try {
+    if (!env.DB) {
+      return dashboardJson({ ok: false, error: "Database not available", tabId: "opportunities" }, 200);
+    }
+
+    const cachedBody = getCachedDashboardQueryBody(cacheKey);
+    if (cachedBody) {
+      return new Response(cachedBody, {
+        headers: { "Content-Type": "application/json", ...corsHeaders() },
+      });
+    }
+
+    const tables = await getDashboardTables(env);
+    if (!tables.has("tool_usage")) {
+      return executeQuery(env, `fallback:${cacheKey}:${fallbackQuery}`, fallbackQuery);
+    }
+
+    if (tables.has("error_events")) await ensureErrorEventsSchema(env);
+    const frictionBranches = [];
+    if (tables.has("events") && tables.has("device") && tables.has("users")) {
+      frictionBranches.push(`SELECT CASE
+      WHEN e.feature_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
+      WHEN e.feature_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
+      WHEN e.feature_id IN ('json_tools', 'json-tools') THEN 'json-tools'
+      ELSE e.feature_id
+    END AS tool_id,
+    COUNT(*) AS friction_events
+  FROM events e
+  JOIN device d ON d.device_id = e.device_id
+  JOIN users u ON u.id = d.user_id
+  WHERE ${includedAnalyticsEmailSql("u.email")}
+    AND (LOWER(e.action) LIKE '%error%' OR e.action IN ('validation_error', 'run_timeout'))
+    ${rangeConfig.where("e.created_time")}
+  GROUP BY tool_id`);
+    }
+    if (tables.has("error_events")) {
+      frictionBranches.push(`SELECT CASE
+      WHEN tool_id IN ('jenkins-runner', 'run-query') THEN 'run-query'
+      WHEN tool_id IN ('master_lockey', 'master-lockey') THEN 'master-lockey'
+      WHEN tool_id IN ('json_tools', 'json-tools') THEN 'json-tools'
+      ELSE COALESCE(NULLIF(tool_id, ''), NULLIF(route, ''), 'unknown')
+    END AS tool_id,
+    COUNT(*) AS friction_events
+  FROM error_events
+  WHERE ${includedAnalyticsEmailSql("user_email")}
+    ${rangeConfig.where("created_time")}
+  GROUP BY tool_id`);
+    }
+    const frictionSql = frictionBranches.length
+      ? frictionBranches.join("\n  UNION ALL\n  ")
+      : "SELECT 'unknown' AS tool_id, 0 AS friction_events WHERE 0";
+    const query = `WITH successful_use AS (
+  ${buildCanonicalToolUsageQuery(rangeConfig)}
+),
+user_tool AS (
+  SELECT tool_id,
+    user_email,
+    COUNT(*) AS uses
+  FROM successful_use
+  GROUP BY tool_id, user_email
+),
+tool_rollup AS (
+  SELECT tool_id,
+    SUM(uses) AS successful_uses,
+    COUNT(*) AS users,
+    SUM(CASE WHEN uses >= 2 THEN 1 ELSE 0 END) AS repeat_users,
+    MAX(uses) AS max_uses_by_one_user
+  FROM user_tool
+  GROUP BY tool_id
+),
+action_counts AS (
+  SELECT tool_id,
+    action,
+    COUNT(*) AS uses,
+    ROW_NUMBER() OVER (PARTITION BY tool_id ORDER BY COUNT(*) DESC, action) AS action_rank
+  FROM successful_use
+  GROUP BY tool_id, action
+),
+last_use AS (
+  SELECT tool_id, MAX(created_time) AS last_used
+  FROM successful_use
+  GROUP BY tool_id
+),
+friction_rows AS (
+  ${frictionSql}
+),
+friction AS (
+  SELECT tool_id, SUM(friction_events) AS friction_events
+  FROM friction_rows
+  GROUP BY tool_id
+),
+ranked AS (
+  SELECT ROW_NUMBER() OVER (ORDER BY tr.successful_uses DESC, tr.users DESC, tr.tool_id) AS priority,
+    tr.tool_id,
+    tr.successful_uses,
+    tr.users,
+    tr.repeat_users,
+    ROUND(100.0 * tr.repeat_users / NULLIF(tr.users, 0), 1) AS repeat_rate_pct,
+    ROUND(1.0 * tr.successful_uses / NULLIF(tr.users, 0), 1) AS uses_per_user,
+    ac.action AS top_action,
+    ROUND(100.0 * ac.uses / NULLIF(tr.successful_uses, 0), 1) AS top_action_share_pct,
+    COALESCE(f.friction_events, 0) AS friction_events,
+    ROUND(100.0 * COALESCE(f.friction_events, 0) / NULLIF(tr.successful_uses, 0), 1) AS friction_per_100_uses,
+    lu.last_used
+  FROM tool_rollup tr
+  JOIN action_counts ac ON ac.tool_id = tr.tool_id AND ac.action_rank = 1
+  JOIN last_use lu ON lu.tool_id = tr.tool_id
+  LEFT JOIN friction f ON f.tool_id = tr.tool_id
+)
+SELECT priority,
+  tool_id,
+  successful_uses,
+  users,
+  repeat_users,
+  repeat_rate_pct,
+  uses_per_user,
+  top_action,
+  top_action_share_pct,
+  friction_events,
+  friction_per_100_uses,
+  CASE
+    WHEN friction_per_100_uses >= 10 THEN 'Reliability'
+    WHEN repeat_rate_pct < 25 THEN 'Retention'
+    WHEN users <= 2 AND successful_uses >= 10 THEN 'Reach'
+    ELSE 'Workflow depth'
+  END AS signal,
+  CASE
+    WHEN friction_per_100_uses >= 10 THEN 'Review the most common error and validation events first'
+    WHEN repeat_rate_pct < 25 THEN 'Study first-use drop-off and reasons people do not return'
+    WHEN users <= 2 AND successful_uses >= 10 THEN 'Validate whether this solves a team need or one power-user need'
+    ELSE 'Study the dominant action and the next step users take after it'
+  END AS next_step,
+  last_used
+FROM ranked
+ORDER BY priority
+LIMIT 100`;
+    const result = await env.DB.prepare(query).all();
+    const body = JSON.stringify({
+      ok: true,
+      data: result.results || [],
+      mode: "computed-opportunities",
+      range: rangeConfig.id,
+      rangeLabel: rangeConfig.label,
+    });
+    setCachedDashboardQueryBody(cacheKey, body);
+
+    return new Response(body, {
+      headers: { "Content-Type": "application/json", ...corsHeaders() },
+    });
+  } catch (err) {
+    return dashboardJson({ ok: false, error: `Opportunity insights failed: ${String(err)}`, tabId: "opportunities" }, 200);
   }
 }
 

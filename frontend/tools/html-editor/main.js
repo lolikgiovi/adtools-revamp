@@ -10,7 +10,7 @@ import MinifyWorker from "./minify.worker.js?worker";
 import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
-import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
+import { bucketSize, cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
@@ -31,6 +31,11 @@ class HTMLTemplateTool extends BaseTool {
     this._envStorageKey = "tool:html-template:env";
     this._splitStorageKey = "tool:html-template:split-ratio";
     this._resizerCleanup = null;
+    this.analyticsSessionId = this.createAnalyticsId();
+    this.inputSource = "default";
+    this.programmaticEditorChange = false;
+    this.lastHtmlOperation = null;
+    this.vtlAnalyticsTimer = null;
   }
 
   getIconSvg() {
@@ -45,9 +50,67 @@ class HTMLTemplateTool extends BaseTool {
     try {
       const cleanMeta = cleanAnalyticsMeta(meta);
       UsageTracker.trackEvent("html-template", event, cleanMeta);
-      const usageActions = { format_action: "format", minify_action: "minify", copy_html: "copy" };
+      const usageActions = { format_action: "format", minify_action: "minify", copy_html: "copy", vtl_extract: "vtl_extract" };
       if (usageActions[event]) UsageTracker.trackToolUse("html-template", usageActions[event], cleanMeta);
     } catch (_) {}
+  }
+
+  createAnalyticsId() {
+    const now = Date.now();
+    return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  getVtlAnalyticsMeta(html = this.editor?.getValue?.() || "") {
+    try {
+      const variables = extractVtlVariables(html).filter((variable) => variable !== "baseUrl");
+      const resolved = variables.filter((variable) => String(this.vtlValues?.[variable] ?? "").length > 0).length;
+      return {
+        variable_count: variables.length,
+        variables_resolved: resolved,
+        variables_unresolved: Math.max(0, variables.length - resolved),
+        vtl_completion_pct: variables.length ? Math.round((100 * resolved) / variables.length) : 100,
+        has_environment: Boolean(document.getElementById("envSelector")?.value),
+      };
+    } catch (_) {
+      return { variable_count: 0, variables_resolved: 0, variables_unresolved: 0, vtl_completion_pct: 0 };
+    }
+  }
+
+  buildHtmlProcessMeta(input, output, startedAt, attemptId, extra = {}) {
+    const inputSize = String(input || "").length;
+    const outputSize = String(output || "").length;
+    return {
+      ...summarizeText(input, "input"),
+      ...summarizeText(output, "output"),
+      input_size_bucket: bucketSize(inputSize),
+      reduction_pct: inputSize > 0 ? Math.round((1000 * (inputSize - outputSize)) / inputSize) / 10 : 0,
+      duration_ms: Math.max(0, Date.now() - startedAt),
+      attempt_id: attemptId,
+      session_id: this.analyticsSessionId,
+      input_source: this.inputSource,
+      ...this.getVtlAnalyticsMeta(output || input),
+      ...extra,
+    };
+  }
+
+  trackHtmlProcessSuccess(event, operation, input, output, startedAt, attemptId, extra = {}) {
+    const meta = this.buildHtmlProcessMeta(input, output, startedAt, attemptId, { operation, ...extra });
+    this.trackAnalytics(event, meta);
+    this.lastHtmlOperation = meta;
+  }
+
+  trackHtmlProcessError(operation, input, startedAt, attemptId, errorType) {
+    this.trackAnalytics("process_error", {
+      operation,
+      error_type: String(errorType || "operation_error").slice(0, 80),
+      ...summarizeText(input, "input"),
+      input_size_bucket: bucketSize(String(input || "").length),
+      duration_ms: Math.max(0, Date.now() - startedAt),
+      attempt_id: attemptId,
+      session_id: this.analyticsSessionId,
+      input_source: this.inputSource,
+      ...this.getVtlAnalyticsMeta(input),
+    });
   }
 
   async onMount() {
@@ -73,6 +136,8 @@ class HTMLTemplateTool extends BaseTool {
 
   onUnmount() {
     this.cleanupResizer();
+    clearTimeout(this.vtlAnalyticsTimer);
+    this.vtlAnalyticsTimer = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -120,6 +185,7 @@ class HTMLTemplateTool extends BaseTool {
       const saved = localStorage.getItem(key);
       if (saved !== null) {
         this.editor.setValue(saved);
+        this.inputSource = "restored";
       }
     } catch (_) {}
   }
@@ -167,18 +233,34 @@ class HTMLTemplateTool extends BaseTool {
       if (btn) btn.disabled = !this.minifierAvailable;
 
       if (success && typeof result === "string") {
+        this.programmaticEditorChange = true;
         this.editor.setValue(result);
+        this.programmaticEditorChange = false;
         this.renderPreview(result);
-        this.trackAnalytics("minify_action", this.pendingMinifyMeta || summarizeText(result, "html"));
+        const pending = this.pendingMinifyMeta || {
+          input: result,
+          startedAt: Date.now(),
+          attemptId: this.createAnalyticsId(),
+        };
+        this.trackHtmlProcessSuccess("minify_action", "minify", pending.input, result, pending.startedAt, pending.attemptId);
         this.pendingMinifyMeta = null;
       } else if (!success && error) {
+        const pending = this.pendingMinifyMeta;
+        if (pending) this.trackHtmlProcessError("minify", pending.input, pending.startedAt, pending.attemptId, "minify_failed");
+        this.pendingMinifyMeta = null;
         this.showError(`Minify failed. Your HTML was left unchanged. ${error}`);
       }
     };
     this.minifyWorker.onerror = (err) => {
+      const pending = this.pendingMinifyMeta;
+      if (pending) this.trackHtmlProcessError("minify", pending.input, pending.startedAt, pending.attemptId, "worker_error");
+      this.pendingMinifyMeta = null;
       markUnavailable(err?.message ? `${unavailableMessage} ${err.message}` : unavailableMessage);
     };
     this.minifyWorker.onmessageerror = () => {
+      const pending = this.pendingMinifyMeta;
+      if (pending) this.trackHtmlProcessError("minify", pending.input, pending.startedAt, pending.attemptId, "worker_message_error");
+      this.pendingMinifyMeta = null;
       markUnavailable("HTML minifier returned an unreadable response. Your HTML was left unchanged.");
     };
     // Probe worker for engine status on load
@@ -211,10 +293,24 @@ class HTMLTemplateTool extends BaseTool {
     if (btnFormat) {
       btnFormat.addEventListener("click", async () => {
         const action = this.editor.getAction("editor.action.formatDocument");
+        const input = this.editor.getValue();
+        const startedAt = Date.now();
+        const attemptId = this.createAnalyticsId();
         if (action) {
-          await action.run();
-          this.renderPreview(this.editor.getValue());
-          this.trackAnalytics("format_action", summarizeText(this.editor.getValue(), "html"));
+          try {
+            this.programmaticEditorChange = true;
+            await action.run();
+            const output = this.editor.getValue();
+            this.renderPreview(output);
+            this.trackHtmlProcessSuccess("format_action", "format", input, output, startedAt, attemptId);
+          } catch (error) {
+            this.trackHtmlProcessError("format", input, startedAt, attemptId, error?.name || "format_error");
+            this.showError("Format failed. Your HTML was left unchanged.");
+          } finally {
+            this.programmaticEditorChange = false;
+          }
+        } else {
+          this.trackHtmlProcessError("format", input, startedAt, attemptId, "formatter_unavailable");
         }
       });
     }
@@ -222,18 +318,21 @@ class HTMLTemplateTool extends BaseTool {
     if (btnMinify) {
       btnMinify.addEventListener("click", async () => {
         if (!this.minifyWorker || !this.minifierAvailable) {
+          this.trackHtmlProcessError("minify", this.editor.getValue(), Date.now(), this.createAnalyticsId(), "minifier_unavailable");
           this.showError("HTML minifier is unavailable. Your HTML was left unchanged.");
           return;
         }
         const html = this.editor.getValue();
         btnMinify.disabled = true;
-        this.pendingMinifyMeta = summarizeText(html, "html");
+        this.pendingMinifyMeta = { input: html, startedAt: Date.now(), attemptId: this.createAnalyticsId() };
         this.minifyWorker.postMessage({ type: "minify", html });
       });
     }
 
     if (btnExtract) {
       btnExtract.addEventListener("click", () => {
+        const startedAt = Date.now();
+        const attemptId = this.createAnalyticsId();
         const html = this.editor.getValue();
         const allVars = extractVtlVariables(html);
         const vars = allVars.filter((v) => v !== "baseUrl");
@@ -286,6 +385,14 @@ class HTMLTemplateTool extends BaseTool {
                 } catch (_) {}
                 // Force re-render to apply latest substitutions
                 this.renderPreview(this.editor.getValue(), true);
+                clearTimeout(this.vtlAnalyticsTimer);
+                this.vtlAnalyticsTimer = setTimeout(() => {
+                  this.trackAnalytics("vtl_values_updated", {
+                    session_id: this.analyticsSessionId,
+                    input_source: this.inputSource,
+                    ...this.getVtlAnalyticsMeta(this.editor.getValue()),
+                  });
+                }, 1000);
               });
 
               row.appendChild(label);
@@ -295,10 +402,9 @@ class HTMLTemplateTool extends BaseTool {
           }
         }
         if (modal) modal.style.display = "block";
-        this.trackAnalytics("vtl_extract", {
-          variable_count: vars.length,
-          ...summarizeText(html, "html"),
-        });
+        const meta = this.buildHtmlProcessMeta(html, html, startedAt, attemptId, { operation: "vtl_extract" });
+        this.trackAnalytics("vtl_extract", meta);
+        this.lastHtmlOperation = meta;
       });
     }
 
@@ -338,8 +444,20 @@ class HTMLTemplateTool extends BaseTool {
         try {
           await navigator.clipboard.writeText(this.editor.getValue());
           this.showSuccess("HTML copied");
-          this.trackAnalytics("copy_html", summarizeText(this.editor.getValue(), "html"));
+          const html = this.editor.getValue();
+          const meta = {
+            operation: "copy",
+            source_operation: this.lastHtmlOperation?.operation || "manual",
+            source_attempt_id: this.lastHtmlOperation?.attempt_id || null,
+            session_id: this.analyticsSessionId,
+            input_source: this.inputSource,
+            ...summarizeText(html, "output"),
+            ...this.getVtlAnalyticsMeta(html),
+          };
+          this.trackAnalytics("copy_html", meta);
+          this.trackAnalytics("output_used", meta);
         } catch (e) {
+          this.trackAnalytics("output_error", { operation: "copy", error_type: e?.name || "clipboard_error" });
           this.showError("Copy failed");
         }
       });
@@ -358,9 +476,15 @@ class HTMLTemplateTool extends BaseTool {
               this.editor.setValue(text);
             }
             this.renderPreview(this.editor.getValue());
-            this.trackAnalytics("paste_html", summarizeText(text, "html"));
+            this.inputSource = "paste";
+            this.trackAnalytics("input_acquired", {
+              source: "paste",
+              session_id: this.analyticsSessionId,
+              ...summarizeText(text, "input"),
+            });
           }
         } catch (e) {
+          this.trackAnalytics("input_error", { source: "paste", error_type: e?.name || "clipboard_error" });
           this.showError("Paste failed");
         }
       });
@@ -369,6 +493,7 @@ class HTMLTemplateTool extends BaseTool {
     if (btnClear) {
       btnClear.addEventListener("click", () => {
         this.editor.setValue("");
+        this.inputSource = "empty";
         try {
           localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", "");
         } catch (_) {}
@@ -379,7 +504,16 @@ class HTMLTemplateTool extends BaseTool {
 
     if (btnReload) {
       btnReload.addEventListener("click", () => {
-        this.renderPreview(this.editor.getValue(), true);
+        const html = this.editor.getValue();
+        const startedAt = Date.now();
+        this.renderPreview(html, true);
+        this.trackAnalytics("preview_reload", {
+          duration_ms: Math.max(0, Date.now() - startedAt),
+          session_id: this.analyticsSessionId,
+          input_source: this.inputSource,
+          ...summarizeText(html, "input"),
+          ...this.getVtlAnalyticsMeta(html),
+        });
       });
     }
 
@@ -387,6 +521,7 @@ class HTMLTemplateTool extends BaseTool {
     this._persistTimer = this._persistTimer || null;
     this.editor.onDidChangeModelContent(() => {
       const value = this.editor.getValue();
+      if (!this.programmaticEditorChange) this.inputSource = "manual";
       this.debouncedRender?.(value);
       clearTimeout(this._persistTimer);
       this._persistTimer = setTimeout(() => {
@@ -424,10 +559,23 @@ class HTMLTemplateTool extends BaseTool {
     this.applyIframeSandbox();
 
     // Apply VTL substitutions before rendering
-    const rendered = renderVtlTemplate(html, this.vtlValues);
+    try {
+      const rendered = renderVtlTemplate(html, this.vtlValues);
 
-    // Use srcdoc for atomic update and secure context
-    iframe.srcdoc = rendered || "";
+      // Use srcdoc for atomic update and secure context
+      iframe.srcdoc = rendered || "";
+    } catch (error) {
+      UsageTracker.trackEvent(
+        "html-template",
+        "preview_error",
+        {
+          error_type: error?.name || "render_error",
+          session_id: this.analyticsSessionId,
+          ...summarizeText(html, "input"),
+        },
+        2000,
+      );
+    }
   }
 
   setupEnvDropdown() {
@@ -549,6 +697,7 @@ class HTMLTemplateTool extends BaseTool {
       this._loadHtmlContent(content);
     } catch (error) {
       console.error("Failed to import HTML (Tauri):", error);
+      this.trackAnalytics("input_error", { source: "import", error_type: error?.name || "file_read_error" });
       this.showError(`Failed to import HTML: ${error.message}`);
     }
   }
@@ -568,6 +717,7 @@ class HTMLTemplateTool extends BaseTool {
       }
     };
     reader.onerror = () => {
+      this.trackAnalytics("input_error", { source: "import", error_type: "file_read_error" });
       this.showError("Failed to read HTML file");
     };
     reader.readAsText(file);
@@ -580,7 +730,10 @@ class HTMLTemplateTool extends BaseTool {
    * Load HTML content into the editor
    */
   _loadHtmlContent(content) {
+    this.programmaticEditorChange = true;
     this.editor.setValue(content);
+    this.programmaticEditorChange = false;
+    this.inputSource = "import";
     this.renderPreview(content);
 
     // Persist to localStorage
@@ -589,7 +742,11 @@ class HTMLTemplateTool extends BaseTool {
     } catch (_) {}
 
     this.showSuccess("HTML file imported successfully");
-    this.trackAnalytics("import_html", summarizeText(content, "html"));
+    this.trackAnalytics("input_acquired", {
+      source: "import",
+      session_id: this.analyticsSessionId,
+      ...summarizeText(content, "input"),
+    });
   }
 
   initializeResizer() {

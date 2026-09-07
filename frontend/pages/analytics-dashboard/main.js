@@ -352,7 +352,10 @@ class AnalyticsDashboardPage {
 
       if (data.ok && Array.isArray(data.data)) {
         if (paginated) {
-          const pageResult = { data: data.data, pagination: data.pagination || { page, pageSize: paginationState.pageSize, hasMore: false } };
+          const pageResult = {
+            data: data.data,
+            pagination: data.pagination || { page, pageSize: paginationState.pageSize, hasMore: false },
+          };
           this.cache[cacheKey] = pageResult;
           this.applyPaginatedPage(content, pageResult.data, pageResult.pagination, append, paginationState);
         } else {
@@ -815,12 +818,12 @@ class AnalyticsDashboardPage {
       const requestedPage = page || state?.page || 1;
       return `${tabId}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
     }
-    return tabId === "who" ? `${tabId}:${this.selectedRange}` : tabId;
+    return ["who", "opportunities"].includes(tabId) ? `${tabId}:${this.selectedRange}` : tabId;
   }
 
   updateRangeVisibility() {
     const rangeControl = this.container.querySelector(".dashboard-range");
-    if (rangeControl) rangeControl.hidden = this.currentTab !== "who";
+    if (rangeControl) rangeControl.hidden = !["who", "opportunities"].includes(this.currentTab);
   }
 
   getRangeLabel(range) {
