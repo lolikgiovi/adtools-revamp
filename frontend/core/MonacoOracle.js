@@ -1,4 +1,4 @@
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { configureMonacoWorkers } from "./MonacoWorkers.js";
 

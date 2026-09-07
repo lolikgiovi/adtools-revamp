@@ -11,7 +11,7 @@ import { MergeSqlService } from "./service.js";
 import { createOracleEditor } from "../../core/MonacoOracle.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta, summarizeFiles, summarizeText } from "../../core/AnalyticsMeta.js";
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import * as IndexedDBManager from "./indexeddb-manager.js";
 
 let html2canvasPromise = null;

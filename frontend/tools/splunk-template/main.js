@@ -1,5 +1,5 @@
 import { BaseTool } from "../../core/BaseTool.js";
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { SplunkVTLEditorTemplate } from "./template.js";

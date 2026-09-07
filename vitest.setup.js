@@ -26,3 +26,9 @@ if (typeof localStorage === "undefined" || typeof localStorage.clear !== "functi
     },
   };
 }
+
+// Monaco's full editor bundle checks this legacy browser API while registering
+// clipboard contributions. jsdom does not implement it.
+if (typeof document !== "undefined" && typeof document.queryCommandSupported !== "function") {
+  document.queryCommandSupported = () => false;
+}
