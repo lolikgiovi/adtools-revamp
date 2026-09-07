@@ -1,4 +1,6 @@
 .quick-query-tool-container {
+  --qq-app-header-height: 57px;
+  --qq-tab-strip-space: 42px;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 100px);
@@ -20,13 +22,17 @@
 }
 
 .qq-tab-strip {
-  position: relative;
+  position: sticky;
+  top: var(--qq-app-header-height);
+  z-index: 200;
   display: flex;
+  flex: 0 0 34px;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  height: 34px;
   margin: 0 0 8px;
   border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
   overflow: hidden;
 }
 
@@ -243,7 +249,10 @@
 
 .content-b {
   flex: 0 0 auto;
-  /* Allow it to grow but not shrink */
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--qq-app-header-height) - var(--qq-tab-strip-space));
+  min-height: 320px;
   padding: 8px 0 8px 0;
   border-top: 1px solid hsl(var(--border));
   position: relative;
@@ -318,6 +327,7 @@
 
 /* Constrain data spreadsheet to viewport and enable internal scrolling */
 #spreadsheet-data {
+  flex: 1 1 auto;
   min-height: 200px;
   overflow: hidden;
   overscroll-behavior: contain;

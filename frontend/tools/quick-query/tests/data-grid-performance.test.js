@@ -85,6 +85,7 @@ function createUi() {
   };
   ui.scheduleSchemaLayoutRefresh = vi.fn();
   ui.scheduleDataTableLayoutRefresh = vi.fn(() => ui.syncDataTableLayout());
+  ui._handleDataWorkspaceWheel = (event) => ui.handleDataWorkspaceWheel(event);
   ui.isDataMaximized = false;
   return { ui, dataContainer, maximizeButton, toolContainer, wordWrapButton, wrapToggle, wrapToggleLabel };
 }
@@ -143,6 +144,91 @@ describe("Quick Query data-grid performance", () => {
     ui.initializeSpreadsheets();
 
     expect(handsontableInstances[1].settings.height).toBe(676);
+  });
+
+  it("uses a preallocated data workspace height so scrolling does not resize the grid", () => {
+    const { ui, dataContainer } = createUi();
+    Object.defineProperty(dataContainer, "clientHeight", { configurable: true, value: 640 });
+
+    ui.initializeSpreadsheets();
+
+    expect(handsontableInstances[1].settings.height).toBe(640);
+  });
+
+  it("moves the page toward the data workspace before scrolling virtualized rows", () => {
+    const { ui, dataContainer, toolContainer } = createUi();
+    const pageScroller = document.createElement("main");
+    const gridScroller = document.createElement("div");
+    pageScroller.className = "main";
+    gridScroller.className = "wtHolder";
+    const master = document.createElement("div");
+    master.className = "ht_master";
+    master.append(gridScroller);
+    dataContainer.append(master);
+    pageScroller.append(toolContainer);
+    Object.defineProperties(pageScroller, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 1400 },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+    });
+    Object.defineProperty(gridScroller, "scrollTop", { configurable: true, writable: true, value: 0 });
+    const event = { ctrlKey: false, defaultPrevented: false, deltaMode: 0, deltaX: 0, deltaY: 120, preventDefault: vi.fn() };
+
+    ui.handleDataWorkspaceWheel(event);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(pageScroller.scrollTop).toBe(220);
+    expect(gridScroller.scrollTop).toBe(0);
+  });
+
+  it("lets the grid scroll after the data workspace fills the page", () => {
+    const { ui, dataContainer, toolContainer } = createUi();
+    const pageScroller = document.createElement("main");
+    const gridScroller = document.createElement("div");
+    pageScroller.className = "main";
+    gridScroller.className = "wtHolder";
+    const master = document.createElement("div");
+    master.className = "ht_master";
+    master.append(gridScroller);
+    dataContainer.append(master);
+    pageScroller.append(toolContainer);
+    Object.defineProperties(pageScroller, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 1400 },
+      scrollTop: { configurable: true, writable: true, value: 600 },
+    });
+    Object.defineProperty(gridScroller, "scrollTop", { configurable: true, writable: true, value: 80 });
+    const event = { ctrlKey: false, defaultPrevented: false, deltaMode: 0, deltaX: 0, deltaY: 120, preventDefault: vi.fn() };
+
+    ui.handleDataWorkspaceWheel(event);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(pageScroller.scrollTop).toBe(600);
+  });
+
+  it("returns to normal page scrolling after virtualized rows reach the top", () => {
+    const { ui, dataContainer, toolContainer } = createUi();
+    const pageScroller = document.createElement("main");
+    const gridScroller = document.createElement("div");
+    pageScroller.className = "main";
+    gridScroller.className = "wtHolder";
+    const master = document.createElement("div");
+    master.className = "ht_master";
+    master.append(gridScroller);
+    dataContainer.append(master);
+    pageScroller.append(toolContainer);
+    Object.defineProperties(pageScroller, {
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 1400 },
+      scrollTop: { configurable: true, writable: true, value: 600 },
+    });
+    Object.defineProperty(gridScroller, "scrollTop", { configurable: true, writable: true, value: 0 });
+    const event = { ctrlKey: false, defaultPrevented: false, deltaMode: 0, deltaX: 0, deltaY: -120, preventDefault: vi.fn() };
+
+    ui.handleDataWorkspaceWheel(event);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(pageScroller.scrollTop).toBe(480);
   });
 
   it("enables automatic row measurement only while wrapping is on", () => {

@@ -142,6 +142,7 @@ export class QuickQueryUI {
     this._cancelScheduledLayout = null;
     this._dataTableLayoutScheduled = false;
     this._cancelScheduledDataTableLayout = null;
+    this._handleDataWorkspaceWheel = (event) => this.handleDataWorkspaceWheel(event);
     this._handleDataTableViewportResize = () => {
       this.scheduleSchemaLayoutRefresh();
       this.scheduleDataTableLayoutRefresh();
@@ -288,6 +289,7 @@ export class QuickQueryUI {
       dataContainer: document.getElementById("spreadsheet-data"),
       toggleDataMaximize: document.getElementById("toggleDataMaximize"),
       contentA: document.querySelector(".content-a"),
+      contentB: document.querySelector(".content-b"),
       leftPanel: document.querySelector(".quick-query-left-panel"),
       leftScroll: document.querySelector(".quick-query-left-scroll"),
       rightPanel: document.querySelector(".quick-query-right-panel"),
@@ -784,6 +786,7 @@ export class QuickQueryUI {
     };
 
     this.dataTable = new Handsontable(this.elements.dataContainer, dataTableConfig);
+    this.elements.dataContainer.addEventListener("wheel", this._handleDataWorkspaceWheel, { passive: false });
     this._handleDataTablePasteCapture ||= (event) => this.captureDataTablePaste(event);
     this.elements.dataContainer.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this.elements.dataContainer.addEventListener("paste", this._handleDataTablePasteCapture, true);
@@ -819,6 +822,9 @@ export class QuickQueryUI {
   }
 
   getDataTableViewportHeight() {
+    const reservedWorkspaceHeight = Math.floor(this.elements.dataContainer?.clientHeight || 0);
+    if (reservedWorkspaceHeight >= DATA_TABLE_MIN_HEIGHT) return reservedWorkspaceHeight;
+
     const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 800;
     const containerTop = this.elements.dataContainer?.getBoundingClientRect?.().top;
     const fallbackHeight = Math.floor(viewportHeight * 0.4);
@@ -826,6 +832,28 @@ export class QuickQueryUI {
       Number.isFinite(containerTop) && containerTop > 0 ? viewportHeight - containerTop - DATA_TABLE_BOTTOM_MARGIN : fallbackHeight;
 
     return Math.max(DATA_TABLE_MIN_HEIGHT, Math.floor(availableHeight));
+  }
+
+  handleDataWorkspaceWheel(event) {
+    if (this.isDataMaximized || event.defaultPrevented || event.ctrlKey) return;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+
+    const pageScroller = this.elements.toolContainer?.closest?.(".main") || document.scrollingElement;
+    const gridScroller = this.elements.dataContainer?.querySelector?.(".ht_master .wtHolder");
+    if (!pageScroller || !gridScroller) return;
+
+    const pageMaxScroll = Math.max(0, pageScroller.scrollHeight - pageScroller.clientHeight);
+    const pageCanMoveTowardData = event.deltaY > 0 && pageScroller.scrollTop < pageMaxScroll - 1;
+    const pageCanMoveTowardEditor = event.deltaY < 0 && gridScroller.scrollTop <= 1 && pageScroller.scrollTop > 0;
+    if (!pageCanMoveTowardData && !pageCanMoveTowardEditor) return;
+
+    const lineHeight = 16;
+    const pageHeight = pageScroller.clientHeight || window.innerHeight || 800;
+    const deltaScale = event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? pageHeight : 1;
+    const nextScrollTop = Math.min(pageMaxScroll, Math.max(0, pageScroller.scrollTop + event.deltaY * deltaScale));
+
+    event.preventDefault();
+    pageScroller.scrollTop = nextScrollTop;
   }
 
   syncDataTableLayout() {
@@ -1612,6 +1640,7 @@ export class QuickQueryUI {
   destroy({ flush = true } = {}) {
     this.removeAutosaveLifecycleListeners();
     window.removeEventListener("resize", this._handleDataTableViewportResize);
+    this.elements.dataContainer?.removeEventListener("wheel", this._handleDataWorkspaceWheel);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
     this.pauseHiddenWork();
