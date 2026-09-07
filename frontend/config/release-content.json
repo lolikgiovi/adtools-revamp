@@ -3,13 +3,14 @@
   "releaseId": "release-1.3.6",
   "version": "1.3.6",
   "title": "Faster everyday workflows",
-  "summary": "AD Tools 1.3.6 makes saved work easier to reach, refreshes two core tools, and uses fewer resources in the background.",
+  "summary": "AD Tools 1.3.6 makes saved work easier to reach, refreshes everyday tools, and uses fewer resources in the background.",
   "notes": [
     "Quick Query preserves JSON and HTML content pasted from DBeaver or SQL Developer, and can expand or collapse the Data Sheet.",
     "Pin favorite tools in the sidebar so they stay at the top.",
     "Press ⌘K to search tools, pages, and saved Quick Query tables.",
     "Home now shows your usage and includes a feedback field.",
     "Check Image adds a clearer batch workflow, saved references, result filters, cancellation, and timeout retries.",
+    "Char Counter now has compact summary metrics and a Per row view for comparing line lengths.",
     "Heavy tools and background work now release resources more efficiently to reduce RAM and compute usage."
   ],
   "slides": [
@@ -27,13 +28,18 @@
       "bullets": ["Right-click a sidebar tool to pin or unpin it.", "Search remembers recent destinations and brings them forward."]
     },
     {
-      "title": "A more useful Home and Check Image",
-      "body": "Home now combines usage context with a direct feedback field, while Check Image makes repeated batch checks easier to manage.",
+      "title": "A more useful Home, Check Image, and Char Counter",
+      "body": "Home now combines usage context with a direct feedback field, Check Image makes repeated batch checks easier to manage, and Char Counter keeps text checks focused.",
       "bullets": [
         "Save friendly labels for image identifiers you use often.",
         "Filter results, cancel a run, and retry timed-out checks.",
-        "Configure CDN environment URLs from Settings."
-      ]
+        "Configure CDN environment URLs from Settings.",
+        "Switch Char Counter to Per row to compare each line's character length while keeping the summary visible."
+      ],
+      "action": {
+        "label": "Open Char Counter",
+        "route": "char-counter"
+      }
     }
   ],
   "tour": [],
@@ -85,6 +91,14 @@
       "placement": "bottom",
       "title": "Reuse image references",
       "body": "Open Saved references to keep friendly labels beside identifiers you check often. Batch runs also support filtering, cancellation, and timeout retries."
+    },
+    {
+      "id": "char-counter-per-row",
+      "route": "char-counter",
+      "target": "#charCounterRowMode",
+      "placement": "bottom",
+      "title": "Compare rows at a glance",
+      "body": "Switch to Per row to see each line's character length while keeping the overall summary below."
     }
   ]
 }
