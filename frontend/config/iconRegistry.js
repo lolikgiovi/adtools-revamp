@@ -4,6 +4,7 @@ import { getIconSvg as getApprovalIconSvg } from "../pages/approval/icon.js";
 import { getIconSvg as getSettingsIconSvg } from "../pages/settings/icon.js";
 import { getIconSvg as getSignoutIconSvg } from "../pages/signout/icon.js";
 import { getIconSvg as getBase64IconSvg } from "../tools/base64-tools/icon.js";
+import { getIconSvg as getCharCounterIconSvg } from "../tools/char-counter/icon.js";
 import { getIconSvg as getCompareConfigIconSvg } from "../tools/compare-config/icon.js";
 import { getIconSvg as getHtmlIconSvg } from "../tools/html-editor/icon.js";
 import { getIconSvg as getImageCheckerIconSvg } from "../tools/image-checker/icon.js";
@@ -27,6 +28,7 @@ const ICON_REGISTRY = new Map([
   ["settings", getSettingsIconSvg],
   ["signout", getSignoutIconSvg],
   ["base64", getBase64IconSvg],
+  ["char-counter", getCharCounterIconSvg],
   ["database", getQuickQueryIconSvg],
   ["database-compare", getCompareConfigIconSvg],
   ["html", getHtmlIconSvg],

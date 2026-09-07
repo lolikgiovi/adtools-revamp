@@ -40,6 +40,13 @@
       "order": 30
     },
     {
+      "id": "char-counter",
+      "name": "Char Counter",
+      "category": "general",
+      "icon": "char-counter",
+      "order": 32
+    },
+    {
       "id": "tlv-viewer",
       "name": "TLV Viewer",
       "category": "general",

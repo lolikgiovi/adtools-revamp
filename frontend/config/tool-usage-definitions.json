@@ -2,6 +2,7 @@
   "uuid-generator": { "actions": ["single", "multiple"], "boundary": "clipboard write succeeds" },
   "json-tools": { "actions": ["prettify", "minify", "stringify", "unstringify", "escape", "unescape", "extract_keys", "json_to_table"], "boundary": "valid output is produced" },
   "base64-tools": { "actions": ["encode", "decode"], "boundary": "at least one output is produced" },
+  "char-counter": { "actions": ["count"], "boundary": "non-empty text is counted" },
   "tlv-viewer": { "actions": ["parse"], "boundary": "input parses and results render" },
   "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },
   "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
