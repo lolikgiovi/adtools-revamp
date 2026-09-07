@@ -22,6 +22,8 @@ export class RunBatch extends BaseTool {
       executableUrl: null,
     };
     this._logUnsubscribes = [];
+    this._layoutResizeObserver = null;
+    this._layoutResizeHandler = null;
   }
 
   getIconSvg() {
@@ -54,7 +56,9 @@ export class RunBatch extends BaseTool {
     const buildLink = this.container.querySelector("#rb-build-link");
     const buildNumEl = this.container.querySelector("#rb-build-number");
     const envErrorEl = this.container.querySelector("#rb-env-error");
+    const formSectionEl = this.container.querySelector(".rb-form-section");
     const savedListEl = this.container.querySelector("#rb-saved-list");
+    const savedSectionEl = this.container.querySelector(".rb-saved-section");
     const configSearchInput = this.container.querySelector("#rb-config-search");
 
     // Tab elements
@@ -89,11 +93,42 @@ export class RunBatch extends BaseTool {
     const editConfigIdInput = this.container.querySelector("#rb-edit-config-id");
     const editConfigNameInput = this.container.querySelector("#rb-edit-config-name");
     const editConfigNameError = this.container.querySelector("#rb-edit-config-name-error");
+    const editEnvironmentSelect = this.container.querySelector("#rb-edit-env");
     const editBatchNameInput = this.container.querySelector("#rb-edit-batch-name");
     const editJobNameInput = this.container.querySelector("#rb-edit-job-name");
     const editConfluLinkInput = this.container.querySelector("#rb-edit-conflu-link");
 
     const hasToken = await this.service.hasToken();
+
+    // Keep the saved-config panel aligned to the form; only its list should grow and scroll.
+    const syncSavedSectionHeight = () => {
+      const isTwoColumnLayout = window.matchMedia ? window.matchMedia("(min-width: 901px)").matches : window.innerWidth > 900;
+      if (!isTwoColumnLayout) {
+        savedSectionEl.style.height = "";
+        savedSectionEl.style.maxHeight = "";
+        return;
+      }
+
+      const formHeight = formSectionEl.getBoundingClientRect().height;
+      if (formHeight > 0) {
+        const height = `${Math.ceil(formHeight)}px`;
+        savedSectionEl.style.height = height;
+        savedSectionEl.style.maxHeight = height;
+      }
+    };
+
+    if (typeof ResizeObserver === "function") {
+      this._layoutResizeObserver = new ResizeObserver(syncSavedSectionHeight);
+      this._layoutResizeObserver.observe(formSectionEl);
+    } else {
+      this._layoutResizeHandler = syncSavedSectionHeight;
+      window.addEventListener("resize", this._layoutResizeHandler);
+    }
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(syncSavedSectionHeight);
+    } else {
+      syncSavedSectionHeight();
+    }
 
     // Load Jenkins URL
     this.state.jenkinsUrl = this.service.loadJenkinsUrl();
@@ -195,6 +230,22 @@ export class RunBatch extends BaseTool {
 
     // Storage keys
     const STORAGE_KEY = "tool:run-batch:savedConfigs";
+    const LAST_ENVIRONMENT_KEY = "tool:run-batch:lastEnvironment";
+
+    const loadLastEnvironment = () => {
+      try {
+        return localStorage.getItem(LAST_ENVIRONMENT_KEY) || "";
+      } catch (_) {
+        return "";
+      }
+    };
+
+    const saveLastEnvironment = (environment) => {
+      if (!environment) return;
+      try {
+        localStorage.setItem(LAST_ENVIRONMENT_KEY, environment);
+      } catch (_) {}
+    };
 
     const loadSavedConfigs = () => {
       try {
@@ -216,7 +267,7 @@ export class RunBatch extends BaseTool {
       // Filter by search term
       if (searchFilter) {
         configs = configs.filter((cfg) => {
-          const searchable = `${cfg.name || ""} ${cfg.batchName || ""} ${cfg.jobName || ""}`.toLowerCase();
+          const searchable = `${cfg.name || ""} ${cfg.environment || ""} ${cfg.batchName || ""} ${cfg.jobName || ""}`.toLowerCase();
           return searchable.includes(searchFilter);
         });
       }
@@ -237,7 +288,7 @@ export class RunBatch extends BaseTool {
         <div class="rb-saved-card" data-id="${cfg.id}">
           <div class="rb-saved-info">
             ${nameHtml}
-            <span class="rb-saved-details">${escHtml(cfg.batchName)} / ${escHtml(cfg.jobName)}</span>
+            <span class="rb-saved-details">${cfg.environment ? `${escHtml(cfg.environment)} / ` : ""}${escHtml(cfg.batchName)} / ${escHtml(cfg.jobName)}</span>
           </div>
           <div class="rb-saved-actions">
             <button class="btn btn-sm-xs rb-load-btn" data-id="${cfg.id}">Load</button>
@@ -276,6 +327,10 @@ export class RunBatch extends BaseTool {
           const id = btn.dataset.id;
           const cfg = configs.find((c) => c.id === id);
           if (cfg) {
+            if (cfg.environment && this.state.envChoices.includes(cfg.environment)) {
+              envSelect.value = cfg.environment;
+              saveLastEnvironment(cfg.environment);
+            }
             batchNameInput.value = cfg.batchName || "";
             jobNameInput.value = cfg.jobName || "";
             toggleRunEnabled();
@@ -323,6 +378,7 @@ export class RunBatch extends BaseTool {
       try {
         statusEl.textContent = "Loading environments…";
         envSelect.disabled = true;
+        const preferredEnvironment = envSelect.value || loadLastEnvironment();
         const choices = await this.service.getEnvChoices(baseUrl);
         this.state.envChoices = Array.isArray(choices) ? choices : [];
 
@@ -332,7 +388,10 @@ export class RunBatch extends BaseTool {
           envSelect.innerHTML = '<option value="">No environments</option>';
           statusEl.textContent = "No environments available";
         } else {
-          envSelect.innerHTML = this.state.envChoices.map((c) => `<option value="${c}">${c}</option>`).join("");
+          envSelect.innerHTML = this.state.envChoices.map((c) => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join("");
+          if (preferredEnvironment && this.state.envChoices.includes(preferredEnvironment)) {
+            envSelect.value = preferredEnvironment;
+          }
           envErrorEl.style.display = "none";
           statusEl.textContent = "Ready";
         }
@@ -350,9 +409,14 @@ export class RunBatch extends BaseTool {
     };
 
     // Input event listeners
-    [batchNameInput, jobNameInput, envSelect].forEach((el) => {
+    [batchNameInput, jobNameInput].forEach((el) => {
       el.addEventListener("input", toggleRunEnabled);
       el.addEventListener("change", toggleRunEnabled);
+    });
+    envSelect.addEventListener("input", toggleRunEnabled);
+    envSelect.addEventListener("change", () => {
+      saveLastEnvironment(envSelect.value);
+      toggleRunEnabled();
     });
 
     // Run batch job
@@ -365,6 +429,7 @@ export class RunBatch extends BaseTool {
         statusEl.textContent = "Please fill all fields";
         return;
       }
+      saveLastEnvironment(env);
 
       logsEl.textContent = "";
       buildLink.style.display = "none";
@@ -476,8 +541,8 @@ export class RunBatch extends BaseTool {
     };
 
     saveBtn.addEventListener("click", () => {
-      if (!batchNameInput.value.trim() || !jobNameInput.value.trim()) {
-        statusEl.textContent = "Enter batch and job name before saving";
+      if (!envSelect.value || !batchNameInput.value.trim() || !jobNameInput.value.trim()) {
+        statusEl.textContent = "Select an environment and enter batch and job name before saving";
         return;
       }
       openSaveModal();
@@ -503,10 +568,12 @@ export class RunBatch extends BaseTool {
       }
 
       const confluenceLink = configConfluLinkInput ? configConfluLinkInput.value.trim() : "";
+      saveLastEnvironment(envSelect.value);
 
       const newConfig = {
         id: crypto.randomUUID(),
         name,
+        environment: envSelect.value,
         batchName: batchNameInput.value.trim(),
         jobName: jobNameInput.value.trim(),
         confluenceLink,
@@ -561,6 +628,13 @@ export class RunBatch extends BaseTool {
       if (!cfg) return;
       editConfigIdInput.value = cfg.id || "";
       editConfigNameInput.value = cfg.name || "";
+      const editEnvironmentChoices = [...new Set([cfg.environment, ...this.state.envChoices].filter(Boolean))];
+      editEnvironmentSelect.innerHTML = editEnvironmentChoices
+        .map((environment) => {
+          const selected = environment === cfg.environment ? " selected" : "";
+          return `<option value="${escHtml(environment)}"${selected}>${escHtml(environment)}</option>`;
+        })
+        .join("");
       editBatchNameInput.value = cfg.batchName || "";
       editJobNameInput.value = cfg.jobName || "";
       editConfluLinkInput.value = cfg.confluenceLink || "";
@@ -581,6 +655,7 @@ export class RunBatch extends BaseTool {
     editModalConfirm.addEventListener("click", () => {
       const id = editConfigIdInput.value;
       const name = editConfigNameInput.value.trim();
+      const environment = editEnvironmentSelect.value;
       const batchName = editBatchNameInput.value.trim();
       const jobName = editJobNameInput.value.trim();
       const confluenceLink = editConfluLinkInput.value.trim();
@@ -590,8 +665,8 @@ export class RunBatch extends BaseTool {
         editConfigNameError.style.display = "block";
         return;
       }
-      if (!batchName || !jobName) {
-        editConfigNameError.textContent = "Batch Name and Job Name are required";
+      if (!environment || !batchName || !jobName) {
+        editConfigNameError.textContent = "Environment, Batch Name, and Job Name are required";
         editConfigNameError.style.display = "block";
         return;
       }
@@ -609,6 +684,7 @@ export class RunBatch extends BaseTool {
         configs[idx] = {
           ...configs[idx],
           name,
+          environment,
           batchName,
           jobName,
           confluenceLink,
@@ -721,6 +797,12 @@ export class RunBatch extends BaseTool {
   }
 
   onUnmount() {
+    this._layoutResizeObserver?.disconnect();
+    this._layoutResizeObserver = null;
+    if (this._layoutResizeHandler) {
+      window.removeEventListener("resize", this._layoutResizeHandler);
+      this._layoutResizeHandler = null;
+    }
     try {
       for (const un of this._logUnsubscribes) un();
     } catch (_) {}

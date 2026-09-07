@@ -144,6 +144,10 @@ export const RunBatchTemplate = /*html*/ `
           <div class="rb-error" id="rb-edit-config-name-error" style="display:none"></div>
         </div>
         <div class="rb-field">
+          <label for="rb-edit-env">Environment <span class="setting-required">*</span></label>
+          <select id="rb-edit-env" class="rb-input" aria-required="true"></select>
+        </div>
+        <div class="rb-field">
           <label for="rb-edit-batch-name">Batch Name <span class="setting-required">*</span></label>
           <input type="text" id="rb-edit-batch-name" class="rb-input" placeholder="e.g. campaign-batch" aria-required="true" />
         </div>
