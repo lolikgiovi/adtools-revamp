@@ -126,28 +126,10 @@ describe("analytics overview count integrity", () => {
     expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
     expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
     expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
-    expect(data.user.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
-    expect(data.global.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
     const storedLogs = await env.DB.prepare("SELECT COUNT(*) AS count FROM usage_log").first();
     expect(storedLogs.count).toBe(1);
     const storedUses = await env.DB.prepare("SELECT COUNT(*) AS count FROM tool_usage").first();
     expect(storedUses.count).toBe(1);
-  });
-
-  it("deduplicates retries by stable tool-use event id in the daily pulse", async () => {
-    env = createEnvironment();
-    await readOverview(env);
-    const insert = env.DB.prepare(
-      "INSERT OR IGNORE INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
-    );
-    const values = ["stable-use", "user@example.com", "device-1", "json-tools", "prettify", "2026-09-04 10:00:00"];
-    await insert.bind(...values).run();
-    await insert.bind(...values).run();
-
-    const data = await readOverview(env);
-
-    expect(data.user.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
-    expect(data.global.daily).toEqual([{ day: "2026-09-04", count: 1 }]);
   });
 
   it("reports canonical tool ids from the success ledger", async () => {

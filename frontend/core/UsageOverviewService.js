@@ -1,4 +1,5 @@
 import { SessionTokenStore } from "./SessionTokenStore.js";
+import { isUserRegistered } from "./RegistrationState.js";
 
 const DEFAULT_WORKER_BASE = "https://adtools.lolik.workers.dev";
 
@@ -47,7 +48,7 @@ class UsageOverviewService {
 
   static getRegisteredIdentity({ deviceId = "" } = {}) {
     try {
-      if (localStorage.getItem("user.registered") !== "true") return null;
+      if (!isUserRegistered()) return null;
       const email = normalizeIdentityEmail(localStorage.getItem("user.email"));
       if (!email) return null;
       return { email, deviceId: String(deviceId || "").trim() };

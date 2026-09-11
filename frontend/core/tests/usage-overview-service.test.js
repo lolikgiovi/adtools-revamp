@@ -28,6 +28,13 @@ describe("UsageOverviewService", () => {
     });
   });
 
+  it("does not expose the development placeholder as a registered identity", () => {
+    localStorage.setItem("user.registered", "true");
+    localStorage.setItem("user.email", "dev@localhost");
+
+    expect(UsageOverviewService.getRegisteredIdentity({ deviceId: "device-123" })).toBeNull();
+  });
+
   it("keeps the deployed Worker as a fallback when the local proxy is unavailable", () => {
     const urls = UsageOverviewService._resolveUrls("/analytics/public-overview");
     expect(urls).toContain("https://adtools.lolik.workers.dev/analytics/public-overview");

@@ -19,6 +19,7 @@ import { isTauri } from "./core/Runtime.js";
 import WebUpdateChecker from "./core/WebUpdateChecker.js";
 import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour.js";
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
+import { initializeLocalRegistrationDefaults, isUserRegistered } from "./core/RegistrationState.js";
 import releaseContent from "./config/release-content.json";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
@@ -118,18 +119,10 @@ class App {
       } catch (_) {}
     }
 
-    // Auto-register in dev mode to skip OTP flow
+    // Keep a recognizable local placeholder identity, but require registration
+    // whenever that placeholder is still present (including upgrades from older builds).
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      try {
-        if (localStorage.getItem("user.registered") !== "true") {
-          localStorage.setItem("user.registered", "true");
-          localStorage.setItem("user.username", "Dev User");
-          localStorage.setItem("user.email", "dev@localhost");
-        }
-        if (window.location.hash === "#register") {
-          window.location.hash = "";
-        }
-      } catch (_) {}
+      initializeLocalRegistrationDefaults();
     }
 
     this.initializeComponents();
@@ -352,7 +345,7 @@ class App {
 
     // Register route for onboarding
     this.router.register("register", ({ navigationId } = {}) => {
-      if (localStorage.getItem("user.registered") === "true") {
+      if (isUserRegistered()) {
         this.router.navigate("home");
         return;
       }
@@ -379,7 +372,7 @@ class App {
     });
 
     // Set default route based on registration state
-    const registered = localStorage.getItem("user.registered") === "true";
+    const registered = isUserRegistered();
     this.router.setDefaultRoute(registered ? "home" : "register");
   }
 
@@ -388,7 +381,7 @@ class App {
    */
   showHome(navigationId = null) {
     if (!this.isNavigationCurrent(navigationId, "home")) return;
-    if (localStorage.getItem("user.registered") !== "true") {
+    if (!isUserRegistered()) {
       this.router.navigate("register");
       return;
     }
@@ -430,7 +423,7 @@ class App {
 
   async showTool(toolId, routeData = null, navigationId = null) {
     if (!this.isNavigationCurrent(navigationId, toolId)) return;
-    if (localStorage.getItem("user.registered") !== "true") {
+    if (!isUserRegistered()) {
       this.router.navigate("register");
       return;
     }
@@ -1771,7 +1764,7 @@ class App {
   }
 
   #getUsageIdentity() {
-    if (localStorage.getItem("user.registered") !== "true") return null;
+    if (!isUserRegistered()) return null;
     return UsageOverviewService.getRegisteredIdentity({ deviceId: UsageTracker.getDeviceId() });
   }
 
@@ -1829,7 +1822,7 @@ class App {
     const usageIdentity = this.#getUsageIdentity();
     const hasIdentity = Boolean(usageIdentity);
     const usageAccess = getUsageAccessState({
-      registered: localStorage.getItem("user.registered") === "true",
+      registered: isUserRegistered(),
       hasIdentity,
     });
     container.style.display = "block";

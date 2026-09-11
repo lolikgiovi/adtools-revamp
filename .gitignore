@@ -77,3 +77,4 @@ backend-workers/.dev.vars
 venv-x64/
 venv/
 tauri/gen/schemas/capabilities.json
+.DS_Store
