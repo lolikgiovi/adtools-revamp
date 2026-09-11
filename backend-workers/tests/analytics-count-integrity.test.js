@@ -79,6 +79,10 @@ async function readOverview(env) {
   return response.json();
 }
 
+function currentGmt7Timestamp() {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
+}
+
 describe("analytics overview count integrity", () => {
   let env;
 
@@ -86,6 +90,7 @@ describe("analytics overview count integrity", () => {
 
   it("uses the idempotent success ledger instead of absolute snapshots for overview totals", async () => {
     env = createEnvironment();
+    const createdTime = currentGmt7Timestamp();
     const payload = {
       device_id: "device-1",
       user_email: "user@example.com",
@@ -95,16 +100,16 @@ describe("analytics overview count integrity", () => {
         {
           tool_id: "json-tools",
           action: "prettify",
-          created_time: "2026-09-04 10:00:00",
+          created_time: createdTime,
         },
       ],
-      tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify", created_time: "2026-09-04 10:00:00" }],
+      tool_usage: [{ event_id: "use-1", tool_id: "json-tools", action: "prettify", created_time: createdTime }],
       device_usage: [
         {
           tool_id: "json-tools",
           action: "prettify",
           count: 2,
-          updated_time: "2026-09-04 10:00:00",
+          updated_time: createdTime,
         },
       ],
     };
@@ -126,10 +131,29 @@ describe("analytics overview count integrity", () => {
     expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
     expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
     expect(data.global).toMatchObject({ totalActivities: 1, toolsUsed: 1, activeUsers: 1 });
+    expect(data.user.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
+    expect(data.global.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
     const storedLogs = await env.DB.prepare("SELECT COUNT(*) AS count FROM usage_log").first();
     expect(storedLogs.count).toBe(1);
     const storedUses = await env.DB.prepare("SELECT COUNT(*) AS count FROM tool_usage").first();
     expect(storedUses.count).toBe(1);
+  });
+
+  it("deduplicates retries by stable tool-use event id in the daily pulse", async () => {
+    env = createEnvironment();
+    await readOverview(env);
+    const insert = env.DB.prepare(
+      "INSERT OR IGNORE INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
+    );
+    const createdTime = currentGmt7Timestamp();
+    const values = ["stable-use", "user@example.com", "device-1", "json-tools", "prettify", createdTime];
+    await insert.bind(...values).run();
+    await insert.bind(...values).run();
+
+    const data = await readOverview(env);
+
+    expect(data.user.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
+    expect(data.global.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
   });
 
   it("reports canonical tool ids from the success ledger", async () => {
@@ -137,7 +161,9 @@ describe("analytics overview count integrity", () => {
     await readOverview(env);
     await env.DB.prepare(
       "INSERT INTO tool_usage (event_id, user_email, device_id, tool_id, action, properties, source, created_time) VALUES (?, ?, ?, ?, ?, '{}', 'client', ?)",
-    ).bind("use-master", "user@example.com", "device-1", "master-lockey", "bulk_search", "2026-09-04 10:00:00").run();
+    )
+      .bind("use-master", "user@example.com", "device-1", "master-lockey", "bulk_search", "2026-09-04 10:00:00")
+      .run();
 
     const data = await readOverview(env);
 
@@ -157,9 +183,7 @@ describe("analytics overview count integrity", () => {
       "INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)",
     );
     await insertUsage.bind("device-user", "user@example.com", "json-tools", "prettify", 5, createdTime).run();
-    await insertUsage
-      .bind("device-owner", "fashalli.bilhaq@bankmandiri.co.id", "json-tools", "prettify", 100, createdTime)
-      .run();
+    await insertUsage.bind("device-owner", "fashalli.bilhaq@bankmandiri.co.id", "json-tools", "prettify", 100, createdTime).run();
     await insertUsage.bind("device-dev", "dev@localhost", "json-tools", "prettify", 50, createdTime).run();
 
     await readOverview(env);
@@ -181,13 +205,9 @@ describe("analytics overview count integrity", () => {
 
   it("ignores obsolete velocity-template rows in ingestion and overview totals", async () => {
     env = createEnvironment();
-    const insertLog = env.DB.prepare(
-      "INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)",
-    );
+    const insertLog = env.DB.prepare("INSERT INTO usage_log (user_email, device_id, tool_id, action, created_time) VALUES (?, ?, ?, ?, ?)");
     await insertLog.bind("user@example.com", "device-1", "velocity-template", "open", "2026-09-04 10:00:00").run();
-    await env.DB.prepare(
-      "INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)",
-    )
+    await env.DB.prepare("INSERT INTO device_usage (device_id, user_email, tool_id, action, count, updated_time) VALUES (?, ?, ?, ?, ?, ?)")
       .bind("device-1", "user@example.com", "velocity-template", "open", 9, "2026-09-04 10:00:00")
       .run();
 

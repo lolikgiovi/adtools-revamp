@@ -38,4 +38,19 @@ describe("registration state", () => {
     expect(localStorage.getItem("user.registered")).toBe("true");
     expect(isUserRegistered()).toBe(true);
   });
+
+  it("allows the development placeholder only when the caller explicitly opts in", () => {
+    initializeLocalRegistrationDefaults(localStorage, { registerDevelopmentIdentity: true });
+
+    expect(localStorage.getItem("user.registered")).toBe("true");
+    expect(isUserRegistered()).toBe(false);
+    expect(isUserRegistered(localStorage, { allowDevelopmentIdentity: true })).toBe(true);
+  });
+
+  it.each(["", "not-an-email", "user@example"])("rejects registered state without a valid email: %s", (email) => {
+    localStorage.setItem("user.registered", "true");
+    localStorage.setItem("user.email", email);
+
+    expect(isUserRegistered()).toBe(false);
+  });
 });

@@ -23,6 +23,14 @@ import { initializeLocalRegistrationDefaults, isUserRegistered } from "./core/Re
 import releaseContent from "./config/release-content.json";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
+
+function isLocalDevelopmentSession() {
+  return Boolean(import.meta?.env?.DEV) && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+}
+
+function hasCompletedRegistration() {
+  return isUserRegistered(globalThis.localStorage, { allowDevelopmentIdentity: isLocalDevelopmentSession() });
+}
 const ASSET_LOAD_MAX_RETRIES = 3;
 const ASSET_LOAD_MAX_RELOADS = 3;
 const ASSET_LOAD_RELOAD_KEY_PREFIX = "adtools.assetLoadReloads";
@@ -119,10 +127,10 @@ class App {
       } catch (_) {}
     }
 
-    // Keep a recognizable local placeholder identity, but require registration
-    // whenever that placeholder is still present (including upgrades from older builds).
+    // Keep local development usable without a Worker registration service. Packaged builds
+    // still require registration whenever the placeholder identity is present.
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      initializeLocalRegistrationDefaults();
+      initializeLocalRegistrationDefaults(globalThis.localStorage, { registerDevelopmentIdentity: isLocalDevelopmentSession() });
     }
 
     this.initializeComponents();
@@ -345,7 +353,7 @@ class App {
 
     // Register route for onboarding
     this.router.register("register", ({ navigationId } = {}) => {
-      if (isUserRegistered()) {
+      if (hasCompletedRegistration()) {
         this.router.navigate("home");
         return;
       }
@@ -372,7 +380,7 @@ class App {
     });
 
     // Set default route based on registration state
-    const registered = isUserRegistered();
+    const registered = hasCompletedRegistration();
     this.router.setDefaultRoute(registered ? "home" : "register");
   }
 
@@ -381,7 +389,7 @@ class App {
    */
   showHome(navigationId = null) {
     if (!this.isNavigationCurrent(navigationId, "home")) return;
-    if (!isUserRegistered()) {
+    if (!hasCompletedRegistration()) {
       this.router.navigate("register");
       return;
     }
@@ -423,7 +431,7 @@ class App {
 
   async showTool(toolId, routeData = null, navigationId = null) {
     if (!this.isNavigationCurrent(navigationId, toolId)) return;
-    if (!isUserRegistered()) {
+    if (!hasCompletedRegistration()) {
       this.router.navigate("register");
       return;
     }
@@ -1764,7 +1772,7 @@ class App {
   }
 
   #getUsageIdentity() {
-    if (!isUserRegistered()) return null;
+    if (!hasCompletedRegistration()) return null;
     return UsageOverviewService.getRegisteredIdentity({ deviceId: UsageTracker.getDeviceId() });
   }
 
@@ -1822,7 +1830,7 @@ class App {
     const usageIdentity = this.#getUsageIdentity();
     const hasIdentity = Boolean(usageIdentity);
     const usageAccess = getUsageAccessState({
-      registered: isUserRegistered(),
+      registered: hasCompletedRegistration(),
       hasIdentity,
     });
     container.style.display = "block";

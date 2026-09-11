@@ -83,6 +83,7 @@ afterEach(() => {
 describe("App navigation race guards", () => {
   it("allows only the latest tool navigation to mount and emit", async () => {
     localStorage.setItem("user.registered", "true");
+    localStorage.setItem("user.email", "user@example.com");
     const { app, eventBus } = createAppHarness();
     const loadA = deferred();
     const loadB = deferred();
