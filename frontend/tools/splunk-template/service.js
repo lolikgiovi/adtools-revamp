@@ -3,6 +3,8 @@
  * Provides formatting and minification for Velocity templates used in Splunk.
  */
 
+import { Compile, parse } from "velocityjs";
+
 // Utility: safe split by top-level pipe (|) delimiters, skipping inside quotes and VTL placeholders
 export function splitByPipesSafely(input = "") {
   const segments = [];
@@ -490,7 +492,322 @@ export function extractFieldsFromTemplate(input = "") {
       displayValue = primaryVar.replace(/^context\./i, "");
     }
 
-    rows.push({ field, source, value: displayValue, variables: varsArr.join(", "), functions: funcsArr.join(", ") });
+    rows.push({
+      field,
+      originalField: field,
+      source,
+      value: displayValue,
+      variables: varsArr.join(", "),
+      functions: funcsArr.join(", "),
+      expression: valueExpr,
+      originalSource: source,
+      originalValue: displayValue,
+    });
   }
   return rows;
+}
+
+const JAVA_DATE_PATTERNS = [
+  "yyyy-MM-dd HH:mm:ss",
+  "yyyy-MM-dd HH:mm:ss.SSS",
+  "yyyy-MM-dd HH:mm:ss.SSSZ",
+  "yyyy-MM-dd HH:mm:ss.SSS'Z'",
+  "yyyy-MM-dd'T'HH:mm:ss",
+  "yyyy-MM-dd'T'HH:mm:ss.SSS",
+  "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+  "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+  "yyyy-MM-dd",
+  "yyyyMMdd",
+];
+
+function parseJavaDate(input, allowedPatterns = JAVA_DATE_PATTERNS) {
+  const text = String(input ?? "").trim();
+  if (!text) return null;
+
+  const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact && allowedPatterns.includes("yyyyMMdd")) {
+    return new Date(+compact[1], +compact[2] - 1, +compact[3]);
+  }
+
+  const match = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::|\.)(\d{2})(?:\.(\d{1,3}))?(?:(Z)|([+-])(\d{2}):?(\d{2}))?)?$/,
+  );
+  if (!match) return null;
+
+  const hasTime = match[4] !== undefined;
+  if (!hasTime && !allowedPatterns.includes("yyyy-MM-dd")) return null;
+  const [, year, month, day, hour = "0", minute = "0", second = "0", millis = "0", utc, sign, zoneHour = "0", zoneMinute = "0"] = match;
+  let date;
+  if (utc || sign) {
+    let timestamp = Date.UTC(+year, +month - 1, +day, +hour, +minute, +second, +millis.padEnd(3, "0"));
+    if (sign) timestamp -= (sign === "+" ? 1 : -1) * (+zoneHour * 60 + +zoneMinute) * 60_000;
+    date = new Date(timestamp);
+  } else {
+    date = new Date(+year, +month - 1, +day, +hour, +minute, +second, +millis.padEnd(3, "0"));
+  }
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function localeName(locale) {
+  const requested = String(locale || "").replace("_", "-");
+  try {
+    new Intl.DateTimeFormat(requested || undefined).format();
+    return requested || undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function javaDateFormatDate(date, pattern, locale) {
+  const formatterLocale = localeName(locale);
+  const getPart = (options) => new Intl.DateTimeFormat(formatterLocale, options).format(date);
+  const hour24 = date.getHours();
+  const replacements = {
+    yyyy: String(date.getFullYear()).padStart(4, "0"),
+    MMMM: getPart({ month: "long" }),
+    MMM: getPart({ month: "short" }),
+    MM: String(date.getMonth() + 1).padStart(2, "0"),
+    M: String(date.getMonth() + 1),
+    dd: String(date.getDate()).padStart(2, "0"),
+    d: String(date.getDate()),
+    HH: String(hour24).padStart(2, "0"),
+    H: String(hour24),
+    hh: String(hour24 % 12 || 12).padStart(2, "0"),
+    h: String(hour24 % 12 || 12),
+    mm: String(date.getMinutes()).padStart(2, "0"),
+    m: String(date.getMinutes()),
+    ss: String(date.getSeconds()).padStart(2, "0"),
+    s: String(date.getSeconds()),
+    SSS: String(date.getMilliseconds()).padStart(3, "0"),
+    a: hour24 < 12 ? "AM" : "PM",
+    Z: `${-date.getTimezoneOffset() >= 0 ? "+" : "-"}${String(Math.floor(Math.abs(date.getTimezoneOffset()) / 60)).padStart(2, "0")}${String(
+      Math.abs(date.getTimezoneOffset()) % 60,
+    ).padStart(2, "0")}`,
+  };
+  return String(pattern).replace(/'([^']*)'|yyyy|MMMM|MMM|MM|M|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|a|Z/g, (token, literal) =>
+    literal !== undefined ? literal : replacements[token],
+  );
+}
+
+function formatParsedDate(input, pattern, locale, allowedPatterns = JAVA_DATE_PATTERNS) {
+  const date = parseJavaDate(input, allowedPatterns);
+  return date ? javaDateFormatDate(date, pattern, locale) : String(input ?? "");
+}
+
+function decimalParts(input) {
+  const match = String(input ?? "")
+    .trim()
+    .match(/^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/);
+  if (!match) return null;
+  const exponent = Number(match[4] || 0);
+  let digits = `${match[2]}${match[3] || ""}`.replace(/^0+(?=\d)/, "");
+  let scale = (match[3] || "").length - exponent;
+  if (scale < 0) {
+    digits += "0".repeat(-scale);
+    scale = 0;
+  }
+  const integer = BigInt(`${match[1] || ""}${digits || "0"}`);
+  return { integer, scale };
+}
+
+function addDecimals(values) {
+  const parts = values.map(decimalParts);
+  if (parts.some((part) => !part)) return null;
+  const scale = Math.max(0, ...parts.map((part) => part.scale));
+  const total = parts.reduce((sum, part) => sum + part.integer * 10n ** BigInt(scale - part.scale), 0n);
+  const negative = total < 0n;
+  const digits = (negative ? -total : total).toString().padStart(scale + 1, "0");
+  const value = scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits;
+  return `${negative ? "-" : ""}${value}`;
+}
+
+function decimalFormat(input, grouping) {
+  const source = String(input ?? "")
+    .replace(/,/g, "")
+    .trim();
+  if (!decimalParts(source)) return String(input ?? "");
+  const number = Number(source);
+  if (!Number.isFinite(number)) return String(input ?? "");
+  return new Intl.NumberFormat("en-US", {
+    useGrouping: grouping,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
+}
+
+function sha256(value) {
+  const bytes = new TextEncoder().encode(String(value));
+  const words = [];
+  const bitLength = bytes.length * 8;
+  bytes.forEach((byte, index) => (words[index >> 2] = (words[index >> 2] || 0) | (byte << (24 - (index % 4) * 8))));
+  words[bitLength >> 5] = (words[bitLength >> 5] || 0) | (0x80 << (24 - (bitLength % 32)));
+  words[(((bitLength + 64) >> 9) << 4) + 15] = bitLength;
+  const constants = [];
+  const initial = [];
+  for (let candidate = 2; constants.length < 64; candidate++) {
+    let prime = true;
+    for (let divisor = 2; divisor * divisor <= candidate; divisor++) if (candidate % divisor === 0) prime = false;
+    if (!prime) continue;
+    if (initial.length < 8) initial.push((Math.sqrt(candidate) * 0x100000000) | 0);
+    constants.push((Math.cbrt(candidate) * 0x100000000) | 0);
+  }
+  const rotate = (number, amount) => (number >>> amount) | (number << (32 - amount));
+  const hash = initial.slice();
+  for (let offset = 0; offset < words.length; offset += 16) {
+    const schedule = words.slice(offset, offset + 16);
+    for (let index = 0; index < 16; index++) schedule[index] ||= 0;
+    for (let index = 16; index < 64; index++) {
+      const x = schedule[index - 15];
+      const y = schedule[index - 2];
+      schedule[index] =
+        (schedule[index - 16] +
+          (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) +
+          schedule[index - 7] +
+          (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) |
+        0;
+    }
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index++) {
+      const first = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + constants[index] + schedule[index]) | 0;
+      const second = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      [a, b, c, d, e, f, g, h] = [(first + second) | 0, a, b, c, (d + first) | 0, e, f, g];
+    }
+    [a, b, c, d, e, f, g, h].forEach((value, index) => (hash[index] = (hash[index] + value) | 0));
+  }
+  return hash.map((word) => (word >>> 0).toString(16).padStart(8, "0")).join("");
+}
+
+export const templateFormatter = {
+  dateShort: (input, locale) => (locale ? formatParsedDate(input, "d/M/yyyy", locale) : String(input ?? "")),
+  dateLong: (input, locale) => (locale ? formatParsedDate(input, "d MMM yyyy", locale).replace("Agt", "Agu") : String(input ?? "")),
+  dateFull: (input, locale) => (locale ? formatParsedDate(input, "d MMMM yyyy", locale) : String(input ?? "")),
+  time12: (input, locale) => (locale ? formatParsedDate(input, "h:mm:ss a", locale) : String(input ?? "")),
+  time24: (input, locale) => (locale ? formatParsedDate(input, "HH:mm:ss", locale) : String(input ?? "")),
+  formatDate: (input, pattern, locale) => (locale ? formatParsedDate(input, pattern, locale) : String(input ?? "")),
+  amount: (input) => decimalFormat(input, true),
+  smsCurrency: (input) => decimalFormat(input, false),
+  trimLeft10: (input) => (input == null ? input : String(input).slice(0, 10)),
+  trimLeft11: (input) => (input == null ? input : String(input).slice(0, 11)),
+  trimLeft25: (input) => (input == null ? input : String(input).slice(0, 25).trim()),
+  mask: (input) => {
+    if (input == null) return input;
+    const right = String(input).slice(-8);
+    return `****${right.slice(Math.min(4, right.length))}`;
+  },
+  currency: (input) => {
+    const source = String(input ?? "").replace(/,+/g, "");
+    if (!decimalParts(source)) return String(input ?? "");
+    const number = Number(source);
+    return Number.isFinite(number)
+      ? new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number)
+      : String(input ?? "");
+  },
+  add: (...numbers) =>
+    addDecimals(numbers.map((number) => (String(number ?? "").trim() ? number : "0"))) ??
+    `[${numbers.map((number) => String(number)).join(", ")}]`,
+  encrypt: (input, salt) => sha256(`${input ?? ""}${salt ?? ""}`),
+  replaceByRegex: (input, regex, replacement) =>
+    input == null ? null : String(input).replace(new RegExp(String(regex), "g"), String(replacement ?? "")),
+};
+
+export const dateFormatter = {
+  get: (pattern) => javaDateFormatDate(new Date(), pattern),
+  convertDate: (input, pattern) =>
+    formatParsedDate(input, pattern, undefined, ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm.ss.SSSZ"]),
+};
+
+function buildParameterContext(parameters) {
+  const values = parameters && typeof parameters === "object" && !Array.isArray(parameters) ? parameters : {};
+  const runtime = { ...values, date: dateFormatter };
+  return { ...runtime, context: runtime, format: templateFormatter };
+}
+
+/** Render like SplunkV2EventTemplate, including its context, format and date helpers. */
+export function renderSplunkTemplate(template = "", parameters = {}) {
+  const ast = parse(String(template));
+  const silenceReferences = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "references") node.leader = "$!";
+    Object.values(node).forEach(silenceReferences);
+  };
+  silenceReferences(ast);
+  return new Compile(ast).render(buildParameterContext(parameters));
+}
+
+function astReferencePath(node) {
+  if (!node || node.type !== "references" || !node.id) return "";
+  const parts = [node.id];
+  for (const segment of node.path || []) {
+    if (segment.type !== "property" || !segment.id) break;
+    parts.push(segment.id);
+  }
+  return parts.join(".");
+}
+
+function collectParameterPaths(node, locals, paths) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    const header = node[0];
+    if (header?.type === "foreach") {
+      collectParameterPaths(header.from, locals, paths);
+      const blockLocals = new Set(locals);
+      blockLocals.add(header.to);
+      node.slice(1).forEach((child) => collectParameterPaths(child, blockLocals, paths));
+      return;
+    }
+    if (header?.type === "macro") {
+      const blockLocals = new Set(locals);
+      (header.args || []).forEach((argument) => blockLocals.add(String(argument?.id || argument || "").replace(/^\$/, "")));
+      node.slice(1).forEach((child) => collectParameterPaths(child, blockLocals, paths));
+      return;
+    }
+    node.forEach((child) => {
+      if (child?.type === "set") {
+        collectParameterPaths(child.equal?.[1], locals, paths);
+        const assigned = astReferencePath(child.equal?.[0]).split(".")[0];
+        if (assigned) locals.add(assigned);
+      } else {
+        collectParameterPaths(child, locals, paths);
+      }
+    });
+    return;
+  }
+  if (node.type === "references") {
+    let path = astReferencePath(node);
+    const root = path.split(".")[0];
+    if (root === "context") path = path.slice("context.".length);
+    else if (locals.has(root) || root === "format" || root === "date" || root === "foreach") path = "";
+    if (path) paths.add(path);
+  }
+  Object.values(node).forEach((child) => collectParameterPaths(child, locals, paths));
+}
+
+/** Collect external parameter paths and normalize $context.foo to the input JSON shape { foo: ... }. */
+export function extractParameterPaths(template = "") {
+  const paths = new Set();
+  try {
+    collectParameterPaths(parse(String(template)), new Set(), paths);
+  } catch (_) {
+    const references = String(template).match(/\$!?\{[^}]+\}|\$!?[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*/g) || [];
+    references.forEach((reference) => {
+      let path = reference.replace(/^\$!?\{?/, "").replace(/\}$/, "");
+      if (path === "context") return;
+      if (path.startsWith("context.")) path = path.slice("context.".length);
+      if (!/^(?:format|date|foreach)(?:\.|$)/.test(path)) paths.add(path);
+    });
+  }
+  return Array.from(paths).sort();
+}
+
+export function setNestedValue(target, path, value) {
+  const parts = String(path).split(".");
+  let cursor = target;
+  parts.forEach((part, index) => {
+    if (index === parts.length - 1) cursor[part] = value;
+    else {
+      if (!cursor[part] || typeof cursor[part] !== "object" || Array.isArray(cursor[part])) cursor[part] = {};
+      cursor = cursor[part];
+    }
+  });
+  return target;
 }

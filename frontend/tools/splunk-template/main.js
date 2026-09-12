@@ -4,7 +4,15 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
-import { formatVtlTemplate, minifyVtlTemplate, extractFieldsFromTemplate, splitByPipesSafely } from "./service.js";
+import {
+  extractFieldsFromTemplate,
+  extractParameterPaths,
+  formatVtlTemplate,
+  minifyVtlTemplate,
+  renderSplunkTemplate,
+  setNestedValue,
+  splitByPipesSafely,
+} from "./service.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
 import "./styles.css";
@@ -17,6 +25,7 @@ class SplunkVTLEditor extends BaseTool {
     this.editor = null;
     this.table = null;
     this._storageKey = "tool:splunk-template:editor";
+    this._parametersStorageKey = "tool:splunk-template:parameters";
     this._trailingPipe = false;
     this._resizerCleanup = null;
     this._suppressTableEdit = false;
@@ -42,14 +51,20 @@ class SplunkVTLEditor extends BaseTool {
     await this.registerVtlLanguage();
     await this.initializeMonacoEditor();
     this.initializeFieldsTable();
+    this.initializeParameters();
     this.initializeResizer();
     this.bindUIEvents();
     this.updateFieldsTable();
+    this.updatePreview();
     UsageTracker.trackFeature("splunk-template", "mount", "", 5000);
   }
 
   onUnmount() {
     this.cleanupResizer();
+    clearTimeout(this._persistTimer);
+    clearTimeout(this._fieldsUpdateTimer);
+    clearTimeout(this._previewTimer);
+    clearTimeout(this._parametersPersistTimer);
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -144,7 +159,85 @@ class SplunkVTLEditor extends BaseTool {
       }, 250);
       clearTimeout(this._fieldsUpdateTimer);
       this._fieldsUpdateTimer = setTimeout(() => this.updateFieldsTable(), 300);
+      this.schedulePreview();
     });
+  }
+
+  initializeParameters() {
+    const input = document.getElementById("splunkParameters");
+    if (!input) return;
+    let saved = null;
+    try {
+      saved = localStorage.getItem(this._parametersStorageKey);
+    } catch (_) {}
+    input.value = saved ?? JSON.stringify(this.buildSampleParameters(), null, 2);
+  }
+
+  buildSampleParameters(existing = {}) {
+    const output = structuredClone(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {});
+    const hasPath = (path) => path.split(".").reduce((value, key) => (value == null ? undefined : value[key]), output) !== undefined;
+    extractParameterPaths(this.editor?.getValue() || "").forEach((path) => {
+      if (hasPath(path)) return;
+      const leaf = path.split(".").at(-1).toLowerCase();
+      let value = `sample-${leaf}`;
+      if (/date|time/.test(leaf)) value = "2026-09-12 13:14:15";
+      else if (/amount|balance|total|price/.test(leaf)) value = "1234.50";
+      else if (/success|active|enabled/.test(leaf)) value = true;
+      setNestedValue(output, path, value);
+    });
+    return output;
+  }
+
+  readParameters() {
+    const input = document.getElementById("splunkParameters");
+    const value = input?.value.trim() || "{}";
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Sample data must be a JSON object.");
+    return parsed;
+  }
+
+  schedulePreview() {
+    clearTimeout(this._previewTimer);
+    this._previewTimer = setTimeout(() => this.updatePreview(), 250);
+  }
+
+  updatePreview() {
+    const output = document.getElementById("splunkPreview");
+    const status = document.getElementById("previewStatus");
+    if (!output || !status || !this.editor) return;
+    try {
+      const rendered = renderSplunkTemplate(this.editor.getValue(), this.readParameters());
+      output.textContent = rendered;
+      status.textContent = `Rendered successfully · ${rendered.length.toLocaleString()} characters`;
+      status.classList.remove("is-error");
+    } catch (error) {
+      output.textContent = "";
+      status.textContent = `Preview error: ${error?.message || "Unable to render template"}`;
+      status.classList.add("is-error");
+    }
+  }
+
+  activateWorkspacePanel(panelId) {
+    document.querySelectorAll(".workspace-pane .vtl-tab").forEach((tab) => {
+      const active = tab.dataset.panel === panelId;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll(".workspace-pane .vtl-workspace-panel").forEach((panel) => {
+      const active = panel.id === panelId;
+      panel.hidden = !active;
+      panel.classList.toggle("is-active", active);
+    });
+    const actionByPanel = { fieldsPanel: "fieldsActions", parametersPanel: "parametersActions", previewPanel: "previewActions" };
+    Object.values(actionByPanel).forEach((id) => {
+      const actions = document.getElementById(id);
+      if (actions) actions.hidden = id !== actionByPanel[panelId];
+    });
+    if (panelId === "fieldsPanel") {
+      this.table?.refreshDimensions?.();
+      this.table?.render?.();
+    }
+    if (panelId === "previewPanel") this.updatePreview();
   }
 
   initializeFieldsTable() {
@@ -211,6 +304,45 @@ class SplunkVTLEditor extends BaseTool {
     const btnPaste = document.getElementById("btnPasteVtl");
     const btnClear = document.getElementById("btnClearVtl");
     const btnAddField = document.getElementById("btnAddField");
+    const parametersInput = document.getElementById("splunkParameters");
+    const btnGenerateParameters = document.getElementById("btnGenerateParameters");
+    const btnFormatParameters = document.getElementById("btnFormatParameters");
+    const btnCopyPreview = document.getElementById("btnCopyPreview");
+
+    document.querySelectorAll(".workspace-pane .vtl-tab").forEach((tab) => {
+      tab.addEventListener("click", () => this.activateWorkspacePanel(tab.dataset.panel));
+    });
+
+    parametersInput?.addEventListener("input", () => {
+      clearTimeout(this._parametersPersistTimer);
+      this._parametersPersistTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(this._parametersStorageKey, parametersInput.value);
+        } catch (_) {}
+      }, 250);
+      this.schedulePreview();
+    });
+
+    btnGenerateParameters?.addEventListener("click", () => {
+      try {
+        const generated = this.buildSampleParameters(this.readParameters());
+        parametersInput.value = JSON.stringify(generated, null, 2);
+        parametersInput.dispatchEvent(new Event("input"));
+      } catch (error) {
+        this.showError(error?.message || "Sample data is not valid JSON");
+      }
+    });
+
+    btnFormatParameters?.addEventListener("click", () => {
+      try {
+        parametersInput.value = JSON.stringify(this.readParameters(), null, 2);
+        parametersInput.dispatchEvent(new Event("input"));
+      } catch (error) {
+        this.showError(error?.message || "Sample data is not valid JSON");
+      }
+    });
+
+    btnCopyPreview?.addEventListener("click", () => this.copyToClipboard(document.getElementById("splunkPreview")?.textContent || ""));
 
     btnFormat?.addEventListener("click", () => {
       const src = this.editor.getValue();
@@ -296,6 +428,7 @@ class SplunkVTLEditor extends BaseTool {
     const src = (row.source || "").toLowerCase();
     const val = (row.value ?? "").trim();
     if (!val) return "";
+    if (row.expression && src === row.originalSource && val === row.originalValue) return row.expression;
     if (src === "context") return `$!{context.${val}}`;
     if (src === "variable") return `$!{${val}}`;
     return val; // hardcoded literal
@@ -310,33 +443,31 @@ class SplunkVTLEditor extends BaseTool {
       if (!f) return;
       const expr = this._rowToExpr(r);
       if (!expr) return;
-      rowMap.set(f, expr);
+      rowMap.set((r.originalField || f).trim(), { row: r, expression: expr });
     });
 
     const updated = [];
     const seen = new Set();
     for (const raw of segments) {
-      // Preserve original leading/trailing whitespace and spacing around '='
-      const m = String(raw).match(/^(\s*[^=|]+?)(\s*=\s*)([\s\S]*?)$/);
+      // Keep any leading header/directive text while identifying the field token immediately before '='.
+      const m = String(raw).match(/^([\s\S]*?)([^\s=|]+)(\s*=\s*)([\s\S]*?)$/);
       if (!m) {
         // Not a key=value segment; keep exactly as-is
         updated.push(String(raw));
         continue;
       }
-      const leftWithLead = m[1]; // includes any leading whitespace and field name
-      const eqSpacing = m[2];
-      const valuePart = m[3]; // may include leading/trailing spaces
-
-      // Extract field name (trimmed) to match rowMap
-      const field = leftWithLead.trim();
+      const prefix = m[1];
+      const field = m[2];
+      const eqSpacing = m[3];
+      const valuePart = m[4];
 
       if (rowMap.has(field)) {
-        const newExpr = rowMap.get(field);
+        const entry = rowMap.get(field);
         const valLeadMatch = valuePart.match(/^\s*/);
         const valTrailMatch = valuePart.match(/\s*$/);
         const valLead = valLeadMatch ? valLeadMatch[0] : "";
         const valTrail = valTrailMatch ? valTrailMatch[0] : "";
-        updated.push(`${leftWithLead}${eqSpacing}${valLead}${newExpr}${valTrail}`);
+        updated.push(`${prefix}${entry.row.field.trim()}${eqSpacing}${valLead}${entry.expression}${valTrail}`);
         seen.add(field);
       } else {
         // Keep original segment untouched
@@ -345,9 +476,9 @@ class SplunkVTLEditor extends BaseTool {
     }
 
     // Append new fields not present in original
-    for (const [field, expr] of rowMap.entries()) {
-      if (!seen.has(field)) {
-        updated.push(`${field}=${expr}`);
+    for (const [originalField, entry] of rowMap.entries()) {
+      if (!seen.has(originalField)) {
+        updated.push(`${entry.row.field.trim()}=${entry.expression}`);
       }
     }
 
