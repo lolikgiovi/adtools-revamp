@@ -37,6 +37,8 @@ class HTMLTemplateTool extends BaseTool {
     this._vtlValuesStorageKey = "tool:html-template:vtl-values";
     this.baseUrls = [];
     this._envStorageKey = "tool:html-template:env";
+    this._previewBackgroundStorageKey = "tool:html-template:preview-background";
+    this.previewWhiteBackground = false;
     this._splitStorageKey = "tool:html-template:split-ratio";
     this._resizerCleanup = null;
     this.analyticsSessionId = this.createAnalyticsId();
@@ -130,6 +132,7 @@ class HTMLTemplateTool extends BaseTool {
     try {
       const savedVtl = localStorage.getItem(this._vtlValuesStorageKey);
       if (savedVtl) this.vtlValues = JSON.parse(savedVtl) || {};
+      this.previewWhiteBackground = localStorage.getItem(this._previewBackgroundStorageKey) === "white";
     } catch (_) {
       this.vtlValues = {};
     }
@@ -286,6 +289,7 @@ class HTMLTemplateTool extends BaseTool {
     const btnPaste = document.getElementById("btnPasteHtml");
     const btnClear = document.getElementById("btnClearHtml");
     const btnReload = document.getElementById("btnReloadPreview");
+    const btnWhitePreviewBg = document.getElementById("btnWhitePreviewBg");
     const btnCloseVtl = document.getElementById("btnCloseVtl");
     const btnResetVtl = document.getElementById("btnResetVtl");
     const btnImport = document.getElementById("btnImportHtml");
@@ -589,6 +593,17 @@ class HTMLTemplateTool extends BaseTool {
       });
     }
 
+    if (btnWhitePreviewBg) {
+      btnWhitePreviewBg.addEventListener("click", () => {
+        this.previewWhiteBackground = !this.previewWhiteBackground;
+        try {
+          localStorage.setItem(this._previewBackgroundStorageKey, this.previewWhiteBackground ? "white" : "transparent");
+        } catch (_) {}
+        this.applyPreviewBackground();
+        this.trackAnalytics("preview_background_toggle", { background: this.previewWhiteBackground ? "white" : "transparent" });
+      });
+    }
+
     // Render on content change with debounce and persist to localStorage
     this._persistTimer = this._persistTimer || null;
     this.editor.onDidChangeModelContent(() => {
@@ -620,6 +635,18 @@ class HTMLTemplateTool extends BaseTool {
     iframe.setAttribute("sandbox", base.join(" "));
   }
 
+  applyPreviewBackground() {
+    const iframe = document.getElementById("htmlRenderer");
+    const button = document.getElementById("btnWhitePreviewBg");
+    if (iframe) iframe.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "transparent";
+    if (button) {
+      button.setAttribute("aria-pressed", String(this.previewWhiteBackground));
+      button.title = this.previewWhiteBackground
+        ? "Use a transparent preview background"
+        : "Show a white background behind transparent HTML";
+    }
+  }
+
   renderPreview(html, force = false) {
     const iframe = document.getElementById("htmlRenderer");
     if (!iframe) return;
@@ -629,6 +656,7 @@ class HTMLTemplateTool extends BaseTool {
 
     // Ensure sandbox set
     this.applyIframeSandbox();
+    this.applyPreviewBackground();
 
     // Apply VTL substitutions before rendering
     try {

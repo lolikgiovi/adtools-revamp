@@ -50,6 +50,13 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <select id="envSelector" class="env-select" title="Select environment"></select>
             </div>
 
+            <button
+              id="btnWhitePreviewBg"
+              class="btn btn-secondary btn-sm preview-bg-toggle"
+              type="button"
+              aria-pressed="false"
+              title="Show a white background behind transparent HTML"
+            >White BG</button>
             <button id="btnReloadPreview" class="btn btn-secondary btn-sm" title="Reload Preview">Reload</button>
           </div>
         </div>
