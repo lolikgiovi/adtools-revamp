@@ -51,19 +51,26 @@ describe("lifetime usage baseline", () => {
 
     const migration = fs.readFileSync(new URL("../migrations/0023_freeze_lifetime_usage_baseline.sql", import.meta.url), "utf8");
     db.exec(migration);
+    const restoreDevMigration = fs.readFileSync(new URL("../migrations/0025_restore_development_usage.sql", import.meta.url), "utf8");
+    db.exec(restoreDevMigration);
 
-    const baseline = db.prepare("SELECT user_email, tool_id, action, count FROM lifetime_usage_baseline ORDER BY tool_id").all();
+    const baseline = db
+      .prepare("SELECT user_email, tool_id, action, count FROM lifetime_usage_baseline ORDER BY tool_id, user_email")
+      .all();
     expect(baseline).toEqual([
       { user_email: "", tool_id: "html-template", action: "mount", count: 4 },
+      { user_email: "dev@localhost", tool_id: "quick-query", action: "merge", count: 99 },
       { user_email: "user@example.com", tool_id: "quick-query", action: "merge", count: 2 },
       { user_email: "user@example.com", tool_id: "run-query", action: "run_click", count: 7 },
     ]);
 
     const lifetime = db
-      .prepare(`WITH lifetime_usage AS (${buildLifetimeUsageRollupQuery()})
+      .prepare(
+        `WITH lifetime_usage AS (${buildLifetimeUsageRollupQuery()})
         SELECT SUM(count) AS total, COUNT(DISTINCT NULLIF(user_email, '')) AS users
-        FROM lifetime_usage`)
+        FROM lifetime_usage`,
+      )
       .get();
-    expect(lifetime).toEqual({ total: 15, users: 2 });
+    expect(lifetime).toEqual({ total: 115, users: 3 });
   });
 });

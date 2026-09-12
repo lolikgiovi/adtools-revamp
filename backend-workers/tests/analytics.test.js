@@ -657,7 +657,7 @@ describe("Analytics endpoints", () => {
     const whoQuery = env.DB.executed.find((item) => item.sql.includes("WITH activity AS ("));
     expect(whoQuery.sql).toContain("FROM tool_usage");
     expect(whoQuery.sql).not.toContain("FROM events e");
-    expect(whoQuery.sql).toContain("dev@localhost");
+    expect(whoQuery.sql).not.toContain("dev@localhost");
   });
 
   it("uses lifetime usage for cumulative tools and usage logs for adoption", async () => {
@@ -709,7 +709,7 @@ describe("Analytics endpoints", () => {
     expect(toolAdoptionQuery).toBeTruthy();
     expect(toolsQuery.sql).toContain("FROM lifetime_usage_baseline");
     expect(toolsQuery.sql).toContain("u.source = 'client'");
-    expect(toolsQuery.sql).toContain("dev@localhost");
+    expect(toolsQuery.sql).not.toContain("dev@localhost");
     expect(toolsQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
     expect(toolAdoptionQuery.sql).toContain("NOT EXISTS");
     expect(toolsQuery.sql).not.toContain("FROM device_usage");
@@ -752,7 +752,7 @@ describe("Analytics endpoints", () => {
     expect(opportunityQuery.sql).toContain("FROM tool_usage");
     expect(opportunityQuery.sql).toContain("LOWER(e.action) LIKE '%error%'");
     expect(opportunityQuery.sql).toContain("'run_timeout'");
-    expect(opportunityQuery.sql).toContain("dev@localhost");
+    expect(opportunityQuery.sql).not.toContain("dev@localhost");
     expect(opportunityQuery.sql).not.toContain("fashalli.bilhaq@bankmandiri.co.id");
   });
 

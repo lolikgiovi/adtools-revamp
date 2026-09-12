@@ -156,6 +156,32 @@ describe("analytics overview count integrity", () => {
     expect(data.global.daily).toEqual([{ day: createdTime.slice(0, 10), count: 1 }]);
   });
 
+  it("stores successful uses from the development identity", async () => {
+    env = createEnvironment();
+    await readOverview(env);
+    const createdTime = currentGmt7Timestamp();
+    const response = await handleAnalyticsBatchPost(
+      new Request("http://localhost/analytics/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: "device-dev",
+          user_email: "dev@localhost",
+          tool_usage: [{ event_id: "dev-use", tool_id: "json-tools", action: "prettify", created_time: createdTime }],
+          device_usage: [{ tool_id: "json-tools", action: "prettify", count: 1, updated_time: createdTime }],
+        }),
+      }),
+      env,
+      { email: "dev@localhost", deviceId: "device-dev" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await env.DB.prepare("SELECT user_email, device_id FROM tool_usage WHERE event_id = 'dev-use'").first()).toEqual({
+      user_email: "dev@localhost",
+      device_id: "device-dev",
+    });
+  });
+
   it("reports canonical tool ids from the success ledger", async () => {
     env = createEnvironment();
     await readOverview(env);
@@ -175,7 +201,7 @@ describe("analytics overview count integrity", () => {
     expect(data.global.tools).toEqual([{ toolId: "master-lockey", count: 1 }]);
   });
 
-  it("includes the owner and excludes the development identity from overview totals", async () => {
+  it("includes owner and development identities in overview totals", async () => {
     env = createEnvironment();
     const todayGmt7 = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const createdTime = `${todayGmt7} 10:00:00`;
@@ -185,6 +211,7 @@ describe("analytics overview count integrity", () => {
     await insertUsage.bind("device-user", "user@example.com", "json-tools", "prettify", 5, createdTime).run();
     await insertUsage.bind("device-owner", "fashalli.bilhaq@bankmandiri.co.id", "json-tools", "prettify", 100, createdTime).run();
     await insertUsage.bind("device-dev", "dev@localhost", "json-tools", "prettify", 50, createdTime).run();
+    await insertUsage.bind("device-dev-2", "dev@localhost", "json-tools", "prettify", 25, createdTime).run();
 
     await readOverview(env);
     const insertUse = env.DB.prepare(
@@ -193,14 +220,15 @@ describe("analytics overview count integrity", () => {
     await insertUse.bind("use-user", "user@example.com", "device-user", "json-tools", "prettify", createdTime).run();
     await insertUse.bind("use-owner", "fashalli.bilhaq@bankmandiri.co.id", "device-owner", "json-tools", "prettify", createdTime).run();
     await insertUse.bind("use-dev", "dev@localhost", "device-dev", "json-tools", "prettify", createdTime).run();
+    await insertUse.bind("use-dev-2", "dev@localhost", "device-dev-2", "json-tools", "prettify", createdTime).run();
 
     const data = await readOverview(env);
 
     expect(data.user).toMatchObject({ totalActivities: 1, toolsUsed: 1 });
     expect(data.user.tools).toEqual([{ toolId: "json-tools", count: 1 }]);
-    expect(data.global).toMatchObject({ totalActivities: 2, toolsUsed: 1, activeUsers: 2 });
-    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 2 }]);
-    expect(data.global.daily).toEqual([{ day: todayGmt7, count: 2 }]);
+    expect(data.global).toMatchObject({ totalActivities: 4, toolsUsed: 1, activeUsers: 4 });
+    expect(data.global.tools).toEqual([{ toolId: "json-tools", count: 4 }]);
+    expect(data.global.daily).toEqual([{ day: todayGmt7, count: 4 }]);
   });
 
   it("ignores obsolete velocity-template rows in ingestion and overview totals", async () => {

@@ -5,7 +5,7 @@
  */
 
 import { corsHeaders } from "../utils/cors.js";
-import { DEVELOPMENT_ANALYTICS_EMAIL, includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
+import { includedAnalyticsEmailSql, OWNER_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
 import {
   buildCanonicalToolUsageQuery,
   buildDeduplicatedUsageLogQuery,
@@ -1322,7 +1322,9 @@ LIMIT 150`,
 const KV_KEY = "analytics-dashboard-config";
 const CACHE_TTL_MS = 60 * 1000;
 const DASHBOARD_CACHE_MAX_ENTRIES = 32;
-const EXCLUDED_ANALYTICS_EMAIL = DEVELOPMENT_ANALYTICS_EMAIL;
+// Default dashboard SQL historically excluded the owner. Rewrite that legacy
+// predicate to an identity that cannot occur so owner and Dev User data remain visible.
+const EXCLUDED_ANALYTICS_EMAIL = "__no_excluded_analytics_identity__";
 let tabConfigCache = null;
 const dashboardQueryCache = new Map();
 const dashboardQueryInFlight = new Map();
@@ -1335,7 +1337,7 @@ function applyAnalyticsIdentityPolicy(tab) {
   if (!tab || typeof tab !== "object") return tab;
   return {
     ...tab,
-    query: typeof tab.query === "string" ? tab.query.replaceAll(OWNER_ANALYTICS_EMAIL, DEVELOPMENT_ANALYTICS_EMAIL) : tab.query,
+    query: typeof tab.query === "string" ? tab.query.replaceAll(OWNER_ANALYTICS_EMAIL, EXCLUDED_ANALYTICS_EMAIL) : tab.query,
   };
 }
 

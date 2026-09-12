@@ -5,7 +5,6 @@
 
 import { corsHeaders } from "../utils/cors.js";
 import { ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema, ensureToolUsageSchema } from "../utils/analyticsSchema.js";
-import { DEVELOPMENT_ANALYTICS_EMAIL } from "../utils/analyticsIdentity.js";
 import { buildCanonicalToolUsageQuery, buildLifetimeUsageRollupQuery } from "../utils/analyticsUsageSql.js";
 import { consumeRateLimit } from "../utils/rateLimit.js";
 import { tsGmt7, tsGmt7Plain, tsToGmt7Plain } from "../utils/timestamps.js";
@@ -138,73 +137,75 @@ async function loadOverviewData(env, userEmail, source) {
   const normalizedUsageSql = buildCanonicalToolUsageQuery();
   const lifetimeUsageSql = buildLifetimeUsageRollupQuery();
   const [userToolsResult, globalToolsResult, userSummary, globalSummary, userDailyResult, globalDailyResult] = await Promise.all([
-    env.DB
-      .prepare(
-        `WITH lifetime_usage AS (${lifetimeUsageSql})
+    env.DB.prepare(
+      `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT tool_id, SUM(count) AS count
          FROM lifetime_usage
          WHERE user_email = ?
          GROUP BY tool_id
          ORDER BY count DESC, tool_id ASC
          LIMIT 100`,
-      )
+    )
       .bind(userEmail)
       .all(),
-    env.DB
-      .prepare(
-        `WITH lifetime_usage AS (${lifetimeUsageSql})
+    env.DB.prepare(
+      `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT tool_id, SUM(count) AS count
          FROM lifetime_usage
          GROUP BY tool_id
          ORDER BY count DESC, tool_id ASC
          LIMIT 100`,
-      )
-      .all(),
-    env.DB
-      .prepare(
-        `WITH lifetime_usage AS (${lifetimeUsageSql})
+    ).all(),
+    env.DB.prepare(
+      `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT
            COALESCE(SUM(count), 0) AS total_activities,
            COUNT(DISTINCT tool_id) AS tools_used,
            MAX(last_updated) AS last_updated
          FROM lifetime_usage
          WHERE user_email = ?`,
-      )
+    )
       .bind(userEmail)
       .first(),
-    env.DB
-      .prepare(
-        `WITH lifetime_usage AS (${lifetimeUsageSql})
+    env.DB.prepare(
+      `WITH lifetime_usage AS (${lifetimeUsageSql})
          SELECT
            COALESCE(SUM(count), 0) AS total_activities,
            COUNT(DISTINCT tool_id) AS tools_used,
-           COUNT(DISTINCT NULLIF(user_email, '')) AS active_users,
+           COUNT(DISTINCT CASE WHEN user_email != 'dev@localhost' THEN NULLIF(user_email, '') END)
+             + CASE
+               WHEN SUM(CASE WHEN user_email = 'dev@localhost' THEN count ELSE 0 END) > 0
+               THEN MAX(1, (
+                 SELECT COUNT(DISTINCT NULLIF(device_id, ''))
+                 FROM tool_usage
+                 WHERE LOWER(TRIM(user_email)) = 'dev@localhost'
+                   AND source = 'client'
+                   AND LOWER(TRIM(tool_id)) != 'velocity-template'
+               ))
+               ELSE 0
+             END AS active_users,
            MAX(last_updated) AS last_updated
          FROM lifetime_usage`,
-      )
-      .first(),
-    env.DB
-      .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
+    ).first(),
+    env.DB.prepare(
+      `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
          FROM normalized_usage
          WHERE created_time >= datetime('now', '+7 hours', '-6 days')
            AND user_email = ?
          GROUP BY day
          ORDER BY day ASC`,
-      )
+    )
       .bind(userEmail)
       .all(),
-    env.DB
-      .prepare(
-        `WITH normalized_usage AS (${normalizedUsageSql})
+    env.DB.prepare(
+      `WITH normalized_usage AS (${normalizedUsageSql})
          SELECT SUBSTR(created_time, 1, 10) AS day, COUNT(*) AS count
          FROM normalized_usage
          WHERE created_time >= datetime('now', '+7 hours', '-6 days')
          GROUP BY day
          ORDER BY day ASC`,
-      )
-      .all(),
+    ).all(),
   ]);
 
   return {
@@ -218,7 +219,9 @@ async function loadOverviewData(env, userEmail, source) {
 }
 
 function normalizeIdentityEmail(value) {
-  const email = safeString(value || "", 254).trim().toLowerCase();
+  const email = safeString(value || "", 254)
+    .trim()
+    .toLowerCase();
   return email === "dev@localhost" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
 }
 
@@ -409,10 +412,6 @@ export async function handleAnalyticsBatchPost(request, env, session) {
         const action = safeString(item.action || "", 80).trim();
         if (!eventId || !toolId || toolId === "unknown" || !action) continue;
         if (isIgnoredAnalyticsTool(toolId)) continue;
-        if (userEmail === DEVELOPMENT_ANALYTICS_EMAIL) {
-          acknowledgedToolUsageIds.push(eventId);
-          continue;
-        }
         const properties = JSON.stringify(sanitizeObject(item.properties || item.meta || {}, 4000));
         const createdTime = tsToGmt7Plain(item.created_time || item.ts) || tsGmt7Plain();
         toolUsageStatements.push(
@@ -669,7 +668,11 @@ function normalizeFeatureId(value) {
 }
 
 function isIgnoredAnalyticsTool(toolId) {
-  return String(toolId || "").trim().toLowerCase() === IGNORED_ANALYTICS_TOOL_ID;
+  return (
+    String(toolId || "")
+      .trim()
+      .toLowerCase() === IGNORED_ANALYTICS_TOOL_ID
+  );
 }
 
 function safeString(value, limit = 120) {
