@@ -7,7 +7,15 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import MinifyWorker from "./minify.worker.js?worker";
-import { extractVtlVariables, debounce, renderVtlTemplate } from "./service.js";
+import {
+  buildVtlValuesExport,
+  debounce,
+  deleteVtlValue,
+  extractVtlVariables,
+  getVtlValue,
+  renderVtlTemplate,
+  setVtlValue,
+} from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { bucketSize, cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
@@ -63,7 +71,10 @@ class HTMLTemplateTool extends BaseTool {
   getVtlAnalyticsMeta(html = this.editor?.getValue?.() || "") {
     try {
       const variables = extractVtlVariables(html).filter((variable) => variable !== "baseUrl");
-      const resolved = variables.filter((variable) => String(this.vtlValues?.[variable] ?? "").length > 0).length;
+      const resolved = variables.filter((variable) => {
+        const value = getVtlValue(this.vtlValues, variable);
+        return value !== undefined && value !== null && String(value).length > 0;
+      }).length;
       return {
         variable_count: variables.length,
         variables_resolved: resolved,
@@ -345,11 +356,77 @@ class HTMLTemplateTool extends BaseTool {
           } else {
             const info = document.createElement("div");
             info.className = "vtl-info";
-            info.textContent = "Provide values for detected variables:";
+            info.textContent = `${vars.length} external variable${vars.length === 1 ? "" : "s"} detected. Paste a JSON object or edit values below.`;
             info.style.margin = "0 0 .5rem 0";
             info.style.fontSize = "13px";
             info.style.color = "#8aa";
             content.appendChild(info);
+
+            const jsonInput = document.createElement("textarea");
+            jsonInput.id = "vtlJsonInput";
+            jsonInput.className = "vtl-json-input";
+            jsonInput.rows = 5;
+            jsonInput.spellcheck = false;
+            jsonInput.placeholder = '{\n  "customer": { "name": "Dewi" },\n  "items": ["one", "two"]\n}';
+            jsonInput.value = JSON.stringify(buildVtlValuesExport(html, this.vtlValues), null, 2);
+            content.appendChild(jsonInput);
+
+            const actions = document.createElement("div");
+            actions.className = "vtl-actions";
+            const applyJson = document.createElement("button");
+            applyJson.type = "button";
+            applyJson.className = "btn btn-primary btn-sm";
+            applyJson.textContent = "Apply JSON";
+            const copyNames = document.createElement("button");
+            copyNames.type = "button";
+            copyNames.className = "btn btn-secondary btn-sm";
+            copyNames.textContent = "Copy Names";
+            const exportJson = document.createElement("button");
+            exportJson.type = "button";
+            exportJson.className = "btn btn-secondary btn-sm";
+            exportJson.textContent = "Export JSON";
+            actions.append(applyJson, copyNames, exportJson);
+            content.appendChild(actions);
+
+            applyJson.addEventListener("click", () => {
+              try {
+                const parsed = JSON.parse(jsonInput.value);
+                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Values must be a JSON object");
+                const baseUrl = this.vtlValues?.baseUrl;
+                this.vtlValues = { ...parsed };
+                if (baseUrl !== undefined && this.vtlValues.baseUrl === undefined) this.vtlValues.baseUrl = baseUrl;
+                localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
+                vars.forEach((variable) => {
+                  const field = document.getElementById(`vtl_${variable.replace(/\./g, "__")}`);
+                  const value = getVtlValue(this.vtlValues, variable);
+                  if (field) field.value = value && typeof value === "object" ? JSON.stringify(value) : String(value ?? "");
+                });
+                this.renderPreview(this.editor.getValue(), true);
+                this.showSuccess("VTL values applied from JSON");
+              } catch (error) {
+                this.showError(error instanceof SyntaxError ? `Invalid JSON: ${error.message}` : error.message);
+              }
+            });
+
+            copyNames.addEventListener("click", async () => {
+              try {
+                await navigator.clipboard.writeText(vars.join("\n"));
+                this.showSuccess("VTL variable names copied");
+              } catch (_) {
+                this.showError("Could not copy VTL variable names");
+              }
+            });
+
+            exportJson.addEventListener("click", () => {
+              const output = JSON.stringify(buildVtlValuesExport(html, this.vtlValues), null, 2);
+              const url = URL.createObjectURL(new Blob([output], { type: "application/json" }));
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "vtl-values.json";
+              link.click();
+              URL.revokeObjectURL(url);
+              this.showSuccess("VTL values exported");
+            });
 
             vars.forEach((v) => {
               const row = document.createElement("div");
@@ -371,7 +448,8 @@ class HTMLTemplateTool extends BaseTool {
               input.id = `vtl_${v.replace(/\./g, "__")}`;
               input.className = "vtl-input";
               input.placeholder = "Enter value";
-              input.value = this.vtlValues?.[v] ?? "";
+              const currentValue = getVtlValue(this.vtlValues, v);
+              input.value = currentValue && typeof currentValue === "object" ? JSON.stringify(currentValue) : String(currentValue ?? "");
               input.style.width = "100%";
               input.style.padding = ".375rem .5rem";
               input.style.border = "1px solid rgba(255,255,255,0.18)";
@@ -379,7 +457,7 @@ class HTMLTemplateTool extends BaseTool {
               input.style.fontSize = "13px";
 
               input.addEventListener("input", (e) => {
-                this.vtlValues[v] = e.target.value;
+                setVtlValue(this.vtlValues, v, e.target.value);
                 try {
                   localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
                 } catch (_) {}
@@ -420,13 +498,7 @@ class HTMLTemplateTool extends BaseTool {
         const html = this.editor.getValue();
         const vars = extractVtlVariables(html).filter((v) => v !== "baseUrl");
         // Unset stored values so rendering falls back to variable names
-        vars.forEach((v) => {
-          try {
-            delete this.vtlValues[v];
-          } catch (_) {
-            this.vtlValues[v] = null;
-          }
-        });
+        vars.forEach((v) => deleteVtlValue(this.vtlValues, v));
         const inputs = document.querySelectorAll("#vtlModalBody .vtl-input");
         inputs.forEach((input) => {
           input.value = "";

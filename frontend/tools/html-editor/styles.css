@@ -59,7 +59,10 @@
   border-radius: inherit;
   background: hsl(var(--border));
   opacity: 0.7;
-  transition: background-color 140ms ease, opacity 140ms ease, transform 140ms ease;
+  transition:
+    background-color 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .html-template-resizer:hover::before,
@@ -162,13 +165,15 @@ body.is-resizing * {
   bottom: 12px;
   left: 12px;
   z-index: 1000;
-  width: min(380px, 92%);
+  width: min(520px, 92%);
   max-height: 60vh;
   overflow: auto;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 10px;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.28),
+    0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 .vtl-modal-header {
@@ -190,6 +195,29 @@ body.is-resizing * {
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
   font-size: 0.8rem;
   line-height: 1.6;
+}
+
+.vtl-json-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 86px;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.vtl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 /* Responsive */
