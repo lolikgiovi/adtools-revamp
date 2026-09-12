@@ -50,7 +50,7 @@ describe("registration and config access", () => {
   it("allows non-Bank Mandiri email to request registration OTP", async () => {
     const fetchMock = vi.fn(
       async () =>
-        new Response(JSON.stringify({ ErrorCode: 0, Message: "OK", MessageID: "message-1" }), {
+        new Response(JSON.stringify({ id: "message-1" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -60,7 +60,7 @@ describe("registration and config access", () => {
       ALLOWED_EMAIL_DOMAINS: "bankmandiri.co.id",
       DEV_MODE: "false",
       MAIL_FROM: "otp-adtools@example.com",
-      POSTMARK_SERVER_TOKEN: "test-token",
+      RESEND_API_KEY: "test-key",
       adtools: createKvMock(),
       DB: {
         prepare: vi.fn(() => ({
@@ -83,28 +83,25 @@ describe("registration and config access", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [requestUrl, requestOptions] = fetchMock.mock.calls[0];
-    expect(requestUrl).toBe("https://api.postmarkapp.com/email");
+    expect(requestUrl).toBe("https://api.resend.com/emails");
     expect(requestOptions.headers).toEqual({
-      Accept: "application/json",
+      Authorization: "Bearer test-key",
       "Content-Type": "application/json",
-      "X-Postmark-Server-Token": "test-token",
+      "User-Agent": "AD-Tools-OTP/1.0",
     });
     const emailPayload = JSON.parse(requestOptions.body);
     expect(emailPayload).toMatchObject({
-      From: "AD Tools <otp-adtools@example.com>",
-      To: "person@example.com",
-      Subject: "[AD Tools] OTP for AD Tools",
-      MessageStream: "outbound",
-      Tag: "otp",
-      TrackOpens: false,
-      TrackLinks: "None",
+      from: "AD Tools <otp-adtools@example.com>",
+      to: ["person@example.com"],
+      subject: "[AD Tools] OTP for AD Tools",
+      tags: [{ name: "category", value: "otp" }],
     });
-    expect(emailPayload.HtmlBody).toContain("Here's your OTP");
-    expect(emailPayload.HtmlBody).toMatch(/>\d{6}<\/td>/);
-    expect(emailPayload.HtmlBody).toContain("USE WITHIN 30 MINUTES");
-    expect(emailPayload.HtmlBody).not.toContain("Select the code");
-    expect(emailPayload.TextBody).toMatch(/verification code is \d{6}/);
-    expect(emailPayload.TextBody).toContain("30 minutes");
+    expect(emailPayload.html).toContain("Here's your OTP");
+    expect(emailPayload.html).toMatch(/>\d{6}<\/td>/);
+    expect(emailPayload.html).toContain("USE WITHIN 30 MINUTES");
+    expect(emailPayload.html).not.toContain("Select the code");
+    expect(emailPayload.text).toMatch(/verification code is \d{6}/);
+    expect(emailPayload.text).toContain("30 minutes");
   });
 
   it("allows non-Bank Mandiri email to verify registration OTP", async () => {

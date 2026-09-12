@@ -39,7 +39,7 @@ export function isEmailDomainAllowed(email, env) {
 }
 
 /**
- * Sends OTP verification email via Postmark
+ * Sends OTP verification email via Resend
  * @param {object} env - Environment bindings
  * @param {string} to - Recipient email address
  * @param {string} code - OTP code to send
@@ -116,23 +116,23 @@ export async function sendOtpEmail(env, to, code) {
   </body>
 </html>`;
 
-    const res = await fetch("https://api.postmarkapp.com/email", {
+    const apiKey = String(env.RESEND_API_KEY || "").trim();
+    if (!apiKey) return { ok: false, error: "RESEND_API_KEY is not configured" };
+
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "X-Postmark-Server-Token": String(env.POSTMARK_SERVER_TOKEN || ""),
+        "User-Agent": "AD-Tools-OTP/1.0",
       },
       body: JSON.stringify({
-        From: `${fromName} <${fromEmail}>`,
-        To: to,
-        Subject: subject,
-        HtmlBody: html,
-        TextBody: text,
-        MessageStream: "outbound",
-        Tag: "otp",
-        TrackOpens: false,
-        TrackLinks: "None",
+        from: `${fromName} <${fromEmail}>`,
+        to: [to],
+        subject,
+        html,
+        text,
+        tags: [{ name: "category", value: "otp" }],
       }),
     });
 
@@ -143,12 +143,11 @@ export async function sendOtpEmail(env, to, code) {
       responseData = responseBody ? JSON.parse(responseBody) : null;
     } catch (_) {}
 
-    const postmarkAccepted = responseData?.ErrorCode === undefined || responseData.ErrorCode === 0;
     return {
-      ok: res.ok && postmarkAccepted,
+      ok: res.ok,
       status: res.status,
       body: responseBody,
-      messageId: responseData?.MessageID,
+      messageId: responseData?.id,
     };
   } catch (e) {
     return { ok: false, error: String(e) };
