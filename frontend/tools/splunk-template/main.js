@@ -158,7 +158,10 @@ class SplunkVTLEditor extends BaseTool {
         } catch (_) {}
       }, 250);
       clearTimeout(this._fieldsUpdateTimer);
-      this._fieldsUpdateTimer = setTimeout(() => this.updateFieldsTable(), 300);
+      this._fieldsUpdateTimer = setTimeout(() => {
+        this.updateFieldsTable();
+        this.syncContextFields();
+      }, 300);
       this.schedulePreview();
     });
   }
@@ -217,27 +220,58 @@ class SplunkVTLEditor extends BaseTool {
     }
   }
 
-  activateWorkspacePanel(panelId) {
-    document.querySelectorAll(".workspace-pane .vtl-tab").forEach((tab) => {
-      const active = tab.dataset.panel === panelId;
-      tab.classList.toggle("is-active", active);
-      tab.setAttribute("aria-selected", String(active));
-    });
-    document.querySelectorAll(".workspace-pane .vtl-workspace-panel").forEach((panel) => {
-      const active = panel.id === panelId;
-      panel.hidden = !active;
-      panel.classList.toggle("is-active", active);
-    });
-    const actionByPanel = { fieldsPanel: "fieldsActions", parametersPanel: "parametersActions", previewPanel: "previewActions" };
-    Object.values(actionByPanel).forEach((id) => {
-      const actions = document.getElementById(id);
-      if (actions) actions.hidden = id !== actionByPanel[panelId];
-    });
-    if (panelId === "fieldsPanel") {
+  buildRequiredInputs() {
+    const output = {};
+    extractParameterPaths(this.editor?.getValue() || "").forEach((path) => setNestedValue(output, path, ""));
+    return output;
+  }
+
+  syncContextFields() {
+    const input = document.getElementById("splunkParameters");
+    if (!input) return false;
+    let current;
+    try {
+      current = this.readParameters();
+    } catch (_) {
+      return false;
+    }
+    const generated = this.buildSampleParameters(current);
+    if (JSON.stringify(generated) === JSON.stringify(current)) return true;
+    input.value = JSON.stringify(generated, null, 2);
+    input.dispatchEvent(new Event("input"));
+    return true;
+  }
+
+  activateEditorView(view) {
+    const isText = view === "text";
+    const textPanel = document.getElementById("textEditorPanel");
+    const tablePanel = document.getElementById("tableEditorPanel");
+    const textActions = document.getElementById("textEditorActions");
+    const tableActions = document.getElementById("tableEditorActions");
+    const textButton = document.getElementById("btnTextView");
+    const tableButton = document.getElementById("btnTableView");
+
+    if (textPanel) {
+      textPanel.hidden = !isText;
+      textPanel.classList.toggle("is-active", isText);
+    }
+    if (tablePanel) {
+      tablePanel.hidden = isText;
+      tablePanel.classList.toggle("is-active", !isText);
+    }
+    if (textActions) textActions.hidden = !isText;
+    if (tableActions) tableActions.hidden = isText;
+    textButton?.classList.toggle("is-active", isText);
+    tableButton?.classList.toggle("is-active", !isText);
+    textButton?.setAttribute("aria-selected", String(isText));
+    tableButton?.setAttribute("aria-selected", String(!isText));
+
+    if (isText) this.editor?.layout?.();
+    else {
+      this.updateFieldsTable();
       this.table?.refreshDimensions?.();
       this.table?.render?.();
     }
-    if (panelId === "previewPanel") this.updatePreview();
   }
 
   initializeFieldsTable() {
@@ -308,10 +342,13 @@ class SplunkVTLEditor extends BaseTool {
     const btnGenerateParameters = document.getElementById("btnGenerateParameters");
     const btnFormatParameters = document.getElementById("btnFormatParameters");
     const btnCopyPreview = document.getElementById("btnCopyPreview");
+    const btnCopyInputsJson = document.getElementById("btnCopyInputsJson");
+    const btnCopyInputsLines = document.getElementById("btnCopyInputsLines");
+    const btnTextView = document.getElementById("btnTextView");
+    const btnTableView = document.getElementById("btnTableView");
 
-    document.querySelectorAll(".workspace-pane .vtl-tab").forEach((tab) => {
-      tab.addEventListener("click", () => this.activateWorkspacePanel(tab.dataset.panel));
-    });
+    btnTextView?.addEventListener("click", () => this.activateEditorView("text"));
+    btnTableView?.addEventListener("click", () => this.activateEditorView("table"));
 
     parametersInput?.addEventListener("input", () => {
       clearTimeout(this._parametersPersistTimer);
@@ -324,13 +361,7 @@ class SplunkVTLEditor extends BaseTool {
     });
 
     btnGenerateParameters?.addEventListener("click", () => {
-      try {
-        const generated = this.buildSampleParameters(this.readParameters());
-        parametersInput.value = JSON.stringify(generated, null, 2);
-        parametersInput.dispatchEvent(new Event("input"));
-      } catch (error) {
-        this.showError(error?.message || "Sample data is not valid JSON");
-      }
+      if (!this.syncContextFields()) this.showError("Context data is not valid JSON");
     });
 
     btnFormatParameters?.addEventListener("click", () => {
@@ -343,6 +374,12 @@ class SplunkVTLEditor extends BaseTool {
     });
 
     btnCopyPreview?.addEventListener("click", () => this.copyToClipboard(document.getElementById("splunkPreview")?.textContent || ""));
+
+    btnCopyInputsJson?.addEventListener("click", () => this.copyToClipboard(JSON.stringify(this.buildRequiredInputs(), null, 2)));
+
+    btnCopyInputsLines?.addEventListener("click", () =>
+      this.copyToClipboard(extractParameterPaths(this.editor?.getValue() || "").join("\n")),
+    );
 
     btnFormat?.addEventListener("click", () => {
       const src = this.editor.getValue();
