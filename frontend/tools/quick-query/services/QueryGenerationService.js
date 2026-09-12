@@ -307,7 +307,7 @@ export class QueryGenerationService {
         queryParts.push(this.generateInsertStatement(tableName, processedFields));
       }
     } else if (queryType === "update") {
-      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames, schemaData));
+      queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames));
     } else {
       for (const processedFields of processedRows) {
         queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys));
@@ -318,7 +318,12 @@ export class QueryGenerationService {
     const selectQuery = this.generateSelectStatement(tableName, primaryKeys, processedRows, schemaData);
 
     if (selectQuery) {
-      queryParts.push(selectQuery);
+      let selectStatements = selectQuery.trimStart();
+      if (queryType === "update") {
+        const updatedFieldsSelect = this.generateUpdatedFieldsSelectStatement(tableName, processedRows, primaryKeys, schemaData);
+        selectStatements = `${updatedFieldsSelect}\n${selectStatements}`;
+      }
+      queryParts.push(`\n------ SELECT Statement --------\n${selectStatements}`);
     }
 
     return queryParts.join("\n\n");
@@ -364,16 +369,11 @@ export class QueryGenerationService {
     return mergeStatement;
   }
 
-  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = [], schemaData = []) {
+  generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames = []) {
     // Collect all unique fields being updated across all rows (table scope)
     const allUpdatedFields = new Set();
     // Collect PK tuples for composite key WHERE clause (instead of separate IN clauses)
     const pkTuples = [];
-
-    // Check if updated_time/updated_by exist in schema
-    const schemaFieldNames = new Set(schemaData.map((row) => String(row[0]).toLowerCase()));
-    const hasUpdatedTime = schemaFieldNames.has("updated_time");
-    const hasUpdatedBy = schemaFieldNames.has("updated_by");
 
     // Process each row to collect updated fields and primary key tuples
     processedRows.forEach((row) => {
@@ -412,10 +412,6 @@ export class QueryGenerationService {
       UsageTracker.trackEvent("quick-query", "generation_error", { type: "no_fields_to_update", table_name: tableName });
       throw new Error("No fields to update. Please provide at least one non-primary-key field with a value.");
     }
-
-    // Add audit fields only if they exist in schema
-    if (hasUpdatedTime) allUpdatedFields.add("updated_time");
-    if (hasUpdatedBy) allUpdatedFields.add("updated_by");
 
     // Build UPDATE SET clause for each row
     const updateStatements = [];
@@ -456,22 +452,39 @@ export class QueryGenerationService {
       }
     });
 
-    // Create field list for SELECT statements (table scope)
-    const selectFieldNames = Array.from(allUpdatedFields).map((f) => this.formatFieldName(f));
+    return updateStatements.join("\n\n");
+  }
 
-    // Build WHERE clause for SELECT statements using tuple-based composite key matching
-    const allPkConditions = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
+  generateUpdatedFieldsSelectStatement(tableName, processedRows, primaryKeys, schemaData = []) {
+    const updatedFields = new Set();
+    const pkTuples = [];
 
-    // Generate the 3-part UPDATE statement
-    let updateStatement = "-- Selected fields before update\n";
-    updateStatement += `SELECT ${selectFieldNames.join(", ")}\nFROM ${tableName} WHERE ${allPkConditions};\n\n`;
+    processedRows.forEach((row) => {
+      const rowPkValues = primaryKeys.map((pk) => row.find((field) => field.fieldName === pk)?.formattedValue || null);
+      if (rowPkValues.every((value) => value && value !== "NULL")) {
+        pkTuples.push(rowPkValues);
+      }
 
-    updateStatement += updateStatements.join("\n\n") + "\n\n";
+      row.forEach((field) => {
+        if (
+          !primaryKeys.includes(field.fieldName) &&
+          !["created_time", "created_by", "updated_time", "updated_by"].includes(String(field.fieldName).toLowerCase()) &&
+          field.formattedValue !== null &&
+          field.formattedValue !== undefined
+        ) {
+          updatedFields.add(String(field.fieldName).toLowerCase());
+        }
+      });
+    });
 
-    updateStatement += "-- Selected fields after update\n";
-    updateStatement += `SELECT ${selectFieldNames.join(", ")}\nFROM ${tableName} WHERE ${allPkConditions};`;
+    const schemaFieldNames = new Set(schemaData.map((row) => String(row[0]).toLowerCase()));
+    if (schemaFieldNames.has("updated_time")) updatedFields.add("updated_time");
+    if (schemaFieldNames.has("updated_by")) updatedFields.add("updated_by");
 
-    return updateStatement;
+    const selectFieldNames = Array.from(updatedFields).map((field) => this.formatFieldName(field));
+    const whereClause = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
+
+    return `SELECT ${selectFieldNames.join(", ")} FROM ${tableName} WHERE ${whereClause};`;
   }
 
   /**
@@ -499,7 +512,7 @@ export class QueryGenerationService {
     return `(${formattedPkNames.join(", ")}) IN (${tupleStrings.join(", ")})`;
   }
 
-  generateSelectStatement(tableName, primaryKeys, processedRows, schemaData = []) {
+  generateSelectStatement(tableName, primaryKeys, processedRows, schemaData = [], recentIntervalMinutes = 2) {
     if (primaryKeys.length === 0) return null;
     if (processedRows.length === 0) return null;
 
@@ -542,7 +555,7 @@ export class QueryGenerationService {
       if (hasUpdatedTime) {
         selectStatement += `\nSELECT ${primaryKeys
           .map((pk) => pk.toLowerCase())
-          .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+          .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '${recentIntervalMinutes}' MINUTE;`;
       }
       return selectStatement;
     }
@@ -559,7 +572,7 @@ export class QueryGenerationService {
     if (hasUpdatedTime) {
       selectStatement += `\nSELECT ${primaryKeys
         .map((pk) => pk.toLowerCase())
-        .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '5' MINUTE;`;
+        .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '${recentIntervalMinutes}' MINUTE;`;
     }
     return selectStatement;
   }

@@ -71,7 +71,10 @@ describe('QueryGenerationService - MERGE generation (lowercase headers)', () => 
     expect(sql).toContain('id, "type", "sequence", created_time, created_by, updated_time, updated_by')
     expect(sql).toContain('VALUES (src.id, src."type", src."sequence", src.created_time, src.created_by, src.updated_time, src.updated_by)')
 
+    expect(sql.match(/------ SELECT Statement --------/g)).toHaveLength(1)
+    expect(sql.indexOf('------ SELECT Statement --------')).toBeGreaterThan(sql.indexOf('MERGE INTO my_table'))
     expect(sql).toContain('SELECT * FROM my_table WHERE id IN (1)')
+    expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
   })
 })
 
@@ -103,6 +106,9 @@ describe('QueryGenerationService - INSERT generation', () => {
     const sql = svc.generateQuery('my_table', 'insert', schema, inputData, [])
     expect(sql).toContain('INSERT INTO my_table (id, "type", "sequence", created_time, created_by, updated_time, updated_by)')
     expect(sql).toContain("VALUES (1, 'menu', 10, SYSDATE, 'SYSTEM', SYSDATE, 'USER1')")
+    expect(sql.match(/------ SELECT Statement --------/g)).toHaveLength(1)
+    expect(sql.indexOf('------ SELECT Statement --------')).toBeGreaterThan(sql.indexOf('INSERT INTO my_table'))
+    expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
   })
 })
 
@@ -114,10 +120,8 @@ describe('QueryGenerationService - UPDATE generation', () => {
   const row2 = ['2','menu2','20','','', '', 'user2']
   const inputData = [headers, row1, row2]
 
-  it('builds pre/post SELECTs and excludes created_* while including updated_* in SET', () => {
+  it('places UPDATE statements before one labeled SELECT section', () => {
     const sql = svc.generateQuery('my_table', 'update', schema, inputData, [])
-    expect(sql).toContain('SELECT')
-    expect(sql).toContain('FROM my_table WHERE id IN (1, 2)')
 
     expect(sql).toContain('UPDATE my_table')
     expect(sql).toContain('SET')
@@ -127,7 +131,47 @@ describe('QueryGenerationService - UPDATE generation', () => {
     expect(sql).toContain("updated_by = 'USER1'")
     expect(sql).not.toContain('created_time =')
     expect(sql).not.toContain('created_by =')
+    expect(sql).not.toContain('Selected fields before update')
+    expect(sql).not.toContain('Selected fields after update')
+    expect(sql.match(/------ SELECT Statement --------/g)).toHaveLength(1)
+    expect(sql.indexOf('------ SELECT Statement --------')).toBeGreaterThan(sql.lastIndexOf('UPDATE my_table'))
+    expect(sql).toContain('SELECT "type", "sequence", updated_time, updated_by FROM my_table WHERE id IN (1, 2);')
+    expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
     // PK used only in WHERE/ON clauses; not part of SET
+  })
+
+  it('matches the requested UPDATE and SELECT layout', () => {
+    const custodySchema = [
+      ['custody_order_id', 'VARCHAR2(20)', 'No', '', '', 'Yes'],
+      ['updated_by', 'VARCHAR2(50)', 'Yes', '', '', ''],
+      ['updated_time', 'DATE', 'Yes', '', '', ''],
+      ['pickup_branch_code', 'VARCHAR2(10)', 'Yes', '', '', ''],
+      ['pickup_branch_name', 'VARCHAR2(100)', 'Yes', '', '', ''],
+      ['pickup_branch_address', 'VARCHAR2(200)', 'Yes', '', '', ''],
+    ]
+    const custodyInput = [
+      ['custody_order_id', 'updated_by', 'updated_time', 'pickup_branch_code', 'pickup_branch_name', 'pickup_branch_address'],
+      ['ORD000000003225', 'PATCHING_CABANG', '', '32500', 'KC Cipeli pam pam', 'Jl. Jendral Sudirman No.7, Opas Indah'],
+    ]
+
+    const sql = svc.generateQuery('BULLION.CUSTODY_ACCOUNT', 'update', custodySchema, custodyInput, [])
+
+    expect(sql).toBe(`SET DEFINE OFF;
+
+UPDATE BULLION.CUSTODY_ACCOUNT
+SET
+  updated_by = 'PATCHING_CABANG',
+  updated_time = SYSDATE,
+  pickup_branch_code = '32500',
+  pickup_branch_name = 'KC Cipeli pam pam',
+  pickup_branch_address = 'Jl. Jendral Sudirman No.7, Opas Indah'
+WHERE custody_order_id = 'ORD000000003225';
+
+
+------ SELECT Statement --------
+SELECT pickup_branch_code, pickup_branch_name, pickup_branch_address, updated_time, updated_by FROM BULLION.CUSTODY_ACCOUNT WHERE custody_order_id IN ('ORD000000003225');
+SELECT * FROM BULLION.CUSTODY_ACCOUNT WHERE custody_order_id IN ('ORD000000003225');
+SELECT custody_order_id, updated_time FROM BULLION.CUSTODY_ACCOUNT WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;`)
   })
 
   it('throws when PK values are missing', () => {
@@ -513,7 +557,7 @@ describe('QueryGenerationService - SELECT schema-aware behavior', () => {
 
     const sql = svc.generateQuery('my_table', 'merge', schemaWithoutUpdatedTime, inputData, [])
 
-    expect(sql).not.toContain("SYSDATE - INTERVAL '5' MINUTE")
+    expect(sql).not.toContain("SYSDATE - INTERVAL '2' MINUTE")
   })
 
   it('includes updated_time filter query when in schema', () => {
@@ -523,7 +567,7 @@ describe('QueryGenerationService - SELECT schema-aware behavior', () => {
 
     const sql = svc.generateQuery('my_table', 'merge', schemaWithUpdatedTime, inputData, [])
 
-    expect(sql).toContain("SYSDATE - INTERVAL '5' MINUTE")
+    expect(sql).toContain("SYSDATE - INTERVAL '2' MINUTE")
   })
 })
 
