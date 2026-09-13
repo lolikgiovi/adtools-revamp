@@ -19,6 +19,31 @@ import "./styles.css";
 import Handsontable from "handsontable";
 import "handsontable/dist/handsontable.full.css";
 
+const VTL_FUNCTIONS = [
+  ["dateShort", "Short date using d/M/yyyy", '$format.dateShort($context.value, "id-ID")'],
+  ["dateLong", "Date with an abbreviated month", '$format.dateLong($context.value, "id-ID")'],
+  ["dateFull", "Date with a full month name", '$format.dateFull($context.value, "id-ID")'],
+  ["time12", "12-hour time with AM/PM", '$format.time12($context.value, "en-US")'],
+  ["time24", "24-hour time", '$format.time24($context.value, "id-ID")'],
+  [
+    "formatDate",
+    "Format a supported date with a Java SimpleDateFormat pattern",
+    '$format.formatDate($context.value, "dd/MM/yyyy", "id-ID")',
+  ],
+  ["amount", "Group a decimal value and keep two decimal places", "$format.amount($context.value)"],
+  ["smsCurrency", "Format a decimal without grouping", "$format.smsCurrency($context.value)"],
+  ["currency", "Format a decimal with Indonesian separators", "$format.currency($context.value)"],
+  ["trimLeft10", "Keep the first 10 characters", "$format.trimLeft10($context.value)"],
+  ["trimLeft11", "Keep the first 11 characters", "$format.trimLeft11($context.value)"],
+  ["trimLeft25", "Keep 25 characters and trim outer whitespace", "$format.trimLeft25($context.value)"],
+  ["mask", "Mask the first four of the rightmost eight characters", "$format.mask($context.value)"],
+  ["add", "Add decimal values exactly", "$format.add($context.first, $context.second)"],
+  ["encrypt", "Return SHA-256 of value plus salt", '$format.encrypt($context.value, "salt")'],
+  ["replaceByRegex", "Replace every Java-regex match", '$format.replaceByRegex($context.value, "regex", "replacement")'],
+  ["get", "Format the current date and time", '$date.get("yyyy-MM-dd HH:mm:ss")'],
+  ["convertDate", "Convert a timestamp or date", "$date.convertDate($context.value, \"yyyy-MM-dd'T'HH:mm:ss\")"],
+];
+
 class SplunkVTLEditor extends BaseTool {
   constructor(eventBus) {
     super({ id: "splunk-template", eventBus, isHeavyTool: true });
@@ -30,6 +55,8 @@ class SplunkVTLEditor extends BaseTool {
     this._trailingPipe = false;
     this._resizerCleanup = null;
     this._suppressTableEdit = false;
+    this._languageDisposables = [];
+    this._clearedTemplate = null;
   }
 
   getIconSvg() {
@@ -66,6 +93,9 @@ class SplunkVTLEditor extends BaseTool {
     clearTimeout(this._fieldsUpdateTimer);
     clearTimeout(this._previewTimer);
     clearTimeout(this._parametersPersistTimer);
+    clearTimeout(this._undoTimer);
+    this._languageDisposables.forEach((disposable) => disposable.dispose());
+    this._languageDisposables = [];
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -128,6 +158,35 @@ class SplunkVTLEditor extends BaseTool {
         ],
       },
     });
+
+    this._languageDisposables.push(
+      monaco.languages.registerCompletionItemProvider("vtl-splunk", {
+        triggerCharacters: ["$", "."],
+        provideCompletionItems: (model, position) => {
+          const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+          const namespace = linePrefix.match(/\$(format|date)\.$/)?.[1];
+          if (!namespace && linePrefix.endsWith("$")) return { suggestions: [] };
+          const functions = namespace ? VTL_FUNCTIONS.filter(([, , expression]) => expression.startsWith(`$${namespace}.`)) : VTL_FUNCTIONS;
+          return {
+            suggestions: functions.map(([name, detail, expression]) => ({
+              label: name,
+              kind: monaco.languages.CompletionItemKind.Function,
+              detail,
+              documentation: { value: `\`${expression}\`` },
+              insertText: namespace ? expression.replace(`$${namespace}.`, "") : expression,
+            })),
+          };
+        },
+      }),
+      monaco.languages.registerHoverProvider("vtl-splunk", {
+        provideHover: (model, position) => {
+          const line = model.getLineContent(position.lineNumber);
+          const match = VTL_FUNCTIONS.find(([name]) => line.includes(`.${name}(`));
+          if (!match) return null;
+          return { contents: [{ value: `**${match[0]}** — ${match[1]}` }, { value: `\`${match[2]}\`` }] };
+        },
+      }),
+    );
   }
 
   async initializeMonacoEditor() {
@@ -148,9 +207,10 @@ class SplunkVTLEditor extends BaseTool {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "on",
-      fontSize: 11,
+      fontSize: 12,
       tabSize: 2,
       insertSpaces: true,
+      ariaLabel: "Velocity template editor",
     });
 
     this._persistTimer = null;
@@ -158,10 +218,14 @@ class SplunkVTLEditor extends BaseTool {
     this.editor.onDidChangeModelContent(() => {
       clearTimeout(this._persistTimer);
       const v = this.editor.getValue();
+      this.setSaveStatus("templateSaveStatus", "Saving…", true);
       this._persistTimer = setTimeout(() => {
         try {
           localStorage.setItem(this._storageKey, v);
-        } catch (_) {}
+          this.setSaveStatus("templateSaveStatus", "Saved locally");
+        } catch (_) {
+          this.setSaveStatus("templateSaveStatus", "Not saved");
+        }
       }, 250);
       clearTimeout(this._fieldsUpdateTimer);
       this._fieldsUpdateTimer = setTimeout(() => {
@@ -187,7 +251,7 @@ class SplunkVTLEditor extends BaseTool {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "on",
-      fontSize: 11,
+      fontSize: 12,
       tabSize: 2,
       insertSpaces: true,
       ariaLabel: "Sample parameters JSON",
@@ -221,19 +285,46 @@ class SplunkVTLEditor extends BaseTool {
     this._previewTimer = setTimeout(() => this.updatePreview(), 250);
   }
 
+  setSaveStatus(id, text, saving = false) {
+    const status = document.getElementById(id);
+    if (!status) return;
+    status.textContent = text;
+    status.classList.toggle("is-saving", saving);
+  }
+
+  setContextError(message = "") {
+    const status = document.getElementById("contextStatus");
+    if (!status) return;
+    status.textContent = message;
+    status.hidden = !message;
+  }
+
   updatePreview() {
     const output = document.getElementById("splunkPreview");
     const status = document.getElementById("previewStatus");
     if (!output || !status || !this.editor) return;
+    let parameters;
     try {
-      const rendered = renderSplunkTemplate(this.editor.getValue(), this.readParameters());
+      parameters = this.readParameters();
+      this.setContextError();
+    } catch (error) {
+      this.setContextError(`Invalid JSON: ${error?.message || "Check the Context Data syntax."}`);
+      output.classList.add("is-stale");
+      status.textContent = "Preview paused until Context Data is valid.";
+      status.hidden = false;
+      status.classList.add("is-error");
+      return;
+    }
+    try {
+      const rendered = renderSplunkTemplate(this.editor.getValue(), parameters);
       this.highlightPreview(output, rendered);
+      output.classList.remove("is-stale");
       status.textContent = "";
       status.hidden = true;
       status.classList.remove("is-error");
     } catch (error) {
-      output.textContent = "";
       status.textContent = `Preview error: ${error?.message || "Unable to render template"}`;
+      output.classList.add("is-stale");
       status.hidden = false;
       status.classList.add("is-error");
     }
@@ -309,9 +400,12 @@ class SplunkVTLEditor extends BaseTool {
     tableButton?.classList.toggle("is-active", !isText);
     textButton?.setAttribute("aria-selected", String(isText));
     tableButton?.setAttribute("aria-selected", String(!isText));
+    textButton?.setAttribute("tabindex", isText ? "0" : "-1");
+    tableButton?.setAttribute("tabindex", isText ? "-1" : "0");
 
     if (isText) this.editor?.layout?.();
     else {
+      this.toggleFunctionLibrary(false, false);
       this.updateFieldsTable();
       this.table?.refreshDimensions?.();
       this.table?.render?.();
@@ -375,6 +469,79 @@ class SplunkVTLEditor extends BaseTool {
     }, 10);
   }
 
+  toggleFunctionLibrary(open, restoreFocus = true) {
+    const pane = document.querySelector(".vtl-editor-pane");
+    const panel = document.getElementById("functionLibraryPanel");
+    const trigger = document.getElementById("btnFunctions");
+    if (!pane || !panel || !trigger) return;
+    panel.hidden = !open;
+    pane.classList.toggle("is-function-library-open", open);
+    trigger.setAttribute("aria-expanded", String(open));
+    requestAnimationFrame(() => {
+      this.editor?.layout?.();
+      this.table?.refreshDimensions?.();
+      if (open) document.getElementById("functionSearch")?.focus();
+      else if (restoreFocus) trigger.focus();
+    });
+  }
+
+  filterFunctions(query) {
+    const normalized = String(query || "")
+      .trim()
+      .toLowerCase();
+    let visibleCount = 0;
+    document.querySelectorAll("[data-function-group]").forEach((group) => {
+      let groupCount = 0;
+      group.querySelectorAll("[data-function-item]").forEach((item) => {
+        const visible = !normalized || item.textContent.toLowerCase().includes(normalized);
+        item.hidden = !visible;
+        if (visible) groupCount++;
+      });
+      group.hidden = groupCount === 0;
+      if (normalized && groupCount > 0) group.open = true;
+      visibleCount += groupCount;
+    });
+    const empty = document.getElementById("functionEmptyState");
+    if (empty) empty.hidden = visibleCount > 0;
+  }
+
+  insertFunctionExpression(expression) {
+    if (!this.editor || !expression) return;
+    this.activateEditorView("text");
+    const selection = this.editor.getSelection();
+    const model = this.editor.getModel();
+    if (!selection || !model) return;
+    const insertionOffset = model.getOffsetAt(selection.getStartPosition());
+    this.editor.executeEdits("function-library", [{ range: selection, text: expression, forceMoveMarkers: true }]);
+    const placeholderOffset = expression.indexOf("$context.value");
+    if (placeholderOffset >= 0) {
+      const startOffset = insertionOffset + placeholderOffset;
+      const start = model.getPositionAt(startOffset);
+      const end = model.getPositionAt(startOffset + "$context.value".length);
+      this.editor.setSelection(new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column));
+    } else this.editor.setPosition(model.getPositionAt(insertionOffset + expression.length));
+    this.editor.focus();
+    this.showSuccess("Function inserted at cursor");
+  }
+
+  showUndoClear(previousValue) {
+    const toast = document.getElementById("vtlUndoToast");
+    if (!toast) return;
+    this._clearedTemplate = previousValue;
+    toast.hidden = false;
+    clearTimeout(this._undoTimer);
+    this._undoTimer = setTimeout(() => {
+      toast.hidden = true;
+      this._clearedTemplate = null;
+    }, 7000);
+  }
+
+  hideUndoClear() {
+    const toast = document.getElementById("vtlUndoToast");
+    if (toast) toast.hidden = true;
+    clearTimeout(this._undoTimer);
+  }
+
   bindUIEvents() {
     const btnFormat = document.getElementById("btnFormatVtl");
     const btnMinify = document.getElementById("btnMinifyVtl");
@@ -389,29 +556,74 @@ class SplunkVTLEditor extends BaseTool {
     const btnCopyInputsLines = document.getElementById("btnCopyInputsLines");
     const btnTextView = document.getElementById("btnTextView");
     const btnTableView = document.getElementById("btnTableView");
+    const btnFunctions = document.getElementById("btnFunctions");
+    const btnCloseFunctions = document.getElementById("btnCloseFunctions");
+    const functionPanel = document.getElementById("functionLibraryPanel");
+    const functionSearch = document.getElementById("functionSearch");
+    const btnTogglePreviewWrap = document.getElementById("btnTogglePreviewWrap");
+    const moreActions = document.getElementById("editorMoreActions");
 
     btnTextView?.addEventListener("click", () => this.activateEditorView("text"));
     btnTableView?.addEventListener("click", () => this.activateEditorView("table"));
+    document.querySelector(".vtl-view-switch")?.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const currentIsText = btnTextView?.getAttribute("aria-selected") === "true";
+      const useText = event.key === "Home" || ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !currentIsText);
+      this.activateEditorView(useText ? "text" : "table");
+      (useText ? btnTextView : btnTableView)?.focus();
+    });
+
+    btnFunctions?.addEventListener("click", () => this.toggleFunctionLibrary(btnFunctions.getAttribute("aria-expanded") !== "true"));
+    btnCloseFunctions?.addEventListener("click", () => this.toggleFunctionLibrary(false));
+    functionPanel?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") this.toggleFunctionLibrary(false);
+    });
+    this.container?.querySelector(".splunk-vtl-editor")?.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (btnFunctions?.getAttribute("aria-expanded") === "true") this.toggleFunctionLibrary(false);
+      moreActions?.removeAttribute("open");
+    });
+    this.container?.querySelector(".splunk-vtl-editor")?.addEventListener("click", (event) => {
+      if (moreActions && !moreActions.contains(event.target)) moreActions.removeAttribute("open");
+    });
+    functionSearch?.addEventListener("input", () => this.filterFunctions(functionSearch.value));
+    functionPanel?.addEventListener("click", (event) => {
+      const insertButton = event.target.closest("[data-insert-expression]");
+      const copyButton = event.target.closest("[data-copy-expression]");
+      if (insertButton) this.insertFunctionExpression(insertButton.dataset.insertExpression);
+      if (copyButton) this.copyToClipboard(copyButton.dataset.copyExpression, copyButton);
+    });
 
     this.parametersEditor?.onDidChangeModelContent(() => {
       clearTimeout(this._parametersPersistTimer);
+      this.setSaveStatus("contextSaveStatus", "Saving…", true);
       this._parametersPersistTimer = setTimeout(() => {
         try {
           localStorage.setItem(this._parametersStorageKey, this.parametersEditor?.getValue() || "");
-        } catch (_) {}
+          this.setSaveStatus("contextSaveStatus", "Saved locally");
+        } catch (_) {
+          this.setSaveStatus("contextSaveStatus", "Not saved");
+        }
       }, 250);
       this.schedulePreview();
     });
 
     btnGenerateParameters?.addEventListener("click", () => {
-      if (!this.syncContextFields()) this.showError("Context data is not valid JSON");
+      if (!this.syncContextFields()) {
+        this.setContextError("Context Data must be valid JSON before fields can be synchronized.");
+        this.showError("Fix the Context Data JSON, then try Sync fields again.");
+      } else this.showSuccess("Context fields synchronized");
     });
 
     btnFormatParameters?.addEventListener("click", () => {
       try {
         this.parametersEditor?.setValue(JSON.stringify(this.readParameters(), null, 2));
+        this.setContextError();
+        this.showSuccess("Context Data formatted");
       } catch (error) {
-        this.showError(error?.message || "Sample data is not valid JSON");
+        this.setContextError(`Invalid JSON: ${error?.message || "Check the Context Data syntax."}`);
+        this.showError("Fix the Context Data JSON before formatting it.");
       }
     });
 
@@ -433,6 +645,7 @@ class SplunkVTLEditor extends BaseTool {
         ...summarizeText(src, "input"),
         ...summarizeText(formatted, "output"),
       });
+      this.showSuccess("Template formatted");
     });
 
     btnMinify?.addEventListener("click", () => {
@@ -445,42 +658,66 @@ class SplunkVTLEditor extends BaseTool {
         ...summarizeText(src, "input"),
         ...summarizeText(minified, "output"),
       });
+      moreActions?.removeAttribute("open");
+      this.showSuccess("Template minified");
     });
 
     btnCopy?.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(this.editor.getValue());
+      const copied = await this.copyToClipboard(this.editor.getValue(), btnCopy);
+      if (copied) {
         this.trackAnalytics("copy_success", {
           field_count: extractFieldsFromTemplate(this.editor.getValue()).length,
           ...summarizeText(this.editor.getValue(), "output"),
         });
-      } catch (_) {}
+      }
     });
     btnPaste?.addEventListener("click", async () => {
       try {
         const text = await navigator.clipboard.readText();
-        if (text) {
-          const model = this.editor.getModel();
-          if (model) {
-            const full = model.getFullModelRange();
-            this.editor.executeEdits("paste", [{ range: full, text }]);
-          } else {
-            this.editor.setValue(text);
-          }
-          this.updateFieldsTable();
-          this.trackAnalytics("paste_template", {
-            field_count: extractFieldsFromTemplate(text).length,
-            ...summarizeText(text, "input"),
-          });
+        if (!text) {
+          this.showError("Clipboard is empty");
+          return;
         }
-      } catch (_) {}
+        const model = this.editor.getModel();
+        if (model) this.editor.executeEdits("paste", [{ range: model.getFullModelRange(), text }]);
+        else this.editor.setValue(text);
+        this.updateFieldsTable();
+        moreActions?.removeAttribute("open");
+        this.showSuccess("Template pasted from clipboard");
+        this.trackAnalytics("paste_template", {
+          field_count: extractFieldsFromTemplate(text).length,
+          ...summarizeText(text, "input"),
+        });
+      } catch (_) {
+        this.showError("Could not read the clipboard. Check browser permission and try again.");
+      }
     });
     btnClear?.addEventListener("click", () => {
+      const previousValue = this.editor.getValue();
+      if (!previousValue) return;
       this.editor.setValue("");
       this.updateFieldsTable();
+      moreActions?.removeAttribute("open");
+      this.showUndoClear(previousValue);
       try {
         localStorage.setItem(this._storageKey, "");
       } catch (_) {}
+    });
+
+    document.getElementById("btnUndoClear")?.addEventListener("click", () => {
+      if (this._clearedTemplate === null) return;
+      this.editor.setValue(this._clearedTemplate);
+      this.hideUndoClear();
+      this._clearedTemplate = null;
+      this.showSuccess("Template restored");
+    });
+    document.getElementById("btnDismissUndo")?.addEventListener("click", () => this.hideUndoClear());
+
+    btnTogglePreviewWrap?.addEventListener("click", () => {
+      const preview = document.getElementById("splunkPreview");
+      const nowrap = preview?.classList.toggle("is-nowrap") || false;
+      btnTogglePreviewWrap.setAttribute("aria-pressed", String(!nowrap));
+      btnTogglePreviewWrap.textContent = nowrap ? "No wrap" : "Wrap";
     });
 
     // Add Field: insert a blank row at the end without triggering sync
@@ -586,14 +823,18 @@ class SplunkVTLEditor extends BaseTool {
     const MIN_RIGHT = 240;
     let dragging = false;
 
+    const applyWidth = (left, rect = layout.getBoundingClientRect()) => {
+      const total = rect.width - RESIZER_W;
+      const clamped = Math.max(MIN_LEFT, Math.min(left, total - MIN_RIGHT));
+      layout.style.gridTemplateColumns = `${clamped}px ${RESIZER_W}px ${total - clamped}px`;
+      resizer.setAttribute("aria-valuenow", String(total > 0 ? Math.round((clamped / total) * 100) : 50));
+    };
+
     const onMove = (e) => {
       if (!dragging) return;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const rect = layout.getBoundingClientRect();
-      const total = rect.width - RESIZER_W;
-      let left = clientX - rect.left;
-      left = Math.max(MIN_LEFT, Math.min(left, total - MIN_RIGHT));
-      layout.style.gridTemplateColumns = `${left}px ${RESIZER_W}px ${total - left}px`;
+      applyWidth(clientX - rect.left, rect);
       e.preventDefault();
     };
 
@@ -608,7 +849,7 @@ class SplunkVTLEditor extends BaseTool {
     };
 
     const onDown = (e) => {
-      if (window.innerWidth <= 900) return; // disabled on mobile layout
+      if (window.innerWidth <= 940) return; // disabled on stacked layout
       dragging = true;
       document.body.classList.add("is-resizing");
       window.addEventListener("mousemove", onMove);
@@ -620,10 +861,22 @@ class SplunkVTLEditor extends BaseTool {
 
     resizer.addEventListener("mousedown", onDown);
     resizer.addEventListener("touchstart", onDown, { passive: false });
+    const onKeyDown = (event) => {
+      if (window.innerWidth <= 940 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const rect = layout.getBoundingClientRect();
+      const total = rect.width - RESIZER_W;
+      const current = (total * (Number(resizer.getAttribute("aria-valuenow")) || 60)) / 100;
+      if (event.key === "Home") applyWidth(MIN_LEFT, rect);
+      else if (event.key === "End") applyWidth(total - MIN_RIGHT, rect);
+      else applyWidth(current + (event.key === "ArrowLeft" ? -24 : 24), rect);
+    };
+    resizer.addEventListener("keydown", onKeyDown);
 
     this._resizerCleanup = () => {
       resizer.removeEventListener("mousedown", onDown);
       resizer.removeEventListener("touchstart", onDown);
+      resizer.removeEventListener("keydown", onKeyDown);
       onUp();
     };
   }
