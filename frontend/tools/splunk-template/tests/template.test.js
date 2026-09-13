@@ -16,7 +16,7 @@ describe("Splunk template editor UI", () => {
     expect(tableTab.getAttribute("aria-controls")).toBe("tableEditorPanel");
     expect(tableTab.tabIndex).toBe(-1);
     expect(functions.getAttribute("aria-controls")).toBe("functionLibraryPanel");
-    expect(document.getElementById("functionLibraryPanel").hidden).toBe(true);
+    expect(document.getElementById("functionLibraryPanel").open).toBe(false);
     expect(resizer.tabIndex).toBe(0);
     expect(resizer.getAttribute("aria-valuenow")).toBe("60");
   });

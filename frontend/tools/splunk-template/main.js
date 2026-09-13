@@ -470,16 +470,18 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   toggleFunctionLibrary(open, restoreFocus = true) {
-    const pane = document.querySelector(".vtl-editor-pane");
     const panel = document.getElementById("functionLibraryPanel");
     const trigger = document.getElementById("btnFunctions");
-    if (!pane || !panel || !trigger) return;
-    panel.hidden = !open;
-    pane.classList.toggle("is-function-library-open", open);
+    if (!panel || !trigger) return;
+    if (open && !panel.open) {
+      if (typeof panel.showModal === "function") panel.showModal();
+      else panel.setAttribute("open", "");
+    } else if (!open && panel.open) {
+      if (typeof panel.close === "function") panel.close();
+      else panel.removeAttribute("open");
+    }
     trigger.setAttribute("aria-expanded", String(open));
     requestAnimationFrame(() => {
-      this.editor?.layout?.();
-      this.table?.refreshDimensions?.();
       if (open) document.getElementById("functionSearch")?.focus();
       else if (restoreFocus) trigger.focus();
     });
@@ -520,6 +522,7 @@ class SplunkVTLEditor extends BaseTool {
       const end = model.getPositionAt(startOffset + "$context.value".length);
       this.editor.setSelection(new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column));
     } else this.editor.setPosition(model.getPositionAt(insertionOffset + expression.length));
+    this.toggleFunctionLibrary(false, false);
     this.editor.focus();
     this.showSuccess("Function inserted at cursor");
   }
@@ -578,6 +581,13 @@ class SplunkVTLEditor extends BaseTool {
     btnCloseFunctions?.addEventListener("click", () => this.toggleFunctionLibrary(false));
     functionPanel?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") this.toggleFunctionLibrary(false);
+    });
+    functionPanel?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.toggleFunctionLibrary(false);
+    });
+    functionPanel?.addEventListener("click", (event) => {
+      if (event.target === functionPanel) this.toggleFunctionLibrary(false);
     });
     this.container?.querySelector(".splunk-vtl-editor")?.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;

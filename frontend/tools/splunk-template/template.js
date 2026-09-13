@@ -89,13 +89,15 @@ export const SplunkVTLEditorTemplate = /* html */ `
           <div id="fieldsTable" class="handsontable-container"></div>
         </div>
 
-        <aside id="functionLibraryPanel" class="vtl-function-panel" aria-labelledby="functionLibraryTitle" hidden>
+        <dialog id="functionLibraryPanel" class="vtl-function-panel" aria-labelledby="functionLibraryTitle" aria-describedby="functionLibraryDescription">
           <div class="vtl-function-panel-header">
             <div>
               <h3 id="functionLibraryTitle">Functions</h3>
-              <p>Search, then insert a valid Velocity expression at the cursor.</p>
+              <p id="functionLibraryDescription">Search, then insert a valid Velocity expression at the cursor.</p>
             </div>
-            <button id="btnCloseFunctions" class="vtl-icon-button" type="button" aria-label="Close functions">×</button>
+            <button id="btnCloseFunctions" class="vtl-icon-button" type="button" aria-label="Close functions">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
+            </button>
           </div>
           <label class="vtl-function-search-label" for="functionSearch">Search functions</label>
           <input id="functionSearch" class="vtl-function-search" type="search" placeholder="Try “date”, “currency”, or “mask”" autocomplete="off" />
@@ -129,12 +131,14 @@ export const SplunkVTLEditorTemplate = /* html */ `
               </div>
             </details>
           </div>
-        </aside>
+        </dialog>
 
         <div id="vtlUndoToast" class="vtl-undo-toast" role="status" hidden>
           <span>Template cleared.</span>
           <button id="btnUndoClear" type="button">Undo</button>
-          <button id="btnDismissUndo" type="button" aria-label="Dismiss">×</button>
+          <button id="btnDismissUndo" type="button" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19" /></svg>
+          </button>
         </div>
       </div>
 
