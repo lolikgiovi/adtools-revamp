@@ -23,6 +23,7 @@ class SplunkVTLEditor extends BaseTool {
   constructor(eventBus) {
     super({ id: "splunk-template", eventBus, isHeavyTool: true });
     this.editor = null;
+    this.parametersEditor = null;
     this.table = null;
     this._storageKey = "tool:splunk-template:editor";
     this._parametersStorageKey = "tool:splunk-template:parameters";
@@ -69,6 +70,10 @@ class SplunkVTLEditor extends BaseTool {
       this.editor.dispose();
       this.editor = null;
     }
+    if (this.parametersEditor) {
+      this.parametersEditor.dispose();
+      this.parametersEditor = null;
+    }
     if (this.table) {
       this.table.destroy();
       this.table = null;
@@ -78,6 +83,7 @@ class SplunkVTLEditor extends BaseTool {
   onWarmResume() {
     try {
       this.editor?.layout?.();
+      this.parametersEditor?.layout?.();
       this.table?.refreshDimensions?.();
       this.table?.render?.();
     } catch (_) {}
@@ -167,13 +173,25 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   initializeParameters() {
-    const input = document.getElementById("splunkParameters");
-    if (!input) return;
+    const container = document.getElementById("splunkParameters");
+    if (!container) return;
     let saved = null;
     try {
       saved = localStorage.getItem(this._parametersStorageKey);
     } catch (_) {}
-    input.value = saved ?? JSON.stringify(this.buildSampleParameters(), null, 2);
+    this.parametersEditor = monaco.editor.create(container, {
+      value: saved ?? JSON.stringify(this.buildSampleParameters(), null, 2),
+      language: "json",
+      theme: "vs-dark",
+      automaticLayout: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      fontSize: 11,
+      tabSize: 2,
+      insertSpaces: true,
+      ariaLabel: "Sample parameters JSON",
+    });
   }
 
   buildSampleParameters(existing = {}) {
@@ -192,8 +210,7 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   readParameters() {
-    const input = document.getElementById("splunkParameters");
-    const value = input?.value.trim() || "{}";
+    const value = this.parametersEditor?.getValue().trim() || "{}";
     const parsed = JSON.parse(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Sample data must be a JSON object.");
     return parsed;
@@ -210,14 +227,43 @@ class SplunkVTLEditor extends BaseTool {
     if (!output || !status || !this.editor) return;
     try {
       const rendered = renderSplunkTemplate(this.editor.getValue(), this.readParameters());
-      output.textContent = rendered;
-      status.textContent = `Rendered successfully · ${rendered.length.toLocaleString()} characters`;
+      this.highlightPreview(output, rendered);
+      status.textContent = "";
+      status.hidden = true;
       status.classList.remove("is-error");
     } catch (error) {
       output.textContent = "";
       status.textContent = `Preview error: ${error?.message || "Unable to render template"}`;
+      status.hidden = false;
       status.classList.add("is-error");
     }
+  }
+
+  highlightPreview(output, rendered) {
+    output.replaceChildren();
+    const append = (text, className) => {
+      if (!text) return;
+      const node = document.createElement("span");
+      if (className) node.className = className;
+      node.textContent = text;
+      output.appendChild(node);
+    };
+
+    rendered.split("|").forEach((segment, index, segments) => {
+      let cursor = 0;
+      const assignment = /(^|[\s-]+)([A-Za-z_][\w.-]*)(\s*)(=)(\s*)(.*?)(?=(?:\s+-\s+|\s+)[A-Za-z_][\w.-]*\s*=|$)/g;
+      for (const match of segment.matchAll(assignment)) {
+        append(segment.slice(cursor, match.index) + match[1]);
+        append(match[2], "vtl-preview-field");
+        append(match[3]);
+        append(match[4], "vtl-preview-operator");
+        append(match[5]);
+        append(match[6], "vtl-preview-value");
+        cursor = match.index + match[0].length;
+      }
+      append(segment.slice(cursor));
+      if (index < segments.length - 1) append("|", "vtl-preview-pipe");
+    });
   }
 
   buildRequiredInputs() {
@@ -227,8 +273,7 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   syncContextFields() {
-    const input = document.getElementById("splunkParameters");
-    if (!input) return false;
+    if (!this.parametersEditor) return false;
     let current;
     try {
       current = this.readParameters();
@@ -237,8 +282,7 @@ class SplunkVTLEditor extends BaseTool {
     }
     const generated = this.buildSampleParameters(current);
     if (JSON.stringify(generated) === JSON.stringify(current)) return true;
-    input.value = JSON.stringify(generated, null, 2);
-    input.dispatchEvent(new Event("input"));
+    this.parametersEditor.setValue(JSON.stringify(generated, null, 2));
     return true;
   }
 
@@ -338,7 +382,6 @@ class SplunkVTLEditor extends BaseTool {
     const btnPaste = document.getElementById("btnPasteVtl");
     const btnClear = document.getElementById("btnClearVtl");
     const btnAddField = document.getElementById("btnAddField");
-    const parametersInput = document.getElementById("splunkParameters");
     const btnGenerateParameters = document.getElementById("btnGenerateParameters");
     const btnFormatParameters = document.getElementById("btnFormatParameters");
     const btnCopyPreview = document.getElementById("btnCopyPreview");
@@ -350,11 +393,11 @@ class SplunkVTLEditor extends BaseTool {
     btnTextView?.addEventListener("click", () => this.activateEditorView("text"));
     btnTableView?.addEventListener("click", () => this.activateEditorView("table"));
 
-    parametersInput?.addEventListener("input", () => {
+    this.parametersEditor?.onDidChangeModelContent(() => {
       clearTimeout(this._parametersPersistTimer);
       this._parametersPersistTimer = setTimeout(() => {
         try {
-          localStorage.setItem(this._parametersStorageKey, parametersInput.value);
+          localStorage.setItem(this._parametersStorageKey, this.parametersEditor?.getValue() || "");
         } catch (_) {}
       }, 250);
       this.schedulePreview();
@@ -366,8 +409,7 @@ class SplunkVTLEditor extends BaseTool {
 
     btnFormatParameters?.addEventListener("click", () => {
       try {
-        parametersInput.value = JSON.stringify(this.readParameters(), null, 2);
-        parametersInput.dispatchEvent(new Event("input"));
+        this.parametersEditor?.setValue(JSON.stringify(this.readParameters(), null, 2));
       } catch (error) {
         this.showError(error?.message || "Sample data is not valid JSON");
       }

@@ -519,6 +519,8 @@ function parseTemplateFormatterDate(input) {
   const text = String(input ?? "").trim();
   if (!text) return null;
 
+  // The Java implementation tries the seconds-only patterns first. SimpleDateFormat.parse
+  // accepts a valid prefix, so later milliseconds and timezone suffixes are intentionally ignored.
   const dateTime = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: |T)(\d{2}):(\d{2}):(\d{2})/);
   if (dateTime) return localDateFromMatch(dateTime);
   const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -550,40 +552,180 @@ function localeName(locale) {
   }
 }
 
-function javaDateFormatDate(date, pattern, locale) {
-  const formatterLocale = localeName(locale);
-  const getPart = (options) => new Intl.DateTimeFormat(formatterLocale, options).format(date);
+function padNumber(value, size) {
+  return String(Math.abs(value)).padStart(size, "0");
+}
+
+function localDayNumber(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
+}
+
+function dayOfYear(date) {
+  const start = new Date(date.getFullYear(), 0, 1);
+  return localDayNumber(date) - localDayNumber(start) + 1;
+}
+
+function isoDayOfWeek(date) {
+  return date.getDay() || 7;
+}
+
+function localeWeekRules(locale) {
+  try {
+    const requested = localeName(locale) || new Intl.DateTimeFormat().resolvedOptions().locale;
+    const info = new Intl.Locale(requested).weekInfo;
+    if (info) return { firstDay: info.firstDay, minimalDays: info.minimalDays };
+  } catch (_) {
+    // Older runtimes may not expose Intl.Locale week metadata.
+  }
+  return { firstDay: 1, minimalDays: 4 };
+}
+
+function firstWeekStart(year, month, rules) {
+  const first = new Date(year, month, 1);
+  const offset = (isoDayOfWeek(first) - rules.firstDay + 7) % 7;
+  const start = new Date(year, month, 1 - offset);
+  if (7 - offset < rules.minimalDays) start.setDate(start.getDate() + 7);
+  return start;
+}
+
+function localeWeekParts(date, locale) {
+  const rules = localeWeekRules(locale);
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  let weekYear = date.getFullYear();
+  let start = firstWeekStart(weekYear, 0, rules);
+  if (day < start) {
+    weekYear--;
+    start = firstWeekStart(weekYear, 0, rules);
+  } else {
+    const nextStart = firstWeekStart(weekYear + 1, 0, rules);
+    if (day >= nextStart) {
+      weekYear++;
+      start = nextStart;
+    }
+  }
+  return { week: Math.floor((localDayNumber(day) - localDayNumber(start)) / 7) + 1, year: weekYear, rules };
+}
+
+function timeZoneOffset(date, separator = "") {
+  const minutes = -date.getTimezoneOffset();
+  const sign = minutes >= 0 ? "+" : "-";
+  const hours = padNumber(Math.floor(Math.abs(minutes) / 60), 2);
+  const remainder = padNumber(Math.abs(minutes) % 60, 2);
+  return `${sign}${hours}${separator}${remainder}`;
+}
+
+function localizedDatePart(date, locale, options, partType) {
+  const formatter = new Intl.DateTimeFormat(localeName(locale), options);
+  if (!partType) return formatter.format(date);
+  return formatter.formatToParts(date).find((part) => part.type === partType)?.value || formatter.format(date);
+}
+
+function javaDateToken(date, token, locale) {
+  const length = token.length;
+  const symbol = token[0];
+  const year = date.getFullYear();
   const hour24 = date.getHours();
-  const replacements = {
-    yyyy: String(date.getFullYear()).padStart(4, "0"),
-    MMMM: getPart({ month: "long" }),
-    MMM: getPart({ month: "short" }),
-    MM: String(date.getMonth() + 1).padStart(2, "0"),
-    M: String(date.getMonth() + 1),
-    dd: String(date.getDate()).padStart(2, "0"),
-    d: String(date.getDate()),
-    HH: String(hour24).padStart(2, "0"),
-    H: String(hour24),
-    hh: String(hour24 % 12 || 12).padStart(2, "0"),
-    h: String(hour24 % 12 || 12),
-    mm: String(date.getMinutes()).padStart(2, "0"),
-    m: String(date.getMinutes()),
-    ss: String(date.getSeconds()).padStart(2, "0"),
-    s: String(date.getSeconds()),
-    SSS: String(date.getMilliseconds()).padStart(3, "0"),
-    a: hour24 < 12 ? "AM" : "PM",
-    Z: `${-date.getTimezoneOffset() >= 0 ? "+" : "-"}${String(Math.floor(Math.abs(date.getTimezoneOffset()) / 60)).padStart(2, "0")}${String(
-      Math.abs(date.getTimezoneOffset()) % 60,
-    ).padStart(2, "0")}`,
-  };
-  return String(pattern).replace(/'([^']*)'|yyyy|MMMM|MMM|MM|M|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|a|Z/g, (token, literal) =>
-    literal !== undefined ? literal : replacements[token],
-  );
+  const localeWeek = localeWeekParts(date, locale);
+  const number = (value) => padNumber(value, length);
+
+  switch (symbol) {
+    case "G":
+      return localizedDatePart(date, locale, { era: length >= 4 ? "long" : "short" }, "era");
+    case "y":
+      return length === 2 ? padNumber(year % 100, 2) : number(year);
+    case "Y":
+      return length === 2 ? padNumber(localeWeek.year % 100, 2) : number(localeWeek.year);
+    case "M":
+    case "L":
+      if (length <= 2) return number(date.getMonth() + 1);
+      return localizedDatePart(date, locale, { month: length === 3 ? "short" : "long" }, "month");
+    case "w":
+      return number(localeWeek.week);
+    case "W": {
+      const weekStart = firstWeekStart(year, date.getMonth(), localeWeek.rules);
+      const day = new Date(year, date.getMonth(), date.getDate());
+      return number(day < weekStart ? 0 : Math.floor((localDayNumber(day) - localDayNumber(weekStart)) / 7) + 1);
+    }
+    case "D":
+      return number(dayOfYear(date));
+    case "d":
+      return number(date.getDate());
+    case "F":
+      return number(Math.ceil(date.getDate() / 7));
+    case "E":
+      return localizedDatePart(date, locale, { weekday: length >= 4 ? "long" : "short" }, "weekday");
+    case "u":
+      return number(isoDayOfWeek(date));
+    case "a":
+      return localizedDatePart(date, locale, { hour: "numeric", hour12: true }, "dayPeriod");
+    case "H":
+      return number(hour24);
+    case "k":
+      return number(hour24 || 24);
+    case "K":
+      return number(hour24 % 12);
+    case "h":
+      return number(hour24 % 12 || 12);
+    case "m":
+      return number(date.getMinutes());
+    case "s":
+      return number(date.getSeconds());
+    case "S":
+      return number(date.getMilliseconds());
+    case "z":
+      return localizedDatePart(date, locale, { timeZoneName: length >= 4 ? "long" : "short" }, "timeZoneName");
+    case "Z":
+      return timeZoneOffset(date);
+    case "X": {
+      if (length > 3) throw new Error("ISO 8601 timezone pattern X supports at most 3 letters.");
+      if (date.getTimezoneOffset() === 0) return "Z";
+      if (length === 1) return timeZoneOffset(date).slice(0, 3);
+      return timeZoneOffset(date, length === 3 ? ":" : "");
+    }
+    default:
+      throw new Error(`Unsupported SimpleDateFormat pattern letter: ${symbol}`);
+  }
+}
+
+function javaDateFormatDate(date, pattern, locale) {
+  const source = String(pattern);
+  let output = "";
+  for (let index = 0; index < source.length; ) {
+    if (source[index] === "'") {
+      if (source[index + 1] === "'") {
+        output += "'";
+        index += 2;
+        continue;
+      }
+      let literal = "";
+      index++;
+      while (index < source.length && source[index] !== "'") literal += source[index++];
+      if (source[index] !== "'") throw new Error("Unterminated quote in SimpleDateFormat pattern.");
+      output += literal;
+      index++;
+      continue;
+    }
+    if (/[A-Za-z]/.test(source[index])) {
+      let end = index + 1;
+      while (source[end] === source[index]) end++;
+      output += javaDateToken(date, source.slice(index, end), locale);
+      index = end;
+      continue;
+    }
+    output += source[index++];
+  }
+  return output;
 }
 
 function formatParsedDate(input, pattern, locale) {
   const date = parseTemplateFormatterDate(input);
-  return date ? javaDateFormatDate(date, pattern, locale) : String(input ?? "");
+  if (!date) return String(input ?? "");
+  try {
+    return javaDateFormatDate(date, pattern, locale);
+  } catch (_) {
+    // TemplateFormatter catches invalid output formats inside its parsing loop.
+    return String(input ?? "");
+  }
 }
 
 function decimalParts(input) {

@@ -66,6 +66,21 @@ describe("Splunk template consumer preview", () => {
     expect(dateFormatter.convertDate("2026-09-12 13:14:15.123", "HH:mm:ss.SSS")).toBe("13:14:15.123");
     expect(dateFormatter.convertDate("2026-09-12T13:14.15.123+0700", "HH:mm:ss")).toBe("00:00:00");
     expect(dateFormatter.convertDate("not-a-date", "yyyy")).toBe("not-a-date");
+    expect(templateFormatter.formatDate("2026-09-12 13:14:15.987+0700", "HH:mm:ss.SSS", "en-US")).toBe("13:14:15.000");
+  });
+
+  it("supports Java SimpleDateFormat output pattern letters", () => {
+    const input = "2026-09-12 13:14:15";
+
+    expect(templateFormatter.formatDate(input, "yyyy|yy|M|MM|d|dd|D|H|HH|k|K|h|m|s|S|SSS|u|F", "en-US")).toBe(
+      "2026|26|9|09|12|12|255|13|13|13|1|1|14|15|0|000|6|2",
+    );
+    expect(templateFormatter.formatDate(input, "G yyyy-MM-dd D EEEE u HH k K h mm ss SSS a", "en-US")).toMatch(
+      /^AD 2026-09-12 255 Saturday 6 13 13 1 1 14 15 000 PM$/,
+    );
+    expect(templateFormatter.formatDate(input, "yyyy-MM-dd'T'HH:mm:ss", "en-US")).toBe("2026-09-12T13:14:15");
+    expect(templateFormatter.formatDate(input, "'day='dd '' MMM", "en-US")).toBe("day=12 ' Sep");
+    expect(templateFormatter.formatDate(input, "not-a-pattern-q", "en-US")).toBe(input);
   });
 
   it("matches helper fallback behavior", () => {
