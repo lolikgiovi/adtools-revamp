@@ -507,45 +507,37 @@ export function extractFieldsFromTemplate(input = "") {
   return rows;
 }
 
-const JAVA_DATE_PATTERNS = [
-  "yyyy-MM-dd HH:mm:ss",
-  "yyyy-MM-dd HH:mm:ss.SSS",
-  "yyyy-MM-dd HH:mm:ss.SSSZ",
-  "yyyy-MM-dd HH:mm:ss.SSS'Z'",
-  "yyyy-MM-dd'T'HH:mm:ss",
-  "yyyy-MM-dd'T'HH:mm:ss.SSS",
-  "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-  "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
-  "yyyy-MM-dd",
-  "yyyyMMdd",
-];
+function localDateFromMatch(match) {
+  const [, year, month, day, hour = "0", minute = "0", second = "0", fraction = "0"] = match;
+  const date = new Date(+year, +month - 1, +day, +hour, +minute, +second, +fraction.slice(0, 3).padEnd(3, "0"));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-function parseJavaDate(input, allowedPatterns = JAVA_DATE_PATTERNS) {
+// SimpleDateFormat.parse(String) accepts a valid prefix and ignores the remaining suffix.
+// Following TemplateFormatter's declared order, the non-millisecond patterns therefore win first.
+function parseTemplateFormatterDate(input) {
   const text = String(input ?? "").trim();
   if (!text) return null;
 
-  const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compact && allowedPatterns.includes("yyyyMMdd")) {
-    return new Date(+compact[1], +compact[2] - 1, +compact[3]);
-  }
+  const dateTime = text.match(/^(\d{4})-(\d{2})-(\d{2})(?: |T)(\d{2}):(\d{2}):(\d{2})/);
+  if (dateTime) return localDateFromMatch(dateTime);
+  const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return localDateFromMatch(dateOnly);
+  const compact = text.match(/^(\d{4})(\d{2})(\d{2})/);
+  return compact ? localDateFromMatch(compact) : null;
+}
 
-  const match = text.match(
-    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::|\.)(\d{2})(?:\.(\d{1,3}))?(?:(Z)|([+-])(\d{2}):?(\d{2}))?)?$/,
-  );
-  if (!match) return null;
+function parseDateFormatterDate(input) {
+  const text = String(input ?? "").trim();
+  if (!text) return null;
 
-  const hasTime = match[4] !== undefined;
-  if (!hasTime && !allowedPatterns.includes("yyyy-MM-dd")) return null;
-  const [, year, month, day, hour = "0", minute = "0", second = "0", millis = "0", utc, sign, zoneHour = "0", zoneMinute = "0"] = match;
-  let date;
-  if (utc || sign) {
-    let timestamp = Date.UTC(+year, +month - 1, +day, +hour, +minute, +second, +millis.padEnd(3, "0"));
-    if (sign) timestamp -= (sign === "+" ? 1 : -1) * (+zoneHour * 60 + +zoneMinute) * 60_000;
-    date = new Date(timestamp);
-  } else {
-    date = new Date(+year, +month - 1, +day, +hour, +minute, +second, +millis.padEnd(3, "0"));
-  }
-  return Number.isNaN(date.getTime()) ? null : date;
+  // Timestamp.valueOf: yyyy-[m]m-[d]d hh:mm:ss[.f...]
+  const timestamp = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/);
+  if (timestamp) return localDateFromMatch(timestamp);
+
+  // The subsequent yyyy-MM-dd SimpleDateFormat parse accepts a valid date prefix.
+  const dateOnly = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return dateOnly ? localDateFromMatch(dateOnly) : null;
 }
 
 function localeName(locale) {
@@ -589,8 +581,8 @@ function javaDateFormatDate(date, pattern, locale) {
   );
 }
 
-function formatParsedDate(input, pattern, locale, allowedPatterns = JAVA_DATE_PATTERNS) {
-  const date = parseJavaDate(input, allowedPatterns);
+function formatParsedDate(input, pattern, locale) {
+  const date = parseTemplateFormatterDate(input);
   return date ? javaDateFormatDate(date, pattern, locale) : String(input ?? "");
 }
 
@@ -607,7 +599,7 @@ function decimalParts(input) {
     scale = 0;
   }
   const integer = BigInt(`${match[1] || ""}${digits || "0"}`);
-  return { integer, scale };
+  return { integer, negative: match[1] === "-", scale };
 }
 
 function addDecimals(values) {
@@ -621,18 +613,28 @@ function addDecimals(values) {
   return `${negative ? "-" : ""}${value}`;
 }
 
-function decimalFormat(input, grouping) {
-  const source = String(input ?? "")
-    .replace(/,/g, "")
-    .trim();
-  if (!decimalParts(source)) return String(input ?? "");
-  const number = Number(source);
-  if (!Number.isFinite(number)) return String(input ?? "");
-  return new Intl.NumberFormat("en-US", {
-    useGrouping: grouping,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(number);
+function decimalFormat(input, grouping, decimalSeparator = ".", groupingSeparator = ",") {
+  const source = String(input ?? "").trim();
+  const parts = decimalParts(source);
+  if (!parts) return String(input ?? "");
+
+  const absolute = parts.integer < 0n ? -parts.integer : parts.integer;
+  let cents;
+  if (parts.scale <= 2) {
+    cents = absolute * 10n ** BigInt(2 - parts.scale);
+  } else {
+    const divisor = 10n ** BigInt(parts.scale - 2);
+    const quotient = absolute / divisor;
+    const remainder = absolute % divisor;
+    const half = divisor / 2n;
+    const roundUp = remainder > half || (remainder === half && quotient % 2n !== 0n);
+    cents = quotient + (roundUp ? 1n : 0n);
+  }
+
+  let whole = (cents / 100n).toString();
+  if (grouping) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, groupingSeparator);
+  const fraction = (cents % 100n).toString().padStart(2, "0");
+  return `${parts.negative ? "-" : ""}${whole}${decimalSeparator}${fraction}`;
 }
 
 function sha256(value) {
@@ -678,12 +680,12 @@ function sha256(value) {
 }
 
 export const templateFormatter = {
-  dateShort: (input, locale) => (locale ? formatParsedDate(input, "d/M/yyyy", locale) : String(input ?? "")),
-  dateLong: (input, locale) => (locale ? formatParsedDate(input, "d MMM yyyy", locale).replace("Agt", "Agu") : String(input ?? "")),
-  dateFull: (input, locale) => (locale ? formatParsedDate(input, "d MMMM yyyy", locale) : String(input ?? "")),
-  time12: (input, locale) => (locale ? formatParsedDate(input, "h:mm:ss a", locale) : String(input ?? "")),
-  time24: (input, locale) => (locale ? formatParsedDate(input, "HH:mm:ss", locale) : String(input ?? "")),
-  formatDate: (input, pattern, locale) => (locale ? formatParsedDate(input, pattern, locale) : String(input ?? "")),
+  dateShort: (input, locale) => (locale != null ? formatParsedDate(input, "d/M/yyyy", locale) : String(input ?? "")),
+  dateLong: (input, locale) => (locale != null ? formatParsedDate(input, "d MMM yyyy", locale).replace("Agt", "Agu") : String(input ?? "")),
+  dateFull: (input, locale) => (locale != null ? formatParsedDate(input, "d MMMM yyyy", locale) : String(input ?? "")),
+  time12: (input, locale) => (locale != null ? formatParsedDate(input, "h:mm:ss a", locale) : String(input ?? "")),
+  time24: (input, locale) => (locale != null ? formatParsedDate(input, "HH:mm:ss", locale) : String(input ?? "")),
+  formatDate: (input, pattern, locale) => (locale != null ? formatParsedDate(input, pattern, locale) : String(input ?? "")),
   amount: (input) => decimalFormat(input, true),
   smsCurrency: (input) => decimalFormat(input, false),
   trimLeft10: (input) => (input == null ? input : String(input).slice(0, 10)),
@@ -696,24 +698,26 @@ export const templateFormatter = {
   },
   currency: (input) => {
     const source = String(input ?? "").replace(/,+/g, "");
-    if (!decimalParts(source)) return String(input ?? "");
-    const number = Number(source);
-    return Number.isFinite(number)
-      ? new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number)
-      : String(input ?? "");
+    return decimalFormat(source, true, ",", ".");
   },
-  add: (...numbers) =>
-    addDecimals(numbers.map((number) => (String(number ?? "").trim() ? number : "0"))) ??
-    `[${numbers.map((number) => String(number)).join(", ")}]`,
-  encrypt: (input, salt) => sha256(`${input ?? ""}${salt ?? ""}`),
+  add: (...numbers) => {
+    if (numbers.some((number) => number === null)) return `[${numbers.map((number) => String(number)).join(", ")}]`;
+    return (
+      addDecimals(numbers.map((number) => (String(number ?? "").trim() ? number : "0"))) ??
+      `[${numbers.map((number) => String(number)).join(", ")}]`
+    );
+  },
+  encrypt: (input, salt) => sha256(`${input === null ? "null" : (input ?? "")}${salt === null ? "null" : (salt ?? "")}`),
   replaceByRegex: (input, regex, replacement) =>
     input == null ? null : String(input).replace(new RegExp(String(regex), "g"), String(replacement ?? "")),
 };
 
 export const dateFormatter = {
   get: (pattern) => javaDateFormatDate(new Date(), pattern),
-  convertDate: (input, pattern) =>
-    formatParsedDate(input, pattern, undefined, ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm.ss.SSSZ"]),
+  convertDate: (input, pattern) => {
+    const date = parseDateFormatterDate(input);
+    return date ? javaDateFormatDate(date, pattern) : String(input ?? "");
+  },
 };
 
 function buildParameterContext(parameters) {
