@@ -619,6 +619,11 @@ class CompareConfigTool extends BaseTool {
         }
       });
     }
+
+    // Bind the controls for the unified comparison workflow. This must stay in
+    // the main binding lifecycle so source selectors, dropdowns, and actions
+    // are interactive after the tool mounts.
+    this.bindUnifiedModeEvents();
   }
 
   // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
