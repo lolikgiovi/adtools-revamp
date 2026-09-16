@@ -78,7 +78,14 @@ pub fn run() {
       oracle_sidecar::get_oracle_sidecar_url,
       oracle_sidecar::oracle_sidecar_test_connection,
       oracle_sidecar::oracle_sidecar_query,
-      oracle_sidecar::oracle_sidecar_query_batch
+      oracle_sidecar::oracle_sidecar_query_batch,
+      // Redis cache commands
+      redis_cache::set_redis_credentials,
+      redis_cache::clear_redis_credentials,
+      redis_cache::has_redis_credentials,
+      redis_cache::redis_test_connection,
+      redis_cache::redis_scan_keys,
+      redis_cache::redis_delete_keys
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -238,6 +245,7 @@ pub mod confluence;
 pub mod jira;
 pub mod oracle;
 pub mod oracle_sidecar;
+pub mod redis_cache;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
@@ -255,6 +263,7 @@ struct UnifiedSecrets {
     confluence_pat: Option<String>,
     jira_pat: Option<String>,
     oracle_credentials: Option<HashMap<String, oracle::CredentialEntry>>,
+    redis_credentials: Option<redis_cache::RedisCredentials>,
 }
 
 pub(crate) fn load_unified_secrets() -> Result<UnifiedSecrets, String> {
@@ -293,6 +302,7 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     let had_confluence = secrets.confluence_pat.is_some();
     let had_jira = secrets.jira_pat.is_some();
     let had_oracle = secrets.oracle_credentials.as_ref().map_or(false, |m| !m.is_empty());
+    let had_redis = secrets.redis_credentials.is_some();
 
     let mut migrated_jenkins = false;
     let mut migrated_confluence = false;
@@ -361,14 +371,14 @@ fn migrate_to_unified_keychain(username: String) -> Result<MigrationResult, Stri
     }
 
     // no_credentials = true if there's nothing in unified AND nothing was found in old locations
-    let no_credentials = !had_jenkins && !had_confluence && !had_jira && !had_oracle
+    let no_credentials = !had_jenkins && !had_confluence && !had_jira && !had_oracle && !had_redis
         && !found_old_jenkins && !found_old_confluence && !found_old_oracle;
 
     Ok(MigrationResult {
         migrated_jenkins,
         migrated_confluence,
         migrated_oracle,
-        already_unified: had_jenkins || had_confluence || had_jira,
+        already_unified: had_jenkins || had_confluence || had_jira || had_redis,
         already_has_oracle: had_oracle,
         no_credentials,
     })

@@ -963,6 +963,19 @@ class SettingsPage {
           }
           // Store a marker only, not the PAT itself
           stored = this.service.setValue(storageKey, "secret", "set", item.apply);
+        } else if (storageKey === "secure.redis.password") {
+          try {
+            if (value) {
+              const username = localStorage.getItem("config.redis.username") || "";
+              await invoke("set_redis_credentials", { username, password: value });
+            } else {
+              await invoke("clear_redis_credentials");
+            }
+          } catch (err) {
+            errorEl.textContent = String(err);
+            return;
+          }
+          stored = this.service.setValue(storageKey, "secret", value ? "set" : "", item.apply);
         } else if (storageKey === "config.jenkins.url" || storageKey === "config.jira.url") {
           // Strong URL validation via URL parser
           try {

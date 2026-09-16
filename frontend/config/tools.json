@@ -75,6 +75,14 @@
       "order": 52
     },
     {
+      "id": "redis-cache",
+      "name": "Redis Cache",
+      "category": "config",
+      "icon": "redis-cache",
+      "requiresTauri": true,
+      "order": 53
+    },
+    {
       "id": "compare-config",
       "name": "Compare Config",
       "category": "config",

@@ -7,6 +7,7 @@
   "qr-tools": { "actions": ["download_png", "download_svg"], "boundary": "download is initiated from valid rendered content" },
   "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
   "querify": { "actions": ["generate"], "boundary": "at least one file generates successfully" },
+  "redis-cache": { "actions": ["search", "clear"], "boundary": "key search completes or selected keys are removed" },
   "compare-config": { "actions": ["unified_*"], "boundary": "comparison completes and results render" },
   "run-query": { "actions": ["run"], "boundary": "Jenkins reports the run complete" },
   "run-batch": { "actions": ["run"], "boundary": "Jenkins reports the batch run complete" },

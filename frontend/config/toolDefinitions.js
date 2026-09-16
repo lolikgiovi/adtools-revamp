@@ -31,6 +31,10 @@ const TOOL_MODULES = {
     description: "Generate SQL in bulk from Excel files using Quick Query schemas",
     load: () => import("../tools/querify/main.js").then((module) => ({ ToolClass: module.QuerifyTool })),
   },
+  "redis-cache": {
+    description: "Find, save, and safely clear Redis cache keys",
+    load: () => import("../tools/redis-cache/main.js").then((module) => ({ ToolClass: module.RedisCacheTool })),
+  },
   "compare-config": {
     description: "Compare Oracle database configs between environments",
     load: () => import("../tools/compare-config/main.js").then((module) => ({ ToolClass: module.CompareConfigTool })),

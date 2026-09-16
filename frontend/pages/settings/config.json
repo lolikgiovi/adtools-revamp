@@ -227,6 +227,65 @@
       ]
     },
     {
+      "id": "redis",
+      "label": "Redis Connection",
+      "requiresTauri": true,
+      "initiallyExpanded": true,
+      "items": [
+        {
+          "key": "config.redis.host",
+          "storageKey": "config.redis.host",
+          "label": "Redis Host",
+          "type": "string",
+          "default": "",
+          "description": "Hostname or IP address for the Redis cache.",
+          "validation": { "required": true, "maxLength": 255, "pattern": "^[^\\s/@]+$" }
+        },
+        {
+          "key": "config.redis.port",
+          "storageKey": "config.redis.port",
+          "label": "Redis Port",
+          "type": "number",
+          "default": 6379,
+          "description": "Redis TCP port.",
+          "validation": { "required": true, "min": 1, "max": 65535 }
+        },
+        {
+          "key": "config.redis.database",
+          "storageKey": "config.redis.database",
+          "label": "Redis Database",
+          "type": "number",
+          "default": 0,
+          "description": "Logical Redis database number.",
+          "validation": { "required": true, "min": 0, "max": 1024 }
+        },
+        {
+          "key": "config.redis.username",
+          "storageKey": "config.redis.username",
+          "label": "Redis Username",
+          "type": "string",
+          "default": "",
+          "description": "Optional ACL username. Leave blank for password-only or unauthenticated Redis."
+        },
+        {
+          "key": "config.redis.tls",
+          "storageKey": "config.redis.tls",
+          "label": "Use TLS",
+          "type": "boolean",
+          "default": false,
+          "description": "Connect with rediss:// and verify the server certificate."
+        },
+        {
+          "key": "secure.redis.password",
+          "storageKey": "secure.redis.password",
+          "label": "Redis Password",
+          "type": "secret",
+          "default": "",
+          "description": "Optional Redis password. Stored securely in macOS Keychain and never exposed to the frontend. Save an empty value to clear it."
+        }
+      ]
+    },
+    {
       "id": "oracle",
       "label": "Oracle Connections",
       "requiresTauri": true,
