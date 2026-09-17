@@ -8,6 +8,7 @@
   "quick-query": { "actions": ["merge", "insert", "update"], "boundary": "query generation succeeds" },
   "querify": { "actions": ["generate"], "boundary": "at least one file generates successfully" },
   "redis-cache": { "actions": ["search", "clear"], "boundary": "key search completes or selected keys are removed" },
+  "kafka": { "actions": ["publish"], "boundary": "one or more Kafka messages are confirmed delivered" },
   "compare-config": { "actions": ["unified_*"], "boundary": "comparison completes and results render" },
   "run-query": { "actions": ["run"], "boundary": "Jenkins reports the run complete" },
   "run-batch": { "actions": ["run"], "boundary": "Jenkins reports the batch run complete" },

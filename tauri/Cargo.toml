@@ -37,6 +37,7 @@ tauri-plugin-dialog = "2.5"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 redis = { version = "0.27.6", features = ["tls-native-tls"] }
+rdkafka = "0.39"
 
 # Oracle database connectivity
 oracle = { version = "0.6", optional = true }

@@ -35,6 +35,10 @@ const TOOL_MODULES = {
     description: "Find, save, and safely clear Redis cache keys",
     load: () => import("../tools/redis-cache/main.js").then((module) => ({ ToolClass: module.RedisCacheTool })),
   },
+  kafka: {
+    description: "Publish saved JSON requests and listen to Kafka topics",
+    load: () => import("../tools/kafka/main.js").then((module) => ({ ToolClass: module.KafkaTool })),
+  },
   "compare-config": {
     description: "Compare Oracle database configs between environments",
     load: () => import("../tools/compare-config/main.js").then((module) => ({ ToolClass: module.CompareConfigTool })),

@@ -83,6 +83,14 @@
       "order": 53
     },
     {
+      "id": "kafka",
+      "name": "Kafka",
+      "category": "config",
+      "icon": "kafka",
+      "requiresTauri": true,
+      "order": 54
+    },
+    {
       "id": "compare-config",
       "name": "Compare Config",
       "category": "config",

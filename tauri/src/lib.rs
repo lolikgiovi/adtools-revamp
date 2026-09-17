@@ -20,6 +20,8 @@ pub fn run() {
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_shell::init())
     .manage(ZoomState(Mutex::new(ZOOM_DEFAULT)))
+    .manage(kafka::PublishGuard::default())
+    .manage(kafka::ListenerState::default())
     .manage(oracle_sidecar::SidecarState::default())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
@@ -85,7 +87,11 @@ pub fn run() {
       redis_cache::has_redis_credentials,
       redis_cache::redis_test_connection,
       redis_cache::redis_scan_keys,
-      redis_cache::redis_delete_keys
+      redis_cache::redis_delete_keys,
+      kafka::kafka_test_connection,
+      kafka::kafka_publish,
+      kafka::kafka_start_listener,
+      kafka::kafka_stop_listener
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -246,6 +252,7 @@ pub mod jira;
 pub mod oracle;
 pub mod oracle_sidecar;
 pub mod redis_cache;
+pub mod kafka;
 use keyring::Entry;
 use reqwest::Client;
 use std::time::Duration;
