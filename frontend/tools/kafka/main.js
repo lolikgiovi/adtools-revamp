@@ -442,7 +442,15 @@ export class KafkaTool extends BaseTool {
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
         return;
       }
-      await this.service.start(config, topic, fromBeginning);
+      try {
+        await this.service.start(config, topic, fromBeginning);
+      } catch (error) {
+        if (!String(error).includes("Listener already running.")) throw error;
+        this.message("kafkaListenStatus", "Restarting the previous listener…");
+        await this.service.stop();
+        if (this.stopRequested || !this.container) return;
+        await this.service.start(config, topic, fromBeginning);
+      }
       if (this.stopRequested || !this.container) {
         await this.service.stop();
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];

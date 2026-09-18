@@ -159,4 +159,25 @@ describe("Kafka publish controls", () => {
     expect(input.getAttribute("aria-expanded")).toBe("false");
     expect(service.publish).not.toHaveBeenCalled();
   });
+
+  it("restarts a stale native listener when explicitly starting a preview", async () => {
+    const service = {
+      on: vi.fn().mockResolvedValue(() => {}),
+      start: vi.fn().mockRejectedValueOnce("Listener already running.").mockResolvedValueOnce(),
+      stop: vi.fn().mockResolvedValue(),
+    };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    document.querySelector("#kafkaFromBeginning").checked = true;
+
+    await tool.startListening();
+
+    expect(service.stop).toHaveBeenCalledOnce();
+    expect(service.start).toHaveBeenCalledTimes(2);
+    expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", true);
+    expect(document.querySelector("#kafkaListenStatus").textContent).toBe("Listening to orders.test…");
+    expect(document.querySelector("#kafkaStop").disabled).toBe(false);
+  });
 });
