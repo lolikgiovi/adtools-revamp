@@ -20,10 +20,12 @@
 .kafka-topic-row > button { width: 152px; height: 44px; justify-content: center; }
 .kafka-key-field { margin-top: 16px; }
 .kafka-topic-field { min-width: 0; }
-.kafka-topic-picker { position: relative; min-width: 0; }
-.kafka-topic-picker > input { padding-right: 44px !important; }
-.kafka-topic-picker > button { position: absolute; top: 7px; right: 0; bottom: 0; width: 42px; border: 0; border-radius: 0 9px 9px 0; background: transparent; color: hsl(var(--muted-foreground)); cursor: pointer; }
-.kafka-topic-picker > button:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.kafka-topic-picker { position: relative; display: flex; box-sizing: border-box; min-width: 0; height: 44px; margin-top: 7px; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--background)); }
+.kafka-topic-picker:focus-within { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.kafka-tool .kafka-topic-picker > input { flex: 1; min-width: 0; height: 100%; margin: 0; padding-right: 12px; border: 0; border-radius: 9px 0 0 9px; background: transparent; }
+.kafka-topic-picker > input:focus-visible, .kafka-topic-picker > button:focus-visible { outline: none; }
+.kafka-topic-picker > button { flex: 0 0 42px; height: 100%; padding: 0; border: 0; border-radius: 0 8px 8px 0; background: transparent; color: hsl(var(--muted-foreground)); cursor: pointer; }
+.kafka-topic-picker > button:hover, .kafka-topic-picker > button[aria-expanded="true"] { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
 .kafka-topic-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; padding: 6px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); box-shadow: 0 8px 24px hsl(var(--foreground) / 0.12); }
 .kafka-topic-menu[hidden] { display: none; }
 .kafka-topic-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 6px; font-size: 12px; }
