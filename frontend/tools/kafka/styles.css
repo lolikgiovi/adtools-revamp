@@ -4,6 +4,15 @@
 .kafka-header p, .kafka-section-title p { margin: 6px 0 0; color: hsl(var(--muted-foreground)); line-height: 1.5; }
 .kafka-desktop-badge { flex: none; padding: 6px 10px; border-radius: 8px; background: hsl(var(--muted)); color: hsl(var(--foreground)); font-size: 12px; }
 .kafka-connection, .kafka-compose, .kafka-saved, .kafka-listener { min-width: 0; padding: 20px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
+.kafka-history { margin-top: 12px; }
+.kafka-history .kafka-section-title { margin-bottom: 12px; }
+.kafka-history .kafka-hint { max-width: 75ch; }
+.kafka-history-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) auto; align-items: end; gap: 12px; margin-bottom: 12px; }
+.kafka-history-form label { min-width: 0; }
+.kafka-tool input[type="datetime-local"] { display: block; width: 100%; box-sizing: border-box; height: 44px; margin-top: 7px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--background)); color: hsl(var(--foreground)); font: inherit; }
+.kafka-history-form button { height: 44px; }
+#kafkaHistoryStatus { margin: 0 0 12px; font-size: 13px; color: hsl(var(--muted-foreground)); }
+#kafkaHistoryStatus:empty { display: none; }
 .kafka-section-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
 .kafka-section-title h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
 .kafka-tool label { display: block; font-weight: 600; font-size: 13px; }
@@ -73,6 +82,7 @@
 .kafka-message-note { margin: 8px 0 0; color: hsl(var(--muted-foreground)); font-size: 12px; }
 @media (max-width: 950px) { .kafka-layout { grid-template-columns: 1fr; } }
 @media (max-width: 650px) {
+  .kafka-history-form { grid-template-columns: 1fr; }
   .kafka-header, .kafka-section-title { flex-direction: column; }
   .kafka-editor-heading { flex-wrap: wrap; }
 }

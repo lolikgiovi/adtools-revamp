@@ -90,6 +90,7 @@ pub fn run() {
       redis_cache::redis_delete_keys,
       kafka::kafka_test_connection,
       kafka::kafka_list_topics,
+      kafka::kafka_search_history,
       kafka::kafka_publish,
       kafka::kafka_start_listener,
       kafka::kafka_stop_listener

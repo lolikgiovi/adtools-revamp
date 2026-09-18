@@ -51,4 +51,14 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-listen-actions"><label><input id="kafkaFromBeginning" type="checkbox" /> From beginning</label><button id="kafkaListen" class="btn btn-secondary" type="button">Start listening</button><button id="kafkaStop" class="btn btn-secondary" type="button" disabled>Stop</button></div></div>
       <p id="kafkaListenStatus" role="status" aria-live="polite"></p><div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Received messages appear here, up to the latest 100.</p></div>
     </section>
+    <section class="kafka-listener kafka-history" aria-labelledby="kafkaHistoryHeading">
+      <div class="kafka-section-title"><div><h2 id="kafkaHistoryHeading">Search retained history</h2><p class="kafka-hint">Search the selected topic’s payloads, keys, and headers from a start time. Scans up to 50,000 records or 30 seconds; returns up to 20 matches.</p></div></div>
+      <form id="kafkaHistoryForm" class="kafka-history-form">
+        <label for="kafkaHistoryQuery">Identifier<input id="kafkaHistoryQuery" type="text" minlength="3" maxlength="200" required placeholder="Trace ID or payload text" autocomplete="off" spellcheck="false" /></label>
+        <label for="kafkaHistorySince">Since<input id="kafkaHistorySince" type="datetime-local" required /></label>
+        <button id="kafkaHistorySearch" class="btn btn-secondary" type="submit">Search history</button>
+      </form>
+      <p id="kafkaHistoryStatus" role="status" aria-live="polite"></p>
+      <div id="kafkaHistoryResults" class="kafka-messages"></div>
+    </section>
   </div>`;

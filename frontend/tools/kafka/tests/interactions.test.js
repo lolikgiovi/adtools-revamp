@@ -211,4 +211,27 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector(".kafka-use-message").disabled).toBe(true);
     expect(document.querySelector(".kafka-message-note").textContent).toContain("Restart the desktop app");
   });
+
+  it("searches retained history and loads a matching payload without publishing", async () => {
+    const service = { searchHistory: vi.fn().mockResolvedValue({
+      scanned: 42, limited: false,
+      matches: [{ topic: "orders.test", partition: 1, offset: 12, key: null,
+        value: '{"traceId":"ccfaba827199ab25"}', headers: [], keyIsUtf8: true, valueIsUtf8: true }],
+    }), publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.activate();
+    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    document.querySelector("#kafkaHistoryQuery").value = "ccfaba827199ab25";
+    document.querySelector("#kafkaHistoryForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+    expect(service.searchHistory).toHaveBeenCalledWith(
+      { brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", "ccfaba827199ab25", expect.any(Number),
+    );
+    expect(document.querySelector("#kafkaHistoryStatus").textContent).toContain("1 match in 42 records");
+    document.querySelector("#kafkaHistoryResults .kafka-use-message").click();
+    expect(document.querySelector("#kafkaValue").value).toBe('{"traceId":"ccfaba827199ab25"}');
+    expect(service.publish).not.toHaveBeenCalled();
+  });
 });

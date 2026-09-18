@@ -8,11 +8,14 @@ use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::message::{Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 const MAX_BATCH: usize = 100;
 const MAX_MESSAGE_BYTES: usize = 1_048_576;
+const MAX_SEARCH_RECORDS: usize = 50_000;
+const MAX_SEARCH_MATCHES: usize = 20;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -249,6 +252,191 @@ struct ReceivedHeader {
     value: Option<String>,
 }
 
+impl ReceivedMessage {
+    fn from_message(message: &impl Message) -> Self {
+        Self {
+            topic: message.topic().to_string(),
+            partition: message.partition(),
+            offset: message.offset(),
+            key: message
+                .key()
+                .map(|bytes| String::from_utf8_lossy(bytes).to_string()),
+            key_is_utf8: message
+                .key()
+                .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
+            value: message
+                .payload()
+                .map(|bytes| String::from_utf8_lossy(bytes).to_string())
+                .unwrap_or_default(),
+            value_is_utf8: message
+                .payload()
+                .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
+            headers: message
+                .headers()
+                .map(|headers| {
+                    headers
+                        .iter()
+                        .map(|header| ReceivedHeader {
+                            key: header.key.to_string(),
+                            value: header
+                                .value
+                                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                                .map(str::to_string),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            timestamp: message.timestamp().to_millis(),
+        }
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        self.value.to_lowercase().contains(query)
+            || self
+                .key
+                .as_ref()
+                .is_some_and(|key| key.to_lowercase().contains(query))
+            || self.headers.iter().any(|header| {
+                header.key.to_lowercase().contains(query)
+                    || header
+                        .value
+                        .as_ref()
+                        .is_some_and(|value| value.to_lowercase().contains(query))
+            })
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    matches: Vec<ReceivedMessage>,
+    scanned: usize,
+    limited: bool,
+}
+
+#[tauri::command]
+pub async fn kafka_search_history(
+    config: KafkaConfig,
+    topic: String,
+    query: String,
+    since_ms: i64,
+) -> Result<SearchResult, String> {
+    validate_topic(&topic)?;
+    let query = query.trim().to_lowercase();
+    if query.len() < 3 || query.len() > 200 {
+        return Err("Enter an identifier of 3 to 200 characters.".into());
+    }
+    let now = chrono::Utc::now().timestamp_millis();
+    if since_ms < 0 || since_ms > now {
+        return Err("Choose a start time in the past.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut client = config.client()?;
+        client
+            .set(
+                "group.id",
+                format!("adtools-search-{}-{}", std::process::id(), now),
+            )
+            .set("enable.auto.commit", "false")
+            .set("enable.partition.eof", "true");
+        let consumer: BaseConsumer = client.create().map_err(|e| e.to_string())?;
+        let metadata = consumer
+            .fetch_metadata(Some(&topic), Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+        let partitions = metadata
+            .topics()
+            .iter()
+            .find(|item| item.name() == topic && item.error().is_none())
+            .ok_or_else(|| "Topic unavailable or access denied.".to_string())?
+            .partitions();
+        if partitions.is_empty() {
+            return Ok(SearchResult {
+                matches: vec![],
+                scanned: 0,
+                limited: false,
+            });
+        }
+        let mut timestamps = TopicPartitionList::new();
+        let mut ends = std::collections::HashMap::new();
+        for partition in partitions {
+            let id = partition.id();
+            let (_, high) = consumer
+                .fetch_watermarks(&topic, id, Duration::from_secs(5))
+                .map_err(|e| e.to_string())?;
+            ends.insert(id, high);
+            timestamps
+                .add_partition_offset(&topic, id, Offset::Offset(since_ms))
+                .map_err(|e| e.to_string())?;
+        }
+        let starts = consumer
+            .offsets_for_times(timestamps, Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+        let mut assignment = TopicPartitionList::new();
+        let mut remaining = std::collections::HashSet::new();
+        for entry in starts.elements() {
+            let end = ends[&entry.partition()];
+            let start = match entry.offset() {
+                Offset::Offset(offset) => offset,
+                Offset::Invalid => end,
+                _ => return Err("Could not resolve a start offset for a partition.".into()),
+            };
+            if start < end {
+                assignment
+                    .add_partition_offset(&topic, entry.partition(), Offset::Offset(start))
+                    .map_err(|e| e.to_string())?;
+                remaining.insert(entry.partition());
+            }
+        }
+        if remaining.is_empty() {
+            return Ok(SearchResult {
+                matches: vec![],
+                scanned: 0,
+                limited: false,
+            });
+        }
+        consumer.assign(&assignment).map_err(|e| e.to_string())?;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut result = SearchResult {
+            matches: vec![],
+            scanned: 0,
+            limited: false,
+        };
+        while !remaining.is_empty()
+            && result.scanned < MAX_SEARCH_RECORDS
+            && result.matches.len() < MAX_SEARCH_MATCHES
+            && Instant::now() < deadline
+        {
+            match consumer.poll(Duration::from_millis(200)) {
+                Some(Ok(message)) => {
+                    if !remaining.contains(&message.partition()) {
+                        continue;
+                    }
+                    if message.offset() >= ends[&message.partition()] - 1 {
+                        remaining.remove(&message.partition());
+                    }
+                    if message.offset() >= ends[&message.partition()] {
+                        continue;
+                    }
+                    result.scanned += 1;
+                    let received = ReceivedMessage::from_message(&message);
+                    if received.matches(&query) {
+                        result.matches.push(received);
+                    }
+                }
+                Some(Err(rdkafka::error::KafkaError::PartitionEOF(partition))) => {
+                    remaining.remove(&partition);
+                }
+                Some(Err(error)) => return Err(error.to_string()),
+                None => {}
+            }
+        }
+        result.limited = !remaining.is_empty();
+        Ok(result)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn kafka_start_listener(
     app: AppHandle,
@@ -293,40 +481,7 @@ pub fn kafka_start_listener(
         while running.load(Ordering::SeqCst) {
             match consumer.poll(Duration::from_millis(250)) {
                 Some(Ok(message)) => {
-                    let payload = ReceivedMessage {
-                        topic: message.topic().to_string(),
-                        partition: message.partition(),
-                        offset: message.offset(),
-                        key: message
-                            .key()
-                            .map(|bytes| String::from_utf8_lossy(bytes).to_string()),
-                        key_is_utf8: message
-                            .key()
-                            .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
-                        value: message
-                            .payload()
-                            .map(|bytes| String::from_utf8_lossy(bytes).to_string())
-                            .unwrap_or_default(),
-                        value_is_utf8: message
-                            .payload()
-                            .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
-                        headers: message
-                            .headers()
-                            .map(|headers| {
-                                headers
-                                    .iter()
-                                    .map(|header| ReceivedHeader {
-                                        key: header.key.to_string(),
-                                        value: header
-                                            .value
-                                            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-                                            .map(str::to_string),
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                        timestamp: message.timestamp().to_millis(),
-                    };
+                    let payload = ReceivedMessage::from_message(&message);
                     if app.emit("kafka-message", payload).is_err() {
                         break;
                     }

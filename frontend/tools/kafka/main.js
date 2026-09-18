@@ -24,6 +24,7 @@ export class KafkaTool extends BaseTool {
     this.activeTopicIndex = -1;
     this.jsonEditors = {};
     this.receivedMessages = new WeakMap();
+    this.historyRequestId = 0;
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -67,15 +68,20 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaListen").addEventListener("click", () => this.startListening());
     this.field("kafkaStop").addEventListener("click", () => this.stopListening());
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
+    this.field("kafkaHistoryResults").addEventListener("click", (event) => this.handleReceivedClick(event));
+    this.field("kafkaHistoryForm").addEventListener("submit", (event) => { event.preventDefault(); this.searchHistory(); });
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    this.field("kafkaHistorySince").value = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     this.updateCount();
     this.field("kafkaTopic").focus();
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
-  onSoftDeactivate() { this.closeTopicMenu(); this.stopListening(); }
+  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.stopListening(); }
   onUnmount() {
     document.removeEventListener("click", this.outsideTopicClick);
     this.topicRequestId++;
+    this.historyRequestId++;
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
@@ -470,14 +476,41 @@ export class KafkaTool extends BaseTool {
     }
   }
 
-  showMessage(message) {
-    if (!this.isActive || !this.listening) return;
-    const root = this.field("kafkaMessages");
-    root.querySelector(".kafka-empty")?.remove();
+  async searchHistory() {
+    const topic = this.field("kafkaTopic").value.trim();
+    const query = this.field("kafkaHistoryQuery").value.trim();
+    const sinceMs = new Date(this.field("kafkaHistorySince").value).getTime();
+    if (!this.config().brokers || !topic) { this.message("kafkaHistoryStatus", "Enter bootstrap servers and a topic in Publish first.", true); return; }
+    if (query.length < 3 || !Number.isFinite(sinceMs) || sinceMs > Date.now()) {
+      this.message("kafkaHistoryStatus", "Enter at least 3 characters and choose a start time in the past.", true); return;
+    }
+    const requestId = ++this.historyRequestId;
+    const button = this.field("kafkaHistorySearch");
+    button.disabled = true;
+    this.field("kafkaHistoryResults").replaceChildren();
+    this.message("kafkaHistoryStatus", "Searching retained records…");
+    try {
+      const result = await this.service.searchHistory(this.config(), topic, query, sinceMs);
+      if (requestId !== this.historyRequestId || !this.container) return;
+      for (const match of result.matches) this.showMessage(match, true);
+      const count = result.matches.length;
+      this.message("kafkaHistoryStatus", `${count} ${count === 1 ? "match" : "matches"} in ${result.scanned.toLocaleString()} records.${result.limited ? " Search limit reached; narrow the start time to look further." : ""}`);
+    } catch (error) {
+      if (requestId === this.historyRequestId && this.container) this.message("kafkaHistoryStatus", String(error), true);
+    } finally {
+      if (requestId === this.historyRequestId && this.container) button.disabled = false;
+    }
+  }
+
+  showMessage(message, fromHistory = false) {
+    if (!this.isActive || (!fromHistory && !this.listening)) return;
+    const root = this.field(fromHistory ? "kafkaHistoryResults" : "kafkaMessages");
+    if (!fromHistory) root.querySelector(".kafka-empty")?.remove();
     const article = document.createElement("article");
     const top = document.createElement("div"); top.className = "kafka-message-top";
     const meta = document.createElement("div"); meta.className = "kafka-message-meta";
-    meta.textContent = `${message.topic} · partition ${message.partition} · offset ${message.offset}${message.key == null ? "" : ` · key ${message.key}`}` +
+    meta.textContent = `${message.topic} · partition ${message.partition} · offset ${message.offset}` +
+      `${message.timestamp ? ` · ${new Date(message.timestamp).toLocaleString()}` : ""}${message.key == null ? "" : ` · key ${message.key}`}` +
       `${message.headers?.length ? ` · ${message.headers.length} ${message.headers.length === 1 ? "header" : "headers"}` : ""}`;
     const use = document.createElement("button");
     use.type = "button";
@@ -490,14 +523,16 @@ export class KafkaTool extends BaseTool {
     this.receivedMessages.set(use, message);
     const value = document.createElement("pre"); value.textContent = message.value;
     top.append(meta, use);
-    article.append(top, value); root.prepend(article);
+    article.append(top, value);
+    if (fromHistory) root.append(article);
+    else root.prepend(article);
     if (issue) {
       const note = document.createElement("p");
       note.className = "kafka-message-note";
       note.textContent = issue;
       article.append(note);
     }
-    while (root.children.length > 100) root.lastElementChild.remove();
+    if (!fromHistory) while (root.children.length > 100) root.lastElementChild.remove();
   }
 
   handleReceivedClick(event) {
@@ -519,7 +554,7 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaComposeHeading").scrollIntoView?.({ behavior: "smooth", block: "start" });
       if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
       else this.field("kafkaValue").focus();
-    } catch (error) { this.message("kafkaListenStatus", error.message, true); }
+    } catch (error) { this.message(button.closest("#kafkaHistoryResults") ? "kafkaHistoryStatus" : "kafkaListenStatus", error.message, true); }
   }
 
   async stopListening() {

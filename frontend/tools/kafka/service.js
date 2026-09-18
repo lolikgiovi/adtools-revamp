@@ -116,6 +116,7 @@ export class KafkaService {
 
   test(config) { return this.call("kafka_test_connection", { config }); }
   listTopics(config) { return this.call("kafka_list_topics", { config }); }
+  searchHistory(config, topic, query, sinceMs) { return this.call("kafka_search_history", { config, topic, query, sinceMs }); }
   publish(config, topic, records) { return this.call("kafka_publish", { config, topic, records }); }
   start(config, topic, fromBeginning) { return this.call("kafka_start_listener", { config, topic, fromBeginning }); }
   stop() { return this.call("kafka_stop_listener", {}); }
