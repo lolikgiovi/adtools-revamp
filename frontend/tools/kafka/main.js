@@ -3,6 +3,7 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
 import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests } from "./service.js";
 import { KafkaTemplate } from "./template.js";
+import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
 
 export class KafkaTool extends BaseTool {
@@ -21,6 +22,7 @@ export class KafkaTool extends BaseTool {
     this.topicError = "";
     this.visibleTopics = [];
     this.activeTopicIndex = -1;
+    this.jsonEditors = {};
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -58,16 +60,100 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaSavedList").addEventListener("click", (event) => this.handleSavedClick(event));
     this.field("kafkaBulk").addEventListener("change", () => this.updateCount());
     this.field("kafkaValue").addEventListener("input", () => this.updateCount());
+    this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
+    this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
+    this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
     this.field("kafkaListen").addEventListener("click", () => this.startListening());
     this.field("kafkaStop").addEventListener("click", () => this.stopListening());
     this.updateCount();
     this.field("kafkaTopic").focus();
+    if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
   onSoftDeactivate() { this.closeTopicMenu(); this.stopListening(); }
-  onUnmount() { document.removeEventListener("click", this.outsideTopicClick); this.topicRequestId++; this.stopListening(); }
+  onUnmount() {
+    document.removeEventListener("click", this.outsideTopicClick);
+    this.topicRequestId++;
+    Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
+    this.jsonEditors = {};
+    this.stopListening();
+  }
   field(id) { return this.container?.querySelector(`#${id}`); }
   config() { return { brokers: this.field("kafkaBrokers").value.trim(), securityProtocol: "PLAINTEXT" }; }
+
+  async initializeJsonEditors() {
+    try {
+      const [monaco, { default: editorWorker }, { default: jsonWorker }] = await Promise.all([
+        import("monaco-editor/esm/vs/editor/editor.main.js"),
+        import("monaco-editor/esm/vs/editor/editor.worker?worker"),
+        import("monaco-editor/esm/vs/language/json/json.worker?worker"),
+        import("monaco-editor/esm/vs/language/json/monaco.contribution.js"),
+      ]);
+      if (!this.container) return;
+      configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
+      for (const name of ["Headers", "Value"]) {
+        const input = this.field(`kafka${name}`);
+        const editor = monaco.editor.create(this.field(`kafka${name}Editor`), {
+          value: input.value,
+          language: "json",
+          ariaLabel: name === "Headers" ? "Header JSON" : "Value JSON",
+          theme: "vs-dark",
+          automaticLayout: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap: "on",
+          formatOnPaste: true,
+          tabSize: 2,
+          insertSpaces: true,
+          padding: { top: 12, bottom: 12 },
+        });
+        this.jsonEditors[name] = editor;
+        editor.onDidChangeModelContent(() => {
+          input.value = editor.getValue();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+      this.field("kafkaForm").classList.add("kafka-monaco-ready");
+      this.updateCount();
+    } catch (error) {
+      console.error("Kafka JSON editors could not load", error);
+    }
+  }
+
+  setJsonValue(name, value) {
+    this.field(`kafka${name}`).value = value;
+    this.jsonEditors[name]?.setValue(value);
+  }
+
+  formatJson(name) {
+    const input = this.field(`kafka${name}`);
+    try {
+      const formatted = JSON.stringify(JSON.parse(input.value), null, 2);
+      this.setJsonValue(name, formatted);
+      this.updateCount();
+    } catch (_) {
+      this.message(`kafka${name}Status`, "Invalid JSON. Fix the syntax before formatting.", true);
+      this.jsonEditors[name]?.focus();
+    }
+  }
+
+  validateJson(name) {
+    const input = this.field(`kafka${name}`);
+    const status = `kafka${name}Status`;
+    if (!input.value.trim() && name === "Value") {
+      this.message(status, "");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(input.value || (name === "Headers" ? "{}" : ""));
+      if (name === "Headers" && (!parsed || Array.isArray(parsed) || typeof parsed !== "object" ||
+        Object.entries(parsed).some(([key, value]) => !key || typeof value !== "string"))) {
+        this.message(status, "Headers need a JSON object with string values.", true);
+      } else if (name === "Value" && this.field("kafkaBulk").checked && (!Array.isArray(parsed) || !parsed.length || parsed.length > 100)) {
+        this.message(status, "Bulk value needs an array of 1 to 100 messages.", true);
+      } else this.message(status, "Valid JSON");
+    } catch (_) { this.message(status, "Invalid JSON. Check the highlighted syntax.", true); }
+  }
 
   saveConnection() {
     localStorage.setItem(KAFKA_CONFIG_KEY, JSON.stringify(this.config()));
@@ -228,16 +314,18 @@ export class KafkaTool extends BaseTool {
   }
 
   updateCount() {
+    this.validateJson("Headers");
+    this.validateJson("Value");
     const bulk = this.field("kafkaBulk").checked;
     const button = this.field("kafkaPublish");
     try {
       const count = this.records().length;
       this.message("kafkaCount", `${count} ${count === 1 ? "message" : "messages"} per click${bulk ? " · 100 maximum" : ""}`);
-      button.textContent = `Publish ${count} ${count === 1 ? "message" : "messages"}`;
+      button.textContent = "Publish";
       button.disabled = this.publishing;
-    } catch (error) {
-      this.message("kafkaCount", this.field("kafkaValue").value ? error.message :
-        (bulk ? "Enter a JSON array of 1 to 100 messages." : "Enter one JSON value."), Boolean(this.field("kafkaValue").value));
+    } catch (_error) {
+      this.message("kafkaCount", this.field("kafkaValue").value ? "" :
+        (bulk ? "Enter a JSON array of 1 to 100 messages." : "Enter one JSON value."));
       button.textContent = "Publish";
       button.disabled = true;
     }
@@ -327,11 +415,12 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTopic").value = request.topic;
     this.closeTopicMenu();
     this.field("kafkaKey").value = request.key || "";
-    this.field("kafkaHeaders").value = request.headers || "{}";
-    this.field("kafkaValue").value = request.value;
+    this.setJsonValue("Headers", request.headers || "{}");
+    this.setJsonValue("Value", request.value);
     this.field("kafkaBulk").checked = Boolean(request.bulk);
     this.updateCount(); this.message("kafkaPublishStatus", `Loaded “${request.name}”. Review it before publishing.`);
-    this.field("kafkaValue").focus();
+    if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
+    else this.field("kafkaValue").focus();
   }
 
   async startListening() {

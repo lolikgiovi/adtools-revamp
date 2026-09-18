@@ -23,7 +23,8 @@ describe("Kafka publish controls", () => {
     value.value = '[{"id":1},{"id":2}]';
     value.dispatchEvent(new Event("input"));
 
-    expect(document.querySelector("#kafkaPublish").textContent).toBe("Publish 2 messages");
+    expect(document.querySelector("#kafkaPublish").textContent).toBe("Publish");
+    expect(document.querySelector("#kafkaCount").textContent).toContain("2 messages per click");
     document.querySelector("#kafkaPublish").click();
     document.querySelector("#kafkaPublish").click();
     expect(service.publish).toHaveBeenCalledTimes(1);
@@ -48,6 +49,29 @@ describe("Kafka publish controls", () => {
     document.querySelector("#kafkaValue").value = "";
     document.querySelector('[data-action="load"]').click();
     expect(document.querySelector("#kafkaValue").value).toBe('{"cif":"30000758049"}');
+    expect(service.publish).not.toHaveBeenCalled();
+  });
+
+  it("formats both JSON fields and blocks publish when headers are invalid", () => {
+    const service = { publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    document.querySelector("#kafkaTopic").value = "orders.test";
+    const headers = document.querySelector("#kafkaHeaders");
+    const value = document.querySelector("#kafkaValue");
+    headers.value = '{"source":"uat"}';
+    value.value = '{"id":1}';
+    document.querySelector("#kafkaFormatHeaders").click();
+    document.querySelector("#kafkaFormatValue").click();
+    expect(headers.value).toBe('{\n  "source": "uat"\n}');
+    expect(value.value).toBe('{\n  "id": 1\n}');
+    expect(document.querySelector("#kafkaValueStatus").textContent).toBe("Valid JSON");
+
+    headers.value = '{"retry":3}';
+    headers.dispatchEvent(new Event("input"));
+    expect(document.querySelector("#kafkaHeadersStatus").textContent).toContain("string values");
+    expect(document.querySelector("#kafkaPublish").disabled).toBe(true);
     expect(service.publish).not.toHaveBeenCalled();
   });
 
