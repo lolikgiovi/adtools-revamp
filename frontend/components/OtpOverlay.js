@@ -13,6 +13,8 @@ function nowMs() {
 }
 
 import { SessionTokenStore } from "../core/SessionTokenStore.js";
+import { UsageTracker } from "../core/UsageTracker.js";
+import { isTauri } from "../core/Runtime.js";
 
 export async function openOtpOverlay({
   email,
@@ -79,13 +81,16 @@ export async function openOtpOverlay({
   return new Promise((resolve, reject) => {
     try {
       const overlay = createElement(`
-        <div class="otp-modal" role="dialog" aria-modal="true" aria-label="OTP Verification">
+        <div class="otp-modal" role="dialog" aria-modal="true" aria-label="Verify access">
           <div class="otp-dialog">
-            <h3>One-Time Password</h3>
+            <h3>Verify access</h3>
             <p class="otp-email-status"></p>
             <div class="otp-actions">
               <button type="button" class="btn btn-primary otp-request">Request OTP</button>
+              <button type="button" class="btn btn-secondary otp-manual-request">Request Manual Approval</button>
             </div>
+            <p class="otp-manual-status" role="status" hidden></p>
+            <button type="button" class="btn btn-secondary otp-manual-check" hidden>Check Approval Status</button>
             <div class="otp-input-row">
               <input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" />
               <button type="button" class="btn btn-secondary otp-confirm">Confirm</button>
@@ -104,6 +109,20 @@ export async function openOtpOverlay({
       const btnReq = overlay.querySelector(".otp-request");
       const btnConfirm = overlay.querySelector(".otp-confirm");
       const btnClose = overlay.querySelector(".otp-close");
+      const btnManual = overlay.querySelector(".otp-manual-request");
+      const btnCheck = overlay.querySelector(".otp-manual-check");
+      const manualStatus = overlay.querySelector(".otp-manual-status");
+      const manualKey = "manual.approval.request";
+      const deviceId = UsageTracker.getDeviceId();
+      let manualRequest = null;
+      try {
+        const saved = JSON.parse(localStorage.getItem(manualKey) || "null");
+        if (saved?.requestId && saved.email === email?.trim().toLowerCase() && saved.deviceId === deviceId) {
+          manualRequest = saved;
+        }
+      } catch (_) {
+        manualRequest = null;
+      }
 
       const lastKey = `otp.lastRequest.${storageScope}`;
       const cooldownLeft = () => {
@@ -123,12 +142,103 @@ export async function openOtpOverlay({
         err.textContent = "No registered email found. Please register first.";
         btnReq.disabled = true;
         btnConfirm.disabled = true;
+        btnManual.disabled = true;
       } else {
-        status.textContent = `We will send an OTP to: ${email}`;
+        status.textContent = `Send a code to ${email}, or request manual approval if email is delayed.`;
         err.textContent = "";
         const left = cooldownLeft();
         if (left > 0) {
           disableWithCountdown(btnReq, left);
+        }
+        if (manualRequest) showManualStatus("Approval requested. Ask an administrator to review it in #approval.");
+      }
+
+      function showManualStatus(message) {
+        manualStatus.textContent = message;
+        manualStatus.hidden = false;
+        btnCheck.hidden = false;
+      }
+
+      async function postApproval(path, payload) {
+        const base = (import.meta?.env?.VITE_WORKER_BASE || "").trim().replace(/\/$/, "");
+        const response = await fetch(base ? `${base}${path}` : path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "omit",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) throw new Error(data?.error || `Approval request failed (${response.status})`);
+        return data;
+      }
+
+      async function finishWithToken(token) {
+        if (!token) throw new Error("Authorization token missing");
+        let kvValue;
+        if (kvKey) {
+          const base = (import.meta?.env?.VITE_WORKER_BASE || "").trim().replace(/\/$/, "");
+          const kvUrl = base ? `${base}/api/kv/get?key=${encodeURIComponent(kvKey)}` : `/api/kv/get?key=${encodeURIComponent(kvKey)}`;
+          const response = await fetch(kvUrl, { headers: { Authorization: `Bearer ${token}` } });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data?.ok) throw new Error(data?.error || "KV access failure");
+          kvValue = data.value;
+        }
+        SessionTokenStore.saveToken(token);
+        cleanup();
+        resolve({ token, kvValue });
+      }
+
+      async function checkManualApproval() {
+        if (!manualRequest) return;
+        btnCheck.disabled = true;
+        err.textContent = "";
+        try {
+          const data = await postApproval("/register/manual-approval-status", manualRequest);
+          if (data.status !== "approved") {
+            showManualStatus("Still pending. Ask an administrator to review the request in #approval.");
+            return;
+          }
+          await finishWithToken(data.token);
+          try {
+            localStorage.removeItem(manualKey);
+          } catch (_) {
+            // Approval succeeded even if local storage is unavailable.
+          }
+        } catch (error) {
+          err.textContent = error.message || "Could not check approval status.";
+        } finally {
+          btnCheck.disabled = false;
+        }
+      }
+
+      async function requestManualApproval() {
+        if (!email) return;
+        btnManual.disabled = true;
+        err.textContent = "";
+        try {
+          const displayName = (localStorage.getItem("user.username") || email.split("@")[0]).trim().slice(0, 15);
+          const identity = {
+            displayName: displayName.length >= 2 ? displayName : "AD Tools User",
+            email: email.trim().toLowerCase(),
+            deviceId,
+            platform: isTauri() ? "Desktop (Tauri)" : "Browser",
+            locale: navigator.language || "",
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+            screenSize: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+          };
+          const data = await postApproval("/register/request-manual-approval", identity);
+          manualRequest = { ...identity, requestId: data.requestId };
+          localStorage.setItem(manualKey, JSON.stringify(manualRequest));
+          showManualStatus(
+            data.status === "approved"
+              ? "Approval granted. Checking access..."
+              : "Approval requested. Ask an administrator to review it in #approval.",
+          );
+          if (data.status === "approved") await checkManualApproval();
+        } catch (error) {
+          err.textContent = error.message || "Could not submit the approval request.";
+        } finally {
+          btnManual.disabled = false;
         }
       }
 
@@ -195,26 +305,7 @@ export async function openOtpOverlay({
           });
           const j = await res.json().catch(() => ({}));
           if (!res.ok || !j?.ok) throw new Error(j?.error || "Invalid OTP");
-          if (!j?.token) throw new Error("Authorization token missing");
-
-          // Persist session token immediately after successful verification
-          try {
-            SessionTokenStore.saveToken(j.token);
-          } catch (_) {}
-
-          let kvValue = undefined;
-          if (kvKey) {
-            const kvUrl = BASE ? `${BASE}/api/kv/get?key=${encodeURIComponent(kvKey)}` : `/api/kv/get?key=${encodeURIComponent(kvKey)}`;
-            const res2 = await fetch(kvUrl, {
-              headers: { Authorization: `Bearer ${j.token}` },
-            });
-            const j2 = await res2.json().catch(() => ({}));
-            if (!res2.ok || !j2?.ok) throw new Error(j2?.error || "KV access failure");
-            kvValue = j2.value;
-          }
-
-          cleanup();
-          resolve({ token: j.token, kvValue });
+          await finishWithToken(j.token);
         } catch (e) {
           err.textContent = String(e?.message || e || "Verification failed");
         }
@@ -231,6 +322,8 @@ export async function openOtpOverlay({
       }
 
       btnReq.addEventListener("click", requestOtp);
+      btnManual.addEventListener("click", requestManualApproval);
+      btnCheck.addEventListener("click", checkManualApproval);
       btnConfirm.addEventListener("click", verifyOtp);
       btnClose.addEventListener("click", () => {
         cleanup();
