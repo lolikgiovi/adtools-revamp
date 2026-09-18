@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_KAFKA_BATCH, parseMessages, rankKafkaTopics } from "../service.js";
+import { MAX_KAFKA_BATCH, parseMessages, rankKafkaTopics, receivedMessageToDraft } from "../service.js";
 
 describe("Kafka message preparation", () => {
   it("creates one record for one JSON request", () => {
@@ -23,6 +23,24 @@ describe("Kafka message preparation", () => {
 
   it("requires string header values", () => {
     expect(() => parseMessages("{}", false, "", '{"retry":3}')).toThrow("Headers");
+  });
+
+  it("copies a received JSON message and its headers into a publish draft", () => {
+    const draft = receivedMessageToDraft({
+      topic: "orders.test", key: " key ", value: '{"id":1}',
+      headers: [{ key: "source", value: "uat" }, { key: "traceId", value: "abc" }],
+      keyIsUtf8: true, valueIsUtf8: true,
+    });
+    expect(draft).toEqual({ topic: "orders.test", key: " key ", headers: '{\n  "source": "uat",\n  "traceId": "abc"\n}', value: '{"id":1}' });
+    expect(parseMessages(draft.value, false, draft.key, draft.headers)[0].key).toBe(" key ");
+  });
+
+  it("rejects received messages whose content cannot be reproduced by the JSON publisher", () => {
+    const message = { topic: "orders.test", key: null, value: '{}', headers: [{ key: "x", value: "a" }] };
+    expect(() => receivedMessageToDraft({ ...message, headers: undefined })).toThrow("Restart the desktop app");
+    expect(() => receivedMessageToDraft({ ...message, value: "plain text" })).toThrow("not valid JSON");
+    expect(() => receivedMessageToDraft({ ...message, headers: [...message.headers, { key: "x", value: "b" }] })).toThrow("duplicate");
+    expect(() => receivedMessageToDraft({ ...message, headers: [{ key: "x", value: null }] })).toThrow("null");
   });
 });
 

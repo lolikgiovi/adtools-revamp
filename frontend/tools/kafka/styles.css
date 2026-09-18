@@ -65,8 +65,11 @@
 .kafka-listen-actions label { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500; }
 .kafka-messages { display: grid; gap: 8px; max-height: 460px; overflow: auto; }
 .kafka-messages article { padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 9px; min-width: 0; }
+.kafka-message-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .kafka-message-meta { color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kafka-use-message { flex: none; }
 .kafka-messages pre { margin: 9px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.kafka-message-note { margin: 8px 0 0; color: hsl(var(--muted-foreground)); font-size: 12px; }
 @media (max-width: 950px) { .kafka-layout { grid-template-columns: 1fr; } }
 @media (max-width: 650px) {
   .kafka-header, .kafka-section-title { flex-direction: column; }
@@ -77,4 +80,5 @@
   .kafka-topic-row > button { width: 100%; }
   .kafka-actions input { flex: 1 1 100%; width: 100% !important; }
   .kafka-actions button { width: 100%; }
+  .kafka-message-top { align-items: flex-start; flex-direction: column; }
 }

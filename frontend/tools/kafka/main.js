@@ -1,7 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
-import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests } from "./service.js";
+import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, receivedMessageToDraft } from "./service.js";
 import { KafkaTemplate } from "./template.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
@@ -23,6 +23,7 @@ export class KafkaTool extends BaseTool {
     this.visibleTopics = [];
     this.activeTopicIndex = -1;
     this.jsonEditors = {};
+    this.receivedMessages = new WeakMap();
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -65,6 +66,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
     this.field("kafkaListen").addEventListener("click", () => this.startListening());
     this.field("kafkaStop").addEventListener("click", () => this.stopListening());
+    this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.updateCount();
     this.field("kafkaTopic").focus();
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
@@ -471,11 +473,51 @@ export class KafkaTool extends BaseTool {
     const root = this.field("kafkaMessages");
     root.querySelector(".kafka-empty")?.remove();
     const article = document.createElement("article");
+    const top = document.createElement("div"); top.className = "kafka-message-top";
     const meta = document.createElement("div"); meta.className = "kafka-message-meta";
-    meta.textContent = `${message.topic} · partition ${message.partition} · offset ${message.offset}${message.key == null ? "" : ` · key ${message.key}`}`;
+    meta.textContent = `${message.topic} · partition ${message.partition} · offset ${message.offset}${message.key == null ? "" : ` · key ${message.key}`}` +
+      `${message.headers?.length ? ` · ${message.headers.length} ${message.headers.length === 1 ? "header" : "headers"}` : ""}`;
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "btn btn-secondary btn-sm kafka-use-message";
+    use.textContent = "Use in Publish";
+    use.setAttribute("aria-label", `Use message at offset ${message.offset} in Publish`);
+    let issue;
+    try { receivedMessageToDraft(message); }
+    catch (error) { use.disabled = true; use.title = error.message; issue = error.message; }
+    this.receivedMessages.set(use, message);
     const value = document.createElement("pre"); value.textContent = message.value;
-    article.append(meta, value); root.prepend(article);
+    top.append(meta, use);
+    article.append(top, value); root.prepend(article);
+    if (issue) {
+      const note = document.createElement("p");
+      note.className = "kafka-message-note";
+      note.textContent = issue;
+      article.append(note);
+    }
     while (root.children.length > 100) root.lastElementChild.remove();
+  }
+
+  handleReceivedClick(event) {
+    const button = event.target.closest(".kafka-use-message");
+    if (!button || button.disabled || this.publishing) return;
+    const message = this.receivedMessages.get(button);
+    if (!message) return;
+    try {
+      const draft = receivedMessageToDraft(message);
+      this.field("kafkaTopic").value = draft.topic;
+      this.closeTopicMenu();
+      this.field("kafkaKey").value = draft.key;
+      this.setJsonValue("Headers", draft.headers);
+      this.setJsonValue("Value", draft.value);
+      this.field("kafkaBulk").checked = false;
+      this.field("kafkaRequestName").value = "";
+      this.updateCount();
+      this.message("kafkaPublishStatus", `Loaded message at offset ${message.offset}. Review it before publishing.`);
+      this.field("kafkaComposeHeading").scrollIntoView?.({ behavior: "smooth", block: "start" });
+      if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
+      else this.field("kafkaValue").focus();
+    } catch (error) { this.message("kafkaListenStatus", error.message, true); }
   }
 
   async stopListening() {

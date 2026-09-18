@@ -180,4 +180,34 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaListenStatus").textContent).toBe("Listening to orders.test…");
     expect(document.querySelector("#kafkaStop").disabled).toBe(false);
   });
+
+  it("loads a received message into Publish without sending or saving it", () => {
+    const service = { publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.activate();
+    tool.listening = true;
+    document.querySelector("#kafkaRequestName").value = "Existing template";
+    tool.showMessage({
+      topic: "orders.test", partition: 2, offset: 48, key: "account-1", value: '{"id":1}',
+      headers: [{ key: "source", value: "uat" }], keyIsUtf8: true, valueIsUtf8: true,
+    });
+
+    const button = document.querySelector(".kafka-use-message");
+    expect(button.disabled).toBe(false);
+    button.click();
+
+    expect(document.querySelector("#kafkaTopic").value).toBe("orders.test");
+    expect(document.querySelector("#kafkaKey").value).toBe("account-1");
+    expect(JSON.parse(document.querySelector("#kafkaHeaders").value)).toEqual({ source: "uat" });
+    expect(document.querySelector("#kafkaValue").value).toBe('{"id":1}');
+    expect(document.querySelector("#kafkaBulk").checked).toBe(false);
+    expect(document.querySelector("#kafkaRequestName").value).toBe("");
+    expect(service.publish).not.toHaveBeenCalled();
+    expect(localStorage.getItem("tool:kafka:requests")).toBeNull();
+
+    tool.showMessage({ topic: "orders.test", partition: 2, offset: 49, key: null, value: '{}' });
+    expect(document.querySelector(".kafka-use-message").disabled).toBe(true);
+    expect(document.querySelector(".kafka-message-note").textContent).toContain("Restart the desktop app");
+  });
 });

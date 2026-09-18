@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer};
-use rdkafka::message::{Header, Message, OwnedHeaders};
+use rdkafka::message::{Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -236,8 +236,17 @@ struct ReceivedMessage {
     partition: i32,
     offset: i64,
     key: Option<String>,
+    key_is_utf8: bool,
     value: String,
+    value_is_utf8: bool,
+    headers: Vec<ReceivedHeader>,
     timestamp: Option<i64>,
+}
+
+#[derive(Serialize, Clone)]
+struct ReceivedHeader {
+    key: String,
+    value: Option<String>,
 }
 
 #[tauri::command]
@@ -291,9 +300,30 @@ pub fn kafka_start_listener(
                         key: message
                             .key()
                             .map(|bytes| String::from_utf8_lossy(bytes).to_string()),
+                        key_is_utf8: message
+                            .key()
+                            .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
                         value: message
                             .payload()
                             .map(|bytes| String::from_utf8_lossy(bytes).to_string())
+                            .unwrap_or_default(),
+                        value_is_utf8: message
+                            .payload()
+                            .map_or(true, |bytes| std::str::from_utf8(bytes).is_ok()),
+                        headers: message
+                            .headers()
+                            .map(|headers| {
+                                headers
+                                    .iter()
+                                    .map(|header| ReceivedHeader {
+                                        key: header.key.to_string(),
+                                        value: header
+                                            .value
+                                            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                                            .map(str::to_string),
+                                    })
+                                    .collect()
+                            })
                             .unwrap_or_default(),
                         timestamp: message.timestamp().to_millis(),
                     };

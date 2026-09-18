@@ -55,7 +55,29 @@ export function parseMessages(value, bulk, key = "", headersText = "{}") {
   }
   const values = bulk ? parsed : [parsed];
   const recordHeaders = Object.entries(headers).map(([name, text]) => ({ key: name, value: text }));
-  return values.map((item) => ({ key: key.trim() || null, value: JSON.stringify(item), headers: recordHeaders }));
+  return values.map((item) => ({ key: key === "" ? null : key, value: JSON.stringify(item), headers: recordHeaders }));
+}
+
+export function receivedMessageToDraft(message) {
+  if (!Array.isArray(message.headers)) throw new Error("Restart the desktop app to load message headers into Publish.");
+  if (message.keyIsUtf8 === false || message.valueIsUtf8 === false) {
+    throw new Error("This message contains a non-text key or value that the JSON publisher cannot reproduce.");
+  }
+  try { JSON.parse(message.value); }
+  catch (error) { throw new Error("This message value is not valid JSON and cannot be loaded into Publish.", { cause: error }); }
+  const headers = Object.create(null);
+  for (const header of message.headers) {
+    if (!header.key || typeof header.value !== "string" || Object.hasOwn(headers, header.key)) {
+      throw new Error("This message has duplicate, null, or non-text headers that the JSON publisher cannot reproduce.");
+    }
+    headers[header.key] = header.value;
+  }
+  return {
+    topic: message.topic,
+    key: message.key ?? "",
+    headers: JSON.stringify(headers, null, 2),
+    value: message.value,
+  };
 }
 
 export function readKafkaConfig(storage = localStorage) {
