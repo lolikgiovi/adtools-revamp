@@ -714,6 +714,7 @@ export class QuickQueryUI {
       fontSize: 10.5,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
+      scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "off",
       // Disable Monaco suggestions/autocomplete in Quick Query
       quickSuggestions: false,
