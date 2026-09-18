@@ -136,6 +136,27 @@ pub async fn kafka_test_connection(config: KafkaConfig) -> Result<String, String
 }
 
 #[tauri::command]
+pub async fn kafka_list_topics(config: KafkaConfig) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let client: BaseConsumer = config.client()?.create().map_err(|e| e.to_string())?;
+        let metadata = client
+            .fetch_metadata(None, Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+        let mut topics: Vec<String> = metadata
+            .topics()
+            .iter()
+            .filter(|topic| topic.error().is_none())
+            .map(|topic| topic.name().to_string())
+            .collect();
+        topics.sort_unstable();
+        topics.dedup();
+        Ok(topics)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn kafka_publish(
     config: KafkaConfig,
     topic: String,

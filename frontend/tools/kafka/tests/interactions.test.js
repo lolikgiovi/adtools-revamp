@@ -50,4 +50,89 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaValue").value).toBe('{"cif":"30000758049"}');
     expect(service.publish).not.toHaveBeenCalled();
   });
+
+  it("browses metadata once and selects a fuzzy topic with the keyboard without publishing", async () => {
+    const service = { listTopics: vi.fn().mockResolvedValue(["orders.failed", "orders.created", "streaming.gold.prebook.consumer-uat1"]), publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.focus();
+    const input = document.querySelector("#kafkaTopic");
+    input.focus();
+    await settle();
+    expect(service.listTopics).toHaveBeenCalledTimes(1);
+
+    input.value = "prebook";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelectorAll(".kafka-topic-option")).toHaveLength(1);
+    expect(document.querySelector(".kafka-topic-option").textContent).toBe("streaming.gold.prebook.consumer-uat1");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(input.value).toBe("streaming.gold.prebook.consumer-uat1");
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(service.publish).not.toHaveBeenCalled();
+    expect(service.listTopics).toHaveBeenCalledTimes(1);
+
+    document.querySelector("#kafkaTopicRefresh").click();
+    await settle();
+    expect(service.listTopics).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores stale topic responses after bootstrap servers change", async () => {
+    let finish;
+    const service = { listTopics: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "first:9092";
+    brokers.focus();
+    document.querySelector("#kafkaTopic").focus();
+    brokers.value = "second:9092";
+    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    finish(["old.topic"]);
+    await settle();
+    expect(document.querySelectorAll(".kafka-topic-option")).toHaveLength(0);
+  });
+
+  it("supports arrow navigation and Escape without submitting the publish form", async () => {
+    const service = { listTopics: vi.fn().mockResolvedValue(["orders.created", "orders.failed"]), publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.focus();
+    const input = document.querySelector("#kafkaTopic");
+    input.focus();
+    await settle();
+    input.value = "orders";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    expect(input.getAttribute("aria-activedescendant")).toBe("kafkaTopicOption1");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(input.value).toBe("orders.failed");
+    expect(service.publish).not.toHaveBeenCalled();
+    document.querySelector("#kafkaTopicToggle").click();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("selects a topic on pointer down before a blur can close the menu", async () => {
+    const service = { listTopics: vi.fn().mockResolvedValue(["orders.created", "orders.failed"]), publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.focus();
+    const input = document.querySelector("#kafkaTopic");
+    input.focus();
+    await settle();
+    const option = document.querySelectorAll(".kafka-topic-option")[1];
+    const pointerDown = new Event("pointerdown", { bubbles: true, cancelable: true });
+    option.dispatchEvent(pointerDown);
+    expect(pointerDown.defaultPrevented).toBe(true);
+    input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    expect(input.value).toBe("orders.failed");
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(service.publish).not.toHaveBeenCalled();
+  });
 });

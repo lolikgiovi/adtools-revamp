@@ -12,7 +12,18 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-section-title"><div><h2 id="kafkaComposeHeading">Publish</h2><p>One click sends the displayed count once. Bulk is capped at 100, sent sequentially, with three seconds between publish actions.</p></div></div>
         <form id="kafkaForm">
           <div class="kafka-fields">
-            <label for="kafkaTopic">Topic <input id="kafkaTopic" type="text" required autocomplete="off" spellcheck="false" placeholder="your.topic.name" /></label>
+            <div class="kafka-topic-field">
+              <label for="kafkaTopic">Topic</label>
+              <div id="kafkaTopicPicker" class="kafka-topic-picker">
+                <input id="kafkaTopic" type="text" role="combobox" required autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="kafkaTopicOptions" placeholder="Search or enter a topic" />
+                <button id="kafkaTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaTopicOptions" aria-expanded="false">▼</button>
+                <div id="kafkaTopicMenu" class="kafka-topic-menu" hidden>
+                  <div class="kafka-topic-menu-heading"><strong>Broker topics</strong><button id="kafkaTopicRefresh" type="button">Refresh</button></div>
+                  <p id="kafkaTopicStatus" role="status" aria-live="polite"></p>
+                  <div id="kafkaTopicOptions" role="listbox" aria-label="Broker topics"></div>
+                </div>
+              </div>
+            </div>
             <label for="kafkaKey">Key <span>(optional)</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
           </div>
           <label for="kafkaHeaders">Headers <span>(optional JSON object)</span><input id="kafkaHeaders" type="text" value="{}" spellcheck="false" /></label>

@@ -1,7 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
-import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, readKafkaConfig, readKafkaRequests } from "./service.js";
+import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests } from "./service.js";
 import { KafkaTemplate } from "./template.js";
 import "./styles.css";
 
@@ -13,6 +13,14 @@ export class KafkaTool extends BaseTool {
     this.listening = false;
     this.unlisten = [];
     this.stopRequested = false;
+    this.topics = [];
+    this.topicBrokerKey = "";
+    this.topicsLoaded = false;
+    this.topicRequestId = 0;
+    this.topicLoading = false;
+    this.topicError = "";
+    this.visibleTopics = [];
+    this.activeTopicIndex = -1;
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -24,6 +32,26 @@ export class KafkaTool extends BaseTool {
     this.requests = readKafkaRequests();
     this.renderRequests();
     this.field("kafkaBrokers").addEventListener("change", () => this.saveConnection());
+    this.field("kafkaBrokers").addEventListener("input", () => this.invalidateTopics());
+    this.field("kafkaTopic").addEventListener("focus", () => { if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(); });
+    this.field("kafkaTopicPicker").addEventListener("focusout", (event) => {
+      if (!this.field("kafkaTopicPicker").contains(event.relatedTarget)) this.closeTopicMenu();
+    });
+    this.field("kafkaTopic").addEventListener("input", () => this.renderTopicOptions());
+    this.field("kafkaTopic").addEventListener("keydown", (event) => this.handleTopicKeydown(event));
+    this.field("kafkaTopicToggle").addEventListener("click", () => this.toggleTopicMenu());
+    this.field("kafkaTopicRefresh").addEventListener("click", () => this.loadTopics(true));
+    this.field("kafkaTopicOptions").addEventListener("pointerdown", (event) => {
+      const option = event.target.closest(".kafka-topic-option");
+      if (!option) return;
+      event.preventDefault();
+      this.selectTopic(this.visibleTopics[Number(option.dataset.index)]);
+    });
+    this.field("kafkaTopicOptions").addEventListener("click", (event) => this.handleTopicClick(event));
+    this.outsideTopicClick = (event) => {
+      if (!this.field("kafkaTopicMenu")?.hidden && !this.field("kafkaTopicPicker")?.contains(event.target)) this.closeTopicMenu();
+    };
+    document.addEventListener("click", this.outsideTopicClick);
     this.field("kafkaTest").addEventListener("click", () => this.testConnection());
     this.field("kafkaForm").addEventListener("submit", (event) => { event.preventDefault(); this.publish(); });
     this.field("kafkaSave").addEventListener("click", () => this.saveRequest());
@@ -36,13 +64,147 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTopic").focus();
   }
 
-  onSoftDeactivate() { this.stopListening(); }
-  onUnmount() { this.stopListening(); }
+  onSoftDeactivate() { this.closeTopicMenu(); this.stopListening(); }
+  onUnmount() { document.removeEventListener("click", this.outsideTopicClick); this.topicRequestId++; this.stopListening(); }
   field(id) { return this.container?.querySelector(`#${id}`); }
   config() { return { brokers: this.field("kafkaBrokers").value.trim(), securityProtocol: "PLAINTEXT" }; }
 
   saveConnection() {
     localStorage.setItem(KAFKA_CONFIG_KEY, JSON.stringify(this.config()));
+  }
+
+  invalidateTopics() {
+    this.topicRequestId++;
+    this.topicBrokerKey = "";
+    this.topicsLoaded = false;
+    this.topicLoading = false;
+    this.topics = [];
+    this.closeTopicMenu();
+  }
+
+  toggleTopicMenu() {
+    if (this.field("kafkaTopicMenu").hidden) {
+      this.field("kafkaTopic").focus();
+      this.openTopicMenu();
+    } else this.closeTopicMenu();
+  }
+
+  openTopicMenu() {
+    this.field("kafkaTopicMenu").hidden = false;
+    this.field("kafkaTopic").setAttribute("aria-expanded", "true");
+    this.field("kafkaTopicToggle").setAttribute("aria-expanded", "true");
+    this.renderTopicOptions();
+    if (!this.topicsLoaded && !this.topicLoading) this.loadTopics();
+  }
+
+  closeTopicMenu() {
+    if (!this.container) return;
+    this.field("kafkaTopicMenu").hidden = true;
+    this.field("kafkaTopic").setAttribute("aria-expanded", "false");
+    this.field("kafkaTopic").removeAttribute("aria-activedescendant");
+    this.field("kafkaTopicToggle").setAttribute("aria-expanded", "false");
+    this.activeTopicIndex = -1;
+  }
+
+  async loadTopics(force = false) {
+    const config = this.config();
+    if (!config.brokers) {
+      this.topicError = "Enter bootstrap servers before browsing topics.";
+      this.renderTopicOptions();
+      return;
+    }
+    if (this.topicLoading && !force) return;
+    if (this.topicsLoaded && this.topicBrokerKey === config.brokers && !force) return;
+    const requestId = ++this.topicRequestId;
+    this.topicLoading = true;
+    this.topicError = "";
+    this.renderTopicOptions();
+    try {
+      const topics = await this.service.listTopics(config);
+      if (requestId !== this.topicRequestId || !this.container) return;
+      this.topics = topics;
+      this.topicBrokerKey = config.brokers;
+      this.topicsLoaded = true;
+    } catch (error) {
+      if (requestId !== this.topicRequestId || !this.container) return;
+      this.topicError = `Could not browse topics: ${String(error)}`;
+    } finally {
+      if (requestId === this.topicRequestId && this.container) {
+        this.topicLoading = false;
+        this.renderTopicOptions();
+      }
+    }
+  }
+
+  renderTopicOptions() {
+    const list = this.field("kafkaTopicOptions");
+    if (!list) return;
+    this.visibleTopics = rankKafkaTopics(this.topics, this.field("kafkaTopic").value);
+    this.activeTopicIndex = this.visibleTopics.length ? 0 : -1;
+    list.replaceChildren();
+    this.visibleTopics.forEach((topic, index) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.id = `kafkaTopicOption${index}`;
+      option.className = "kafka-topic-option";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", String(index === this.activeTopicIndex));
+      option.dataset.index = String(index);
+      option.dataset.active = String(index === this.activeTopicIndex);
+      option.textContent = topic;
+      list.append(option);
+    });
+    this.updateActiveTopic();
+    const status = this.field("kafkaTopicStatus");
+    status.textContent = this.topicLoading ? "Loading topics…" : this.topicError ||
+      (this.visibleTopics.length ? `${this.visibleTopics.length} of ${this.topics.length} topics shown` :
+        (this.topicsLoaded ? (this.topics.length ? "No matching topics. You can still enter a topic manually." :
+          "No topics returned. Check broker access or enter a topic manually.") : "Browse topics from the broker."));
+  }
+
+  updateActiveTopic() {
+    const input = this.field("kafkaTopic");
+    input.removeAttribute("aria-activedescendant");
+    this.field("kafkaTopicOptions").querySelectorAll(".kafka-topic-option").forEach((option, index) => {
+      const active = index === this.activeTopicIndex;
+      option.dataset.active = String(active);
+      option.setAttribute("aria-selected", String(active));
+      if (active) {
+        input.setAttribute("aria-activedescendant", option.id);
+        option.scrollIntoView?.({ block: "nearest" });
+      }
+    });
+  }
+
+  handleTopicKeydown(event) {
+    if (event.key === "Escape") { if (!this.field("kafkaTopicMenu").hidden) { event.preventDefault(); this.closeTopicMenu(); } return; }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!this.field("kafkaTopicMenu").hidden && this.activeTopicIndex >= 0) this.selectTopic(this.visibleTopics[this.activeTopicIndex]);
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (this.field("kafkaTopicMenu").hidden) { this.openTopicMenu(); return; }
+    if (!this.visibleTopics.length) return;
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    this.activeTopicIndex = (this.activeTopicIndex + direction + this.visibleTopics.length) % this.visibleTopics.length;
+    this.updateActiveTopic();
+  }
+
+  handleTopicClick(event) {
+    const option = event.target.closest(".kafka-topic-option");
+    if (!option) return;
+    this.selectTopic(this.visibleTopics[Number(option.dataset.index)]);
+  }
+
+  selectTopic(topic) {
+    if (!topic) return;
+    this.field("kafkaTopic").value = topic;
+    this.closeTopicMenu();
+    this.suppressTopicFocus = true;
+    this.field("kafkaTopic").focus();
+    this.suppressTopicFocus = false;
   }
 
   message(id, text, error = false) {
@@ -163,6 +325,7 @@ export class KafkaTool extends BaseTool {
     }
     this.field("kafkaRequestName").value = request.name;
     this.field("kafkaTopic").value = request.topic;
+    this.closeTopicMenu();
     this.field("kafkaKey").value = request.key || "";
     this.field("kafkaHeaders").value = request.headers || "{}";
     this.field("kafkaValue").value = request.value;

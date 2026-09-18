@@ -2,6 +2,41 @@ export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
 export const KAFKA_REQUESTS_KEY = "tool:kafka:requests";
 export const MAX_KAFKA_BATCH = 100;
 
+export function rankKafkaTopics(topics, query, limit = 40) {
+  const needle = String(query || "").trim().toLowerCase();
+  const terms = needle.split(/\s+/);
+  const matches = [];
+  for (const topic of topics) {
+    const name = topic.toLowerCase();
+    let score = 0;
+    let distance = 0;
+    if (terms.length > 1) {
+      let cursor = 0;
+      let matched = true;
+      for (const term of terms) {
+        const index = name.indexOf(term, cursor);
+        if (index === -1) { matched = false; break; }
+        distance += index - cursor;
+        cursor = index + term.length;
+      }
+      if (matched) score = name.startsWith(terms[0]) ? 3 : 2;
+    } else if (needle) {
+      if (name === needle) score = 5;
+      else if (name.startsWith(needle)) score = 4;
+      else if (name.split(/[._-]/).some((segment) => segment.startsWith(needle))) score = 3;
+      else if (name.includes(needle)) score = 2;
+      else {
+        let index = 0;
+        for (const char of name) if (char === needle[index]) index++;
+        if (index === needle.length) score = 1;
+      }
+    } else score = 1;
+    if (score) matches.push({ topic, score, distance });
+  }
+  matches.sort((a, b) => b.score - a.score || a.distance - b.distance || a.topic.localeCompare(b.topic));
+  return matches.slice(0, limit).map(({ topic }) => topic);
+}
+
 export function parseMessages(value, bulk, key = "", headersText = "{}") {
   let parsed;
   let headers;
@@ -58,6 +93,7 @@ export class KafkaService {
   }
 
   test(config) { return this.call("kafka_test_connection", { config }); }
+  listTopics(config) { return this.call("kafka_list_topics", { config }); }
   publish(config, topic, records) { return this.call("kafka_publish", { config, topic, records }); }
   start(config, topic, fromBeginning) { return this.call("kafka_start_listener", { config, topic, fromBeginning }); }
   stop() { return this.call("kafka_stop_listener", {}); }

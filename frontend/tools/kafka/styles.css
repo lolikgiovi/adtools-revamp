@@ -15,7 +15,21 @@
 .kafka-hint { margin: 9px 0 0; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .kafka-tool [data-state="error"] { color: hsl(var(--destructive)); }
 .kafka-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 26%); gap: 12px; min-width: 0; }
-.kafka-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.kafka-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.kafka-topic-field { min-width: 0; }
+.kafka-topic-picker { position: relative; min-width: 0; }
+.kafka-topic-picker > input { padding-right: 44px !important; }
+.kafka-topic-picker > button { position: absolute; top: 7px; right: 0; bottom: 0; width: 42px; border: 0; border-radius: 0 9px 9px 0; background: transparent; color: hsl(var(--muted-foreground)); cursor: pointer; }
+.kafka-topic-picker > button:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.kafka-topic-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; padding: 6px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); box-shadow: 0 8px 24px hsl(var(--foreground) / 0.12); }
+.kafka-topic-menu[hidden] { display: none; }
+.kafka-topic-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 6px; font-size: 12px; }
+.kafka-topic-menu-heading button { border: 0; background: transparent; color: hsl(var(--primary)); font: inherit; cursor: pointer; }
+#kafkaTopicStatus { margin: 0; padding: 4px 8px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+#kafkaTopicStatus:empty { display: none; }
+#kafkaTopicOptions { max-height: 260px; overflow-y: auto; }
+.kafka-topic-option { display: block; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: hsl(var(--foreground)); font: inherit; font-size: 13px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.kafka-topic-option:hover, .kafka-topic-option[data-active="true"] { background: hsl(var(--muted)); }
 .kafka-compose form > label { margin-top: 18px; }
 .kafka-value-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 20px; }
 .kafka-bulk-toggle { display: flex !important; align-items: center; gap: 7px; font-weight: 500 !important; }
