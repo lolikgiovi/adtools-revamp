@@ -1,6 +1,24 @@
 import { ValueProcessorService } from "./ValueProcessorService.js";
 import { oracleReservedWords } from "../constants.js";
 import { AttachmentValidationService } from "./AttachmentValidationService.js";
+
+export function findReferencedBlobAttachments(schemaData, inputData, attachments) {
+  if (!attachments?.length || !inputData?.length) return [];
+
+  const blobFields = new Set(schemaData.filter((row) => String(row[1]).trim().toUpperCase() === "BLOB").map((row) => row[0]));
+  const blobColumns = inputData[0].map((name, index) => blobFields.has(String(name || "").trim()) ? index : -1).filter((index) => index >= 0);
+  if (!blobColumns.length) return [];
+
+  const referenced = new Set();
+  for (const row of inputData.slice(1)) {
+    for (const index of blobColumns) {
+      const value = String(row[index] ?? "").toLowerCase();
+      const file = attachments.find((attachment) => attachment.name.toLowerCase() === value);
+      if (file) referenced.add(file);
+    }
+  }
+  return [...referenced];
+}
 import { UsageTracker } from "../../../core/UsageTracker.js";
 
 export function columnIndexToLetter(index) {
@@ -243,6 +261,7 @@ export class QueryGenerationService {
 
     // 3. Map schema with field name as key
     const schemaMap = new Map(schemaData.map((row) => [row[0], row]));
+    const blobAttachments = new Map();
 
     // 4. Process each row of data
     const processedRows = dataRows.map((rowData, rowIndex) => {
@@ -267,6 +286,20 @@ export class QueryGenerationService {
             // Get the actual value from the data
             let value = rowData[colIndex];
 
+            // BLOB attachments are reconstructed as PL/SQL variables before the DML runs.
+            const matchingBlob = options.blobAttachmentMode !== "filename" && dataType.trim().toUpperCase() === "BLOB" && attachments?.find(
+              (file) => file.name.toLowerCase() === String(value).toLowerCase(),
+            );
+            if (matchingBlob) {
+              if (!matchingBlob.processedFormats?.base64) {
+                throw new Error(`Attachment "${matchingBlob.name}" has no binary content`);
+              }
+              if (!blobAttachments.has(matchingBlob)) {
+                blobAttachments.set(matchingBlob, `quick_query_blob_${blobAttachments.size + 1}`);
+              }
+              return { fieldName, formattedValue: blobAttachments.get(matchingBlob) };
+            }
+
             // Check if value matches any attachment
             const attachmentValue = this.attachmentValidationService.validateAttachment(
               value,
@@ -277,7 +310,7 @@ export class QueryGenerationService {
             );
 
             // Use attachment value if found, otherwise use original value
-            value = attachmentValue !== null ? attachmentValue : value;
+            value = attachmentValue != null ? attachmentValue : value;
 
             // Return formatted object
             return {
@@ -314,6 +347,10 @@ export class QueryGenerationService {
       }
     }
 
+    if (blobAttachments.size > 0) {
+      queryParts.splice(1, queryParts.length - 1, this.generateBlobBlock(blobAttachments, queryParts.slice(1)));
+    }
+
     // 8. Add select query to verify results
     const selectQuery = this.generateSelectStatement(tableName, primaryKeys, processedRows, schemaData);
 
@@ -327,6 +364,33 @@ export class QueryGenerationService {
     }
 
     return queryParts.join("\n\n");
+  }
+
+  generateBlobBlock(blobAttachments, statements) {
+    const declarations = ["  quick_query_chunk RAW(32767);"];
+    const initialization = [];
+
+    for (const [file, variable] of blobAttachments) {
+      const base64 = file.processedFormats.base64.replace(/^data:[^,]*;base64,/i, "");
+      if (base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+        throw new Error(`Attachment "${file.name}" has invalid Base64 content`);
+      }
+
+      declarations.push(`  ${variable} BLOB;`);
+      initialization.push(`  DBMS_LOB.CREATETEMPORARY(${variable}, TRUE);`);
+      // Each chunk is a complete Base64 group and stays below PL/SQL literal and RAW limits.
+      for (let offset = 0; offset < base64.length; offset += 16000) {
+        const chunk = base64.slice(offset, offset + 16000);
+        initialization.push(`  quick_query_chunk := UTL_ENCODE.BASE64_DECODE(UTL_RAW.CAST_TO_RAW('${chunk}'));`);
+        initialization.push(`  DBMS_LOB.WRITEAPPEND(${variable}, UTL_RAW.LENGTH(quick_query_chunk), quick_query_chunk);`);
+      }
+    }
+
+    const cleanup = [...blobAttachments.values()].map((variable) => `  DBMS_LOB.FREETEMPORARY(${variable});`);
+    const errorCleanup = [...blobAttachments.values()].map((variable) =>
+      `    IF DBMS_LOB.ISTEMPORARY(${variable}) = 1 THEN DBMS_LOB.FREETEMPORARY(${variable}); END IF;`,
+    );
+    return `DECLARE\n${declarations.join("\n")}\nBEGIN\n${initialization.join("\n")}\n${statements.join("\n\n")}\n${cleanup.join("\n")}\nEXCEPTION\n  WHEN OTHERS THEN\n${errorCleanup.join("\n")}\n    RAISE;\nEND;\n/`;
   }
 
   generateInsertStatement(tableName, processedFields) {

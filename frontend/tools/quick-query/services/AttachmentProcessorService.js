@@ -88,6 +88,8 @@ export class AttachmentProcessorService {
   async handleTextFile(file, processedFile, tableName) {
     const textContent = await this.readFileAs(file, "text");
     processedFile.processedFormats.original = textContent;
+    processedFile.processedFormats.base64 = await this.readFileAs(file, "dataURL");
+    processedFile.processedFormats.sizes.base64 = processedFile.processedFormats.base64.length;
     processedFile.processedFormats.contentType = "text/plain";
 
     const cleaned = textContent.trim();

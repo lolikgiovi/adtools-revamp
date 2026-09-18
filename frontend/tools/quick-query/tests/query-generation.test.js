@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { QueryGenerationService } from '../services/QueryGenerationService.js'
+import { QueryGenerationService, findReferencedBlobAttachments } from '../services/QueryGenerationService.js'
+import { AttachmentProcessorService } from '../services/AttachmentProcessorService.js'
 
 vi.mock('../../../core/UsageTracker.js', () => ({
   UsageTracker: {
@@ -28,6 +29,97 @@ const buildUppercaseSchema = () => [
   ['UPDATED_TIME', 'DATE', 'Yes', '', '', ''],
   ['UPDATED_BY', 'VARCHAR2(50)', 'Yes', '', '', ''],
 ]
+
+describe('QueryGenerationService - BLOB attachments', () => {
+  const schema = [
+    ['id', 'NUMBER', 'No', '', '', 'Yes'],
+    ['document', 'BLOB', 'No', '', '', ''],
+  ]
+  const pdf = (name, bytes) => ({
+    name,
+    type: 'application/pdf',
+    processedFormats: { base64: `data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}` },
+  })
+
+  it.each(['insert', 'update', 'merge'])('embeds the actual PDF bytes for %s', (queryType) => {
+    const attachment = pdf('first.pdf', [0x25, 0x50, 0x44, 0x46, 0x00, 0xff])
+    const sql = new QueryGenerationService().generateQuery('documents', queryType, schema, [
+      ['id', 'document'],
+      ['1', 'first.pdf'],
+    ], [attachment])
+
+    expect(sql).toContain('DECLARE\n  quick_query_chunk RAW(32767);\n  quick_query_blob_1 BLOB;')
+    expect(sql).toContain("UTL_ENCODE.BASE64_DECODE(UTL_RAW.CAST_TO_RAW('JVBERgD/'))")
+    expect(sql).toContain('DBMS_LOB.WRITEAPPEND(quick_query_blob_1, UTL_RAW.LENGTH(quick_query_chunk), quick_query_chunk);')
+    expect(sql).toContain('quick_query_blob_1')
+    expect(sql).not.toContain("utl_raw.cast_to_raw('first.pdf')")
+    expect(sql).toContain('END;\n/')
+  })
+
+  it('includes six different files once each and reuses an attachment across rows', () => {
+    const attachments = Array.from({ length: 6 }, (_, index) => pdf(`file${index + 1}.pdf`, [index + 1]))
+    const rows = attachments.map((file, index) => [String(index + 1), file.name])
+    rows.push(['7', 'file1.pdf'])
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', schema, [['id', 'document'], ...rows], attachments)
+
+    expect((sql.match(/DBMS_LOB.CREATETEMPORARY/g) || [])).toHaveLength(6)
+    expect((sql.match(/INSERT INTO documents/g) || [])).toHaveLength(7)
+    expect((sql.match(/VALUES \(\d+, quick_query_blob_1\);/g) || [])).toHaveLength(2)
+  })
+
+  it('chunks a large attachment on complete Base64 groups', () => {
+    const attachment = pdf('large.pdf', new Uint8Array(16000))
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', schema, [
+      ['id', 'document'], ['1', 'large.pdf'],
+    ], [attachment])
+
+    expect((sql.match(/DBMS_LOB.WRITEAPPEND/g) || [])).toHaveLength(2)
+    expect(sql).not.toContain("utl_raw.cast_to_raw('large.pdf')")
+  })
+
+  it('generates regular SQL with filename bytes when that option is selected', () => {
+    const attachment = pdf('first.pdf', [0x25, 0x50, 0x44, 0x46])
+    const sql = new QueryGenerationService().generateQuery('documents', 'merge', schema, [
+      ['id', 'document'], ['1', 'first.pdf'],
+    ], [attachment], { blobAttachmentMode: 'filename' })
+
+    expect(sql).toContain("utl_raw.cast_to_raw('first.pdf')")
+    expect(sql).not.toContain('DECLARE')
+    expect(sql).not.toContain('JVBERg==')
+  })
+
+  it('detects only attached filenames in BLOB cells, counting reused files once', () => {
+    const attachments = [pdf('first.pdf', [1]), pdf('second.pdf', [2])]
+    const input = [['id', 'document'], ['1', 'first.pdf'], ['2', 'FIRST.PDF'], ['3', 'unattached.pdf']]
+
+    expect(findReferencedBlobAttachments(schema, input, attachments)).toEqual([attachments[0]])
+    expect(findReferencedBlobAttachments([['id', 'NUMBER'], ['document', 'VARCHAR2(30)']], input, attachments)).toEqual([])
+  })
+
+  it('rejects an attached file whose binary content is unavailable', () => {
+    const attachment = { name: 'missing.pdf', processedFormats: { base64: null } }
+    expect(() => new QueryGenerationService().generateQuery('documents', 'insert', schema, [
+      ['id', 'document'], ['1', 'missing.pdf'],
+    ], [attachment])).toThrow('has no binary content')
+  })
+
+  it('rejects invalid Base64 before emitting a SQL block', () => {
+    const attachment = { name: 'bad.pdf', processedFormats: { base64: 'data:application/pdf;base64,not valid' } }
+    expect(() => new QueryGenerationService().generateQuery('documents', 'insert', schema, [
+      ['id', 'document'], ['1', 'bad.pdf'],
+    ], [attachment])).toThrow('invalid Base64 content')
+  })
+
+  it('uses the original UTF-8 bytes of an attached text file for a BLOB', async () => {
+    const file = new File(['café'], 'note.txt', { type: 'text/plain' })
+    const [attachment] = await new AttachmentProcessorService().processAttachments([file], 'documents')
+    const sql = new QueryGenerationService().generateQuery('documents', 'insert', schema, [
+      ['id', 'document'], ['1', 'note.txt'],
+    ], [attachment])
+
+    expect(sql).toContain("UTL_ENCODE.BASE64_DECODE(UTL_RAW.CAST_TO_RAW('Y2Fmw6k='))")
+  })
+})
 
 describe('QueryGenerationService - reserved words formatting', () => {
   const svc = new QueryGenerationService()

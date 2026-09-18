@@ -1,5 +1,5 @@
 import { IndexedDBStorageService } from "./services/IndexedDBStorageService.js";
-import { columnIndexToLetter } from "./services/QueryGenerationService.js";
+import { columnIndexToLetter, findReferencedBlobAttachments } from "./services/QueryGenerationService.js";
 import { isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
@@ -409,6 +409,14 @@ export class QuickQueryUI {
       htmlMinifyConfirmButton: document.getElementById("htmlMinifyConfirm"),
       htmlMinifySkipButton: document.getElementById("htmlMinifySkip"),
       closeHtmlMinifyOverlayButton: document.getElementById("closeHtmlMinifyOverlay"),
+
+      // BLOB attachment choice
+      blobAttachmentOverlay: document.getElementById("blobAttachmentOverlay"),
+      blobAttachmentModal: document.getElementById("blobAttachmentModal"),
+      blobAttachmentDescription: document.getElementById("blobAttachmentDescription"),
+      blobAttachmentContentButton: document.getElementById("blobAttachmentContent"),
+      blobAttachmentFilenameButton: document.getElementById("blobAttachmentFilename"),
+      closeBlobAttachmentModalButton: document.getElementById("closeBlobAttachmentModal"),
 
       // Download As overlay elements
       downloadAsOverlay: document.getElementById("downloadAsOverlay"),
@@ -1651,6 +1659,7 @@ export class QuickQueryUI {
     this.elements.dataContainer?.removeEventListener("wheel", this._handleDataWorkspaceWheel);
     this.elements.dataContainer?.removeEventListener("paste", this._handleDataTablePasteCapture, true);
     this._pendingDataTableClipboard = null;
+    this._closeBlobAttachmentChoice?.();
     this.pauseHiddenWork();
     this.closeTabContextMenu();
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
@@ -1955,7 +1964,7 @@ export class QuickQueryUI {
 
   async handleGenerateQuery() {
     // Prevent duplicate generation
-    if (this.isGenerating) return;
+    if (this.isGenerating || this._blobChoicePending) return;
 
     try {
       await this.flushPendingDataAutosave();
@@ -2010,12 +2019,77 @@ export class QuickQueryUI {
       }
 
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked };
+      const blobAttachments = findReferencedBlobAttachments(schemaData, inputData, this.processedFiles);
+      if (blobAttachments.length > 0) {
+        const choice = await this._showBlobAttachmentChoice(blobAttachments.length);
+        if (!choice) return;
+        options.blobAttachmentMode = choice;
+      }
 
       await this._generateQuery(tableName, queryType, schemaData, inputData, dataSource, options);
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
     }
+  }
+
+  _showBlobAttachmentChoice(fileCount) {
+    return new Promise((resolve) => {
+      const {
+        blobAttachmentOverlay: overlay,
+        blobAttachmentModal: modal,
+        blobAttachmentDescription: description,
+        blobAttachmentContentButton: contentButton,
+        blobAttachmentFilenameButton: filenameButton,
+        closeBlobAttachmentModalButton: closeButton,
+      } = this.elements;
+      const previousFocus = document.activeElement;
+      this._blobChoicePending = true;
+      description.textContent = `${fileCount} attached ${fileCount === 1 ? "file is" : "files are"} referenced by BLOB fields. How should Quick Query generate the script?`;
+      overlay.classList.remove("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      modal.classList.remove("hidden");
+      contentButton.focus();
+
+      const finish = (choice) => {
+        contentButton.removeEventListener("click", onContent);
+        filenameButton.removeEventListener("click", onFilename);
+        closeButton.removeEventListener("click", onCancel);
+        overlay.removeEventListener("click", onOverlay);
+        modal.removeEventListener("click", onModal);
+        modal.removeEventListener("keydown", onKeydown);
+        overlay.classList.add("hidden");
+        overlay.setAttribute("aria-hidden", "true");
+        modal.classList.add("hidden");
+        this._blobChoicePending = false;
+        this._closeBlobAttachmentChoice = null;
+        previousFocus?.focus?.();
+        resolve(choice);
+      };
+      const onContent = () => finish("content");
+      const onFilename = () => finish("filename");
+      const onCancel = () => finish(null);
+      const onOverlay = (event) => { if (event.target === overlay) onCancel(); };
+      const onModal = (event) => { if (event.target === modal) onCancel(); };
+      const onKeydown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+        } else if (event.key === "Tab") {
+          const buttons = [closeButton, contentButton, filenameButton];
+          const index = buttons.indexOf(document.activeElement);
+          event.preventDefault();
+          buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
+        }
+      };
+      contentButton.addEventListener("click", onContent);
+      filenameButton.addEventListener("click", onFilename);
+      closeButton.addEventListener("click", onCancel);
+      overlay.addEventListener("click", onOverlay);
+      modal.addEventListener("click", onModal);
+      modal.addEventListener("keydown", onKeydown);
+      this._closeBlobAttachmentChoice = onCancel;
+    });
   }
 
   async _generateQuery(tableName, queryType, schemaData, inputData, dataSource = "manual", options = {}) {

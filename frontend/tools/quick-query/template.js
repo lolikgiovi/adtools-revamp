@@ -243,6 +243,29 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
+<div id="blobAttachmentOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="blobAttachmentModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="blobAttachmentTitle" aria-describedby="blobAttachmentDescription">
+    <div class="qq-modal-content qq-blob-attachment-content">
+        <div class="qq-modal-header">
+            <h3 id="blobAttachmentTitle">BLOB attachment detected</h3>
+            <button id="closeBlobAttachmentModal" class="overlay-close-button" type="button" aria-label="Cancel generation">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <p id="blobAttachmentDescription" class="qq-blob-attachment-description"></p>
+            <div class="qq-blob-attachment-actions" role="group" aria-label="BLOB attachment output">
+                <button id="blobAttachmentContent" class="btn btn-primary qq-blob-attachment-option" type="button">
+                    <span class="qq-blob-attachment-option-title">Embed file content</span>
+                    <span class="qq-blob-attachment-option-detail">Generate a PL/SQL script that loads the attached bytes into the BLOB field.</span>
+                </button>
+                <button id="blobAttachmentFilename" class="btn btn-outline qq-blob-attachment-option" type="button">
+                    <span class="qq-blob-attachment-option-title">Keep filename for later</span>
+                    <span class="qq-blob-attachment-option-detail">Generate regular SQL with the filename stored as BLOB bytes. Replace it with file content later.</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="fileViewerOverlay" class="file-viewer-overlay hidden">
     <div class="file-viewer-modal">
         <div class="file-viewer-header">
