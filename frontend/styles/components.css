@@ -952,16 +952,6 @@ body.global-search-open {
   flex-wrap: wrap;
 }
 
-.otp-manual-status {
-  margin: 0 0 0.5rem;
-  color: hsl(var(--muted-foreground));
-  line-height: 1.45;
-}
-
-.otp-manual-check {
-  margin-bottom: 0.75rem;
-}
-
 .otp-input-row {
   flex-wrap: wrap;
 }

@@ -44,34 +44,31 @@ describe("OTP overlay", () => {
     await expect(pending).rejects.toThrow("Closed");
   });
 
-  it("offers manual approval and completes the protected action after approval", async () => {
-    localStorage.setItem("user.username", "Test User");
+  it("requests an email OTP and completes the protected action after verification", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: "request-1", status: "pending" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, status: "pending" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, status: "approved", token: "approved-token" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, token: "otp-token" }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, value: { schema: "ready" } }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const pending = openOtpOverlay({ email: "person@example.com", kvKey: "default-config", preferCachedToken: false });
     const overlay = document.querySelector(".otp-modal");
-    expect(overlay.querySelector(".otp-manual-request")).not.toBeNull();
+    expect(overlay.querySelector(".otp-email-status").textContent).toContain("around 1 minute");
+    expect(overlay.querySelector(".otp-email-status").textContent).toContain("Contact Lolik directly");
+    expect(overlay.querySelector(".otp-manual-request")).toBeNull();
 
-    overlay.querySelector(".otp-manual-request").click();
+    overlay.querySelector(".otp-request").click();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(fetchMock.mock.calls[0][0]).toContain("/register/request-manual-approval");
+    expect(fetchMock.mock.calls[0][0]).toContain("/register/request-otp");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
-      email: "person@example.com", displayName: "Test User",
+      email: "person@example.com",
     });
-    expect(overlay.querySelector(".otp-manual-check").hidden).toBe(false);
+    expect(overlay.querySelector(".otp-email-status").textContent).toContain("Code requested");
 
-    overlay.querySelector(".otp-manual-check").click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(overlay.querySelector(".otp-manual-status").textContent).toContain("Still pending");
-
-    overlay.querySelector(".otp-manual-check").click();
-    await expect(pending).resolves.toEqual({ token: "approved-token", kvValue: { schema: "ready" } });
-    expect(fetchMock.mock.calls[3][1].headers.Authorization).toBe("Bearer approved-token");
-    expect(localStorage.getItem("manual.approval.request")).toBeNull();
+    overlay.querySelector(".otp-code-input").value = "123456";
+    overlay.querySelector(".otp-confirm").click();
+    await expect(pending).resolves.toEqual({ token: "otp-token", kvValue: { schema: "ready" } });
+    expect(fetchMock.mock.calls[1][0]).toContain("/register/verify");
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer otp-token");
   });
 });

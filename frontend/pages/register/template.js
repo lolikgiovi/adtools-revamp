@@ -18,24 +18,15 @@ export const RegisterTemplate = /* html */ `
           <div class="register-hint">We sent a code to your email. Enter it to continue.</div>
         </div>
         <div class="register-method-notice" role="status">
-          <strong>OTP is currently unavailable.</strong>
-          <span>Request manual approval below, then ask Lolik to review your request.</span>
+          <strong>Verify your email with an OTP.</strong>
+          <span>Delivery takes around 1 minute. Contact Lolik directly for faster access.</span>
         </div>
         <div class="register-actions">
-          <button type="button" class="btn btn-primary" data-role="manual-approval-btn">Request Manual Approval</button>
-          <button type="submit" class="btn btn-secondary" data-role="submit-btn" disabled aria-disabled="true" title="OTP is currently unavailable">OTP Unavailable</button>
+          <button type="submit" class="btn btn-primary" data-role="submit-btn">Request OTP</button>
         </div>
         <div class="register-error" aria-live="polite"></div>
       </form>
-      <div class="approval-status" data-role="approval-status" hidden>
-        <div class="approval-status-mark" aria-hidden="true"></div>
-        <div class="approval-status-copy">
-          <strong>Approval requested</strong>
-          <span>Ask Lolik to review and approve this device before you continue.</span>
-        </div>
-        <button type="button" class="btn btn-secondary" data-role="check-approval-btn">Check Status</button>
-      </div>
-      <p class="register-note">Manual requests include device and browser details so an administrator can recognize the request. Bank Mandiri email is required for managed config access.</p>
+      <p class="register-note">Bank Mandiri email is required for managed config access.</p>
     </div>
   </div>
 `;
