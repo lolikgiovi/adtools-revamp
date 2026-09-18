@@ -184,6 +184,7 @@ class HTMLTemplateTool extends BaseTool {
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
+      scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "on",
       formatOnPaste: true,
       formatOnType: true,

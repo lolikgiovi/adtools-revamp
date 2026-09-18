@@ -103,6 +103,7 @@ export class KafkaTool extends BaseTool {
           automaticLayout: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
+          scrollbar: { alwaysConsumeMouseWheel: false },
           wordWrap: "on",
           formatOnPaste: true,
           tabSize: 2,

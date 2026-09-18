@@ -276,6 +276,7 @@ export function createOracleEditor(container, options = {}) {
     automaticLayout: true,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
+    scrollbar: { alwaysConsumeMouseWheel: false },
     wordWrap: "on",
     fontSize: 12,
     suggestOnTriggerCharacters: false,
