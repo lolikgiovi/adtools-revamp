@@ -316,7 +316,7 @@
 
 #spreadsheet-schema .ht_master .wtHolder {
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: auto;
 }
 
 /* Add left border to first column cells in schema table */
