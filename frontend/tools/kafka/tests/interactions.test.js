@@ -177,7 +177,8 @@ describe("Kafka publish controls", () => {
     expect(service.stop).toHaveBeenCalledOnce();
     expect(service.start).toHaveBeenCalledTimes(2);
     expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", true);
-    expect(document.querySelector("#kafkaListenStatus").textContent).toBe("Listening to orders.test…");
+    expect(document.querySelector("#kafkaListenHeading").textContent).toBe("Listen to orders.test");
+    expect(document.querySelector("#kafkaListenStatus").textContent).toBe("");
     expect(document.querySelector("#kafkaStop").disabled).toBe(false);
   });
 

@@ -47,8 +47,8 @@ export const KafkaTemplate = /*html*/ `
       <aside class="kafka-saved" aria-labelledby="kafkaSavedHeading"><div class="kafka-section-title"><div><h2 id="kafkaSavedHeading">Saved requests</h2></div></div><div id="kafkaSavedList"></div></aside>
     </div>
     <section class="kafka-listener" aria-labelledby="kafkaListenHeading">
-      <div class="kafka-section-title"><div><h2 id="kafkaListenHeading">Listen</h2><p>Preview messages from the topic above. Listening never publishes and does not commit offsets.</p></div>
+      <div class="kafka-section-title"><div><h2 id="kafkaListenHeading">Listen</h2></div>
         <div class="kafka-listen-actions"><label><input id="kafkaFromBeginning" type="checkbox" /> From beginning</label><button id="kafkaListen" class="btn btn-secondary" type="button">Start listening</button><button id="kafkaStop" class="btn btn-secondary" type="button" disabled>Stop</button></div></div>
-      <p id="kafkaListenStatus" role="status" aria-live="polite">Stopped</p><div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Received messages appear here, up to the latest 100.</p></div>
+      <p id="kafkaListenStatus" role="status" aria-live="polite"></p><div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Received messages appear here, up to the latest 100.</p></div>
     </section>
   </div>`;

@@ -61,6 +61,7 @@
 .kafka-saved-row strong, .kafka-saved-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kafka-saved-row small { color: hsl(var(--muted-foreground)); }
 .kafka-empty { color: hsl(var(--muted-foreground)); }
+#kafkaListenStatus:empty { display: none; }
 .kafka-listen-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .kafka-listen-actions label { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: 500; }
 .kafka-messages { display: grid; gap: 8px; max-height: 460px; overflow: auto; }

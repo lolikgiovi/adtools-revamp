@@ -460,7 +460,8 @@ export class KafkaTool extends BaseTool {
       }
       this.listening = true;
       this.field("kafkaStop").disabled = false;
-      this.message("kafkaListenStatus", `Listening to ${topic}…`);
+      this.field("kafkaListenHeading").textContent = `Listen to ${topic}`;
+      this.message("kafkaListenStatus", "");
     } catch (error) {
       this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
       if (this.field("kafkaListen")) this.field("kafkaListen").disabled = false;
@@ -529,6 +530,7 @@ export class KafkaTool extends BaseTool {
     catch (error) { this.message("kafkaListenStatus", String(error), true); }
     if (this.field("kafkaListen")) this.field("kafkaListen").disabled = false;
     if (this.field("kafkaStop")) this.field("kafkaStop").disabled = true;
-    this.message("kafkaListenStatus", "Stopped");
+    if (this.field("kafkaListenHeading")) this.field("kafkaListenHeading").textContent = "Listen";
+    this.message("kafkaListenStatus", "");
   }
 }
