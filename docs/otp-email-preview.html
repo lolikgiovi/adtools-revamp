@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>AD / Tools — OTP email preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #0e110f;
+        --card: #181c19;
+        --code-surface: #101411;
+        --line: #384039;
+        --ink: #f2efe7;
+        --muted: #a7ada4;
+        --quiet: #7f887e;
+        --accent: #c49a5b;
+        --accent-strong: #d2aa6e;
+        --accent-ink: #17140f;
+        --success: #b8d3b2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        background: var(--page);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      code,
+      .mono {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .preview-stage {
+        display: grid;
+        min-height: 100vh;
+        place-items: start center;
+        padding: 48px 20px;
+      }
+
+      .email-card {
+        width: min(100%, 496px);
+        overflow: hidden;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+      }
+
+      .email-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 23px 28px 21px;
+        border-bottom: 1px dashed var(--line);
+      }
+
+      .wordmark,
+      .receipt-label,
+      .code-label,
+      .expiry {
+        font-size: 11px;
+        line-height: 1;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .wordmark {
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.13em;
+      }
+
+      .receipt-label {
+        color: var(--quiet);
+        text-align: right;
+      }
+
+      .email-content {
+        padding: 39px 28px 32px;
+      }
+
+      h1 {
+        max-width: 12ch;
+        margin: 0;
+        color: var(--ink);
+        font-size: clamp(28px, 7vw, 34px);
+        font-weight: 720;
+        letter-spacing: -0.045em;
+        line-height: 1.08;
+      }
+
+      .intro {
+        max-width: 36ch;
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      .code-panel {
+        margin-top: 31px;
+        overflow: hidden;
+        background: var(--code-surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+
+      .code-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 18px 0;
+      }
+
+      .code-label {
+        color: var(--quiet);
+      }
+
+      .copy-button {
+        padding: 8px 11px;
+        color: var(--accent-strong);
+        background: transparent;
+        border: 1px solid #5d4b31;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1;
+        text-transform: uppercase;
+        transition:
+          background-color 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease;
+      }
+
+      .copy-button:hover {
+        color: var(--accent-ink);
+        background: var(--accent-strong);
+        border-color: var(--accent-strong);
+      }
+
+      .copy-button:focus-visible {
+        outline: 2px solid var(--accent-strong);
+        outline-offset: 3px;
+      }
+
+      .copy-button.is-copied {
+        color: var(--success);
+        border-color: #587155;
+      }
+
+      .code-value {
+        display: block;
+        padding: 24px 18px 27px;
+        color: var(--ink);
+        font-size: clamp(38px, 12vw, 52px);
+        font-weight: 700;
+        letter-spacing: 0.17em;
+        line-height: 1;
+        text-align: center;
+        text-indent: 0.17em;
+        user-select: all;
+        -webkit-user-select: all;
+      }
+
+      .code-help {
+        margin: 0;
+        padding: 0 18px 17px;
+        color: var(--quiet);
+        font-size: 12px;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .expiry {
+        display: block;
+        padding: 13px 16px 12px;
+        color: var(--accent-ink);
+        background: var(--accent);
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .email-footer {
+        padding: 21px 28px 25px;
+        border-top: 1px dashed var(--line);
+      }
+
+      .footer-copy {
+        margin: 0;
+        color: var(--quiet);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .footer-copy.mono {
+        letter-spacing: 0.02em;
+      }
+
+      .copy-status {
+        min-height: 18px;
+        margin: 11px 0 0;
+        color: var(--success);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 520px) {
+        .preview-stage {
+          padding: 20px 12px;
+        }
+
+        .email-header,
+        .email-content,
+        .email-footer {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        .email-header {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 11px;
+        }
+
+        .receipt-label {
+          text-align: left;
+        }
+
+        .code-panel-header {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .copy-button {
+          width: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .copy-button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="preview-stage">
+      <article class="email-card" aria-label="AD Tools OTP email preview">
+        <header class="email-header">
+          <div class="wordmark mono">AD / TOOLS</div>
+          <div class="receipt-label mono">SIGN-IN RECEIPT</div>
+        </header>
+
+        <section class="email-content">
+          <h1>Here's your OTP.</h1>
+          <p class="intro">Use it to finish signing in while it's still fresh.</p>
+
+          <section class="code-panel" aria-labelledby="code-label">
+            <div class="code-panel-header">
+              <div id="code-label" class="code-label mono">ONE-TIME PASSCODE</div>
+              <button class="copy-button" type="button" data-copy-button aria-describedby="copy-status">Copy code</button>
+            </div>
+            <code class="code-value" data-copy-code tabindex="0">786083</code>
+            <p class="code-help">Select the code or use Copy code.</p>
+            <div class="expiry mono">USE WITHIN 30 MINUTES</div>
+          </section>
+        </section>
+
+        <footer class="email-footer">
+          <p class="footer-copy mono">Not your request? Ignore this receipt.<br />Keep the code private.</p>
+          <p class="copy-status" id="copy-status" aria-live="polite"></p>
+        </footer>
+      </article>
+    </main>
+
+    <script>
+      (() => {
+        const button = document.querySelector("[data-copy-button]");
+        const code = document.querySelector("[data-copy-code]");
+        const status = document.querySelector("#copy-status");
+        let resetTimer;
+
+        const showCopied = () => {
+          button.textContent = "Copied";
+          button.classList.add("is-copied");
+          status.textContent = "Code copied to your clipboard.";
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => {
+            button.textContent = "Copy code";
+            button.classList.remove("is-copied");
+            status.textContent = "";
+          }, 1800);
+        };
+
+        const selectCode = () => {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(code);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        };
+
+        button.addEventListener("click", async () => {
+          const value = code.textContent.trim();
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch (_) {
+            selectCode();
+            document.execCommand("copy");
+          }
+          showCopied();
+        });
+      })();
+    </script>
+  </body>
+</html>

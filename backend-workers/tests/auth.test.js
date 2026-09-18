@@ -97,9 +97,11 @@ describe("registration and config access", () => {
       tags: [{ name: "category", value: "otp" }],
     });
     expect(emailPayload.html).toContain("Here's your OTP");
-    expect(emailPayload.html).toMatch(/>\d{6}<\/td>/);
+    expect(emailPayload.html).toMatch(/>\s*\d{6}\s*<\/td>/);
     expect(emailPayload.html).toContain("USE WITHIN 30 MINUTES");
-    expect(emailPayload.html).not.toContain("Select the code");
+    expect(emailPayload.html).toContain("SELECT TO COPY");
+    expect(emailPayload.html).toContain("Select the code to copy.");
+    expect(emailPayload.html).not.toContain("<script");
     expect(emailPayload.text).toMatch(/verification code is \d{6}/);
     expect(emailPayload.text).toContain("30 minutes");
   });
