@@ -1,23 +1,20 @@
-.kafka-tool { max-width: 1480px; margin: 0 auto; padding: 28px clamp(18px, 3vw, 42px) 48px; color: hsl(var(--foreground)); }
+.kafka-tool { display: grid; gap: 12px; width: 100%; max-width: none; box-sizing: border-box; margin: 0; padding: 0; color: hsl(var(--foreground)); }
 .kafka-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-bottom: 24px; border-bottom: 1px solid hsl(var(--border)); }
 .kafka-header h1 { margin: 0; font-size: clamp(26px, 3vw, 38px); letter-spacing: -0.03em; }
 .kafka-header p, .kafka-section-title p { margin: 6px 0 0; color: hsl(var(--muted-foreground)); line-height: 1.5; }
 .kafka-desktop-badge { flex: none; padding: 6px 10px; border-radius: 8px; background: hsl(var(--muted)); color: hsl(var(--foreground)); font-size: 12px; }
-.kafka-connection, .kafka-listener { padding: 26px 0; border-bottom: 1px solid hsl(var(--border)); }
-.kafka-section-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.kafka-connection, .kafka-compose, .kafka-saved, .kafka-listener { min-width: 0; padding: 16px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--card)); }
+.kafka-section-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
 .kafka-section-title h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
 .kafka-tool label { display: block; font-weight: 600; font-size: 13px; }
 .kafka-tool label span { color: hsl(var(--muted-foreground)); font-weight: 400; }
 .kafka-tool input[type="text"], .kafka-tool textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 7px; padding: 11px 12px; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--background)); color: hsl(var(--foreground)); font: inherit; }
 .kafka-tool input:focus-visible, .kafka-tool textarea:focus-visible, .kafka-tool button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
-.kafka-tool textarea { min-height: 235px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.5; tab-size: 2; }
+.kafka-tool textarea { min-height: clamp(260px, 36dvh, 460px); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.5; tab-size: 2; }
 .kafka-tool input::placeholder, .kafka-tool textarea::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; }
 .kafka-hint { margin: 9px 0 0; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .kafka-tool [data-state="error"] { color: hsl(var(--destructive)); }
-.kafka-connection > input { max-width: 900px; }
-.kafka-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 330px); gap: clamp(24px, 4vw, 54px); padding: 28px 0; }
-.kafka-compose, .kafka-saved { min-width: 0; }
-.kafka-saved { padding-left: clamp(18px, 3vw, 34px); border-left: 1px solid hsl(var(--border)); }
+.kafka-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 26%); gap: 12px; min-width: 0; }
 .kafka-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .kafka-compose form > label { margin-top: 18px; }
 .kafka-value-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 20px; }
@@ -38,5 +35,5 @@
 .kafka-messages article { padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 9px; min-width: 0; }
 .kafka-message-meta { color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kafka-messages pre { margin: 9px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-@media (max-width: 950px) { .kafka-layout { grid-template-columns: 1fr; } .kafka-saved { padding: 0; border-left: 0; } }
-@media (max-width: 650px) { .kafka-header, .kafka-section-title { flex-direction: column; } .kafka-fields { grid-template-columns: 1fr; } .kafka-tool { padding-inline: 18px; } }
+@media (max-width: 950px) { .kafka-layout { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .kafka-header, .kafka-section-title { flex-direction: column; } .kafka-fields { grid-template-columns: 1fr; } }
