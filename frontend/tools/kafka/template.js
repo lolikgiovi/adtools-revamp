@@ -1,10 +1,6 @@
 export const KafkaTemplate = /*html*/ `
   <div class="kafka-tool">
-    <header class="kafka-header">
-      <div><h1>Kafka</h1><p>Compose, save, publish, and inspect messages from one desktop connection.</p></div>
-      <span class="kafka-desktop-badge">Desktop connection</span>
-    </header>
-    <section class="kafka-connection" aria-labelledby="kafkaConnectionHeading">
+      <section class="kafka-connection" aria-labelledby="kafkaConnectionHeading">
       <div class="kafka-section-title"><div><h2 id="kafkaConnectionHeading">Broker</h2><p>Shared by publisher and listener. Connection details stay on this device.</p></div><button id="kafkaTest" class="btn btn-secondary" type="button">Test connection</button></div>
       <label for="kafkaBrokers">Bootstrap servers</label>
       <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
