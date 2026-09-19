@@ -13,6 +13,9 @@ function nowMs() {
 }
 
 import { SessionTokenStore } from "../core/SessionTokenStore.js";
+import { UsageTracker } from "../core/UsageTracker.js";
+import { isTauri } from "../core/Runtime.js";
+import { fetchRegistrationAuthMode, REGISTRATION_AUTH_MODE } from "../core/RegistrationAuthMode.js";
 
 export async function openOtpOverlay({
   email,
@@ -76,6 +79,9 @@ export async function openOtpOverlay({
     }
   }
 
+  const authMode = await fetchRegistrationAuthMode();
+  const manual = authMode === REGISTRATION_AUTH_MODE.MANUAL;
+
   return new Promise((resolve, reject) => {
     try {
       const overlay = createElement(`
@@ -84,12 +90,17 @@ export async function openOtpOverlay({
             <h3>Verify access</h3>
             <p class="otp-email-status"></p>
             <div class="otp-actions">
-              <button type="button" class="btn btn-primary otp-request">Request OTP</button>
+              ${
+                manual
+                  ? '<button type="button" class="btn btn-primary otp-manual-request">Request Manual Approval</button>'
+                  : '<button type="button" class="btn btn-primary otp-request">Request OTP</button>'
+              }
             </div>
-            <div class="otp-input-row">
-              <input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" />
-              <button type="button" class="btn btn-secondary otp-confirm">Confirm</button>
-            </div>
+            ${
+              manual
+                ? '<p class="otp-manual-status" role="status" hidden></p><button type="button" class="btn btn-secondary otp-manual-check" hidden>Check Approval Status</button>'
+                : '<div class="otp-input-row"><input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" /><button type="button" class="btn btn-secondary otp-confirm">Confirm</button></div>'
+            }
             <div class="otp-error" aria-live="polite"></div>
             <div class="otp-footer">
               <button type="button" class="btn otp-close">Close</button>
@@ -104,6 +115,22 @@ export async function openOtpOverlay({
       const btnReq = overlay.querySelector(".otp-request");
       const btnConfirm = overlay.querySelector(".otp-confirm");
       const btnClose = overlay.querySelector(".otp-close");
+      const btnManual = overlay.querySelector(".otp-manual-request");
+      const btnCheck = overlay.querySelector(".otp-manual-check");
+      const manualStatus = overlay.querySelector(".otp-manual-status");
+      const manualKey = "manual.approval.request";
+      const deviceId = UsageTracker.getDeviceId();
+      let manualRequest = null;
+      if (manual) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(manualKey) || "null");
+          if (saved?.requestId && saved.email === email?.trim().toLowerCase() && saved.deviceId === deviceId) {
+            manualRequest = saved;
+          }
+        } catch (_) {
+          manualRequest = null;
+        }
+      }
 
       const lastKey = `otp.lastRequest.${storageScope}`;
       const cooldownLeft = () => {
@@ -121,8 +148,13 @@ export async function openOtpOverlay({
       if (!email) {
         status.textContent = "";
         err.textContent = "No registered email found. Please register first.";
-        btnReq.disabled = true;
-        btnConfirm.disabled = true;
+        if (btnReq) btnReq.disabled = true;
+        if (btnConfirm) btnConfirm.disabled = true;
+        if (btnManual) btnManual.disabled = true;
+      } else if (manual) {
+        status.textContent = `Request manual approval for ${email}, then contact Lolik directly for faster access.`;
+        err.textContent = "";
+        if (manualRequest) showManualStatus("Approval requested. Contact Lolik to review it.");
       } else {
         status.textContent = `Send a code to ${email}. Delivery takes around 1 minute. Contact Lolik directly for faster access.`;
         err.textContent = "";
@@ -130,6 +162,25 @@ export async function openOtpOverlay({
         if (left > 0) {
           disableWithCountdown(btnReq, left);
         }
+      }
+
+      function showManualStatus(message) {
+        manualStatus.textContent = message;
+        manualStatus.hidden = false;
+        btnCheck.hidden = false;
+      }
+
+      async function postApproval(path, payload) {
+        const base = (import.meta?.env?.VITE_WORKER_BASE || "").trim().replace(/\/$/, "");
+        const response = await fetch(base ? `${base}${path}` : path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "omit",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) throw new Error(data?.error || `Approval request failed (${response.status})`);
+        return data;
       }
 
       async function finishWithToken(token) {
@@ -146,6 +197,58 @@ export async function openOtpOverlay({
         SessionTokenStore.saveToken(token);
         cleanup();
         resolve({ token, kvValue });
+      }
+
+      async function checkManualApproval() {
+        if (!manualRequest) return;
+        btnCheck.disabled = true;
+        err.textContent = "";
+        try {
+          const data = await postApproval("/register/manual-approval-status", manualRequest);
+          if (data.status !== "approved") {
+            showManualStatus("Still pending. Contact Lolik to review the request.");
+            return;
+          }
+          await finishWithToken(data.token);
+          try {
+            localStorage.removeItem(manualKey);
+          } catch (_) {
+            // Approval succeeded even if local storage is unavailable.
+          }
+        } catch (error) {
+          err.textContent = error.message || "Could not check approval status.";
+        } finally {
+          btnCheck.disabled = false;
+        }
+      }
+
+      async function requestManualApproval() {
+        if (!email) return;
+        btnManual.disabled = true;
+        err.textContent = "";
+        try {
+          const displayName = (localStorage.getItem("user.username") || email.split("@")[0]).trim().slice(0, 15);
+          const identity = {
+            displayName: displayName.length >= 2 ? displayName : "AD Tools User",
+            email: email.trim().toLowerCase(),
+            deviceId,
+            platform: isTauri() ? "Desktop (Tauri)" : "Browser",
+            locale: navigator.language || "",
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+            screenSize: `${window.screen?.width || 0}x${window.screen?.height || 0}`,
+          };
+          const data = await postApproval("/register/request-manual-approval", identity);
+          manualRequest = { ...identity, requestId: data.requestId };
+          localStorage.setItem(manualKey, JSON.stringify(manualRequest));
+          showManualStatus(
+            data.status === "approved" ? "Approval granted. Checking access..." : "Approval requested. Contact Lolik to review it.",
+          );
+          if (data.status === "approved") await checkManualApproval();
+        } catch (error) {
+          err.textContent = error.message || "Could not submit the approval request.";
+        } finally {
+          btnManual.disabled = false;
+        }
       }
 
       function disableWithCountdown(button, ms) {
@@ -228,8 +331,10 @@ export async function openOtpOverlay({
         }
       }
 
-      btnReq.addEventListener("click", requestOtp);
-      btnConfirm.addEventListener("click", verifyOtp);
+      btnReq?.addEventListener("click", requestOtp);
+      btnManual?.addEventListener("click", requestManualApproval);
+      btnCheck?.addEventListener("click", checkManualApproval);
+      btnConfirm?.addEventListener("click", verifyOtp);
       btnClose.addEventListener("click", () => {
         cleanup();
         reject(new Error("Closed"));

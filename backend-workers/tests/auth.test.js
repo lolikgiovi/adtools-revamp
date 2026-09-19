@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleKvGet, handleRegisterRequestOtp, handleRegisterVerify } from "../src/routes/auth.js";
+import { handleKvGet, handleRegisterRequestOtp, handleRegisterVerify, handleRegistrationAuthMode } from "../src/routes/auth.js";
 
 function createKvMock(values = {}) {
   return {
@@ -61,6 +61,7 @@ describe("registration and config access", () => {
       DEV_MODE: "false",
       MAIL_FROM: "otp-adtools@example.com",
       RESEND_API_KEY: "test-key",
+      REGISTRATION_AUTH_MODE: "otp",
       adtools: createKvMock(),
       DB: {
         prepare: vi.fn(() => ({
@@ -104,6 +105,27 @@ describe("registration and config access", () => {
     expect(emailPayload.html).not.toContain("<script");
     expect(emailPayload.text).toMatch(/verification code is \d{6}/);
     expect(emailPayload.text).toContain("30 minutes");
+  });
+
+  it("uses the KV registration mode override and disables OTP requests in manual mode", async () => {
+    const env = {
+      REGISTRATION_AUTH_MODE: "otp",
+      adtools: createKvMock({ "config:registration-auth-mode": "manual" }),
+    };
+
+    const configResponse = await handleRegistrationAuthMode(env);
+    await expect(configResponse.json()).resolves.toEqual({ ok: true, mode: "manual" });
+
+    const requestResponse = await handleRegisterRequestOtp(
+      new Request("http://localhost/register/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "person@example.com" }),
+      }),
+      env,
+    );
+    expect(requestResponse.status).toBe(409);
+    await expect(requestResponse.json()).resolves.toMatchObject({ ok: false, mode: "manual" });
   });
 
   it("allows non-Bank Mandiri email to verify registration OTP", async () => {

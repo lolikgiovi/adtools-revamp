@@ -25,6 +25,8 @@
     "cf:publish": "npm run cf:deploy",
     "cf:deploy": "npm run build && npm run cf:deploy:worker",
     "cf:deploy:worker": "npx wrangler deploy && npm run db:migrate:remote",
+    "cf:auth:manual": "wrangler kv key put config:registration-auth-mode manual --binding adtools --remote --preview false",
+    "cf:auth:otp": "wrangler kv key put config:registration-auth-mode otp --binding adtools --remote --preview false",
     "cf:versions:upload": "npx wrangler versions upload",
     "db:migrate:local": "npx wrangler d1 migrations apply adtools --local",
     "db:migrate:remote": "npx wrangler d1 migrations apply adtools --remote",

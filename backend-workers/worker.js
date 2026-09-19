@@ -16,7 +16,7 @@ import {
   handleImprovementFeedbackPost,
   handlePublicImprovementFeedbackPost,
 } from './src/routes/analytics.js';
-import { getSession, handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleKvGet } from './src/routes/auth.js';
+import { getSession, handleRegister, handleRegisterRequestOtp, handleRegisterVerify, handleRegistrationAuthMode, handleKvGet } from './src/routes/auth.js';
 import { handleDashboardVerify, handleDashboardTabs, handleDashboardQuery, handleStatsTools, handleStatsDaily, handleStatsDevices, handleStatsEvents, handleStatsQuickQuery, handleStatsQuickQueryErrors } from './src/routes/dashboard.js';
 import { handleInstallScript, handleInstallOracleScript, handleUninstallScript, handleLatestRelease } from './src/routes/installer.js';
 import { handleManifestRequest, handleArtifactRequest, handleDevSeedUpdate } from './src/routes/updater.js';
@@ -85,6 +85,10 @@ export default {
     }
 
     // New OTP registration routes
+    if (url.pathname === "/register/auth-mode") {
+      if (method !== "GET") return methodNotAllowed();
+      return handleRegistrationAuthMode(env);
+    }
     if (url.pathname === "/register/request-otp") {
       if (method !== "POST") return methodNotAllowed();
       return handleRegisterRequestOtp(request, env);

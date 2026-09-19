@@ -2,6 +2,7 @@ import { corsHeaders } from "../utils/cors.js";
 import { tsGmt7Plain } from "../utils/timestamps.js";
 import { completeRegistration, detectRegistrationPlatform } from "./auth.js";
 import { validateDashboardToken } from "./dashboard.js";
+import { getRegistrationAuthMode } from "../utils/registrationAuthMode.js";
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,6 +17,9 @@ async function requireDashboardAuth(request, env) {
 
 export async function handleManualApprovalRequest(request, env) {
   try {
+    if ((await getRegistrationAuthMode(env)) !== "manual") {
+      return json({ ok: false, mode: "otp", error: "Manual approval is disabled. Request an email OTP." }, 409);
+    }
     if (!env.DB) return json({ ok: false, error: "Database not available" }, 500);
     const data = await request.json();
     const email = String(data.email || "")

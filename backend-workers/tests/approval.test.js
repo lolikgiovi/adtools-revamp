@@ -40,6 +40,20 @@ function statement({ first = null, results = [], onRun } = {}) {
 }
 
 describe("manual approval", () => {
+  it("disables new manual requests while OTP mode is active", async () => {
+    const env = { REGISTRATION_AUTH_MODE: "otp", adtools: { get: vi.fn(async () => null) } };
+    const response = await handleManualApprovalRequest(
+      new Request("https://example.test/register/request-manual-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "person@example.com", displayName: "Person", deviceId: "device-1" }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, mode: "otp" });
+  });
+
   it("stores a device-bound pending request with client and edge identity", async () => {
     const inserted = [];
     const env = {

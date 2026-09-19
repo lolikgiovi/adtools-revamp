@@ -18,14 +18,23 @@ export const RegisterTemplate = /* html */ `
           <div class="register-hint">We sent a code to your email. Enter it to continue.</div>
         </div>
         <div class="register-method-notice" role="status">
-          <strong>Verify your email with an OTP.</strong>
-          <span>Delivery takes around 1 minute. Contact Lolik directly for faster access.</span>
+          <strong data-role="method-title">Checking access method…</strong>
+          <span data-role="method-copy">Please wait while AD Tools loads the current access method.</span>
         </div>
         <div class="register-actions">
-          <button type="submit" class="btn btn-primary" data-role="submit-btn">Request OTP</button>
+          <button type="button" class="btn btn-primary" data-role="manual-approval-btn" hidden>Request Manual Approval</button>
+          <button type="submit" class="btn btn-primary" data-role="submit-btn" hidden>Request OTP</button>
         </div>
         <div class="register-error" aria-live="polite"></div>
       </form>
+      <div class="approval-status" data-role="approval-status" hidden>
+        <div class="approval-status-mark" aria-hidden="true"></div>
+        <div class="approval-status-copy">
+          <strong>Approval requested</strong>
+          <span>Contact Lolik to review and approve this device.</span>
+        </div>
+        <button type="button" class="btn btn-secondary" data-role="check-approval-btn">Check Status</button>
+      </div>
       <p class="register-note">Bank Mandiri email is required for managed config access.</p>
     </div>
   </div>

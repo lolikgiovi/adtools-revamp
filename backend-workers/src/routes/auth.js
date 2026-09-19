@@ -7,8 +7,15 @@ import { corsHeaders, isOriginAllowed } from "../utils/cors.js";
 import { tsGmt7, tsGmt7Plain, parseTsFlexible } from "../utils/timestamps.js";
 import { allowedEmailDomains, OTP_EXPIRY_MINUTES, sendOtpEmail } from "../utils/email.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
+import { getRegistrationAuthMode } from "../utils/registrationAuthMode.js";
 
 const OTP_EXPIRY_MS = OTP_EXPIRY_MINUTES * 60 * 1000;
+
+export async function handleRegistrationAuthMode(env) {
+  return new Response(JSON.stringify({ ok: true, mode: await getRegistrationAuthMode(env) }), {
+    headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+  });
+}
 
 export function detectRegistrationPlatform(data, request) {
   const ua = request.headers.get("User-Agent") || "";
@@ -99,6 +106,12 @@ export async function handleRegister(request, env) {
  */
 export async function handleRegisterRequestOtp(request, env) {
   try {
+    if ((await getRegistrationAuthMode(env)) !== "otp") {
+      return new Response(JSON.stringify({ ok: false, mode: "manual", error: "Email OTP is disabled. Request manual approval." }), {
+        status: 409,
+        headers: { "Content-Type": "application/json", ...corsHeaders(), "Cache-Control": "no-store" },
+      });
+    }
     const { email } = await request.json();
     const normalized = String(email || "")
       .trim()
