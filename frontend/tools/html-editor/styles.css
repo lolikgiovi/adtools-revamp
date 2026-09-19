@@ -118,16 +118,31 @@ body.is-resizing * {
 }
 
 .renderer-pane {
-  container-type: inline-size;
   overflow: hidden;
+}
+
+.renderer-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+  background: hsl(var(--background));
 }
 
 .renderer-iframe {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   border: none;
   width: 100%;
+  height: 100%;
   background: transparent;
   /* do not affect page rendering fidelity */
+}
+
+.renderer-iframe.is-fixed-viewport {
+  border-inline: 1px solid hsl(var(--border));
 }
 
 .renderer-actions {
@@ -141,15 +156,34 @@ body.is-resizing * {
   max-width: 100%;
 }
 
-@container (max-width: 620px) {
-  .renderer-pane .pane-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.preview-viewport-select {
+  width: fit-content;
+  min-width: 0;
+  max-width: min(14rem, 100%);
+  height: 1.875rem;
+  padding: 0 1.5rem 0 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .renderer-actions {
-    justify-content: flex-start;
-  }
+.preview-viewport-width {
+  width: 4.75rem;
+  height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 0.8rem;
+}
+
+.preview-viewport-width:focus,
+.preview-viewport-width:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring));
 }
 
 .renderer-toggle {

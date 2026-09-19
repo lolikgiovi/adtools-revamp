@@ -22,6 +22,23 @@ import { bucketSize, cleanAnalyticsMeta, summarizeText } from "../../core/Analyt
 import { isTauri } from "../../core/Runtime.js";
 import "./styles.css";
 
+const PREVIEW_VIEWPORT_MIN_WIDTH = 240;
+const PREVIEW_VIEWPORT_MAX_WIDTH = 1440;
+// Representative CSS viewport widths; hardware pixel resolution is a separate device property.
+const PREVIEW_VIEWPORT_PRESETS = [
+  { value: "responsive", label: "Fit · Responsive", width: null },
+  { value: "iphone-se", label: "iPhone SE (1st) · 320px", width: 320 },
+  { value: "android-compact", label: "Android compact · 360px", width: 360 },
+  { value: "iphone-standard", label: "iPhone 7/8/X/SE · 375px", width: 375 },
+  { value: "iphone-modern", label: "iPhone 12–16 · 390px", width: 390 },
+  { value: "android-standard", label: "Pixel / Android · 393px", width: 393 },
+  { value: "iphone-latest", label: "Modern iPhone · 402px", width: 402 },
+  { value: "android-large", label: "Android large · 412px", width: 412 },
+  { value: "iphone-plus", label: "iPhone Plus · 414px", width: 414 },
+  { value: "iphone-large", label: "iPhone Plus / Max · 430px", width: 430 },
+  { value: "custom", label: "Custom width…", width: null },
+];
+
 class HTMLTemplateTool extends BaseTool {
   constructor(eventBus) {
     super({ id: "html-template", eventBus, isHeavyTool: true });
@@ -39,6 +56,9 @@ class HTMLTemplateTool extends BaseTool {
     this._envStorageKey = "tool:html-template:env";
     this._previewBackgroundStorageKey = "tool:html-template:preview-background";
     this.previewWhiteBackground = false;
+    this._previewViewportStorageKey = "tool:html-template:preview-viewport";
+    this.previewViewportMode = "responsive";
+    this.previewViewportWidth = 390;
     this._splitStorageKey = "tool:html-template:split-ratio";
     this._resizerCleanup = null;
     this.analyticsSessionId = this.createAnalyticsId();
@@ -140,6 +160,7 @@ class HTMLTemplateTool extends BaseTool {
     this.bindToolEvents();
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
+    this.setupPreviewViewport();
     this.setupDebouncedRendering();
     this.initializeResizer();
     this.renderPreview(this.editor.getValue());
@@ -646,6 +667,102 @@ class HTMLTemplateTool extends BaseTool {
         ? "Use a transparent preview background"
         : "Show a white background behind transparent HTML";
     }
+  }
+
+  setupPreviewViewport() {
+    const select = document.getElementById("previewViewportSelect");
+    const widthInput = document.getElementById("previewViewportWidth");
+    if (!select || !widthInput) return;
+
+    try {
+      const saved = localStorage.getItem(this._previewViewportStorageKey);
+      const parsed = saved ? JSON.parse(saved) : null;
+      const isKnownMode = PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.value === parsed?.mode);
+      if (isKnownMode) this.previewViewportMode = parsed.mode;
+      if (this.previewViewportMode === "custom" && parsed?.width !== undefined) {
+        this.previewViewportWidth = this.normalizePreviewViewportWidth(parsed.width, this.previewViewportWidth);
+      }
+    } catch (_) {}
+
+    PREVIEW_VIEWPORT_PRESETS.forEach((preset) => {
+      const option = document.createElement("option");
+      option.value = preset.value;
+      option.textContent = preset.label;
+      select.appendChild(option);
+    });
+
+    const syncControls = () => {
+      select.value = this.previewViewportMode;
+      const isCustom = this.previewViewportMode === "custom";
+      widthInput.hidden = !isCustom;
+      if (isCustom) widthInput.value = String(this.previewViewportWidth);
+    };
+
+    const persistAndApply = () => {
+      try {
+        localStorage.setItem(
+          this._previewViewportStorageKey,
+          JSON.stringify({ mode: this.previewViewportMode, width: this.previewViewportWidth }),
+        );
+      } catch (_) {}
+      this.applyPreviewViewport();
+      const width = this.getPreviewViewportWidth();
+      this.trackAnalytics("preview_viewport_change", {
+        viewport: this.previewViewportMode,
+        viewport_width: width || "responsive",
+      });
+    };
+
+    select.addEventListener("change", () => {
+      this.previewViewportMode = PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.value === select.value) ? select.value : "responsive";
+      syncControls();
+      persistAndApply();
+    });
+
+    widthInput.addEventListener("change", () => {
+      this.previewViewportWidth = this.normalizePreviewViewportWidth(widthInput.value, this.previewViewportWidth);
+      syncControls();
+      persistAndApply();
+    });
+
+    syncControls();
+    this.applyPreviewViewport();
+  }
+
+  normalizePreviewViewportWidth(value, fallback = 390) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(PREVIEW_VIEWPORT_MAX_WIDTH, Math.max(PREVIEW_VIEWPORT_MIN_WIDTH, parsed));
+  }
+
+  getPreviewViewportWidth() {
+    const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.value === this.previewViewportMode);
+    if (preset?.width) return preset.width;
+    if (this.previewViewportMode === "custom") {
+      return this.normalizePreviewViewportWidth(this.previewViewportWidth);
+    }
+    return null;
+  }
+
+  applyPreviewViewport() {
+    const iframe = document.getElementById("htmlRenderer");
+    if (!iframe) return;
+
+    const width = this.getPreviewViewportWidth();
+    if (width) {
+      iframe.classList.add("is-fixed-viewport");
+      iframe.style.width = `${width}px`;
+      iframe.style.maxWidth = "none";
+      iframe.style.flex = "0 0 auto";
+      iframe.style.marginInline = "auto";
+      return;
+    }
+
+    iframe.classList.remove("is-fixed-viewport");
+    iframe.style.width = "100%";
+    iframe.style.maxWidth = "100%";
+    iframe.style.flex = "1";
+    iframe.style.marginInline = "0";
   }
 
   renderPreview(html, force = false) {

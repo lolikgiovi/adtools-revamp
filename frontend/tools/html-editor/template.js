@@ -50,6 +50,25 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <select id="envSelector" class="env-select" title="Select environment"></select>
             </div>
 
+            <select
+              id="previewViewportSelect"
+              class="preview-viewport-select"
+              aria-label="Preview viewport width"
+              title="Preview viewport width"
+            ></select>
+            <input
+              id="previewViewportWidth"
+              class="preview-viewport-width"
+              type="number"
+              min="240"
+              max="1440"
+              step="1"
+              inputmode="numeric"
+              aria-label="Custom preview viewport width in pixels"
+              placeholder="px"
+              hidden
+            />
+
             <button
               id="btnWhitePreviewBg"
               class="btn btn-secondary btn-sm preview-bg-toggle"
@@ -60,7 +79,9 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <button id="btnReloadPreview" class="btn btn-secondary btn-sm" title="Reload Preview">Reload</button>
           </div>
         </div>
-        <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+        <div id="rendererSurface" class="renderer-surface">
+          <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+        </div>
       </div>
     </div>
 
