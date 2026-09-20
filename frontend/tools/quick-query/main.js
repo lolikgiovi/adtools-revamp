@@ -3130,7 +3130,7 @@ export class QuickQueryUI {
 
     this.trackQuickQueryEvent("open_uuid_generator", this.getCurrentQuickQueryContext(), { flush: true });
 
-    this.generateQuickQueryUuids({ track: false });
+    this.generateQuickQueryUuids({ track: false, autoCopy: false });
 
     setTimeout(() => {
       quickQueryUuidQuantity?.focus();
@@ -3160,7 +3160,7 @@ export class QuickQueryUI {
     }
   }
 
-  generateQuickQueryUuids({ track = true } = {}) {
+  async generateQuickQueryUuids({ track = true, autoCopy = true } = {}) {
     const { quickQueryUuidQuantity, quickQueryUuidOutput, quickQueryUuidCopyButton, quickQueryUuidStatus } = this.elements;
     if (!quickQueryUuidQuantity || !quickQueryUuidOutput) return;
 
@@ -3186,6 +3186,10 @@ export class QuickQueryUI {
         }),
         { flush: true },
       );
+    }
+
+    if (autoCopy) {
+      await this.copyQuickQueryUuids();
     }
   }
 
@@ -3226,14 +3230,16 @@ export class QuickQueryUI {
     if (!quickQueryUuidOutput) return;
 
     if (!quickQueryUuidOutput.value) {
-      this.generateQuickQueryUuids({ track: false });
+      await this.generateQuickQueryUuids({ track: false, autoCopy: false });
     }
 
-    await this.copyToClipboard(quickQueryUuidOutput.value, targetEl);
-    if (quickQueryUuidStatus) {
-      quickQueryUuidStatus.textContent = "Copied";
-    }
+    const copied = await this.copyToClipboard(quickQueryUuidOutput.value, targetEl);
+    if (!copied) return false;
+
     const count = quickQueryUuidOutput.value.split("\n").filter(Boolean).length;
+    if (quickQueryUuidStatus) {
+      quickQueryUuidStatus.textContent = `${count} UUID${count === 1 ? "" : "s"} copied to clipboard`;
+    }
     this.uuidAnalyticsSession.copied_count += count;
     this.trackQuickQueryEvent(
       "copy_uuid",
@@ -3243,6 +3249,7 @@ export class QuickQueryUI {
       }),
       { flush: true },
     );
+    return true;
   }
 
   clearQuickQueryUuids() {
