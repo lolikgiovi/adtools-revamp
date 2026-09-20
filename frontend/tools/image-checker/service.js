@@ -7,7 +7,7 @@ export class BaseUrlService {
    * Maps to: [{ name, url }]
    */
   getAllUrls() {
-    let pairs = [];
+    let pairs;
     try {
       const raw = localStorage.getItem(BaseUrlService.STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
@@ -61,6 +61,8 @@ export class ImageCheckerService {
   checkImageOnce(url, timeoutMs) {
     return new Promise((resolve) => {
       const img = new Image();
+      img.loading = "eager";
+      img.decoding = "async";
       let settled = false;
 
       // Add cache-buster to ensure fresh load
@@ -69,10 +71,19 @@ export class ImageCheckerService {
       const timeoutId = setTimeout(() => {
         if (!settled) {
           settled = true;
+          clearTimeout(timeoutId);
+          img.onload = null;
+          img.onerror = null;
           img.src = ""; // Cancel the request
           resolve({ exists: false, url, timeout: true });
         }
       }, timeoutMs);
+
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        img.onload = null;
+        img.onerror = null;
+      };
 
       const handleSuccess = async () => {
         if (settled) return;
@@ -86,7 +97,7 @@ export class ImageCheckerService {
 
         if (settled) return;
         settled = true;
-        clearTimeout(timeoutId);
+        cleanup();
 
         const width = img.naturalWidth;
         const height = img.naturalHeight;
@@ -111,7 +122,7 @@ export class ImageCheckerService {
       img.onerror = () => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeoutId);
+        cleanup();
         resolve({ exists: false, url });
       };
 
@@ -120,11 +131,11 @@ export class ImageCheckerService {
   }
 
   /**
-   * Probe an image URL and return width/height. Retries up to maxRetries times on timeout.
+   * Probe an image URL and return width/height. Retries transient load failures and timeouts.
    * @param {string} baseUrl
    * @param {string} imagePath
-   * @param {number} timeoutMs - Timeout in milliseconds per attempt (default: 15000)
-   * @param {number} maxRetries - Maximum number of retry attempts on timeout (default: 5)
+   * @param {number} timeoutMs - Timeout in milliseconds per attempt (default: 5000)
+   * @param {number} maxRetries - Maximum number of attempts (default: 3)
    */
   async checkImage(baseUrl, imagePath = "", timeoutMs = 5000, maxRetries = 3) {
     const url = baseUrl.replace(/\/$/, "") + "/" + imagePath.replace(/^\//, "");
@@ -132,13 +143,9 @@ export class ImageCheckerService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const result = await this.checkImageOnce(url, timeoutMs);
 
-      // If not a timeout, return immediately (success or error)
-      if (!result.timeout) {
-        return result;
-      }
-
-      // If this was the last attempt, return the timeout result
-      if (attempt === maxRetries) {
+      // A failed image load can be transient too. Keep trying until the image
+      // loads or all attempts have been used.
+      if (result.exists || attempt === maxRetries) {
         return result;
       }
 
@@ -167,7 +174,7 @@ export class ImageCheckerService {
       baseUrls.map(async (u) => ({
         ...(await this.checkImage(u.url, normalized)),
         name: u.name,
-      }))
+      })),
     );
   }
 
@@ -199,7 +206,7 @@ export class ImageCheckerService {
           baseUrls.map(async (u) => ({
             ...(await this.checkImage(u.url, normalized)),
             name: u.name,
-          }))
+          })),
         );
 
         return {
@@ -209,7 +216,7 @@ export class ImageCheckerService {
           existsCount: results.filter((r) => r.exists).length,
           totalCount: results.length,
         };
-      })
+      }),
     );
   }
 }

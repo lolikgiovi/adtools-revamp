@@ -28,6 +28,8 @@ class CheckImageTool extends BaseTool {
     this.isChecking = false;
     this.statusFilter = "all";
     this.runProgress = null;
+    this.selectedEnvironmentIndices = null;
+    this.environmentDocumentClick = null;
   }
 
   getIconSvg() {
@@ -51,6 +53,10 @@ class CheckImageTool extends BaseTool {
     this.completedCells.clear();
     this.runProgress = null;
     this.isChecking = false;
+    if (this.environmentDocumentClick) {
+      document.removeEventListener("click", this.environmentDocumentClick);
+      this.environmentDocumentClick = null;
+    }
     this.root = null;
     this.elements = null;
   }
@@ -67,6 +73,10 @@ class CheckImageTool extends BaseTool {
       checkImageButton: this.root.querySelector("#checkImageButton"),
       clearButton: this.root.querySelector("#clearButton"),
       envSelector: this.root.querySelector("#envSelector"),
+      environmentControl: this.root.querySelector(".environment-control"),
+      envSelectorValue: this.root.querySelector("#envSelectorValue"),
+      envSelectorMenu: this.root.querySelector("#envSelectorMenu"),
+      environmentSelectionHint: this.root.querySelector("#environmentSelectionHint"),
       retryAllTimeoutsBtn: this.root.querySelector("#retryAllTimeoutsBtn"),
       cancelCheckButton: this.root.querySelector("#cancelCheckButton"),
       environmentStatus: this.root.querySelector("#environmentStatus"),
@@ -152,6 +162,7 @@ class CheckImageTool extends BaseTool {
 
     this.elements.cancelCheckButton?.addEventListener("click", () => this.cancelCheck());
     this.elements.configureEnvironmentsButton?.addEventListener("click", () => this.openEnvironmentSettings());
+    this.setupEnvironmentSelector();
 
     this.elements.savedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary());
     this.elements.closeSavedReferencesButton?.addEventListener("click", () => this.toggleReferenceLibrary(false));
@@ -184,48 +195,169 @@ class CheckImageTool extends BaseTool {
     this.updateCheckButtonState();
   }
 
-  /**
-   * Populate the environment selector dropdown with configured environments
-   */
-  populateEnvSelector() {
-    const selector = this.elements.envSelector;
-    if (!selector) return;
+  setupEnvironmentSelector() {
+    const trigger = this.elements?.envSelector;
+    const menu = this.elements?.envSelectorMenu;
+    if (!trigger || !menu) return;
 
-    // Clear existing options except "All"
-    selector.innerHTML = '<option value="all">All Environments</option>';
-
-    // Get all configured environments
-    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
-
-    // Add each environment as an option
-    baseUrls.forEach((env, index) => {
-      const option = document.createElement("option");
-      option.value = index.toString();
-      option.textContent = env.name || `Environment ${index + 1}`;
-      selector.appendChild(option);
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggleEnvironmentMenu();
     });
+    trigger.addEventListener("keydown", (event) => {
+      if (["Enter", " ", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        this.toggleEnvironmentMenu(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeEnvironmentMenu(true);
+      }
+    });
+    menu.addEventListener("click", (event) => event.stopPropagation());
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeEnvironmentMenu(true);
+      } else if (event.key === "Tab") {
+        this.closeEnvironmentMenu();
+      }
+    });
+    menu.addEventListener("change", (event) => this.handleEnvironmentSelectionChange(event));
 
-    this.updateEnvironmentStatus();
+    this.environmentDocumentClick = (event) => {
+      if (!this.elements?.environmentControl?.contains(event.target)) this.closeEnvironmentMenu();
+    };
+    document.addEventListener("click", this.environmentDocumentClick);
   }
 
   /**
-   * Get the selected environments based on dropdown selection
+   * Populate the environment selector with checkbox options.
+   */
+  populateEnvSelector() {
+    const menu = this.elements?.envSelectorMenu;
+    if (!menu) return;
+
+    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+    this.selectedEnvironmentIndices = null;
+    menu.replaceChildren();
+    menu.appendChild(this.createEnvironmentOption("all", "All environments", true));
+
+    baseUrls.forEach((env, index) => {
+      menu.appendChild(this.createEnvironmentOption(String(index), env.name || `Environment ${index + 1}`, true));
+    });
+
+    this.updateEnvironmentSelectionUi();
+    this.updateEnvironmentStatus();
+  }
+
+  createEnvironmentOption(value, label, checked) {
+    const option = document.createElement("label");
+    option.className = `environment-option${value === "all" ? " environment-option-all" : ""}`;
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = value;
+    input.checked = checked;
+    input.dataset.environmentOption = value;
+    input.setAttribute("aria-label", label);
+
+    const text = document.createElement("span");
+    text.textContent = label;
+    option.append(input, text);
+    return option;
+  }
+
+  handleEnvironmentSelectionChange(event) {
+    const input = event.target.closest?.("input[data-environment-option]");
+    if (!input) return;
+
+    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+    if (input.dataset.environmentOption === "all") {
+      this.selectedEnvironmentIndices = input.checked ? null : new Set();
+    } else {
+      const selected =
+        this.selectedEnvironmentIndices === null
+          ? new Set(baseUrls.map((_, index) => index))
+          : new Set(this.selectedEnvironmentIndices || []);
+      const selectedIndex = Number(input.dataset.environmentOption);
+      if (input.checked) selected.add(selectedIndex);
+      else selected.delete(selectedIndex);
+      this.selectedEnvironmentIndices = selected.size === baseUrls.length ? null : selected;
+    }
+
+    this.syncEnvironmentOptionStates();
+    this.updateEnvironmentSelectionUi();
+  }
+
+  syncEnvironmentOptionStates() {
+    const menu = this.elements?.envSelectorMenu;
+    if (!menu) return;
+
+    const allSelected = this.selectedEnvironmentIndices === null;
+    menu.querySelectorAll("input[data-environment-option]").forEach((input) => {
+      input.checked =
+        input.dataset.environmentOption === "all"
+          ? allSelected
+          : allSelected || this.selectedEnvironmentIndices.has(Number(input.dataset.environmentOption));
+    });
+  }
+
+  updateEnvironmentSelectionUi() {
+    const value = this.elements?.envSelectorValue;
+    const hint = this.elements?.environmentSelectionHint;
+    const baseUrls = this.imageCheckerService.baseUrlService.getAllUrls();
+    const selectedIndices = this.selectedEnvironmentIndices;
+    const selectedCount = selectedIndices === null ? baseUrls.length : selectedIndices?.size || 0;
+    const selectedEnvironment = selectedCount === 1 && selectedIndices !== null ? baseUrls[[...selectedIndices][0]] : null;
+    const selectionLabel =
+      selectedCount === 0
+        ? "Choose environments"
+        : selectedCount === baseUrls.length
+          ? "All environments"
+          : selectedCount === 1
+            ? selectedEnvironment?.name || "1 environment"
+            : `${selectedCount} environments`;
+
+    if (value) value.textContent = selectionLabel;
+    if (this.elements?.envSelector) {
+      this.elements.envSelector.setAttribute("aria-label", `${selectionLabel}. Choose environments`);
+    }
+    if (hint) {
+      hint.textContent =
+        baseUrls.length === 0
+          ? "Configure at least one CDN base URL in Settings."
+          : `${selectedCount} of ${baseUrls.length} environments selected.`;
+    }
+  }
+
+  toggleEnvironmentMenu(forceOpen) {
+    const menu = this.elements?.envSelectorMenu;
+    const trigger = this.elements?.envSelector;
+    if (!menu || !trigger || trigger.disabled) return;
+
+    const open = typeof forceOpen === "boolean" ? forceOpen : menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute("aria-expanded", String(open));
+    if (open) menu.querySelector("input")?.focus();
+  }
+
+  closeEnvironmentMenu(returnFocus = false) {
+    const menu = this.elements?.envSelectorMenu;
+    const trigger = this.elements?.envSelector;
+    if (!menu || !trigger) return;
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    if (returnFocus) trigger.focus();
+  }
+
+  /**
+   * Get the selected environments.
    * @returns {Array} Array of { name, url } objects
    */
   getSelectedEnvironments() {
-    const selector = this.elements.envSelector;
     const allUrls = this.imageCheckerService.baseUrlService.getAllUrls();
-
-    if (!selector || selector.value === "all") {
-      return allUrls;
-    }
-
-    const selectedIndex = parseInt(selector.value, 10);
-    if (selectedIndex >= 0 && selectedIndex < allUrls.length) {
-      return [allUrls[selectedIndex]];
-    }
-
-    return allUrls;
+    if (!(this.selectedEnvironmentIndices instanceof Set)) return allUrls;
+    return allUrls.filter((_, index) => this.selectedEnvironmentIndices.has(index));
   }
 
   /* ──────────────── Core actions ──────────────── */
@@ -243,7 +375,12 @@ class CheckImageTool extends BaseTool {
 
     const baseUrls = this.getSelectedEnvironments();
     if (baseUrls.length === 0) {
-      this.showInputValidation("No environments are configured. Add one in Settings, then try again.");
+      const configuredEnvironments = this.imageCheckerService.baseUrlService.getAllUrls();
+      this.showInputValidation(
+        configuredEnvironments.length === 0
+          ? "No environments are configured. Add one in Settings, then try again."
+          : "Select at least one environment to start a check.",
+      );
       return;
     }
 
@@ -431,7 +568,9 @@ class CheckImageTool extends BaseTool {
   openEnvironmentSettings() {
     try {
       localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, "config.baseUrls");
-    } catch (_) {}
+    } catch (_) {
+      // Settings navigation can still continue when storage is unavailable.
+    }
 
     if (window.app?.router?.navigate) {
       window.app.router.navigate("settings");
@@ -720,9 +859,30 @@ class CheckImageTool extends BaseTool {
     }
   }
 
-  /**
-   * Update a cell with the check result
-   */
+  getLiveImageUrl(url) {
+    if (!url) return url;
+    const cacheKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    try {
+      const liveUrl = new URL(url, window.location.href);
+      liveUrl.searchParams.set("adtools_live", cacheKey);
+      return liveUrl.toString();
+    } catch (_) {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}adtools_live=${encodeURIComponent(cacheKey)}`;
+    }
+  }
+
+  createLiveResultImage(result, altText, onError) {
+    const image = document.createElement("img");
+    image.alt = altText;
+    image.loading = "eager";
+    image.decoding = "async";
+    if (onError) image.addEventListener("error", onError, { once: true });
+    image.src = this.getLiveImageUrl(result.url);
+    return image;
+  }
+
   updateCellWithResult(cell, result, originalPath, env, rowIndex, colIndex, runId = this.checkRunId) {
     if (!this.isCheckRunCurrent(runId)) return;
     const cellId = `cell-${rowIndex}-${colIndex}`;
@@ -737,10 +897,16 @@ class CheckImageTool extends BaseTool {
 
       const miniPreview = document.createElement("div");
       miniPreview.className = "mini-image-preview";
-      const img = document.createElement("img");
-      img.src = result.url;
-      img.alt = `Preview for ${this.formatImageIdentifier(originalPath)}`;
-      miniPreview.appendChild(img);
+      const previewFallback = document.createElement("span");
+      previewFallback.className = "image-load-fallback";
+      previewFallback.textContent = "Preview unavailable";
+      previewFallback.hidden = true;
+      const img = this.createLiveResultImage(result, `Preview for ${this.formatImageIdentifier(originalPath)}`, () => {
+        miniPreview.classList.add("is-broken");
+        previewFallback.hidden = false;
+        cell.setAttribute("aria-label", `${env.name || "Environment"}: CDN preview could not be loaded`);
+      });
+      miniPreview.append(img, previewFallback);
 
       const previewButton = document.createElement("button");
       previewButton.type = "button";
@@ -1254,9 +1420,7 @@ class CheckImageTool extends BaseTool {
           // Create a mini image preview instead of check mark
           const miniPreview = document.createElement("div");
           miniPreview.className = "mini-image-preview";
-          const img = document.createElement("img");
-          img.src = result.url;
-          img.alt = "Image Preview";
+          const img = this.createLiveResultImage(result, "Image Preview");
           miniPreview.appendChild(img);
           container.appendChild(miniPreview);
 
@@ -1373,10 +1537,16 @@ class CheckImageTool extends BaseTool {
 
     const preview = document.createElement("div");
     preview.className = "image-preview large";
-    const previewImage = document.createElement("img");
-    previewImage.src = result.url;
-    previewImage.alt = `Preview for ${this.formatImageIdentifier(imagePath)}`;
+    const previewFallback = document.createElement("p");
+    previewFallback.className = "image-load-fallback";
+    previewFallback.textContent = "Preview unavailable: the CDN did not return a loadable image.";
+    previewFallback.hidden = true;
+    const previewImage = this.createLiveResultImage(result, `Preview for ${this.formatImageIdentifier(imagePath)}`, () => {
+      previewImage.hidden = true;
+      previewFallback.hidden = false;
+    });
     preview.appendChild(previewImage);
+    preview.appendChild(previewFallback);
     modalContent.appendChild(preview);
     modalContent.appendChild(closeButton);
     modal.appendChild(modalContent);

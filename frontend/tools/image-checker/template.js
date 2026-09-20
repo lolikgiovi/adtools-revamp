@@ -41,11 +41,29 @@ export const imageCheckerTemplate = /*html*/ `
         </div>
         <div class="check-image-run-actions">
           <div class="environment-control">
-            <label class="environment-select-field" for="envSelector">
-              <select id="envSelector" class="env-selector">
-                <option value="all">All environments</option>
-              </select>
-            </label>
+            <div class="environment-select-field">
+              <span id="environmentSelectLabel" class="environment-select-label">Environments</span>
+              <button
+                id="envSelector"
+                class="env-selector"
+                type="button"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="envSelectorMenu"
+                aria-describedby="environmentSelectionHint"
+              >
+                <span id="envSelectorValue" class="env-selector-value">All environments</span>
+                <span class="env-selector-chevron" aria-hidden="true"></span>
+              </button>
+              <div
+                id="envSelectorMenu"
+                class="environment-select-menu"
+                role="group"
+                aria-labelledby="environmentSelectLabel"
+                hidden
+              ></div>
+              <span id="environmentSelectionHint" class="environment-selection-hint">Choose one or more environments to compare.</span>
+            </div>
             <span id="environmentStatus" class="environment-status" aria-live="polite" hidden></span>
             <button id="configureEnvironmentsButton" class="btn btn-secondary btn-sm" type="button" hidden>
               Set CDN Base URLs

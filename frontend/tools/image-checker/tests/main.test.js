@@ -117,6 +117,16 @@ describe("CheckImageTool run scheduling", () => {
     expect(tool.root.querySelector("#cell-0-0").className).toContain("loading");
     expect(tool.root.querySelector("#cell-0-0").textContent).toContain("Checking");
   });
+
+  it("creates a fresh live image request for the result preview", () => {
+    const tool = createHarness();
+    const probeImage = document.createElement("img");
+    const previewImage = tool.createLiveResultImage({ ...result(), image: probeImage }, "Preview for image-0");
+
+    expect(previewImage).not.toBe(probeImage);
+    expect(previewImage.loading).toBe("eager");
+    expect(previewImage.src).toContain("adtools_live=");
+  });
 });
 
 describe("CheckImageTool image references", () => {
@@ -159,5 +169,27 @@ describe("CheckImageTool image references", () => {
     tool.elements.batchImagePathsInput.value = `${identifier}\n/content/v1/image/${identifier}.png`;
 
     expect(tool.getInputEntries()).toEqual({ imagePaths: [identifier], duplicateCount: 1 });
+  });
+
+  it("checks only the environments selected in the multi-select menu", () => {
+    localStorage.setItem(
+      "config.baseUrls",
+      JSON.stringify([
+        { key: "Development", value: "https://development.example" },
+        { key: "Staging", value: "https://staging.example" },
+        { key: "Production", value: "https://production.example" },
+      ]),
+    );
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const tool = new CheckImageTool();
+    tool.mount(host);
+
+    expect(tool.getSelectedEnvironments().map(({ name }) => name)).toEqual(["Development", "Staging", "Production"]);
+
+    host.querySelector('input[data-environment-option="1"]').click();
+
+    expect(tool.getSelectedEnvironments().map(({ name }) => name)).toEqual(["Development", "Production"]);
+    expect(tool.elements.envSelectorValue.textContent).toBe("2 environments");
   });
 });
