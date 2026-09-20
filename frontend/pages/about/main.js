@@ -11,7 +11,7 @@ const TOOL_DEFINITIONS = buildToolDefinitions(toolsConfig?.tools || []);
 const TOOL_GROUPS = [
   { id: "config", label: "Configuration & SQL" },
   { id: "general", label: "Data & utilities" },
-  { id: "jenkins", label: "Jenkins automation" },
+  { id: "execute", label: "Execute" },
 ];
 
 function escapeHtml(value) {

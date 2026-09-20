@@ -6,8 +6,8 @@
       "order": 10
     },
     {
-      "id": "jenkins",
-      "name": "Jenkins",
+      "id": "execute",
+      "name": "Execute",
       "order": 15,
       "requiresTauri": true
     },
@@ -77,18 +77,18 @@
     {
       "id": "redis-cache",
       "name": "Redis Cache",
-      "category": "config",
+      "category": "execute",
       "icon": "redis-cache",
       "requiresTauri": true,
-      "order": 53
+      "order": 55
     },
     {
       "id": "kafka",
       "name": "Kafka",
-      "category": "config",
+      "category": "execute",
       "icon": "kafka",
       "requiresTauri": true,
-      "order": 54
+      "order": 56
     },
     {
       "id": "compare-config",
@@ -100,18 +100,18 @@
     {
       "id": "run-query",
       "name": "Run Query",
-      "category": "jenkins",
+      "category": "execute",
       "icon": "jenkins-query",
       "requiresTauri": true,
-      "order": 55
+      "order": 53
     },
     {
       "id": "run-batch",
       "name": "Run Batch",
-      "category": "jenkins",
+      "category": "execute",
       "icon": "jenkins-batch",
       "requiresTauri": true,
-      "order": 56
+      "order": 54
     },
     {
       "id": "html-template",

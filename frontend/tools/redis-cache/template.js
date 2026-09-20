@@ -3,7 +3,6 @@ export const RedisCacheTemplate = /*html*/ `
     <header class="redis-cache-header">
       <div>
         <h1>Redis Cache</h1>
-        <p>Find cache keys without blocking Redis, keep frequent keys close, and clear only what you select.</p>
       </div>
       <div class="redis-connection-summary" aria-live="polite">
         <span class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
