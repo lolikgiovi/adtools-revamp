@@ -55,7 +55,6 @@ export const SplunkVTLEditorTemplate = /* html */ `
           <div class="vtl-editor-heading">
             <div class="vtl-title-group">
               <h3>Template Editor</h3>
-              <span id="templateSaveStatus" class="vtl-save-status" role="status" aria-live="polite">Saved locally</span>
             </div>
             <div class="vtl-view-switch" role="tablist" aria-label="Template editor view" aria-orientation="horizontal">
               <button id="btnTextView" class="vtl-view-button is-active" type="button" role="tab" aria-selected="true" aria-controls="textEditorPanel" tabindex="0">Text</button>
@@ -148,7 +147,6 @@ export const SplunkVTLEditorTemplate = /* html */ `
         <div class="pane-header vtl-compact-header vtl-context-header">
           <div class="vtl-title-group">
             <h3>Context Data</h3>
-            <span id="contextSaveStatus" class="vtl-save-status" role="status" aria-live="polite">Saved locally</span>
           </div>
           <div class="vtl-panel-actions">
             <button id="btnGenerateParameters" class="btn btn-secondary btn-sm" type="button" title="Add fields required by the template">Sync fields</button>
