@@ -52,7 +52,7 @@ class UUIDGenerator extends BaseTool {
 
     if (generateMultipleBtn) {
       generateMultipleBtn.addEventListener("click", () => {
-        this.generateMultipleUUIDs();
+        void this.generateMultipleUUIDs();
       });
     }
 
@@ -85,7 +85,7 @@ class UUIDGenerator extends BaseTool {
     this.trackAnalytics("single_generate");
   }
 
-  generateMultipleUUIDs() {
+  async generateMultipleUUIDs() {
     const quantityInput = document.getElementById("uuidQuantity");
     const resultTextarea = document.getElementById("multipleUuidResult");
 
@@ -110,6 +110,8 @@ class UUIDGenerator extends BaseTool {
     this.trackAnalytics("bulk_generate", {
       quantity: Math.min(quantity, 10000),
     });
+
+    await this.copyMultipleUUIDs();
   }
 
   async copySingleUUID() {
