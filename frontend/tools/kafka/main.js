@@ -3,6 +3,7 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
 import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, receivedMessageToDraft } from "./service.js";
 import { KafkaTemplate } from "./template.js";
+import { KafkaDateTimePicker } from "./date-picker.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
 
@@ -25,6 +26,7 @@ export class KafkaTool extends BaseTool {
     this.jsonEditors = {};
     this.receivedMessages = new WeakMap();
     this.historyRequestId = 0;
+    this.historyPicker = null;
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -65,29 +67,41 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
     this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
-    this.field("kafkaListen").addEventListener("click", () => this.startListening());
-    this.field("kafkaStop").addEventListener("click", () => this.stopListening());
+    this.field("kafkaListen").addEventListener("click", () => this.toggleListening());
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryResults").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryForm").addEventListener("submit", (event) => { event.preventDefault(); this.searchHistory(); });
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     this.field("kafkaHistorySince").value = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    this.historyPicker = new KafkaDateTimePicker({ root: this.field("kafkaHistoryPicker"), input: this.field("kafkaHistorySince") });
+    this.historyPicker.mount();
     this.updateCount();
     this.field("kafkaTopic").focus();
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
-  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.stopListening(); }
+  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.historyPicker?.close(); this.stopListening(); }
   onUnmount() {
     document.removeEventListener("click", this.outsideTopicClick);
     this.topicRequestId++;
     this.historyRequestId++;
+    this.historyPicker?.destroy();
+    this.historyPicker = null;
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
   }
   field(id) { return this.container?.querySelector(`#${id}`); }
   config() { return { brokers: this.field("kafkaBrokers").value.trim(), securityProtocol: "PLAINTEXT" }; }
+  setListeningButton(label = "Start listening", disabled = false, pressed = false) {
+    const button = this.field("kafkaListen");
+    if (!button) return;
+    button.textContent = label;
+    button.disabled = disabled;
+    button.setAttribute("aria-pressed", String(pressed));
+    button.setAttribute("aria-label", label);
+  }
+  toggleListening() { return this.listening ? this.stopListening() : this.startListening(); }
 
   async initializeJsonEditors() {
     try {
@@ -440,7 +454,7 @@ export class KafkaTool extends BaseTool {
     this.saveConnection();
     const config = this.config();
     const fromBeginning = this.field("kafkaFromBeginning").checked;
-    this.field("kafkaListen").disabled = true;
+    this.setListeningButton("Connecting…", true);
     this.message("kafkaListenStatus", "Connecting…");
     try {
       this.unlisten = [
@@ -449,6 +463,7 @@ export class KafkaTool extends BaseTool {
       ];
       if (this.stopRequested || !this.container) {
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
+        if (this.container) this.setListeningButton();
         return;
       }
       try {
@@ -457,21 +472,25 @@ export class KafkaTool extends BaseTool {
         if (!String(error).includes("Listener already running.")) throw error;
         this.message("kafkaListenStatus", "Restarting the previous listener…");
         await this.service.stop();
-        if (this.stopRequested || !this.container) return;
+        if (this.stopRequested || !this.container) {
+          if (this.container) this.setListeningButton();
+          return;
+        }
         await this.service.start(config, topic, fromBeginning);
       }
       if (this.stopRequested || !this.container) {
         await this.service.stop();
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
+        if (this.container) this.setListeningButton();
         return;
       }
       this.listening = true;
-      this.field("kafkaStop").disabled = false;
+      this.setListeningButton("Stop listening", false, true);
       this.field("kafkaListenHeading").textContent = `Listen to ${topic}`;
       this.message("kafkaListenStatus", "");
     } catch (error) {
       this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
-      if (this.field("kafkaListen")) this.field("kafkaListen").disabled = false;
+      this.setListeningButton();
       this.message("kafkaListenStatus", String(error), true);
     }
   }
@@ -559,13 +578,16 @@ export class KafkaTool extends BaseTool {
 
   async stopListening() {
     this.stopRequested = true;
-    if (!this.listening && !this.unlisten.length) return;
+    if (!this.listening && !this.unlisten.length) {
+      this.setListeningButton();
+      return;
+    }
     this.listening = false;
     this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
+    this.setListeningButton("Stopping…", true);
     try { await this.service.stop(); }
     catch (error) { this.message("kafkaListenStatus", String(error), true); }
-    if (this.field("kafkaListen")) this.field("kafkaListen").disabled = false;
-    if (this.field("kafkaStop")) this.field("kafkaStop").disabled = true;
+    this.setListeningButton();
     if (this.field("kafkaListenHeading")) this.field("kafkaListenHeading").textContent = "Listen";
     this.message("kafkaListenStatus", "");
   }

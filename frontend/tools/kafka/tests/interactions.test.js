@@ -11,6 +11,70 @@ describe("Kafka publish controls", () => {
     localStorage.clear();
   });
 
+  it("renders boolean options as accessible toggle controls", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    for (const id of ["kafkaBulk", "kafkaFromBeginning"]) {
+      const input = document.querySelector(`#${id}`);
+      expect(input.type).toBe("checkbox");
+      expect(input.closest(".switch")).not.toBeNull();
+      expect(input.nextElementSibling.classList.contains("slider")).toBe(true);
+    }
+    expect(document.querySelector("#kafkaListen").textContent).toBe("Start listening");
+    expect(document.querySelector("#kafkaListen").getAttribute("aria-pressed")).toBe("false");
+    expect(document.querySelector("#kafkaStop")).toBeNull();
+  });
+
+  it("uses a custom responsive history picker instead of a native datetime control", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const input = document.querySelector("#kafkaHistorySince");
+    const trigger = document.querySelector("#kafkaHistoryTrigger");
+    const calendar = document.querySelector("#kafkaHistoryCalendar");
+    expect(input.type).toBe("hidden");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    trigger.click();
+    expect(calendar.hidden).toBe(false);
+    expect(document.querySelectorAll("#kafkaHistoryDays .kafka-date-day")).toHaveLength(42);
+
+    const hours = document.querySelector("#kafkaHistoryHours");
+    const minutes = document.querySelector("#kafkaHistoryMinutes");
+    hours.value = "01";
+    minutes.value = "05";
+    hours.dispatchEvent(new Event("input", { bubbles: true }));
+    minutes.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#kafkaHistoryApply").click();
+
+    expect(input.value).toMatch(/T01:05$/);
+    expect(calendar.hidden).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("places the history picker above or below based on available space", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const trigger = document.querySelector("#kafkaHistoryTrigger");
+    const calendar = document.querySelector("#kafkaHistoryCalendar");
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({ top: 40, bottom: 84 });
+    vi.spyOn(calendar, "getBoundingClientRect").mockReturnValue({ height: 360 });
+
+    trigger.click();
+    expect(calendar.classList.contains("is-above")).toBe(false);
+    trigger.click();
+
+    trigger.getBoundingClientRect.mockReturnValue({ top: 600, bottom: 644 });
+    trigger.click();
+    expect(calendar.classList.contains("is-above")).toBe(true);
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
+  });
+
   it("sends one explicit bulk click once and locks the button until delivery", async () => {
     let finish;
     const service = { publish: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
@@ -179,7 +243,15 @@ describe("Kafka publish controls", () => {
     expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", true);
     expect(document.querySelector("#kafkaListenHeading").textContent).toBe("Listen to orders.test");
     expect(document.querySelector("#kafkaListenStatus").textContent).toBe("");
-    expect(document.querySelector("#kafkaStop").disabled).toBe(false);
+    const listenButton = document.querySelector("#kafkaListen");
+    expect(listenButton.textContent).toBe("Stop listening");
+    expect(listenButton.getAttribute("aria-pressed")).toBe("true");
+
+    listenButton.click();
+    await settle();
+    expect(service.stop).toHaveBeenCalledTimes(2);
+    expect(listenButton.textContent).toBe("Start listening");
+    expect(listenButton.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("loads a received message into Publish without sending or saving it", () => {
