@@ -6,15 +6,20 @@
       "order": 10
     },
     {
+      "id": "template",
+      "name": "Template",
+      "order": 15
+    },
+    {
       "id": "execute",
       "name": "Execute",
-      "order": 15,
+      "order": 20,
       "requiresTauri": true
     },
     {
       "id": "general",
       "name": "General",
-      "order": 20
+      "order": 30
     }
   ],
   "tools": [
@@ -116,14 +121,14 @@
     {
       "id": "html-template",
       "name": "HTML Template",
-      "category": "config",
+      "category": "template",
       "icon": "html",
       "order": 60
     },
     {
       "id": "splunk-template",
       "name": "Splunk Template",
-      "category": "config",
+      "category": "template",
       "icon": "splunk-template",
       "order": 70
     },

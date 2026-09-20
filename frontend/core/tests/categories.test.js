@@ -15,5 +15,15 @@ describe("tool categories", () => {
         .sort((a, b) => a.order - b.order)
         .map((tool) => tool.id),
     ).toEqual(["run-query", "run-batch", "redis-cache", "kafka"]);
+
+    expect(CATEGORIES.TEMPLATE).toBe("template");
+    expect(normalizeCategory("templates")).toBe(CATEGORIES.TEMPLATE);
+    expect(categorizeTool({ id: "html-template", category: "template" })).toBe(CATEGORIES.TEMPLATE);
+    expect(toolsConfig.categories.find((category) => category.id === CATEGORIES.TEMPLATE)?.name).toBe("Template");
+    expect(toolsConfig.tools.filter((tool) => tool.category === CATEGORIES.TEMPLATE).map((tool) => tool.id)).toEqual([
+      "html-template",
+      "splunk-template",
+    ]);
+    expect(toolsConfig.categories.map((category) => category.id)).toEqual(["config", "template", "execute", "general"]);
   });
 });

@@ -2,6 +2,7 @@
 export const CATEGORIES = {
   GENERAL: "general",
   CONFIG: "config",
+  TEMPLATE: "template",
   EXECUTE: "execute",
   JIRA: "jira",
 };
@@ -13,6 +14,9 @@ export function normalizeCategory(value) {
 
   const configAliases = ["config", "configuration", "settings", "admin", "setup"];
   if (configAliases.includes(v)) return CATEGORIES.CONFIG;
+
+  const templateAliases = ["template", "templates"];
+  if (templateAliases.includes(v)) return CATEGORIES.TEMPLATE;
 
   const executeAliases = ["execute", "jenkins"];
   if (executeAliases.includes(v)) return CATEGORIES.EXECUTE;
@@ -28,6 +32,7 @@ export function categorizeTool(tool) {
   if (!tool) return CATEGORIES.GENERAL;
   const base = normalizeCategory(tool.category);
   if (base === CATEGORIES.CONFIG) return CATEGORIES.CONFIG;
+  if (base === CATEGORIES.TEMPLATE) return CATEGORIES.TEMPLATE;
   if (base === CATEGORIES.EXECUTE) return CATEGORIES.EXECUTE;
   if (base === CATEGORIES.JIRA) return CATEGORIES.JIRA;
 

@@ -10,6 +10,7 @@ const MACOS_INSTALL_COMMAND = 'curl -fsSL "https://adtools.lolik.workers.dev/ins
 const TOOL_DEFINITIONS = buildToolDefinitions(toolsConfig?.tools || []);
 const TOOL_GROUPS = [
   { id: "config", label: "Configuration & SQL" },
+  { id: "template", label: "Template" },
   { id: "general", label: "Data & utilities" },
   { id: "execute", label: "Execute" },
 ];
