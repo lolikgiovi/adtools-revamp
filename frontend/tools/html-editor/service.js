@@ -304,3 +304,9 @@ export function renderVtlTemplate(template = "", values = {}) {
   if (!template) return template;
   return render(String(template), { ...buildContext(values), format: templateFormatter });
 }
+
+/** Return the preview source either with VTL evaluated or with the template syntax left untouched. */
+export function getPreviewContent(template = "", values = {}, mode = "rendered") {
+  const source = String(template ?? "");
+  return mode === "plain" ? source : renderVtlTemplate(source, values);
+}

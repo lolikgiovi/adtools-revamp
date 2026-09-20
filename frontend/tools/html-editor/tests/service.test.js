@@ -1,4 +1,4 @@
-import { buildVtlValuesExport, extractVtlVariables, getVtlValue, renderVtlTemplate, setVtlValue } from "../service.js";
+import { buildVtlValuesExport, extractVtlVariables, getPreviewContent, getVtlValue, renderVtlTemplate, setVtlValue } from "../service.js";
 
 describe("HTML editor VTL support", () => {
   it("detects references in output, directives, paths, and formatter arguments", () => {
@@ -48,6 +48,14 @@ $local $format.currency($price) $baseUrl`;
 
   it("supports flat dotted values as well as nested JSON", () => {
     expect(renderVtlTemplate("$user.name / $account.id", { "user.name": "Ayu", account: { id: 42 } })).toBe("Ayu / 42");
+  });
+
+  it("can leave VTL syntax untouched for a plain preview", () => {
+    const template = "<p>$user.name</p>#if($user.active)<strong>$title</strong>#end";
+    const values = { user: { name: "Dewi", active: true }, title: "Welcome" };
+
+    expect(getPreviewContent(template, values, "plain")).toBe(template);
+    expect(getPreviewContent(template, values, "rendered")).toBe("<p>Dewi</p><strong>Welcome</strong>");
   });
 
   it("implements the supplied TemplateFormatter methods", () => {

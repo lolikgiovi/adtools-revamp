@@ -43,7 +43,6 @@ export const HTMLTemplateToolTemplate = /* html */ `
 
       <div class="pane renderer-pane">
         <div class="pane-header">
-          <h3>Preview</h3>
           <div class="renderer-actions">
             <div id="envControls" class="env-controls" style="display:inline-flex;gap:.5rem;align-items:center;margin-right:.5rem;">
               <label for="envSelector" class="env-label">ENV:</label>
@@ -69,6 +68,18 @@ export const HTMLTemplateToolTemplate = /* html */ `
               hidden
             />
 
+            <div class="preview-mode-control">
+              <select
+                id="previewVtlModeSelect"
+                class="preview-vtl-mode-select"
+                aria-label="VTL preview mode"
+                title="Render VTL using the current values"
+              >
+                <option value="rendered">Render VTL</option>
+                <option value="plain">Show VTL plainly</option>
+              </select>
+            </div>
+
             <button
               id="btnWhitePreviewBg"
               class="btn btn-secondary btn-sm preview-bg-toggle"
@@ -76,7 +87,20 @@ export const HTMLTemplateToolTemplate = /* html */ `
               aria-pressed="false"
               title="Show a white background behind transparent HTML"
             >White BG</button>
-            <button id="btnReloadPreview" class="btn btn-secondary btn-sm" title="Reload Preview">Reload</button>
+            <button
+              id="btnReloadPreview"
+              class="btn btn-secondary btn-sm btn-icon-only"
+              type="button"
+              aria-label="Reload preview"
+              title="Reload preview"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15.7-6L21 9"></path>
+                <path d="M21 3v6h-6"></path>
+                <path d="M21 12a9 9 0 0 1-15.7 6L3 15"></path>
+                <path d="M3 21v-6h6"></path>
+              </svg>
+            </button>
           </div>
         </div>
         <div id="rendererSurface" class="renderer-surface">

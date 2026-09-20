@@ -12,8 +12,8 @@ import {
   debounce,
   deleteVtlValue,
   extractVtlVariables,
+  getPreviewContent,
   getVtlValue,
-  renderVtlTemplate,
   setVtlValue,
 } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -56,6 +56,8 @@ class HTMLTemplateTool extends BaseTool {
     this._envStorageKey = "tool:html-template:env";
     this._previewBackgroundStorageKey = "tool:html-template:preview-background";
     this.previewWhiteBackground = false;
+    this._previewVtlModeStorageKey = "tool:html-template:preview-vtl-mode";
+    this.previewVtlMode = "rendered";
     this._previewViewportStorageKey = "tool:html-template:preview-viewport";
     this.previewViewportMode = "responsive";
     this.previewViewportWidth = 390;
@@ -160,6 +162,7 @@ class HTMLTemplateTool extends BaseTool {
     this.bindToolEvents();
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
+    this.setupPreviewVtlMode();
     this.setupPreviewViewport();
     this.setupDebouncedRendering();
     this.initializeResizer();
@@ -607,6 +610,7 @@ class HTMLTemplateTool extends BaseTool {
         this.renderPreview(html, true);
         this.trackAnalytics("preview_reload", {
           duration_ms: Math.max(0, Date.now() - startedAt),
+          preview_mode: this.previewVtlMode,
           session_id: this.analyticsSessionId,
           input_source: this.inputSource,
           ...summarizeText(html, "input"),
@@ -647,6 +651,37 @@ class HTMLTemplateTool extends BaseTool {
         this.renderPreview(html);
       }
     }, 300);
+  }
+
+  setupPreviewVtlMode() {
+    const select = document.getElementById("previewVtlModeSelect");
+    if (!select) return;
+
+    try {
+      const saved = localStorage.getItem(this._previewVtlModeStorageKey);
+      if (saved === "plain" || saved === "rendered") this.previewVtlMode = saved;
+    } catch (_) {}
+
+    const syncControl = () => {
+      select.value = this.previewVtlMode;
+      select.title =
+        this.previewVtlMode === "plain" ? "Show the HTML template without rendering VTL" : "Render VTL using the current values";
+    };
+
+    select.addEventListener("change", () => {
+      this.previewVtlMode = select.value === "plain" ? "plain" : "rendered";
+      syncControl();
+      try {
+        localStorage.setItem(this._previewVtlModeStorageKey, this.previewVtlMode);
+      } catch (_) {}
+      this.renderPreview(this.editor?.getValue?.() || "", true);
+      this.trackAnalytics("preview_vtl_mode_change", {
+        mode: this.previewVtlMode,
+        ...this.getVtlAnalyticsMeta(this.editor?.getValue?.() || ""),
+      });
+    });
+
+    syncControl();
   }
 
   applyIframeSandbox() {
@@ -776,9 +811,9 @@ class HTMLTemplateTool extends BaseTool {
     this.applyIframeSandbox();
     this.applyPreviewBackground();
 
-    // Apply VTL substitutions before rendering
+    // Apply VTL substitutions only when the preview is in rendered mode.
     try {
-      const rendered = renderVtlTemplate(html, this.vtlValues);
+      const rendered = getPreviewContent(html, this.vtlValues, this.previewVtlMode);
 
       // Use srcdoc for atomic update and secure context
       iframe.srcdoc = rendered || "";

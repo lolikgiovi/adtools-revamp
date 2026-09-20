@@ -169,6 +169,33 @@ body.is-resizing * {
   white-space: nowrap;
 }
 
+.preview-mode-control {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.preview-mode-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.preview-vtl-mode-select {
+  width: fit-content;
+  min-width: 0;
+  max-width: min(12rem, 100%);
+  height: 1.875rem;
+  padding: 0 1.5rem 0 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-viewport-width {
   width: 4.75rem;
   height: 1.875rem;
