@@ -379,19 +379,36 @@
 }
 
 .redis-delete-confirmation {
+  position: fixed;
+  z-index: 500;
+  inset: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  margin: 14px 0 4px;
-  padding: 14px;
-  border: 1px solid hsl(var(--destructive) / 0.35);
-  border-radius: 12px;
-  background: hsl(var(--destructive) / 0.07);
+  place-items: center;
+  padding: 24px;
+  background: hsl(var(--background) / 0.72);
+  backdrop-filter: blur(4px);
 }
 
 .redis-delete-confirmation[hidden] {
   display: none;
+}
+
+.redis-delete-dialog {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 540px);
+  padding: 24px;
+  border: 1px solid hsl(var(--destructive) / 0.5);
+  border-radius: 16px;
+  background: hsl(var(--card));
+  box-shadow: 0 20px 60px hsl(0 0% 0% / 0.36);
+}
+
+.redis-delete-dialog-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
 }
 
 .redis-delete-mark {
@@ -422,6 +439,7 @@
 }
 .redis-delete-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -775,12 +793,14 @@
   .redis-search-form .btn {
     width: 100%;
   }
-  .redis-delete-confirmation {
-    grid-template-columns: auto 1fr;
+  .redis-delete-dialog {
+    padding: 20px;
   }
   .redis-delete-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .redis-delete-actions .btn {
+    flex: 1;
   }
   .redis-results-toolbar {
     align-items: flex-start;

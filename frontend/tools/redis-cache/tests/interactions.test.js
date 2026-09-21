@@ -52,6 +52,25 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector("#redisResults").getAttribute("role")).toBe("region");
   });
 
+  it("opens destructive confirmation as a modal dialog", () => {
+    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.keys = ["session:1"];
+    tool.resultPages = [tool.keys.slice()];
+    tool.activePattern = "*session*";
+    tool.scanComplete = true;
+    tool.renderResults();
+
+    document.querySelector('[data-action="clear"]').click();
+
+    const confirmation = document.querySelector("#redisDeleteConfirmation");
+    expect(confirmation.hidden).toBe(false);
+    expect(confirmation.getAttribute("role")).toBe("alertdialog");
+    expect(confirmation.getAttribute("aria-modal")).toBe("true");
+    expect(document.activeElement).toBe(document.querySelector("#redisConfirmDelete"));
+  });
+
   it("searches with SCAN, supports selection, and clears only after confirmation", async () => {
     const pageKeys = Array.from({ length: 10 }, (_, index) => `session:${index + 1}`);
     const nextPageKeys = Array.from({ length: 10 }, (_, index) => `session:${index + 11}`);

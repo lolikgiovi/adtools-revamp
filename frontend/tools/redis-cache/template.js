@@ -22,17 +22,21 @@ export const RedisCacheTemplate = /*html*/ `
         </form>
         <p id="redisSearchMessage" class="redis-search-message" role="status" aria-live="polite"></p>
 
-        <div id="redisDeleteConfirmation" class="redis-delete-confirmation" role="group" aria-labelledby="redisDeleteTitle" aria-describedby="redisDeleteDescription" hidden>
-          <div class="redis-delete-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 8v5"></path><path d="M12 17h.01"></path><path d="M10.3 3.8 2.5 17.3A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.7L13.7 3.8a2 2 0 0 0-3.4 0Z"></path></svg>
-          </div>
-          <div>
-            <h3 id="redisDeleteTitle">Clear selected cache keys?</h3>
-            <p id="redisDeleteDescription"></p>
-          </div>
-          <div class="redis-delete-actions">
-            <button id="redisCancelDelete" class="btn btn-secondary btn-sm" type="button">Cancel</button>
-            <button id="redisConfirmDelete" class="btn btn-danger btn-sm" type="button">Clear keys</button>
+        <div id="redisDeleteConfirmation" class="redis-delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="redisDeleteTitle" aria-describedby="redisDeleteDescription" hidden>
+          <div class="redis-delete-dialog" role="document">
+            <div class="redis-delete-dialog-body">
+              <div class="redis-delete-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 8v5"></path><path d="M12 17h.01"></path><path d="M10.3 3.8 2.5 17.3A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.7L13.7 3.8a2 2 0 0 0-3.4 0Z"></path></svg>
+              </div>
+              <div>
+                <h3 id="redisDeleteTitle">Clear selected cache keys?</h3>
+                <p id="redisDeleteDescription"></p>
+              </div>
+            </div>
+            <div class="redis-delete-actions">
+              <button id="redisCancelDelete" class="btn btn-secondary btn-sm" type="button">Cancel</button>
+              <button id="redisConfirmDelete" class="btn btn-danger btn-sm" type="button">Clear keys</button>
+            </div>
           </div>
         </div>
 

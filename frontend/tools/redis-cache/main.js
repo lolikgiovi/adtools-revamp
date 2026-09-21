@@ -71,10 +71,27 @@ export class RedisCacheTool extends BaseTool {
     this.container.querySelector("#redisCancelDelete")?.addEventListener("click", () => this.closeDeleteConfirmation());
     this.container.querySelector("#redisConfirmDelete")?.addEventListener("click", () => this.confirmDelete());
     this.container.querySelector("#redisDeleteConfirmation")?.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
+      const confirmation = event.currentTarget;
+      if (event.key === "Escape" && !this.busy) {
         event.preventDefault();
         this.closeDeleteConfirmation();
+        return;
       }
+      if (event.key !== "Tab") return;
+      const focusable = [...confirmation.querySelectorAll("button:not(:disabled)")];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    this.container.querySelector("#redisDeleteConfirmation")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget && !this.busy) this.closeDeleteConfirmation();
     });
     this.container.querySelector("#redisResults")?.addEventListener("click", (event) => this.handleResultAction(event));
     this.container.querySelector("#redisResults")?.addEventListener("change", (event) => this.handleResultSelection(event));
@@ -589,6 +606,8 @@ export class RedisCacheTool extends BaseTool {
       search.textContent = busy ? label : "Find keys";
     }
     if (testConnection) testConnection.disabled = busy || !this.config?.host;
+    const cancelDelete = this.container.querySelector("#redisCancelDelete");
+    if (cancelDelete) cancelDelete.disabled = busy;
     this.container.querySelector(".redis-cache-tool")?.setAttribute("aria-busy", String(busy));
     this.updateActionState();
   }
