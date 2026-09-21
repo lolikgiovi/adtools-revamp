@@ -84,6 +84,130 @@
   background: var(--redis-danger);
 }
 
+.redis-connection-diagnostics {
+  margin-top: 18px;
+  padding: 16px 18px 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--muted) / 0.22);
+}
+
+.redis-connection-diagnostics[hidden] {
+  display: none;
+}
+
+.redis-connection-diagnostics[data-state="error"] {
+  border-color: hsl(var(--destructive) / 0.42);
+}
+
+.redis-connection-diagnostics[data-state="success"] {
+  border-color: hsl(var(--success, 142 65% 36%) / 0.42);
+}
+
+.redis-diagnostic-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.redis-diagnostic-header h2 {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-size: 15px;
+}
+
+.redis-diagnostic-header p {
+  margin: 4px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.redis-diagnostic-outcome {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 15px;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+
+.redis-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 15px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.redis-diagnostic-grid > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.redis-diagnostic-grid dt {
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.redis-diagnostic-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 12px;
+}
+
+.redis-diagnostic-copy {
+  display: grid;
+  gap: 6px;
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.redis-diagnostic-copy[hidden],
+.redis-diagnostic-hint[hidden] {
+  display: none;
+}
+
+.redis-diagnostic-copy strong {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+
+.redis-diagnostic-copy code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.redis-diagnostic-hint {
+  margin: 14px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.redis-connection-diagnostics[data-state="success"] .redis-diagnostic-hint {
+  color: var(--redis-success);
+}
+
+.redis-connection-diagnostics[data-state="error"] .redis-diagnostic-hint {
+  color: hsl(var(--destructive));
+}
+
 @keyframes redis-pulse {
   50% {
     opacity: 0.35;
@@ -488,6 +612,9 @@
   .redis-cache-layout {
     grid-template-columns: 1fr;
   }
+  .redis-diagnostic-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .redis-favorites {
     padding: 26px 0 0;
     border-top: 1px solid hsl(var(--border));
@@ -501,6 +628,17 @@
   }
   .redis-connection-summary {
     grid-template-columns: auto 1fr auto;
+  }
+  .redis-diagnostic-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .redis-diagnostic-header .btn {
+    align-self: flex-start;
+  }
+  .redis-diagnostic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   #redisOpenSettings {
     grid-column: 2 / -1;

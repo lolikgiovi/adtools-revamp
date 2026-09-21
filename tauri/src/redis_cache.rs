@@ -1,6 +1,6 @@
 use redis::{Client, Commands, Connection, RedisError};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
@@ -26,6 +26,11 @@ pub struct RedisConfig {
 pub struct RedisConnectionStatus {
     ok: bool,
     message: String,
+    stage: String,
+    endpoint: String,
+    detail: Option<String>,
+    hint: Option<String>,
+    latency_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +93,16 @@ fn connection_url(config: &RedisConfig, credentials: &RedisCredentials) -> Resul
     ))
 }
 
+fn endpoint_label(config: &RedisConfig) -> String {
+    let host = config.host.trim();
+    let formatted_host = if host.contains(':') && !host.starts_with('[') {
+        format!("[{}]", host)
+    } else {
+        host.to_string()
+    };
+    format!("{}:{}", formatted_host, config.port)
+}
+
 fn connect(config: &RedisConfig) -> Result<Connection, String> {
     let credentials = load_credentials()?;
     let url = connection_url(config, &credentials)?;
@@ -104,17 +119,95 @@ fn connect(config: &RedisConfig) -> Result<Connection, String> {
     Ok(connection)
 }
 
-fn redis_error(error: RedisError) -> String {
-    let message = error.to_string();
-    if message.to_lowercase().contains("authentication")
-        || message.contains("NOAUTH")
-        || message.contains("WRONGPASS")
+fn diagnose_redis_error(detail: &str) -> (&'static str, &'static str, &'static str) {
+    let lower = detail.to_ascii_lowercase();
+    if lower.contains("authentication") || lower.contains("noauth") || lower.contains("wrongpass") {
+        (
+            "authentication",
+            "Redis authentication failed",
+            "Check the username and password in Settings. Leave the username blank when the server uses password-only authentication.",
+        )
+    } else if lower.contains("certificate") || lower.contains("tls") || lower.contains("ssl") {
+        (
+            "tls",
+            "Redis TLS negotiation failed",
+            "Confirm the server expects TLS, its certificate is trusted by this Mac, and the TLS setting matches the endpoint.",
+        )
+    } else if lower.contains("connection refused") || lower.contains("os error 61") {
+        (
+            "network",
+            "The Redis endpoint refused the TCP connection",
+            concat!(
+                "The host is reachable, but nothing is accepting Redis connections on this port. ",
+                "Verify Redis is running and listening on the configured host and port, then check firewall or VPN rules."
+            ),
+        )
+    } else if lower.contains("timed out") || lower.contains("timeout") {
+        (
+            "network",
+            "The Redis connection timed out",
+            "No response arrived before the timeout. Check the host, port, firewall, VPN route, and TLS setting.",
+        )
+    } else if lower.contains("could not resolve")
+        || lower.contains("failed to lookup")
+        || lower.contains("name or service not known")
+        || lower.contains("no address associated")
     {
-        "Redis authentication failed. Update the username or password in Settings.".to_string()
-    } else if message.to_lowercase().contains("timed out") {
-        "Redis connection timed out. Check the host, port, VPN, and TLS setting.".to_string()
+        (
+            "network",
+            "The Redis host could not be resolved",
+            "Check the hostname spelling and confirm DNS or VPN access from this Mac.",
+        )
+    } else if lower.contains("keychain") || lower.contains("credential") {
+        (
+            "credentials",
+            "Redis credentials could not be loaded",
+            "Check Keychain access for AD Tools, then save the Redis password again in Settings.",
+        )
+    } else if lower.contains("db index is out of range")
+        || lower.contains("invalid database")
+        || lower.contains("invalid db index")
+    {
+        (
+            "database",
+            "Redis rejected the configured database",
+            concat!(
+                "The server does not expose the selected database index. Set Redis Database to a valid index, commonly 0, ",
+                "or ask the Redis administrator to increase the configured database count."
+            ),
+        )
     } else {
-        format!("Redis error: {}", message)
+        (
+            "redis",
+            "The Redis connection check failed",
+            "Confirm the endpoint is a Redis server and review the server-side logs for the rejected connection.",
+        )
+    }
+}
+
+fn redis_error(error: RedisError) -> String {
+    let detail = error.to_string();
+    let (_, message, hint) = diagnose_redis_error(&detail);
+    format!("{}. {} Details: {}", message, hint, detail)
+}
+
+fn raw_diagnostic_detail(detail: &str) -> String {
+    detail
+        .rsplit_once(" Details: ")
+        .map(|(_, raw)| raw.to_string())
+        .unwrap_or_else(|| detail.to_string())
+}
+
+fn failed_connection_status(config: &RedisConfig, detail: String) -> RedisConnectionStatus {
+    let (stage, message, hint) = diagnose_redis_error(&detail);
+    RedisConnectionStatus {
+        ok: false,
+        message: message.to_string(),
+        stage: stage.to_string(),
+        endpoint: endpoint_label(config),
+        detail: Some(raw_diagnostic_detail(&detail)),
+        hint: Some(hint.to_string()),
+        latency_ms: None,
     }
 }
 
@@ -146,17 +239,48 @@ pub fn has_redis_credentials() -> Result<bool, String> {
 }
 
 fn test_connection(config: RedisConfig) -> Result<RedisConnectionStatus, String> {
-    let mut connection = connect(&config)?;
-    let response: String = redis::cmd("PING")
-        .query(&mut connection)
-        .map_err(redis_error)?;
+    if let Err(detail) = validate_config(&config) {
+        return Ok(RedisConnectionStatus {
+            ok: false,
+            message: "Invalid Redis connection settings".to_string(),
+            stage: "configuration".to_string(),
+            endpoint: endpoint_label(&config),
+            detail: Some(detail),
+            hint: Some("Check the host, port, and database values in Settings.".to_string()),
+            latency_ms: None,
+        });
+    }
+
+    let started = Instant::now();
+    let mut connection = match connect(&config) {
+        Ok(connection) => connection,
+        Err(detail) => return Ok(failed_connection_status(&config, detail)),
+    };
+    let response: String = match redis::cmd("PING").query(&mut connection) {
+        Ok(response) => response,
+        Err(error) => return Ok(failed_connection_status(&config, error.to_string())),
+    };
+    let latency_ms = Some(started.elapsed().as_millis().min(u64::MAX as u128) as u64);
     Ok(RedisConnectionStatus {
         ok: response == "PONG",
         message: if response == "PONG" {
-            "Connection successful".to_string()
+            "Redis replied to PING".to_string()
         } else {
-            format!("Unexpected PING response: {}", response)
+            "Redis returned an unexpected PING response".to_string()
         },
+        stage: "redis".to_string(),
+        endpoint: endpoint_label(&config),
+        detail: if response == "PONG" {
+            None
+        } else {
+            Some(format!("PING returned {}", response))
+        },
+        hint: if response == "PONG" {
+            None
+        } else {
+            Some("Confirm that the configured endpoint is a Redis server.".to_string())
+        },
+        latency_ms,
     })
 }
 
@@ -292,5 +416,34 @@ mod tests {
             username: "".to_string(),
         };
         assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn diagnoses_connection_refused_with_network_guidance() {
+        let (stage, message, hint) = diagnose_redis_error("Connection refused (os error 61)");
+        assert_eq!(stage, "network");
+        assert!(message.contains("refused"));
+        assert!(hint.contains("listening"));
+    }
+
+    #[test]
+    fn diagnoses_authentication_and_tls_failures_separately() {
+        assert_eq!(
+            diagnose_redis_error("WRONGPASS invalid password").0,
+            "authentication"
+        );
+        assert_eq!(
+            diagnose_redis_error("TLS certificate verify failed").0,
+            "tls"
+        );
+    }
+
+    #[test]
+    fn diagnoses_database_index_errors_separately() {
+        let (stage, message, hint) =
+            diagnose_redis_error("ResponseError: DB index is out of range");
+        assert_eq!(stage, "database");
+        assert!(message.contains("database"));
+        assert!(hint.contains("Database"));
     }
 }

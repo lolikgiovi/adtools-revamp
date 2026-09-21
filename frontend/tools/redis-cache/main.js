@@ -20,6 +20,7 @@ export class RedisCacheTool extends BaseTool {
     this.activePattern = "";
     this.pendingDeleteKeys = [];
     this.deleteTrigger = null;
+    this.connectionDiagnosticStage = null;
     this.busy = false;
   }
 
@@ -48,6 +49,7 @@ export class RedisCacheTool extends BaseTool {
     });
     this.container.querySelector("#redisLoadMore")?.addEventListener("click", () => this.search({ reset: false }));
     this.container.querySelector("#redisTestConnection")?.addEventListener("click", () => this.testConnection());
+    this.container.querySelector("#redisDismissDiagnostics")?.addEventListener("click", () => this.dismissConnectionDiagnostics());
     this.container.querySelector("#redisOpenSettings")?.addEventListener("click", () => this.openSettings());
     this.container.querySelector("#redisSelectAll")?.addEventListener("click", () => this.toggleSelectAll());
     this.container.querySelector("#redisClearSelected")?.addEventListener("click", () => this.requestDelete([...this.selectedKeys]));
@@ -93,16 +95,80 @@ export class RedisCacheTool extends BaseTool {
     try {
       const result = await this.service.testConnection(this.config);
       if (dot) dot.dataset.state = result?.ok ? "ready" : "error";
-      this.setMessage(result?.message || "Connection successful", result?.ok ? "success" : "error");
+      this.renderConnectionDiagnostics(result);
+      this.setMessage(result?.message || "Connection test failed", result?.ok ? "success" : "error");
     } catch (error) {
       if (dot) dot.dataset.state = "error";
-      this.setMessage(this.errorMessage(error), "error");
+      const detail = this.errorMessage(error);
+      this.renderConnectionDiagnostics({
+        ok: false,
+        message: "Connection test failed",
+        stage: "unknown",
+        endpoint: this.connectionEndpoint(),
+        detail,
+        hint: "Check the Redis settings and the native desktop connection bridge, then test again.",
+      });
+      this.setMessage(detail, "error");
     } finally {
       if (button) {
         button.textContent = original;
       }
       this.setBusy(false);
     }
+  }
+
+  renderConnectionDiagnostics(result = {}) {
+    const root = this.container.querySelector("#redisConnectionDiagnostics");
+    if (!root) return;
+    const diagnostic = result || {};
+    const ok = diagnostic.ok === true;
+    const stage = String(diagnostic.stage || (ok ? "redis" : "unknown"));
+    const stageLabel = stage.charAt(0).toUpperCase() + stage.slice(1);
+    const detail = String(diagnostic.detail || "").trim();
+    const hint = String(diagnostic.hint || "").trim();
+    const latencyValue = diagnostic.latency_ms;
+    const latency =
+      latencyValue !== null && latencyValue !== undefined && Number.isFinite(Number(latencyValue))
+        ? `${Number(latencyValue)} ms`
+        : "Not reached";
+    root.hidden = false;
+    root.dataset.state = ok ? "success" : "error";
+    this.connectionDiagnosticStage = stage;
+    this.setText(
+      "#redisConnectionDiagnosticSummary",
+      ok ? "The configured endpoint accepted a Redis PING." : `The check stopped at the ${stage} stage.`,
+    );
+    this.setText("#redisDiagnosticStatus", diagnostic.message || (ok ? "Redis replied to PING" : "Connection test failed"));
+    this.setText("#redisDiagnosticEndpoint", diagnostic.endpoint || this.connectionEndpoint());
+    this.setText("#redisDiagnosticDatabase", String(this.config?.database ?? "—"));
+    this.setText("#redisDiagnosticTransport", this.config?.tls ? "TLS (rediss://)" : "TCP (redis://)");
+    this.setText("#redisDiagnosticStage", stageLabel);
+    this.setText("#redisDiagnosticLatency", latency);
+    this.setText("#redisDiagnosticDetail", detail);
+    this.setText("#redisDiagnosticHint", hint);
+    const statusDot = this.container.querySelector("#redisDiagnosticStatusDot");
+    if (statusDot) statusDot.dataset.state = ok ? "ready" : "error";
+    const detailBlock = this.container.querySelector("#redisDiagnosticDetailBlock");
+    if (detailBlock) detailBlock.hidden = !detail;
+    const hintElement = this.container.querySelector("#redisDiagnosticHint");
+    if (hintElement) hintElement.hidden = !hint;
+  }
+
+  dismissConnectionDiagnostics() {
+    const diagnostics = this.container.querySelector("#redisConnectionDiagnostics");
+    if (diagnostics) diagnostics.hidden = true;
+    this.container.querySelector("#redisTestConnection")?.focus();
+  }
+
+  connectionEndpoint() {
+    const host = String(this.config?.host || "").trim();
+    const formattedHost = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+    return host ? `${formattedHost}:${this.config.port}` : "Not configured";
+  }
+
+  setText(selector, value) {
+    const element = this.container.querySelector(selector);
+    if (element) element.textContent = String(value ?? "");
   }
 
   async search({ reset }) {
@@ -408,7 +474,8 @@ export class RedisCacheTool extends BaseTool {
 
   openSettings() {
     try {
-      localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, "config.redis.host");
+      const focusKey = this.connectionDiagnosticStage === "database" ? "config.redis.database" : "config.redis.host";
+      localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, focusKey);
     } catch (_) {
       // Navigation still works when local storage is unavailable.
     }

@@ -53,10 +53,12 @@ describe("Redis cache service helpers", () => {
     });
     const config = { host: "cache.internal", port: 6379, database: 0, tls: false, username: "" };
 
+    await service.testConnection(config);
     await service.scan(config, "session:*", 12, 100);
     await service.deleteKeys(config, ["session:1"]);
 
     expect(calls).toEqual([
+      { command: "redis_test_connection", args: { config } },
       { command: "redis_scan_keys", args: { config, pattern: "session:*", cursor: 12, count: 100 } },
       { command: "redis_delete_keys", args: { config, keys: ["session:1"] } },
     ]);

@@ -92,6 +92,63 @@ describe("RedisCacheTool interactions", () => {
     await settle();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(false);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(false);
+    expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(false);
+    expect(document.querySelector("#redisDiagnosticStatus").textContent).toBe("Connection successful");
+  });
+
+  it("shows actionable diagnostics when the Redis endpoint refuses the connection", async () => {
+    const service = {
+      scan: vi.fn(),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn().mockResolvedValue({
+        ok: false,
+        message: "The Redis endpoint refused the TCP connection",
+        stage: "network",
+        endpoint: "cache.internal:6379",
+        detail: "Connection refused (os error 61)",
+        hint: "Verify Redis is running and listening on the configured host and port.",
+      }),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    document.querySelector("#redisTestConnection").click();
+    await settle();
+
+    const diagnostics = document.querySelector("#redisConnectionDiagnostics");
+    expect(diagnostics.hidden).toBe(false);
+    expect(diagnostics.dataset.state).toBe("error");
+    expect(document.querySelector("#redisDiagnosticStage").textContent).toBe("Network");
+    expect(document.querySelector("#redisDiagnosticDetail").textContent).toContain("os error 61");
+    expect(document.querySelector("#redisDiagnosticHint").textContent).toContain("listening");
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("refused");
+
+    document.querySelector("#redisDismissDiagnostics").click();
+    expect(diagnostics.hidden).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector("#redisTestConnection"));
+  });
+
+  it("focuses the database setting after a database-selection failure", async () => {
+    const service = {
+      scan: vi.fn(),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn().mockResolvedValue({
+        ok: false,
+        message: "Redis rejected the configured database",
+        stage: "database",
+        endpoint: "cache.internal:6379",
+        detail: "DB index is out of range",
+        hint: "Set Redis Database to a valid index, commonly 0.",
+      }),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    document.querySelector("#redisTestConnection").click();
+    await settle();
+    document.querySelector("#redisOpenSettings").click();
+
+    expect(localStorage.getItem("settings.focus")).toBe("config.redis.database");
   });
 
   it("closes delete confirmation with Escape and restores focus to its trigger", async () => {

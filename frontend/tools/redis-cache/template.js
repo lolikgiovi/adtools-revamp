@@ -15,6 +15,53 @@ export const RedisCacheTemplate = /*html*/ `
       </div>
     </header>
 
+    <section
+      id="redisConnectionDiagnostics"
+      class="redis-connection-diagnostics"
+      aria-labelledby="redisConnectionDiagnosticsHeading"
+      aria-live="polite"
+      hidden
+    >
+      <div class="redis-diagnostic-header">
+        <div>
+          <h2 id="redisConnectionDiagnosticsHeading">Connection diagnostics</h2>
+          <p id="redisConnectionDiagnosticSummary"></p>
+        </div>
+        <button id="redisDismissDiagnostics" class="btn btn-ghost btn-sm" type="button">Dismiss</button>
+      </div>
+      <div class="redis-diagnostic-outcome">
+        <span id="redisDiagnosticStatusDot" class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
+        <strong id="redisDiagnosticStatus"></strong>
+      </div>
+      <dl class="redis-diagnostic-grid">
+        <div>
+          <dt>Endpoint</dt>
+          <dd id="redisDiagnosticEndpoint"></dd>
+        </div>
+        <div>
+          <dt>Database</dt>
+          <dd id="redisDiagnosticDatabase"></dd>
+        </div>
+        <div>
+          <dt>Transport</dt>
+          <dd id="redisDiagnosticTransport"></dd>
+        </div>
+        <div>
+          <dt>Failure stage</dt>
+          <dd id="redisDiagnosticStage"></dd>
+        </div>
+        <div>
+          <dt>Round trip</dt>
+          <dd id="redisDiagnosticLatency"></dd>
+        </div>
+      </dl>
+      <div id="redisDiagnosticDetailBlock" class="redis-diagnostic-copy" hidden>
+        <strong>Diagnostic detail</strong>
+        <code id="redisDiagnosticDetail"></code>
+      </div>
+      <p id="redisDiagnosticHint" class="redis-diagnostic-hint" hidden></p>
+    </section>
+
     <main class="redis-cache-layout">
       <section class="redis-key-workspace" aria-labelledby="redisSearchHeading">
         <div class="redis-section-heading">
