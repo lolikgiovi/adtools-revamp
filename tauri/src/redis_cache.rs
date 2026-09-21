@@ -8,10 +8,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_SCAN_COUNT: usize = 200;
 const MAX_DELETE_KEYS: usize = 200;
 const MAX_VALUE_BYTES: usize = 512 * 1024;
-const MAX_VALUE_SEARCH_BYTES: usize = 256 * 1024;
 const MAX_VALUE_COLLECTION_ITEMS: usize = 200;
-const MAX_VALUE_SEARCH_MATCHES: usize = 10;
-const MAX_VALUE_SEARCH_INSPECTED: usize = 500;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct RedisCredentials {
@@ -60,15 +57,6 @@ pub struct RedisValueResult {
     value: Option<JsonValue>,
     supported: bool,
     truncated: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RedisValueSearchResult {
-    cursor: u64,
-    keys: Vec<String>,
-    inspected: usize,
-    truncated_values: usize,
-    unsupported_values: usize,
 }
 
 fn validate_config(config: &RedisConfig) -> Result<(), String> {
@@ -620,108 +608,6 @@ pub async fn redis_get_value(config: RedisConfig, key: String) -> Result<RedisVa
     tauri::async_runtime::spawn_blocking(move || get_value(config, key))
         .await
         .map_err(|error| format!("Redis value task failed: {}", error))?
-}
-
-fn search_values(
-    config: RedisConfig,
-    pattern: String,
-    query: String,
-    cursor: u64,
-    count: usize,
-) -> Result<RedisValueSearchResult, String> {
-    let pattern = pattern.trim();
-    let query = query.trim();
-    if pattern.is_empty() {
-        return Err("Enter a Redis key pattern".to_string());
-    }
-    if pattern.len() > 512 {
-        return Err("Redis key pattern is too long".to_string());
-    }
-    if query.is_empty() {
-        return Err("Enter text to search for in Redis values".to_string());
-    }
-    if query.len() > 256 {
-        return Err("Redis value search text is too long".to_string());
-    }
-
-    let requested_matches = count.clamp(1, MAX_VALUE_SEARCH_MATCHES);
-    let query_lower = query.to_lowercase();
-    let mut connection = connect(&config)?;
-    let mut next_cursor = cursor;
-    let mut keys = Vec::new();
-    let mut inspected = 0;
-    let mut truncated_values = 0;
-    let mut unsupported_values = 0;
-
-    loop {
-        let response: Value = redis::cmd("SCAN")
-            .arg(next_cursor)
-            .arg("MATCH")
-            .arg(pattern)
-            .arg("COUNT")
-            .arg(MAX_SCAN_COUNT)
-            .query(&mut connection)
-            .map_err(redis_error)?;
-        let (scan_cursor, candidate_keys) = redis_scan_items(response)?;
-        next_cursor = scan_cursor;
-
-        for key in candidate_keys {
-            inspected += 1;
-            let kind = redis_value_kind(&mut connection, &redis_value_to_text(&key))?;
-            let key = redis_value_to_text(&key);
-            if kind == "none" {
-                continue;
-            }
-            let (value, truncated, supported) =
-                read_value_payload(&mut connection, &key, &kind, MAX_VALUE_SEARCH_BYTES)?;
-            if truncated {
-                truncated_values += 1;
-            }
-            if !supported {
-                unsupported_values += 1;
-                continue;
-            }
-            let text = value
-                .map(|value| match value {
-                    JsonValue::String(value) => value,
-                    value => serde_json::to_string(&value).unwrap_or_default(),
-                })
-                .unwrap_or_default();
-            if text.to_lowercase().contains(&query_lower) {
-                keys.push(key);
-            }
-        }
-
-        if next_cursor == 0
-            || keys.len() >= requested_matches
-            || inspected >= MAX_VALUE_SEARCH_INSPECTED
-        {
-            break;
-        }
-    }
-
-    Ok(RedisValueSearchResult {
-        cursor: next_cursor,
-        keys,
-        inspected,
-        truncated_values,
-        unsupported_values,
-    })
-}
-
-#[tauri::command]
-pub async fn redis_search_values(
-    config: RedisConfig,
-    pattern: String,
-    query: String,
-    cursor: u64,
-    count: usize,
-) -> Result<RedisValueSearchResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        search_values(config, pattern, query, cursor, count)
-    })
-    .await
-    .map_err(|error| format!("Redis value search task failed: {}", error))?
 }
 
 fn delete_keys(config: RedisConfig, keys: Vec<String>) -> Result<RedisDeleteResult, String> {

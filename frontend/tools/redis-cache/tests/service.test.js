@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   chunkRedisKeys,
   normalizeRedisPattern,
-  normalizeRedisValueQuery,
   readFavorites,
   readRedisConfig,
   REDIS_FAVORITES_STORAGE_KEY,
@@ -20,8 +19,6 @@ describe("Redis cache service helpers", () => {
     expect(normalizeRedisPattern(" session:* ")).toBe("session:*");
     expect(normalizeRedisPattern("user:?")).toBe("user:?");
     expect(normalizeRedisPattern(" ")).toBe("");
-    expect(normalizeRedisValueQuery("  customer-42  ")).toBe("customer-42");
-    expect(normalizeRedisValueQuery(" ")).toBe("");
   });
 
   it("loads one connection from settings with bounded numeric fallbacks", () => {
@@ -61,14 +58,12 @@ describe("Redis cache service helpers", () => {
     await service.testConnection(config);
     await service.scan(config, "session:*", 12, 100);
     await service.getValue(config, "session:1");
-    await service.searchValues(config, "*", "customer-42", 0, 10);
     await service.deleteKeys(config, ["session:1"]);
 
     expect(calls).toEqual([
       { command: "redis_test_connection", args: { config } },
       { command: "redis_scan_keys", args: { config, pattern: "session:*", cursor: 12, count: 100 } },
       { command: "redis_get_value", args: { config, key: "session:1" } },
-      { command: "redis_search_values", args: { config, pattern: "*", query: "customer-42", cursor: 0, count: 10 } },
       { command: "redis_delete_keys", args: { config, keys: ["session:1"] } },
     ]);
   });

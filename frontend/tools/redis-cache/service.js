@@ -17,10 +17,6 @@ export function normalizeRedisPattern(value) {
   return hasGlob ? normalized : `*${normalized}*`;
 }
 
-export function normalizeRedisValueQuery(value) {
-  return String(value || "").trim().slice(0, 256);
-}
-
 export function readRedisConfig(storage = localStorage) {
   const host = String(storage.getItem(CONFIG_KEYS.host) || "").trim();
   const port = Number(storage.getItem(CONFIG_KEYS.port) || 6379);
@@ -80,10 +76,6 @@ export class RedisCacheService {
 
   getValue(config, key) {
     return this.call("redis_get_value", { config, key });
-  }
-
-  searchValues(config, pattern, query, cursor = 0, count = 10) {
-    return this.call("redis_search_values", { config, pattern, query, cursor, count });
   }
 
   deleteKeys(config, keys) {

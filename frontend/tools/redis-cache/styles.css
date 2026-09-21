@@ -307,47 +307,6 @@
   letter-spacing: 0.03em;
 }
 
-.redis-search-tabs-row {
-  height: 3.25rem;
-  min-height: 3.25rem;
-  align-items: stretch;
-  box-sizing: border-box;
-  padding: 0 0.75rem;
-  overflow: hidden;
-}
-
-.redis-search-tabs-row.tabs-container {
-  background: inherit;
-}
-
-.redis-search-tabs {
-  height: 100%;
-  align-items: stretch;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.redis-search-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.redis-search-tabs-row > .redis-scan-badge {
-  align-self: center;
-  margin-bottom: 1px;
-  margin-left: auto;
-}
-
-.redis-search-tab {
-  flex: 0 0 auto;
-  height: 100%;
-  white-space: nowrap;
-}
-
-.redis-search-panel[hidden] {
-  display: none;
-}
-
 .redis-search-panel {
   margin-top: 14px;
 }
@@ -945,18 +904,6 @@
   }
   .redis-search-form {
     grid-template-columns: 1fr;
-  }
-  .redis-search-tabs-row.tabs-container {
-    flex-direction: row;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .redis-search-tabs {
-    width: auto;
-  }
-  .redis-search-tab {
-    padding: 6px 10px;
-    font-size: 0.875rem;
   }
   .redis-search-form .btn {
     width: 100%;

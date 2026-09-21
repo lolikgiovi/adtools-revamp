@@ -32,34 +32,16 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector(".redis-connection-panel #redisTestConnection")).not.toBeNull();
   });
 
-  it("switches between separate Search Key and Search Value tabs", () => {
-    const service = { scan: vi.fn(), searchValues: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
+  it("renders the key search without value-search controls", () => {
+    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
     const tool = new RedisCacheTool(null, service);
     tool.mount(document.querySelector("#tool"));
 
-    expect(document.querySelector("#redisSearchHeading")).toBeNull();
-    expect(document.querySelector(".redis-search-tabs-row")?.classList.contains("tabs-container")).toBe(true);
-    expect(document.querySelector(".redis-search-tabs-row #redisSearchTabs")?.classList.contains("tabs-left")).toBe(true);
-    expect(document.querySelector(".redis-search-tabs-row .redis-scan-badge").textContent).toContain("10 results per page");
-
-    const keyTab = document.querySelector("#redisKeySearchTab");
-    const valueTab = document.querySelector("#redisValueSearchTab");
-    expect(keyTab?.classList.contains("tab-button")).toBe(true);
-    expect(keyTab?.classList.contains("active")).toBe(true);
-    expect(keyTab.getAttribute("aria-selected")).toBe("true");
-    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(false);
-    expect(document.querySelector("#redisValueSearchPanel").hidden).toBe(true);
-
-    valueTab.click();
-    expect(valueTab.getAttribute("aria-selected")).toBe("true");
-    expect(valueTab.classList.contains("active")).toBe(true);
-    expect(keyTab.classList.contains("active")).toBe(false);
-    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(true);
-    expect(document.querySelector("#redisValueSearchPanel").hidden).toBe(false);
-
-    keyTab.click();
-    expect(keyTab.getAttribute("aria-selected")).toBe("true");
-    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(false);
+    expect(document.querySelector("#redisSearchHeading").textContent).toBe("Find cache keys");
+    expect(document.querySelector("#redisKeySearchForm")).not.toBeNull();
+    expect(document.querySelector("#redisValueSearchTab")).toBeNull();
+    expect(document.querySelector("#redisValueSearchForm")).toBeNull();
+    expect(document.querySelector("#redisValueSearchButton")).toBeNull();
   });
 
   it("keeps pagination at the bottom of the results container", () => {
@@ -172,38 +154,9 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
   });
 
-  it("keeps value search separate from key search and reports bounded inspection", async () => {
-    const service = {
-      scan: vi.fn(),
-      searchValues: vi.fn().mockResolvedValue({
-        cursor: 0,
-        keys: ["session:1"],
-        inspected: 42,
-        truncated_values: 1,
-        unsupported_values: 0,
-      }),
-      deleteKeys: vi.fn(),
-      testConnection: vi.fn(),
-    };
-    const tool = new RedisCacheTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-
-    document.querySelector("#redisValueSearchTab").click();
-    document.querySelector("#redisValueQueryInput").value = "customer-42";
-    document.querySelector("#redisValueSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await settle();
-
-    expect(service.scan).not.toHaveBeenCalled();
-    expect(service.searchValues).toHaveBeenCalledWith(expect.objectContaining({ database: 2 }), "*", "customer-42", 0, 10);
-    expect(document.querySelector("#redisAppliedPattern").textContent).toBe("Value: customer-42 · all keys");
-    expect(document.querySelector("#redisSearchMessage").textContent).toContain("Inspected 42 keys");
-    expect(document.querySelector("#redisSearchMessage").textContent).toContain("1 large value was sampled");
-  });
-
   it("opens a read-only formatted JSON value inspector", async () => {
     const service = {
       scan: vi.fn(),
-      searchValues: vi.fn(),
       getValue: vi.fn().mockResolvedValue({
         key: "session:1",
         kind: "string",
@@ -298,13 +251,11 @@ describe("RedisCacheTool interactions", () => {
 
     document.querySelector("#redisTestConnection").click();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(true);
-    expect(document.querySelector("#redisValueSearchButton").disabled).toBe(true);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(true);
 
     finishTest({ ok: true, message: "Connection successful" });
     await settle();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(false);
-    expect(document.querySelector("#redisValueSearchButton").disabled).toBe(false);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(false);
     expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(true);
     expect(document.querySelector("#redisConnectionDiagnostics").dataset.state).toBe("success");
