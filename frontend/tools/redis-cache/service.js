@@ -12,7 +12,9 @@ export const REDIS_DELETE_BATCH_SIZE = 100;
 export function normalizeRedisPattern(value) {
   const pattern = String(value || "").trim();
   if (!pattern) return "";
-  return pattern.includes("*") || pattern.includes("?") || pattern.includes("[") ? pattern : `*${pattern}*`;
+  const hasGlob = pattern.includes("*") || pattern.includes("?") || pattern.includes("[");
+  const normalized = pattern.replace(/\s+/g, "*");
+  return hasGlob ? normalized : `*${normalized}*`;
 }
 
 export function readRedisConfig(storage = localStorage) {

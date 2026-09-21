@@ -14,6 +14,8 @@ describe("Redis cache service helpers", () => {
 
   it("turns plain text into a contains pattern and preserves Redis glob patterns", () => {
     expect(normalizeRedisPattern("customer:42")).toBe("*customer:42*");
+    expect(normalizeRedisPattern("a b")).toBe("*a*b*");
+    expect(normalizeRedisPattern("  a   b  ")).toBe("*a*b*");
     expect(normalizeRedisPattern(" session:* ")).toBe("session:*");
     expect(normalizeRedisPattern("user:?")).toBe("user:?");
     expect(normalizeRedisPattern(" ")).toBe("");

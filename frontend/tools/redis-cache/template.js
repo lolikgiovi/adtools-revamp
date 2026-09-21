@@ -5,7 +5,7 @@ export const RedisCacheTemplate = /*html*/ `
         <div class="redis-section-heading">
           <div>
             <h2 id="redisSearchHeading">Find cache keys</h2>
-            <p>Plain text becomes a contains search. Redis glob patterns such as <code>session:*</code> are used as entered.</p>
+            <p>Plain text becomes a contains search. Separate terms with spaces. Redis glob patterns such as <code>session:*</code> are used as entered.</p>
           </div>
           <span class="redis-scan-badge">10 results per page · SCAN 100/request</span>
         </div>
