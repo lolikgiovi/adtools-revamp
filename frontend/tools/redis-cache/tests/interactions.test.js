@@ -20,11 +20,44 @@ describe("RedisCacheTool interactions", () => {
     localStorage.setItem("config.redis.database", "2");
   });
 
+  it("keeps search primary and stacks connection above saved keys in the side rail", () => {
+    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    const sidebar = document.querySelector(".redis-sidebar");
+    expect(document.querySelector(".redis-cache-tool h1")).toBeNull();
+    expect(sidebar?.firstElementChild?.classList.contains("redis-connection-panel")).toBe(true);
+    expect(sidebar?.lastElementChild?.classList.contains("redis-favorites")).toBe(true);
+    expect(document.querySelector(".redis-connection-panel #redisTestConnection")).not.toBeNull();
+  });
+
+  it("keeps pagination at the bottom of the results container", () => {
+    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.keys = Array.from({ length: 10 }, (_, index) => `session:${index + 1}`);
+    tool.resultPages = [tool.keys.slice()];
+    tool.activePattern = "*session*";
+    tool.cursor = 44;
+    tool.scanComplete = false;
+    tool.renderResults();
+
+    const pagination = document.querySelector("#redisPagination");
+    expect(document.querySelector("#redisLoadMore")).toBeNull();
+    expect(pagination.hidden).toBe(false);
+    expect(document.querySelector("#redisResults").nextElementSibling).toBe(pagination);
+    expect(pagination.querySelector('[data-redis-page="1"]').getAttribute("aria-current")).toBe("page");
+    expect(pagination.querySelector('[data-redis-page="previous"]').disabled).toBe(true);
+    expect(document.querySelector("#redisResults").getAttribute("role")).toBe("region");
+  });
+
   it("searches with SCAN, supports selection, and clears only after confirmation", async () => {
     const pageKeys = Array.from({ length: 10 }, (_, index) => `session:${index + 1}`);
+    const nextPageKeys = Array.from({ length: 10 }, (_, index) => `session:${index + 11}`);
     const service = {
-      scan: vi.fn().mockResolvedValue({ cursor: 44, keys: pageKeys }),
-      deleteKeys: vi.fn().mockResolvedValue({ deleted: pageKeys.length, command: "UNLINK" }),
+      scan: vi.fn().mockResolvedValueOnce({ cursor: 44, keys: pageKeys }).mockResolvedValueOnce({ cursor: 0, keys: nextPageKeys }),
+      deleteKeys: vi.fn().mockResolvedValue({ deleted: nextPageKeys.length, command: "UNLINK" }),
       testConnection: vi.fn(),
     };
     const tool = new RedisCacheTool(null, service);
@@ -37,7 +70,18 @@ describe("RedisCacheTool interactions", () => {
 
     expect(service.scan).toHaveBeenCalledWith(expect.objectContaining({ database: 2 }), "*session*", 0, 100);
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
-    expect(document.querySelector("#redisLoadMore").hidden).toBe(false);
+    expect(document.querySelector("#redisPagination").hidden).toBe(false);
+
+    document.querySelector('[data-redis-page="next"]').click();
+    await settle();
+    expect(service.scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ database: 2 }), "*session*", 44, 100);
+    expect(document.querySelector('[data-redis-page="2"]').getAttribute("aria-current")).toBe("page");
+
+    document.querySelector('[data-redis-page="1"]').click();
+    await settle();
+    expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:1");
+    document.querySelector('[data-redis-page="2"]').click();
+    await settle();
 
     for (const checkbox of document.querySelectorAll(".redis-key-select")) {
       checkbox.checked = true;
@@ -51,7 +95,7 @@ describe("RedisCacheTool interactions", () => {
     document.querySelector("#redisConfirmDelete").click();
     await settle();
 
-    expect(service.deleteKeys).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), pageKeys);
+    expect(service.deleteKeys).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), nextPageKeys);
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(0);
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("10 keys cleared with UNLINK");
   });
@@ -60,10 +104,7 @@ describe("RedisCacheTool interactions", () => {
     const firstScanKeys = ["session:1"];
     const remainingKeys = Array.from({ length: 9 }, (_, index) => `session:${index + 2}`);
     const service = {
-      scan: vi
-        .fn()
-        .mockResolvedValueOnce({ cursor: 44, keys: firstScanKeys })
-        .mockResolvedValueOnce({ cursor: 0, keys: remainingKeys }),
+      scan: vi.fn().mockResolvedValueOnce({ cursor: 44, keys: firstScanKeys }).mockResolvedValueOnce({ cursor: 0, keys: remainingKeys }),
       deleteKeys: vi.fn(),
       testConnection: vi.fn(),
     };
@@ -78,8 +119,38 @@ describe("RedisCacheTool interactions", () => {
     expect(service.scan).toHaveBeenNthCalledWith(1, expect.objectContaining({ database: 2 }), "*session*", 0, 100);
     expect(service.scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ database: 2 }), "*session*", 44, 100);
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
-    expect(document.querySelector("#redisLoadMore").hidden).toBe(true);
+    expect(document.querySelector("#redisPagination").hidden).toBe(true);
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
+  });
+
+  it("keeps buffered scan matches available across numbered pages", async () => {
+    const allKeys = Array.from({ length: 25 }, (_, index) => `session:${index + 1}`);
+    const service = {
+      scan: vi.fn().mockResolvedValue({ cursor: 0, keys: allKeys }),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn(),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    const input = document.querySelector("#redisPatternInput");
+    input.value = "session";
+    document.querySelector("#redisSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(service.scan).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("#redisPaginationSummary").textContent).toBe("Page 1 of 1+");
+    expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:1");
+
+    document.querySelector('[data-redis-page="next"]').click();
+    await settle();
+    expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:11");
+
+    document.querySelector('[data-redis-page="next"]').click();
+    await settle();
+    expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:21");
+    expect(document.querySelector('[data-redis-page="next"]').disabled).toBe(true);
+    expect(document.querySelector("#redisPaginationSummary").textContent).toBe("Page 3 of 3");
   });
 
   it("keeps a favorite after clearing it so recurring cache keys remain reusable", async () => {
@@ -119,7 +190,8 @@ describe("RedisCacheTool interactions", () => {
     await settle();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(false);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(false);
-    expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(false);
+    expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(true);
+    expect(document.querySelector("#redisConnectionDiagnostics").dataset.state).toBe("success");
     expect(document.querySelector("#redisDiagnosticStatus").textContent).toBe("Connection successful");
   });
 

@@ -1,67 +1,5 @@
 export const RedisCacheTemplate = /*html*/ `
   <div class="redis-cache-tool">
-    <header class="redis-cache-header">
-      <div>
-        <h1>Redis Cache</h1>
-      </div>
-      <div class="redis-connection-summary" aria-live="polite">
-        <span class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
-        <div>
-          <strong id="redisConnectionLabel">Not configured</strong>
-          <span id="redisConnectionDetail">Add the Redis connection in Settings.</span>
-        </div>
-        <button id="redisTestConnection" class="btn btn-secondary btn-sm" type="button">Test</button>
-        <button id="redisOpenSettings" class="btn btn-ghost btn-sm" type="button">Settings</button>
-      </div>
-    </header>
-
-    <section
-      id="redisConnectionDiagnostics"
-      class="redis-connection-diagnostics"
-      aria-labelledby="redisConnectionDiagnosticsHeading"
-      aria-live="polite"
-      hidden
-    >
-      <div class="redis-diagnostic-header">
-        <div>
-          <h2 id="redisConnectionDiagnosticsHeading">Connection diagnostics</h2>
-          <p id="redisConnectionDiagnosticSummary"></p>
-        </div>
-        <button id="redisDismissDiagnostics" class="btn btn-ghost btn-sm" type="button">Dismiss</button>
-      </div>
-      <div class="redis-diagnostic-outcome">
-        <span id="redisDiagnosticStatusDot" class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
-        <strong id="redisDiagnosticStatus"></strong>
-      </div>
-      <dl class="redis-diagnostic-grid">
-        <div>
-          <dt>Endpoint</dt>
-          <dd id="redisDiagnosticEndpoint"></dd>
-        </div>
-        <div>
-          <dt>Database</dt>
-          <dd id="redisDiagnosticDatabase"></dd>
-        </div>
-        <div>
-          <dt>Transport</dt>
-          <dd id="redisDiagnosticTransport"></dd>
-        </div>
-        <div>
-          <dt>Failure stage</dt>
-          <dd id="redisDiagnosticStage"></dd>
-        </div>
-        <div>
-          <dt>Round trip</dt>
-          <dd id="redisDiagnosticLatency"></dd>
-        </div>
-      </dl>
-      <div id="redisDiagnosticDetailBlock" class="redis-diagnostic-copy" hidden>
-        <strong>Diagnostic detail</strong>
-        <code id="redisDiagnosticDetail"></code>
-      </div>
-      <p id="redisDiagnosticHint" class="redis-diagnostic-hint" hidden></p>
-    </section>
-
     <main class="redis-cache-layout">
       <section class="redis-key-workspace" aria-labelledby="redisSearchHeading">
         <div class="redis-section-heading">
@@ -109,25 +47,96 @@ export const RedisCacheTemplate = /*html*/ `
           </div>
         </div>
 
-        <div id="redisResults" class="redis-results" aria-live="polite">
+        <div id="redisResults" class="redis-results" role="region" aria-label="Redis key results" aria-live="polite" tabindex="0">
           <div class="redis-empty-state">
             <svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="13" rx="15" ry="6"></ellipse><path d="M9 13v10c0 3.3 6.7 6 15 6s15-2.7 15-6V13"></path><path d="M9 23v10c0 3.3 6.7 6 15 6 4.1 0 7.8-.7 10.5-1.9"></path><path d="m36 33 6 6m0-6-6 6"></path></svg>
             <h3>Search the keyspace</h3>
             <p>Results appear here in bounded pages. No values are fetched.</p>
           </div>
         </div>
-        <button id="redisLoadMore" class="btn btn-secondary redis-load-more" type="button" hidden>Scan next page</button>
+
+        <nav id="redisPagination" class="redis-pagination" aria-label="Search result pages" hidden></nav>
       </section>
 
-      <aside class="redis-favorites" aria-labelledby="redisFavoritesHeading">
-        <div class="redis-section-heading redis-favorites-heading">
-          <div>
-            <h2 id="redisFavoritesHeading">Favorite keys</h2>
-            <p>Saved on this device for quick clearing.</p>
+      <aside class="redis-sidebar" aria-label="Redis connection and saved keys">
+        <section class="redis-connection-panel" aria-labelledby="redisConnectionHeading">
+          <div class="redis-section-heading redis-connection-heading">
+            <div>
+              <h2 id="redisConnectionHeading">Connection</h2>
+              <p>Test the configured Redis endpoint before searching.</p>
+            </div>
           </div>
-          <span id="redisFavoritesCount" class="redis-favorites-count">0</span>
-        </div>
-        <div id="redisFavoritesList" class="redis-favorites-list"></div>
+
+          <div class="redis-connection-summary" aria-live="polite">
+            <span class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
+            <div>
+              <strong id="redisConnectionLabel">Not configured</strong>
+              <span id="redisConnectionDetail">Add the Redis connection in Settings.</span>
+            </div>
+          </div>
+          <div class="redis-connection-actions">
+            <button id="redisTestConnection" class="btn btn-primary btn-sm" type="button">Test connection</button>
+            <button id="redisOpenSettings" class="btn btn-ghost btn-sm" type="button">Settings</button>
+          </div>
+
+          <section
+            id="redisConnectionDiagnostics"
+            class="redis-connection-diagnostics"
+            aria-labelledby="redisConnectionDiagnosticsHeading"
+            aria-live="polite"
+            hidden
+          >
+            <div class="redis-diagnostic-header">
+              <div>
+                <h3 id="redisConnectionDiagnosticsHeading">Connection diagnostics</h3>
+                <p id="redisConnectionDiagnosticSummary"></p>
+              </div>
+              <button id="redisDismissDiagnostics" class="btn btn-ghost btn-sm" type="button">Dismiss</button>
+            </div>
+            <div class="redis-diagnostic-outcome">
+              <span id="redisDiagnosticStatusDot" class="redis-status-dot" data-state="idle" aria-hidden="true"></span>
+              <strong id="redisDiagnosticStatus"></strong>
+            </div>
+            <dl class="redis-diagnostic-grid">
+              <div>
+                <dt>Endpoint</dt>
+                <dd id="redisDiagnosticEndpoint"></dd>
+              </div>
+              <div>
+                <dt>Database</dt>
+                <dd id="redisDiagnosticDatabase"></dd>
+              </div>
+              <div>
+                <dt>Transport</dt>
+                <dd id="redisDiagnosticTransport"></dd>
+              </div>
+              <div>
+                <dt>Failure stage</dt>
+                <dd id="redisDiagnosticStage"></dd>
+              </div>
+              <div>
+                <dt>Round trip</dt>
+                <dd id="redisDiagnosticLatency"></dd>
+              </div>
+            </dl>
+            <div id="redisDiagnosticDetailBlock" class="redis-diagnostic-copy" hidden>
+              <strong>Diagnostic detail</strong>
+              <code id="redisDiagnosticDetail"></code>
+            </div>
+            <p id="redisDiagnosticHint" class="redis-diagnostic-hint" hidden></p>
+          </section>
+        </section>
+
+        <section class="redis-favorites" aria-labelledby="redisFavoritesHeading">
+          <div class="redis-section-heading redis-favorites-heading">
+            <div>
+              <h2 id="redisFavoritesHeading">Saved keys</h2>
+              <p>Saved on this device for quick clearing.</p>
+            </div>
+            <span id="redisFavoritesCount" class="redis-favorites-count">0</span>
+          </div>
+          <div id="redisFavoritesList" class="redis-favorites-list"></div>
+        </section>
       </aside>
     </main>
   </div>
