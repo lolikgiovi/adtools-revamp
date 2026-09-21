@@ -32,6 +32,36 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector(".redis-connection-panel #redisTestConnection")).not.toBeNull();
   });
 
+  it("switches between separate Search Key and Search Value tabs", () => {
+    const service = { scan: vi.fn(), searchValues: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    expect(document.querySelector("#redisSearchHeading")).toBeNull();
+    expect(document.querySelector(".redis-search-tabs-row")?.classList.contains("tabs-container")).toBe(true);
+    expect(document.querySelector(".redis-search-tabs-row #redisSearchTabs")?.classList.contains("tabs-left")).toBe(true);
+    expect(document.querySelector(".redis-search-tabs-row .redis-scan-badge").textContent).toContain("10 results per page");
+
+    const keyTab = document.querySelector("#redisKeySearchTab");
+    const valueTab = document.querySelector("#redisValueSearchTab");
+    expect(keyTab?.classList.contains("tab-button")).toBe(true);
+    expect(keyTab?.classList.contains("active")).toBe(true);
+    expect(keyTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(false);
+    expect(document.querySelector("#redisValueSearchPanel").hidden).toBe(true);
+
+    valueTab.click();
+    expect(valueTab.getAttribute("aria-selected")).toBe("true");
+    expect(valueTab.classList.contains("active")).toBe(true);
+    expect(keyTab.classList.contains("active")).toBe(false);
+    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(true);
+    expect(document.querySelector("#redisValueSearchPanel").hidden).toBe(false);
+
+    keyTab.click();
+    expect(keyTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelector("#redisKeySearchPanel").hidden).toBe(false);
+  });
+
   it("keeps pagination at the bottom of the results container", () => {
     const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
     const tool = new RedisCacheTool(null, service);
@@ -158,6 +188,7 @@ describe("RedisCacheTool interactions", () => {
     const tool = new RedisCacheTool(null, service);
     tool.mount(document.querySelector("#tool"));
 
+    document.querySelector("#redisValueSearchTab").click();
     document.querySelector("#redisValueQueryInput").value = "customer-42";
     document.querySelector("#redisValueSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await settle();

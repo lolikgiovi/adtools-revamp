@@ -1,18 +1,22 @@
 export const RedisCacheTemplate = /*html*/ `
   <div class="redis-cache-tool">
     <main class="redis-cache-layout">
-      <section class="redis-key-workspace" aria-labelledby="redisSearchHeading">
-        <div class="redis-section-heading">
-          <div>
-            <h2 id="redisSearchHeading">Find cache keys</h2>
+      <section class="redis-key-workspace" aria-label="Redis cache search">
+        <div class="redis-search-tabs-row tabs-container">
+          <div id="redisSearchTabs" class="redis-search-tabs tabs-left" role="tablist" aria-label="Redis search mode">
+            <button id="redisKeySearchTab" class="redis-search-tab tab-button active" type="button" role="tab" aria-selected="true" aria-controls="redisKeySearchPanel" data-search-tab="keys">
+              Search Key
+            </button>
+            <button id="redisValueSearchTab" class="redis-search-tab tab-button" type="button" role="tab" aria-selected="false" aria-controls="redisValueSearchPanel" data-search-tab="values" tabindex="-1">
+              Search Value
+            </button>
           </div>
           <span class="redis-scan-badge">10 results per page · SCAN 100/request</span>
         </div>
-
-        <div class="redis-search-grid">
+        <div id="redisKeySearchPanel" class="redis-search-panel" role="tabpanel" aria-labelledby="redisKeySearchTab">
           <form id="redisKeySearchForm" class="redis-search-form">
             <label class="redis-search-field" for="redisPatternInput">
-              <span>Find by key</span>
+              <span>Key pattern</span>
               <div class="redis-search-control">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
                 <input id="redisPatternInput" type="text" maxlength="512" placeholder="session:user:*" autocomplete="off" spellcheck="false" />
@@ -20,9 +24,11 @@ export const RedisCacheTemplate = /*html*/ `
             </label>
             <button id="redisSearchButton" class="btn btn-primary" type="submit">Find keys</button>
           </form>
-          <form id="redisValueSearchForm" class="redis-search-form redis-value-search-form">
+        </div>
+        <div id="redisValueSearchPanel" class="redis-search-panel" role="tabpanel" aria-labelledby="redisValueSearchTab" hidden>
+          <form id="redisValueSearchForm" class="redis-search-form">
             <label class="redis-search-field" for="redisValueQueryInput">
-              <span>Find in values <small>case-insensitive</small></span>
+              <span>Value contains <small>case-insensitive across the keyspace</small></span>
               <div class="redis-search-control">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16M4 12h16M4 16.5h10"></path></svg>
                 <input id="redisValueQueryInput" type="text" maxlength="256" placeholder="customer-42" autocomplete="off" spellcheck="false" />

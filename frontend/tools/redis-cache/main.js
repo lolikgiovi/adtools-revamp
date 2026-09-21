@@ -106,6 +106,7 @@ export class RedisCacheTool extends BaseTool {
     this.activePattern = "";
     this.activeValueQuery = "";
     this.activeSearchMode = "keys";
+    this.activeSearchTab = "keys";
     this.valueSearchInspected = 0;
     this.valueSearchTruncatedValues = 0;
     this.valueSearchUnsupportedValues = 0;
@@ -129,6 +130,7 @@ export class RedisCacheTool extends BaseTool {
     this.config = readRedisConfig();
     this.favorites = readFavorites();
     this.bindEvents();
+    this.setActiveSearchTab("keys");
     this.renderConnection();
     this.renderFavorites();
     this.renderResults();
@@ -136,6 +138,25 @@ export class RedisCacheTool extends BaseTool {
   }
 
   bindEvents() {
+    this.container.querySelector("#redisSearchTabs")?.addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-search-tab]");
+      if (!tab || this.busy) return;
+      this.setActiveSearchTab(tab.dataset.searchTab);
+    });
+    this.container.querySelector("#redisSearchTabs")?.addEventListener("keydown", (event) => {
+      const tabs = [...this.container.querySelectorAll("[data-search-tab]")];
+      const currentIndex = tabs.indexOf(event.target.closest("[data-search-tab]"));
+      if (currentIndex < 0 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const nextIndex =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? tabs.length - 1
+            : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      this.setActiveSearchTab(nextTab.dataset.searchTab, { focus: true });
+    });
     this.container.querySelector("#redisKeySearchForm")?.addEventListener("submit", (event) => {
       event.preventDefault();
       this.search({ reset: true, mode: "keys" });
@@ -191,6 +212,20 @@ export class RedisCacheTool extends BaseTool {
     this.container.querySelector("#redisResults")?.addEventListener("click", (event) => this.handleResultAction(event));
     this.container.querySelector("#redisResults")?.addEventListener("change", (event) => this.handleResultSelection(event));
     this.container.querySelector("#redisFavoritesList")?.addEventListener("click", (event) => this.handleFavoriteAction(event));
+  }
+
+  setActiveSearchTab(mode, { focus = false } = {}) {
+    const activeMode = mode === "values" ? "values" : "keys";
+    this.activeSearchTab = activeMode;
+    this.container.querySelectorAll("[data-search-tab]").forEach((tab) => {
+      const selected = tab.dataset.searchTab === activeMode;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.classList.toggle("active", selected);
+      tab.tabIndex = selected ? 0 : -1;
+      if (focus && selected) tab.focus();
+    });
+    this.container.querySelector("#redisKeySearchPanel")?.toggleAttribute("hidden", activeMode !== "keys");
+    this.container.querySelector("#redisValueSearchPanel")?.toggleAttribute("hidden", activeMode !== "values");
   }
 
   renderConnection() {
@@ -331,6 +366,7 @@ export class RedisCacheTool extends BaseTool {
       this.activePattern = pattern;
       this.activeValueQuery = valueQuery;
       this.activeSearchMode = searchMode;
+      this.setActiveSearchTab(searchMode);
       this.valueSearchInspected = 0;
       this.valueSearchTruncatedValues = 0;
       this.valueSearchUnsupportedValues = 0;
@@ -846,6 +882,9 @@ export class RedisCacheTool extends BaseTool {
     if (cancelDelete) cancelDelete.disabled = busy;
     const closeInspector = this.container.querySelector("#redisCloseInspector");
     if (closeInspector) closeInspector.disabled = busy;
+    this.container.querySelectorAll("[data-search-tab]").forEach((tab) => {
+      tab.disabled = busy;
+    });
     this.container.querySelectorAll("#redisResults [data-action]").forEach((button) => {
       button.disabled = busy;
     });
@@ -861,6 +900,9 @@ export class RedisCacheTool extends BaseTool {
     const clearSelected = this.container.querySelector("#redisClearSelected");
     if (search) search.disabled = this.busy || !configured;
     if (valueSearch) valueSearch.disabled = this.busy || !configured;
+    this.container.querySelectorAll("[data-search-tab]").forEach((tab) => {
+      tab.disabled = this.busy;
+    });
     const pagination = this.container.querySelector("#redisPagination");
     const hasNextPage = this.currentPage < this.resultPages.length || this.hasUnloadedPage();
     pagination?.querySelector('[data-redis-page="previous"]')?.toggleAttribute("disabled", this.busy || this.currentPage <= 1);
