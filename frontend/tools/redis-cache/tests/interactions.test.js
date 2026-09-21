@@ -21,9 +21,10 @@ describe("RedisCacheTool interactions", () => {
   });
 
   it("searches with SCAN, supports selection, and clears only after confirmation", async () => {
+    const pageKeys = Array.from({ length: 10 }, (_, index) => `session:${index + 1}`);
     const service = {
-      scan: vi.fn().mockResolvedValue({ cursor: 44, keys: ["session:1", "session:2"] }),
-      deleteKeys: vi.fn().mockResolvedValue({ deleted: 2, command: "UNLINK" }),
+      scan: vi.fn().mockResolvedValue({ cursor: 44, keys: pageKeys }),
+      deleteKeys: vi.fn().mockResolvedValue({ deleted: pageKeys.length, command: "UNLINK" }),
       testConnection: vi.fn(),
     };
     const tool = new RedisCacheTool(null, service);
@@ -35,7 +36,7 @@ describe("RedisCacheTool interactions", () => {
     await settle();
 
     expect(service.scan).toHaveBeenCalledWith(expect.objectContaining({ database: 2 }), "*session*", 0, 100);
-    expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(2);
+    expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
     expect(document.querySelector("#redisLoadMore").hidden).toBe(false);
 
     for (const checkbox of document.querySelectorAll(".redis-key-select")) {
@@ -50,9 +51,35 @@ describe("RedisCacheTool interactions", () => {
     document.querySelector("#redisConfirmDelete").click();
     await settle();
 
-    expect(service.deleteKeys).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), ["session:1", "session:2"]);
+    expect(service.deleteKeys).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), pageKeys);
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(0);
-    expect(document.querySelector("#redisSearchMessage").textContent).toContain("2 keys cleared with UNLINK");
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("10 keys cleared with UNLINK");
+  });
+
+  it("auto-scans until a sparse page has ten unique matches", async () => {
+    const firstScanKeys = ["session:1"];
+    const remainingKeys = Array.from({ length: 9 }, (_, index) => `session:${index + 2}`);
+    const service = {
+      scan: vi
+        .fn()
+        .mockResolvedValueOnce({ cursor: 44, keys: firstScanKeys })
+        .mockResolvedValueOnce({ cursor: 0, keys: remainingKeys }),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn(),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    const input = document.querySelector("#redisPatternInput");
+    input.value = "session";
+    document.querySelector("#redisSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(service.scan).toHaveBeenNthCalledWith(1, expect.objectContaining({ database: 2 }), "*session*", 0, 100);
+    expect(service.scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ database: 2 }), "*session*", 44, 100);
+    expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
+    expect(document.querySelector("#redisLoadMore").hidden).toBe(true);
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
   });
 
   it("keeps a favorite after clearing it so recurring cache keys remain reusable", async () => {

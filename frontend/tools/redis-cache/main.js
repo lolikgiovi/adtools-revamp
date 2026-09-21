@@ -7,6 +7,9 @@ import { RedisCacheTemplate } from "./template.js";
 import "./styles.css";
 
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
+const REDIS_RESULTS_PAGE_SIZE = 10;
+const REDIS_SCAN_COUNT = 100;
+const REDIS_MAX_PAGE_SCAN_REQUESTS = 25;
 
 export class RedisCacheTool extends BaseTool {
   constructor(eventBus, service = new RedisCacheService()) {
@@ -190,12 +193,27 @@ export class RedisCacheTool extends BaseTool {
     this.setBusy(true, reset ? "Searching…" : "Scanning…");
     this.setMessage(`Scanning database ${this.config.database} with ${pattern}`, "neutral");
     try {
-      const result = await this.service.scan(this.config, pattern, this.cursor, 100);
-      const incoming = Array.isArray(result?.keys) ? result.keys.map(String) : [];
-      this.keys = [...new Set([...this.keys, ...incoming])];
-      this.cursor = Number(result?.cursor) || 0;
+      const targetKeyCount = this.keys.length + REDIS_RESULTS_PAGE_SIZE;
+      let scanRequests = 0;
+      while (
+        (scanRequests === 0 || this.cursor !== 0) &&
+        this.keys.length < targetKeyCount &&
+        scanRequests < REDIS_MAX_PAGE_SCAN_REQUESTS
+      ) {
+        const result = await this.service.scan(this.config, pattern, this.cursor, REDIS_SCAN_COUNT);
+        const incoming = Array.isArray(result?.keys) ? result.keys.map(String) : [];
+        this.keys = [...new Set([...this.keys, ...incoming])];
+        this.cursor = Number(result?.cursor) || 0;
+        scanRequests += 1;
+      }
       this.renderResults();
-      const suffix = this.cursor === 0 ? "Scan complete." : "More keyspace remains.";
+      const pageScanLimitReached = this.cursor !== 0 && this.keys.length < targetKeyCount && scanRequests >= REDIS_MAX_PAGE_SCAN_REQUESTS;
+      const suffix =
+        this.cursor === 0
+          ? "Scan complete."
+          : pageScanLimitReached
+            ? "Page scan limit reached; scan next page to continue."
+            : "More keyspace remains.";
       this.setMessage(`${this.keys.length.toLocaleString()} unique ${this.keys.length === 1 ? "key" : "keys"} found. ${suffix}`, "success");
       UsageTracker.trackToolUse(
         "redis-cache",
