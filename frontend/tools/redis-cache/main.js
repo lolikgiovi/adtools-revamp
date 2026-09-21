@@ -2,7 +2,15 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta } from "../../core/AnalyticsMeta.js";
 import { getIconSvg } from "./icon.js";
-import { chunkRedisKeys, normalizeRedisPattern, readFavorites, readRedisConfig, RedisCacheService, writeFavorites } from "./service.js";
+import {
+  chunkRedisKeys,
+  normalizeRedisPattern,
+  normalizeRedisValueQuery,
+  readFavorites,
+  readRedisConfig,
+  RedisCacheService,
+  writeFavorites,
+} from "./service.js";
 import { RedisCacheTemplate } from "./template.js";
 import "./styles.css";
 
@@ -10,6 +18,75 @@ const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 const REDIS_RESULTS_PAGE_SIZE = 10;
 const REDIS_SCAN_COUNT = 100;
 const REDIS_MAX_PAGE_SCAN_REQUESTS = 25;
+
+export function formatRedisValue(value) {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return { text: JSON.stringify(parsed, null, 2), isJson: true };
+    } catch (_) {
+      return { text: value, isJson: false };
+    }
+  }
+  try {
+    return { text: JSON.stringify(value, null, 2), isJson: true };
+  } catch (_) {
+    return { text: String(value ?? ""), isJson: false };
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function highlightJson(json) {
+  const source = String(json ?? "");
+  const tokenPattern = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
+  let output = "";
+  let lastIndex = 0;
+  for (const match of source.matchAll(tokenPattern)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    output += escapeHtml(source.slice(lastIndex, index));
+    const afterToken = source.slice(index + token.length);
+    const tokenClass = token.startsWith('"')
+      ? /^\s*:/.test(afterToken)
+        ? "redis-json-key"
+        : "redis-json-string"
+      : token === "true" || token === "false"
+        ? "redis-json-boolean"
+        : token === "null"
+          ? "redis-json-null"
+          : "redis-json-number";
+    output += `<span class="${tokenClass}">${escapeHtml(token)}</span>`;
+    lastIndex = index + token.length;
+  }
+  return output + escapeHtml(source.slice(lastIndex));
+}
+
+function formatRedisBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) return "Memory unavailable";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatRedisTtl(value) {
+  const ttl = Number(value);
+  if (ttl === -1) return "No expiry";
+  if (ttl === -2) return "Expired";
+  if (!Number.isFinite(ttl) || ttl < 0) return "TTL unavailable";
+  if (ttl < 60) return `${ttl}s TTL`;
+  if (ttl < 3600) return `${Math.floor(ttl / 60)}m TTL`;
+  if (ttl < 86400) return `${Math.floor(ttl / 3600)}h TTL`;
+  return `${Math.floor(ttl / 86400)}d TTL`;
+}
 
 export class RedisCacheTool extends BaseTool {
   constructor(eventBus, service = new RedisCacheService()) {
@@ -27,8 +104,15 @@ export class RedisCacheTool extends BaseTool {
     this.scanComplete = false;
     this.pageScanLimitReached = false;
     this.activePattern = "";
+    this.activeValueQuery = "";
+    this.activeSearchMode = "keys";
+    this.valueSearchInspected = 0;
+    this.valueSearchTruncatedValues = 0;
+    this.valueSearchUnsupportedValues = 0;
     this.pendingDeleteKeys = [];
     this.deleteTrigger = null;
+    this.valueInspectorKey = "";
+    this.valueInspectorTrigger = null;
     this.connectionDiagnosticStage = null;
     this.busy = false;
   }
@@ -52,9 +136,13 @@ export class RedisCacheTool extends BaseTool {
   }
 
   bindEvents() {
-    this.container.querySelector("#redisSearchForm")?.addEventListener("submit", (event) => {
+    this.container.querySelector("#redisKeySearchForm")?.addEventListener("submit", (event) => {
       event.preventDefault();
-      this.search({ reset: true });
+      this.search({ reset: true, mode: "keys" });
+    });
+    this.container.querySelector("#redisValueSearchForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.search({ reset: true, mode: "values" });
     });
     this.container.querySelector("#redisPagination")?.addEventListener("click", (event) => {
       const button = event.target.closest("[data-redis-page]");
@@ -66,6 +154,13 @@ export class RedisCacheTool extends BaseTool {
     this.container.querySelector("#redisTestConnection")?.addEventListener("click", () => this.testConnection());
     this.container.querySelector("#redisDismissDiagnostics")?.addEventListener("click", () => this.dismissConnectionDiagnostics());
     this.container.querySelector("#redisOpenSettings")?.addEventListener("click", () => this.openSettings());
+    this.container.querySelector("#redisCloseInspector")?.addEventListener("click", () => this.closeValueInspector());
+    this.container.querySelector("#redisValueInspector")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !this.busy) {
+        event.preventDefault();
+        this.closeValueInspector();
+      }
+    });
     this.container.querySelector("#redisSelectAll")?.addEventListener("click", () => this.toggleSelectAll());
     this.container.querySelector("#redisClearSelected")?.addEventListener("click", () => this.requestDelete([...this.selectedKeys]));
     this.container.querySelector("#redisCancelDelete")?.addEventListener("click", () => this.closeDeleteConfirmation());
@@ -205,13 +300,21 @@ export class RedisCacheTool extends BaseTool {
     if (element) element.textContent = String(value ?? "");
   }
 
-  async search({ reset = true } = {}) {
+  async search({ reset = true, mode = this.activeSearchMode } = {}) {
     if (this.busy || !this.requireConfiguration()) return;
     const input = this.container.querySelector("#redisPatternInput");
-    const pattern = reset ? normalizeRedisPattern(input?.value) : this.activePattern;
+    const valueInput = this.container.querySelector("#redisValueQueryInput");
+    const searchMode = reset ? mode : this.activeSearchMode;
+    const valueQuery = reset && searchMode === "values" ? normalizeRedisValueQuery(valueInput?.value) : reset ? "" : this.activeValueQuery;
+    const pattern = reset ? (searchMode === "values" ? "*" : normalizeRedisPattern(input?.value)) : this.activePattern;
     if (!pattern) {
-      this.setMessage("Enter a key or wildcard pattern to search.", "error");
+      this.setMessage("Enter a key pattern or value text to search for.", "error");
       input?.focus();
+      return;
+    }
+    if (searchMode === "values" && !valueQuery) {
+      this.setMessage("Enter text to search for in Redis values.", "error");
+      valueInput?.focus();
       return;
     }
 
@@ -226,6 +329,12 @@ export class RedisCacheTool extends BaseTool {
       this.scanComplete = false;
       this.pageScanLimitReached = false;
       this.activePattern = pattern;
+      this.activeValueQuery = valueQuery;
+      this.activeSearchMode = searchMode;
+      this.valueSearchInspected = 0;
+      this.valueSearchTruncatedValues = 0;
+      this.valueSearchUnsupportedValues = 0;
+      this.closeValueInspector({ restoreFocus: false });
     }
     await this.loadResultPage(reset ? 1 : this.currentPage + 1, { reset, pattern });
   }
@@ -251,7 +360,12 @@ export class RedisCacheTool extends BaseTool {
 
   async loadResultPage(targetPage, { reset = false, pattern = this.activePattern } = {}) {
     this.setBusy(true, reset ? "Searching…" : "Scanning…");
-    this.setMessage(`Scanning database ${this.config.database} with ${pattern}`, "neutral");
+    this.setMessage(
+      this.activeSearchMode === "values"
+        ? `Searching values across database ${this.config.database}`
+        : `Scanning database ${this.config.database} with ${pattern}`,
+      "neutral",
+    );
     let scanRequests = 0;
     try {
       while (this.resultPages.length < targetPage && this.hasUnloadedPage()) {
@@ -266,14 +380,25 @@ export class RedisCacheTool extends BaseTool {
         : this.pageScanLimitReached || scanRequests >= REDIS_MAX_PAGE_SCAN_REQUESTS
           ? "More keyspace remains; use the pagination controls to continue."
           : "More keyspace remains.";
+      const valueSummary =
+        this.activeSearchMode === "values"
+          ? ` Inspected ${this.valueSearchInspected.toLocaleString()} keys${
+              this.valueSearchTruncatedValues ? `; ${this.valueSearchTruncatedValues} large value${this.valueSearchTruncatedValues === 1 ? " was" : "s were"} sampled` : ""
+            }.${this.valueSearchUnsupportedValues ? ` ${this.valueSearchUnsupportedValues} unsupported value type${this.valueSearchUnsupportedValues === 1 ? " was" : "s were"} skipped.` : ""}`
+          : "";
       this.setMessage(
-        `${this.keys.length.toLocaleString()} ${this.keys.length === 1 ? "key" : "keys"} on page ${this.currentPage}. ${suffix}`,
+        `${this.keys.length.toLocaleString()} ${this.keys.length === 1 ? "key" : "keys"} on page ${this.currentPage}.${valueSummary} ${suffix}`,
         "success",
       );
       UsageTracker.trackToolUse(
         "redis-cache",
         "search",
-        cleanAnalyticsMeta({ result_count: this.keys.length, page: this.currentPage, scan_complete: this.scanComplete }),
+        cleanAnalyticsMeta({
+          result_count: this.keys.length,
+          page: this.currentPage,
+          mode: this.activeSearchMode,
+          scan_complete: this.scanComplete,
+        }),
       );
     } catch (error) {
       this.setMessage(this.errorMessage(error), "error");
@@ -296,8 +421,16 @@ export class RedisCacheTool extends BaseTool {
       }
       if (pageKeys.length >= REDIS_RESULTS_PAGE_SIZE || this.scanComplete) break;
 
-      const result = await this.service.scan(this.config, pattern, this.cursor, REDIS_SCAN_COUNT);
+      const result =
+        this.activeSearchMode === "values"
+          ? await this.service.searchValues(this.config, pattern, this.activeValueQuery, this.cursor, REDIS_RESULTS_PAGE_SIZE)
+          : await this.service.scan(this.config, pattern, this.cursor, REDIS_SCAN_COUNT);
       const incoming = Array.isArray(result?.keys) ? result.keys.map(String) : [];
+      if (this.activeSearchMode === "values") {
+        this.valueSearchInspected += Number(result?.inspected) || 0;
+        this.valueSearchTruncatedValues += Number(result?.truncated_values) || 0;
+        this.valueSearchUnsupportedValues += Number(result?.unsupported_values) || 0;
+      }
       incoming.forEach((key) => {
         if (this.seenKeys.has(key)) return;
         this.seenKeys.add(key);
@@ -334,14 +467,21 @@ export class RedisCacheTool extends BaseTool {
       count.textContent = this.keys.length
         ? `${this.keys.length.toLocaleString()} ${this.keys.length === 1 ? "key" : "keys"}`
         : "No results";
-    if (pattern) pattern.textContent = this.activePattern ? `Pattern: ${this.activePattern}` : "";
+    if (pattern) {
+      pattern.textContent =
+        this.activeSearchMode === "values" && this.activeValueQuery
+          ? `Value: ${this.activeValueQuery} · all keys`
+          : this.activePattern
+            ? `Pattern: ${this.activePattern}`
+            : "";
+    }
 
     root.replaceChildren();
     if (!this.keys.length) {
       const empty = document.createElement("div");
       empty.className = "redis-empty-state";
       empty.innerHTML = this.activePattern
-        ? `<h3>No keys in this page</h3><p>${this.hasUnloadedPage() ? "Use the pagination controls to continue through the keyspace." : "Try a broader pattern or confirm the database number."}</p>`
+        ? `<h3>${this.activeSearchMode === "values" ? "No matching values" : "No keys in this page"}</h3><p>${this.hasUnloadedPage() ? "Use the pagination controls to continue through the keyspace." : this.activeSearchMode === "values" ? "Try different text or confirm the database number." : "Try a broader pattern or confirm the database number."}</p>`
         : `<svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="13" rx="15" ry="6"></ellipse><path d="M9 13v10c0 3.3 6.7 6 15 6s15-2.7 15-6V13"></path><path d="M9 23v10c0 3.3 6.7 6 15 6 4.1 0 7.8-.7 10.5-1.9"></path><path d="m36 33 6 6m0-6-6 6"></path></svg><h3>Search the keyspace</h3><p>Results appear here in bounded pages. No values are fetched.</p>`;
       root.appendChild(empty);
       this.renderPagination();
@@ -434,6 +574,13 @@ export class RedisCacheTool extends BaseTool {
 
     const actions = document.createElement("td");
     actions.className = "redis-row-actions";
+    const view = document.createElement("button");
+    view.type = "button";
+    view.className = "redis-icon-button";
+    view.dataset.action = "view";
+    view.title = "View value";
+    view.setAttribute("aria-label", `View value for ${key}`);
+    view.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>`;
     const favorite = document.createElement("button");
     favorite.type = "button";
     favorite.className = "redis-icon-button";
@@ -445,11 +592,93 @@ export class RedisCacheTool extends BaseTool {
     clear.type = "button";
     clear.className = "redis-icon-button redis-icon-button-danger";
     clear.dataset.action = "clear";
+    clear.title = `Clear ${key}`;
     clear.setAttribute("aria-label", `Clear ${key}`);
     clear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-3h4.6l.7 3"></path><path d="m6 7 1 13h10l1-13"></path><path d="M10 11v5m4-5v5"></path></svg>`;
-    actions.append(favorite, clear);
+    actions.append(view, favorite, clear);
     row.append(selectCell, keyCell, actions);
     return row;
+  }
+
+  async viewValue(key) {
+    if (this.busy || !this.requireConfiguration()) return;
+    this.valueInspectorKey = key;
+    this.valueInspectorTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    this.renderValueInspector({ key, loading: true });
+    this.setBusy(true, "Loading value…");
+    try {
+      const result = await this.service.getValue(this.config, key);
+      if (this.valueInspectorKey !== key) return;
+      this.renderValueInspector(result);
+      UsageTracker.trackToolUse("redis-cache", "view", cleanAnalyticsMeta({ type: result?.kind || "unknown" }));
+    } catch (error) {
+      if (this.valueInspectorKey === key) this.renderValueInspector({ key, error: this.errorMessage(error) });
+    } finally {
+      this.setBusy(false);
+      this.container.querySelector("#redisCloseInspector")?.focus();
+    }
+  }
+
+  renderValueInspector(result = {}) {
+    const root = this.container.querySelector("#redisValueInspector");
+    const keyElement = this.container.querySelector("#redisValueInspectorKey");
+    const metaElement = this.container.querySelector("#redisValueInspectorMeta");
+    const notice = this.container.querySelector("#redisValueInspectorNotice");
+    const content = this.container.querySelector("#redisValueContent");
+    if (!root || !content) return;
+
+    root.hidden = false;
+    root.dataset.state = result.loading ? "loading" : result.error ? "error" : "ready";
+    if (keyElement) keyElement.textContent = result.key || "";
+    if (metaElement) {
+      const metadata = result.loading || result.error
+        ? ""
+        : [
+            result.kind || "unknown type",
+            formatRedisTtl(result.ttl_seconds),
+            result.memory_bytes === null || result.memory_bytes === undefined ? "Memory unavailable" : formatRedisBytes(result.memory_bytes),
+          ].join(" · ");
+      metaElement.textContent = metadata;
+    }
+    if (notice) {
+      notice.hidden = true;
+      notice.textContent = "";
+    }
+    content.className = "redis-value-content";
+    content.textContent = "";
+
+    if (result.loading) {
+      content.textContent = "Reading this value…";
+      return;
+    }
+    if (result.error) {
+      content.textContent = result.error;
+      return;
+    }
+    if (result.supported === false) {
+      content.textContent = `Redis type “${result.kind || "unknown"}” is not supported for inspection yet.`;
+      return;
+    }
+
+    const formatted = formatRedisValue(result.value);
+    content.classList.add(formatted.isJson ? "redis-json-content" : "redis-raw-content");
+    if (formatted.isJson) content.innerHTML = highlightJson(formatted.text);
+    else content.textContent = formatted.text;
+    if (result.truncated && notice) {
+      notice.hidden = false;
+      notice.textContent = "This value is larger than the safe preview limit and has been truncated. Search and mutation remain separate from this view.";
+    }
+  }
+
+  closeValueInspector({ restoreFocus = true } = {}) {
+    const root = this.container.querySelector("#redisValueInspector");
+    if (root) root.hidden = true;
+    this.valueInspectorKey = "";
+    if (restoreFocus) {
+      const target = this.valueInspectorTrigger?.isConnected ? this.valueInspectorTrigger : this.container.querySelector("#redisPatternInput");
+      this.valueInspectorTrigger = null;
+      target?.focus();
+    } else this.valueInspectorTrigger = null;
   }
 
   handleResultSelection(event) {
@@ -465,6 +694,7 @@ export class RedisCacheTool extends BaseTool {
     const button = event.target.closest("[data-action]");
     const key = button?.closest("tr")?.dataset.key;
     if (!button || !key) return;
+    if (button.dataset.action === "view") this.viewValue(key);
     if (button.dataset.action === "favorite") this.toggleFavorite(key);
     if (button.dataset.action === "clear") this.requestDelete([key]);
   }
@@ -591,6 +821,7 @@ export class RedisCacheTool extends BaseTool {
 
   removeClearedResults(clearedKeys) {
     if (!clearedKeys?.size) return;
+    if (this.valueInspectorKey && clearedKeys.has(this.valueInspectorKey)) this.closeValueInspector({ restoreFocus: false });
     this.keys = this.keys.filter((key) => !clearedKeys.has(key));
     const currentPage = this.resultPages[this.currentPage - 1];
     if (currentPage) currentPage.splice(0, currentPage.length, ...this.keys);
@@ -600,14 +831,24 @@ export class RedisCacheTool extends BaseTool {
   setBusy(busy, label = "Find keys") {
     this.busy = busy;
     const search = this.container.querySelector("#redisSearchButton");
+    const valueSearch = this.container.querySelector("#redisValueSearchButton");
     const testConnection = this.container.querySelector("#redisTestConnection");
     if (search) {
       search.disabled = busy || !this.config?.host;
       search.textContent = busy ? label : "Find keys";
     }
+    if (valueSearch) {
+      valueSearch.disabled = busy || !this.config?.host;
+      valueSearch.textContent = busy ? label : "Search values";
+    }
     if (testConnection) testConnection.disabled = busy || !this.config?.host;
     const cancelDelete = this.container.querySelector("#redisCancelDelete");
     if (cancelDelete) cancelDelete.disabled = busy;
+    const closeInspector = this.container.querySelector("#redisCloseInspector");
+    if (closeInspector) closeInspector.disabled = busy;
+    this.container.querySelectorAll("#redisResults [data-action]").forEach((button) => {
+      button.disabled = busy;
+    });
     this.container.querySelector(".redis-cache-tool")?.setAttribute("aria-busy", String(busy));
     this.updateActionState();
   }
@@ -615,9 +856,11 @@ export class RedisCacheTool extends BaseTool {
   updateActionState() {
     const configured = Boolean(this.config?.host);
     const search = this.container.querySelector("#redisSearchButton");
+    const valueSearch = this.container.querySelector("#redisValueSearchButton");
     const selectAll = this.container.querySelector("#redisSelectAll");
     const clearSelected = this.container.querySelector("#redisClearSelected");
     if (search) search.disabled = this.busy || !configured;
+    if (valueSearch) valueSearch.disabled = this.busy || !configured;
     const pagination = this.container.querySelector("#redisPagination");
     const hasNextPage = this.currentPage < this.resultPages.length || this.hasUnloadedPage();
     pagination?.querySelector('[data-redis-page="previous"]')?.toggleAttribute("disabled", this.busy || this.currentPage <= 1);

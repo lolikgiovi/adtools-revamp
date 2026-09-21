@@ -1,11 +1,17 @@
-use redis::{Client, Commands, Connection, RedisError};
+use redis::{Client, Commands, Connection, RedisError, Value};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value as JsonValue};
 use std::time::{Duration, Instant};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_SCAN_COUNT: usize = 200;
 const MAX_DELETE_KEYS: usize = 200;
+const MAX_VALUE_BYTES: usize = 512 * 1024;
+const MAX_VALUE_SEARCH_BYTES: usize = 256 * 1024;
+const MAX_VALUE_COLLECTION_ITEMS: usize = 200;
+const MAX_VALUE_SEARCH_MATCHES: usize = 10;
+const MAX_VALUE_SEARCH_INSPECTED: usize = 500;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct RedisCredentials {
@@ -43,6 +49,26 @@ pub struct RedisScanResult {
 pub struct RedisDeleteResult {
     deleted: usize,
     command: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RedisValueResult {
+    key: String,
+    kind: String,
+    ttl_seconds: i64,
+    memory_bytes: Option<u64>,
+    value: Option<JsonValue>,
+    supported: bool,
+    truncated: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RedisValueSearchResult {
+    cursor: u64,
+    keys: Vec<String>,
+    inspected: usize,
+    truncated_values: usize,
+    unsupported_values: usize,
 }
 
 fn validate_config(config: &RedisConfig) -> Result<(), String> {
@@ -330,6 +356,372 @@ pub async fn redis_scan_keys(
     tauri::async_runtime::spawn_blocking(move || scan_keys(config, pattern, cursor, count))
         .await
         .map_err(|error| format!("Redis scan task failed: {}", error))?
+}
+
+fn validate_redis_key(key: &str) -> Result<(), String> {
+    if key.is_empty() || key.len() > 4096 {
+        return Err("Redis key is invalid or too long".to_string());
+    }
+    Ok(())
+}
+
+fn redis_value_to_json(value: Value) -> JsonValue {
+    match value {
+        Value::Nil => JsonValue::Null,
+        Value::Int(number) => JsonValue::from(number),
+        Value::BulkString(bytes) => JsonValue::String(String::from_utf8_lossy(&bytes).into_owned()),
+        Value::Array(values) | Value::Set(values) => {
+            JsonValue::Array(values.into_iter().map(redis_value_to_json).collect())
+        }
+        Value::Map(entries) => {
+            let mut map = Map::new();
+            for (key, value) in entries {
+                let key = redis_value_to_text(&key);
+                map.insert(key, redis_value_to_json(value));
+            }
+            JsonValue::Object(map)
+        }
+        Value::Attribute { data, .. } => redis_value_to_json(*data),
+        Value::SimpleString(value) | Value::VerbatimString { text: value, .. } => {
+            JsonValue::String(value)
+        }
+        Value::Okay => JsonValue::String("OK".to_string()),
+        Value::Double(number) => serde_json::Number::from_f64(number)
+            .map(JsonValue::Number)
+            .unwrap_or(JsonValue::Null),
+        Value::Boolean(value) => JsonValue::Bool(value),
+        Value::BigNumber(number) => JsonValue::String(number.to_string()),
+        Value::Push { data, .. } => {
+            JsonValue::Array(data.into_iter().map(redis_value_to_json).collect())
+        }
+        Value::ServerError(error) => JsonValue::String(format!("{:?}", error)),
+    }
+}
+
+fn redis_value_to_text(value: &Value) -> String {
+    match value {
+        Value::BulkString(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        Value::SimpleString(value) | Value::VerbatimString { text: value, .. } => value.clone(),
+        Value::Int(number) => number.to_string(),
+        Value::Double(number) => number.to_string(),
+        Value::Boolean(value) => value.to_string(),
+        Value::Nil => String::new(),
+        other => redis_value_to_json(other.clone()).to_string(),
+    }
+}
+
+fn redis_scan_items(value: Value) -> Result<(u64, Vec<Value>), String> {
+    let Value::Array(mut values) = value else {
+        return Err("Redis returned an unexpected scan response".to_string());
+    };
+    if values.len() != 2 {
+        return Err("Redis returned an incomplete scan response".to_string());
+    }
+    let cursor = redis_value_to_text(&values.remove(0))
+        .parse::<u64>()
+        .map_err(|_| "Redis returned an invalid scan cursor".to_string())?;
+    let items = match values.remove(0) {
+        Value::Array(items) | Value::Set(items) => items,
+        value => vec![value],
+    };
+    Ok((cursor, items))
+}
+
+fn read_string_value(
+    connection: &mut Connection,
+    key: &str,
+    max_bytes: usize,
+) -> Result<(JsonValue, bool), String> {
+    let byte_length: usize = redis::cmd("STRLEN")
+        .arg(key)
+        .query(connection)
+        .map_err(redis_error)?;
+    if byte_length == 0 {
+        return Ok((JsonValue::String(String::new()), false));
+    }
+    let end = byte_length.min(max_bytes).saturating_sub(1) as isize;
+    let bytes: Vec<u8> = redis::cmd("GETRANGE")
+        .arg(key)
+        .arg(0)
+        .arg(end)
+        .query(connection)
+        .map_err(redis_error)?;
+    Ok((
+        JsonValue::String(String::from_utf8_lossy(&bytes).into_owned()),
+        byte_length > max_bytes,
+    ))
+}
+
+fn read_collection_value(
+    connection: &mut Connection,
+    key: &str,
+    kind: &str,
+    max_items: usize,
+) -> Result<(Option<JsonValue>, bool), String> {
+    let max_items = max_items.max(1);
+    match kind {
+        "hash" => {
+            let response: Value = redis::cmd("HSCAN")
+                .arg(key)
+                .arg(0)
+                .arg("COUNT")
+                .arg(max_items)
+                .query(connection)
+                .map_err(redis_error)?;
+            let (cursor, items) = redis_scan_items(response)?;
+            let mut map = Map::new();
+            for pair in items.chunks(2) {
+                if let [field, value] = pair {
+                    map.insert(
+                        redis_value_to_text(field),
+                        redis_value_to_json(value.clone()),
+                    );
+                }
+            }
+            Ok((Some(JsonValue::Object(map)), cursor != 0))
+        }
+        "list" => {
+            let length: usize = redis::cmd("LLEN")
+                .arg(key)
+                .query(connection)
+                .map_err(redis_error)?;
+            if length == 0 {
+                return Ok((Some(JsonValue::Array(Vec::new())), false));
+            }
+            let response: Value = redis::cmd("LRANGE")
+                .arg(key)
+                .arg(0)
+                .arg((max_items - 1) as isize)
+                .query(connection)
+                .map_err(redis_error)?;
+            Ok((Some(redis_value_to_json(response)), length > max_items))
+        }
+        "set" => {
+            let response: Value = redis::cmd("SSCAN")
+                .arg(key)
+                .arg(0)
+                .arg("COUNT")
+                .arg(max_items)
+                .query(connection)
+                .map_err(redis_error)?;
+            let (cursor, items) = redis_scan_items(response)?;
+            Ok((
+                Some(JsonValue::Array(
+                    items.into_iter().map(redis_value_to_json).collect(),
+                )),
+                cursor != 0,
+            ))
+        }
+        "zset" => {
+            let response: Value = redis::cmd("ZRANGE")
+                .arg(key)
+                .arg(0)
+                .arg((max_items - 1) as isize)
+                .arg("WITHSCORES")
+                .query(connection)
+                .map_err(redis_error)?;
+            let items = match response {
+                Value::Array(items) | Value::Set(items) => items,
+                value => vec![value],
+            };
+            let mut entries = Vec::new();
+            for pair in items.chunks(2) {
+                if let [member, score] = pair {
+                    let mut entry = Map::new();
+                    entry.insert("member".to_string(), redis_value_to_json(member.clone()));
+                    entry.insert("score".to_string(), redis_value_to_json(score.clone()));
+                    entries.push(JsonValue::Object(entry));
+                }
+            }
+            let length: usize = redis::cmd("ZCARD")
+                .arg(key)
+                .query(connection)
+                .map_err(redis_error)?;
+            Ok((Some(JsonValue::Array(entries)), length > max_items))
+        }
+        "stream" => {
+            let response: Value = redis::cmd("XRANGE")
+                .arg(key)
+                .arg("-")
+                .arg("+")
+                .arg("COUNT")
+                .arg(max_items)
+                .query(connection)
+                .map_err(redis_error)?;
+            let length: usize = redis::cmd("XLEN")
+                .arg(key)
+                .query(connection)
+                .map_err(redis_error)?;
+            Ok((Some(redis_value_to_json(response)), length > max_items))
+        }
+        _ => Ok((None, false)),
+    }
+}
+
+fn read_value_payload(
+    connection: &mut Connection,
+    key: &str,
+    kind: &str,
+    max_bytes: usize,
+) -> Result<(Option<JsonValue>, bool, bool), String> {
+    if kind == "string" {
+        let (value, truncated) = read_string_value(connection, key, max_bytes)?;
+        return Ok((Some(value), truncated, true));
+    }
+    let (value, truncated) =
+        read_collection_value(connection, key, kind, MAX_VALUE_COLLECTION_ITEMS)?;
+    let supported = value.is_some();
+    Ok((value, truncated, supported))
+}
+
+fn redis_memory_usage(connection: &mut Connection, key: &str) -> Option<u64> {
+    redis::cmd("MEMORY")
+        .arg("USAGE")
+        .arg(key)
+        .query::<Option<u64>>(connection)
+        .ok()
+        .flatten()
+}
+
+fn redis_value_kind(connection: &mut Connection, key: &str) -> Result<String, String> {
+    redis::cmd("TYPE")
+        .arg(key)
+        .query(connection)
+        .map_err(redis_error)
+}
+
+fn get_value(config: RedisConfig, key: String) -> Result<RedisValueResult, String> {
+    validate_redis_key(&key)?;
+    let mut connection = connect(&config)?;
+    let kind = redis_value_kind(&mut connection, &key)?;
+    if kind == "none" {
+        return Err("Redis key no longer exists".to_string());
+    }
+    let ttl_seconds: i64 = redis::cmd("TTL")
+        .arg(&key)
+        .query(&mut connection)
+        .map_err(redis_error)?;
+    let memory_bytes = redis_memory_usage(&mut connection, &key);
+    let (value, truncated, supported) =
+        read_value_payload(&mut connection, &key, &kind, MAX_VALUE_BYTES)?;
+    Ok(RedisValueResult {
+        key,
+        kind,
+        ttl_seconds,
+        memory_bytes,
+        value,
+        supported,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn redis_get_value(config: RedisConfig, key: String) -> Result<RedisValueResult, String> {
+    tauri::async_runtime::spawn_blocking(move || get_value(config, key))
+        .await
+        .map_err(|error| format!("Redis value task failed: {}", error))?
+}
+
+fn search_values(
+    config: RedisConfig,
+    pattern: String,
+    query: String,
+    cursor: u64,
+    count: usize,
+) -> Result<RedisValueSearchResult, String> {
+    let pattern = pattern.trim();
+    let query = query.trim();
+    if pattern.is_empty() {
+        return Err("Enter a Redis key pattern".to_string());
+    }
+    if pattern.len() > 512 {
+        return Err("Redis key pattern is too long".to_string());
+    }
+    if query.is_empty() {
+        return Err("Enter text to search for in Redis values".to_string());
+    }
+    if query.len() > 256 {
+        return Err("Redis value search text is too long".to_string());
+    }
+
+    let requested_matches = count.clamp(1, MAX_VALUE_SEARCH_MATCHES);
+    let query_lower = query.to_lowercase();
+    let mut connection = connect(&config)?;
+    let mut next_cursor = cursor;
+    let mut keys = Vec::new();
+    let mut inspected = 0;
+    let mut truncated_values = 0;
+    let mut unsupported_values = 0;
+
+    loop {
+        let response: Value = redis::cmd("SCAN")
+            .arg(next_cursor)
+            .arg("MATCH")
+            .arg(pattern)
+            .arg("COUNT")
+            .arg(MAX_SCAN_COUNT)
+            .query(&mut connection)
+            .map_err(redis_error)?;
+        let (scan_cursor, candidate_keys) = redis_scan_items(response)?;
+        next_cursor = scan_cursor;
+
+        for key in candidate_keys {
+            inspected += 1;
+            let kind = redis_value_kind(&mut connection, &redis_value_to_text(&key))?;
+            let key = redis_value_to_text(&key);
+            if kind == "none" {
+                continue;
+            }
+            let (value, truncated, supported) =
+                read_value_payload(&mut connection, &key, &kind, MAX_VALUE_SEARCH_BYTES)?;
+            if truncated {
+                truncated_values += 1;
+            }
+            if !supported {
+                unsupported_values += 1;
+                continue;
+            }
+            let text = value
+                .map(|value| match value {
+                    JsonValue::String(value) => value,
+                    value => serde_json::to_string(&value).unwrap_or_default(),
+                })
+                .unwrap_or_default();
+            if text.to_lowercase().contains(&query_lower) {
+                keys.push(key);
+            }
+        }
+
+        if next_cursor == 0
+            || keys.len() >= requested_matches
+            || inspected >= MAX_VALUE_SEARCH_INSPECTED
+        {
+            break;
+        }
+    }
+
+    Ok(RedisValueSearchResult {
+        cursor: next_cursor,
+        keys,
+        inspected,
+        truncated_values,
+        unsupported_values,
+    })
+}
+
+#[tauri::command]
+pub async fn redis_search_values(
+    config: RedisConfig,
+    pattern: String,
+    query: String,
+    cursor: u64,
+    count: usize,
+) -> Result<RedisValueSearchResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        search_values(config, pattern, query, cursor, count)
+    })
+    .await
+    .map_err(|error| format!("Redis value search task failed: {}", error))?
 }
 
 fn delete_keys(config: RedisConfig, keys: Vec<String>) -> Result<RedisDeleteResult, String> {

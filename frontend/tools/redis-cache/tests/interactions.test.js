@@ -84,7 +84,7 @@ describe("RedisCacheTool interactions", () => {
 
     const input = document.querySelector("#redisPatternInput");
     input.value = "session";
-    document.querySelector("#redisSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    document.querySelector("#redisKeySearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await settle();
 
     expect(service.scan).toHaveBeenCalledWith(expect.objectContaining({ database: 2 }), "*session*", 0, 100);
@@ -132,7 +132,7 @@ describe("RedisCacheTool interactions", () => {
 
     const input = document.querySelector("#redisPatternInput");
     input.value = "session";
-    document.querySelector("#redisSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    document.querySelector("#redisKeySearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await settle();
 
     expect(service.scan).toHaveBeenNthCalledWith(1, expect.objectContaining({ database: 2 }), "*session*", 0, 100);
@@ -140,6 +140,70 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
     expect(document.querySelector("#redisPagination").hidden).toBe(true);
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
+  });
+
+  it("keeps value search separate from key search and reports bounded inspection", async () => {
+    const service = {
+      scan: vi.fn(),
+      searchValues: vi.fn().mockResolvedValue({
+        cursor: 0,
+        keys: ["session:1"],
+        inspected: 42,
+        truncated_values: 1,
+        unsupported_values: 0,
+      }),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn(),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    document.querySelector("#redisValueQueryInput").value = "customer-42";
+    document.querySelector("#redisValueSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(service.scan).not.toHaveBeenCalled();
+    expect(service.searchValues).toHaveBeenCalledWith(expect.objectContaining({ database: 2 }), "*", "customer-42", 0, 10);
+    expect(document.querySelector("#redisAppliedPattern").textContent).toBe("Value: customer-42 · all keys");
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("Inspected 42 keys");
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("1 large value was sampled");
+  });
+
+  it("opens a read-only formatted JSON value inspector", async () => {
+    const service = {
+      scan: vi.fn(),
+      searchValues: vi.fn(),
+      getValue: vi.fn().mockResolvedValue({
+        key: "session:1",
+        kind: "string",
+        ttl_seconds: 120,
+        memory_bytes: 64,
+        value: '{"customer":"42","active":true}',
+        supported: true,
+        truncated: false,
+      }),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn(),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.keys = ["session:1"];
+    tool.resultPages = [tool.keys.slice()];
+    tool.activePattern = "*session*";
+    tool.scanComplete = true;
+    tool.renderResults();
+
+    document.querySelector('[data-action="view"]').click();
+    await settle();
+
+    expect(service.getValue).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), "session:1");
+    expect(document.querySelector("#redisValueInspector").hidden).toBe(false);
+    expect(document.querySelector("#redisValueInspectorKey").textContent).toBe("session:1");
+    expect(document.querySelector("#redisValueInspectorMeta").textContent).toContain("string");
+    expect(document.querySelector("#redisValueContent").textContent).toContain('"customer"');
+    expect(document.querySelector(".redis-json-key").textContent).toBe('"customer"');
+    expect(document.querySelector(".redis-json-boolean").textContent).toBe("true");
+    expect(document.querySelector("#redisValueContent").innerHTML).not.toContain("<script");
   });
 
   it("keeps buffered scan matches available across numbered pages", async () => {
@@ -154,7 +218,7 @@ describe("RedisCacheTool interactions", () => {
 
     const input = document.querySelector("#redisPatternInput");
     input.value = "session";
-    document.querySelector("#redisSearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    document.querySelector("#redisKeySearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await settle();
 
     expect(service.scan).toHaveBeenCalledTimes(1);
@@ -203,11 +267,13 @@ describe("RedisCacheTool interactions", () => {
 
     document.querySelector("#redisTestConnection").click();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(true);
+    expect(document.querySelector("#redisValueSearchButton").disabled).toBe(true);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(true);
 
     finishTest({ ok: true, message: "Connection successful" });
     await settle();
     expect(document.querySelector("#redisSearchButton").disabled).toBe(false);
+    expect(document.querySelector("#redisValueSearchButton").disabled).toBe(false);
     expect(document.querySelector("#redisTestConnection").disabled).toBe(false);
     expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(true);
     expect(document.querySelector("#redisConnectionDiagnostics").dataset.state).toBe("success");

@@ -5,22 +5,48 @@ export const RedisCacheTemplate = /*html*/ `
         <div class="redis-section-heading">
           <div>
             <h2 id="redisSearchHeading">Find cache keys</h2>
-            <p>Plain text becomes a contains search. Separate terms with spaces. Redis glob patterns such as <code>session:*</code> are used as entered.</p>
           </div>
           <span class="redis-scan-badge">10 results per page · SCAN 100/request</span>
         </div>
 
-        <form id="redisSearchForm" class="redis-search-form">
-          <label class="redis-search-field" for="redisPatternInput">
-            <span>Key or wildcard pattern</span>
-            <div class="redis-search-control">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
-              <input id="redisPatternInput" type="text" maxlength="512" placeholder="session:user:*" autocomplete="off" spellcheck="false" />
-            </div>
-          </label>
-          <button id="redisSearchButton" class="btn btn-primary" type="submit">Find keys</button>
-        </form>
+        <div class="redis-search-grid">
+          <form id="redisKeySearchForm" class="redis-search-form">
+            <label class="redis-search-field" for="redisPatternInput">
+              <span>Find by key</span>
+              <div class="redis-search-control">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
+                <input id="redisPatternInput" type="text" maxlength="512" placeholder="session:user:*" autocomplete="off" spellcheck="false" />
+              </div>
+            </label>
+            <button id="redisSearchButton" class="btn btn-primary" type="submit">Find keys</button>
+          </form>
+          <form id="redisValueSearchForm" class="redis-search-form redis-value-search-form">
+            <label class="redis-search-field" for="redisValueQueryInput">
+              <span>Find in values <small>case-insensitive</small></span>
+              <div class="redis-search-control">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16M4 12h16M4 16.5h10"></path></svg>
+                <input id="redisValueQueryInput" type="text" maxlength="256" placeholder="customer-42" autocomplete="off" spellcheck="false" />
+              </div>
+            </label>
+            <button id="redisValueSearchButton" class="btn btn-secondary" type="submit">Search values</button>
+          </form>
+        </div>
         <p id="redisSearchMessage" class="redis-search-message" role="status" aria-live="polite"></p>
+
+        <section id="redisValueInspector" class="redis-value-inspector" aria-labelledby="redisValueInspectorHeading" hidden>
+          <div class="redis-value-inspector-header">
+            <div>
+              <h3 id="redisValueInspectorHeading">Value inspector</h3>
+              <code id="redisValueInspectorKey"></code>
+              <p id="redisValueInspectorMeta"></p>
+            </div>
+            <button id="redisCloseInspector" class="btn btn-ghost btn-sm" type="button">Close</button>
+          </div>
+          <div id="redisValueInspectorNotice" class="redis-value-inspector-notice" hidden></div>
+          <div id="redisValueInspectorBody" class="redis-value-inspector-body" aria-live="polite">
+            <pre id="redisValueContent" class="redis-value-content"></pre>
+          </div>
+        </section>
 
         <div id="redisDeleteConfirmation" class="redis-delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="redisDeleteTitle" aria-describedby="redisDeleteDescription" hidden>
           <div class="redis-delete-dialog" role="document">
@@ -55,7 +81,7 @@ export const RedisCacheTemplate = /*html*/ `
           <div class="redis-empty-state">
             <svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="13" rx="15" ry="6"></ellipse><path d="M9 13v10c0 3.3 6.7 6 15 6s15-2.7 15-6V13"></path><path d="M9 23v10c0 3.3 6.7 6 15 6 4.1 0 7.8-.7 10.5-1.9"></path><path d="m36 33 6 6m0-6-6 6"></path></svg>
             <h3>Search the keyspace</h3>
-            <p>Results appear here in bounded pages. No values are fetched.</p>
+            <p>Results appear in bounded pages. Use View to inspect a key without changing it.</p>
           </div>
         </div>
 

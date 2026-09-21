@@ -87,6 +87,8 @@ pub fn run() {
       redis_cache::has_redis_credentials,
       redis_cache::redis_test_connection,
       redis_cache::redis_scan_keys,
+      redis_cache::redis_get_value,
+      redis_cache::redis_search_values,
       redis_cache::redis_delete_keys,
       kafka::kafka_test_connection,
       kafka::kafka_list_topics,
