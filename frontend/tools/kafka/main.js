@@ -1,7 +1,7 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
-import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, receivedMessageToDraft } from "./service.js";
+import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, KAFKA_TOPIC_FAVORITES_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, readKafkaTopicFavorites, receivedMessageToDraft } from "./service.js";
 import { KafkaTemplate } from "./template.js";
 import { KafkaDateTimePicker } from "./date-picker.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
@@ -27,6 +27,8 @@ export class KafkaTool extends BaseTool {
     this.receivedMessages = new WeakMap();
     this.historyRequestId = 0;
     this.historyPicker = null;
+    this.favoriteTopics = [];
+    this._resizerCleanup = null;
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -36,16 +38,27 @@ export class KafkaTool extends BaseTool {
     const config = readKafkaConfig();
     this.field("kafkaBrokers").value = config.brokers;
     this.requests = readKafkaRequests();
+    this.favoriteTopics = readKafkaTopicFavorites();
     this.renderRequests();
+    this.field("kafkaConnectionSettings").open = !config.brokers;
+    this.setConnectionState(config.brokers ? "ready" : "empty");
     this.field("kafkaBrokers").addEventListener("change", () => this.saveConnection());
-    this.field("kafkaBrokers").addEventListener("input", () => this.invalidateTopics());
+    this.field("kafkaBrokers").addEventListener("input", () => {
+      this.invalidateTopics();
+      this.setConnectionState(this.config().brokers ? "ready" : "empty");
+    });
     this.field("kafkaTopic").addEventListener("focus", () => { if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(); });
     this.field("kafkaTopicPicker").addEventListener("focusout", (event) => {
       if (!this.field("kafkaTopicPicker").contains(event.relatedTarget)) this.closeTopicMenu();
     });
-    this.field("kafkaTopic").addEventListener("input", () => this.renderTopicOptions());
+    this.field("kafkaTopic").addEventListener("input", () => {
+      this.renderTopicOptions();
+      this.updateTopicFavorite();
+      this.renderRequests();
+    });
     this.field("kafkaTopic").addEventListener("keydown", (event) => this.handleTopicKeydown(event));
     this.field("kafkaTopicToggle").addEventListener("click", () => this.toggleTopicMenu());
+    this.field("kafkaTopicFavorite").addEventListener("click", () => this.toggleTopicFavorite());
     this.field("kafkaTopicRefresh").addEventListener("click", () => this.loadTopics(true));
     this.field("kafkaTopicOptions").addEventListener("pointerdown", (event) => {
       const option = event.target.closest(".kafka-topic-option");
@@ -59,6 +72,8 @@ export class KafkaTool extends BaseTool {
     };
     document.addEventListener("click", this.outsideTopicClick);
     this.field("kafkaTest").addEventListener("click", () => this.testConnection());
+    this.field("kafkaPublishFlow").addEventListener("click", () => this.setFlow("publish"));
+    this.field("kafkaListenFlow").addEventListener("click", () => this.setFlow("listen"));
     this.field("kafkaForm").addEventListener("submit", (event) => { event.preventDefault(); this.publish(); });
     this.field("kafkaSave").addEventListener("click", () => this.saveRequest());
     this.field("kafkaSavedList").addEventListener("click", (event) => this.handleSavedClick(event));
@@ -75,8 +90,12 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaHistorySince").value = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     this.historyPicker = new KafkaDateTimePicker({ root: this.field("kafkaHistoryPicker"), input: this.field("kafkaHistorySince") });
     this.historyPicker.mount();
+    this.updateTopicFavorite();
+    this.initializeResizer();
     this.updateCount();
+    this.suppressTopicFocus = true;
     this.field("kafkaTopic").focus();
+    this.suppressTopicFocus = false;
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
@@ -87,12 +106,41 @@ export class KafkaTool extends BaseTool {
     this.historyRequestId++;
     this.historyPicker?.destroy();
     this.historyPicker = null;
+    this.cleanupResizer();
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
   }
   field(id) { return this.container?.querySelector(`#${id}`); }
   config() { return { brokers: this.field("kafkaBrokers").value.trim(), securityProtocol: "PLAINTEXT" }; }
+  setConnectionState(state, text = "") {
+    const section = this.field("kafkaConnection");
+    const status = this.field("kafkaConnectionStatus");
+    if (!section || !status) return;
+    const brokers = this.config().brokers;
+    const labels = {
+      empty: "Add a bootstrap server to get started.",
+      ready: brokers ? `Ready · ${brokers}` : "Add a bootstrap server to get started.",
+      checking: "Checking connection…",
+      connected: brokers ? `Connected to ${brokers}` : "Connected to Kafka",
+      error: text || "Connection failed. Check broker settings.",
+    };
+    section.dataset.state = state;
+    status.textContent = text || labels[state] || labels.ready;
+    status.dataset.state = state === "error" ? "error" : "ok";
+    status.title = state === "connected" && text ? text : "";
+  }
+  setFlow(flow) {
+    const publish = flow === "publish";
+    const publishButton = this.field("kafkaPublishFlow");
+    const listenButton = this.field("kafkaListenFlow");
+    publishButton?.classList.toggle("is-active", publish);
+    listenButton?.classList.toggle("is-active", !publish);
+    publishButton?.setAttribute("aria-pressed", String(publish));
+    listenButton?.setAttribute("aria-pressed", String(!publish));
+    this.field("kafkaPublishPanel")?.classList.toggle("is-active", publish);
+    this.field("kafkaListenPanel")?.classList.toggle("is-active", !publish);
+  }
   setListeningButton(label = "Start listening", disabled = false, pressed = false) {
     const button = this.field("kafkaListen");
     if (!button) return;
@@ -102,6 +150,109 @@ export class KafkaTool extends BaseTool {
     button.setAttribute("aria-label", label);
   }
   toggleListening() { return this.listening ? this.stopListening() : this.startListening(); }
+
+  initializeResizer() {
+    const layout = this.field("kafkaWorkspace");
+    const resizer = this.field("kafkaResizer");
+    if (!layout || !resizer || this._resizerCleanup) return;
+
+    const RESIZER_WIDTH = 6;
+    const MIN_LEFT = 420;
+    const MIN_RIGHT = 360;
+    let dragging = false;
+    let activePointerId = null;
+
+    const getMetrics = () => {
+      const rect = layout.getBoundingClientRect();
+      const styles = getComputedStyle(layout);
+      const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
+      return { rect, gap, total: rect.width - RESIZER_WIDTH - gap * 2 };
+    };
+    const updateAria = (left, total) => {
+      resizer.setAttribute("aria-valuemin", String(MIN_LEFT));
+      resizer.setAttribute("aria-valuemax", String(Math.max(MIN_LEFT, Math.round(total - MIN_RIGHT))));
+      resizer.setAttribute("aria-valuenow", String(Math.round(left)));
+    };
+    const currentLeft = () => {
+      const firstColumn = getComputedStyle(layout).gridTemplateColumns.split(" ")[0];
+      const current = Number.parseFloat(firstColumn);
+      return Number.isFinite(current) ? current : MIN_LEFT;
+    };
+    const applyLeft = (requestedLeft, persist = true) => {
+      const { total } = getMetrics();
+      const maxLeft = total - MIN_RIGHT;
+      if (maxLeft < MIN_LEFT) return;
+      const left = Math.round(Math.max(MIN_LEFT, Math.min(requestedLeft, maxLeft)));
+      const right = Math.max(MIN_RIGHT, Math.round(total - left));
+      layout.style.gridTemplateColumns = `${left}px ${RESIZER_WIDTH}px ${right}px`;
+      updateAria(left, total);
+      if (persist && total > 0) {
+        try { localStorage.setItem("tool:kafka:split-ratio", String(left / total)); } catch (_) {}
+      }
+    };
+    const onMove = (event) => {
+      if (!dragging || (activePointerId !== null && event.pointerId !== activePointerId)) return;
+      const { rect, gap } = getMetrics();
+      applyLeft(event.clientX - rect.left - gap - RESIZER_WIDTH / 2);
+      event.preventDefault();
+    };
+    const onUp = (event) => {
+      if (!dragging || (activePointerId !== null && event?.pointerId !== activePointerId)) return;
+      if (activePointerId !== null && resizer.hasPointerCapture?.(activePointerId)) resizer.releasePointerCapture?.(activePointerId);
+      dragging = false;
+      activePointerId = null;
+      resizer.classList.remove("is-dragging");
+      document.body.classList.remove("is-resizing");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    const onDown = (event) => {
+      if (window.innerWidth <= 1060) return;
+      dragging = true;
+      activePointerId = event.pointerId;
+      resizer.setPointerCapture?.(activePointerId);
+      resizer.classList.add("is-dragging");
+      document.body.classList.add("is-resizing");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+      event.preventDefault();
+    };
+    const onKeyDown = (event) => {
+      if (window.innerWidth <= 1060) return;
+      const step = event.shiftKey ? 48 : 16;
+      const current = currentLeft();
+      if (event.key === "ArrowLeft") applyLeft(current - step);
+      else if (event.key === "ArrowRight") applyLeft(current + step);
+      else if (event.key === "Home") applyLeft(MIN_LEFT);
+      else if (event.key === "End") applyLeft(getMetrics().total - MIN_RIGHT);
+      else return;
+      event.preventDefault();
+    };
+
+    const metrics = getMetrics();
+    let savedRatio = null;
+    try {
+      const parsed = Number.parseFloat(localStorage.getItem("tool:kafka:split-ratio") || "");
+      if (Number.isFinite(parsed) && parsed > 0 && parsed < 1) savedRatio = parsed;
+    } catch (_) {}
+    if (savedRatio !== null) applyLeft(metrics.total * savedRatio, false);
+    updateAria(currentLeft(), getMetrics().total);
+    resizer.addEventListener("pointerdown", onDown);
+    resizer.addEventListener("keydown", onKeyDown);
+    this._resizerCleanup = () => {
+      onUp({ pointerId: activePointerId });
+      resizer.removeEventListener("pointerdown", onDown);
+      resizer.removeEventListener("keydown", onKeyDown);
+    };
+  }
+
+  cleanupResizer() {
+    if (!this._resizerCleanup) return;
+    try { this._resizerCleanup(); } catch (_) {}
+    this._resizerCleanup = null;
+  }
 
   async initializeJsonEditors() {
     try {
@@ -191,6 +342,32 @@ export class KafkaTool extends BaseTool {
     this.closeTopicMenu();
   }
 
+  updateTopicFavorite() {
+    const button = this.field("kafkaTopicFavorite");
+    if (!button) return;
+    const topic = this.field("kafkaTopic").value.trim();
+    const favorite = Boolean(topic && this.favoriteTopics.includes(topic));
+    button.classList.toggle("is-favorite", favorite);
+    button.setAttribute("aria-pressed", String(favorite));
+    button.setAttribute("aria-label", favorite ? "Remove topic from favorites" : "Favorite topic");
+    button.title = favorite ? "Remove topic from favorites" : "Favorite topic";
+  }
+
+  toggleTopicFavorite() {
+    const topic = this.field("kafkaTopic").value.trim();
+    if (!topic) {
+      this.message("kafkaPublishStatus", "Enter a topic before saving it as a favorite.", true);
+      this.field("kafkaTopic").focus();
+      return;
+    }
+    const favorite = this.favoriteTopics.includes(topic);
+    this.favoriteTopics = favorite ? this.favoriteTopics.filter((item) => item !== topic) : [topic, ...this.favoriteTopics].slice(0, 100);
+    try { localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics)); } catch (_) {}
+    this.updateTopicFavorite();
+    this.renderTopicOptions();
+    this.message("kafkaPublishStatus", favorite ? `Removed “${topic}” from favorites.` : `Added “${topic}” to favorites.`);
+  }
+
   toggleTopicMenu() {
     if (this.field("kafkaTopicMenu").hidden) {
       this.field("kafkaTopic").focus();
@@ -248,7 +425,10 @@ export class KafkaTool extends BaseTool {
   renderTopicOptions() {
     const list = this.field("kafkaTopicOptions");
     if (!list) return;
-    this.visibleTopics = rankKafkaTopics(this.topics, this.field("kafkaTopic").value);
+    const query = this.field("kafkaTopic").value;
+    const favorites = rankKafkaTopics(this.favoriteTopics, query);
+    const allTopics = rankKafkaTopics(this.topics, query).filter((topic) => !this.favoriteTopics.includes(topic));
+    this.visibleTopics = [...favorites, ...allTopics];
     this.activeTopicIndex = this.visibleTopics.length ? 0 : -1;
     list.replaceChildren();
     this.visibleTopics.forEach((topic, index) => {
@@ -260,7 +440,16 @@ export class KafkaTool extends BaseTool {
       option.setAttribute("aria-selected", String(index === this.activeTopicIndex));
       option.dataset.index = String(index);
       option.dataset.active = String(index === this.activeTopicIndex);
-      option.textContent = topic;
+      const label = document.createElement("span");
+      label.textContent = topic;
+      option.append(label);
+      if (this.favoriteTopics.includes(topic)) {
+        const favorite = document.createElement("span");
+        favorite.className = "kafka-topic-option-favorite";
+        favorite.setAttribute("aria-label", "Favorite");
+        favorite.innerHTML = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z\" /></svg>";
+        option.append(favorite);
+      }
       list.append(option);
     });
     this.updateActiveTopic();
@@ -311,6 +500,8 @@ export class KafkaTool extends BaseTool {
     if (!topic) return;
     this.field("kafkaTopic").value = topic;
     this.closeTopicMenu();
+    this.updateTopicFavorite();
+    this.renderRequests();
     this.suppressTopicFocus = true;
     this.field("kafkaTopic").focus();
     this.suppressTopicFocus = false;
@@ -325,10 +516,14 @@ export class KafkaTool extends BaseTool {
     this.saveConnection();
     const button = this.field("kafkaTest");
     button.disabled = true;
-    this.message("kafkaConnectionStatus", "Connecting…");
-    try { this.message("kafkaConnectionStatus", await this.service.test(this.config())); }
-    catch (error) { this.message("kafkaConnectionStatus", String(error), true); }
-    finally { button.disabled = false; }
+    this.setConnectionState("checking");
+    try {
+      const result = await this.service.test(this.config());
+      this.setConnectionState("connected", `Connected to ${this.config().brokers}`);
+      this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
+    } catch (error) {
+      this.setConnectionState("error", String(error));
+    } finally { button.disabled = false; }
   }
 
   records() {
@@ -395,6 +590,7 @@ export class KafkaTool extends BaseTool {
     const request = {
       name, topic: this.field("kafkaTopic").value.trim(), key: this.field("kafkaKey").value,
       headers: this.field("kafkaHeaders").value, value: this.field("kafkaValue").value, bulk: this.field("kafkaBulk").checked,
+      favorite: Boolean(this.requests.find((item) => item.name === name)?.favorite),
     };
     if (!request.topic) { this.message("kafkaPublishStatus", "Enter a topic before saving.", true); return; }
     const next = [request, ...this.requests.filter((item) => item.name !== name)].slice(0, 30);
@@ -407,20 +603,32 @@ export class KafkaTool extends BaseTool {
 
   renderRequests() {
     const root = this.field("kafkaSavedList");
+    if (!root) return;
     root.replaceChildren();
-    if (!this.requests.length) {
+    const topic = this.field("kafkaTopic")?.value.trim();
+    const requests = topic ? this.requests.filter((request) => request.topic === topic) : this.requests;
+    const count = this.field("kafkaTemplateCount");
+    if (count) count.textContent = requests.length ? `${requests.length} ${requests.length === 1 ? "template" : "templates"}` : "";
+    if (!requests.length) {
       const empty = document.createElement("p"); empty.className = "kafka-empty";
-      empty.textContent = "No saved requests yet. Name the current JSON and save it for later."; root.append(empty); return;
+      empty.textContent = topic ? "No templates for this topic yet." : "Save a template to reuse it here."; root.append(empty); return;
     }
-    this.requests.forEach((request, index) => {
+    const ordered = [...requests].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
+    ordered.forEach((request) => {
       const row = document.createElement("div"); row.className = "kafka-saved-row";
       const detail = document.createElement("div");
       const name = document.createElement("strong"); name.textContent = request.name;
-      const topic = document.createElement("small"); topic.textContent = request.topic;
-      detail.append(name, topic);
+      const topicLabel = document.createElement("small"); topicLabel.textContent = request.topic;
+      detail.append(name, topicLabel);
+      const index = this.requests.indexOf(request);
+      const favorite = document.createElement("button"); favorite.type = "button"; favorite.className = "kafka-icon-button kafka-template-favorite"; favorite.dataset.action = "favorite"; favorite.dataset.index = index;
+      favorite.setAttribute("aria-pressed", String(Boolean(request.favorite)));
+      favorite.setAttribute("aria-label", request.favorite ? `Remove ${request.name} from favorites` : `Favorite ${request.name}`);
+      favorite.title = favorite.getAttribute("aria-label");
+      favorite.innerHTML = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z\" /></svg>";
       const load = document.createElement("button"); load.type = "button"; load.className = "btn btn-ghost btn-sm"; load.textContent = "Load"; load.dataset.action = "load"; load.dataset.index = index;
-      const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-ghost btn-sm"; remove.textContent = "Delete"; remove.dataset.action = "delete"; remove.dataset.index = index;
-      row.append(detail, load, remove); root.append(row);
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-ghost btn-sm"; remove.textContent = "Remove"; remove.dataset.action = "delete"; remove.dataset.index = index;
+      row.append(detail, favorite, load, remove); root.append(row);
     });
   }
 
@@ -430,6 +638,12 @@ export class KafkaTool extends BaseTool {
     const index = Number(button.dataset.index);
     const request = this.requests[index];
     if (!request) return;
+    if (button.dataset.action === "favorite") {
+      request.favorite = !request.favorite;
+      localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
+      this.renderRequests();
+      return;
+    }
     if (button.dataset.action === "delete") {
       this.requests.splice(index, 1); localStorage.setItem(KAFKA_REQUESTS_KEY, JSON.stringify(this.requests));
       this.renderRequests(); this.message("kafkaPublishStatus", `Deleted “${request.name}”.`); return;
@@ -437,6 +651,8 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaRequestName").value = request.name;
     this.field("kafkaTopic").value = request.topic;
     this.closeTopicMenu();
+    this.updateTopicFavorite();
+    this.renderRequests();
     this.field("kafkaKey").value = request.key || "";
     this.setJsonValue("Headers", request.headers || "{}");
     this.setJsonValue("Value", request.value);
@@ -448,6 +664,7 @@ export class KafkaTool extends BaseTool {
 
   async startListening() {
     if (this.listening) return;
+    this.setFlow("listen");
     this.stopRequested = false;
     const topic = this.field("kafkaTopic").value.trim();
     if (!this.config().brokers || !topic) { this.message("kafkaListenStatus", "Enter bootstrap servers and a topic.", true); return; }
@@ -496,6 +713,7 @@ export class KafkaTool extends BaseTool {
   }
 
   async searchHistory() {
+    this.setFlow("listen");
     const topic = this.field("kafkaTopic").value.trim();
     const query = this.field("kafkaHistoryQuery").value.trim();
     const sinceMs = new Date(this.field("kafkaHistorySince").value).getTime();
@@ -531,17 +749,39 @@ export class KafkaTool extends BaseTool {
     meta.textContent = `${message.topic} · partition ${message.partition} · offset ${message.offset}` +
       `${message.timestamp ? ` · ${new Date(message.timestamp).toLocaleString()}` : ""}${message.key == null ? "" : ` · key ${message.key}`}` +
       `${message.headers?.length ? ` · ${message.headers.length} ${message.headers.length === 1 ? "header" : "headers"}` : ""}`;
+    const actions = document.createElement("div"); actions.className = "kafka-message-actions";
     const use = document.createElement("button");
     use.type = "button";
     use.className = "btn btn-secondary btn-sm kafka-use-message";
+    use.dataset.messageAction = "use";
     use.textContent = "Use in Publish";
     use.setAttribute("aria-label", `Use message at offset ${message.offset} in Publish`);
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "btn btn-ghost btn-sm";
+    copy.dataset.messageAction = "copy";
+    copy.textContent = "Copy";
+    copy.setAttribute("aria-label", `Copy message at offset ${message.offset}`);
+    const format = document.createElement("button");
+    format.type = "button";
+    format.className = "btn btn-ghost btn-sm";
+    format.dataset.messageAction = "format";
+    format.textContent = "Format";
+    format.setAttribute("aria-label", `Format message at offset ${message.offset} as JSON`);
     let issue;
     try { receivedMessageToDraft(message); }
     catch (error) { use.disabled = true; use.title = error.message; issue = error.message; }
+    try { JSON.stringify(JSON.parse(message.value), null, 2); }
+    catch (_) { format.disabled = true; format.title = "Message value is not valid JSON."; }
     this.receivedMessages.set(use, message);
-    const value = document.createElement("pre"); value.textContent = message.value;
-    top.append(meta, use);
+    this.receivedMessages.set(copy, message);
+    this.receivedMessages.set(format, message);
+    const value = document.createElement("pre");
+    value.className = "kafka-message-value";
+    value.dataset.rawValue = message.value;
+    value.textContent = message.value;
+    actions.append(use, copy, format);
+    top.append(meta, actions);
     article.append(top, value);
     if (fromHistory) root.append(article);
     else root.prepend(article);
@@ -555,25 +795,50 @@ export class KafkaTool extends BaseTool {
   }
 
   handleReceivedClick(event) {
-    const button = event.target.closest(".kafka-use-message");
+    const button = event.target.closest("[data-message-action]");
     if (!button || button.disabled || this.publishing) return;
     const message = this.receivedMessages.get(button);
     if (!message) return;
+    if (button.dataset.messageAction === "copy") {
+      const value = button.closest("article")?.querySelector(".kafka-message-value")?.textContent || message.value;
+      this.copyToClipboard(value, button);
+      return;
+    }
+    if (button.dataset.messageAction === "format") {
+      this.toggleMessageFormat(button);
+      return;
+    }
     try {
       const draft = receivedMessageToDraft(message);
       this.field("kafkaTopic").value = draft.topic;
       this.closeTopicMenu();
+      this.updateTopicFavorite();
+      this.renderRequests();
       this.field("kafkaKey").value = draft.key;
       this.setJsonValue("Headers", draft.headers);
       this.setJsonValue("Value", draft.value);
       this.field("kafkaBulk").checked = false;
       this.field("kafkaRequestName").value = "";
       this.updateCount();
+      this.setFlow("publish");
       this.message("kafkaPublishStatus", `Loaded message at offset ${message.offset}. Review it before publishing.`);
       this.field("kafkaComposeHeading").scrollIntoView?.({ behavior: "smooth", block: "start" });
       if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
       else this.field("kafkaValue").focus();
     } catch (error) { this.message(button.closest("#kafkaHistoryResults") ? "kafkaHistoryStatus" : "kafkaListenStatus", error.message, true); }
+  }
+
+  toggleMessageFormat(button) {
+    const article = button.closest("article");
+    const value = article?.querySelector(".kafka-message-value");
+    if (!value) return;
+    const formatted = button.getAttribute("aria-pressed") !== "true";
+    if (formatted) {
+      try { value.textContent = JSON.stringify(JSON.parse(value.dataset.rawValue), null, 2); }
+      catch (_) { return; }
+    } else value.textContent = value.dataset.rawValue;
+    button.setAttribute("aria-pressed", String(formatted));
+    button.textContent = formatted ? "Raw" : "Format";
   }
 
   async stopListening() {

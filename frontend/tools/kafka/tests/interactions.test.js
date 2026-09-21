@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KafkaTool } from "../main.js";
+import { KAFKA_TOPIC_FAVORITES_KEY } from "../service.js";
 
 vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn() } }));
 
@@ -51,6 +52,61 @@ describe("Kafka publish controls", () => {
     expect(input.value).toMatch(/T01:05$/);
     expect(calendar.hidden).toBe(true);
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps broker setup compact and shows the tested bootstrap server", async () => {
+    const service = { test: vi.fn().mockResolvedValue("Connected to Kafka") };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    const settings = document.querySelector("#kafkaConnectionSettings");
+    expect(settings.open).toBe(true);
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#kafkaTest").click();
+    await settle();
+
+    expect(service.test).toHaveBeenCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" });
+    expect(document.querySelector("#kafkaConnectionStatus").textContent).toBe("Connected to broker:9092");
+    expect(document.querySelector("#kafkaConnection").dataset.state).toBe("connected");
+  });
+
+  it("favorites a topic and keeps multiple templates scoped to that topic", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+    const topic = document.querySelector("#kafkaTopic");
+    topic.value = "orders.test";
+    topic.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#kafkaTopicFavorite").click();
+    expect(JSON.parse(localStorage.getItem(KAFKA_TOPIC_FAVORITES_KEY))).toEqual(["orders.test"]);
+
+    for (const name of ["Create order", "Retry order"]) {
+      document.querySelector("#kafkaRequestName").value = name;
+      document.querySelector("#kafkaValue").value = `{"name":"${name}"}`;
+      document.querySelector("#kafkaSave").click();
+    }
+    expect(document.querySelectorAll("#kafkaSavedList .kafka-saved-row")).toHaveLength(2);
+    expect(document.querySelector("#kafkaTopicFavorite").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("formats message JSON and exposes a copy action without publishing", () => {
+    const service = { publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    tool.activate();
+    tool.listening = true;
+    tool.showMessage({
+      topic: "orders.test", partition: 0, offset: 7, key: null, value: '{"id":1,"items":["a"]}',
+      headers: [], keyIsUtf8: true, valueIsUtf8: true,
+    });
+
+    const article = document.querySelector("#kafkaMessages article");
+    const format = article.querySelector('[data-message-action="format"]');
+    expect(article.querySelector('[data-message-action="copy"]')).not.toBeNull();
+    format.click();
+    expect(article.querySelector("pre").textContent).toContain("\n  \"id\": 1");
+    expect(service.publish).not.toHaveBeenCalled();
   });
 
   it("places the history picker above or below based on available space", () => {

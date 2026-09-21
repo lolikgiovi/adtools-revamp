@@ -1,5 +1,6 @@
 export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
 export const KAFKA_REQUESTS_KEY = "tool:kafka:requests";
+export const KAFKA_TOPIC_FAVORITES_KEY = "tool:kafka:topic-favorites";
 export const MAX_KAFKA_BATCH = 100;
 
 export function rankKafkaTopics(topics, query, limit = 40) {
@@ -93,6 +94,15 @@ export function readKafkaRequests(storage = localStorage) {
   try {
     const requests = JSON.parse(storage.getItem(KAFKA_REQUESTS_KEY) || "[]");
     return Array.isArray(requests) ? requests.filter((item) => item && typeof item.name === "string").slice(0, 30) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function readKafkaTopicFavorites(storage = localStorage) {
+  try {
+    const topics = JSON.parse(storage.getItem(KAFKA_TOPIC_FAVORITES_KEY) || "[]");
+    return Array.isArray(topics) ? topics.filter((topic) => typeof topic === "string" && topic.trim()).slice(0, 100) : [];
   } catch (_) {
     return [];
   }
