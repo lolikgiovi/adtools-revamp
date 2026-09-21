@@ -46,6 +46,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaBrokers").addEventListener("input", () => {
       this.invalidateTopics();
       this.setConnectionState(this.config().brokers ? "ready" : "empty");
+      this.updateCount();
     });
     this.field("kafkaTopic").addEventListener("focus", () => { if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(); });
     this.field("kafkaTopicPicker").addEventListener("focusout", (event) => {
@@ -54,7 +55,9 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTopic").addEventListener("input", () => {
       this.renderTopicOptions();
       this.updateTopicFavorite();
+      this.updateListenTopic();
       this.renderRequests();
+      this.updateCount();
     });
     this.field("kafkaTopic").addEventListener("keydown", (event) => this.handleTopicKeydown(event));
     this.field("kafkaTopicToggle").addEventListener("click", () => this.toggleTopicMenu());
@@ -91,6 +94,7 @@ export class KafkaTool extends BaseTool {
     this.historyPicker = new KafkaDateTimePicker({ root: this.field("kafkaHistoryPicker"), input: this.field("kafkaHistorySince") });
     this.historyPicker.mount();
     this.updateTopicFavorite();
+    this.updateListenTopic();
     this.initializeResizer();
     this.updateCount();
     this.suppressTopicFocus = true;
@@ -120,9 +124,9 @@ export class KafkaTool extends BaseTool {
     const brokers = this.config().brokers;
     const labels = {
       empty: "Add a bootstrap server to get started.",
-      ready: brokers ? `Ready · ${brokers}` : "Add a bootstrap server to get started.",
+      ready: brokers ? `Not tested · ${brokers}` : "Add a bootstrap server to get started.",
       checking: "Checking connection…",
-      connected: brokers ? `Connected to ${brokers}` : "Connected to Kafka",
+      connected: brokers ? `Connected · ${brokers}` : "Connected to Kafka",
       error: text || "Connection failed. Check broker settings.",
     };
     section.dataset.state = state;
@@ -156,7 +160,7 @@ export class KafkaTool extends BaseTool {
     const resizer = this.field("kafkaResizer");
     if (!layout || !resizer || this._resizerCleanup) return;
 
-    const RESIZER_WIDTH = 6;
+    const RESIZER_WIDTH = 4;
     const MIN_LEFT = 420;
     const MIN_RIGHT = 360;
     let dragging = false;
@@ -353,6 +357,14 @@ export class KafkaTool extends BaseTool {
     button.title = favorite ? "Remove topic from favorites" : "Favorite topic";
   }
 
+  updateListenTopic() {
+    const node = this.field("kafkaListenTopic");
+    if (!node) return;
+    const topic = this.field("kafkaTopic")?.value.trim();
+    node.textContent = topic ? `Topic: ${topic}` : "Choose a topic in Publish to search or listen.";
+    node.title = topic || "";
+  }
+
   toggleTopicFavorite() {
     const topic = this.field("kafkaTopic").value.trim();
     if (!topic) {
@@ -501,6 +513,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTopic").value = topic;
     this.closeTopicMenu();
     this.updateTopicFavorite();
+    this.updateListenTopic();
     this.renderRequests();
     this.suppressTopicFocus = true;
     this.field("kafkaTopic").focus();
@@ -521,6 +534,7 @@ export class KafkaTool extends BaseTool {
       const result = await this.service.test(this.config());
       this.setConnectionState("connected", `Connected to ${this.config().brokers}`);
       this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
+      this.field("kafkaConnectionSettings").open = false;
     } catch (error) {
       this.setConnectionState("error", String(error));
     } finally { button.disabled = false; }
@@ -538,9 +552,11 @@ export class KafkaTool extends BaseTool {
     const button = this.field("kafkaPublish");
     try {
       const count = this.records().length;
-      this.message("kafkaCount", `${count} ${count === 1 ? "message" : "messages"} per click${bulk ? " · 100 maximum" : ""}`);
+      const ready = this.config().brokers && this.field("kafkaTopic").value.trim();
+      this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click${bulk ? " · 100 maximum" : ""}` :
+        (!this.config().brokers ? "Set up a broker to publish." : "Choose a topic to publish."));
       button.textContent = "Publish";
-      button.disabled = this.publishing;
+      button.disabled = this.publishing || !ready;
     } catch (_error) {
       this.message("kafkaCount", this.field("kafkaValue").value ? "" :
         (bulk ? "Enter a JSON array of 1 to 100 messages." : "Enter one JSON value."));
@@ -652,6 +668,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTopic").value = request.topic;
     this.closeTopicMenu();
     this.updateTopicFavorite();
+    this.updateListenTopic();
     this.renderRequests();
     this.field("kafkaKey").value = request.key || "";
     this.setJsonValue("Headers", request.headers || "{}");
@@ -813,6 +830,7 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaTopic").value = draft.topic;
       this.closeTopicMenu();
       this.updateTopicFavorite();
+      this.updateListenTopic();
       this.renderRequests();
       this.field("kafkaKey").value = draft.key;
       this.setJsonValue("Headers", draft.headers);

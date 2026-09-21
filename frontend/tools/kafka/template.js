@@ -23,7 +23,7 @@ export const KafkaTemplate = /*html*/ `
       </div>
     </section>
 
-    <nav class="kafka-flow-nav" aria-label="Kafka workflow">
+    <nav class="kafka-flow-nav" aria-label="Kafka workflow on small screens">
       <button id="kafkaPublishFlow" class="kafka-flow-button is-active" type="button" aria-controls="kafkaPublishPanel" aria-pressed="true">Publish</button>
       <button id="kafkaListenFlow" class="kafka-flow-button" type="button" aria-controls="kafkaListenPanel" aria-pressed="false">Listen</button>
     </nav>
@@ -63,16 +63,18 @@ export const KafkaTemplate = /*html*/ `
               <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
 
               <div class="kafka-editor-section">
-                <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers <span>JSON object</span></label><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button></div>
+                <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button></div>
                 <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
                 <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
                 <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
               </div>
 
               <div class="kafka-editor-section kafka-value-section">
-                <div class="kafka-editor-heading"><label id="kafkaValueLabel" for="kafkaValue">Payload <span>JSON</span></label><div class="kafka-editor-controls"><label class="switch kafka-bulk-toggle" title="Publish the payload as a JSON array"><input id="kafkaBulk" type="checkbox" /><span class="slider"></span></label><span class="kafka-toggle-label">Bulk</span><button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button></div></div>
+                <div class="kafka-editor-heading"><label id="kafkaValueLabel" for="kafkaValue">Payload</label><div class="kafka-editor-controls"><label class="switch kafka-bulk-toggle" title="Publish the payload as a JSON array"><input id="kafkaBulk" type="checkbox" /><span class="slider"></span></label><span class="kafka-toggle-label">Bulk</span><button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button></div></div>
                 <div id="kafkaValueEditor" class="kafka-json-editor" aria-labelledby="kafkaValueLabel"></div>
-                <textarea id="kafkaValue" class="kafka-editor-fallback" rows="11" spellcheck="false" placeholder='{"example":"value"}'></textarea>
+                <textarea id="kafkaValue" class="kafka-editor-fallback" rows="11" spellcheck="false">{
+  "example": "value"
+}</textarea>
                 <p id="kafkaValueStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
               </div>
 
@@ -98,19 +100,16 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-pane-header kafka-listen-header">
           <div>
             <h2 id="kafkaListenHeading">Listen</h2>
+            <p id="kafkaListenTopic" class="kafka-pane-caption">Choose a topic in Publish to search or listen.</p>
             <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
-          </div>
-          <div class="kafka-listen-actions">
-            <label class="switch kafka-from-beginning-toggle" title="Start at the earliest retained message"><input id="kafkaFromBeginning" type="checkbox" /><span class="slider"></span><span class="kafka-toggle-label">From start</span></label>
-            <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false">Start listening</button>
           </div>
         </div>
         <div class="kafka-pane-body kafka-listen-body">
           <section class="kafka-history" aria-labelledby="kafkaHistoryHeading">
-            <div class="kafka-subhead"><div><h3 id="kafkaHistoryHeading">Find retained messages</h3><span class="kafka-subhead-note">Search by trace ID, payload, key, or header</span></div></div>
+            <div class="kafka-subhead"><div><h3 id="kafkaHistoryHeading">Search retained messages</h3><span class="kafka-subhead-note">Trace ID, payload, key, or header</span></div></div>
             <form id="kafkaHistoryForm" class="kafka-history-form">
               <label class="kafka-visually-hidden" for="kafkaHistoryQuery">Search retained messages</label>
-              <input id="kafkaHistoryQuery" type="text" minlength="3" maxlength="200" required placeholder="Trace ID or payload text" autocomplete="off" spellcheck="false" aria-label="Trace ID or payload text" />
+              <input id="kafkaHistoryQuery" type="text" minlength="3" maxlength="200" required placeholder="Trace ID, payload, key, or header" autocomplete="off" spellcheck="false" aria-label="Trace ID, payload, key, or header" />
               <div class="kafka-history-field">
                 <label class="kafka-visually-hidden" for="kafkaHistoryTrigger">Since</label>
                 <div id="kafkaHistoryPicker" class="kafka-date-picker">
@@ -151,7 +150,13 @@ export const KafkaTemplate = /*html*/ `
           </section>
 
           <section class="kafka-live-results" aria-labelledby="kafkaLiveHeading">
-            <div class="kafka-subhead"><div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Newest first · up to 100</span></div></div>
+            <div class="kafka-subhead">
+              <div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Optional · newest first · up to 100</span></div>
+              <div class="kafka-listen-actions">
+                <label class="switch kafka-from-beginning-toggle" title="Start at the earliest retained message"><input id="kafkaFromBeginning" type="checkbox" /><span class="slider"></span><span class="kafka-toggle-label">From start</span></label>
+                <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false">Start listening</button>
+              </div>
+            </div>
             <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Start listening to see new messages.</p></div>
           </section>
         </div>

@@ -27,6 +27,31 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaStop")).toBeNull();
   });
 
+  it("starts with a safe payload example and keeps the desktop split search-first", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    expect(document.querySelector("#kafkaValue").value).toBe(`{
+  "example": "value"
+}`);
+    expect(document.querySelector("#kafkaPublish").disabled).toBe(true);
+    expect(document.querySelector("#kafkaCount").textContent).toBe("Set up a broker to publish.");
+    expect(document.querySelector("#kafkaPublishPanel").hidden).toBe(false);
+    expect(document.querySelector("#kafkaListenPanel").hidden).toBe(false);
+    expect(document.querySelector("#kafkaLiveHeading").closest(".kafka-live-results").querySelector("#kafkaListen")).not.toBeNull();
+
+    const topic = document.querySelector("#kafkaTopic");
+    topic.value = "orders.test";
+    topic.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaListenTopic").textContent).toBe("Topic: orders.test");
+
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
+    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
+  });
+
   it("uses a custom responsive history picker instead of a native datetime control", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
@@ -70,6 +95,7 @@ describe("Kafka publish controls", () => {
     expect(service.test).toHaveBeenCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" });
     expect(document.querySelector("#kafkaConnectionStatus").textContent).toBe("Connected to broker:9092");
     expect(document.querySelector("#kafkaConnection").dataset.state).toBe("connected");
+    expect(settings.open).toBe(false);
   });
 
   it("favorites a topic and keeps multiple templates scoped to that topic", () => {

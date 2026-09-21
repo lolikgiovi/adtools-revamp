@@ -79,6 +79,13 @@
   line-height: 1.35;
 }
 
+.kafka-connection-state p {
+  max-width: min(62vw, 760px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kafka-connection-state p[data-state="error"],
 .kafka-tool [data-state="error"] {
   color: hsl(var(--destructive));
@@ -173,7 +180,7 @@
 }
 
 .kafka-flow-nav {
-  display: inline-flex;
+  display: none;
   align-self: flex-start;
   gap: 2px;
   padding: 3px;
@@ -204,11 +211,11 @@
 
 .kafka-workspace {
   display: grid;
-  grid-template-columns: minmax(420px, 1.12fr) 6px minmax(360px, 0.88fr);
+  grid-template-columns: minmax(420px, 1.12fr) 4px minmax(360px, 0.88fr);
   gap: 12px;
   min-width: 0;
-  min-height: min(680px, calc(100dvh - 220px));
-  height: min(760px, calc(100dvh - 220px));
+  min-height: min(620px, calc(100dvh - 190px));
+  height: min(720px, calc(100dvh - 190px));
 }
 
 .kafka-pane {
@@ -218,7 +225,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  border-radius: 10px;
+  border-radius: 8px;
   background: hsl(var(--card));
 }
 
@@ -243,7 +250,7 @@
 
 .kafka-publish-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(190px, 28%);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
   gap: 18px;
   align-items: start;
   min-width: 0;
@@ -549,7 +556,7 @@
 }
 
 .kafka-value-section .kafka-json-editor {
-  height: clamp(220px, 30dvh, 320px);
+  height: clamp(200px, 27dvh, 280px);
 }
 
 .kafka-monaco-ready .kafka-json-editor {
@@ -564,6 +571,10 @@
   margin: 5px 0 0;
   color: hsl(var(--muted-foreground));
   font-size: 11px;
+}
+
+.kafka-json-status[data-state="ok"] {
+  display: none;
 }
 
 .kafka-editor-section .kafka-editor-fallback {
@@ -758,8 +769,8 @@
 
 .kafka-resizer {
   position: relative;
-  width: 6px;
-  min-width: 6px;
+  width: 4px;
+  min-width: 4px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -1117,6 +1128,10 @@
   min-width: 0;
 }
 
+.kafka-live-results .kafka-subhead {
+  align-items: center;
+}
+
 .kafka-live-results .kafka-messages {
   max-height: 330px;
 }
@@ -1190,6 +1205,10 @@ body.is-resizing * {
 }
 
 @media (max-width: 1060px) {
+  .kafka-flow-nav {
+    display: inline-flex;
+  }
+
   .kafka-workspace {
     display: block;
     height: auto;
@@ -1228,6 +1247,15 @@ body.is-resizing * {
   .kafka-history-form > #kafkaHistorySearch {
     grid-column: 1 / -1;
   }
+
+  .kafka-live-results .kafka-subhead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kafka-live-results .kafka-listen-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1238,6 +1266,11 @@ body.is-resizing * {
 
   .kafka-connection-bar {
     flex-wrap: wrap;
+  }
+
+  .kafka-connection-state p {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .kafka-connection-actions {
