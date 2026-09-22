@@ -132,12 +132,34 @@ describe("Kafka publish controls", () => {
     const expand = document.querySelector("#kafkaExpandHeaders");
     expand.click();
     expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(true);
-    expect(document.body.classList.contains("kafka-editor-is-expanded")).toBe(true);
+    expect(document.body.classList.contains("kafka-editor-is-expanded")).toBe(false);
     expect(expand.getAttribute("aria-expanded")).toBe("true");
+    expect(expand.textContent).toBe("Compact");
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(false);
     expect(document.querySelector("#kafkaHeaders").value).toBe('{"source":"uat","traceId":"abc"}');
+  });
+
+  it("keeps topic browsing and template saving in the publish pane flow", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const topicMenu = document.querySelector("#kafkaTopicMenu");
+    expect(topicMenu.parentElement).toBe(document.querySelector("#kafkaTopicPicker"));
+
+    const toggle = document.querySelector("#kafkaTemplateSaveToggle");
+    const panel = document.querySelector("#kafkaTemplateSave");
+    expect(panel.hidden).toBe(true);
+    toggle.click();
+    expect(panel.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(document.querySelector("#kafkaRequestName"));
+
+    document.querySelector("#kafkaTemplateSaveCancel").click();
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(toggle);
   });
 
   it("uses a custom responsive history picker instead of a native datetime control", () => {

@@ -79,6 +79,9 @@ export class KafkaTool extends BaseTool {
       if (event.key === "Escape" && this.field("kafkaHeadersSection")?.classList.contains("is-expanded")) {
         event.preventDefault();
         this.setHeadersExpanded(false);
+      } else if (event.key === "Escape" && !this.field("kafkaTemplateSave")?.hidden) {
+        event.preventDefault();
+        this.setTemplateSaveOpen(false, true);
       }
     };
     document.addEventListener("keydown", this.headersEscapeHandler);
@@ -89,6 +92,8 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaHistoryMode").addEventListener("click", () => this.setListenMode("history"));
     this.field("kafkaLiveMode").parentElement.addEventListener("keydown", (event) => this.handleListenModeKeydown(event));
     this.field("kafkaForm").addEventListener("submit", (event) => { event.preventDefault(); this.publish(); });
+    this.field("kafkaTemplateSaveToggle").addEventListener("click", () => this.setTemplateSaveOpen(this.field("kafkaTemplateSave").hidden));
+    this.field("kafkaTemplateSaveCancel").addEventListener("click", () => this.setTemplateSaveOpen(false, true));
     this.field("kafkaSave").addEventListener("click", () => this.saveRequest());
     this.field("kafkaSavedList").addEventListener("click", (event) => this.handleSavedClick(event));
     this.field("kafkaTemplateSearch").addEventListener("input", () => this.renderRequests());
@@ -117,7 +122,14 @@ export class KafkaTool extends BaseTool {
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
-  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.historyPicker?.close(); this.setHeadersExpanded(false); this.stopListening(); }
+  onSoftDeactivate() {
+    this.historyRequestId++;
+    this.closeTopicMenu();
+    this.historyPicker?.close();
+    this.setHeadersExpanded(false);
+    this.setTemplateSaveOpen(false);
+    this.stopListening();
+  }
   onUnmount() {
     document.removeEventListener("click", this.outsideTopicClick);
     document.removeEventListener("keydown", this.headersEscapeHandler);
@@ -126,8 +138,8 @@ export class KafkaTool extends BaseTool {
     this.historyPicker?.destroy();
     this.historyPicker = null;
     this.cleanupResizer();
-    document.body.classList.remove("kafka-editor-is-expanded");
     this.setHeadersExpanded(false);
+    this.setTemplateSaveOpen(false);
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
@@ -302,15 +314,24 @@ export class KafkaTool extends BaseTool {
     const button = this.field("kafkaExpandHeaders");
     if (!section || !button) return;
     section.classList.toggle("is-expanded", expanded);
-    document.body.classList.toggle("kafka-editor-is-expanded", expanded);
-    button.textContent = expanded ? "Close" : "Expand";
+    button.textContent = expanded ? "Compact" : "Expand";
     button.setAttribute("aria-expanded", String(expanded));
-    button.setAttribute("aria-label", expanded ? "Close expanded headers editor" : "Expand headers editor");
+    button.setAttribute("aria-label", expanded ? "Use compact headers editor" : "Expand headers editor inline");
     if (expanded) {
       this.jsonEditors.Headers?.focus();
       if (!this.jsonEditors.Headers) this.field("kafkaHeaders")?.focus();
     }
     this.jsonEditors.Headers?.layout?.();
+  }
+
+  setTemplateSaveOpen(open, returnFocus = false) {
+    const panel = this.field("kafkaTemplateSave");
+    const toggle = this.field("kafkaTemplateSaveToggle");
+    if (!panel || !toggle) return;
+    panel.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) this.field("kafkaRequestName")?.focus();
+    else if (returnFocus) toggle.focus();
   }
 
   async initializeJsonEditors() {
@@ -671,7 +692,7 @@ export class KafkaTool extends BaseTool {
     catch (_) { this.message("kafkaPublishStatus", "This request is too large to save on this device.", true); return; }
     this.requests = next;
     this.renderRequests();
-    this.field("kafkaTemplateSave").open = false;
+    this.setTemplateSaveOpen(false);
     this.field("kafkaTemplates").open = true;
     this.message("kafkaPublishStatus", `Saved “${name}” on this device.`);
   }

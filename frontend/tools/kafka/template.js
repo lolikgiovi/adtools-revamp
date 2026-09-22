@@ -91,17 +91,20 @@ export const KafkaTemplate = /*html*/ `
               </details>
 
               <div class="kafka-publish-footer">
-                <p id="kafkaCount" class="kafka-hint">1 message per click</p>
-                <div class="kafka-publish-actions">
-                  <details id="kafkaTemplateSave" class="kafka-template-save">
-                    <summary class="btn btn-secondary btn-sm">Save as template</summary>
-                    <div class="kafka-template-save-popover">
-                      <label for="kafkaRequestName">Template name</label>
-                      <input id="kafkaRequestName" type="text" maxlength="80" placeholder="e.g. Retry payment" autocomplete="off" />
-                      <button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button>
-                    </div>
-                  </details>
-                  <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
+                <div class="kafka-publish-footer-main">
+                  <p id="kafkaCount" class="kafka-hint">1 message per click</p>
+                  <div class="kafka-publish-actions">
+                    <button id="kafkaTemplateSaveToggle" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="kafkaTemplateSave">Save as template</button>
+                    <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
+                  </div>
+                </div>
+                <div id="kafkaTemplateSave" class="kafka-template-save" hidden>
+                  <label for="kafkaRequestName">Template name</label>
+                  <div class="kafka-template-save-fields">
+                    <input id="kafkaRequestName" type="text" maxlength="80" placeholder="e.g. Retry payment" autocomplete="off" />
+                    <button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button>
+                    <button id="kafkaTemplateSaveCancel" class="btn btn-ghost btn-sm" type="button">Cancel</button>
+                  </div>
                 </div>
               </div>
               <p id="kafkaPublishStatus" role="status" aria-live="polite"></p>
