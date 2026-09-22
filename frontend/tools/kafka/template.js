@@ -33,7 +33,6 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-pane-header">
           <div>
             <h2 id="kafkaComposeHeading">Publish</h2>
-            <p class="kafka-pane-caption">Select a topic, edit the payload, publish.</p>
           </div>
         </div>
         <div class="kafka-pane-body kafka-publish-body">
