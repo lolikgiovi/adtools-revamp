@@ -1,11 +1,17 @@
 .kafka-tool {
+  --kafka-control-height: 40px;
+  --kafka-compact-height: 32px;
+  --kafka-control-radius: 10px;
+  --kafka-section-gap: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
   min-width: 0;
+  min-height: 0;
+  height: calc(100dvh - 89px);
+  max-height: calc(100dvh - 89px);
   box-sizing: border-box;
-  padding: 0 0 20px;
   color: hsl(var(--foreground));
 }
 
@@ -212,10 +218,12 @@
 .kafka-workspace {
   display: grid;
   grid-template-columns: minmax(420px, 1.12fr) 4px minmax(360px, 0.88fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
-  min-height: min(620px, calc(100dvh - 190px));
-  height: min(720px, calc(100dvh - 190px));
+  min-height: 0;
+  height: auto;
 }
 
 .kafka-pane {
@@ -223,6 +231,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
@@ -242,6 +251,7 @@
 }
 
 .kafka-pane-body {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -267,16 +277,16 @@
 .kafka-publish-options {
   min-width: 0;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--kafka-control-radius);
   background: hsl(var(--background));
 }
 
 .kafka-templates {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .kafka-publish-options {
-  margin-top: 14px;
+  margin-top: var(--kafka-section-gap);
 }
 
 .kafka-templates > summary,
@@ -285,9 +295,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 36px;
+  min-height: var(--kafka-control-height);
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 0 12px;
   color: hsl(var(--foreground));
   font-size: 12px;
   font-weight: 600;
@@ -335,7 +345,7 @@
 
 .kafka-templates-content,
 .kafka-publish-options-content {
-  padding: 0 10px 10px;
+  padding: 0 12px 12px;
 }
 
 .kafka-publish-options-content .kafka-key-field {
@@ -343,12 +353,13 @@
 }
 
 .kafka-publish-options-content .kafka-editor-section {
-  margin-top: 12px;
+  margin-top: var(--kafka-section-gap);
 }
 
 .kafka-field-heading {
   justify-content: space-between;
   gap: 8px;
+  min-height: var(--kafka-compact-height);
 }
 
 .kafka-tool label {
@@ -369,16 +380,23 @@
   width: 100%;
   box-sizing: border-box;
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--kafka-control-radius);
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font: inherit;
 }
 
 .kafka-tool input[type="text"] {
-  height: 38px;
+  height: var(--kafka-control-height);
+  padding: 0 12px;
+}
+
+.kafka-tool .btn {
+  box-sizing: border-box;
+  border-radius: var(--kafka-control-radius);
+  justify-content: center;
 }
 
 .kafka-tool input:focus-visible,
@@ -412,10 +430,10 @@
   display: flex;
   box-sizing: border-box;
   min-width: 0;
-  height: 38px;
+  height: var(--kafka-control-height);
   margin-top: 6px;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--kafka-control-radius);
   background: hsl(var(--background));
 }
 
@@ -431,7 +449,7 @@
   margin: 0;
   padding-right: 8px;
   border: 0;
-  border-radius: 8px 0 0 8px;
+  border-radius: var(--kafka-control-radius) 0 0 var(--kafka-control-radius);
   background: transparent;
 }
 
@@ -445,7 +463,7 @@
   height: 100%;
   padding: 0;
   border: 0;
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
   background: transparent;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
@@ -591,22 +609,22 @@
 
 .kafka-editor-section {
   min-width: 0;
-  margin-top: 14px;
+  margin-top: var(--kafka-section-gap);
 }
 
 .kafka-editor-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 30px;
+  min-height: var(--kafka-compact-height);
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .kafka-editor-heading .btn {
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
+  height: var(--kafka-compact-height);
+  padding: 0 12px;
   border-color: hsl(var(--border));
   color: hsl(var(--foreground));
 }
@@ -622,7 +640,7 @@
   height: 76px;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: var(--kafka-control-radius);
   background: hsl(var(--background));
 }
 
@@ -718,7 +736,7 @@
 .kafka-publish-footer {
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: var(--kafka-section-gap);
 }
 
 .kafka-publish-actions {
@@ -730,8 +748,8 @@
 }
 
 .kafka-publish-actions > #kafkaPublish {
-  min-width: 92px;
-  height: 38px;
+  min-width: 132px;
+  height: var(--kafka-control-height);
   justify-content: center;
 }
 
@@ -743,18 +761,19 @@
 
 .kafka-template-save {
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .kafka-template-save input {
-  width: 150px !important;
-  height: 32px !important;
+  width: 180px !important;
+  height: var(--kafka-control-height) !important;
   margin-top: 0 !important;
 }
 
 .kafka-template-save button {
-  height: 32px;
+  min-width: 132px;
+  height: var(--kafka-control-height);
   justify-content: center;
 }
 
@@ -1290,6 +1309,7 @@ body.is-resizing * {
 
   .kafka-workspace {
     display: block;
+    flex: 1 1 auto;
     height: auto;
     min-height: 0;
   }
@@ -1299,7 +1319,8 @@ body.is-resizing * {
   }
 
   .kafka-pane {
-    min-height: 620px;
+    min-height: 0;
+    height: 100%;
   }
 
   .kafka-pane:not(.is-active) {
@@ -1425,6 +1446,22 @@ body.is-resizing * {
 
   .kafka-date-day {
     height: 36px;
+  }
+}
+
+@media (max-width: 420px) {
+  .kafka-publish-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kafka-publish-actions .kafka-template-save,
+  .kafka-publish-actions > #kafkaPublish {
+    width: 100%;
+  }
+
+  .kafka-template-save input {
+    min-width: 0;
   }
 }
 
