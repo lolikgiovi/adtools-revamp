@@ -120,9 +120,13 @@ export const KafkaTemplate = /*html*/ `
             <p id="kafkaListenTopic" class="kafka-pane-caption">Choose a topic in Publish to search or listen.</p>
             <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
           </div>
+          <div class="kafka-listen-mode" role="tablist" aria-label="Listen mode">
+            <button id="kafkaLiveMode" class="kafka-listen-mode-button is-active" type="button" role="tab" aria-selected="true" aria-controls="kafkaLiveView">Live</button>
+            <button id="kafkaHistoryMode" class="kafka-listen-mode-button" type="button" role="tab" aria-selected="false" aria-controls="kafkaHistoryView" tabindex="-1">History</button>
+          </div>
         </div>
         <div class="kafka-pane-body kafka-listen-body">
-          <section class="kafka-history" aria-labelledby="kafkaHistoryHeading">
+          <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode kafkaHistoryHeading" hidden>
             <div class="kafka-subhead"><div><h3 id="kafkaHistoryHeading">Search retained messages</h3><span class="kafka-subhead-note">Trace ID, payload, key, or header</span></div></div>
             <form id="kafkaHistoryForm" class="kafka-history-form">
               <label class="kafka-visually-hidden" for="kafkaHistoryQuery">Search retained messages</label>
@@ -166,7 +170,7 @@ export const KafkaTemplate = /*html*/ `
             <div id="kafkaHistoryResults" class="kafka-messages kafka-history-results"></div>
           </section>
 
-          <section class="kafka-live-results" aria-labelledby="kafkaLiveHeading">
+          <section id="kafkaLiveView" class="kafka-live-results kafka-listen-view" role="tabpanel" aria-labelledby="kafkaLiveMode kafkaLiveHeading">
             <div class="kafka-subhead">
               <div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Optional · newest first · up to 100</span></div>
               <div class="kafka-listen-actions">

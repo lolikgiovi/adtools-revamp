@@ -85,6 +85,9 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTest").addEventListener("click", () => this.testConnection());
     this.field("kafkaPublishFlow").addEventListener("click", () => this.setFlow("publish"));
     this.field("kafkaListenFlow").addEventListener("click", () => this.setFlow("listen"));
+    this.field("kafkaLiveMode").addEventListener("click", () => this.setListenMode("live"));
+    this.field("kafkaHistoryMode").addEventListener("click", () => this.setListenMode("history"));
+    this.field("kafkaLiveMode").parentElement.addEventListener("keydown", (event) => this.handleListenModeKeydown(event));
     this.field("kafkaForm").addEventListener("submit", (event) => { event.preventDefault(); this.publish(); });
     this.field("kafkaSave").addEventListener("click", () => this.saveRequest());
     this.field("kafkaSavedList").addEventListener("click", (event) => this.handleSavedClick(event));
@@ -158,6 +161,28 @@ export class KafkaTool extends BaseTool {
     listenButton?.setAttribute("aria-pressed", String(!publish));
     this.field("kafkaPublishPanel")?.classList.toggle("is-active", publish);
     this.field("kafkaListenPanel")?.classList.toggle("is-active", !publish);
+  }
+  setListenMode(mode, focus = false) {
+    const live = mode === "live";
+    const liveButton = this.field("kafkaLiveMode");
+    const historyButton = this.field("kafkaHistoryMode");
+    liveButton?.classList.toggle("is-active", live);
+    historyButton?.classList.toggle("is-active", !live);
+    liveButton?.setAttribute("aria-selected", String(live));
+    historyButton?.setAttribute("aria-selected", String(!live));
+    if (liveButton) liveButton.tabIndex = live ? 0 : -1;
+    if (historyButton) historyButton.tabIndex = live ? -1 : 0;
+    if (this.field("kafkaLiveView")) this.field("kafkaLiveView").hidden = !live;
+    if (this.field("kafkaHistoryView")) this.field("kafkaHistoryView").hidden = live;
+    if (live) this.historyPicker?.close();
+    if (focus) (live ? liveButton : historyButton)?.focus();
+  }
+  handleListenModeKeydown(event) {
+    const keyModes = { ArrowLeft: "live", ArrowRight: "history", Home: "live", End: "history" };
+    const mode = keyModes[event.key];
+    if (!mode) return;
+    event.preventDefault();
+    this.setListenMode(mode, true);
   }
   setListeningButton(label = "Start listening", disabled = false, pressed = false) {
     const button = this.field("kafkaListen");
@@ -742,6 +767,7 @@ export class KafkaTool extends BaseTool {
   async startListening() {
     if (this.listening) return;
     this.setFlow("listen");
+    this.setListenMode("live");
     this.stopRequested = false;
     const topic = this.field("kafkaTopic").value.trim();
     if (!this.config().brokers || !topic) { this.message("kafkaListenStatus", "Enter bootstrap servers and a topic.", true); return; }
@@ -791,6 +817,7 @@ export class KafkaTool extends BaseTool {
 
   async searchHistory() {
     this.setFlow("listen");
+    this.setListenMode("history");
     const topic = this.field("kafkaTopic").value.trim();
     const query = this.field("kafkaHistoryQuery").value.trim();
     const sinceMs = new Date(this.field("kafkaHistorySince").value).getTime();

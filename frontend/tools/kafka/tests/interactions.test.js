@@ -39,6 +39,8 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaPublishPanel").hidden).toBe(false);
     expect(document.querySelector("#kafkaListenPanel").hidden).toBe(false);
     expect(document.querySelector("#kafkaLiveHeading").closest(".kafka-live-results").querySelector("#kafkaListen")).not.toBeNull();
+    expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
+    expect(document.querySelector("#kafkaHistoryView").hidden).toBe(true);
 
     const topic = document.querySelector("#kafkaTopic");
     topic.value = "orders.test";
@@ -50,6 +52,28 @@ describe("Kafka publish controls", () => {
     brokers.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
     expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
+  });
+
+  it("gives live listening and retained history separate full-pane modes", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const liveMode = document.querySelector("#kafkaLiveMode");
+    const historyMode = document.querySelector("#kafkaHistoryMode");
+    historyMode.click();
+    expect(historyMode.getAttribute("aria-selected")).toBe("true");
+    expect(liveMode.getAttribute("aria-selected")).toBe("false");
+    expect(document.querySelector("#kafkaHistoryView").hidden).toBe(false);
+    expect(document.querySelector("#kafkaLiveView").hidden).toBe(true);
+
+    liveMode.click();
+    expect(liveMode.getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
+
+    liveMode.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    expect(historyMode.getAttribute("aria-selected")).toBe("true");
+    expect(historyMode.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(historyMode);
   });
 
   it("keeps payload primary and progressively discloses templates and options", () => {
