@@ -33,7 +33,7 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-pane-header">
           <div>
             <h2 id="kafkaComposeHeading">Publish</h2>
-            <p class="kafka-pane-caption">Choose a topic, shape the payload, send when ready.</p>
+            <p class="kafka-pane-caption">Select a topic, edit the payload, publish.</p>
           </div>
         </div>
         <div class="kafka-pane-body kafka-publish-body">
@@ -57,17 +57,12 @@ export const KafkaTemplate = /*html*/ `
                     </div>
                   </div>
                 </div>
-                <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
               </div>
 
-              <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
-
-              <div class="kafka-editor-section">
-                <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button></div>
-                <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
-                <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
-                <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
-              </div>
+              <details id="kafkaTemplates" class="kafka-templates">
+                <summary><span>Templates</span><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></summary>
+                <div class="kafka-templates-content"><div id="kafkaSavedList"></div></div>
+              </details>
 
               <div class="kafka-editor-section kafka-value-section">
                 <div class="kafka-editor-heading"><label id="kafkaValueLabel" for="kafkaValue">Payload</label><div class="kafka-editor-controls"><label class="switch kafka-bulk-toggle" title="Publish the payload as a JSON array"><input id="kafkaBulk" type="checkbox" /><span class="slider"></span></label><span class="kafka-toggle-label">Bulk</span><button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button></div></div>
@@ -78,18 +73,30 @@ export const KafkaTemplate = /*html*/ `
                 <p id="kafkaValueStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
               </div>
 
+              <details id="kafkaPublishOptions" class="kafka-publish-options">
+                <summary><span>Options</span><span class="kafka-subhead-note">Key · headers</span></summary>
+                <div class="kafka-publish-options-content">
+                  <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
+
+                  <div class="kafka-editor-section">
+                    <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button></div>
+                    <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
+                    <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
+                    <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+              </details>
+
               <div class="kafka-publish-footer">
                 <p id="kafkaCount" class="kafka-hint">1 message per click</p>
-                <div class="kafka-template-save"><input id="kafkaRequestName" type="text" maxlength="80" aria-label="Template name" placeholder="Template name" /><button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button></div>
+                <div class="kafka-publish-actions">
+                  <div class="kafka-template-save"><input id="kafkaRequestName" type="text" maxlength="80" aria-label="Template name" placeholder="Template name" /><button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button></div>
+                  <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
+                </div>
               </div>
               <p id="kafkaPublishStatus" role="status" aria-live="polite"></p>
               <div id="kafkaDeliveries" class="kafka-deliveries" aria-live="polite"></div>
             </form>
-
-            <aside class="kafka-templates" aria-labelledby="kafkaSavedHeading">
-              <div class="kafka-subhead"><div><h3 id="kafkaSavedHeading">Templates</h3><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></div></div>
-              <div id="kafkaSavedList"></div>
-            </aside>
           </div>
         </div>
       </section>

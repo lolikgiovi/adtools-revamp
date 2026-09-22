@@ -377,7 +377,7 @@ export class KafkaTool extends BaseTool {
     try { localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics)); } catch (_) {}
     this.updateTopicFavorite();
     this.renderTopicOptions();
-    this.message("kafkaPublishStatus", favorite ? `Removed “${topic}” from favorites.` : `Added “${topic}” to favorites.`);
+    this.showSuccess(favorite ? `Removed “${topic}” from favorites.` : `Added “${topic}” to favorites.`);
   }
 
   toggleTopicMenu() {
@@ -614,6 +614,7 @@ export class KafkaTool extends BaseTool {
     catch (_) { this.message("kafkaPublishStatus", "This request is too large to save on this device.", true); return; }
     this.requests = next;
     this.renderRequests();
+    this.field("kafkaTemplates").open = true;
     this.message("kafkaPublishStatus", `Saved “${name}” on this device.`);
   }
 
@@ -674,6 +675,7 @@ export class KafkaTool extends BaseTool {
     this.setJsonValue("Headers", request.headers || "{}");
     this.setJsonValue("Value", request.value);
     this.field("kafkaBulk").checked = Boolean(request.bulk);
+    this.field("kafkaPublishOptions").open = Boolean(request.key || (request.headers && request.headers.trim() !== "{}"));
     this.updateCount(); this.message("kafkaPublishStatus", `Loaded “${request.name}”. Review it before publishing.`);
     if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
     else this.field("kafkaValue").focus();
@@ -837,6 +839,7 @@ export class KafkaTool extends BaseTool {
       this.setJsonValue("Value", draft.value);
       this.field("kafkaBulk").checked = false;
       this.field("kafkaRequestName").value = "";
+      this.field("kafkaPublishOptions").open = Boolean(draft.key || draft.headers !== "{}");
       this.updateCount();
       this.setFlow("publish");
       this.message("kafkaPublishStatus", `Loaded message at offset ${message.offset}. Review it before publishing.`);

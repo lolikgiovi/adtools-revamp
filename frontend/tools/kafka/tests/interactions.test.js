@@ -52,6 +52,26 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
   });
 
+  it("keeps payload primary and progressively discloses templates and options", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const templates = document.querySelector("#kafkaTemplates");
+    const options = document.querySelector("#kafkaPublishOptions");
+    const payload = document.querySelector(".kafka-value-section");
+    expect(templates.open).toBe(false);
+    expect(options.open).toBe(false);
+    expect(payload.nextElementSibling).toBe(options);
+
+    templates.querySelector("summary").click();
+    options.querySelector("summary").click();
+    expect(templates.open).toBe(true);
+    expect(options.open).toBe(true);
+    expect(document.querySelector("#kafkaSavedList")).not.toBeNull();
+    expect(document.querySelector("#kafkaKey")).not.toBeNull();
+    expect(document.querySelector("#kafkaHeaders")).not.toBeNull();
+  });
+
   it("uses a custom responsive history picker instead of a native datetime control", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
@@ -99,13 +119,17 @@ describe("Kafka publish controls", () => {
   });
 
   it("favorites a topic and keeps multiple templates scoped to that topic", () => {
-    const tool = new KafkaTool(null, { publish: vi.fn() });
+    const eventBus = { emit: vi.fn() };
+    const tool = new KafkaTool(eventBus, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
     const topic = document.querySelector("#kafkaTopic");
     topic.value = "orders.test";
     topic.dispatchEvent(new Event("input", { bubbles: true }));
     document.querySelector("#kafkaTopicFavorite").click();
     expect(JSON.parse(localStorage.getItem(KAFKA_TOPIC_FAVORITES_KEY))).toEqual(["orders.test"]);
+    expect(eventBus.emit).toHaveBeenCalledWith("notification:success", {
+      message: "Added “orders.test” to favorites.", duration: 2500,
+    });
 
     for (const name of ["Create order", "Retry order"]) {
       document.querySelector("#kafkaRequestName").value = name;

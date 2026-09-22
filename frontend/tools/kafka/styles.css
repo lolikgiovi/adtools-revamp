@@ -249,10 +249,7 @@
 }
 
 .kafka-publish-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
-  gap: 18px;
-  align-items: start;
+  display: block;
   min-width: 0;
 }
 
@@ -263,16 +260,90 @@
 }
 
 .kafka-topic-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
+  display: block;
 }
 
-.kafka-topic-row > button {
-  min-width: 92px;
-  height: 38px;
-  justify-content: center;
+.kafka-templates,
+.kafka-publish-options {
+  min-width: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+}
+
+.kafka-templates {
+  margin-top: 10px;
+}
+
+.kafka-publish-options {
+  margin-top: 14px;
+}
+
+.kafka-templates > summary,
+.kafka-publish-options > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.kafka-templates > summary::-webkit-details-marker,
+.kafka-publish-options > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kafka-templates > summary::after,
+.kafka-publish-options > summary::after {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  content: "▼";
+  font-size: 8px;
+  transition: transform 140ms ease;
+}
+
+.kafka-templates[open] > summary::after,
+.kafka-publish-options[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.kafka-templates > summary:hover,
+.kafka-publish-options > summary:hover,
+.kafka-templates[open] > summary,
+.kafka-publish-options[open] > summary {
+  background: hsl(var(--muted));
+}
+
+.kafka-templates > summary:focus-visible,
+.kafka-publish-options > summary:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+
+.kafka-templates summary .kafka-subhead-note,
+.kafka-publish-options summary .kafka-subhead-note {
+  margin: 0 0 0 auto;
+  font-weight: 400;
+}
+
+.kafka-templates-content,
+.kafka-publish-options-content {
+  padding: 0 10px 10px;
+}
+
+.kafka-publish-options-content .kafka-key-field {
+  margin-top: 0;
+}
+
+.kafka-publish-options-content .kafka-editor-section {
+  margin-top: 12px;
 }
 
 .kafka-field-heading {
@@ -319,7 +390,7 @@
 }
 
 .kafka-tool textarea {
-  min-height: 240px;
+  min-height: 180px;
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
@@ -548,7 +619,7 @@
 
 .kafka-json-editor {
   display: none;
-  height: 92px;
+  height: 76px;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
@@ -556,7 +627,7 @@
 }
 
 .kafka-value-section .kafka-json-editor {
-  height: clamp(200px, 27dvh, 280px);
+  height: clamp(180px, 22dvh, 240px);
 }
 
 .kafka-monaco-ready .kafka-json-editor {
@@ -582,11 +653,11 @@
 }
 
 .kafka-editor-section #kafkaHeaders {
-  min-height: 92px;
+  min-height: 76px;
 }
 
 .kafka-value-section #kafkaValue {
-  min-height: 220px;
+  min-height: 180px;
 }
 
 .kafka-tool .switch {
@@ -650,6 +721,20 @@
   margin-top: 12px;
 }
 
+.kafka-publish-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kafka-publish-actions > #kafkaPublish {
+  min-width: 92px;
+  height: 38px;
+  justify-content: center;
+}
+
 .kafka-hint {
   margin: 0;
   color: hsl(var(--muted-foreground));
@@ -693,12 +778,6 @@
 
 .kafka-deliveries p {
   margin: 4px 0;
-}
-
-.kafka-templates {
-  min-width: 0;
-  padding-left: 16px;
-  border-left: 1px solid hsl(var(--border));
 }
 
 .kafka-subhead {
@@ -1229,15 +1308,8 @@ body.is-resizing * {
 }
 
 @media (max-width: 760px) {
-  .kafka-publish-grid {
-    grid-template-columns: 1fr;
-  }
-
   .kafka-templates {
-    padding-top: 14px;
-    padding-left: 0;
-    border-top: 1px solid hsl(var(--border));
-    border-left: 0;
+    margin-top: 10px;
   }
 
   .kafka-history-form {
@@ -1284,7 +1356,7 @@ body.is-resizing * {
   }
 
   .kafka-topic-row {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
   .kafka-topic-row > button {
@@ -1297,6 +1369,15 @@ body.is-resizing * {
 
   .kafka-template-save {
     width: 100%;
+  }
+
+  .kafka-publish-actions {
+    width: 100%;
+  }
+
+  .kafka-publish-actions .kafka-template-save {
+    width: auto;
+    flex: 1;
   }
 
   .kafka-template-save input {
@@ -1349,6 +1430,8 @@ body.is-resizing * {
 
 @media (prefers-reduced-motion: reduce) {
   .kafka-settings summary::after,
+  .kafka-templates > summary::after,
+  .kafka-publish-options > summary::after,
   .kafka-tool .switch .slider,
   .kafka-tool .switch .slider::before,
   .kafka-resizer::before {
