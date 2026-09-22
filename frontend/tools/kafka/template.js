@@ -60,7 +60,11 @@ export const KafkaTemplate = /*html*/ `
 
               <details id="kafkaTemplates" class="kafka-templates">
                 <summary><span>Templates</span><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></summary>
-                <div class="kafka-templates-content"><div id="kafkaSavedList"></div></div>
+                <div class="kafka-templates-content">
+                  <label class="kafka-template-search-label" for="kafkaTemplateSearch">Find a saved template</label>
+                  <input id="kafkaTemplateSearch" type="search" placeholder="Filter templates" autocomplete="off" spellcheck="false" />
+                  <div id="kafkaSavedList"></div>
+                </div>
               </details>
 
               <div class="kafka-editor-section kafka-value-section">
@@ -73,12 +77,12 @@ export const KafkaTemplate = /*html*/ `
               </div>
 
               <details id="kafkaPublishOptions" class="kafka-publish-options">
-                <summary><span>Options</span><span class="kafka-subhead-note">Key · headers</span></summary>
+                <summary><span>Options</span><span id="kafkaPublishOptionsSummary" class="kafka-subhead-note">Optional</span></summary>
                 <div class="kafka-publish-options-content">
                   <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
 
-                  <div class="kafka-editor-section">
-                    <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button></div>
+                  <div id="kafkaHeadersSection" class="kafka-editor-section">
+                    <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><div class="kafka-editor-controls"><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button><button id="kafkaExpandHeaders" class="btn btn-ghost btn-sm" type="button" aria-controls="kafkaHeadersEditor" aria-expanded="false">Expand</button></div></div>
                     <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
                     <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
                     <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
@@ -89,7 +93,14 @@ export const KafkaTemplate = /*html*/ `
               <div class="kafka-publish-footer">
                 <p id="kafkaCount" class="kafka-hint">1 message per click</p>
                 <div class="kafka-publish-actions">
-                  <div class="kafka-template-save"><input id="kafkaRequestName" type="text" maxlength="80" aria-label="Template name" placeholder="Template name" /><button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button></div>
+                  <details id="kafkaTemplateSave" class="kafka-template-save">
+                    <summary class="btn btn-secondary btn-sm">Save as template</summary>
+                    <div class="kafka-template-save-popover">
+                      <label for="kafkaRequestName">Template name</label>
+                      <input id="kafkaRequestName" type="text" maxlength="80" placeholder="e.g. Retry payment" autocomplete="off" />
+                      <button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button>
+                    </div>
+                  </details>
                   <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
                 </div>
               </div>

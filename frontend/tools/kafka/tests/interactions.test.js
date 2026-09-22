@@ -72,6 +72,50 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaHeaders")).not.toBeNull();
   });
 
+  it("filters saved templates and closes the picker after preparing one", () => {
+    const service = { publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    document.querySelector("#kafkaTopic").value = "orders.test";
+
+    for (const [name, value] of [["Create order", '{"kind":"create"}'], ["Retry order", '{"kind":"retry"}']]) {
+      document.querySelector("#kafkaRequestName").value = name;
+      document.querySelector("#kafkaValue").value = value;
+      document.querySelector("#kafkaSave").click();
+    }
+
+    const search = document.querySelector("#kafkaTemplateSearch");
+    search.value = "retry";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelectorAll("#kafkaSavedList .kafka-saved-row")).toHaveLength(1);
+    expect(document.querySelector("#kafkaSavedList").textContent).toContain("Retry order");
+
+    document.querySelector('[data-action="load"]').click();
+    expect(document.querySelector("#kafkaTemplates").open).toBe(false);
+    expect(document.querySelector("#kafkaValue").value).toBe('{"kind":"retry"}');
+    expect(service.publish).not.toHaveBeenCalled();
+  });
+
+  it("shows option counts and expands headers without changing the JSON contract", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const headers = document.querySelector("#kafkaHeaders");
+    headers.value = '{"source":"uat","traceId":"abc"}';
+    headers.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaPublishOptionsSummary").textContent).toBe("2 headers");
+
+    const expand = document.querySelector("#kafkaExpandHeaders");
+    expand.click();
+    expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(true);
+    expect(document.body.classList.contains("kafka-editor-is-expanded")).toBe(true);
+    expect(expand.getAttribute("aria-expanded")).toBe("true");
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(false);
+    expect(document.querySelector("#kafkaHeaders").value).toBe('{"source":"uat","traceId":"abc"}');
+  });
+
   it("uses a custom responsive history picker instead of a native datetime control", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));

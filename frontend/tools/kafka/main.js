@@ -56,6 +56,7 @@ export class KafkaTool extends BaseTool {
       this.renderTopicOptions();
       this.updateTopicFavorite();
       this.updateListenTopic();
+      this.field("kafkaTemplateSearch").value = "";
       this.renderRequests();
       this.updateCount();
     });
@@ -74,17 +75,27 @@ export class KafkaTool extends BaseTool {
       if (!this.field("kafkaTopicMenu")?.hidden && !this.field("kafkaTopicPicker")?.contains(event.target)) this.closeTopicMenu();
     };
     document.addEventListener("click", this.outsideTopicClick);
+    this.headersEscapeHandler = (event) => {
+      if (event.key === "Escape" && this.field("kafkaHeadersSection")?.classList.contains("is-expanded")) {
+        event.preventDefault();
+        this.setHeadersExpanded(false);
+      }
+    };
+    document.addEventListener("keydown", this.headersEscapeHandler);
     this.field("kafkaTest").addEventListener("click", () => this.testConnection());
     this.field("kafkaPublishFlow").addEventListener("click", () => this.setFlow("publish"));
     this.field("kafkaListenFlow").addEventListener("click", () => this.setFlow("listen"));
     this.field("kafkaForm").addEventListener("submit", (event) => { event.preventDefault(); this.publish(); });
     this.field("kafkaSave").addEventListener("click", () => this.saveRequest());
     this.field("kafkaSavedList").addEventListener("click", (event) => this.handleSavedClick(event));
+    this.field("kafkaTemplateSearch").addEventListener("input", () => this.renderRequests());
     this.field("kafkaBulk").addEventListener("change", () => this.updateCount());
+    this.field("kafkaKey").addEventListener("input", () => this.updateCount());
     this.field("kafkaValue").addEventListener("input", () => this.updateCount());
     this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
     this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
+    this.field("kafkaExpandHeaders").addEventListener("click", () => this.setHeadersExpanded());
     this.field("kafkaListen").addEventListener("click", () => this.toggleListening());
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryResults").addEventListener("click", (event) => this.handleReceivedClick(event));
@@ -103,14 +114,17 @@ export class KafkaTool extends BaseTool {
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
-  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.historyPicker?.close(); this.stopListening(); }
+  onSoftDeactivate() { this.historyRequestId++; this.closeTopicMenu(); this.historyPicker?.close(); this.setHeadersExpanded(false); this.stopListening(); }
   onUnmount() {
     document.removeEventListener("click", this.outsideTopicClick);
+    document.removeEventListener("keydown", this.headersEscapeHandler);
     this.topicRequestId++;
     this.historyRequestId++;
     this.historyPicker?.destroy();
     this.historyPicker = null;
     this.cleanupResizer();
+    document.body.classList.remove("kafka-editor-is-expanded");
+    this.setHeadersExpanded(false);
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
@@ -256,6 +270,22 @@ export class KafkaTool extends BaseTool {
     if (!this._resizerCleanup) return;
     try { this._resizerCleanup(); } catch (_) {}
     this._resizerCleanup = null;
+  }
+
+  setHeadersExpanded(expanded = !this.field("kafkaHeadersSection")?.classList.contains("is-expanded")) {
+    const section = this.field("kafkaHeadersSection");
+    const button = this.field("kafkaExpandHeaders");
+    if (!section || !button) return;
+    section.classList.toggle("is-expanded", expanded);
+    document.body.classList.toggle("kafka-editor-is-expanded", expanded);
+    button.textContent = expanded ? "Close" : "Expand";
+    button.setAttribute("aria-expanded", String(expanded));
+    button.setAttribute("aria-label", expanded ? "Close expanded headers editor" : "Expand headers editor");
+    if (expanded) {
+      this.jsonEditors.Headers?.focus();
+      if (!this.jsonEditors.Headers) this.field("kafkaHeaders")?.focus();
+    }
+    this.jsonEditors.Headers?.layout?.();
   }
 
   async initializeJsonEditors() {
@@ -514,6 +544,7 @@ export class KafkaTool extends BaseTool {
     this.closeTopicMenu();
     this.updateTopicFavorite();
     this.updateListenTopic();
+    this.field("kafkaTemplateSearch").value = "";
     this.renderRequests();
     this.suppressTopicFocus = true;
     this.field("kafkaTopic").focus();
@@ -546,6 +577,7 @@ export class KafkaTool extends BaseTool {
   }
 
   updateCount() {
+    this.updateOptionsSummary();
     this.validateJson("Headers");
     this.validateJson("Value");
     const bulk = this.field("kafkaBulk").checked;
@@ -614,8 +646,30 @@ export class KafkaTool extends BaseTool {
     catch (_) { this.message("kafkaPublishStatus", "This request is too large to save on this device.", true); return; }
     this.requests = next;
     this.renderRequests();
+    this.field("kafkaTemplateSave").open = false;
     this.field("kafkaTemplates").open = true;
     this.message("kafkaPublishStatus", `Saved “${name}” on this device.`);
+  }
+
+  updateOptionsSummary() {
+    const summary = this.field("kafkaPublishOptionsSummary");
+    if (!summary) return;
+    const key = this.field("kafkaKey")?.value.trim();
+    const headers = this.field("kafkaHeaders")?.value.trim();
+    const parts = [];
+    if (key) parts.push("Key");
+    if (headers && headers !== "{}") {
+      try {
+        const parsed = JSON.parse(headers);
+        const valid = parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+          Object.entries(parsed).every(([name, value]) => name && typeof value === "string");
+        if (valid && Object.keys(parsed).length) {
+          const count = Object.keys(parsed).length;
+          parts.push(String(count) + (count === 1 ? " header" : " headers"));
+        } else parts.push("Headers need attention");
+      } catch (_) { parts.push("Headers need attention"); }
+    }
+    summary.textContent = parts.length ? parts.join(" · ") : "Optional";
   }
 
   renderRequests() {
@@ -623,12 +677,14 @@ export class KafkaTool extends BaseTool {
     if (!root) return;
     root.replaceChildren();
     const topic = this.field("kafkaTopic")?.value.trim();
-    const requests = topic ? this.requests.filter((request) => request.topic === topic) : this.requests;
+    const topicRequests = topic ? this.requests.filter((request) => request.topic === topic) : this.requests;
+    const query = this.field("kafkaTemplateSearch")?.value.trim().toLowerCase() || "";
+    const requests = query ? topicRequests.filter((request) => request.name.toLowerCase().includes(query)) : topicRequests;
     const count = this.field("kafkaTemplateCount");
-    if (count) count.textContent = requests.length ? `${requests.length} ${requests.length === 1 ? "template" : "templates"}` : "";
+    if (count) count.textContent = topicRequests.length ? `${topicRequests.length} ${topicRequests.length === 1 ? "template" : "templates"}` : "";
     if (!requests.length) {
       const empty = document.createElement("p"); empty.className = "kafka-empty";
-      empty.textContent = topic ? "No templates for this topic yet." : "Save a template to reuse it here."; root.append(empty); return;
+      empty.textContent = query ? "No templates match “" + query + "”." : topic ? "No templates for this topic yet." : "Save a template to reuse it here."; root.append(empty); return;
     }
     const ordered = [...requests].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
     ordered.forEach((request) => {
@@ -643,7 +699,7 @@ export class KafkaTool extends BaseTool {
       favorite.setAttribute("aria-label", request.favorite ? `Remove ${request.name} from favorites` : `Favorite ${request.name}`);
       favorite.title = favorite.getAttribute("aria-label");
       favorite.innerHTML = "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z\" /></svg>";
-      const load = document.createElement("button"); load.type = "button"; load.className = "btn btn-ghost btn-sm"; load.textContent = "Load"; load.dataset.action = "load"; load.dataset.index = index;
+      const load = document.createElement("button"); load.type = "button"; load.className = "btn btn-secondary btn-sm"; load.textContent = "Use"; load.dataset.action = "load"; load.dataset.index = index;
       const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-ghost btn-sm"; remove.textContent = "Remove"; remove.dataset.action = "delete"; remove.dataset.index = index;
       row.append(detail, favorite, load, remove); root.append(row);
     });
@@ -676,6 +732,8 @@ export class KafkaTool extends BaseTool {
     this.setJsonValue("Value", request.value);
     this.field("kafkaBulk").checked = Boolean(request.bulk);
     this.field("kafkaPublishOptions").open = Boolean(request.key || (request.headers && request.headers.trim() !== "{}"));
+    this.field("kafkaTemplateSearch").value = "";
+    this.field("kafkaTemplates").open = false;
     this.updateCount(); this.message("kafkaPublishStatus", `Loaded “${request.name}”. Review it before publishing.`);
     if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
     else this.field("kafkaValue").focus();
