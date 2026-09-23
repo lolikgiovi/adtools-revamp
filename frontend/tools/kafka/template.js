@@ -38,7 +38,7 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-pane-body kafka-publish-body">
           <div class="kafka-publish-grid">
             <form id="kafkaForm" class="kafka-publish-form">
-              <div class="kafka-topic-row">
+              <div class="kafka-topic-action-row">
                 <div class="kafka-topic-field">
                   <div id="kafkaTopicPicker" class="kafka-topic-picker">
                     <input id="kafkaTopic" type="text" role="combobox" required autocomplete="off" spellcheck="false" aria-label="Topic" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="kafkaTopicOptions" placeholder="Search or enter a topic" />
@@ -53,6 +53,7 @@ export const KafkaTemplate = /*html*/ `
                     </div>
                   </div>
                 </div>
+                <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
               </div>
 
               <div class="kafka-template-action-row">
@@ -71,10 +72,7 @@ export const KafkaTemplate = /*html*/ `
                     </div>
                   </details>
                 </div>
-                <div class="kafka-publish-actions">
-                  <button id="kafkaTemplateSaveToggle" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="kafkaTemplateSave" title="Save the current draft as a template">Save as</button>
-                  <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
-                </div>
+                <button id="kafkaTemplateSaveToggle" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="kafkaTemplateSave" title="Save the current draft as a template">Save as</button>
               </div>
 
               <div id="kafkaTemplateSave" class="kafka-template-save" hidden>
@@ -129,7 +127,6 @@ export const KafkaTemplate = /*html*/ `
         </div>
         <div class="kafka-pane-body kafka-listen-body">
           <div class="kafka-listen-topic-row">
-            <label for="kafkaListenTopic">Topic</label>
             <div id="kafkaListenTopicPicker" class="kafka-topic-picker kafka-listen-topic-picker">
               <input
                 id="kafkaListenTopic"

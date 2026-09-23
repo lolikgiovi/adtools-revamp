@@ -280,10 +280,6 @@
   min-width: 0;
 }
 
-.kafka-topic-row {
-  display: block;
-}
-
 .kafka-publish-options {
   min-width: 0;
   border: 1px solid hsl(var(--border));
@@ -291,14 +287,22 @@
   background: hsl(var(--background));
 }
 
+.kafka-topic-action-row,
 .kafka-template-action-row {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 112px;
   align-items: center;
   gap: 8px;
+}
+
+.kafka-template-action-row {
   margin-top: 12px;
+}
+
+.kafka-topic-action-row {
+  z-index: 4;
 }
 
 .kafka-templates {
@@ -841,17 +845,10 @@
   user-select: none;
 }
 
-.kafka-publish-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.kafka-publish-actions > #kafkaTemplateSaveToggle,
-.kafka-publish-actions > #kafkaPublish {
-  width: 112px;
-  min-width: 112px;
+.kafka-topic-action-row > #kafkaPublish,
+.kafka-template-action-row > #kafkaTemplateSaveToggle {
+  width: 100%;
+  min-width: 0;
   height: var(--kafka-control-height);
   justify-content: center;
 }
@@ -1103,17 +1100,9 @@
 }
 
 .kafka-listen-topic-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+  display: block;
   flex: none;
   margin-bottom: 12px;
-}
-
-.kafka-listen-topic-row label {
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .kafka-listen-topic-row input {
@@ -1139,7 +1128,7 @@
 
 .kafka-history-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px auto;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
   gap: 8px;
   align-items: end;
 }
@@ -1207,6 +1196,13 @@
 
 .kafka-date-trigger svg {
   color: hsl(var(--muted-foreground));
+}
+
+.kafka-date-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kafka-date-popover {
@@ -1331,18 +1327,21 @@
 }
 
 .kafka-date-time {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid hsl(var(--border));
 }
 
 .kafka-date-time > div:first-child {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .kafka-date-time strong {
@@ -1355,27 +1354,30 @@
 }
 
 .kafka-time-fields {
-  display: flex;
+  display: grid;
+  grid-template-columns: 52px 10px 52px;
   align-items: end;
-  gap: 5px;
+  gap: 4px;
 }
 
 .kafka-time-fields label {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   color: hsl(var(--muted-foreground));
-  font-size: 9px;
-  font-weight: 700 !important;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: 600 !important;
+  letter-spacing: 0;
   text-align: center;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
-.kafka-tool .kafka-time-fields input {
-  width: 44px;
+.kafka-date-time .kafka-time-fields input[type="text"] {
+  width: 52px;
+  max-width: 52px;
   height: 32px;
   margin: 0;
   padding: 5px 3px;
+  box-sizing: border-box;
   border-radius: 7px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
@@ -1541,21 +1543,6 @@ body.is-resizing * {
 }
 
 @media (max-width: 760px) {
-  .kafka-template-action-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .kafka-publish-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .kafka-publish-actions > #kafkaTemplateSaveToggle,
-  .kafka-publish-actions > #kafkaPublish {
-    width: 100%;
-    min-width: 0;
-  }
-
   .kafka-history-form {
     grid-template-columns: minmax(0, 1fr) 132px;
   }
@@ -1606,14 +1593,6 @@ body.is-resizing * {
     left: auto;
   }
 
-  .kafka-topic-row {
-    display: block;
-  }
-
-  .kafka-topic-row > button {
-    width: 100%;
-  }
-
   .kafka-template-save-fields {
     grid-template-columns: 1fr 1fr;
   }
@@ -1655,9 +1634,9 @@ body.is-resizing * {
 }
 
 @media (max-width: 420px) {
-  .kafka-publish-actions > #kafkaTemplateSaveToggle,
-  .kafka-publish-actions > #kafkaPublish {
-    width: 100%;
+  .kafka-topic-action-row,
+  .kafka-template-action-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .kafka-template-save input {
