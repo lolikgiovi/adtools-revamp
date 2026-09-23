@@ -152,6 +152,7 @@ export const KafkaTemplate = /*html*/ `
                 <div id="kafkaListenTopicOptions" role="listbox" aria-label="Broker topics for listening"></div>
               </div>
             </div>
+            <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false" disabled hidden>Start listening</button>
           </div>
           <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
           <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode">
@@ -197,14 +198,7 @@ export const KafkaTemplate = /*html*/ `
             <div id="kafkaHistoryResults" class="kafka-messages kafka-history-results"></div>
           </section>
 
-          <section id="kafkaLiveView" class="kafka-live-results kafka-listen-view" role="tabpanel" aria-labelledby="kafkaLiveMode kafkaLiveHeading" hidden>
-            <div class="kafka-subhead">
-              <div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Optional · newest first · up to 100</span></div>
-              <div class="kafka-listen-actions">
-                <label class="switch kafka-from-beginning-toggle" title="Start at the earliest retained message"><input id="kafkaFromBeginning" type="checkbox" /><span class="slider"></span><span class="kafka-toggle-label">From start</span></label>
-                <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false" disabled>Start listening</button>
-              </div>
-            </div>
+          <section id="kafkaLiveView" class="kafka-live-results kafka-listen-view" role="tabpanel" aria-labelledby="kafkaLiveMode" hidden>
             <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Add a bootstrap server, then enter a topic to listen.</p></div>
           </section>
         </div>

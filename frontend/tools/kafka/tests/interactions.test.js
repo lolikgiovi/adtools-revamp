@@ -16,7 +16,7 @@ describe("Kafka publish controls", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
 
-    for (const id of ["kafkaBulk", "kafkaFromBeginning"]) {
+    for (const id of ["kafkaBulk"]) {
       const input = document.querySelector(`#${id}`);
       expect(input.type).toBe("checkbox");
       expect(input.closest(".switch")).not.toBeNull();
@@ -38,7 +38,7 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaCount").textContent).toBe("Set up a broker to publish.");
     expect(document.querySelector("#kafkaPublishPanel").hidden).toBe(false);
     expect(document.querySelector("#kafkaListenPanel").hidden).toBe(false);
-    expect(document.querySelector("#kafkaLiveHeading").closest(".kafka-live-results").querySelector("#kafkaListen")).not.toBeNull();
+    expect(document.querySelector("#kafkaListen").parentElement).toBe(document.querySelector(".kafka-listen-topic-row"));
     expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
     expect(document.querySelector("#kafkaHistoryView").hidden).toBe(true);
     expect(document.activeElement).toBe(document.querySelector("#kafkaBrokers"));
@@ -83,9 +83,7 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaTest").disabled).toBe(false);
     expect(document.querySelector("#kafkaListen").disabled).toBe(false);
     expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
-    expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe(
-      "Start listening to see new messages."
-    );
+    expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe("");
   });
 
   it("gives live listening and retained history separate full-pane modes", () => {
@@ -475,13 +473,11 @@ describe("Kafka publish controls", () => {
     tool.mount(document.querySelector("#tool"));
     document.querySelector("#kafkaBrokers").value = "broker:9092";
     document.querySelector("#kafkaTopic").value = "orders.test";
-    document.querySelector("#kafkaFromBeginning").checked = true;
-
     await tool.startListening();
 
     expect(service.stop).toHaveBeenCalledOnce();
     expect(service.start).toHaveBeenCalledTimes(2);
-    expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", true);
+    expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", false);
     expect(document.querySelector("#kafkaListenHeading").textContent).toBe("Listen to orders.test");
     expect(document.querySelector("#kafkaListenStatus").textContent).toBe("");
     const listenButton = document.querySelector("#kafkaListen");

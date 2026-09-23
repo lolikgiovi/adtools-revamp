@@ -31,7 +31,6 @@
 .kafka-field-heading,
 .kafka-pane-header,
 .kafka-section-title,
-.kafka-listen-actions,
 .kafka-message-top,
 .kafka-message-actions {
   display: flex;
@@ -1044,25 +1043,6 @@
   outline: none;
 }
 
-.kafka-listen-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.kafka-listen-actions .switch {
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  height: 1rem;
-  white-space: nowrap;
-}
-
-.kafka-listen-actions #kafkaListen {
-  min-width: 72px;
-  justify-content: center;
-}
-
 .kafka-listen-mode {
   display: inline-flex;
   flex: none;
@@ -1100,14 +1080,32 @@
 }
 
 .kafka-listen-topic-row {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: none;
   margin-bottom: 12px;
+}
+
+.kafka-listen-topic-picker {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .kafka-listen-topic-row input {
   min-width: 0;
   margin: 0;
+}
+
+.kafka-listen-topic-row > #kafkaListen {
+  flex: none;
+  min-width: 112px;
+  height: var(--kafka-control-height);
+  justify-content: center;
+}
+
+.kafka-listen-topic-row > #kafkaListen[hidden] {
+  display: none;
 }
 
 .kafka-listen-view {
@@ -1437,10 +1435,6 @@
   min-width: 0;
 }
 
-.kafka-live-results .kafka-subhead {
-  align-items: center;
-}
-
 .kafka-listen-view .kafka-messages {
   flex: 1 1 auto;
   align-content: start;
@@ -1550,18 +1544,21 @@ body.is-resizing * {
   .kafka-history-form > #kafkaHistorySearch {
     grid-column: 1 / -1;
   }
-
-  .kafka-live-results .kafka-subhead {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .kafka-live-results .kafka-listen-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 560px) {
+  .kafka-listen-topic-row {
+    flex-wrap: wrap;
+  }
+
+  .kafka-listen-topic-picker {
+    flex-basis: 100%;
+  }
+
+  .kafka-listen-topic-row > #kafkaListen {
+    margin-left: auto;
+  }
+
   .kafka-connection-bar {
     align-items: flex-start;
   }

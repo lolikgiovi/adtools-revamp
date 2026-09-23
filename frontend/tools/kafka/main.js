@@ -221,8 +221,7 @@ export class KafkaTool extends BaseTool {
     }
     if (historyButton) historyButton.disabled = !ready || this.searchingHistory;
     if (emptyMessage) {
-      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then enter a topic to listen." :
-        !hasTopic ? "Enter a topic, then start listening." : "Start listening to see new messages.";
+      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then enter a topic to listen." : "";
     }
   }
   setFlow(flow) {
@@ -248,8 +247,17 @@ export class KafkaTool extends BaseTool {
     if (historyButton) historyButton.tabIndex = live ? -1 : 0;
     if (this.field("kafkaLiveView")) this.field("kafkaLiveView").hidden = !live;
     if (this.field("kafkaHistoryView")) this.field("kafkaHistoryView").hidden = live;
+    this.updateListeningButtonVisibility();
     if (live) this.historyPicker?.close();
     if (focus) (live ? liveButton : historyButton)?.focus();
+  }
+  updateListeningButtonVisibility() {
+    const button = this.field("kafkaListen");
+    const liveView = this.field("kafkaLiveView");
+    if (!button || !liveView) return;
+    const active = this.listening || button.getAttribute("aria-pressed") === "true" ||
+      ["Connecting…", "Stopping…"].includes(button.textContent);
+    button.hidden = liveView.hidden && !active;
   }
   handleListenModeKeydown(event) {
     const keyModes = { ArrowLeft: "history", ArrowRight: "live", Home: "history", End: "live" };
@@ -265,6 +273,7 @@ export class KafkaTool extends BaseTool {
     button.disabled = disabled;
     button.setAttribute("aria-pressed", String(pressed));
     button.setAttribute("aria-label", label);
+    this.updateListeningButtonVisibility();
     const topic = this.field("kafkaListenTopic");
     if (topic) topic.disabled = pressed || ["Connecting…", "Stopping…"].includes(label);
   }
@@ -1058,7 +1067,7 @@ export class KafkaTool extends BaseTool {
     }
     this.saveConnection();
     const config = this.config();
-    const fromBeginning = this.field("kafkaFromBeginning").checked;
+    const fromBeginning = false;
     this.setListeningButton("Connecting…", true);
     this.message("kafkaListenStatus", "Connecting…");
     try {
