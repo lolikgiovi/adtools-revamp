@@ -185,6 +185,23 @@
   font-size: 11px;
 }
 
+@media (min-width: 561px) {
+  .kafka-connection.is-settings-open .kafka-connection-bar,
+  .kafka-connection.is-settings-open .kafka-connection-actions {
+    align-items: flex-start;
+  }
+
+  .kafka-connection.is-settings-open .kafka-settings-popover {
+    position: static;
+    margin-top: 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
 .kafka-flow-nav {
   display: none;
   align-self: flex-start;
@@ -451,11 +468,10 @@
 .kafka-topic-picker {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--kafka-control-height);
-  margin-top: 6px;
 }
 
 .kafka-tool .kafka-topic-picker > input {
@@ -477,10 +493,19 @@
   padding: 0;
   border: 1px solid hsl(var(--border));
   border-left: 0;
-  border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
+  border-radius: 0;
   background: hsl(var(--background));
   color: hsl(var(--muted-foreground));
   cursor: pointer;
+}
+
+.kafka-topic-picker > #kafkaTopicToggle {
+  border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
+}
+
+.kafka-topic-picker > #kafkaTopicFavorite {
+  width: 36px;
+  border-radius: 0;
 }
 
 .kafka-topic-picker > button:hover,
@@ -525,12 +550,16 @@
 }
 
 .kafka-topic-menu {
-  grid-column: 1 / -1;
-  margin-top: 5px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
   padding: 5px;
   border: 1px solid hsl(var(--border));
   border-radius: 9px;
   background: hsl(var(--background));
+  box-shadow: 0 10px 24px hsl(var(--foreground) / 0.14);
 }
 
 .kafka-topic-menu[hidden],

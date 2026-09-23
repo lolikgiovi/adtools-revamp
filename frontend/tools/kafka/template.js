@@ -10,7 +10,7 @@ export const KafkaTemplate = /*html*/ `
           </div>
         </div>
         <div class="kafka-connection-actions">
-          <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button">Test</button>
+          <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
           <details id="kafkaConnectionSettings" class="kafka-settings">
             <summary>Broker settings</summary>
             <div class="kafka-settings-popover">
@@ -40,14 +40,11 @@ export const KafkaTemplate = /*html*/ `
             <form id="kafkaForm" class="kafka-publish-form">
               <div class="kafka-topic-row">
                 <div class="kafka-topic-field">
-                  <div class="kafka-field-heading">
-                    <label for="kafkaTopic">Topic</label>
+                  <div id="kafkaTopicPicker" class="kafka-topic-picker">
+                    <input id="kafkaTopic" type="text" role="combobox" required autocomplete="off" spellcheck="false" aria-label="Topic" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="kafkaTopicOptions" placeholder="Search or enter a topic" />
                     <button id="kafkaTopicFavorite" class="kafka-icon-button" type="button" aria-label="Favorite topic" aria-pressed="false" title="Favorite topic">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
                     </button>
-                  </div>
-                  <div id="kafkaTopicPicker" class="kafka-topic-picker">
-                    <input id="kafkaTopic" type="text" role="combobox" required autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="kafkaTopicOptions" placeholder="Search or enter a topic" />
                     <button id="kafkaTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaTopicOptions" aria-expanded="false">▼</button>
                     <div id="kafkaTopicMenu" class="kafka-topic-menu" hidden>
                       <div class="kafka-topic-menu-heading"><strong>Topics</strong><button id="kafkaTopicRefresh" type="button">Refresh</button></div>
@@ -167,7 +164,7 @@ export const KafkaTemplate = /*html*/ `
                   </div>
                 </div>
               </div>
-              <button id="kafkaHistorySearch" class="btn btn-secondary btn-sm" type="submit">Search</button>
+              <button id="kafkaHistorySearch" class="btn btn-secondary btn-sm" type="submit" disabled>Search</button>
             </form>
             <p id="kafkaHistoryStatus" role="status" aria-live="polite"></p>
             <div id="kafkaHistoryResults" class="kafka-messages kafka-history-results"></div>
@@ -178,10 +175,10 @@ export const KafkaTemplate = /*html*/ `
               <div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Optional · newest first · up to 100</span></div>
               <div class="kafka-listen-actions">
                 <label class="switch kafka-from-beginning-toggle" title="Start at the earliest retained message"><input id="kafkaFromBeginning" type="checkbox" /><span class="slider"></span><span class="kafka-toggle-label">From start</span></label>
-                <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false">Start listening</button>
+                <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false" disabled>Start listening</button>
               </div>
             </div>
-            <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Start listening to see new messages.</p></div>
+            <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Add a bootstrap server, then choose a topic in Publish.</p></div>
           </section>
         </div>
       </section>

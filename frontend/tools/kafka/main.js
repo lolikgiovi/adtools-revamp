@@ -13,6 +13,8 @@ export class KafkaTool extends BaseTool {
     this.service = service;
     this.publishing = false;
     this.listening = false;
+    this.testingConnection = false;
+    this.searchingHistory = false;
     this.unlisten = [];
     this.stopRequested = false;
     this.topics = [];
@@ -40,13 +42,16 @@ export class KafkaTool extends BaseTool {
     this.requests = readKafkaRequests();
     this.favoriteTopics = readKafkaTopicFavorites();
     this.renderRequests();
-    this.field("kafkaConnectionSettings").open = !config.brokers;
+    const connectionSettings = this.field("kafkaConnectionSettings");
+    connectionSettings.addEventListener("toggle", () => this.updateConnectionSettingsLayout());
+    this.setConnectionSettingsOpen(!config.brokers);
     this.setConnectionState(config.brokers ? "ready" : "empty");
     this.field("kafkaBrokers").addEventListener("change", () => this.saveConnection());
     this.field("kafkaBrokers").addEventListener("input", () => {
       this.invalidateTopics();
       this.setConnectionState(this.config().brokers ? "ready" : "empty");
       this.updateCount();
+      this.updateActionAvailability();
     });
     this.field("kafkaTopic").addEventListener("focus", () => { if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(); });
     this.field("kafkaTopicPicker").addEventListener("focusout", (event) => {
@@ -116,9 +121,11 @@ export class KafkaTool extends BaseTool {
     this.updateListenTopic();
     this.initializeResizer();
     this.updateCount();
-    this.suppressTopicFocus = true;
-    this.field("kafkaTopic").focus();
-    this.suppressTopicFocus = false;
+    if (config.brokers) {
+      this.suppressTopicFocus = true;
+      this.field("kafkaTopic").focus();
+      this.suppressTopicFocus = false;
+    } else this.field("kafkaBrokers").focus();
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
@@ -162,6 +169,35 @@ export class KafkaTool extends BaseTool {
     status.textContent = text || labels[state] || labels.ready;
     status.dataset.state = state === "error" ? "error" : "ok";
     status.title = state === "connected" && text ? text : "";
+  }
+  setConnectionSettingsOpen(open) {
+    const settings = this.field("kafkaConnectionSettings");
+    if (!settings) return;
+    settings.open = Boolean(open);
+    this.updateConnectionSettingsLayout();
+  }
+  updateConnectionSettingsLayout() {
+    const settings = this.field("kafkaConnectionSettings");
+    this.field("kafkaConnection")?.classList.toggle("is-settings-open", Boolean(settings?.open));
+  }
+  updateActionAvailability() {
+    const hasBrokers = Boolean(this.config().brokers);
+    const hasTopic = Boolean(this.field("kafkaTopic")?.value.trim());
+    const ready = hasBrokers && hasTopic;
+    const testButton = this.field("kafkaTest");
+    const listenButton = this.field("kafkaListen");
+    const historyButton = this.field("kafkaHistorySearch");
+    const emptyMessage = this.field("kafkaMessages")?.querySelector(".kafka-empty");
+
+    if (testButton) testButton.disabled = !hasBrokers || this.testingConnection;
+    if (listenButton && !this.listening && !["Connecting…", "Stopping…"].includes(listenButton.textContent)) {
+      listenButton.disabled = !ready;
+    }
+    if (historyButton) historyButton.disabled = !ready || this.searchingHistory;
+    if (emptyMessage) {
+      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then choose a topic in Publish." :
+        !hasTopic ? "Choose a topic in Publish, then start listening." : "Start listening to see new messages.";
+    }
   }
   setFlow(flow) {
     const publish = flow === "publish";
@@ -439,6 +475,7 @@ export class KafkaTool extends BaseTool {
     const topic = this.field("kafkaTopic")?.value.trim();
     node.textContent = topic ? `Topic: ${topic}` : "Choose a topic in Publish to search or listen.";
     node.title = topic || "";
+    this.updateActionAvailability();
   }
 
   toggleTopicFavorite() {
@@ -457,10 +494,8 @@ export class KafkaTool extends BaseTool {
   }
 
   toggleTopicMenu() {
-    if (this.field("kafkaTopicMenu").hidden) {
-      this.field("kafkaTopic").focus();
-      this.openTopicMenu();
-    } else this.closeTopicMenu();
+    if (this.field("kafkaTopicMenu").hidden) this.openTopicMenu();
+    else this.closeTopicMenu();
   }
 
   openTopicMenu() {
@@ -603,18 +638,26 @@ export class KafkaTool extends BaseTool {
   }
 
   async testConnection() {
+    if (!this.config().brokers) {
+      this.field("kafkaBrokers").focus();
+      return;
+    }
     this.saveConnection();
     const button = this.field("kafkaTest");
+    this.testingConnection = true;
     button.disabled = true;
     this.setConnectionState("checking");
     try {
       const result = await this.service.test(this.config());
       this.setConnectionState("connected", `Connected to ${this.config().brokers}`);
       this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
-      this.field("kafkaConnectionSettings").open = false;
+      this.setConnectionSettingsOpen(false);
     } catch (error) {
       this.setConnectionState("error", String(error));
-    } finally { button.disabled = false; }
+    } finally {
+      this.testingConnection = false;
+      this.updateActionAvailability();
+    }
   }
 
   records() {
@@ -804,7 +847,10 @@ export class KafkaTool extends BaseTool {
       ];
       if (this.stopRequested || !this.container) {
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
-        if (this.container) this.setListeningButton();
+        if (this.container) {
+          this.setListeningButton();
+          this.updateActionAvailability();
+        }
         return;
       }
       try {
@@ -814,7 +860,10 @@ export class KafkaTool extends BaseTool {
         this.message("kafkaListenStatus", "Restarting the previous listener…");
         await this.service.stop();
         if (this.stopRequested || !this.container) {
-          if (this.container) this.setListeningButton();
+          if (this.container) {
+            this.setListeningButton();
+            this.updateActionAvailability();
+          }
           return;
         }
         await this.service.start(config, topic, fromBeginning);
@@ -822,7 +871,10 @@ export class KafkaTool extends BaseTool {
       if (this.stopRequested || !this.container) {
         await this.service.stop();
         this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
-        if (this.container) this.setListeningButton();
+        if (this.container) {
+          this.setListeningButton();
+          this.updateActionAvailability();
+        }
         return;
       }
       this.listening = true;
@@ -832,6 +884,7 @@ export class KafkaTool extends BaseTool {
     } catch (error) {
       this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
       this.setListeningButton();
+      if (this.container) this.updateActionAvailability();
       this.message("kafkaListenStatus", String(error), true);
     }
   }
@@ -848,6 +901,7 @@ export class KafkaTool extends BaseTool {
     }
     const requestId = ++this.historyRequestId;
     const button = this.field("kafkaHistorySearch");
+    this.searchingHistory = true;
     button.disabled = true;
     this.field("kafkaHistoryResults").replaceChildren();
     this.message("kafkaHistoryStatus", "Searching retained records…");
@@ -860,7 +914,8 @@ export class KafkaTool extends BaseTool {
     } catch (error) {
       if (requestId === this.historyRequestId && this.container) this.message("kafkaHistoryStatus", String(error), true);
     } finally {
-      if (requestId === this.historyRequestId && this.container) button.disabled = false;
+      this.searchingHistory = false;
+      if (this.container) this.updateActionAvailability();
     }
   }
 
@@ -972,6 +1027,7 @@ export class KafkaTool extends BaseTool {
     this.stopRequested = true;
     if (!this.listening && !this.unlisten.length) {
       this.setListeningButton();
+      if (this.container) this.updateActionAvailability();
       return;
     }
     this.listening = false;
@@ -980,6 +1036,7 @@ export class KafkaTool extends BaseTool {
     try { await this.service.stop(); }
     catch (error) { this.message("kafkaListenStatus", String(error), true); }
     this.setListeningButton();
+    if (this.container) this.updateActionAvailability();
     if (this.field("kafkaListenHeading")) this.field("kafkaListenHeading").textContent = "Listen";
     this.message("kafkaListenStatus", "");
   }

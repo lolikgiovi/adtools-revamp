@@ -41,6 +41,10 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaLiveHeading").closest(".kafka-live-results").querySelector("#kafkaListen")).not.toBeNull();
     expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
     expect(document.querySelector("#kafkaHistoryView").hidden).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector("#kafkaBrokers"));
+    expect(document.querySelector("#kafkaTest").disabled).toBe(true);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
 
     const topic = document.querySelector("#kafkaTopic");
     topic.value = "orders.test";
@@ -51,7 +55,37 @@ describe("Kafka publish controls", () => {
     brokers.value = "broker:9092";
     brokers.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
+    expect(document.querySelector("#kafkaTest").disabled).toBe(false);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(false);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
     expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
+  });
+
+  it("keeps first-run broker settings in the desktop flow and updates action readiness", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+
+    const connection = document.querySelector("#kafkaConnection");
+    expect(connection.classList.contains("is-settings-open")).toBe(true);
+    expect(document.querySelector("#kafkaConnectionSettings").open).toBe(true);
+    expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe(
+      "Add a bootstrap server, then choose a topic in Publish."
+    );
+
+    const topic = document.querySelector("#kafkaTopic");
+    topic.value = "orders.test";
+    topic.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
+
+    const brokers = document.querySelector("#kafkaBrokers");
+    brokers.value = "broker:9092";
+    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaTest").disabled).toBe(false);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(false);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
+    expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe(
+      "Start listening to see new messages."
+    );
   });
 
   it("gives live listening and retained history separate full-pane modes", () => {
@@ -146,7 +180,18 @@ describe("Kafka publish controls", () => {
     tool.mount(document.querySelector("#tool"));
 
     const topicMenu = document.querySelector("#kafkaTopicMenu");
-    expect(topicMenu.parentElement).toBe(document.querySelector("#kafkaTopicPicker"));
+    const topicPicker = document.querySelector("#kafkaTopicPicker");
+    const topicToggle = document.querySelector("#kafkaTopicToggle");
+    expect(topicMenu.parentElement).toBe(topicPicker);
+    expect(document.querySelector("#kafkaTopicFavorite").parentElement).toBe(topicPicker);
+    expect(document.querySelector('label[for="kafkaTopic"]')).toBeNull();
+
+    topicToggle.click();
+    expect(topicMenu.hidden).toBe(false);
+    expect(topicToggle.getAttribute("aria-expanded")).toBe("true");
+    topicToggle.click();
+    expect(topicMenu.hidden).toBe(true);
+    expect(topicToggle.getAttribute("aria-expanded")).toBe("false");
 
     const toggle = document.querySelector("#kafkaTemplateSaveToggle");
     const panel = document.querySelector("#kafkaTemplateSave");
