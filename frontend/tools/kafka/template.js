@@ -94,7 +94,7 @@ export const KafkaTemplate = /*html*/ `
               </div>
 
               <details id="kafkaPublishOptions" class="kafka-publish-options">
-                <summary><span>Options</span><span id="kafkaPublishOptionsSummary" class="kafka-subhead-note">Optional</span></summary>
+                <summary><span>Options</span><span id="kafkaPublishOptionsSummary" class="kafka-subhead-note"></span></summary>
                 <div class="kafka-publish-options-content">
                   <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
 

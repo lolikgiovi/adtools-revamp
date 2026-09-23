@@ -872,7 +872,7 @@ export class KafkaTool extends BaseTool {
       const count = this.records().length;
       const ready = this.config().brokers && this.field("kafkaTopic").value.trim();
       this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click${bulk ? " · 100 maximum" : ""}` :
-        (!this.config().brokers ? "Set up a broker to publish." : "Choose a topic to publish."));
+        (!this.config().brokers ? "Set up a broker to publish." : ""));
       button.textContent = "Publish";
       button.disabled = this.publishing || !ready;
     } catch (_error) {
@@ -957,7 +957,7 @@ export class KafkaTool extends BaseTool {
         } else parts.push("Headers need attention");
       } catch (_) { parts.push("Headers need attention"); }
     }
-    summary.textContent = parts.length ? parts.join(" · ") : "Optional";
+    summary.textContent = parts.join(" · ");
   }
 
   renderRequests() {
