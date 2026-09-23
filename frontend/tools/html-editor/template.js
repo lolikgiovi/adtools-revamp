@@ -8,7 +8,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
         </svg>
       </button>
       <div id="htmlDocumentUndo" class="html-document-undo" hidden>
-        <span>Tab closed</span>
+        <span id="htmlDocumentUndoMessage">Tab closed</span>
         <button id="btnUndoCloseHtmlDocument" type="button">Undo</button>
       </div>
     </div>

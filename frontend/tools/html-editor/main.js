@@ -66,8 +66,19 @@ class HTMLTemplateTool extends BaseTool {
     this.activeDocumentId = null;
     this._documentWriteQueue = Promise.resolve();
     this._tabTransition = false;
-    this._closedDocument = null;
+    this._closedDocuments = null;
     this._undoTimer = null;
+    this._tabMenu = null;
+    this._tabMenuTrigger = null;
+    this._handleTabMenuPointerDown = (event) => {
+      if (!this._tabMenu?.contains(event.target)) this.closeDocumentMenu();
+    };
+    this._handleTabMenuKeyDown = (event) => {
+      if (event.key === "Escape" && this._tabMenu) {
+        event.preventDefault();
+        this.closeDocumentMenu(true);
+      }
+    };
     this._mountSequence = 0;
     this._pendingFormat = null;
     this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
@@ -189,6 +200,7 @@ class HTMLTemplateTool extends BaseTool {
     this._mountSequence += 1;
     window.removeEventListener("pagehide", this._handlePageHide);
     document.removeEventListener("visibilitychange", this._handleVisibilityChange);
+    this.closeDocumentMenu();
     const finalSave = this.flushActiveDocument().catch(() => {});
     const store = this.documentStore;
     this.cleanupResizer();
@@ -340,7 +352,22 @@ class HTMLTemplateTool extends BaseTool {
       const select = event.target.closest(".html-document-tab-select");
       if (select) this.renameDocument(select.closest(".html-document-tab").dataset.documentId);
     });
+    strip.addEventListener("contextmenu", (event) => {
+      const tab = event.target.closest(".html-document-tab");
+      if (!tab) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.openDocumentMenu(tab.dataset.documentId, event.clientX, event.clientY, tab.querySelector(".html-document-tab-select"));
+    });
     strip.addEventListener("keydown", (event) => {
+      if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+        const tab = event.target.closest(".html-document-tab");
+        if (!tab) return;
+        event.preventDefault();
+        const rect = tab.getBoundingClientRect();
+        this.openDocumentMenu(tab.dataset.documentId, rect.left, rect.bottom + 4, tab.querySelector(".html-document-tab-select"));
+        return;
+      }
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       const current = this.documents.findIndex((document) => document.id === this.activeDocumentId);
       const next =
@@ -354,6 +381,84 @@ class HTMLTemplateTool extends BaseTool {
     });
     this.container.querySelector("#btnNewHtmlDocument").addEventListener("click", () => void this.newDocument());
     this.container.querySelector("#btnUndoCloseHtmlDocument").addEventListener("click", () => void this.undoCloseDocument());
+  }
+
+  openDocumentMenu(id, x, y, trigger) {
+    const index = this.documents.findIndex((document) => document.id === id);
+    if (this._tabTransition || index < 0) return;
+    this.closeDocumentMenu();
+    const menu = document.createElement("div");
+    menu.id = "htmlDocumentTabMenu";
+    menu.className = "html-document-tab-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", `Options for ${this.documents[index].name}`);
+    const actions = [
+      { label: "Rename", run: () => this.renameDocument(id) },
+      { label: "Duplicate", run: () => this.duplicateDocument(id) },
+      { separator: true },
+      { label: "Close", run: () => this.closeDocument(id), disabled: this.documents.length <= 1 },
+      { label: "Close Other Tabs", run: () => this.closeOtherDocuments(id), disabled: this.documents.length <= 1 },
+      { label: "Close Tabs to the Left", run: () => this.closeDocumentsToLeft(id), disabled: index === 0 },
+      { label: "Close Tabs to the Right", run: () => this.closeDocumentsToRight(id), disabled: index === this.documents.length - 1 },
+      { label: "Close All Tabs", run: () => this.closeAllDocuments() },
+    ];
+    actions.forEach((action) => {
+      if (action.separator) {
+        const separator = document.createElement("div");
+        separator.className = "html-document-tab-menu-separator";
+        separator.setAttribute("role", "separator");
+        menu.appendChild(separator);
+        return;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "menuitem");
+      button.textContent = action.label;
+      button.disabled = Boolean(action.disabled);
+      button.addEventListener("click", () => {
+        this.closeDocumentMenu();
+        void action.run();
+      });
+      menu.appendChild(button);
+    });
+    menu.addEventListener("keydown", (event) => {
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const enabled = [...menu.querySelectorAll("button:not(:disabled)")];
+      const current = enabled.indexOf(document.activeElement);
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? enabled.length - 1
+            : (current + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+      event.preventDefault();
+      enabled[next]?.focus();
+    });
+    document.body.appendChild(menu);
+    const margin = 8;
+    menu.style.left = `${Math.min(Math.max(x, margin), Math.max(margin, window.innerWidth - menu.offsetWidth - margin))}px`;
+    menu.style.top = `${Math.min(Math.max(y, margin), Math.max(margin, window.innerHeight - menu.offsetHeight - margin))}px`;
+    this._tabMenu = menu;
+    this._tabMenuTrigger = trigger;
+    document.addEventListener("pointerdown", this._handleTabMenuPointerDown);
+    document.addEventListener("keydown", this._handleTabMenuKeyDown);
+    menu.querySelector("button:not(:disabled)")?.focus();
+  }
+
+  closeDocumentMenu(restoreFocus = false) {
+    const trigger = this._tabMenuTrigger;
+    this._tabMenu?.remove();
+    this._tabMenu = null;
+    this._tabMenuTrigger = null;
+    document.removeEventListener("pointerdown", this._handleTabMenuPointerDown);
+    document.removeEventListener("keydown", this._handleTabMenuKeyDown);
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
+  }
+
+  duplicateDocument(id) {
+    const document = this.documents.find((item) => item.id === id);
+    if (!document) return;
+    return this.newDocument(`${document.name} copy`, document.model.getValue(), structuredClone(document.vtlValues));
   }
 
   async switchDocument(id, focusTab = false) {
@@ -392,7 +497,7 @@ class HTMLTemplateTool extends BaseTool {
     }
   }
 
-  async newDocument(name = null, html = "") {
+  async newDocument(name = null, html = "", vtlValues = {}) {
     if (this._tabTransition) return;
     this._tabTransition = true;
     let document = null;
@@ -408,7 +513,7 @@ class HTMLTemplateTool extends BaseTool {
         id: this.createAnalyticsId(),
         name: name || `Untitled ${nextNumber}`,
         html,
-        vtlValues: {},
+        vtlValues,
         createdAt: now,
         updatedAt: now,
       });
@@ -474,95 +579,170 @@ class HTMLTemplateTool extends BaseTool {
     input.addEventListener("blur", () => finish(true));
   }
 
-  async closeDocument(id) {
-    if (this._tabTransition || this.documents.length <= 1) return;
+  closeDocument(id) {
+    if (this.documents.length <= 1) return;
+    return this.closeDocuments([id]);
+  }
+
+  closeOtherDocuments(id) {
+    return this.closeDocuments(
+      this.documents.filter((document) => document.id !== id).map((document) => document.id),
+      id,
+    );
+  }
+
+  closeDocumentsToLeft(id) {
     const index = this.documents.findIndex((document) => document.id === id);
-    if (index < 0) return;
+    return this.closeDocuments(
+      this.documents.slice(0, index).map((document) => document.id),
+      id,
+    );
+  }
+
+  closeDocumentsToRight(id) {
+    const index = this.documents.findIndex((document) => document.id === id);
+    return this.closeDocuments(
+      this.documents.slice(index + 1).map((document) => document.id),
+      id,
+    );
+  }
+
+  closeAllDocuments() {
+    return this.closeDocuments(this.documents.map((document) => document.id));
+  }
+
+  async closeDocuments(ids, preferredActiveId = null) {
+    if (this._tabTransition) return;
+    const idsToClose = new Set(ids.filter((id) => this.documents.some((document) => document.id === id)));
+    if (!idsToClose.size) return;
     this._tabTransition = true;
+    let replacement = null;
+    let committed = false;
     try {
-      if (id === this.activeDocumentId) await this.flushActiveDocument();
-      const document = this.documents[index];
-      const record = this.documentRecord(document);
-      const remaining = this.documents.filter((item) => item.id !== id);
-      const nextId = id === this.activeDocumentId ? remaining[Math.min(index, remaining.length - 1)].id : this.activeDocumentId;
-      await this.writeDocumentStore(() =>
-        this.documentStore.deleteDocument(
-          id,
-          remaining.map((item) => item.id),
-          nextId,
-        ),
+      await this.flushActiveDocument();
+      const previousActiveId = this.activeDocumentId;
+      this.activeDocument.viewState = this.editor.saveViewState();
+      const closed = this.documents.flatMap((document, index) =>
+        idsToClose.has(document.id) ? [{ record: this.documentRecord(document), index, viewState: document.viewState }] : [],
       );
+      const remaining = this.documents.filter((document) => !idsToClose.has(document.id));
+      if (!remaining.length) {
+        const now = Date.now();
+        replacement = this.createDocumentModel({
+          id: this.createAnalyticsId(),
+          name: "Untitled 1",
+          html: "",
+          vtlValues: {},
+          createdAt: now,
+          updatedAt: now,
+        });
+        remaining.push(replacement);
+      }
+      const originalIndex = this.documents.findIndex((document) => document.id === previousActiveId);
+      const nextId = remaining.some((document) => document.id === preferredActiveId)
+        ? preferredActiveId
+        : remaining.some((document) => document.id === previousActiveId)
+          ? previousActiveId
+          : remaining[Math.min(originalIndex, remaining.length - 1)].id;
+      await this.writeDocumentStore(() =>
+        this.documentStore.updateDocuments({
+          deleteIds: [...idsToClose],
+          documents: replacement ? [this.documentRecord(replacement)] : [],
+          order: remaining.map((document) => document.id),
+          activeId: nextId,
+        }),
+      );
+      committed = true;
+      const oldDocuments = this.documents;
       this.documents = remaining;
-      if (id === this.activeDocumentId) {
-        document.viewState = this.editor.saveViewState();
+      this.activeDocumentId = nextId;
+      if (nextId !== previousActiveId) {
         clearTimeout(this._previewTimer);
         clearTimeout(this.vtlAnalyticsTimer);
-        this.activeDocumentId = nextId;
-        this.vtlValues = this.activeDocument.vtlValues || {};
+        this.container.querySelector("#vtlModal").style.display = "none";
+        this.vtlValues = this.activeDocument.vtlValues;
         const envKey = this.container.querySelector("#envSelector")?.value;
         const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
         if (url !== undefined) this.vtlValues.baseUrl = url;
-        this.container.querySelector("#vtlModal").style.display = "none";
         this.editor.setModel(this.activeDocument.model);
         if (this.activeDocument.viewState) this.editor.restoreViewState(this.activeDocument.viewState);
         this.lastRenderedHTML = "";
         this.renderPreview(this.editor.getValue(), true);
         this.editor.layout();
       }
-      document.model.dispose();
-      this._closedDocument = { record, index, viewState: document.viewState };
+      oldDocuments.filter((document) => idsToClose.has(document.id)).forEach((document) => document.model.dispose());
+      this._closedDocuments = { closed, previousActiveId, replacementId: replacement?.id || null };
       clearTimeout(this._undoTimer);
+      this.container.querySelector("#htmlDocumentUndoMessage").textContent = `${closed.length} tab${closed.length === 1 ? "" : "s"} closed`;
       this.container.querySelector("#htmlDocumentUndo").hidden = false;
       this._undoTimer = setTimeout(() => {
-        this._closedDocument = null;
-        this.container.querySelector("#htmlDocumentUndo").hidden = true;
+        this._closedDocuments = null;
+        this.container?.querySelector("#htmlDocumentUndo")?.setAttribute("hidden", "");
       }, 8000);
       this.renderDocumentTabs();
       this.container.querySelector(`#html-document-tab-${nextId}`)?.focus();
     } catch (_) {
-      // Keep the document visible when deletion cannot be persisted.
+      if (!committed) replacement?.model.dispose();
+      // Keep the original tabs visible if the storage transaction fails.
     } finally {
       this._tabTransition = false;
     }
   }
 
   async undoCloseDocument() {
-    if (this._tabTransition || !this._closedDocument) return;
+    if (this._tabTransition || !this._closedDocuments) return;
     this._tabTransition = true;
-    let document = null;
+    const restored = [];
+    let committed = false;
     try {
       await this.flushActiveDocument();
-      const { record, index, viewState } = this._closedDocument;
-      document = this.createDocumentModel({ ...record });
-      document.viewState = viewState;
-      const order = [...this.documents];
-      order.splice(index, 0, document);
+      const { closed, previousActiveId, replacementId } = this._closedDocuments;
+      const replacement = this.documents.find((document) => document.id === replacementId);
+      const dropReplacement =
+        replacement &&
+        replacement.name === "Untitled 1" &&
+        replacement.model.getValue() === "" &&
+        Object.keys(replacement.vtlValues).every((key) => key === "baseUrl");
+      const order = this.documents.filter((document) => !dropReplacement || document.id !== replacementId);
+      closed.forEach(({ record, index, viewState }) => {
+        const document = this.createDocumentModel({ ...record });
+        document.viewState = viewState;
+        restored.push(document);
+        order.splice(Math.min(index, order.length), 0, document);
+      });
+      const nextId = order.some((document) => document.id === previousActiveId) ? previousActiveId : this.activeDocumentId;
       await this.writeDocumentStore(() =>
-        this.documentStore.saveWorkspaceAndDocument(record, {
-          order: order.map((item) => item.id),
-          activeId: document.id,
+        this.documentStore.updateDocuments({
+          deleteIds: dropReplacement ? [replacementId] : [],
+          documents: closed.map(({ record }) => record),
+          order: order.map((document) => document.id),
+          activeId: nextId,
         }),
       );
+      committed = true;
       this.activeDocument.viewState = this.editor.saveViewState();
       this.documents = order;
-      this.activeDocumentId = document.id;
-      this.vtlValues = document.vtlValues || {};
+      this.activeDocumentId = nextId;
+      this.vtlValues = this.activeDocument.vtlValues;
       const envKey = this.container.querySelector("#envSelector")?.value;
       const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
       if (url !== undefined) this.vtlValues.baseUrl = url;
-      this.editor.setModel(document.model);
-      if (document.viewState) this.editor.restoreViewState(document.viewState);
-      this.lastRenderedHTML = "";
-      this.renderDocumentTabs();
-      this.container.querySelector(`#html-document-tab-${document.id}`)?.focus();
-      this.renderPreview(document.model.getValue(), true);
-      this.editor.layout();
-      this._closedDocument = null;
+      if (this.editor.getModel() !== this.activeDocument.model) {
+        this.editor.setModel(this.activeDocument.model);
+        if (this.activeDocument.viewState) this.editor.restoreViewState(this.activeDocument.viewState);
+        this.lastRenderedHTML = "";
+        this.renderPreview(this.editor.getValue(), true);
+        this.editor.layout();
+      }
+      if (dropReplacement) replacement.model.dispose();
+      this._closedDocuments = null;
       clearTimeout(this._undoTimer);
       this.container.querySelector("#htmlDocumentUndo").hidden = true;
+      this.renderDocumentTabs();
+      this.container.querySelector(`#html-document-tab-${nextId}`)?.focus();
     } catch (_) {
-      document?.model.dispose();
-      // The Undo control stays available if the write fails.
+      if (!committed) restored.forEach((document) => document.model.dispose());
+      // The Undo control stays available if the storage transaction fails.
     } finally {
       this._tabTransition = false;
     }

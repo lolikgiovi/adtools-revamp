@@ -81,4 +81,39 @@ describe("HtmlDocumentStore migration", () => {
     expect(result.documents.map((document) => document.id)).toEqual(["b", "a"]);
     expect(result.activeId).toBe("b");
   });
+
+  it("deletes several tabs and writes the replacement in one workspace transaction", async () => {
+    const deleted = [];
+    const written = [];
+    const transactions = [];
+    const store = new HtmlDocumentStore();
+    store.db = {
+      transaction(names, mode) {
+        transactions.push({ names, mode });
+        const transaction = {
+          objectStore(name) {
+            return name === "documents"
+              ? { delete: (id) => deleted.push(id), put: (document) => written.push(document) }
+              : { put: (workspace) => written.push(workspace) };
+          },
+        };
+        setTimeout(() => transaction.oncomplete?.(), 0);
+        return transaction;
+      },
+    };
+
+    await store.updateDocuments({
+      deleteIds: ["a", "b"],
+      documents: [{ id: "new", html: "" }],
+      order: ["new"],
+      activeId: "new",
+    });
+
+    expect(transactions).toEqual([{ names: ["documents", "workspace"], mode: "readwrite" }]);
+    expect(deleted).toEqual(["a", "b"]);
+    expect(written).toEqual([
+      { id: "new", html: "" },
+      { id: "default", order: ["new"], activeId: "new" },
+    ]);
+  });
 });

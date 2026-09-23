@@ -108,9 +108,11 @@ export class HtmlDocumentStore {
     await completed(transaction);
   }
 
-  async deleteDocument(id, order, activeId) {
+  async updateDocuments({ deleteIds = [], documents = [], order, activeId }) {
     const transaction = this.db.transaction([DOCUMENTS, WORKSPACE], "readwrite");
-    transaction.objectStore(DOCUMENTS).delete(id);
+    const documentStore = transaction.objectStore(DOCUMENTS);
+    deleteIds.forEach((id) => documentStore.delete(id));
+    documents.forEach((document) => documentStore.put(document));
     transaction.objectStore(WORKSPACE).put({ id: WORKSPACE_ID, order, activeId });
     await completed(transaction);
   }
