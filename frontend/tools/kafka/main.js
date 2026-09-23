@@ -25,6 +25,7 @@ export class KafkaTool extends BaseTool {
     this.topicError = "";
     this.visibleTopics = [];
     this.activeTopicIndex = -1;
+    this.topicPickerSource = "publish";
     this.jsonEditors = {};
     this.receivedMessages = new WeakMap();
     this.historyRequestId = 0;
@@ -66,36 +67,13 @@ export class KafkaTool extends BaseTool {
       this.updateCount();
       this.updateActionAvailability();
     });
-    this.field("kafkaTopic").addEventListener("pointerdown", () => this.field("kafkaTopicPicker").classList.add("is-pointer-focused"));
-    this.field("kafkaTopic").addEventListener("click", () => this.field("kafkaTopicPicker").classList.add("is-pointer-focused"));
-    this.field("kafkaTopic").addEventListener("blur", () => this.field("kafkaTopicPicker").classList.remove("is-pointer-focused"));
-    this.field("kafkaTopic").addEventListener("focus", () => { if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(); });
-    this.field("kafkaTopicPicker").addEventListener("focusout", (event) => {
-      if (!this.field("kafkaTopicPicker").contains(event.relatedTarget)) this.closeTopicMenu();
-    });
-    this.field("kafkaTopic").addEventListener("input", () => {
-      this.renderTopicOptions();
-      this.updateTopicFavorite();
-      this.updateListenTopic();
-      this.closeTemplateMenu();
-      this.field("kafkaTemplateSearch").value = "";
-      this.selectedRequestName = "";
-      this.renderRequests();
-      this.updateCount();
-    });
-    this.field("kafkaTopic").addEventListener("keydown", (event) => this.handleTopicKeydown(event));
-    this.field("kafkaTopicToggle").addEventListener("click", () => this.toggleTopicMenu());
-    this.field("kafkaTopicFavorite").addEventListener("click", () => this.toggleTopicFavorite());
-    this.field("kafkaTopicRefresh").addEventListener("click", () => this.loadTopics(true));
-    this.field("kafkaTopicOptions").addEventListener("pointerdown", (event) => {
-      const option = event.target.closest(".kafka-topic-option");
-      if (!option) return;
-      event.preventDefault();
-      this.selectTopic(this.visibleTopics[Number(option.dataset.index)]);
-    });
-    this.field("kafkaTopicOptions").addEventListener("click", (event) => this.handleTopicClick(event));
+    this.bindTopicPicker("publish");
+    this.bindTopicPicker("listen");
     this.outsideTopicClick = (event) => {
       if (!this.field("kafkaTopicMenu")?.hidden && !this.field("kafkaTopicPicker")?.contains(event.target)) this.closeTopicMenu();
+      if (!this.field("kafkaListenTopicMenu")?.hidden && !this.field("kafkaListenTopicPicker")?.contains(event.target)) {
+        this.closeTopicMenu("listen");
+      }
       if (this.field("kafkaTemplates")?.open && !this.field("kafkaTemplatePicker")?.contains(event.target)) this.closeTemplateMenu();
       if (this.field("kafkaConnectionSettings")?.open && !this.field("kafkaConnectionSettings")?.contains(event.target)) {
         this.setConnectionSettingsOpen(false);
@@ -162,8 +140,10 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaHistorySince").value = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     this.historyPicker = new KafkaDateTimePicker({ root: this.field("kafkaHistoryPicker"), input: this.field("kafkaHistorySince") });
     this.historyPicker.mount();
+    this.setListenMode("history");
     this.updateTopicFavorite();
-    this.updateListenTopic();
+    this.updateTopicFavorite("listen");
+    this.updateActionAvailability();
     this.initializeResizer();
     this.updateCount();
     if (!config.brokers) this.field("kafkaBrokers").focus();
@@ -173,6 +153,7 @@ export class KafkaTool extends BaseTool {
   onSoftDeactivate() {
     this.historyRequestId++;
     this.closeTopicMenu();
+    this.closeTopicMenu("listen");
     this.closeTemplateMenu();
     this.historyPicker?.close();
     this.setHeadersExpanded(false);
@@ -184,6 +165,8 @@ export class KafkaTool extends BaseTool {
     document.removeEventListener("keydown", this.headersEscapeHandler);
     this.topicRequestId++;
     this.historyRequestId++;
+    this.closeTopicMenu();
+    this.closeTopicMenu("listen");
     this.historyPicker?.destroy();
     this.historyPicker = null;
     this.cleanupResizer();
@@ -225,7 +208,7 @@ export class KafkaTool extends BaseTool {
   }
   updateActionAvailability() {
     const hasBrokers = Boolean(this.config().brokers);
-    const hasTopic = Boolean(this.field("kafkaTopic")?.value.trim());
+    const hasTopic = Boolean(this.field("kafkaListenTopic")?.value.trim());
     const ready = hasBrokers && hasTopic;
     const testButton = this.field("kafkaTest");
     const listenButton = this.field("kafkaListen");
@@ -238,8 +221,8 @@ export class KafkaTool extends BaseTool {
     }
     if (historyButton) historyButton.disabled = !ready || this.searchingHistory;
     if (emptyMessage) {
-      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then choose a topic in Publish." :
-        !hasTopic ? "Choose a topic in Publish, then start listening." : "Start listening to see new messages.";
+      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then enter a topic to listen." :
+        !hasTopic ? "Enter a topic, then start listening." : "Start listening to see new messages.";
     }
   }
   setFlow(flow) {
@@ -269,7 +252,7 @@ export class KafkaTool extends BaseTool {
     if (focus) (live ? liveButton : historyButton)?.focus();
   }
   handleListenModeKeydown(event) {
-    const keyModes = { ArrowLeft: "live", ArrowRight: "history", Home: "live", End: "history" };
+    const keyModes = { ArrowLeft: "history", ArrowRight: "live", Home: "history", End: "live" };
     const mode = keyModes[event.key];
     if (!mode) return;
     event.preventDefault();
@@ -282,6 +265,8 @@ export class KafkaTool extends BaseTool {
     button.disabled = disabled;
     button.setAttribute("aria-pressed", String(pressed));
     button.setAttribute("aria-label", label);
+    const topic = this.field("kafkaListenTopic");
+    if (topic) topic.disabled = pressed || ["Connecting…", "Stopping…"].includes(label);
   }
   toggleListening() { return this.listening ? this.stopListening() : this.startListening(); }
 
@@ -499,12 +484,67 @@ export class KafkaTool extends BaseTool {
     this.topicLoading = false;
     this.topics = [];
     this.closeTopicMenu();
+    this.closeTopicMenu("listen");
   }
 
-  updateTopicFavorite() {
-    const button = this.field("kafkaTopicFavorite");
+  topicPickerIds(source = "publish") {
+    const input = source === "listen" ? "kafkaListenTopic" : "kafkaTopic";
+    return {
+      input,
+      picker: `${input}Picker`,
+      favorite: `${input}Favorite`,
+      toggle: `${input}Toggle`,
+      menu: `${input}Menu`,
+      refresh: `${input}Refresh`,
+      status: `${input}Status`,
+      options: `${input}Options`,
+    };
+  }
+
+  bindTopicPicker(source) {
+    const ids = this.topicPickerIds(source);
+    const input = this.field(ids.input);
+    const picker = this.field(ids.picker);
+    input.addEventListener("pointerdown", () => picker.classList.add("is-pointer-focused"));
+    input.addEventListener("click", () => picker.classList.add("is-pointer-focused"));
+    input.addEventListener("blur", () => picker.classList.remove("is-pointer-focused"));
+    input.addEventListener("focus", () => {
+      if (!this.suppressTopicFocus && this.config().brokers) this.openTopicMenu(source);
+    });
+    picker.addEventListener("focusout", (event) => {
+      if (!picker.contains(event.relatedTarget)) this.closeTopicMenu(source);
+    });
+    input.addEventListener("input", () => {
+      this.renderTopicOptions(source);
+      this.updateTopicFavorite(source);
+      if (source === "listen") {
+        this.updateActionAvailability();
+      } else {
+        this.closeTemplateMenu();
+        this.field("kafkaTemplateSearch").value = "";
+        this.selectedRequestName = "";
+        this.renderRequests();
+        this.updateCount();
+      }
+    });
+    input.addEventListener("keydown", (event) => this.handleTopicKeydown(event, source));
+    this.field(ids.toggle).addEventListener("click", () => this.toggleTopicMenu(source));
+    this.field(ids.favorite).addEventListener("click", () => this.toggleTopicFavorite(source));
+    this.field(ids.refresh).addEventListener("click", () => this.loadTopics(true));
+    this.field(ids.options).addEventListener("pointerdown", (event) => {
+      const option = event.target.closest(".kafka-topic-option");
+      if (!option) return;
+      event.preventDefault();
+      this.selectTopic(this.visibleTopics[Number(option.dataset.index)], source);
+    });
+    this.field(ids.options).addEventListener("click", (event) => this.handleTopicClick(event, source));
+  }
+
+  updateTopicFavorite(source = "publish") {
+    const ids = this.topicPickerIds(source);
+    const button = this.field(ids.favorite);
     if (!button) return;
-    const topic = this.field("kafkaTopic").value.trim();
+    const topic = this.field(ids.input).value.trim();
     const favorite = Boolean(topic && this.favoriteTopics.includes(topic));
     button.classList.toggle("is-favorite", favorite);
     button.setAttribute("aria-pressed", String(favorite));
@@ -512,50 +552,51 @@ export class KafkaTool extends BaseTool {
     button.title = favorite ? "Remove topic from favorites" : "Favorite topic";
   }
 
-  updateListenTopic() {
-    const node = this.field("kafkaListenTopic");
-    if (!node) return;
-    const topic = this.field("kafkaTopic")?.value.trim();
-    node.textContent = topic ? `Topic: ${topic}` : "Choose a topic in Publish to search or listen.";
-    node.title = topic || "";
-    this.updateActionAvailability();
-  }
-
-  toggleTopicFavorite() {
-    const topic = this.field("kafkaTopic").value.trim();
+  toggleTopicFavorite(source = "publish") {
+    const ids = this.topicPickerIds(source);
+    const topic = this.field(ids.input).value.trim();
     if (!topic) {
-      this.message("kafkaPublishStatus", "Enter a topic before saving it as a favorite.", true);
-      this.field("kafkaTopic").focus();
+      this.message(source === "listen" ? "kafkaListenStatus" : "kafkaPublishStatus", "Enter a topic before saving it as a favorite.", true);
+      this.field(ids.input).focus();
       return;
     }
     const favorite = this.favoriteTopics.includes(topic);
     this.favoriteTopics = favorite ? this.favoriteTopics.filter((item) => item !== topic) : [topic, ...this.favoriteTopics].slice(0, 100);
     try { localStorage.setItem(KAFKA_TOPIC_FAVORITES_KEY, JSON.stringify(this.favoriteTopics)); } catch (_) {}
-    this.updateTopicFavorite();
-    this.renderTopicOptions();
+    this.updateTopicFavorite("publish");
+    this.updateTopicFavorite("listen");
+    this.renderTopicOptions(source);
     this.showSuccess(favorite ? `Removed “${topic}” from favorites.` : `Added “${topic}” to favorites.`);
   }
 
-  toggleTopicMenu() {
-    if (this.field("kafkaTopicMenu").hidden) this.openTopicMenu();
-    else this.closeTopicMenu();
+  toggleTopicMenu(source = "publish") {
+    const { menu } = this.topicPickerIds(source);
+    if (this.field(menu).hidden) this.openTopicMenu(source);
+    else this.closeTopicMenu(source);
   }
 
-  openTopicMenu() {
-    this.field("kafkaTopicMenu").hidden = false;
-    this.field("kafkaTopic").setAttribute("aria-expanded", "true");
-    this.field("kafkaTopicToggle").setAttribute("aria-expanded", "true");
-    this.renderTopicOptions();
+  openTopicMenu(source = "publish") {
+    const ids = this.topicPickerIds(source);
+    this.closeTopicMenu(source === "listen" ? "publish" : "listen");
+    this.topicPickerSource = source;
+    this.field(ids.menu).hidden = false;
+    this.field(ids.input).setAttribute("aria-expanded", "true");
+    this.field(ids.toggle).setAttribute("aria-expanded", "true");
+    this.renderTopicOptions(source);
     if (!this.topicsLoaded && !this.topicLoading) this.loadTopics();
   }
 
-  closeTopicMenu() {
+  closeTopicMenu(source = "publish") {
     if (!this.container) return;
-    this.field("kafkaTopicMenu").hidden = true;
-    this.field("kafkaTopic").setAttribute("aria-expanded", "false");
-    this.field("kafkaTopic").removeAttribute("aria-activedescendant");
-    this.field("kafkaTopicToggle").setAttribute("aria-expanded", "false");
-    this.activeTopicIndex = -1;
+    const ids = this.topicPickerIds(source);
+    const menu = this.field(ids.menu);
+    if (!menu) return;
+    const wasOpen = !menu.hidden;
+    menu.hidden = true;
+    this.field(ids.input).setAttribute("aria-expanded", "false");
+    this.field(ids.input).removeAttribute("aria-activedescendant");
+    this.field(ids.toggle).setAttribute("aria-expanded", "false");
+    if (wasOpen && this.topicPickerSource === source) this.activeTopicIndex = -1;
   }
 
   updateTemplateMenuLayout() {
@@ -669,7 +710,7 @@ export class KafkaTool extends BaseTool {
     const config = this.config();
     if (!config.brokers) {
       this.topicError = "Enter bootstrap servers before browsing topics.";
-      this.renderTopicOptions();
+      this.renderTopicOptions(this.topicPickerSource);
       return;
     }
     if (this.topicLoading && !force) return;
@@ -677,7 +718,7 @@ export class KafkaTool extends BaseTool {
     const requestId = ++this.topicRequestId;
     this.topicLoading = true;
     this.topicError = "";
-    this.renderTopicOptions();
+    this.renderTopicOptions(this.topicPickerSource);
     try {
       const topics = await this.service.listTopics(config);
       if (requestId !== this.topicRequestId || !this.container) return;
@@ -690,15 +731,16 @@ export class KafkaTool extends BaseTool {
     } finally {
       if (requestId === this.topicRequestId && this.container) {
         this.topicLoading = false;
-        this.renderTopicOptions();
+        this.renderTopicOptions(this.topicPickerSource);
       }
     }
   }
 
-  renderTopicOptions() {
-    const list = this.field("kafkaTopicOptions");
+  renderTopicOptions(source = "publish") {
+    const ids = this.topicPickerIds(source);
+    const list = this.field(ids.options);
     if (!list) return;
-    const query = this.field("kafkaTopic").value;
+    const query = this.field(ids.input).value;
     const favorites = rankKafkaTopics(this.favoriteTopics, query);
     const allTopics = rankKafkaTopics(this.topics, query).filter((topic) => !this.favoriteTopics.includes(topic));
     this.visibleTopics = [...favorites, ...allTopics];
@@ -707,7 +749,7 @@ export class KafkaTool extends BaseTool {
     this.visibleTopics.forEach((topic, index) => {
       const option = document.createElement("button");
       option.type = "button";
-      option.id = `kafkaTopicOption${index}`;
+      option.id = `${ids.input}Option${index}`;
       option.className = "kafka-topic-option";
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", String(index === this.activeTopicIndex));
@@ -725,18 +767,19 @@ export class KafkaTool extends BaseTool {
       }
       list.append(option);
     });
-    this.updateActiveTopic();
-    const status = this.field("kafkaTopicStatus");
+    this.updateActiveTopic(source);
+    const status = this.field(ids.status);
     status.textContent = this.topicLoading ? "Loading topics…" : this.topicError ||
       (this.visibleTopics.length ? `${this.visibleTopics.length} of ${this.topics.length} topics shown` :
         (this.topicsLoaded ? (this.topics.length ? "No matching topics. You can still enter a topic manually." :
           "No topics returned. Check broker access or enter a topic manually.") : "Browse topics from the broker."));
   }
 
-  updateActiveTopic() {
-    const input = this.field("kafkaTopic");
+  updateActiveTopic(source = "publish") {
+    const ids = this.topicPickerIds(source);
+    const input = this.field(ids.input);
     input.removeAttribute("aria-activedescendant");
-    this.field("kafkaTopicOptions").querySelectorAll(".kafka-topic-option").forEach((option, index) => {
+    this.field(ids.options).querySelectorAll(".kafka-topic-option").forEach((option, index) => {
       const active = index === this.activeTopicIndex;
       option.dataset.active = String(active);
       option.setAttribute("aria-selected", String(active));
@@ -747,36 +790,41 @@ export class KafkaTool extends BaseTool {
     });
   }
 
-  handleTopicKeydown(event) {
-    if (event.key === "Escape") { if (!this.field("kafkaTopicMenu").hidden) { event.preventDefault(); this.closeTopicMenu(); } return; }
+  handleTopicKeydown(event, source = "publish") {
+    const ids = this.topicPickerIds(source);
+    if (event.key === "Escape") { if (!this.field(ids.menu).hidden) { event.preventDefault(); this.closeTopicMenu(source); } return; }
     if (event.key === "Enter") {
       event.preventDefault();
-      if (!this.field("kafkaTopicMenu").hidden && this.activeTopicIndex >= 0) this.selectTopic(this.visibleTopics[this.activeTopicIndex]);
+      if (!this.field(ids.menu).hidden && this.activeTopicIndex >= 0) this.selectTopic(this.visibleTopics[this.activeTopicIndex], source);
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     event.preventDefault();
-    if (this.field("kafkaTopicMenu").hidden) { this.openTopicMenu(); return; }
+    if (this.field(ids.menu).hidden) { this.openTopicMenu(source); return; }
     if (!this.visibleTopics.length) return;
     const direction = event.key === "ArrowDown" ? 1 : -1;
     this.activeTopicIndex = (this.activeTopicIndex + direction + this.visibleTopics.length) % this.visibleTopics.length;
-    this.updateActiveTopic();
+    this.updateActiveTopic(source);
   }
 
-  handleTopicClick(event) {
+  handleTopicClick(event, source = "publish") {
     const option = event.target.closest(".kafka-topic-option");
     if (!option) return;
-    this.selectTopic(this.visibleTopics[Number(option.dataset.index)]);
+    this.selectTopic(this.visibleTopics[Number(option.dataset.index)], source);
   }
 
-  selectTopic(topic) {
+  selectTopic(topic, source = "publish") {
     if (!topic) return;
-    this.field("kafkaTopic").value = topic;
-    this.closeTopicMenu();
+    const ids = this.topicPickerIds(source);
+    this.field(ids.input).value = topic;
+    this.updateTopicFavorite(source);
+    this.closeTopicMenu(source);
+    if (source === "listen") {
+      this.updateActionAvailability();
+      return;
+    }
     this.closeTemplateMenu();
     this.selectedRequestName = "";
-    this.updateTopicFavorite();
-    this.updateListenTopic();
     this.field("kafkaTemplateSearch").value = "";
     this.renderRequests();
   }
@@ -982,7 +1030,6 @@ export class KafkaTool extends BaseTool {
     this.selectedRequestName = request.name;
     this.field("kafkaTemplateSearch").value = request.name;
     this.updateTopicFavorite();
-    this.updateListenTopic();
     this.renderRequests();
     this.field("kafkaKey").value = request.key || "";
     this.setJsonValue("Headers", request.headers || "{}");
@@ -999,8 +1046,16 @@ export class KafkaTool extends BaseTool {
     this.setFlow("listen");
     this.setListenMode("live");
     this.stopRequested = false;
-    const topic = this.field("kafkaTopic").value.trim();
-    if (!this.config().brokers || !topic) { this.message("kafkaListenStatus", "Enter bootstrap servers and a topic.", true); return; }
+    const topic = this.field("kafkaListenTopic").value.trim();
+    if (!this.config().brokers) {
+      this.message("kafkaListenStatus", "Enter bootstrap servers before listening.", true);
+      return;
+    }
+    if (!topic) {
+      this.message("kafkaListenStatus", "Enter a topic to listen on.", true);
+      this.field("kafkaListenTopic").focus();
+      return;
+    }
     this.saveConnection();
     const config = this.config();
     const fromBeginning = this.field("kafkaFromBeginning").checked;
@@ -1045,7 +1100,6 @@ export class KafkaTool extends BaseTool {
       }
       this.listening = true;
       this.setListeningButton("Stop listening", false, true);
-      this.field("kafkaListenHeading").textContent = `Listen to ${topic}`;
       this.message("kafkaListenStatus", "");
     } catch (error) {
       this.unlisten.forEach((unlisten) => unlisten()); this.unlisten = [];
@@ -1058,10 +1112,10 @@ export class KafkaTool extends BaseTool {
   async searchHistory() {
     this.setFlow("listen");
     this.setListenMode("history");
-    const topic = this.field("kafkaTopic").value.trim();
+    const topic = this.field("kafkaListenTopic").value.trim();
     const query = this.field("kafkaHistoryQuery").value.trim();
     const sinceMs = new Date(this.field("kafkaHistorySince").value).getTime();
-    if (!this.config().brokers || !topic) { this.message("kafkaHistoryStatus", "Enter bootstrap servers and a topic in Publish first.", true); return; }
+    if (!this.config().brokers || !topic) { this.message("kafkaHistoryStatus", "Enter bootstrap servers and a topic to search.", true); return; }
     if (query.length < 3 || !Number.isFinite(sinceMs) || sinceMs > Date.now()) {
       this.message("kafkaHistoryStatus", "Enter at least 3 characters and choose a start time in the past.", true); return;
     }
@@ -1162,7 +1216,6 @@ export class KafkaTool extends BaseTool {
       this.selectedRequestName = "";
       this.field("kafkaTemplateSearch").value = "";
       this.updateTopicFavorite();
-      this.updateListenTopic();
       this.renderRequests();
       this.field("kafkaKey").value = draft.key;
       this.setJsonValue("Headers", draft.headers);
@@ -1206,7 +1259,6 @@ export class KafkaTool extends BaseTool {
     catch (error) { this.message("kafkaListenStatus", String(error), true); }
     this.setListeningButton();
     if (this.container) this.updateActionAvailability();
-    if (this.field("kafkaListenHeading")) this.field("kafkaListenHeading").textContent = "Listen";
     this.message("kafkaListenStatus", "");
   }
 }

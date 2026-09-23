@@ -121,18 +121,43 @@ export const KafkaTemplate = /*html*/ `
 
       <section id="kafkaListenPanel" class="kafka-pane kafka-listen-pane" aria-labelledby="kafkaListenHeading">
         <div class="kafka-pane-header kafka-listen-header">
-          <div>
-            <h2 id="kafkaListenHeading">Listen</h2>
-            <p id="kafkaListenTopic" class="kafka-pane-caption">Choose a topic in Publish to search or listen.</p>
-            <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
-          </div>
+          <h2 id="kafkaListenHeading">Listen</h2>
           <div class="kafka-listen-mode" role="tablist" aria-label="Listen mode">
-            <button id="kafkaLiveMode" class="kafka-listen-mode-button is-active" type="button" role="tab" aria-selected="true" aria-controls="kafkaLiveView">Live</button>
-            <button id="kafkaHistoryMode" class="kafka-listen-mode-button" type="button" role="tab" aria-selected="false" aria-controls="kafkaHistoryView" tabindex="-1">History</button>
+            <button id="kafkaHistoryMode" class="kafka-listen-mode-button is-active" type="button" role="tab" aria-selected="true" aria-controls="kafkaHistoryView">Search</button>
+            <button id="kafkaLiveMode" class="kafka-listen-mode-button" type="button" role="tab" aria-selected="false" aria-controls="kafkaLiveView" tabindex="-1">Live</button>
           </div>
         </div>
         <div class="kafka-pane-body kafka-listen-body">
-          <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode kafkaHistoryHeading" hidden>
+          <div class="kafka-listen-topic-row">
+            <label for="kafkaListenTopic">Topic</label>
+            <div id="kafkaListenTopicPicker" class="kafka-topic-picker kafka-listen-topic-picker">
+              <input
+                id="kafkaListenTopic"
+                type="text"
+                role="combobox"
+                required
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Topic to listen on"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="kafkaListenTopicOptions"
+                placeholder="Search or enter a topic"
+              />
+              <button id="kafkaListenTopicFavorite" class="kafka-icon-button" type="button" aria-label="Favorite topic" aria-pressed="false" title="Favorite topic">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
+              </button>
+              <button id="kafkaListenTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaListenTopicOptions" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
+              <div id="kafkaListenTopicMenu" class="kafka-topic-menu" hidden>
+                <div class="kafka-topic-menu-heading"><strong>Topics</strong><button id="kafkaListenTopicRefresh" type="button">Refresh</button></div>
+                <p id="kafkaListenTopicStatus" role="status" aria-live="polite"></p>
+                <div id="kafkaListenTopicOptions" role="listbox" aria-label="Broker topics for listening"></div>
+              </div>
+            </div>
+          </div>
+          <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
+          <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode kafkaHistoryHeading">
             <div class="kafka-subhead"><div><h3 id="kafkaHistoryHeading">Search retained messages</h3><span class="kafka-subhead-note">Trace ID, payload, key, or header</span></div></div>
             <form id="kafkaHistoryForm" class="kafka-history-form">
               <label class="kafka-visually-hidden" for="kafkaHistoryQuery">Search retained messages</label>
@@ -176,7 +201,7 @@ export const KafkaTemplate = /*html*/ `
             <div id="kafkaHistoryResults" class="kafka-messages kafka-history-results"></div>
           </section>
 
-          <section id="kafkaLiveView" class="kafka-live-results kafka-listen-view" role="tabpanel" aria-labelledby="kafkaLiveMode kafkaLiveHeading">
+          <section id="kafkaLiveView" class="kafka-live-results kafka-listen-view" role="tabpanel" aria-labelledby="kafkaLiveMode kafkaLiveHeading" hidden>
             <div class="kafka-subhead">
               <div><h3 id="kafkaLiveHeading">Live messages</h3><span class="kafka-subhead-note">Optional · newest first · up to 100</span></div>
               <div class="kafka-listen-actions">
@@ -184,7 +209,7 @@ export const KafkaTemplate = /*html*/ `
                 <button id="kafkaListen" class="btn btn-secondary btn-sm" type="button" aria-pressed="false" disabled>Start listening</button>
               </div>
             </div>
-            <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Add a bootstrap server, then choose a topic in Publish.</p></div>
+            <div id="kafkaMessages" class="kafka-messages"><p class="kafka-empty">Add a bootstrap server, then enter a topic to listen.</p></div>
           </section>
         </div>
       </section>

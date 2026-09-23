@@ -243,8 +243,11 @@
 }
 
 .kafka-pane-header {
+  box-sizing: border-box;
+  height: 60px;
+  min-height: 60px;
   flex: none;
-  align-items: flex-start;
+  align-items: center;
   padding: 12px 14px;
   border-bottom: 1px solid hsl(var(--border));
 }
@@ -535,16 +538,19 @@
   cursor: pointer;
 }
 
-.kafka-topic-picker > #kafkaTopicToggle {
+.kafka-topic-picker > #kafkaTopicToggle,
+.kafka-listen-topic-picker > #kafkaListenTopicToggle {
   border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
 }
 
 .kafka-topic-picker > #kafkaTopicToggle[aria-expanded="true"] .kafka-picker-chevron,
+.kafka-listen-topic-picker > #kafkaListenTopicToggle[aria-expanded="true"] .kafka-picker-chevron,
 .kafka-template-picker > #kafkaTemplateToggle[aria-expanded="true"] .kafka-picker-chevron {
   transform: rotate(180deg);
 }
 
 .kafka-topic-picker > #kafkaTopicFavorite,
+.kafka-listen-topic-picker > #kafkaListenTopicFavorite,
 .kafka-topic-picker > #kafkaTemplateFavorite {
   width: 36px;
   border-radius: 0;
@@ -633,18 +639,21 @@
   cursor: pointer;
 }
 
-#kafkaTopicStatus {
+#kafkaTopicStatus,
+#kafkaListenTopicStatus {
   margin: 0;
   padding: 3px 7px;
   color: hsl(var(--muted-foreground));
   font-size: 11px;
 }
 
-#kafkaTopicStatus:empty {
+#kafkaTopicStatus:empty,
+#kafkaListenTopicStatus:empty {
   display: none;
 }
 
-#kafkaTopicOptions {
+#kafkaTopicOptions,
+#kafkaListenTopicOptions {
   max-height: 230px;
   overflow-y: auto;
 }
@@ -1091,6 +1100,25 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.kafka-listen-topic-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  margin-bottom: 12px;
+}
+
+.kafka-listen-topic-row label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.kafka-listen-topic-row input {
+  min-width: 0;
+  margin: 0;
 }
 
 .kafka-listen-view {
@@ -1545,21 +1573,16 @@ body.is-resizing * {
 }
 
 @media (max-width: 560px) {
-  .kafka-connection-bar,
-  .kafka-pane-header {
+  .kafka-connection-bar {
     align-items: flex-start;
   }
 
-  .kafka-listen-header {
-    flex-direction: column;
-  }
-
   .kafka-listen-mode {
-    width: 100%;
+    width: auto;
   }
 
   .kafka-listen-mode-button {
-    flex: 1;
+    flex: none;
   }
 
   .kafka-connection-bar {
