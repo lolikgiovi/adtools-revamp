@@ -244,11 +244,11 @@
 
 .kafka-pane-header {
   box-sizing: border-box;
-  height: 60px;
-  min-height: 60px;
+  height: 48px;
+  min-height: 48px;
   flex: none;
   align-items: center;
-  padding: 12px 14px;
+  padding: 7px 14px;
   border-bottom: 1px solid hsl(var(--border));
 }
 
