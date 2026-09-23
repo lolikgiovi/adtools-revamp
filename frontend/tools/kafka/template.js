@@ -12,7 +12,7 @@ export const KafkaTemplate = /*html*/ `
         <div class="kafka-connection-actions">
           <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
           <details id="kafkaConnectionSettings" class="kafka-settings">
-            <summary>Broker settings</summary>
+            <summary><span>Broker settings</span><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
             <div class="kafka-settings-popover">
               <label for="kafkaBrokers">Bootstrap server</label>
               <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
@@ -45,7 +45,7 @@ export const KafkaTemplate = /*html*/ `
                     <button id="kafkaTopicFavorite" class="kafka-icon-button" type="button" aria-label="Favorite topic" aria-pressed="false" title="Favorite topic">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
                     </button>
-                    <button id="kafkaTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaTopicOptions" aria-expanded="false">▼</button>
+                    <button id="kafkaTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaTopicOptions" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
                     <div id="kafkaTopicMenu" class="kafka-topic-menu" hidden>
                       <div class="kafka-topic-menu-heading"><strong>Topics</strong><button id="kafkaTopicRefresh" type="button">Refresh</button></div>
                       <p id="kafkaTopicStatus" role="status" aria-live="polite"></p>
@@ -55,14 +55,36 @@ export const KafkaTemplate = /*html*/ `
                 </div>
               </div>
 
-              <details id="kafkaTemplates" class="kafka-templates">
-                <summary><span>Templates</span><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></summary>
-                <div class="kafka-templates-content">
-                  <label class="kafka-template-search-label" for="kafkaTemplateSearch">Find a saved template</label>
-                  <input id="kafkaTemplateSearch" type="search" placeholder="Filter templates" autocomplete="off" spellcheck="false" />
-                  <div id="kafkaSavedList"></div>
+              <div class="kafka-template-action-row">
+                <div id="kafkaTemplatePicker" class="kafka-topic-picker kafka-template-picker">
+                  <input id="kafkaTemplateSearch" type="text" role="combobox" aria-label="Template" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="kafkaSavedList" placeholder="Search or choose a template" autocomplete="off" spellcheck="false" />
+                  <button id="kafkaTemplateFavorite" class="kafka-icon-button" type="button" aria-label="Favorite template" aria-pressed="false" title="Favorite template" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
+                  </button>
+                  <button id="kafkaTemplateToggle" type="button" aria-label="Browse templates" aria-controls="kafkaSavedList" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
+                  <details id="kafkaTemplates" class="kafka-templates">
+                    <summary class="kafka-visually-hidden" tabindex="-1" aria-hidden="true">Templates</summary>
+                    <div id="kafkaSavedPanel" class="kafka-templates-content">
+                      <div class="kafka-template-menu-heading"><strong>Saved templates</strong><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></div>
+                      <p id="kafkaTemplateStatus" role="status" aria-live="polite"></p>
+                      <div id="kafkaSavedList" role="listbox" aria-label="Saved templates"></div>
+                    </div>
+                  </details>
                 </div>
-              </details>
+                <div class="kafka-publish-actions">
+                  <button id="kafkaTemplateSaveToggle" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="kafkaTemplateSave" title="Save the current draft as a template">Save as</button>
+                  <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
+                </div>
+              </div>
+
+              <div id="kafkaTemplateSave" class="kafka-template-save" hidden>
+                <label for="kafkaRequestName">Template name</label>
+                <div class="kafka-template-save-fields">
+                  <input id="kafkaRequestName" type="text" maxlength="80" placeholder="e.g. Retry payment" autocomplete="off" />
+                  <button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button>
+                  <button id="kafkaTemplateSaveCancel" class="btn btn-ghost btn-sm" type="button">Cancel</button>
+                </div>
+              </div>
 
               <div class="kafka-editor-section kafka-value-section">
                 <div class="kafka-editor-heading"><label id="kafkaValueLabel" for="kafkaValue">Payload</label><div class="kafka-editor-controls"><label class="switch kafka-bulk-toggle" title="Publish the payload as a JSON array"><input id="kafkaBulk" type="checkbox" /><span class="slider"></span></label><span class="kafka-toggle-label">Bulk</span><button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button></div></div>
@@ -87,23 +109,7 @@ export const KafkaTemplate = /*html*/ `
                 </div>
               </details>
 
-              <div class="kafka-publish-footer">
-                <div class="kafka-publish-footer-main">
-                  <p id="kafkaCount" class="kafka-hint">1 message per click</p>
-                  <div class="kafka-publish-actions">
-                    <button id="kafkaTemplateSaveToggle" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="kafkaTemplateSave">Save as template</button>
-                    <button id="kafkaPublish" class="btn btn-primary" type="submit">Publish</button>
-                  </div>
-                </div>
-                <div id="kafkaTemplateSave" class="kafka-template-save" hidden>
-                  <label for="kafkaRequestName">Template name</label>
-                  <div class="kafka-template-save-fields">
-                    <input id="kafkaRequestName" type="text" maxlength="80" placeholder="e.g. Retry payment" autocomplete="off" />
-                    <button id="kafkaSave" class="btn btn-secondary btn-sm" type="button">Save template</button>
-                    <button id="kafkaTemplateSaveCancel" class="btn btn-ghost btn-sm" type="button">Cancel</button>
-                  </div>
-                </div>
-              </div>
+              <p id="kafkaCount" class="kafka-hint kafka-publish-count">1 message per click</p>
               <p id="kafkaPublishStatus" role="status" aria-live="polite"></p>
               <div id="kafkaDeliveries" class="kafka-deliveries" aria-live="polite"></div>
             </form>

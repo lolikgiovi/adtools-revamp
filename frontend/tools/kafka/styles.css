@@ -31,8 +31,6 @@
 .kafka-field-heading,
 .kafka-pane-header,
 .kafka-section-title,
-.kafka-publish-footer,
-.kafka-template-save,
 .kafka-listen-actions,
 .kafka-message-top,
 .kafka-message-actions {
@@ -43,7 +41,6 @@
 .kafka-connection-bar,
 .kafka-pane-header,
 .kafka-section-title,
-.kafka-publish-footer,
 .kafka-message-top {
   justify-content: space-between;
 }
@@ -130,6 +127,9 @@
 }
 
 .kafka-settings summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 7px;
   color: hsl(var(--muted-foreground));
@@ -142,15 +142,19 @@
   display: none;
 }
 
-.kafka-settings summary::after {
-  display: inline-block;
-  margin-left: 6px;
-  content: "▼";
-  font-size: 9px;
-  transition: transform 140ms ease;
+.kafka-picker-chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  transition: transform 160ms ease;
 }
 
-.kafka-settings[open] summary::after {
+.kafka-settings[open] .kafka-picker-chevron {
   transform: rotate(180deg);
 }
 
@@ -183,23 +187,6 @@
 .kafka-setting-note {
   margin-bottom: 0;
   font-size: 11px;
-}
-
-@media (min-width: 561px) {
-  .kafka-connection.is-settings-open .kafka-connection-bar,
-  .kafka-connection.is-settings-open .kafka-connection-actions {
-    align-items: flex-start;
-  }
-
-  .kafka-connection.is-settings-open .kafka-settings-popover {
-    position: static;
-    margin-top: 8px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
 }
 
 .kafka-flow-nav {
@@ -294,7 +281,6 @@
   display: block;
 }
 
-.kafka-templates,
 .kafka-publish-options {
   min-width: 0;
   border: 1px solid hsl(var(--border));
@@ -302,15 +288,30 @@
   background: hsl(var(--background));
 }
 
-.kafka-templates {
+.kafka-template-action-row {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.kafka-templates {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .kafka-publish-options {
   margin-top: var(--kafka-section-gap);
 }
 
-.kafka-templates > summary,
 .kafka-publish-options > summary {
   display: flex;
   align-items: center;
@@ -326,12 +327,10 @@
   list-style: none;
 }
 
-.kafka-templates > summary::-webkit-details-marker,
 .kafka-publish-options > summary::-webkit-details-marker {
   display: none;
 }
 
-.kafka-templates > summary::after,
 .kafka-publish-options > summary::after {
   margin-left: auto;
   color: hsl(var(--muted-foreground));
@@ -340,46 +339,77 @@
   transition: transform 140ms ease;
 }
 
-.kafka-templates[open] > summary::after,
 .kafka-publish-options[open] > summary::after {
   transform: rotate(180deg);
 }
 
-.kafka-templates > summary:hover,
 .kafka-publish-options > summary:hover,
-.kafka-templates[open] > summary,
 .kafka-publish-options[open] > summary {
   background: hsl(var(--muted));
 }
 
-.kafka-templates > summary:focus-visible,
 .kafka-publish-options > summary:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: -2px;
 }
 
-.kafka-templates summary .kafka-subhead-note,
 .kafka-publish-options summary .kafka-subhead-note {
   margin: 0 0 0 auto;
   font-weight: 400;
 }
 
-.kafka-templates-content,
+.kafka-templates-content {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  max-height: min(360px, calc(100dvh - 180px));
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--kafka-control-radius);
+  background: hsl(var(--background));
+  box-shadow: 0 10px 24px hsl(var(--foreground) / 0.14);
+  pointer-events: auto;
+}
+
+.kafka-templates:not([open]) > .kafka-templates-content {
+  display: none;
+}
+
 .kafka-publish-options-content {
   padding: 0 12px 12px;
 }
 
-.kafka-template-search-label {
-  margin-top: 10px;
-  color: hsl(var(--muted-foreground)) !important;
-  font-size: 11px !important;
-  font-weight: 500 !important;
+.kafka-template-menu-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding: 0 7px;
+  font-size: 11px;
 }
 
-.kafka-templates-content > input[type="search"] {
-  height: 34px;
-  margin-top: 5px;
-  padding: 0 10px;
+.kafka-template-menu-heading .kafka-subhead-note {
+  margin: 0;
+}
+
+#kafkaSavedList {
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+#kafkaTemplateStatus {
+  margin: 0 0 5px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+
+#kafkaTemplateStatus:empty {
+  display: none;
 }
 
 .kafka-publish-options-content .kafka-key-field {
@@ -488,6 +518,12 @@
   z-index: 1;
 }
 
+.kafka-topic-picker.is-pointer-focused > input:focus-visible,
+.kafka-template-picker.is-pointer-focused > input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .kafka-topic-picker > button {
   height: var(--kafka-control-height);
   padding: 0;
@@ -503,9 +539,19 @@
   border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
 }
 
-.kafka-topic-picker > #kafkaTopicFavorite {
+.kafka-topic-picker > #kafkaTopicToggle[aria-expanded="true"] .kafka-picker-chevron,
+.kafka-template-picker > #kafkaTemplateToggle[aria-expanded="true"] .kafka-picker-chevron {
+  transform: rotate(180deg);
+}
+
+.kafka-topic-picker > #kafkaTopicFavorite,
+.kafka-topic-picker > #kafkaTemplateFavorite {
   width: 36px;
   border-radius: 0;
+}
+
+.kafka-template-picker > #kafkaTemplateToggle {
+  border-radius: 0 var(--kafka-control-radius) var(--kafka-control-radius) 0;
 }
 
 .kafka-topic-picker > button:hover,
@@ -786,31 +832,17 @@
   user-select: none;
 }
 
-.kafka-publish-footer {
-  display: grid;
-  gap: 12px;
-  margin-top: var(--kafka-section-gap);
-  padding-top: 12px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.kafka-publish-footer-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .kafka-publish-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
+.kafka-publish-actions > #kafkaTemplateSaveToggle,
 .kafka-publish-actions > #kafkaPublish {
-  min-width: 132px;
+  width: 112px;
+  min-width: 112px;
   height: var(--kafka-control-height);
   justify-content: center;
 }
@@ -821,9 +853,14 @@
   font-size: 11px;
 }
 
+.kafka-publish-count {
+  margin-top: 8px;
+}
+
 .kafka-template-save {
   display: grid;
   gap: 8px;
+  margin-top: 8px;
   padding: 12px;
   border: 1px solid hsl(var(--border));
   border-radius: var(--kafka-control-radius);
@@ -899,42 +936,66 @@
 .kafka-saved-row {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 8px 0;
+  gap: 4px;
+  padding: 5px 0;
   border-bottom: 1px solid hsl(var(--border));
 }
 
-.kafka-saved-row > div {
+.kafka-saved-row:last-child {
+  border-bottom: 0;
+}
+
+.kafka-saved-option {
   display: grid;
   min-width: 0;
   flex: 1;
   gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.kafka-saved-row strong,
-.kafka-saved-row small {
+.kafka-saved-option strong,
+.kafka-saved-option small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kafka-saved-row strong {
+.kafka-saved-option strong {
   font-size: 12px;
 }
 
-.kafka-saved-row small {
+.kafka-saved-option small {
   color: hsl(var(--muted-foreground));
   font-size: 10px;
 }
 
+.kafka-saved-option:hover,
+.kafka-saved-option[aria-selected="true"],
+.kafka-saved-option[data-active="true"] {
+  background: hsl(var(--muted));
+}
+
+.kafka-saved-option:focus-visible,
+.kafka-saved-row > button:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+
 .kafka-saved-row .btn {
-  height: 28px;
-  padding: 0 6px;
+  height: var(--kafka-compact-height);
+  padding: 0 8px;
 }
 
 .kafka-template-favorite {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
 .kafka-empty {
@@ -1450,8 +1511,19 @@ body.is-resizing * {
 }
 
 @media (max-width: 760px) {
-  .kafka-templates {
-    margin-top: 10px;
+  .kafka-template-action-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kafka-publish-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kafka-publish-actions > #kafkaTemplateSaveToggle,
+  .kafka-publish-actions > #kafkaPublish {
+    width: 100%;
+    min-width: 0;
   }
 
   .kafka-history-form {
@@ -1505,8 +1577,8 @@ body.is-resizing * {
   }
 
   .kafka-settings-popover {
-    right: auto;
-    left: 0;
+    right: 0;
+    left: auto;
   }
 
   .kafka-topic-row {
@@ -1514,19 +1586,6 @@ body.is-resizing * {
   }
 
   .kafka-topic-row > button {
-    width: 100%;
-  }
-
-  .kafka-publish-footer {
-    align-items: stretch;
-  }
-
-  .kafka-publish-footer-main {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .kafka-publish-actions {
     width: 100%;
   }
 
@@ -1578,11 +1637,6 @@ body.is-resizing * {
 }
 
 @media (max-width: 420px) {
-  .kafka-publish-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
   .kafka-publish-actions > #kafkaTemplateSaveToggle,
   .kafka-publish-actions > #kafkaPublish {
     width: 100%;
@@ -1594,8 +1648,7 @@ body.is-resizing * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kafka-settings summary::after,
-  .kafka-templates > summary::after,
+  .kafka-picker-chevron,
   .kafka-publish-options > summary::after,
   .kafka-tool .switch .slider,
   .kafka-tool .switch .slider::before,
