@@ -48,10 +48,11 @@ export class KafkaDateTimePicker {
   constructor({ root, input }) {
     this.root = root;
     this.input = input;
+    this.calendarPlaceholder = null;
     this.selected = null;
     this.viewMonth = null;
     this.handleOutsideClick = (event) => {
-      if (!this.root?.contains(event.target)) this.close();
+      if (!this.root?.contains(event.target) && !this.calendar?.contains(event.target)) this.close();
     };
     this.handleDayClick = (event) => {
       const day = event.target.closest("button[data-date]");
@@ -99,6 +100,9 @@ export class KafkaDateTimePicker {
     document.addEventListener("click", this.handleOutsideClick);
     window.addEventListener("resize", this.handleViewportChange);
     window.addEventListener("scroll", this.handleViewportChange, true);
+    this.calendarPlaceholder = document.createComment("kafka-history-calendar");
+    this.calendar.replaceWith(this.calendarPlaceholder);
+    document.body.append(this.calendar);
     this.loadFromInput();
   }
 
@@ -107,6 +111,8 @@ export class KafkaDateTimePicker {
     window.removeEventListener("resize", this.handleViewportChange);
     window.removeEventListener("scroll", this.handleViewportChange, true);
     this.close();
+    this.calendarPlaceholder?.replaceWith(this.calendar);
+    this.calendarPlaceholder = null;
   }
 
   toggle() {
@@ -134,22 +140,44 @@ export class KafkaDateTimePicker {
     const isMobileSheet = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 520px)").matches;
     if (isMobileSheet) {
       this.calendar.classList.remove("is-above");
+      this.calendar.style.removeProperty("top");
+      this.calendar.style.removeProperty("left");
       this.calendar.style.removeProperty("max-height");
       return;
     }
+    this.calendar.style.removeProperty("max-height");
     const triggerRect = this.trigger.getBoundingClientRect();
     const calendarRect = this.calendar.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const gap = 8;
-    const spaceAbove = Math.max(0, triggerRect.top - gap);
-    const spaceBelow = Math.max(0, viewportHeight - triggerRect.bottom - gap);
+    const viewportGutter = 16;
+    const spaceAbove = Math.max(0, triggerRect.top - gap - viewportGutter);
+    const spaceBelow = Math.max(0, viewportHeight - triggerRect.bottom - gap - viewportGutter);
     const fitsBelow = calendarRect.height <= spaceBelow;
     const fitsAbove = calendarRect.height <= spaceAbove;
-    const opensAbove = !fitsBelow && (fitsAbove || spaceAbove > spaceBelow);
-    const availableSpace = opensAbove ? spaceAbove : spaceBelow;
+    const fitsViewport = calendarRect.height <= Math.max(0, viewportHeight - viewportGutter * 2);
+    let opensAbove = false;
+    let top;
+    if (fitsBelow) {
+      top = triggerRect.bottom + gap;
+    } else if (fitsAbove) {
+      opensAbove = true;
+      top = triggerRect.top - gap - calendarRect.height;
+    } else if (fitsViewport) {
+      top = Math.min(triggerRect.bottom + gap, viewportHeight - calendarRect.height - viewportGutter);
+      opensAbove = top + calendarRect.height < triggerRect.top;
+    } else {
+      opensAbove = spaceAbove > spaceBelow;
+      const availableSpace = opensAbove ? spaceAbove : spaceBelow;
+      top = opensAbove ? triggerRect.top - gap - availableSpace : triggerRect.bottom + gap;
+      this.calendar.style.maxHeight = `${Math.floor(availableSpace)}px`;
+    }
     this.calendar.classList.toggle("is-above", opensAbove);
-    if (calendarRect.height > availableSpace) this.calendar.style.maxHeight = `${Math.floor(availableSpace)}px`;
-    else this.calendar.style.removeProperty("max-height");
+    const maxLeft = Math.max(viewportGutter, viewportWidth - calendarRect.width - viewportGutter);
+    const left = clamp(triggerRect.left, viewportGutter, maxLeft);
+    this.calendar.style.left = `${Math.round(left)}px`;
+    this.calendar.style.top = `${Math.round(top)}px`;
   }
 
   loadFromInput() {

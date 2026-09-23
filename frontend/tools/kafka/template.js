@@ -157,8 +157,7 @@ export const KafkaTemplate = /*html*/ `
             </div>
           </div>
           <p id="kafkaListenStatus" class="kafka-pane-caption" role="status" aria-live="polite"></p>
-          <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode kafkaHistoryHeading">
-            <div class="kafka-subhead"><div><h3 id="kafkaHistoryHeading">Search retained messages</h3><span class="kafka-subhead-note">Trace ID, payload, key, or header</span></div></div>
+          <section id="kafkaHistoryView" class="kafka-history kafka-listen-view" role="tabpanel" aria-labelledby="kafkaHistoryMode">
             <form id="kafkaHistoryForm" class="kafka-history-form">
               <label class="kafka-visually-hidden" for="kafkaHistoryQuery">Search retained messages</label>
               <input id="kafkaHistoryQuery" type="text" minlength="3" maxlength="200" required placeholder="Trace ID, payload, key, or header" autocomplete="off" spellcheck="false" aria-label="Trace ID, payload, key, or header" />
