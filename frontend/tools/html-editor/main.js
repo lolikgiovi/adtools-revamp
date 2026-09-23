@@ -6,16 +6,9 @@ import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
+import { HtmlDocumentStore } from "./documentStore.js";
 import MinifyWorker from "./minify.worker.js?worker";
-import {
-  buildVtlValuesExport,
-  debounce,
-  deleteVtlValue,
-  extractVtlVariables,
-  getPreviewContent,
-  getVtlValue,
-  setVtlValue,
-} from "./service.js";
+import { buildVtlValuesExport, deleteVtlValue, extractVtlVariables, getPreviewContent, getVtlValue, setVtlValue } from "./service.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { bucketSize, cleanAnalyticsMeta, summarizeText } from "../../core/AnalyticsMeta.js";
@@ -24,6 +17,7 @@ import "./styles.css";
 
 const PREVIEW_VIEWPORT_MIN_WIDTH = 240;
 const PREVIEW_VIEWPORT_MAX_WIDTH = 1440;
+const DEFAULT_HTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`;
 // Representative CSS viewport widths; hardware pixel resolution is a separate device property.
 const PREVIEW_VIEWPORT_PRESETS = [
   { value: "responsive", label: "Fit · Responsive", width: null },
@@ -48,7 +42,6 @@ class HTMLTemplateTool extends BaseTool {
     this.minifierAvailable = false;
     this.lastRenderedHTML = "";
     this.sandboxSameOriginAllowed = false; // default disabled for safer preview
-    this.debouncedRender = null;
     // VTL values state and storage key
     this.vtlValues = {};
     this._vtlValuesStorageKey = "tool:html-template:vtl-values";
@@ -68,6 +61,19 @@ class HTMLTemplateTool extends BaseTool {
     this.programmaticEditorChange = false;
     this.lastHtmlOperation = null;
     this.vtlAnalyticsTimer = null;
+    this.documentStore = null;
+    this.documents = [];
+    this.activeDocumentId = null;
+    this._documentWriteQueue = Promise.resolve();
+    this._tabTransition = false;
+    this._closedDocument = null;
+    this._undoTimer = null;
+    this._mountSequence = 0;
+    this._pendingFormat = null;
+    this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
+    this._handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") void this.flushActiveDocument().catch(() => {});
+    };
   }
 
   getIconSvg() {
@@ -149,22 +155,29 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   async onMount() {
-    await this.initializeMonacoEditor();
-    // Load any saved VTL values
-    try {
-      const savedVtl = localStorage.getItem(this._vtlValuesStorageKey);
-      if (savedVtl) this.vtlValues = JSON.parse(savedVtl) || {};
-      this.previewWhiteBackground = localStorage.getItem(this._previewBackgroundStorageKey) === "white";
-    } catch (_) {
-      this.vtlValues = {};
+    const sequence = ++this._mountSequence;
+    configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker });
+    await this.initializeDocuments();
+    if (sequence !== this._mountSequence || !this.container) {
+      this.documents.forEach((document) => document.model?.dispose());
+      this.documents = [];
+      this.documentStore?.close();
+      return;
     }
+    await this.initializeMonacoEditor();
+    if (sequence !== this._mountSequence || !this.container) return;
+    try {
+      this.previewWhiteBackground = localStorage.getItem(this._previewBackgroundStorageKey) === "white";
+    } catch (_) {}
     this.initializeWorker();
+    this.bindDocumentEvents();
     this.bindToolEvents();
+    window.addEventListener("pagehide", this._handlePageHide);
+    document.addEventListener("visibilitychange", this._handleVisibilityChange);
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
     this.setupPreviewVtlMode();
     this.setupPreviewViewport();
-    this.setupDebouncedRendering();
     this.initializeResizer();
     this.renderPreview(this.editor.getValue());
     try {
@@ -173,13 +186,23 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   onUnmount() {
+    this._mountSequence += 1;
+    window.removeEventListener("pagehide", this._handlePageHide);
+    document.removeEventListener("visibilitychange", this._handleVisibilityChange);
+    const finalSave = this.flushActiveDocument().catch(() => {});
+    const store = this.documentStore;
     this.cleanupResizer();
+    clearTimeout(this._previewTimer);
+    clearTimeout(this._undoTimer);
     clearTimeout(this.vtlAnalyticsTimer);
     this.vtlAnalyticsTimer = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
     }
+    this.documents.forEach((document) => document.model?.dispose());
+    this.documents = [];
+    void Promise.allSettled([finalSave, this._documentWriteQueue]).then(() => store?.close());
     if (this.minifyWorker) {
       this.minifyWorker.terminate();
       this.minifyWorker = null;
@@ -197,12 +220,358 @@ class HTMLTemplateTool extends BaseTool {
     this.cleanupResizer();
   }
 
-  async initializeMonacoEditor() {
-    configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker });
+  get activeDocument() {
+    return this.documents.find((document) => document.id === this.activeDocumentId);
+  }
 
+  createDocumentModel(document) {
+    document.html = typeof document.html === "string" ? document.html : "";
+    document.vtlValues = document.vtlValues && typeof document.vtlValues === "object" ? document.vtlValues : {};
+    document.model = monaco.editor.createModel(document.html, "html", monaco.Uri.parse(`inmemory://html-template/${document.id}.html`));
+    return document;
+  }
+
+  documentRecord(document) {
+    return {
+      id: document.id,
+      name: document.name,
+      html: document.model?.getValue() ?? document.html,
+      vtlValues: structuredClone(document.vtlValues || {}),
+      createdAt: document.createdAt,
+      updatedAt: Date.now(),
+    };
+  }
+
+  async initializeDocuments() {
+    this.documentStore = new HtmlDocumentStore();
+    try {
+      await this.documentStore.open();
+      const saved = await this.documentStore.load(DEFAULT_HTML, () => this.createAnalyticsId());
+      this.documents = saved.documents.map((document) => this.createDocumentModel(document));
+      this.activeDocumentId = saved.activeId;
+    } catch (error) {
+      console.error("Could not open HTML document storage:", error);
+      this.documentStore?.close();
+      this.documentStore = null;
+      let html = DEFAULT_HTML;
+      let vtlValues = {};
+      try {
+        html = localStorage.getItem("tool:html-template:editor") ?? DEFAULT_HTML;
+        vtlValues = JSON.parse(localStorage.getItem(this._vtlValuesStorageKey) || "{}") || {};
+      } catch (_) {}
+      const document = { id: this.createAnalyticsId(), name: "Untitled 1", html, vtlValues, createdAt: Date.now() };
+      this.documents = [this.createDocumentModel(document)];
+      this.activeDocumentId = document.id;
+      this.showError("HTML drafts could not be saved on this device. Check browser storage, then reload.");
+    }
+    this.vtlValues = this.activeDocument.vtlValues || {};
+    this.renderDocumentTabs();
+  }
+
+  writeDocumentStore(operation) {
+    if (!this.documentStore) return Promise.resolve();
+    const task = this._documentWriteQueue.then(operation);
+    this._documentWriteQueue = task.catch((error) => {
+      console.error("Could not save HTML document:", error);
+      this.showError("HTML draft was not saved. Check available storage before closing this page.");
+    });
+    return task;
+  }
+
+  scheduleDocumentSave() {
+    clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(() => void this.flushActiveDocument().catch(() => {}), 300);
+  }
+
+  async flushActiveDocument() {
+    clearTimeout(this._persistTimer);
+    this._persistTimer = null;
+    if (this._pendingFormat) await this._pendingFormat.catch(() => {});
+    const document = this.activeDocument;
+    if (!document) return;
+    const record = this.documentRecord(document);
+    document.html = record.html;
+    document.updatedAt = record.updatedAt;
+    await this.writeDocumentStore(() => this.documentStore.saveDocument(record));
+  }
+
+  renderDocumentTabs() {
+    const strip = this.container?.querySelector("#htmlDocumentTabs");
+    if (!strip) return;
+    strip.replaceChildren();
+    this.documents.forEach((document) => {
+      const tab = globalThis.document.createElement("div");
+      tab.className = `html-document-tab${document.id === this.activeDocumentId ? " active" : ""}`;
+      tab.dataset.documentId = document.id;
+      const select = globalThis.document.createElement("button");
+      select.type = "button";
+      select.className = "html-document-tab-select";
+      select.id = `html-document-tab-${document.id}`;
+      select.role = "tab";
+      select.setAttribute("aria-selected", String(document.id === this.activeDocumentId));
+      select.setAttribute("aria-controls", "htmlDocumentPanel");
+      select.tabIndex = document.id === this.activeDocumentId ? 0 : -1;
+      select.title = `${document.name} · Double-click to rename`;
+      select.textContent = document.name;
+      const close = globalThis.document.createElement("button");
+      close.type = "button";
+      close.className = "html-document-tab-close";
+      close.setAttribute("aria-label", `Close ${document.name}`);
+      close.title = `Close ${document.name}`;
+      close.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+      close.disabled = this.documents.length === 1;
+      tab.append(select, close);
+      strip.appendChild(tab);
+    });
+    const panel = this.container?.querySelector("#htmlDocumentPanel");
+    panel?.setAttribute("aria-labelledby", `html-document-tab-${this.activeDocumentId}`);
+  }
+
+  bindDocumentEvents() {
+    const strip = this.container.querySelector("#htmlDocumentTabs");
+    strip.addEventListener("click", (event) => {
+      const tab = event.target.closest(".html-document-tab");
+      if (!tab) return;
+      if (event.target.closest(".html-document-tab-close")) void this.closeDocument(tab.dataset.documentId);
+      else if (event.target.closest(".html-document-tab-select")) void this.switchDocument(tab.dataset.documentId, true);
+    });
+    strip.addEventListener("dblclick", (event) => {
+      const select = event.target.closest(".html-document-tab-select");
+      if (select) this.renameDocument(select.closest(".html-document-tab").dataset.documentId);
+    });
+    strip.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const current = this.documents.findIndex((document) => document.id === this.activeDocumentId);
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? this.documents.length - 1
+            : (current + (event.key === "ArrowRight" ? 1 : -1) + this.documents.length) % this.documents.length;
+      event.preventDefault();
+      void this.switchDocument(this.documents[next].id, true);
+    });
+    this.container.querySelector("#btnNewHtmlDocument").addEventListener("click", () => void this.newDocument());
+    this.container.querySelector("#btnUndoCloseHtmlDocument").addEventListener("click", () => void this.undoCloseDocument());
+  }
+
+  async switchDocument(id, focusTab = false) {
+    if (this._tabTransition || id === this.activeDocumentId) return;
+    const next = this.documents.find((document) => document.id === id);
+    if (!next) return;
+    this._tabTransition = true;
+    try {
+      await this.flushActiveDocument();
+      clearTimeout(this._previewTimer);
+      clearTimeout(this.vtlAnalyticsTimer);
+      this.container.querySelector("#vtlModal").style.display = "none";
+      this.activeDocument.viewState = this.editor.saveViewState();
+      this.activeDocumentId = id;
+      this.vtlValues = next.vtlValues || {};
+      const envKey = this.container.querySelector("#envSelector")?.value;
+      const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
+      if (url !== undefined) this.vtlValues.baseUrl = url;
+      this.editor.setModel(next.model);
+      if (next.viewState) this.editor.restoreViewState(next.viewState);
+      this.lastRenderedHTML = "";
+      this.renderDocumentTabs();
+      this.renderPreview(next.model.getValue(), true);
+      this.editor.layout();
+      await this.writeDocumentStore(() =>
+        this.documentStore.saveWorkspace(
+          this.documents.map((document) => document.id),
+          id,
+        ),
+      );
+      if (focusTab) this.container.querySelector(`#html-document-tab-${id}`)?.focus();
+    } catch (_) {
+      // Storage errors are shown by writeDocumentStore; the visible tab remains usable.
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  async newDocument(name = null, html = "") {
+    if (this._tabTransition) return;
+    this._tabTransition = true;
+    let document = null;
+    try {
+      await this.flushActiveDocument();
+      const numbers = this.documents
+        .map((document) => /^Untitled (\d+)$/.exec(document.name)?.[1])
+        .filter(Boolean)
+        .map(Number);
+      const nextNumber = Math.max(0, ...numbers) + 1;
+      const now = Date.now();
+      document = this.createDocumentModel({
+        id: this.createAnalyticsId(),
+        name: name || `Untitled ${nextNumber}`,
+        html,
+        vtlValues: {},
+        createdAt: now,
+        updatedAt: now,
+      });
+      const order = [...this.documents.map((item) => item.id), document.id];
+      await this.writeDocumentStore(() =>
+        this.documentStore.saveWorkspaceAndDocument(this.documentRecord(document), {
+          order,
+          activeId: document.id,
+        }),
+      );
+      this.activeDocument.viewState = this.editor.saveViewState();
+      this.documents.push(document);
+      this.activeDocumentId = document.id;
+      this.vtlValues = document.vtlValues;
+      const envKey = this.container.querySelector("#envSelector")?.value;
+      const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
+      if (url !== undefined) this.vtlValues.baseUrl = url;
+      clearTimeout(this._previewTimer);
+      this.container.querySelector("#vtlModal").style.display = "none";
+      this.editor.setModel(document.model);
+      this.lastRenderedHTML = "";
+      this.renderDocumentTabs();
+      this.renderPreview(html, true);
+      this.editor.focus();
+      this.editor.layout();
+      return document;
+    } catch (_) {
+      document?.model.dispose();
+      return null;
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  renameDocument(id) {
+    const document = this.documents.find((item) => item.id === id);
+    const tab = [...this.container.querySelectorAll(".html-document-tab")].find((item) => item.dataset.documentId === id);
+    const select = tab?.querySelector(".html-document-tab-select");
+    if (!document || !select) return;
+    const input = globalThis.document.createElement("input");
+    input.className = "html-document-name";
+    input.setAttribute("aria-label", "Document name");
+    input.value = document.name;
+    select.replaceWith(input);
+    input.focus();
+    input.select();
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      const name = input.value.trim().slice(0, 120);
+      if (save && name) {
+        document.name = name;
+        void this.writeDocumentStore(() => this.documentStore.saveDocument(this.documentRecord(document)));
+      }
+      this.renderDocumentTabs();
+      this.container.querySelector(`#html-document-tab-${id}`)?.focus();
+    };
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") finish(true);
+      if (event.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  async closeDocument(id) {
+    if (this._tabTransition || this.documents.length <= 1) return;
+    const index = this.documents.findIndex((document) => document.id === id);
+    if (index < 0) return;
+    this._tabTransition = true;
+    try {
+      if (id === this.activeDocumentId) await this.flushActiveDocument();
+      const document = this.documents[index];
+      const record = this.documentRecord(document);
+      const remaining = this.documents.filter((item) => item.id !== id);
+      const nextId = id === this.activeDocumentId ? remaining[Math.min(index, remaining.length - 1)].id : this.activeDocumentId;
+      await this.writeDocumentStore(() =>
+        this.documentStore.deleteDocument(
+          id,
+          remaining.map((item) => item.id),
+          nextId,
+        ),
+      );
+      this.documents = remaining;
+      if (id === this.activeDocumentId) {
+        document.viewState = this.editor.saveViewState();
+        clearTimeout(this._previewTimer);
+        clearTimeout(this.vtlAnalyticsTimer);
+        this.activeDocumentId = nextId;
+        this.vtlValues = this.activeDocument.vtlValues || {};
+        const envKey = this.container.querySelector("#envSelector")?.value;
+        const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
+        if (url !== undefined) this.vtlValues.baseUrl = url;
+        this.container.querySelector("#vtlModal").style.display = "none";
+        this.editor.setModel(this.activeDocument.model);
+        if (this.activeDocument.viewState) this.editor.restoreViewState(this.activeDocument.viewState);
+        this.lastRenderedHTML = "";
+        this.renderPreview(this.editor.getValue(), true);
+        this.editor.layout();
+      }
+      document.model.dispose();
+      this._closedDocument = { record, index, viewState: document.viewState };
+      clearTimeout(this._undoTimer);
+      this.container.querySelector("#htmlDocumentUndo").hidden = false;
+      this._undoTimer = setTimeout(() => {
+        this._closedDocument = null;
+        this.container.querySelector("#htmlDocumentUndo").hidden = true;
+      }, 8000);
+      this.renderDocumentTabs();
+      this.container.querySelector(`#html-document-tab-${nextId}`)?.focus();
+    } catch (_) {
+      // Keep the document visible when deletion cannot be persisted.
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  async undoCloseDocument() {
+    if (this._tabTransition || !this._closedDocument) return;
+    this._tabTransition = true;
+    let document = null;
+    try {
+      await this.flushActiveDocument();
+      const { record, index, viewState } = this._closedDocument;
+      document = this.createDocumentModel({ ...record });
+      document.viewState = viewState;
+      const order = [...this.documents];
+      order.splice(index, 0, document);
+      await this.writeDocumentStore(() =>
+        this.documentStore.saveWorkspaceAndDocument(record, {
+          order: order.map((item) => item.id),
+          activeId: document.id,
+        }),
+      );
+      this.activeDocument.viewState = this.editor.saveViewState();
+      this.documents = order;
+      this.activeDocumentId = document.id;
+      this.vtlValues = document.vtlValues || {};
+      const envKey = this.container.querySelector("#envSelector")?.value;
+      const url = this.baseUrls.find((pair) => pair.key === envKey)?.value;
+      if (url !== undefined) this.vtlValues.baseUrl = url;
+      this.editor.setModel(document.model);
+      if (document.viewState) this.editor.restoreViewState(document.viewState);
+      this.lastRenderedHTML = "";
+      this.renderDocumentTabs();
+      this.container.querySelector(`#html-document-tab-${document.id}`)?.focus();
+      this.renderPreview(document.model.getValue(), true);
+      this.editor.layout();
+      this._closedDocument = null;
+      clearTimeout(this._undoTimer);
+      this.container.querySelector("#htmlDocumentUndo").hidden = true;
+    } catch (_) {
+      document?.model.dispose();
+      // The Undo control stays available if the write fails.
+    } finally {
+      this._tabTransition = false;
+    }
+  }
+
+  async initializeMonacoEditor() {
     const container = document.getElementById("htmlEditor");
     this.editor = monaco.editor.create(container, {
-      value: `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`,
+      model: this.activeDocument.model,
       language: "html",
       theme: "vs-dark",
       automaticLayout: true,
@@ -217,16 +586,7 @@ class HTMLTemplateTool extends BaseTool {
       suggestOnTriggerCharacters: false,
     });
 
-    // Load saved content from localStorage
-    try {
-      const key = "tool:html-template:editor";
-      this._htmlStorageKey = key;
-      const saved = localStorage.getItem(key);
-      if (saved !== null) {
-        this.editor.setValue(saved);
-        this.inputSource = "restored";
-      }
-    } catch (_) {}
+    this.inputSource = "restored";
   }
 
   initializeWorker() {
@@ -272,15 +632,17 @@ class HTMLTemplateTool extends BaseTool {
       if (btn) btn.disabled = !this.minifierAvailable;
 
       if (success && typeof result === "string") {
+        const pending = this.pendingMinifyMeta;
+        const target = this.documents.find((document) => document.id === pending?.documentId);
+        if (!target || target.model.getAlternativeVersionId() !== pending?.versionId) {
+          this.pendingMinifyMeta = null;
+          return;
+        }
         this.programmaticEditorChange = true;
-        this.editor.setValue(result);
+        target.model.setValue(result);
         this.programmaticEditorChange = false;
-        this.renderPreview(result);
-        const pending = this.pendingMinifyMeta || {
-          input: result,
-          startedAt: Date.now(),
-          attemptId: this.createAnalyticsId(),
-        };
+        void this.writeDocumentStore(() => this.documentStore.saveDocument(this.documentRecord(target)));
+        if (target.id === this.activeDocumentId) this.renderPreview(result);
         this.trackHtmlProcessSuccess("minify_action", "minify", pending.input, result, pending.startedAt, pending.attemptId);
         this.pendingMinifyMeta = null;
       } else if (!success && error) {
@@ -339,7 +701,8 @@ class HTMLTemplateTool extends BaseTool {
         if (action) {
           try {
             this.programmaticEditorChange = true;
-            await action.run();
+            this._pendingFormat = action.run();
+            await this._pendingFormat;
             const output = this.editor.getValue();
             this.renderPreview(output);
             this.trackHtmlProcessSuccess("format_action", "format", input, output, startedAt, attemptId);
@@ -347,6 +710,7 @@ class HTMLTemplateTool extends BaseTool {
             this.trackHtmlProcessError("format", input, startedAt, attemptId, error?.name || "format_error");
             this.showError("Format failed. Your HTML was left unchanged.");
           } finally {
+            this._pendingFormat = null;
             this.programmaticEditorChange = false;
           }
         } else {
@@ -364,7 +728,13 @@ class HTMLTemplateTool extends BaseTool {
         }
         const html = this.editor.getValue();
         btnMinify.disabled = true;
-        this.pendingMinifyMeta = { input: html, startedAt: Date.now(), attemptId: this.createAnalyticsId() };
+        this.pendingMinifyMeta = {
+          input: html,
+          startedAt: Date.now(),
+          attemptId: this.createAnalyticsId(),
+          documentId: this.activeDocumentId,
+          versionId: this.editor.getModel().getAlternativeVersionId(),
+        };
         this.minifyWorker.postMessage({ type: "minify", html });
       });
     }
@@ -424,7 +794,8 @@ class HTMLTemplateTool extends BaseTool {
                 const baseUrl = this.vtlValues?.baseUrl;
                 this.vtlValues = { ...parsed };
                 if (baseUrl !== undefined && this.vtlValues.baseUrl === undefined) this.vtlValues.baseUrl = baseUrl;
-                localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
+                this.activeDocument.vtlValues = this.vtlValues;
+                this.scheduleDocumentSave();
                 vars.forEach((variable) => {
                   const field = document.getElementById(`vtl_${variable.replace(/\./g, "__")}`);
                   const value = getVtlValue(this.vtlValues, variable);
@@ -487,9 +858,7 @@ class HTMLTemplateTool extends BaseTool {
 
               input.addEventListener("input", (e) => {
                 setVtlValue(this.vtlValues, v, e.target.value);
-                try {
-                  localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
-                } catch (_) {}
+                this.scheduleDocumentSave();
                 // Force re-render to apply latest substitutions
                 this.renderPreview(this.editor.getValue(), true);
                 clearTimeout(this.vtlAnalyticsTimer);
@@ -532,9 +901,7 @@ class HTMLTemplateTool extends BaseTool {
         inputs.forEach((input) => {
           input.value = "";
         });
-        try {
-          localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
-        } catch (_) {}
+        this.scheduleDocumentSave();
         // Re-render preview to show default variable tokens again
         this.renderPreview(this.editor.getValue(), true);
       });
@@ -595,9 +962,6 @@ class HTMLTemplateTool extends BaseTool {
       btnClear.addEventListener("click", () => {
         this.editor.setValue("");
         this.inputSource = "empty";
-        try {
-          localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", "");
-        } catch (_) {}
         this.renderPreview("");
         this.trackAnalytics("clear_html");
       });
@@ -630,27 +994,17 @@ class HTMLTemplateTool extends BaseTool {
       });
     }
 
-    // Render on content change with debounce and persist to localStorage
-    this._persistTimer = this._persistTimer || null;
+    // Render and autosave only the active document.
     this.editor.onDidChangeModelContent(() => {
       const value = this.editor.getValue();
       if (!this.programmaticEditorChange) this.inputSource = "manual";
-      this.debouncedRender?.(value);
-      clearTimeout(this._persistTimer);
-      this._persistTimer = setTimeout(() => {
-        try {
-          localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", value);
-        } catch (_) {}
+      clearTimeout(this._previewTimer);
+      const id = this.activeDocumentId;
+      this._previewTimer = setTimeout(() => {
+        if (id === this.activeDocumentId && value !== this.lastRenderedHTML) this.renderPreview(value);
       }, 300);
+      this.scheduleDocumentSave();
     });
-  }
-
-  setupDebouncedRendering() {
-    this.debouncedRender = debounce((html) => {
-      if (html !== this.lastRenderedHTML) {
-        this.renderPreview(html);
-      }
-    }, 300);
   }
 
   setupPreviewVtlMode() {
@@ -894,10 +1248,11 @@ class HTMLTemplateTool extends BaseTool {
     const pair = this.baseUrls.find((p) => p.key === envKey);
     const url = pair?.value || "";
 
-    // Update VTL special variable and persist
+    // Update the active document's VTL context; the environment selection is shared.
     this.vtlValues = { ...this.vtlValues, baseUrl: url };
+    if (this.activeDocument) this.activeDocument.vtlValues = this.vtlValues;
+    this.scheduleDocumentSave();
     try {
-      localStorage.setItem(this._vtlValuesStorageKey, JSON.stringify(this.vtlValues));
       localStorage.setItem(this._envStorageKey, envKey || "");
     } catch (_) {}
 
@@ -947,7 +1302,7 @@ class HTMLTemplateTool extends BaseTool {
 
       // Read file contents as text
       const content = await readTextFile(selected);
-      this._loadHtmlContent(content);
+      await this._loadHtmlContent(content, selected.split(/[\\/]/).pop());
     } catch (error) {
       console.error("Failed to import HTML (Tauri):", error);
       this.trackAnalytics("input_error", { source: "import", error_type: error?.name || "file_read_error" });
@@ -966,7 +1321,7 @@ class HTMLTemplateTool extends BaseTool {
     reader.onload = (event) => {
       const content = event.target?.result;
       if (typeof content === "string") {
-        this._loadHtmlContent(content);
+        void this._loadHtmlContent(content, file.name);
       }
     };
     reader.onerror = () => {
@@ -982,19 +1337,11 @@ class HTMLTemplateTool extends BaseTool {
   /**
    * Load HTML content into the editor
    */
-  _loadHtmlContent(content) {
-    this.programmaticEditorChange = true;
-    this.editor.setValue(content);
-    this.programmaticEditorChange = false;
+  async _loadHtmlContent(content, name = null) {
+    const document = await this.newDocument(name, content);
+    if (!document) return;
     this.inputSource = "import";
-    this.renderPreview(content);
-
-    // Persist to localStorage
-    try {
-      localStorage.setItem(this._htmlStorageKey || "tool:html-template:editor", content);
-    } catch (_) {}
-
-    this.showSuccess("HTML file imported successfully");
+    this.showSuccess("HTML file opened in a new tab");
     this.trackAnalytics("input_acquired", {
       source: "import",
       session_id: this.analyticsSessionId,

@@ -1,7 +1,19 @@
 export const HTMLTemplateToolTemplate = /* html */ `
   <div class="tool-container html-template">
+    <div class="html-document-bar" aria-label="HTML documents">
+      <div id="htmlDocumentTabs" class="html-document-tabs" role="tablist" aria-label="HTML documents"></div>
+      <button id="btnNewHtmlDocument" class="html-document-add" type="button" title="New HTML document" aria-label="New HTML document">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+      </button>
+      <div id="htmlDocumentUndo" class="html-document-undo" hidden>
+        <span>Tab closed</span>
+        <button id="btnUndoCloseHtmlDocument" type="button">Undo</button>
+      </div>
+    </div>
     <div class="html-template-layout">
-      <div class="pane editor-pane">
+      <div id="htmlDocumentPanel" class="pane editor-pane" role="tabpanel">
         <div class="pane-header">
           <h3>Editor</h3>
           <div class="toolbar-left">

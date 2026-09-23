@@ -15,6 +15,142 @@
   color: hsl(var(--foreground));
 }
 
+.html-document-bar {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: transparent;
+}
+
+.html-document-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.html-document-tab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 86px;
+  max-width: 190px;
+  height: 38px;
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 2px solid transparent;
+  color: hsl(var(--muted-foreground));
+}
+
+.html-document-tab:hover {
+  background: hsl(var(--muted) / 0.35);
+  color: hsl(var(--foreground));
+}
+
+.html-document-tab.active {
+  border-bottom-color: hsl(var(--primary));
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+
+.html-document-tab-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.55rem 0 0.75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.html-document-tab-close,
+.html-document-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.html-document-tab-close {
+  margin-right: 0.25rem;
+}
+
+.html-document-tab-close svg,
+.html-document-add svg {
+  width: 15px;
+  height: 15px;
+}
+
+.html-document-tab-close:hover,
+.html-document-add:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.html-document-tab-select:focus-visible,
+.html-document-tab-close:focus-visible,
+.html-document-add:focus-visible,
+.html-document-undo button:focus-visible,
+.html-document-name:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.html-document-name {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border: 1px solid hsl(var(--ring));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.html-document-undo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  padding: 0 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.html-document-undo[hidden] {
+  display: none;
+}
+
+.html-document-undo button {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--primary));
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .html-template-toolbar {
   display: flex;
   justify-content: space-between;
