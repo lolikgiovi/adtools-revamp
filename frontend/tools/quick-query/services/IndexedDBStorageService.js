@@ -611,6 +611,34 @@ export class IndexedDBStorageService {
     }
   }
 
+  async updateQueryTabs({ deleteIds = [], tabs = [], tabOrder, activeTabId }) {
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = this.db.transaction([TAB_STORE, TAB_SESSION_STORE], "readwrite");
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error("Transaction aborted"));
+        const tabStore = tx.objectStore(TAB_STORE);
+        deleteIds.forEach((id) => tabStore.delete(id));
+        tabs.forEach((tab) => tabStore.put(tab));
+        tx.objectStore(TAB_SESSION_STORE).put({
+          id: TAB_SESSION_KEY,
+          tabOrder,
+          activeTabId,
+          lastUpdated: new Date().toISOString(),
+        });
+      });
+      return true;
+    } catch (error) {
+      console.error("Error updating query tabs:", error);
+      UsageTracker.trackEvent("quick-query", "storage_error", {
+        type: "update_query_tabs_failed",
+        message: error.message,
+      });
+      return false;
+    }
+  }
+
   async saveQueryTabSession(session) {
     try {
       await this._putRecord(TAB_SESSION_STORE, {

@@ -1,9 +1,17 @@
 export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container">
     <div class="qq-tab-strip" id="quickQueryTabStrip" aria-label="Quick Query tabs">
-        <div class="qq-tab-list" id="quickQueryTabList" role="tablist"></div>
-        <button type="button" class="qq-tab-add" id="quickQueryAddTab" aria-label="New tab" title="New tab">+</button>
+        <div class="qq-tab-list" id="quickQueryTabList" role="tablist" aria-label="Quick Query tabs"></div>
+        <button type="button" class="qq-tab-add" id="quickQueryAddTab" aria-label="New tab" title="New tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"></path>
+            </svg>
+        </button>
+        <div id="quickQueryTabUndo" class="qq-tab-undo" hidden>
+            <span id="quickQueryTabUndoMessage">Tab closed</span>
+            <button id="quickQueryTabUndoButton" type="button">Undo</button>
+        </div>
     </div>
-    <div class="quick-query-content">
+    <div class="quick-query-content" id="quickQueryTabPanel" role="tabpanel">
         <div class="content-a">
             <div class="quick-query-left-panel">
                 <div class="button-group quick-query-search">

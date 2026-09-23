@@ -129,6 +129,9 @@ export class QuickQueryUI {
     });
     this.tabs = [];
     this.activeTabId = null;
+    this._closedTabs = null;
+    this._tabUndoTimer = null;
+    this._tabOperation = false;
     this._isHydratingTab = false;
     this.isAttachmentActive = false;
     this.isGenerating = false; // Track async generation state
@@ -272,6 +275,9 @@ export class QuickQueryUI {
       tabStrip: document.getElementById("quickQueryTabStrip"),
       tabList: document.getElementById("quickQueryTabList"),
       addTabButton: document.getElementById("quickQueryAddTab"),
+      tabUndo: document.getElementById("quickQueryTabUndo"),
+      tabUndoMessage: document.getElementById("quickQueryTabUndoMessage"),
+      tabUndoButton: document.getElementById("quickQueryTabUndoButton"),
       toolContainer: document.querySelector(".quick-query-tool-container"),
 
       // Input elements
@@ -430,6 +436,12 @@ export class QuickQueryUI {
     const eventMap = {
       addTabButton: {
         click: () => this.createNewTab({ activate: true }),
+      },
+      tabUndoButton: {
+        click: () => this.undoCloseTabs(),
+      },
+      tabList: {
+        keydown: (event) => this.handleTabListKeydown(event),
       },
       // Input elements
       tableNameInput: {
@@ -994,13 +1006,32 @@ export class QuickQueryUI {
       return renderedHeight + toPx(styles.marginTop) + toPx(styles.marginBottom);
     };
 
+    const leftScrollContentHeight = (scroll) => {
+      const styles = getComputedStyle(scroll);
+      return (
+        Array.from(scroll.children).reduce(
+          (height, child) => {
+            if (child === this.elements.schemaContainer) return height + schemaTableHeight();
+            if (child === this.elements.filesContainer) {
+              // Its auto top margin fills unused scroll space and is not intrinsic content height.
+              return height + Math.max(0, outerHeight(child) - toPx(getComputedStyle(child).marginTop));
+            }
+            return height + outerHeight(child);
+          },
+          0,
+        ) +
+        toPx(styles.paddingTop) +
+        toPx(styles.paddingBottom) +
+        toPx(styles.marginTop) +
+        toPx(styles.marginBottom)
+      );
+    };
+
     const leftStyles = getComputedStyle(leftPanel);
     const leftContentHeight =
       Array.from(leftPanel.children).reduce((height, child) => {
-        // Handsontable's rendered wrapper can inherit the current flex row height. Use the table's content size so warm
-        // resumes do not feed the previous upper-section height back into the next editor-height calculation.
-        if (child === this.elements.schemaContainer) return height + schemaTableHeight();
-        if (child.classList?.contains("quick-query-left-scroll")) return height + outerHeight(child);
+        // The scroll viewport stretches with section A; its intrinsic children are the actual height requirement.
+        if (child === this.elements.leftScroll) return height + leftScrollContentHeight(child);
         return height + outerHeight(child);
       }, 0) +
       toPx(leftStyles.paddingTop) +
@@ -1176,31 +1207,34 @@ export class QuickQueryUI {
 
   renderTabs() {
     if (!this.elements.tabList) return;
-    this.elements.tabList.innerHTML = "";
+    this.elements.tabList.replaceChildren();
 
     this.tabs.forEach((tab) => {
       const item = document.createElement("div");
       item.className = `qq-query-tab${tab.id === this.activeTabId ? " active" : ""}`;
-      item.setAttribute("role", "tab");
-      item.setAttribute("aria-selected", String(tab.id === this.activeTabId));
       item.dataset.tabId = tab.id;
 
       const label = document.createElement("button");
       label.type = "button";
       label.className = "qq-query-tab-label";
-      label.title = this.getTabTitle(tab);
+      label.id = `quick-query-tab-${tab.id}`;
+      label.setAttribute("role", "tab");
+      label.setAttribute("aria-selected", String(tab.id === this.activeTabId));
+      label.setAttribute("aria-controls", "quickQueryTabPanel");
+      label.tabIndex = tab.id === this.activeTabId ? 0 : -1;
+      label.title = `${this.getTabTitle(tab)} · Double-click to rename`;
       label.textContent = this.getTabTitle(tab);
-      label.addEventListener("click", () => this.switchTab(tab.id));
+      label.addEventListener("click", () => void this.switchTab(tab.id, true));
       label.addEventListener("dblclick", () => this.renameTab(tab.id));
-      label.addEventListener("contextmenu", (event) => this.openTabContextMenu(event, tab.id));
-      item.addEventListener("contextmenu", (event) => this.openTabContextMenu(event, tab.id));
+      item.addEventListener("contextmenu", (event) => this.openTabContextMenu(event, tab.id, label));
 
       const close = document.createElement("button");
       close.type = "button";
       close.className = "qq-query-tab-close";
-      close.title = "Close tab";
+      close.title = `Close ${this.getTabTitle(tab)}`;
       close.setAttribute("aria-label", `Close ${this.getTabTitle(tab)}`);
-      close.textContent = "x";
+      close.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
       close.disabled = this.tabs.length <= 1;
       close.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -1215,8 +1249,30 @@ export class QuickQueryUI {
       this.elements.addTabButton.disabled = this.tabs.length >= 15;
       this.elements.addTabButton.title = this.tabs.length >= 15 ? "Maximum 15 tabs" : "New tab";
     }
+    this.container.querySelector("#quickQueryTabPanel")?.setAttribute("aria-labelledby", `quick-query-tab-${this.activeTabId}`);
 
     this.scrollActiveTabIntoView();
+  }
+
+  handleTabListKeydown(event) {
+    const tab = event.target.closest(".qq-query-tab");
+    if (!tab) return;
+    if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+      event.preventDefault();
+      const rect = tab.getBoundingClientRect();
+      this.openTabContextMenu(event, tab.dataset.tabId, tab.querySelector(".qq-query-tab-label"), rect.left, rect.bottom + 4);
+      return;
+    }
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const index = this.tabs.findIndex((item) => item.id === tab.dataset.tabId);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? this.tabs.length - 1
+          : (index + (event.key === "ArrowRight" ? 1 : -1) + this.tabs.length) % this.tabs.length;
+    event.preventDefault();
+    void this.switchTab(this.tabs[next].id, true);
   }
 
   scrollActiveTabIntoView() {
@@ -1233,32 +1289,40 @@ export class QuickQueryUI {
     });
   }
 
-  openTabContextMenu(event, tabId) {
+  openTabContextMenu(event, tabId, trigger = null, x = event.clientX, y = event.clientY) {
     event.preventDefault();
     event.stopPropagation();
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex < 0 || this._tabOperation) return;
     this.closeTabContextMenu();
 
     const menu = document.createElement("div");
     menu.className = "qq-tab-context-menu";
     menu.setAttribute("role", "menu");
-    menu.setAttribute("aria-label", "Tab actions");
-    menu.style.left = `${event.clientX}px`;
-    menu.style.top = `${event.clientY}px`;
-    menu.dataset.tabId = tabId;
+    menu.setAttribute("aria-label", `Options for ${this.getTabTitle(this.tabs[tabIndex])}`);
 
-    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
     const hasOtherTabs = this.tabs.length > 1;
+    const hasTabsToLeft = tabIndex > 0;
     const hasTabsToRight = tabIndex >= 0 && tabIndex < this.tabs.length - 1;
     const actions = [
       { label: "Rename", run: () => this.renameTab(tabId) },
       { label: "Duplicate", run: () => this.duplicateTab(tabId), disabled: this.tabs.length >= 15 },
+      { separator: true },
       { label: "Close", run: () => this.closeTab(tabId), disabled: this.tabs.length <= 1 },
       { label: "Close Other Tabs", run: () => this.closeOtherTabs(tabId), disabled: !hasOtherTabs },
+      { label: "Close Tabs to the Left", run: () => this.closeTabsToLeft(tabId), disabled: !hasTabsToLeft },
       { label: "Close Tabs to the Right", run: () => this.closeTabsToRight(tabId), disabled: !hasTabsToRight },
-      { label: "Close All Tabs", run: () => this.closeAllTabs(), disabled: !hasOtherTabs },
+      { label: "Close All Tabs", run: () => this.closeAllTabs() },
     ];
 
     actions.forEach((action) => {
+      if (action.separator) {
+        const separator = document.createElement("div");
+        separator.className = "qq-tab-context-menu-separator";
+        separator.setAttribute("role", "separator");
+        menu.appendChild(separator);
+        return;
+      }
       const button = document.createElement("button");
       button.type = "button";
       button.setAttribute("role", "menuitem");
@@ -1270,6 +1334,19 @@ export class QuickQueryUI {
       });
       menu.appendChild(button);
     });
+    menu.addEventListener("keydown", (keydownEvent) => {
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(keydownEvent.key)) return;
+      const enabled = [...menu.querySelectorAll("button:not(:disabled)")];
+      const current = enabled.indexOf(document.activeElement);
+      const next =
+        keydownEvent.key === "Home"
+          ? 0
+          : keydownEvent.key === "End"
+            ? enabled.length - 1
+            : (current + (keydownEvent.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+      keydownEvent.preventDefault();
+      enabled[next]?.focus();
+    });
 
     document.body.appendChild(menu);
     const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
@@ -1277,40 +1354,38 @@ export class QuickQueryUI {
     const menuMargin = 8;
     const maxLeft = Math.max(menuMargin, viewportWidth - menu.offsetWidth - menuMargin);
     const maxTop = Math.max(menuMargin, viewportHeight - menu.offsetHeight - menuMargin);
-    menu.style.left = `${Math.min(Math.max(event.clientX, menuMargin), maxLeft)}px`;
-    menu.style.top = `${Math.min(Math.max(event.clientY, menuMargin), maxTop)}px`;
+    menu.style.left = `${Math.min(Math.max(x, menuMargin), maxLeft)}px`;
+    menu.style.top = `${Math.min(Math.max(y, menuMargin), maxTop)}px`;
     this._tabContextMenu = menu;
+    this._tabContextTrigger = trigger;
     this._handleTabContextDismiss = (dismissEvent) => {
-      if (!menu.contains(dismissEvent.target)) {
-        this.closeTabContextMenu();
-      }
+      if (!menu.contains(dismissEvent.target)) this.closeTabContextMenu();
     };
     this._handleTabContextKeydown = (keydownEvent) => {
       if (keydownEvent.key === "Escape") {
-        this.closeTabContextMenu();
+        keydownEvent.preventDefault();
+        this.closeTabContextMenu(true);
       }
     };
-    setTimeout(() => {
-      document.addEventListener("click", this._handleTabContextDismiss);
-      document.addEventListener("contextmenu", this._handleTabContextDismiss);
-      document.addEventListener("keydown", this._handleTabContextKeydown);
-    }, 0);
+    document.addEventListener("pointerdown", this._handleTabContextDismiss);
+    document.addEventListener("keydown", this._handleTabContextKeydown);
+    menu.querySelector("button:not(:disabled)")?.focus();
   }
 
-  closeTabContextMenu() {
-    if (this._tabContextMenu?.parentNode) {
-      this._tabContextMenu.parentNode.removeChild(this._tabContextMenu);
-    }
+  closeTabContextMenu(restoreFocus = false) {
+    const trigger = this._tabContextTrigger;
+    this._tabContextMenu?.remove();
     this._tabContextMenu = null;
+    this._tabContextTrigger = null;
     if (this._handleTabContextDismiss) {
-      document.removeEventListener("click", this._handleTabContextDismiss);
-      document.removeEventListener("contextmenu", this._handleTabContextDismiss);
+      document.removeEventListener("pointerdown", this._handleTabContextDismiss);
       this._handleTabContextDismiss = null;
     }
     if (this._handleTabContextKeydown) {
       document.removeEventListener("keydown", this._handleTabContextKeydown);
       this._handleTabContextKeydown = null;
     }
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
   }
 
   captureCurrentTabDraft() {
@@ -1384,7 +1459,8 @@ export class QuickQueryUI {
       this.tabs[idx] = draft;
     }
     this.renderTabs();
-    await this.storageService.saveQueryTab(draft);
+    const saved = await this.storageService.saveQueryTab(draft);
+    if (!saved) return false;
     await this.saveTabSession();
     return true;
   }
@@ -1397,8 +1473,8 @@ export class QuickQueryUI {
     });
   }
 
-  async switchTab(tabId) {
-    if (!tabId || tabId === this.activeTabId) return;
+  async switchTab(tabId, focusTab = false) {
+    if (!tabId || tabId === this.activeTabId || this._tabOperation) return;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
     const next = this.tabs.find((tab) => tab.id === tabId);
@@ -1406,10 +1482,11 @@ export class QuickQueryUI {
     this.activeTabId = tabId;
     await this.applyTabDraft(next);
     await this.saveTabSession();
+    if (focusTab) this.elements.tabList?.querySelector(`[data-tab-id="${tabId}"] .qq-query-tab-label`)?.focus();
   }
 
   async createNewTab({ activate = true } = {}) {
-    if (this.tabs.length >= 15) return null;
+    if (this.tabs.length >= 15 || this._tabOperation) return null;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
     const tab = this.createTabDraft();
@@ -1451,7 +1528,7 @@ export class QuickQueryUI {
   }
 
   async duplicateTab(tabId) {
-    if (this.tabs.length >= 15) return null;
+    if (this.tabs.length >= 15 || this._tabOperation) return null;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
     const source = this.tabs.find((tab) => tab.id === tabId);
@@ -1491,12 +1568,21 @@ export class QuickQueryUI {
     return this.closeTabs(tabIds, { nextActiveId: tabId });
   }
 
+  async closeTabsToLeft(tabId) {
+    const index = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (index <= 0) return false;
+    return this.closeTabs(
+      this.tabs.slice(0, index).map((tab) => tab.id),
+      { nextActiveId: tabId },
+    );
+  }
+
   async closeTabsToRight(tabId) {
     const index = this.tabs.findIndex((tab) => tab.id === tabId);
     if (index === -1 || index >= this.tabs.length - 1) return false;
 
     const tabIds = this.tabs.slice(index + 1).map((tab) => tab.id);
-    return this.closeTabs(tabIds);
+    return this.closeTabs(tabIds, { nextActiveId: tabId });
   }
 
   async closeAllTabs() {
@@ -1506,41 +1592,110 @@ export class QuickQueryUI {
   }
 
   async closeTabs(tabIds, { nextActiveId = null, createReplacement = false } = {}) {
+    if (this._tabOperation) return false;
     const idsToClose = new Set((Array.isArray(tabIds) ? tabIds : [tabIds]).filter((tabId) => this.tabs.some((tab) => tab.id === tabId)));
     if (idsToClose.size === 0 || (!createReplacement && idsToClose.size >= this.tabs.length)) return false;
-
-    await this.flushPendingDataAutosave();
-    const activeTabId = this.activeTabId;
-    const activeIndex = this.tabs.findIndex((tab) => tab.id === activeTabId);
-    if (idsToClose.has(activeTabId)) {
-      await this.saveActiveTabDraft();
-    }
-
-    const remainingTabs = this.tabs.filter((tab) => !idsToClose.has(tab.id));
-    await Promise.all(Array.from(idsToClose, (tabId) => this.storageService.deleteQueryTab(tabId)));
-
-    if (remainingTabs.length === 0) {
-      const replacement = this.createTabDraft();
-      this.tabs = [replacement];
-      this.activeTabId = replacement.id;
-      await this.storageService.saveQueryTab(replacement);
-      await this.applyTabDraft(replacement);
-    } else {
-      this.tabs = remainingTabs;
-      const requestedNext = this.tabs.find((tab) => tab.id === nextActiveId);
-      const currentActive = this.tabs.find((tab) => tab.id === activeTabId);
-      const fallbackIndex = Math.min(Math.max(activeIndex, 0), this.tabs.length - 1);
-      const nextActive = requestedNext || currentActive || this.tabs[fallbackIndex] || this.tabs[0];
-      const activeChanged = nextActive.id !== this.activeTabId;
-      this.activeTabId = nextActive.id;
-      if (activeChanged) {
-        await this.applyTabDraft(nextActive);
+    this._tabOperation = true;
+    try {
+      await this.flushPendingDataAutosave();
+      if (!(await this.saveActiveTabDraft())) {
+        this.eventBus?.emit("notification:error", { message: "The current tab could not be saved. Try closing it again." });
+        return false;
       }
+      const previousActiveId = this.activeTabId;
+      const activeIndex = this.tabs.findIndex((tab) => tab.id === previousActiveId);
+      const closed = this.tabs.flatMap((tab, index) => (idsToClose.has(tab.id) ? [{ tab: structuredClone(tab), index }] : []));
+      const remaining = this.tabs.filter((tab) => !idsToClose.has(tab.id));
+      const replacement = remaining.length ? null : this.createTabDraft();
+      if (replacement) remaining.push(replacement);
+      const requestedNext = remaining.find((tab) => tab.id === nextActiveId);
+      const currentActive = remaining.find((tab) => tab.id === previousActiveId);
+      const next = requestedNext || currentActive || remaining[Math.min(Math.max(activeIndex, 0), remaining.length - 1)];
+      const saved = await this.storageService.updateQueryTabs({
+        deleteIds: [...idsToClose],
+        tabs: replacement ? [replacement] : [],
+        tabOrder: remaining.map((tab) => tab.id),
+        activeTabId: next.id,
+      });
+      if (!saved) {
+        this.eventBus?.emit("notification:error", { message: "The tabs could not be closed. Check available storage and try again." });
+        return false;
+      }
+      this.tabs = remaining;
+      this.activeTabId = next.id;
+      if (next.id !== previousActiveId) await this.applyTabDraft(next);
+      this.renderTabs();
+      this.elements.tabList?.querySelector(`[data-tab-id="${next.id}"] .qq-query-tab-label`)?.focus();
+      this._closedTabs = { closed, previousActiveId, replacementId: replacement?.id || null };
+      this.showTabUndo(closed.length);
+      return true;
+    } finally {
+      this._tabOperation = false;
     }
+  }
 
-    await this.saveTabSession();
-    this.renderTabs();
-    return true;
+  showTabUndo(count) {
+    clearTimeout(this._tabUndoTimer);
+    if (this.elements.tabUndoMessage) this.elements.tabUndoMessage.textContent = `${count} tab${count === 1 ? "" : "s"} closed`;
+    if (this.elements.tabUndo) this.elements.tabUndo.hidden = false;
+    this._tabUndoTimer = setTimeout(() => {
+      this._closedTabs = null;
+      if (this.elements.tabUndo) this.elements.tabUndo.hidden = true;
+    }, 8000);
+  }
+
+  async undoCloseTabs() {
+    if (this._tabOperation || !this._closedTabs) return false;
+    this._tabOperation = true;
+    try {
+      await this.flushPendingDataAutosave();
+      if (!(await this.saveActiveTabDraft())) {
+        this.eventBus?.emit("notification:error", { message: "The current tab could not be saved. Try Undo again." });
+        return false;
+      }
+      const { closed, previousActiveId, replacementId } = this._closedTabs;
+      const replacement = this.tabs.find((tab) => tab.id === replacementId);
+      const dropReplacement =
+        replacement?.title === "Untitled" &&
+        isTabDraftContentEmpty({
+          tableName: replacement.tableName,
+          schemaData: replacement.schemaData,
+          inputData: replacement.inputData,
+          sql: replacement.generatedSql,
+          attachments: replacement.attachments,
+        });
+      const order = this.tabs.filter((tab) => !dropReplacement || tab.id !== replacementId);
+      closed.forEach(({ tab, index }) => order.splice(Math.min(index, order.length), 0, tab));
+      if (order.length > 15) {
+        this.eventBus?.emit("notification:error", { message: "Close a tab before restoring the previous tabs." });
+        return false;
+      }
+      const nextActiveId = order.some((tab) => tab.id === previousActiveId) ? previousActiveId : this.activeTabId;
+      const saved = await this.storageService.updateQueryTabs({
+        deleteIds: dropReplacement ? [replacementId] : [],
+        tabs: closed.map(({ tab }) => tab),
+        tabOrder: order.map((tab) => tab.id),
+        activeTabId: nextActiveId,
+      });
+      if (!saved) {
+        this.eventBus?.emit("notification:error", {
+          message: "The tabs could not be restored. Check available storage and try Undo again.",
+        });
+        return false;
+      }
+      const activeChanged = nextActiveId !== this.activeTabId;
+      this.tabs = order;
+      this.activeTabId = nextActiveId;
+      if (activeChanged) await this.applyTabDraft(this.getActiveTab());
+      this.renderTabs();
+      this.elements.tabList?.querySelector(`[data-tab-id="${nextActiveId}"] .qq-query-tab-label`)?.focus();
+      this._closedTabs = null;
+      clearTimeout(this._tabUndoTimer);
+      if (this.elements.tabUndo) this.elements.tabUndo.hidden = true;
+      return true;
+    } finally {
+      this._tabOperation = false;
+    }
   }
 
   async renameTab(tabId) {
@@ -1662,6 +1817,8 @@ export class QuickQueryUI {
     this._closeBlobAttachmentChoice?.();
     this.pauseHiddenWork();
     this.closeTabContextMenu();
+    clearTimeout(this._tabUndoTimer);
+    this._closedTabs = null;
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
     document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
@@ -2069,8 +2226,12 @@ export class QuickQueryUI {
       const onContent = () => finish("content");
       const onFilename = () => finish("filename");
       const onCancel = () => finish(null);
-      const onOverlay = (event) => { if (event.target === overlay) onCancel(); };
-      const onModal = (event) => { if (event.target === modal) onCancel(); };
+      const onOverlay = (event) => {
+        if (event.target === overlay) onCancel();
+      };
+      const onModal = (event) => {
+        if (event.target === modal) onCancel();
+      };
       const onKeydown = (event) => {
         if (event.key === "Escape") {
           event.preventDefault();

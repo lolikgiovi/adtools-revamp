@@ -29,14 +29,16 @@ function createUi(tabs, activeTabId = tabs[0]?.id) {
   ui.activeTabId = activeTabId;
   ui._storageReady = true;
   ui.storageService = {
-    deleteQueryTab: vi.fn(async () => true),
+    updateQueryTabs: vi.fn(async () => true),
     saveQueryTab: vi.fn(async () => true),
   };
+  ui.elements = {};
   ui.flushPendingDataAutosave = vi.fn(async () => undefined);
   ui.saveActiveTabDraft = vi.fn(async () => true);
   ui.saveTabSession = vi.fn(async () => true);
   ui.applyTabDraft = vi.fn(async () => undefined);
   ui.renderTabs = vi.fn();
+  ui.showTabUndo = vi.fn();
   return ui;
 }
 
@@ -49,8 +51,12 @@ describe("Quick Query tab management", () => {
 
     expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-3"]);
     expect(ui.activeTabId).toBe("tab-3");
-    expect(ui.storageService.deleteQueryTab).toHaveBeenCalledWith("tab-1");
-    expect(ui.storageService.deleteQueryTab).toHaveBeenCalledWith("tab-2");
+    expect(ui.storageService.updateQueryTabs).toHaveBeenCalledWith({
+      deleteIds: ["tab-1", "tab-2"],
+      tabs: [],
+      tabOrder: ["tab-3"],
+      activeTabId: "tab-3",
+    });
     expect(ui.saveActiveTabDraft).toHaveBeenCalledOnce();
     expect(ui.applyTabDraft).toHaveBeenCalledWith(tabs[2]);
   });
@@ -63,9 +69,13 @@ describe("Quick Query tab management", () => {
 
     expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-1", "tab-2"]);
     expect(ui.activeTabId).toBe("tab-2");
-    expect(ui.storageService.deleteQueryTab).toHaveBeenCalledWith("tab-3");
-    expect(ui.storageService.deleteQueryTab).toHaveBeenCalledWith("tab-4");
-    expect(ui.saveActiveTabDraft).not.toHaveBeenCalled();
+    expect(ui.storageService.updateQueryTabs).toHaveBeenCalledWith({
+      deleteIds: ["tab-3", "tab-4"],
+      tabs: [],
+      tabOrder: ["tab-1", "tab-2"],
+      activeTabId: "tab-2",
+    });
+    expect(ui.saveActiveTabDraft).toHaveBeenCalledOnce();
     expect(ui.applyTabDraft).not.toHaveBeenCalled();
   });
 
@@ -81,6 +91,22 @@ describe("Quick Query tab management", () => {
     expect(ui.applyTabDraft).toHaveBeenCalledWith(tabs[1]);
   });
 
+  it("closes tabs to the left and activates the clicked tab", async () => {
+    const tabs = [createTab("tab-1"), createTab("tab-2"), createTab("tab-3")];
+    const ui = createUi(tabs, "tab-1");
+
+    await ui.closeTabsToLeft("tab-3");
+
+    expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-3"]);
+    expect(ui.activeTabId).toBe("tab-3");
+    expect(ui.storageService.updateQueryTabs).toHaveBeenCalledWith({
+      deleteIds: ["tab-1", "tab-2"],
+      tabs: [],
+      tabOrder: ["tab-3"],
+      activeTabId: "tab-3",
+    });
+  });
+
   it("replaces all closed tabs with one blank tab so the tool remains usable", async () => {
     const tabs = [createTab("tab-1"), createTab("tab-2"), createTab("tab-3")];
     const ui = createUi(tabs, "tab-2");
@@ -92,9 +118,40 @@ describe("Quick Query tab management", () => {
     expect(ui.tabs[0].id).not.toBe("tab-2");
     expect(ui.tabs[0].id).not.toBe("tab-3");
     expect(ui.activeTabId).toBe(ui.tabs[0].id);
-    expect(ui.storageService.deleteQueryTab).toHaveBeenCalledTimes(3);
-    expect(ui.storageService.saveQueryTab).toHaveBeenCalledWith(ui.tabs[0]);
+    expect(ui.storageService.updateQueryTabs).toHaveBeenCalledWith({
+      deleteIds: ["tab-1", "tab-2", "tab-3"],
+      tabs: [ui.tabs[0]],
+      tabOrder: [ui.tabs[0].id],
+      activeTabId: ui.tabs[0].id,
+    });
     expect(ui.applyTabDraft).toHaveBeenCalledWith(ui.tabs[0]);
+  });
+
+  it("restores a bulk close with its original order and active tab", async () => {
+    const tabs = [createTab("tab-1"), createTab("tab-2"), createTab("tab-3")];
+    const ui = createUi(tabs, "tab-2");
+
+    await ui.closeAllTabs();
+    await ui.undoCloseTabs();
+
+    expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-1", "tab-2", "tab-3"]);
+    expect(ui.activeTabId).toBe("tab-2");
+    expect(ui.storageService.updateQueryTabs).toHaveBeenLastCalledWith({
+      deleteIds: [expect.stringMatching(/^qq-tab-/)],
+      tabs: expect.arrayContaining([expect.objectContaining({ id: "tab-1" }), expect.objectContaining({ id: "tab-2" })]),
+      tabOrder: ["tab-1", "tab-2", "tab-3"],
+      activeTabId: "tab-2",
+    });
+  });
+
+  it("keeps tabs open when the current draft cannot be saved", async () => {
+    const tabs = [createTab("tab-1"), createTab("tab-2")];
+    const ui = createUi(tabs);
+    ui.saveActiveTabDraft.mockResolvedValue(false);
+
+    expect(await ui.closeTab("tab-1")).toBe(false);
+    expect(ui.tabs.map((tab) => tab.id)).toEqual(["tab-1", "tab-2"]);
+    expect(ui.storageService.updateQueryTabs).not.toHaveBeenCalled();
   });
 
   it("scrolls the active tab into view after it is rendered", () => {
@@ -134,10 +191,17 @@ describe("Quick Query tab management", () => {
     );
 
     const labels = [...document.querySelectorAll(".qq-tab-context-menu button")].map((button) => button.textContent);
-    expect(labels).toEqual(["Rename", "Duplicate", "Close", "Close Other Tabs", "Close Tabs to the Right", "Close All Tabs"]);
+    expect(labels).toEqual([
+      "Rename",
+      "Duplicate",
+      "Close",
+      "Close Other Tabs",
+      "Close Tabs to the Left",
+      "Close Tabs to the Right",
+      "Close All Tabs",
+    ]);
     expect(document.querySelector(".qq-tab-context-menu")?.getAttribute("role")).toBe("menu");
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
     ui.closeTabContextMenu();
     tabList.remove();
   });
