@@ -2013,6 +2013,15 @@ body.global-search-open {
   box-sizing: border-box;
 }
 
+.home-greeting {
+  margin: 0 0 1rem;
+  color: hsl(var(--foreground));
+  font-size: clamp(1.45rem, 2.4vw, 1.8rem);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
 .usage-panel {
   width: 100%;
 }

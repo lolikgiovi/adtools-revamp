@@ -138,12 +138,6 @@ class App {
     this.setupHeaderRuntime();
     this.connectionIndicators = new ConnectionIndicators(document.querySelector(".connection-indicators"));
     this.syncDeviceVersion();
-    // Apply sidebar title from stored username
-    try {
-      const titleEl = document.querySelector(".sidebar-title");
-      const username = localStorage.getItem("user.username");
-      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
-    } catch (_) {}
     this.setupRoutes();
 
     // Build global search index after routes/tools are ready
@@ -387,9 +381,15 @@ class App {
     this.router.setDefaultRoute(registered ? "home" : "register");
   }
 
-  /**
-   * Show home page
-   */
+  getHomeGreeting(username = null) {
+    let name = username;
+    if (!name) {
+      try { name = localStorage.getItem("user.username"); } catch (_) { name = null; }
+    }
+    return `Hi, ${String(name || "User").trim().slice(0, 15) || "User"}`;
+  }
+
+  /** Show home page. */
   showHome(navigationId = null) {
     if (!this.isNavigationCurrent(navigationId, "home")) return;
     if (!hasCompletedRegistration()) {
@@ -411,6 +411,7 @@ class App {
     if (this.mainContent) {
       this.mainContent.innerHTML = `
         <div class="home-container">
+          <h1 class="home-greeting">${this.#escapeHtml(this.getHomeGreeting())}</h1>
           <div id="usage-panel"></div>
         </div>
       `;
@@ -732,11 +733,10 @@ class App {
       }
     });
 
-    // Update sidebar title when user registers
+    // Keep the Home greeting in sync when the user's name changes.
     this.eventBus.on("user:registered", (data) => {
-      const titleEl = document.querySelector(".sidebar-title");
-      const username = data?.username || localStorage.getItem("user.username");
-      if (titleEl && username) titleEl.textContent = `Hi, ${String(username).slice(0, 15)}`;
+      const greeting = document.querySelector(".home-greeting");
+      if (greeting) greeting.textContent = this.getHomeGreeting(data?.username);
       this.sidebar?.renderMenuGroups?.();
       this.syncDeviceVersion();
     });
