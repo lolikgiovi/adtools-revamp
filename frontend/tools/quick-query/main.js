@@ -114,6 +114,7 @@ export class QuickQueryUI {
     this.editor = null;
     this.schemaTable = null;
     this.dataTable = null;
+    this.primaryKeyFieldNames = new Set();
     this.elements = {};
     this.storageService = new IndexedDBStorageService();
     this._storageReady = false;
@@ -457,7 +458,10 @@ export class QuickQueryUI {
       },
       // Input elements
       tableNameInput: {
-        input: (e) => this.handleSearchInput(e),
+        input: (e) => {
+          this.handleSearchInput(e);
+          this.updatePrimaryKeyHighlight();
+        },
         keydown: (e) => this.handleSearchKeyDown(e),
       },
       savedSchemasSearch: {
@@ -831,6 +835,24 @@ export class QuickQueryUI {
 
     const dataTableConfig = {
       ...initialDataTableSpecification,
+      cells: (row, col) => {
+        const properties = initialDataTableSpecification.cells(row, col);
+        const fieldName = this.dataTable?.getDataAtCell?.(0, col);
+        if (this.primaryKeyFieldNames.has(fieldName)) {
+          properties.className = row === 0 ? "qq-primary-key-cell qq-primary-key-field" : "qq-primary-key-cell";
+        }
+        return properties;
+      },
+      afterGetColHeader: (col, TH) => {
+        if (col < 0) return;
+        const fieldName = this.dataTable?.getDataAtCell?.(0, col);
+        const isPrimaryKey = this.primaryKeyFieldNames.has(fieldName);
+        TH.classList.toggle("qq-primary-key-header", isPrimaryKey);
+        const header = TH.querySelector(".colHeader");
+        if (header) header.textContent = `${columnIndexToLetter(col)}${isPrimaryKey ? " [PK]" : ""}`;
+        if (isPrimaryKey) TH.title = `Primary key: ${fieldName}`;
+        else TH.removeAttribute("title");
+      },
       // A finite height keeps Handsontable virtualized instead of rendering every data row into the page.
       height: this.getDataTableViewportHeight(),
       autoRowSize: wrapTextOn,
@@ -1093,6 +1115,7 @@ export class QuickQueryUI {
 
   updateDataSpreadsheet() {
     const schemaData = this.schemaTable.getData().filter((row) => row[0]);
+    this.updatePrimaryKeyHighlight(schemaData);
     const columnCount = schemaData.length;
     const currentData = this.dataTable.getData();
 
@@ -1113,6 +1136,15 @@ export class QuickQueryUI {
       });
       this.dataTable.loadData(newData);
     }
+  }
+
+  updatePrimaryKeyHighlight(schemaData = this.schemaTable?.getData?.().filter((row) => row[0]) || []) {
+    const tableName = this.elements.tableNameInput?.value?.trim() || "";
+    const findPrimaryKeys = this.queryExecutionService?.queryService?.ValueProcessorService?.findPrimaryKeys;
+    this.primaryKeyFieldNames = new Set(schemaData.length && findPrimaryKeys
+      ? findPrimaryKeys.call(this.queryExecutionService.queryService.ValueProcessorService, schemaData, tableName)
+      : []);
+    this.dataTable?.render?.();
   }
 
   setDataSheetColumns(count) {

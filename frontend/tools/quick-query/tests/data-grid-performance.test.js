@@ -29,6 +29,7 @@ vi.mock("../../../core/MonacoOracle.js", () => ({
 }));
 
 import { QuickQueryUI } from "../main.js";
+import { ValueProcessorService } from "../services/ValueProcessorService.js";
 
 function createUi() {
   const toolContainer = document.createElement("div");
@@ -107,6 +108,61 @@ describe("Quick Query data-grid performance", () => {
     expect(dataTable.settings.fixedRowsTop).toBe(1);
     expect(dataTable.settings.autoRowSize).toBe(false);
     expect(dataTable.settings.rowHeights).toBe(20);
+  });
+
+  it("highlights the schema-selected primary key columns in the data sheet", () => {
+    const { ui } = createUi();
+    ui.elements.tableNameInput = { value: "BULLION.ORDER" };
+    ui.queryExecutionService = { queryService: { ValueProcessorService: new ValueProcessorService() } };
+    ui.initializeSpreadsheets();
+    ui.schemaTable.getData = () => [
+      ["ID", "VARCHAR2", "No", "", "", "Yes"],
+      ["TENANT", "VARCHAR2", "No", "", "", "Y"],
+      ["DESCRIPTION", "VARCHAR2", "Yes", "", "", "No"],
+    ];
+    const dataTable = ui.dataTable;
+    dataTable.getDataAtCell = (row, col) => ["DESCRIPTION", "ID", "TENANT"][col];
+
+    ui.updatePrimaryKeyHighlight();
+
+    expect(dataTable.settings.cells(1, 0).className).toBeUndefined();
+    expect(dataTable.settings.cells(1, 1).className).toBe("qq-primary-key-cell");
+    expect(dataTable.settings.cells(1, 2).className).toBe("qq-primary-key-cell");
+    expect(dataTable.settings.cells(0, 1).className).toBe("qq-primary-key-cell qq-primary-key-field");
+    const header = document.createElement("th");
+    header.innerHTML = '<span class="colHeader">B</span>';
+    dataTable.settings.afterGetColHeader(1, header);
+    expect(header.classList.contains("qq-primary-key-header")).toBe(true);
+    expect(header.textContent).toBe("B [PK]");
+    expect(header.title).toBe("Primary key: ID");
+  });
+
+  it("updates the highlight when the chosen key changes and follows config-table key selection", () => {
+    const { ui } = createUi();
+    ui.elements.tableNameInput = { value: "BULLION.ORDER" };
+    ui.queryExecutionService = { queryService: { ValueProcessorService: new ValueProcessorService() } };
+    ui.initializeSpreadsheets();
+    let schema = [["ID", "VARCHAR2", "No", "", "", "Yes"], ["PARAMETER_KEY", "VARCHAR2", "No", "", "", "No"]];
+    ui.schemaTable.getData = () => schema;
+    const dataTable = ui.dataTable;
+    dataTable.getDataAtCell = (row, col) => ["ID", "PARAMETER_KEY"][col];
+
+    ui.updatePrimaryKeyHighlight();
+    expect(dataTable.settings.cells(1, 0).className).toBe("qq-primary-key-cell");
+    ui.elements.tableNameInput.value = "BULLION.CONFIG";
+    ui.updatePrimaryKeyHighlight();
+    expect(dataTable.settings.cells(1, 0).className).toBeUndefined();
+    expect(dataTable.settings.cells(1, 1).className).toBe("qq-primary-key-cell");
+    const header = document.createElement("th");
+    header.innerHTML = '<span class="colHeader">A [PK]</span>';
+    dataTable.settings.afterGetColHeader(0, header);
+    expect(header.textContent).toBe("A");
+    expect(header.classList.contains("qq-primary-key-header")).toBe(false);
+
+    schema = [["ID", "VARCHAR2", "No", "", "", "No"], ["PARAMETER_KEY", "VARCHAR2", "No", "", "", "No"]];
+    ui.elements.tableNameInput.value = "BULLION.ORDER";
+    ui.updatePrimaryKeyHighlight();
+    expect(dataTable.settings.cells(1, 0).className).toBe("qq-primary-key-cell");
   });
 
   it("bounds a long schema grid so its Handsontable header stays fixed", () => {
