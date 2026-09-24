@@ -31,7 +31,7 @@
   height: 38px;
   margin: 0 0 8px;
   border-bottom: 1px solid hsl(var(--border));
-  background: transparent;
+  background: hsl(var(--background));
 }
 
 .qq-tab-list {
