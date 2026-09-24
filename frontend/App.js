@@ -136,7 +136,9 @@ class App {
 
     this.initializeComponents();
     this.setupHeaderRuntime();
-    this.connectionIndicators = new ConnectionIndicators(document.querySelector(".connection-indicators"));
+    this.connectionIndicators = new ConnectionIndicators(document.querySelector(".connection-indicators"), {
+      onOpenSettings: () => this.router.navigate("settings"),
+    });
     this.syncDeviceVersion();
     this.setupRoutes();
 

@@ -67,10 +67,10 @@ export class RedisCacheService {
     globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail }));
     try {
       const result = await this.invoke(command, args);
-      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish" } }));
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish", success: true } }));
       return result;
     } catch (error) {
-      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish" } }));
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish", success: false } }));
       throw error;
     }
   }

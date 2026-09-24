@@ -22,6 +22,8 @@ pub fn run() {
     .manage(ZoomState(Mutex::new(ZOOM_DEFAULT)))
     .manage(kafka::PublishGuard::default())
     .manage(kafka::ListenerState::default())
+    .manage(kafka::KafkaConnectionState::default())
+    .manage(redis_cache::RedisSessionState::default())
     .manage(oracle_sidecar::SidecarState::default())
     // Install opener capability via a simple Rust command (no plugin required)
     .invoke_handler(tauri::generate_handler![
@@ -79,6 +81,8 @@ pub fn run() {
       oracle_sidecar::check_oracle_sidecar_status,
       oracle_sidecar::get_oracle_sidecar_url,
       oracle_sidecar::oracle_sidecar_test_connection,
+      oracle_sidecar::oracle_sidecar_connect,
+      oracle_sidecar::oracle_sidecar_disconnect,
       oracle_sidecar::oracle_sidecar_query,
       oracle_sidecar::oracle_sidecar_query_batch,
       oracle_sidecar::oracle_sidecar_pool_connections,
@@ -87,10 +91,18 @@ pub fn run() {
       redis_cache::clear_redis_credentials,
       redis_cache::has_redis_credentials,
       redis_cache::redis_test_connection,
+      redis_cache::redis_connect,
+      redis_cache::redis_disconnect,
+      redis_cache::redis_connection_status,
+      redis_cache::redis_connection_touch,
       redis_cache::redis_scan_keys,
       redis_cache::redis_get_value,
       redis_cache::redis_delete_keys,
       kafka::kafka_test_connection,
+      kafka::kafka_connect,
+      kafka::kafka_disconnect,
+      kafka::kafka_connection_status,
+      kafka::kafka_connection_touch,
       kafka::kafka_list_topics,
       kafka::kafka_search_history,
       kafka::kafka_publish,

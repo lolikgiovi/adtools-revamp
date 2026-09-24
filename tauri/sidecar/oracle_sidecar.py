@@ -43,6 +43,7 @@ POOL_MIN = 1
 POOL_MAX = 5
 POOL_INCREMENT = 1
 POOL_TIMEOUT = 120  # Close idle connections after 2 minutes
+MAX_ACTIVE_CONNECTION_NAMES = 2
 POOL_GETMODE = oracledb.POOL_GETMODE_WAIT
 PORT = 21522  # Sidecar port (easy to remember: 2 + Oracle default 1521)
 
@@ -117,6 +118,11 @@ class PoolManager:
         key = self._pool_key(config)
 
         with self._lock:
+            if any(config.name in names and existing_key != key for existing_key, names in self._names.items()):
+                raise ValueError(f"{config.name} is active with different settings. Disconnect it before reconnecting.")
+            active_names = {name for names in self._names.values() for name in names}
+            if config.name not in active_names and len(active_names) >= MAX_ACTIVE_CONNECTION_NAMES:
+                raise ValueError("Two Oracle connections are already active. Disconnect one before connecting another.")
             if key not in self._pools:
                 logger.info(f"Creating new pool for: {key}")
                 pool = oracledb.create_pool(
@@ -134,6 +140,28 @@ class PoolManager:
             self._last_used[key] = datetime.now()
             self._names.setdefault(key, set()).add(config.name)
             return self._pools[key]
+
+    def is_connected(self, name: str) -> bool:
+        with self._lock:
+            return any(name in names for names in self._names.values())
+
+    def disconnect_name(self, name: str) -> bool:
+        """Remove one named connection without closing a pool shared by another name."""
+        with self._lock:
+            for key, names in list(self._names.items()):
+                if name not in names:
+                    continue
+                pool = self._pools[key]
+                if pool.busy:
+                    raise ValueError(f"{name} is running a query. Try disconnecting when it finishes.")
+                names.remove(name)
+                if not names:
+                    pool.close()
+                    del self._pools[key]
+                    del self._last_used[key]
+                    del self._names[key]
+                return True
+        return False
 
     def close_pool(self, key: str) -> None:
         """Close and remove a specific pool."""
@@ -289,19 +317,70 @@ async def health_check():
 
 @app.post("/test-connection")
 async def test_connection(request: TestConnectionRequest):
-    """Test database connection without executing queries."""
+    """Check credentials without retaining a pool or database session."""
     try:
-        pool = pool_manager.get_pool(request.connection)
-        with pool.acquire() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM DUAL")
-            cursor.fetchone()
+        await asyncio.get_running_loop().run_in_executor(_db_executor, _test_connection_sync, request.connection)
         return {"success": True, "message": "Connection successful"}
     except oracledb.Error as e:
         error = oracle_error_to_response(e)
         raise HTTPException(status_code=400, detail=error.model_dump())
     except Exception as e:
         raise HTTPException(status_code=500, detail={"code": 0, "message": str(e)})
+
+
+def _test_connection_sync(config: ConnectionConfig):
+    with oracledb.connect(user=config.username, password=config.password, dsn=config.connect_string) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM DUAL")
+        cursor.fetchone()
+
+
+def _connect_named_pool_sync(config: ConnectionConfig):
+    pool = pool_manager.get_pool(config)
+    with pool.acquire() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM DUAL")
+        cursor.fetchone()
+
+
+@app.post("/connect")
+async def connect_named_pool(request: TestConnectionRequest):
+    """Open a named pool after confirming that it can serve a query."""
+    config = request.connection
+    was_connected = pool_manager.is_connected(config.name)
+    try:
+        await asyncio.get_running_loop().run_in_executor(_db_executor, _connect_named_pool_sync, config)
+        return {"success": True, "name": config.name}
+    except oracledb.Error as e:
+        if not was_connected:
+            try:
+                pool_manager.disconnect_name(config.name)
+            except Exception:
+                logger.exception("Could not close failed Oracle connection")
+        error = oracle_error_to_response(e)
+        raise HTTPException(status_code=400, detail=error.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        if not was_connected:
+            try:
+                pool_manager.disconnect_name(config.name)
+            except Exception:
+                logger.exception("Could not close failed Oracle connection")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DisconnectRequest(BaseModel):
+    name: str
+
+
+@app.post("/disconnect")
+async def disconnect_named_pool(request: DisconnectRequest):
+    try:
+        disconnected = await asyncio.get_running_loop().run_in_executor(_db_executor, pool_manager.disconnect_name, request.name)
+        return {"disconnected": disconnected}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 def _convert_value(val):

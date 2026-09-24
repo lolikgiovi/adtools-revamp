@@ -41,6 +41,8 @@ export class KafkaTool extends BaseTool {
   render() { return KafkaTemplate; }
 
   onMount() {
+    this.headerDisconnectHandler = () => { void this.stopListening(); };
+    globalThis.addEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
     const config = readKafkaConfig();
     this.field("kafkaBrokers").value = config.brokers;
     this.requests = readKafkaRequests();
@@ -161,6 +163,7 @@ export class KafkaTool extends BaseTool {
     this.stopListening();
   }
   onUnmount() {
+    globalThis.removeEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
     document.removeEventListener("click", this.outsideTopicClick);
     document.removeEventListener("keydown", this.headersEscapeHandler);
     this.topicRequestId++;

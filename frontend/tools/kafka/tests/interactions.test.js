@@ -257,7 +257,7 @@ describe("Kafka publish controls", () => {
     await settle();
 
     expect(service.test).toHaveBeenCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" });
-    expect(document.querySelector("#kafkaConnectionStatus").textContent).toBe("Connected to broker:9092");
+    expect(document.querySelector("#kafkaConnectionStatus").textContent).toBe("Test passed · broker:9092");
     expect(document.querySelector("#kafkaConnection").dataset.state).toBe("connected");
     expect(settings.open).toBe(false);
   });
@@ -501,6 +501,25 @@ describe("Kafka publish controls", () => {
     expect(service.stop).toHaveBeenCalledTimes(2);
     expect(listenButton.textContent).toBe("Start listening");
     expect(listenButton.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("updates the listener control when Kafka is disconnected from the header", async () => {
+    const service = {
+      on: vi.fn().mockResolvedValue(() => {}),
+      start: vi.fn().mockResolvedValue(),
+      stop: vi.fn().mockResolvedValue(),
+    };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    document.querySelector("#kafkaListenTopic").value = "orders.test";
+    await tool.startListening();
+    window.dispatchEvent(new Event("adtools:kafka-disconnected"));
+    await settle();
+    expect(tool.listening).toBe(false);
+    expect(document.querySelector("#kafkaListen").textContent).toBe("Start listening");
+    expect(service.stop).toHaveBeenCalledOnce();
+    tool.unmount();
   });
 
   it("loads a received message into Publish without sending or saving it", () => {

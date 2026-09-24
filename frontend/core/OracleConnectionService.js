@@ -105,6 +105,18 @@ export class OracleConnectionService {
     return this.invokeTauri("oracle_sidecar_test_connection", { connectionName, config, username: null, password: null });
   }
 
+  static async connectPool(connectionName, config) {
+    const started = await this.ensureSidecarStarted();
+    if (!started) throw new OracleSidecarError("Oracle bridge did not start");
+    return this.invokeTauri("oracle_sidecar_connect", { connectionName, config });
+  }
+
+  static async disconnectPool(connectionName) {
+    if (!this.isSidecarReady()) return false;
+    const result = await this.invokeTauri("oracle_sidecar_disconnect", { connectionName });
+    return Boolean(result?.disconnected);
+  }
+
   static async queryViaSidecar(connectionName, config, sql, maxRows = 1000) {
     const started = await this.ensureSidecarStarted();
     if (!started) {

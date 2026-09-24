@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
 use std::time::{Duration, Instant};
@@ -16,6 +16,81 @@ const MAX_BATCH: usize = 100;
 const MAX_MESSAGE_BYTES: usize = 1_048_576;
 const MAX_SEARCH_RECORDS: usize = 50_000;
 const MAX_SEARCH_MATCHES: usize = 20;
+const MANUAL_CONNECTION_IDLE: Duration = Duration::from_secs(120);
+
+pub struct KafkaConnectionState {
+    session: Arc<Mutex<Option<KafkaManualConnection>>>,
+    next_id: AtomicU64,
+}
+
+struct KafkaManualConnection {
+    _consumer: BaseConsumer,
+    brokers: String,
+    last_used: Instant,
+    id: u64,
+}
+
+impl Default for KafkaConnectionState {
+    fn default() -> Self {
+        Self { session: Arc::new(Mutex::new(None)), next_id: AtomicU64::new(1) }
+    }
+}
+
+#[tauri::command]
+pub async fn kafka_connect(config: KafkaConfig, state: State<'_, KafkaConnectionState>) -> Result<String, String> {
+    let brokers = config.brokers.trim().to_string();
+    let consumer = tauri::async_runtime::spawn_blocking(move || {
+        let consumer: BaseConsumer = config.client()?.create().map_err(|e| e.to_string())?;
+        consumer.fetch_metadata(None, Duration::from_secs(5)).map_err(|e| e.to_string())?;
+        Ok::<_, String>(consumer)
+    }).await.map_err(|e| e.to_string())??;
+    let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    let session = state.session.clone();
+    {
+        let mut guard = session.lock().map_err(|_| "Kafka connection unavailable".to_string())?;
+        *guard = Some(KafkaManualConnection { _consumer: consumer, brokers: brokers.clone(), last_used: Instant::now(), id });
+    }
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let remaining = {
+                let Ok(mut guard) = session.lock() else { return; };
+                let Some(active) = guard.as_ref() else { return; };
+                if active.id != id { return; }
+                let remaining = MANUAL_CONNECTION_IDLE.saturating_sub(active.last_used.elapsed());
+                if remaining.is_zero() { guard.take(); return; }
+                remaining
+            };
+            tokio::time::sleep(remaining).await;
+        }
+    });
+    Ok(brokers)
+}
+
+#[tauri::command]
+pub fn kafka_disconnect(state: State<'_, KafkaConnectionState>, listener: State<'_, ListenerState>) -> Result<(), String> {
+    if let Some(running) = listener.0.lock().map_err(|_| "Listener unavailable".to_string())?.take() {
+        running.store(false, Ordering::SeqCst);
+    }
+    state.session.lock().map_err(|_| "Kafka connection unavailable".to_string())?.take();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn kafka_connection_status(state: State<'_, KafkaConnectionState>) -> Result<Option<String>, String> {
+    let mut guard = state.session.lock().map_err(|_| "Kafka connection unavailable".to_string())?;
+    if guard.as_ref().is_some_and(|active| active.last_used.elapsed() >= MANUAL_CONNECTION_IDLE) {
+        guard.take();
+    }
+    Ok(guard.as_ref().map(|active| active.brokers.clone()))
+}
+
+#[tauri::command]
+pub fn kafka_connection_touch(state: State<'_, KafkaConnectionState>) -> Result<(), String> {
+    if let Some(active) = state.session.lock().map_err(|_| "Kafka connection unavailable".to_string())?.as_mut() {
+        active.last_used = Instant::now();
+    }
+    Ok(())
+}
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

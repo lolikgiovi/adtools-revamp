@@ -2,6 +2,9 @@ use redis::{Client, Commands, Connection, RedisError, Value};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as JsonValue};
 use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tauri::State;
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
@@ -9,6 +12,79 @@ const MAX_SCAN_COUNT: usize = 200;
 const MAX_DELETE_KEYS: usize = 200;
 const MAX_VALUE_BYTES: usize = 512 * 1024;
 const MAX_VALUE_COLLECTION_ITEMS: usize = 200;
+const MANUAL_CONNECTION_IDLE: Duration = Duration::from_secs(120);
+
+pub struct RedisSessionState {
+    session: Arc<Mutex<Option<RedisManualConnection>>>,
+    next_id: AtomicU64,
+}
+
+struct RedisManualConnection {
+    _connection: Connection,
+    endpoint: String,
+    last_used: Instant,
+    id: u64,
+}
+
+impl Default for RedisSessionState {
+    fn default() -> Self {
+        Self { session: Arc::new(Mutex::new(None)), next_id: AtomicU64::new(1) }
+    }
+}
+
+#[tauri::command]
+pub async fn redis_connect(config: RedisConfig, state: State<'_, RedisSessionState>) -> Result<String, String> {
+    let endpoint = format!("{}/{}", endpoint_label(&config), config.database);
+    let connection = tauri::async_runtime::spawn_blocking(move || {
+        let mut connection = connect(&config)?;
+        let pong: String = redis::cmd("PING").query(&mut connection).map_err(redis_error)?;
+        if pong != "PONG" { return Err("Redis returned an unexpected PING response".to_string()); }
+        Ok(connection)
+    }).await.map_err(|e| e.to_string())??;
+    let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    let session = state.session.clone();
+    {
+        let mut guard = session.lock().map_err(|_| "Redis connection unavailable".to_string())?;
+        *guard = Some(RedisManualConnection { _connection: connection, endpoint: endpoint.clone(), last_used: Instant::now(), id });
+    }
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let remaining = {
+                let Ok(mut guard) = session.lock() else { return; };
+                let Some(active) = guard.as_ref() else { return; };
+                if active.id != id { return; }
+                let remaining = MANUAL_CONNECTION_IDLE.saturating_sub(active.last_used.elapsed());
+                if remaining.is_zero() { guard.take(); return; }
+                remaining
+            };
+            tokio::time::sleep(remaining).await;
+        }
+    });
+    Ok(endpoint)
+}
+
+#[tauri::command]
+pub fn redis_disconnect(state: State<'_, RedisSessionState>) -> Result<(), String> {
+    state.session.lock().map_err(|_| "Redis connection unavailable".to_string())?.take();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn redis_connection_status(state: State<'_, RedisSessionState>) -> Result<Option<String>, String> {
+    let mut guard = state.session.lock().map_err(|_| "Redis connection unavailable".to_string())?;
+    if guard.as_ref().is_some_and(|active| active.last_used.elapsed() >= MANUAL_CONNECTION_IDLE) {
+        guard.take();
+    }
+    Ok(guard.as_ref().map(|active| active.endpoint.clone()))
+}
+
+#[tauri::command]
+pub fn redis_connection_touch(state: State<'_, RedisSessionState>) -> Result<(), String> {
+    if let Some(active) = state.session.lock().map_err(|_| "Redis connection unavailable".to_string())?.as_mut() {
+        active.last_used = Instant::now();
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct RedisCredentials {

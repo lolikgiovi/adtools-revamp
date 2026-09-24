@@ -743,7 +743,7 @@ class SettingsPage {
 
             await OracleConnectionService.testConnectionViaSidecar(connName, conn);
             if (statusEl) {
-              statusEl.textContent = "✓ Connected";
+              statusEl.textContent = "✓ Connection test passed";
               statusEl.className = "oracle-conn-status success";
             }
           } catch (err) {

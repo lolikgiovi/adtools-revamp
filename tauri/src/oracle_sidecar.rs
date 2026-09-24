@@ -218,6 +218,20 @@ pub async fn oracle_sidecar_test_connection(
 }
 
 #[tauri::command]
+pub async fn oracle_sidecar_connect(
+    connection_name: String,
+    config: crate::oracle::ConnectionConfig,
+) -> Result<Value, String> {
+    let connection = connection_payload(&connection_name, &config)?;
+    post_sidecar("/connect", json!({ "connection": connection })).await
+}
+
+#[tauri::command]
+pub async fn oracle_sidecar_disconnect(connection_name: String) -> Result<Value, String> {
+    post_sidecar("/disconnect", json!({ "name": connection_name })).await
+}
+
+#[tauri::command]
 pub async fn oracle_sidecar_query(
     connection_name: String,
     config: crate::oracle::ConnectionConfig,

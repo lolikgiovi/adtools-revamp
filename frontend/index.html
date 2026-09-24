@@ -84,18 +84,33 @@
                 <!-- Header actions (right side) -->
                 <div class="header-actions">
                     <div class="connection-indicators" aria-label="Connection activity">
-                        <span class="connection-indicator" data-connection="oracle" data-state="idle" role="status">
+                        <button class="connection-indicator" data-connection="oracle" data-state="idle" type="button"
+                            aria-expanded="false" aria-controls="oracle-connection-menu" aria-haspopup="true">
                             <span class="connection-dot" aria-hidden="true"></span><span class="connection-name">Oracle</span>
                             <span class="connection-detail">Idle</span>
-                        </span>
-                        <span class="connection-indicator" data-connection="kafka" data-state="idle" role="status">
+                            <svg class="connection-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
+                        <button class="connection-indicator" data-connection="kafka" data-state="idle" type="button"
+                            aria-expanded="false" aria-controls="kafka-connection-menu" aria-haspopup="true">
                             <span class="connection-dot" aria-hidden="true"></span><span class="connection-name">Kafka</span>
                             <span class="connection-detail">On demand</span>
-                        </span>
-                        <span class="connection-indicator" data-connection="redis" data-state="idle" role="status">
+                            <svg class="connection-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
+                        <button class="connection-indicator" data-connection="redis" data-state="idle" type="button"
+                            aria-expanded="false" aria-controls="redis-connection-menu" aria-haspopup="true">
                             <span class="connection-dot" aria-hidden="true"></span><span class="connection-name">Redis</span>
                             <span class="connection-detail">On demand</span>
-                        </span>
+                            <svg class="connection-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
+                        <div class="connection-menu" id="oracle-connection-menu" hidden></div>
+                        <div class="connection-menu" id="kafka-connection-menu" hidden></div>
+                        <div class="connection-menu" id="redis-connection-menu" hidden></div>
                     </div>
                     <button class="mobile-search" type="button" aria-label="Search tools, pages, and Quick Query schemas">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

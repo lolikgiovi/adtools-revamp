@@ -94,6 +94,7 @@
 }
 
 .connection-indicators {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -115,8 +116,132 @@
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
   white-space: nowrap;
+  background: hsl(var(--background));
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+button.connection-indicator {
+  cursor: pointer;
+}
+
+button.connection-indicator:hover,
+button.connection-indicator[aria-expanded="true"] {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--ring) / 0.5);
+}
+
+button.connection-indicator:focus-visible,
+.connection-menu button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.connection-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.connection-menu {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  z-index: 5;
+  width: min(20rem, calc(100vw - 1.5rem));
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: 0 10px 28px hsl(var(--foreground) / 0.13);
+}
+
+.connection-menu[hidden] {
+  display: none;
+}
+
+.connection-menu-heading,
+.connection-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.connection-menu-heading {
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.connection-menu-count,
+.connection-menu-note,
+.connection-menu-endpoint {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.connection-menu-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.connection-menu-row {
+  min-height: 38px;
+  padding: 0.25rem 0;
+}
+
+.connection-menu-row + .connection-menu-row {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.connection-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.connection-menu-identity,
+.connection-menu-endpoint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-menu-action {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.connection-menu-action:hover:not(:disabled) {
+  background: hsl(var(--muted) / 0.6);
+}
+
+.connection-menu-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.connection-menu-note {
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
+.connection-menu-note[data-error="true"] {
+  color: hsl(var(--destructive));
 }
 
 .connection-indicator .connection-dot {
