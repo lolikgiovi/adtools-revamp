@@ -1,108 +1,90 @@
 {
-  "build": "20260919035736",
-  "timestamp": "2026-09-19T03:57:36.922Z",
-  "releaseId": "release-1.3.6",
-  "version": "1.3.6",
-  "title": "Faster everyday workflows",
-  "summary": "AD Tools 1.3.6 makes saved work easier to reach, refreshes everyday tools, and uses fewer resources in the background.",
+  "build": "20260924004853",
+  "timestamp": "2026-09-24T00:48:53.264Z",
+  "releaseId": "release-1.3.7",
+  "version": "1.3.7",
+  "title": "Work across messages, cache, and drafts",
+  "summary": "AD Tools 1.3.7 adds Kafka and Redis Cache workflows and makes it easier to manage multiple editor drafts.",
   "notes": [
-    "Quick Query preserves JSON and HTML content pasted from DBeaver or SQL Developer, and can expand or collapse the Data Sheet.",
-    "Pin favorite tools in the sidebar so they stay at the top.",
-    "Press ⌘K to search tools, pages, and saved Quick Query tables.",
-    "Home now shows your usage and includes a feedback field.",
-    "Check Image adds a clearer batch workflow, saved references, result filters, cancellation, and timeout retries.",
-    "Char Counter now has compact summary metrics and a Per row view for comparing line lengths.",
-    "Heavy tools and background work now release resources more efficiently to reduce RAM and compute usage."
+    "Kafka can publish messages, browse topics, listen live, and search retained messages by payload, key, or header.",
+    "Redis Cache can find keys in bounded pages, inspect a key's value, and clear selected keys after confirmation.",
+    "HTML Editor keeps multiple documents in tabs, with tab actions and Undo for closed tabs.",
+    "Quick Query tabs now have more flexible management and layout.",
+    "Preview adds viewport presets and VTL mode controls, and Check Image can check multiple environments in one run."
   ],
   "slides": [
     {
-      "title": "Quick Query: safer paste, flexible Data Sheet",
-      "body": "Move database results into Quick Query without breaking structured values, then reshape the Data Sheet around the work in front of you.",
+      "title": "Publish and inspect Kafka messages",
+      "body": "Set a bootstrap server, then work with topics and messages from one place.",
       "bullets": [
-        "Paste rows from DBeaver or SQL Developer without losing quotes inside JSON or HTML values.",
-        "Expand or collapse the Data Sheet to match the task."
-      ]
-    },
-    {
-      "title": "Your shortcuts, wherever you are",
-      "body": "Keep frequent tools pinned in the sidebar, or press ⌘K to jump directly to a tool, page, or saved Quick Query table.",
-      "bullets": [
-        "Right-click a sidebar tool to pin or unpin it.",
-        "Search remembers recent destinations and brings them forward."
-      ]
-    },
-    {
-      "title": "A more useful Home, Check Image, and Char Counter",
-      "body": "Home now combines usage context with a direct feedback field, Check Image makes repeated batch checks easier to manage, and Char Counter keeps text checks focused.",
-      "bullets": [
-        "Save friendly labels for image identifiers you use often.",
-        "Filter results, cancel a run, and retry timed-out checks.",
-        "Configure CDN environment URLs from Settings.",
-        "Switch Char Counter to Per row to compare each line's character length while keeping the summary visible."
+        "Compose a payload and choose a topic to publish.",
+        "Switch to Listen for live messages or search retained messages from a chosen time.",
+        "Reuse a received message as an editable Publish draft."
       ],
       "action": {
-        "label": "Open Char Counter",
-        "route": "char-counter"
+        "label": "Open Kafka",
+        "route": "kafka"
+      }
+    },
+    {
+      "title": "Find and inspect Redis cache keys",
+      "body": "Search a configured Redis connection, inspect individual values, and clear keys when needed.",
+      "bullets": [
+        "Browse key results in bounded pages and keep frequently used keys close at hand.",
+        "Open a key's value to find text within it.",
+        "Review a confirmation before clearing one or more keys."
+      ],
+      "action": {
+        "label": "Open Redis Cache",
+        "route": "redis-cache"
+      }
+    },
+    {
+      "title": "Keep more drafts in reach",
+      "body": "HTML Editor and Quick Query make it easier to move between active pieces of work.",
+      "bullets": [
+        "Keep separate HTML documents in tabs and use the tab menu to manage them.",
+        "Undo a bulk tab close in HTML Editor or Quick Query."
+      ],
+      "action": {
+        "label": "Open HTML Editor",
+        "route": "html-template"
       }
     }
   ],
   "tour": [],
   "tips": [
     {
-      "id": "pin-tools",
-      "route": "home",
-      "target": ".sidebar-trigger",
+      "id": "kafka-broker-settings",
+      "route": "kafka",
+      "target": "#kafkaConnectionSettings > summary",
       "placement": "bottom",
-      "title": "Pin a favorite tool",
-      "body": "Open the sidebar, then right-click any tool and choose Pin. Pinned tools stay together at the top; repeat the action to unpin one."
+      "title": "Start with a broker",
+      "body": "Open Broker settings and enter a bootstrap server before testing the connection."
     },
     {
-      "id": "global-search",
-      "route": "home",
-      "target": ".header-search",
+      "id": "redis-connection-settings",
+      "route": "redis-cache",
+      "target": "#redisOpenSettings",
       "placement": "bottom",
-      "title": "Search with ⌘K",
-      "body": "Press ⌘K from anywhere. Type qq: followed by a table name to open a saved Quick Query table directly."
+      "title": "Connect Redis Cache",
+      "body": "Open Settings to configure a Redis connection, then test it before finding keys."
     },
     {
-      "id": "home-feedback",
-      "route": "home",
-      "target": ".usage-feedback-section",
-      "placement": "top",
-      "title": "Send feedback from Home",
-      "body": "Choose a tool if relevant, describe what should be better, and send your note without leaving Home."
+      "id": "html-document-tabs",
+      "route": "html-template",
+      "target": "#btnNewHtmlDocument",
+      "placement": "bottom",
+      "title": "Open another document",
+      "body": "Select New HTML document to work in a separate tab; use a tab's menu for more actions."
     },
     {
-      "id": "quick-query-safe-paste",
+      "id": "quick-query-tabs",
       "route": "quick-query",
-      "target": "#spreadsheet-data",
-      "placement": "top",
-      "title": "Paste JSON and HTML safely",
-      "body": "Copy rows from DBeaver or SQL Developer, then paste them directly into the Data Sheet. Quotes and multiline content inside JSON or HTML values are preserved."
-    },
-    {
-      "id": "quick-query-expand-data-sheet",
-      "route": "quick-query",
-      "target": "#toggleDataMaximize",
+      "target": "#quickQueryAddTab",
       "placement": "bottom",
-      "title": "Expand or collapse the Data Sheet",
-      "body": "Select Expand Data Sheet to use the available workspace for table data. Select it again to return to the split Query and Data Sheet view."
-    },
-    {
-      "id": "check-image-references",
-      "route": "check-image",
-      "target": ".saved-references-button",
-      "placement": "bottom",
-      "title": "Reuse image references",
-      "body": "Open Saved references to keep friendly labels beside identifiers you check often. Batch runs also support filtering, cancellation, and timeout retries."
-    },
-    {
-      "id": "char-counter-per-row",
-      "route": "char-counter",
-      "target": "#charCounterRowMode",
-      "placement": "bottom",
-      "title": "Compare rows at a glance",
-      "body": "Switch to Per row to see each line's character length while keeping the overall summary below."
+      "title": "Keep queries separate",
+      "body": "Select New tab to start another Quick Query workspace without closing the current one."
     }
   ]
 }

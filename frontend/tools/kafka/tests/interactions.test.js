@@ -39,8 +39,8 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaPublishPanel").hidden).toBe(false);
     expect(document.querySelector("#kafkaListenPanel").hidden).toBe(false);
     expect(document.querySelector("#kafkaListen").parentElement).toBe(document.querySelector(".kafka-listen-topic-row"));
-    expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
-    expect(document.querySelector("#kafkaHistoryView").hidden).toBe(true);
+    expect(document.querySelector("#kafkaLiveView").hidden).toBe(true);
+    expect(document.querySelector("#kafkaHistoryView").hidden).toBe(false);
     expect(document.activeElement).toBe(document.querySelector("#kafkaBrokers"));
     expect(document.querySelector("#kafkaTest").disabled).toBe(true);
     expect(document.querySelector("#kafkaListen").disabled).toBe(true);
@@ -49,16 +49,22 @@ describe("Kafka publish controls", () => {
     const topic = document.querySelector("#kafkaTopic");
     topic.value = "orders.test";
     topic.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(document.querySelector("#kafkaListenTopic").textContent).toBe("Topic: orders.test");
+    expect(document.querySelector("#kafkaListenTopic").value).toBe("");
 
     const brokers = document.querySelector("#kafkaBrokers");
     brokers.value = "broker:9092";
     brokers.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
     expect(document.querySelector("#kafkaTest").disabled).toBe(false);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
+    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
+
+    const listenTopic = document.querySelector("#kafkaListenTopic");
+    listenTopic.value = "orders.test";
+    listenTopic.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaListen").disabled).toBe(false);
     expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
-    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
   });
 
   it("keeps first-run broker settings in the desktop flow and updates action readiness", () => {
@@ -69,7 +75,7 @@ describe("Kafka publish controls", () => {
     expect(connection.classList.contains("is-settings-open")).toBe(true);
     expect(document.querySelector("#kafkaConnectionSettings").open).toBe(true);
     expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe(
-      "Add a bootstrap server, then choose a topic in Publish."
+      "Add a bootstrap server, then enter a topic to listen."
     );
 
     const topic = document.querySelector("#kafkaTopic");
@@ -81,6 +87,11 @@ describe("Kafka publish controls", () => {
     brokers.value = "broker:9092";
     brokers.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaTest").disabled).toBe(false);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
+    const listenTopic = document.querySelector("#kafkaListenTopic");
+    listenTopic.value = "orders.test";
+    listenTopic.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaListen").disabled).toBe(false);
     expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
     expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe("");
@@ -102,7 +113,7 @@ describe("Kafka publish controls", () => {
     expect(liveMode.getAttribute("aria-selected")).toBe("true");
     expect(document.querySelector("#kafkaLiveView").hidden).toBe(false);
 
-    liveMode.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    liveMode.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
     expect(historyMode.getAttribute("aria-selected")).toBe("true");
     expect(historyMode.tabIndex).toBe(0);
     expect(document.activeElement).toBe(historyMode);
@@ -119,9 +130,9 @@ describe("Kafka publish controls", () => {
     expect(options.open).toBe(false);
     expect(payload.nextElementSibling).toBe(options);
 
-    templates.querySelector("summary").click();
-    options.querySelector("summary").click();
+    document.querySelector("#kafkaTemplateToggle").click();
     expect(templates.open).toBe(true);
+    options.querySelector("summary").click();
     expect(options.open).toBe(true);
     expect(document.querySelector("#kafkaSavedList")).not.toBeNull();
     expect(document.querySelector("#kafkaKey")).not.toBeNull();
@@ -472,13 +483,14 @@ describe("Kafka publish controls", () => {
     const tool = new KafkaTool(null, service);
     tool.mount(document.querySelector("#tool"));
     document.querySelector("#kafkaBrokers").value = "broker:9092";
-    document.querySelector("#kafkaTopic").value = "orders.test";
+    document.querySelector("#kafkaListenTopic").value = "orders.test";
     await tool.startListening();
 
     expect(service.stop).toHaveBeenCalledOnce();
     expect(service.start).toHaveBeenCalledTimes(2);
     expect(service.start).toHaveBeenLastCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" }, "orders.test", false);
-    expect(document.querySelector("#kafkaListenHeading").textContent).toBe("Listen to orders.test");
+    expect(document.querySelector("#kafkaListenHeading").textContent).toBe("Listen");
+    expect(document.querySelector("#kafkaListenTopic").value).toBe("orders.test");
     expect(document.querySelector("#kafkaListenStatus").textContent).toBe("");
     const listenButton = document.querySelector("#kafkaListen");
     expect(listenButton.textContent).toBe("Stop listening");
@@ -531,7 +543,7 @@ describe("Kafka publish controls", () => {
     tool.mount(document.querySelector("#tool"));
     tool.activate();
     document.querySelector("#kafkaBrokers").value = "broker:9092";
-    document.querySelector("#kafkaTopic").value = "orders.test";
+    document.querySelector("#kafkaListenTopic").value = "orders.test";
     document.querySelector("#kafkaHistoryQuery").value = "ccfaba827199ab25";
     document.querySelector("#kafkaHistoryForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await settle();
