@@ -72,20 +72,20 @@ curl -X POST http://127.0.0.1:21522/query \
 pip install pyinstaller
 ```
 
-### 2. Build the executable
+### 2. Build both macOS architectures
 
 ```bash
-python build_sidecar.py
+cd ../..  # Repository root
+npm run sidecar:build
 ```
 
-This creates `tauri/binaries/oracle-sidecar-{target-triple}` (e.g., `oracle-sidecar-aarch64-apple-darwin` on Apple Silicon Mac).
+This creates `tauri/oracle-sidecar-{target-triple}` and the matching support files under `tauri/sidecar-dist/`. The executable and support files must stay together. PyInstaller's one-directory layout avoids unpacking the Python runtime on every Oracle start. On the development Mac, repeated `/health` readiness checks took about 9.5–10.2 seconds with the one-file build and about 1.2 seconds with the one-directory build. The latter uses roughly 40 MB on disk instead of 15 MB per architecture.
+
+`npm run tauri:dev` also links the native support files beside Tauri's copied executable in `tauri/target/debug`, where the PyInstaller bootloader expects them.
 
 ### 3. Build the Tauri app
 
-```bash
-cd ..  # Back to tauri/
-cargo tauri build
-```
+Use `npm run tauri:build` for a native build. The release script selects the matching Tauri sidecar config for each architecture, places the Python runtime in app resources, signs the app, and creates the DMG.
 
 The sidecar is automatically bundled with the app.
 
@@ -104,7 +104,7 @@ The sidecar is automatically bundled with the app.
 The sidecar maintains connection pools per unique connection config:
 
 - **min=1**: Keeps 1 connection warm
-- **max=2**: Allows up to 2 concurrent connections
+- **max=5**: Allows up to 5 pooled connections per configured database
 - **timeout=120**: Closes idle connections after 2 minutes
 
 Pools are created lazily on first use and cleaned up automatically.

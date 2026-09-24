@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""
-Build script to create the Oracle sidecar executable using PyInstaller.
-The output is placed in tauri/binaries/ with the correct target triple suffix.
-"""
+"""Build a fast-starting Oracle sidecar and its support files with PyInstaller."""
 
 import subprocess
 import platform
 import sys
 import os
+import shutil
 from pathlib import Path
 
 
@@ -40,10 +38,8 @@ def get_target_triple() -> str:
 def main():
     script_dir = Path(__file__).parent
     project_root = script_dir.parent  # tauri/
-    # Output directly to tauri/ root (Tauri expects sidecar next to tauri.conf.json)
     binaries_dir = project_root
-
-    # Note: No need to create directory, outputting to tauri/ root
+    sidecar_dist = project_root / "sidecar-dist"
 
     target_triple = get_target_triple()
     output_name = f"oracle-sidecar-{target_triple}"
@@ -52,14 +48,15 @@ def main():
         output_name += ".exe"
 
     print(f"Building Oracle sidecar for: {target_triple}")
-    print(f"Output: {binaries_dir / output_name}")
+    print(f"Output: {sidecar_dist / output_name}")
 
     # Build with PyInstaller
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
+        "--contents-directory", "_internal",
         "--name", output_name.replace(".exe", ""),  # PyInstaller adds .exe on Windows
-        "--distpath", str(binaries_dir),
+        "--distpath", str(sidecar_dist),
         "--workpath", str(script_dir / "build"),
         "--specpath", str(script_dir),
         "--clean",
@@ -97,24 +94,35 @@ def main():
         print("❌ Build failed!")
         sys.exit(1)
 
-    output_path = binaries_dir / output_name
+    output_path = sidecar_dist / output_name.replace(".exe", "") / output_name
     if output_path.exists():
+        shutil.copy2(output_path, binaries_dir / output_name)
         print(f"✅ Build successful: {output_path}")
-        print(f"   Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
+        print(f"   Bundle size: {sum(p.stat().st_size for p in output_path.parent.rglob('*') if p.is_file()) / 1024 / 1024:.1f} MB")
 
-        # Ad-hoc sign on macOS for Gatekeeper compatibility
+        # The framework remains signed inside the app's bundled sidecar
+        # resources, which the PyInstaller bootloader reaches via Frameworks.
         if platform.system() == "Darwin":
+            framework = output_path.parent / "_internal" / "Python3.framework"
+            framework_sign = subprocess.run(
+                ["codesign", "--force", "--deep", "--sign", "-", str(framework)],
+                capture_output=True,
+                text=True,
+            )
+            if framework_sign.returncode != 0:
+                print(f"❌ Framework signing failed: {framework_sign.stderr}")
+                sys.exit(1)
             print("🔏 Ad-hoc signing for macOS...")
             sign_result = subprocess.run(
-                ["codesign", "--force", "--sign", "-", str(output_path)],
+                ["codesign", "--force", "--sign", "-", str(binaries_dir / output_name)],
                 capture_output=True,
                 text=True
             )
             if sign_result.returncode == 0:
                 print("✅ Ad-hoc signing successful")
             else:
-                print(f"⚠️  Ad-hoc signing failed: {sign_result.stderr}")
-                print("   (App may still work but could trigger Gatekeeper warnings)")
+                print(f"❌ Executable signing failed: {sign_result.stderr}")
+                sys.exit(1)
     else:
         print("❌ Output file not found!")
         sys.exit(1)

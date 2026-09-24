@@ -70,6 +70,8 @@ tauri/sidecar/*.spec
 # Sidecar binaries (large, built locally)
 tauri/oracle-sidecar-*
 tauri/binaries/oracle-sidecar-*
+tauri/sidecar-dist/
+tauri/_internal
 
 #macOS
 .DS_Store

@@ -197,10 +197,10 @@ build_tauri_targets() {
   # to Oracle without native client libraries.
 
   echo "Building Tauri app for aarch64-apple-darwin..."
-  npx tauri build --target aarch64-apple-darwin
+  node tauri/scripts/build_with_sidecar.cjs aarch64-apple-darwin --skip-before-build
 
   echo "Building Tauri app for x86_64-apple-darwin..."
-  npx tauri build --target x86_64-apple-darwin
+  node tauri/scripts/build_with_sidecar.cjs x86_64-apple-darwin --skip-before-build
   popd >/dev/null
 }
 

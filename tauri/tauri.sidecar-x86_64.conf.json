@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "./sidecar-dist/oracle-sidecar-x86_64-apple-darwin/_internal": "sidecar"
+    }
+  }
+}

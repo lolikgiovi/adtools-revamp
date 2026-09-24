@@ -71,12 +71,12 @@ pub async fn start_oracle_sidecar(app: tauri::AppHandle) -> Result<String, Strin
         // Process exists but not responding, will restart below
     }
 
-    // Kill any orphan sidecar process from a previous crash
-    // This ensures the port is free before we try to start
-    kill_sidecar_by_port();
-
-    // Small delay to ensure port is released
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Most starts have a free port. Avoid spawning lsof and waiting for a port
+    // release unless another process is actually listening there.
+    if tokio::net::TcpStream::connect(("127.0.0.1", SIDECAR_PORT)).await.is_ok() {
+        kill_sidecar_by_port();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     // Spawn the sidecar
     let sidecar_command = app
