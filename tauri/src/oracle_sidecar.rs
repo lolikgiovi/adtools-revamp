@@ -243,6 +243,37 @@ pub async fn oracle_sidecar_query_batch(queries: Vec<SidecarQueryInput>) -> Resu
     post_sidecar("/query-batch", json!({ "queries": payloads })).await
 }
 
+/// Read the sidecar's existing pools without starting it or opening a database connection.
+/// Only saved connection names are returned; usernames and connection strings stay native.
+#[tauri::command]
+pub async fn oracle_sidecar_pool_connections() -> Result<Vec<String>, String> {
+    let response = sidecar_http_client()
+        .get(format!("http://127.0.0.1:{SIDECAR_PORT}/pools"))
+        .send()
+        .await
+        .map_err(|e| format!("Sidecar not responding: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Sidecar pool status failed: {}", response.status()));
+    }
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Invalid sidecar response: {e}"))?;
+    Ok(body["pools"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|pool| {
+            pool["names"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|name| name.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .collect())
+}
+
 /// Internal health check
 async fn check_sidecar_health() -> bool {
     let url = format!("http://127.0.0.1:{}/health", SIDECAR_PORT);

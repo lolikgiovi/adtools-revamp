@@ -81,6 +81,7 @@ pub fn run() {
       oracle_sidecar::oracle_sidecar_test_connection,
       oracle_sidecar::oracle_sidecar_query,
       oracle_sidecar::oracle_sidecar_query_batch,
+      oracle_sidecar::oracle_sidecar_pool_connections,
       // Redis cache commands
       redis_cache::set_redis_credentials,
       redis_cache::clear_redis_credentials,

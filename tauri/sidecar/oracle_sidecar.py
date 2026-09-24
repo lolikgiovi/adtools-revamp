@@ -104,6 +104,7 @@ class PoolManager:
     def __init__(self):
         self._pools: dict[str, oracledb.ConnectionPool] = {}
         self._last_used: dict[str, datetime] = {}
+        self._names: dict[str, set[str]] = {}
         self._lock = Lock()
         self._cleanup_task: Optional[asyncio.Task] = None
 
@@ -131,6 +132,7 @@ class PoolManager:
                 self._pools[key] = pool
 
             self._last_used[key] = datetime.now()
+            self._names.setdefault(key, set()).add(config.name)
             return self._pools[key]
 
     def close_pool(self, key: str) -> None:
@@ -144,6 +146,7 @@ class PoolManager:
                     logger.warning(f"Error closing pool {key}: {e}")
                 del self._pools[key]
                 del self._last_used[key]
+                self._names.pop(key, None)
 
     def close_all(self) -> None:
         """Close all pools (called on shutdown)."""
@@ -156,6 +159,7 @@ class PoolManager:
                     logger.warning(f"Error closing pool {key}: {e}")
             self._pools.clear()
             self._last_used.clear()
+            self._names.clear()
 
     async def cleanup_idle_pools(self) -> None:
         """Periodically close pools that haven't been used recently."""
@@ -427,6 +431,7 @@ async def list_pools():
         for key, pool in pool_manager._pools.items():
             pools.append({
                 "key": key,
+                "names": sorted(pool_manager._names.get(key, set())),
                 "busy": pool.busy,
                 "opened": pool.opened,
                 "min": pool.min,

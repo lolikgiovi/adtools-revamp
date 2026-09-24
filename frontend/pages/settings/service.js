@@ -144,6 +144,9 @@ class SettingsService {
     }
 
     localStorage.setItem(key, storeVal);
+    if (key === "config.oracle.connections" || key.startsWith("config.redis.")) {
+      globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
+    }
 
     if (applyHint === "theme") {
       let theme = storeVal;

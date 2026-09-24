@@ -21,6 +21,7 @@ import { ReleaseTips, ReleaseTour, takePendingRelease } from "./core/ReleaseTour
 import { installSearchableDropdowns } from "./components/SearchableDropdown.js";
 import { initializeLocalRegistrationDefaults, isUserRegistered } from "./core/RegistrationState.js";
 import releaseContent from "./config/release-content.json";
+import { ConnectionIndicators } from "./core/ConnectionIndicators.js";
 
 const ASSET_LOAD_RETRY_DELAY_MS = 3000;
 
@@ -135,6 +136,7 @@ class App {
 
     this.initializeComponents();
     this.setupHeaderRuntime();
+    this.connectionIndicators = new ConnectionIndicators(document.querySelector(".connection-indicators"));
     this.syncDeviceVersion();
     // Apply sidebar title from stored username
     try {
@@ -266,6 +268,7 @@ class App {
       searchQuickQuery: this.searchQuickQueryTables.bind(this),
     });
     document.querySelector(".header-search")?.addEventListener("click", () => this.globalSearch.open());
+    document.querySelector(".mobile-search")?.addEventListener("click", () => this.globalSearch.open());
 
     // Setup notification system
     this.setupNotifications();

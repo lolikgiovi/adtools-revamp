@@ -190,40 +190,10 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    // Tauri/Desktop mode - start the Python sidecar for Oracle connectivity
-    try {
-      console.log("[OracleCheck] Starting Oracle sidecar...");
-
-      // Subscribe to status changes to update UI
-      if (this._sidecarStatusUnsubscribe) {
-        this._sidecarStatusUnsubscribe();
-        this._sidecarStatusUnsubscribe = null;
-      }
-      this._sidecarStatusUnsubscribe = OracleConnectionService.onStatusChange((status) => {
-        this.sidecarStatus = status;
-      });
-
-      // Start the sidecar
-      const started = await OracleConnectionService.startSidecar();
-
-      if (started) {
-        console.log("[OracleCheck] Oracle sidecar started successfully");
-        this.oracleClientReady = true;
-        this.showMainInterface();
-      } else {
-        // Sidecar not running in dev mode - still show main interface
-        // but Oracle features may not work
-        console.warn("[OracleCheck] Oracle sidecar not running - Oracle features may not work");
-        console.warn("Start sidecar manually: cd tauri/sidecar && python oracle_sidecar.py");
-        this.oracleClientReady = false;
-        this.showMainInterface();
-      }
-    } catch (error) {
-      console.error("Failed to start Oracle sidecar:", error);
-      // Show main interface anyway - user can still use Excel compare
-      this.oracleClientReady = false;
-      this.showMainInterface();
-    }
+    // Oracle queries start the sidecar on demand. Opening Compare Config should
+    // not leave a Python process running when the user only compares files.
+    this.oracleClientReady = true;
+    this.showMainInterface();
   }
 
   /**

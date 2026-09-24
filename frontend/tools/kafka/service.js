@@ -116,7 +116,20 @@ export class KafkaService {
 
   async call(command, args) {
     if (!this.invoke) this.invoke = (await import("@tauri-apps/api/core")).invoke;
-    return this.invoke(command, args);
+    const detail = { service: "kafka", command, phase: "start", label: args?.config?.brokers || "" };
+    globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail }));
+    try {
+      const result = await this.invoke(command, args);
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
+        detail: { ...detail, phase: "finish", success: true },
+      }));
+      return result;
+    } catch (error) {
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", {
+        detail: { ...detail, phase: "finish", success: false },
+      }));
+      throw error;
+    }
   }
 
   async on(event, handler) {

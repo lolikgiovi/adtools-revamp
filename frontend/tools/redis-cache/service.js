@@ -63,7 +63,16 @@ export class RedisCacheService {
       const tauri = await import("@tauri-apps/api/core");
       this.invoke = tauri.invoke;
     }
-    return this.invoke(command, args);
+    const detail = { service: "redis", command, phase: "start", label: args?.config?.host || "" };
+    globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail }));
+    try {
+      const result = await this.invoke(command, args);
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish" } }));
+      return result;
+    } catch (error) {
+      globalThis.dispatchEvent?.(new CustomEvent("adtools:connection-activity", { detail: { ...detail, phase: "finish" } }));
+      throw error;
+    }
   }
 
   testConnection(config) {

@@ -77,7 +77,13 @@ export class OracleConnectionService {
 
   static async invokeTauri(command, args) {
     const { invoke } = await import("@tauri-apps/api/core");
-    return invoke(command, args);
+    try {
+      return await invoke(command, args);
+    } finally {
+      if (command.startsWith("oracle_sidecar_") && command !== "oracle_sidecar_pool_connections") {
+        globalThis.dispatchEvent?.(new Event("adtools:oracle-pools-changed"));
+      }
+    }
   }
 
   static async testConnectionWithCredentials(connection) {

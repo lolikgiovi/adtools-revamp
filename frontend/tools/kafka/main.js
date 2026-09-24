@@ -188,7 +188,7 @@ export class KafkaTool extends BaseTool {
       empty: "Add a bootstrap server to get started.",
       ready: brokers ? `Not tested · ${brokers}` : "Add a bootstrap server to get started.",
       checking: "Checking connection…",
-      connected: brokers ? `Connected · ${brokers}` : "Connected to Kafka",
+      connected: brokers ? `Test passed · ${brokers}` : "Connection test passed",
       error: text || "Connection failed. Check broker settings.",
     };
     section.dataset.state = state;
@@ -484,6 +484,7 @@ export class KafkaTool extends BaseTool {
 
   saveConnection() {
     localStorage.setItem(KAFKA_CONFIG_KEY, JSON.stringify(this.config()));
+    globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
   }
 
   invalidateTopics() {
@@ -855,7 +856,7 @@ export class KafkaTool extends BaseTool {
     this.setConnectionState("checking");
     try {
       const result = await this.service.test(this.config());
-      this.setConnectionState("connected", `Connected to ${this.config().brokers}`);
+      this.setConnectionState("connected", `Test passed · ${this.config().brokers}`);
       this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
       this.setConnectionSettingsOpen(false);
     } catch (error) {

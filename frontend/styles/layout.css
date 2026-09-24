@@ -93,6 +93,82 @@
   font-size: 0.75rem;
 }
 
+.connection-indicators {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.main-header[data-runtime="web"] .connection-indicators {
+  display: none;
+}
+
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 13rem;
+  height: 30px;
+  padding: 0 0.55rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.connection-indicator .connection-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: hsl(var(--muted-foreground) / 0.55);
+}
+
+.connection-indicator[data-state="active"] .connection-dot {
+  background: hsl(145 60% 42%);
+}
+
+.connection-indicator[data-state="busy"] .connection-dot {
+  background: hsl(39 85% 50%);
+}
+
+.connection-name {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.connection-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-search {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.mobile-search svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-search:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 .main-header .sidebar-trigger {
   margin: 0;
 }
@@ -120,16 +196,16 @@
     gap: 0.5rem;
   }
 
-  .header-search {
-    justify-content: center;
-    width: 36px;
-    padding: 0;
-  }
+  .connection-indicator { max-width: 7rem; }
+  .connection-indicator .connection-detail { display: none; }
+}
 
-  .header-search span,
-  .header-search kbd {
-    display: none;
-  }
+@media (max-width: 768px) {
+  .mobile-search { display: inline-flex; }
+}
+
+.sidebar[data-state="collapsed"] ~ .main .mobile-search {
+  display: inline-flex;
 }
 
 .breadcrumb-list {
