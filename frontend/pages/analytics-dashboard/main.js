@@ -816,14 +816,14 @@ class AnalyticsDashboardPage {
     if (this.isPaginatedTab(tabId)) {
       const state = this.pagination[tabId];
       const requestedPage = page || state?.page || 1;
-      return `${tabId}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
+      return `${tabId}:${tabId === "daily" ? this.selectedRange : "all"}:${requestedPage}:${state?.pageSize || 100}:${state?.search || ""}`;
     }
     return ["who", "opportunities"].includes(tabId) ? `${tabId}:${this.selectedRange}` : tabId;
   }
 
   updateRangeVisibility() {
     const rangeControl = this.container.querySelector(".dashboard-range");
-    if (rangeControl) rangeControl.hidden = !["who", "opportunities"].includes(this.currentTab);
+    if (rangeControl) rangeControl.hidden = !["who", "opportunities", "daily"].includes(this.currentTab);
   }
 
   getRangeLabel(range) {

@@ -26,6 +26,17 @@ afterEach(() => {
 });
 
 describe("AnalyticsDashboardPage pagination", () => {
+  it("keeps Recent Activity pages separate by time range and shows the range control", () => {
+    const page = createPage();
+    page.updateRangeVisibility();
+
+    expect(page.container.querySelector(".dashboard-range").hidden).toBe(false);
+    const monthKey = page.getCacheKey("daily", 1);
+    page.selectedRange = "today";
+    expect(page.getCacheKey("daily", 1)).not.toBe(monthKey);
+    page.unmount();
+  });
+
   it("loads the first page and appends the next page without losing rows", async () => {
     const page = createPage();
     const firstRows = Array.from({ length: 100 }, (_, index) => ({ time: `00:${index}`, user: `user-${index}`, action: "open" }));

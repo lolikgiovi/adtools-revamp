@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from "vitest";
+import { DatabaseSync } from "node:sqlite";
 import worker from "../worker.js";
 
 function createStatement(db, sql, rows, options = {}) {
@@ -82,6 +83,67 @@ async function query(env, token, body) {
 }
 
 describe("dashboard query performance boundaries", () => {
+  it("keeps paginated built-in tabs usable when KV contains older tab SQL", async () => {
+    const env = createEnv({
+      storedTabs: [
+        { id: "daily", name: "Recent Activity", query: "SELECT 'old activity query'" },
+        { id: "events", name: "Events", query: "SELECT 'old events query'" },
+      ],
+    });
+    const token = await getToken(env);
+
+    for (const tabId of ["daily", "events"]) {
+      const response = await query(env, token, { tabId, page: 1, search: "old-config" });
+      const body = await response.json();
+      expect(body.ok, `${tabId}: ${body.error || "query failed"}`).toBe(true);
+    }
+  });
+
+  it("shows recent client tool uses alongside legacy logs without historical projections", async () => {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(`
+      CREATE TABLE device (device_id TEXT PRIMARY KEY, platform TEXT, app_version TEXT);
+      CREATE TABLE usage_log (user_email TEXT, device_id TEXT, tool_id TEXT, action TEXT, created_time TEXT);
+      CREATE TABLE tool_usage (
+        event_id TEXT UNIQUE, user_email TEXT, device_id TEXT, tool_id TEXT,
+        action TEXT, properties TEXT, source TEXT, created_time TEXT
+      );
+      INSERT INTO device VALUES ('fixture-device', 'Desktop (Tauri)', '1.3.7');
+      INSERT INTO usage_log VALUES
+        ('fixture@example.com', 'fixture-device', 'quick-query', 'open', datetime('now', '+7 hours', '-1 minute')),
+        ('fixture@example.com', 'fixture-device', 'quick-query', 'merge', datetime('now', '+7 hours', '-2 days'));
+      INSERT INTO tool_usage VALUES
+        ('client-1', 'fixture@example.com', 'fixture-device', 'kafka', 'publish', '{}', 'client', datetime('now', '+7 hours')),
+        ('historical-1', 'fixture@example.com', 'fixture-device', 'quick-query', 'merge', '{}', 'historical_usage_log', datetime('now', '+7 hours', '-2 days'));
+    `);
+    const env = createEnv();
+    env.DB = {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            const statement = sqlite.prepare(sql);
+            return { all: async () => ({ results: statement.all(...args) }) };
+          },
+          all: async () => ({ results: sqlite.prepare(sql).all() }),
+          run: async () => sqlite.prepare(sql).run(),
+        };
+      },
+    };
+
+    try {
+      const token = await getToken(env);
+      const today = await (await query(env, token, { tabId: "daily", range: "today", search: "fixture" })).json();
+      const month = await (await query(env, token, { tabId: "daily", range: "30d", search: "fixture" })).json();
+
+      expect(today.ok).toBe(true);
+      expect(today.data.map((row) => row.action)).toEqual(["publish", "open"]);
+      expect(month.data.map((row) => row.action)).toEqual(["publish", "open", "merge"]);
+      expect(month.data[0]).toMatchObject({ user: "fixture", platform: "Desktop (Tauri)", app_version: "1.3.7", tool_id: "kafka" });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("bounds daily pages, binds search and pagination, and reports hasMore", async () => {
     const rows = Array.from({ length: 205 }, (_, index) => ({ id: index, user: `user-${index}` }));
     const env = createEnv({ tableNames: ["usage_log", "device"], rows });

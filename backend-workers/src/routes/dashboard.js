@@ -12,8 +12,17 @@ import {
   buildLifetimeUsageRollupQuery,
   buildNormalizedUsageLogQuery,
 } from "../utils/analyticsUsageSql.js";
-import { ensureDeviceAppVersionSchema, ensureErrorEventsSchema, ensureLifetimeUsageBaselineSchema } from "../utils/analyticsSchema.js";
+import {
+  ensureDeviceAppVersionSchema,
+  ensureErrorEventsSchema,
+  ensureLifetimeUsageBaselineSchema,
+  ensureToolUsageSchema,
+} from "../utils/analyticsSchema.js";
 import { clearRateLimit, consumeRateLimit } from "../utils/rateLimit.js";
+
+const RECENT_ACTIVITY_SOURCE_SQL = `SELECT user_email, device_id, tool_id, action, created_time FROM usage_log
+  UNION ALL
+  SELECT user_email, device_id, tool_id, action, created_time FROM tool_usage WHERE source = 'client'`;
 
 // Default tab configurations (fallback when KV is empty)
 const DEFAULT_TABS = [
@@ -200,13 +209,14 @@ LIMIT 100`,
   {
     id: "daily",
     name: "Recent Activity",
-    query: `SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+    query: `WITH activity AS (${RECENT_ACTIVITY_SOURCE_SQL})
+      SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
       SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
       COALESCE(d.platform, 'unknown') AS platform,
       COALESCE(d.app_version, '-') AS app_version,
       u.tool_id,
       u.action
-      FROM usage_log u
+      FROM activity u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != 'fashalli.bilhaq@bankmandiri.co.id'
         AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
@@ -1343,7 +1353,12 @@ function applyAnalyticsIdentityPolicy(tab) {
 
 function mergeStoredTabsWithDefaults(storedTabs) {
   const storedById = new Map(storedTabs.map((tab) => [tab.id, tab]));
-  const merged = DEFAULT_TABS.map((defaultTab) => storedById.get(defaultTab.id) || defaultTab);
+  const merged = DEFAULT_TABS.map((defaultTab) => {
+    const storedTab = storedById.get(defaultTab.id);
+    if (!storedTab) return defaultTab;
+    // These tabs use the built-in paginated endpoint, so their SQL must match its current contract.
+    return ["daily", "events"].includes(defaultTab.id) ? { ...storedTab, query: defaultTab.query } : storedTab;
+  });
   const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
   const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
   return [...merged, ...customTabs].map(applyAnalyticsIdentityPolicy);
@@ -1548,7 +1563,7 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
         );
       }
       const pagination = normalizeDashboardPagination(body);
-      return executePaginatedDashboardQuery(env, tab.id, pagination);
+      return executePaginatedDashboardQuery(env, tab.id, pagination, range);
     }
 
     if (tab.id === "tools") {
@@ -2456,23 +2471,25 @@ function normalizeDashboardPagination(body = {}) {
   return { page, pageSize, search };
 }
 
-function buildPaginatedDashboardQuery(tabId, pagination) {
+function buildPaginatedDashboardQuery(tabId, pagination, rangeConfig) {
   const { page, pageSize, search } = pagination;
   const offset = (page - 1) * pageSize;
   const searchPattern = `%${search}%`;
   const limit = pageSize + 1;
 
   if (tabId === "daily") {
-    const query = `SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
+    const query = `WITH activity AS (${RECENT_ACTIVITY_SOURCE_SQL})
+      SELECT STRFTIME('%m-%d / %H:%M', u.created_time) AS time,
       SUBSTR(u.user_email, 1, INSTR(u.user_email, '@') - 1) AS user,
       COALESCE(d.platform, 'unknown') AS platform,
       COALESCE(d.app_version, '-') AS app_version,
       u.tool_id,
       u.action
-      FROM usage_log u
+      FROM activity u
       LEFT JOIN device d ON u.device_id = d.device_id
       WHERE u.user_email != '${EXCLUDED_ANALYTICS_EMAIL}'
         AND LOWER(TRIM(u.tool_id)) != 'velocity-template'
+        ${rangeConfig.where("u.created_time")}
         AND (
           ? = ''
           OR LOWER(STRFTIME('%m-%d / %H:%M', u.created_time)) LIKE ?
@@ -2514,11 +2531,12 @@ function buildPaginatedDashboardQuery(tabId, pagination) {
   };
 }
 
-async function executePaginatedDashboardQuery(env, tabId, pagination) {
+async function executePaginatedDashboardQuery(env, tabId, pagination, range) {
   if (!env.DB) return dashboardJson({ ok: false, error: "Database not available", tabId }, 200);
 
-  const { query, args } = buildPaginatedDashboardQuery(tabId, pagination);
-  const cacheKey = `tab:${tabId}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}`;
+  const rangeConfig = getDashboardRangeConfig(range);
+  const { query, args } = buildPaginatedDashboardQuery(tabId, pagination, rangeConfig);
+  const cacheKey = `tab:${tabId}:range:${rangeConfig.id}:page:${pagination.page}:size:${pagination.pageSize}:search:${pagination.search}`;
   try {
     const body = await coalesceDashboardQuery(cacheKey, async () => {
       await prepareDashboardSchema(env, query);
@@ -2547,6 +2565,9 @@ async function prepareDashboardSchema(env, query) {
   try {
     if (query.includes("error_events")) {
       await ensureErrorEventsSchema(env);
+    }
+    if (query.includes("tool_usage")) {
+      await ensureToolUsageSchema(env);
     }
     if (query.includes("d.app_version") || query.includes("devices.app_version")) {
       await ensureDeviceAppVersionSchema(env);

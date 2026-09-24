@@ -30,7 +30,7 @@ export const AnalyticsDashboardTemplate = /*html*/ `
         </div>
         <div class="dashboard-actions">
           <label class="dashboard-range" for="dashboard-range" hidden>
-            <span class="dashboard-range-label">Who range</span>
+            <span class="dashboard-range-label">Time range</span>
             <select id="dashboard-range" class="dashboard-range-select">
               <option value="today">Today</option>
               <option value="7d">Last 7 days</option>
