@@ -625,6 +625,9 @@ export class QuickQueryUI {
         click: (e) => { if (e.target === this.elements.oracleDataOverlay) this.closeOracleDataImport(); },
       },
       oracleDataModal: {
+        click: (event) => {
+          if (event.target === this.elements.oracleDataModal) this.closeOracleDataImport();
+        },
         keydown: (event) => {
           if (event.key === "Escape") this.closeOracleDataImport();
         },
@@ -724,6 +727,11 @@ export class QuickQueryUI {
           if (e.target === this.elements.oracleEnvOverlay) {
             this.closeOracleEnvOverlay();
           }
+        },
+      },
+      oracleEnvModal: {
+        click: (event) => {
+          if (event.target === this.elements.oracleEnvModal) this.closeOracleEnvOverlay();
         },
       },
       oracleEnvNext: {
