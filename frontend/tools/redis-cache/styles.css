@@ -367,10 +367,10 @@
   font-size: 13px;
 }
 
-.redis-search-control input:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-  border-color: hsl(var(--ring));
+#redisPatternInput:focus,
+#redisPatternInput:focus-visible {
+  outline: none;
+  border-color: hsl(var(--muted-foreground) / 0.7);
 }
 
 .redis-search-message {
@@ -378,6 +378,10 @@
   margin: 8px 0 0;
   color: hsl(var(--muted-foreground));
   font-size: 12px;
+}
+
+.redis-search-message:empty {
+  display: none;
 }
 
 .redis-search-message[data-state="success"] {
@@ -388,13 +392,27 @@
 }
 
 .redis-value-inspector {
-  flex: none;
-  min-width: 0;
-  margin-top: 10px;
+  position: fixed;
+  z-index: 500;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: hsl(var(--background) / 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.redis-value-inspector-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 860px);
+  max-height: min(82dvh, 760px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  background: hsl(var(--background));
+  border-radius: 16px;
+  background: hsl(var(--card));
+  box-shadow: 0 20px 60px hsl(0 0% 0% / 0.36);
 }
 
 .redis-value-inspector[hidden] {
@@ -434,9 +452,56 @@
   font-size: 11px;
 }
 
+.redis-value-inspector-search {
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.redis-value-inspector-search label {
+  display: block;
+  margin-bottom: 6px;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.redis-value-inspector-search-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.redis-value-inspector-search input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 12px;
+}
+
+.redis-value-inspector-search input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.redis-value-inspector-search-controls span {
+  min-width: 72px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .redis-value-inspector-body {
-  max-height: min(42dvh, 420px);
+  flex: 1;
+  min-height: 120px;
   overflow: auto;
+  background: hsl(var(--background));
   scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -466,6 +531,17 @@
 
 .redis-value-inspector-notice[hidden] {
   display: none;
+}
+
+.redis-value-match {
+  border-radius: 2px;
+  background: hsl(var(--warning, 38 92% 50%) / 0.42);
+  color: inherit;
+}
+
+.redis-value-match[data-active="true"] {
+  background: hsl(var(--warning, 38 92% 50%));
+  color: hsl(var(--background));
 }
 
 .redis-value-inspector[data-state="loading"] .redis-value-content {
@@ -935,6 +1011,18 @@
   }
   .redis-value-inspector-header .btn {
     align-self: flex-start;
+  }
+  .redis-value-inspector {
+    padding: 12px;
+  }
+  .redis-value-inspector-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+  .redis-value-inspector-search-controls {
+    flex-wrap: wrap;
+  }
+  .redis-value-inspector-search input {
+    flex-basis: 100%;
   }
   .redis-pagination {
     align-items: stretch;

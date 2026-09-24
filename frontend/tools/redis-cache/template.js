@@ -22,21 +22,6 @@ export const RedisCacheTemplate = /*html*/ `
         </div>
         <p id="redisSearchMessage" class="redis-search-message" role="status" aria-live="polite"></p>
 
-        <section id="redisValueInspector" class="redis-value-inspector" aria-labelledby="redisValueInspectorHeading" hidden>
-          <div class="redis-value-inspector-header">
-            <div>
-              <h3 id="redisValueInspectorHeading">Value inspector</h3>
-              <code id="redisValueInspectorKey"></code>
-              <p id="redisValueInspectorMeta"></p>
-            </div>
-            <button id="redisCloseInspector" class="btn btn-ghost btn-sm" type="button">Close</button>
-          </div>
-          <div id="redisValueInspectorNotice" class="redis-value-inspector-notice" hidden></div>
-          <div id="redisValueInspectorBody" class="redis-value-inspector-body" aria-live="polite">
-            <pre id="redisValueContent" class="redis-value-content"></pre>
-          </div>
-        </section>
-
         <div id="redisDeleteConfirmation" class="redis-delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="redisDeleteTitle" aria-describedby="redisDeleteDescription" hidden>
           <div class="redis-delete-dialog" role="document">
             <div class="redis-delete-dialog-body">
@@ -158,5 +143,30 @@ export const RedisCacheTemplate = /*html*/ `
         </section>
       </aside>
     </main>
+    <div id="redisValueInspector" class="redis-value-inspector" role="dialog" aria-modal="true" aria-labelledby="redisValueInspectorHeading" hidden>
+      <div class="redis-value-inspector-dialog" role="document">
+        <div class="redis-value-inspector-header">
+          <div>
+            <h3 id="redisValueInspectorHeading">Value inspector</h3>
+            <code id="redisValueInspectorKey"></code>
+            <p id="redisValueInspectorMeta"></p>
+          </div>
+          <button id="redisCloseInspector" class="btn btn-ghost btn-sm" type="button">Close</button>
+        </div>
+        <div class="redis-value-inspector-search">
+          <label for="redisValueSearch">Find in value</label>
+          <div class="redis-value-inspector-search-controls">
+            <input id="redisValueSearch" type="search" placeholder="Search this value" autocomplete="off" aria-controls="redisValueContent" disabled />
+            <span id="redisValueSearchCount" role="status" aria-live="polite"></span>
+            <button id="redisValuePreviousMatch" class="btn btn-ghost btn-sm" type="button" aria-label="Previous match" disabled>Previous</button>
+            <button id="redisValueNextMatch" class="btn btn-ghost btn-sm" type="button" aria-label="Next match" disabled>Next</button>
+          </div>
+        </div>
+        <div id="redisValueInspectorNotice" class="redis-value-inspector-notice" hidden></div>
+        <div id="redisValueInspectorBody" class="redis-value-inspector-body">
+          <pre id="redisValueContent" class="redis-value-content"></pre>
+        </div>
+      </div>
+    </div>
   </div>
 `;

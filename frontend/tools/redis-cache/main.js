@@ -2,14 +2,7 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { cleanAnalyticsMeta } from "../../core/AnalyticsMeta.js";
 import { getIconSvg } from "./icon.js";
-import {
-  chunkRedisKeys,
-  normalizeRedisPattern,
-  readFavorites,
-  readRedisConfig,
-  RedisCacheService,
-  writeFavorites,
-} from "./service.js";
+import { chunkRedisKeys, normalizeRedisPattern, readFavorites, readRedisConfig, RedisCacheService, writeFavorites } from "./service.js";
 import { RedisCacheTemplate } from "./template.js";
 import "./styles.css";
 
@@ -107,6 +100,10 @@ export class RedisCacheTool extends BaseTool {
     this.deleteTrigger = null;
     this.valueInspectorKey = "";
     this.valueInspectorTrigger = null;
+    this.valueInspectorText = "";
+    this.valueInspectorIsJson = false;
+    this.valueSearchMatches = 0;
+    this.valueSearchIndex = 0;
     this.connectionDiagnosticStage = null;
     this.busy = false;
   }
@@ -145,11 +142,32 @@ export class RedisCacheTool extends BaseTool {
     this.container.querySelector("#redisDismissDiagnostics")?.addEventListener("click", () => this.dismissConnectionDiagnostics());
     this.container.querySelector("#redisOpenSettings")?.addEventListener("click", () => this.openSettings());
     this.container.querySelector("#redisCloseInspector")?.addEventListener("click", () => this.closeValueInspector());
+    this.container.querySelector("#redisValueSearch")?.addEventListener("input", () => this.searchValue());
+    this.container.querySelector("#redisValuePreviousMatch")?.addEventListener("click", () => this.navigateValueMatch(-1));
+    this.container.querySelector("#redisValueNextMatch")?.addEventListener("click", () => this.navigateValueMatch(1));
     this.container.querySelector("#redisValueInspector")?.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !this.busy) {
+      if (event.key === "Escape") {
         event.preventDefault();
         this.closeValueInspector();
+      } else if (event.key === "Enter" && event.target.id === "redisValueSearch") {
+        event.preventDefault();
+        this.navigateValueMatch(event.shiftKey ? -1 : 1);
+      } else if (event.key === "Tab") {
+        const focusable = [...event.currentTarget.querySelectorAll("button:not(:disabled), input:not(:disabled)")];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
+    });
+    this.container.querySelector("#redisValueInspector")?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) this.closeValueInspector();
     });
     this.container.querySelector("#redisSelectAll")?.addEventListener("click", () => this.toggleSelectAll());
     this.container.querySelector("#redisClearSelected")?.addEventListener("click", () => this.requestDelete([...this.selectedKeys]));
@@ -213,7 +231,7 @@ export class RedisCacheTool extends BaseTool {
       const result = await this.service.testConnection(this.config);
       if (dot) dot.dataset.state = result?.ok ? "ready" : "error";
       this.renderConnectionDiagnostics(result);
-      this.setMessage(result?.message || "Connection test failed", result?.ok ? "success" : "error");
+      this.setMessage(result?.ok ? "" : result?.message || "Connection test failed", result?.ok ? "neutral" : "error");
     } catch (error) {
       if (dot) dot.dataset.state = "error";
       const detail = this.errorMessage(error);
@@ -567,7 +585,10 @@ export class RedisCacheTool extends BaseTool {
       if (this.valueInspectorKey === key) this.renderValueInspector({ key, error: this.errorMessage(error) });
     } finally {
       this.setBusy(false);
-      this.container.querySelector("#redisCloseInspector")?.focus();
+      if (this.valueInspectorKey === key) {
+        const search = this.container.querySelector("#redisValueSearch");
+        (search?.disabled ? this.container.querySelector("#redisCloseInspector") : search)?.focus();
+      }
     }
   }
 
@@ -577,19 +598,24 @@ export class RedisCacheTool extends BaseTool {
     const metaElement = this.container.querySelector("#redisValueInspectorMeta");
     const notice = this.container.querySelector("#redisValueInspectorNotice");
     const content = this.container.querySelector("#redisValueContent");
+    const search = this.container.querySelector("#redisValueSearch");
     if (!root || !content) return;
 
     root.hidden = false;
+    if (result.loading) this.container.querySelector("#redisCloseInspector")?.focus();
     root.dataset.state = result.loading ? "loading" : result.error ? "error" : "ready";
     if (keyElement) keyElement.textContent = result.key || "";
     if (metaElement) {
-      const metadata = result.loading || result.error
-        ? ""
-        : [
-            result.kind || "unknown type",
-            formatRedisTtl(result.ttl_seconds),
-            result.memory_bytes === null || result.memory_bytes === undefined ? "Memory unavailable" : formatRedisBytes(result.memory_bytes),
-          ].join(" · ");
+      const metadata =
+        result.loading || result.error
+          ? ""
+          : [
+              result.kind || "unknown type",
+              formatRedisTtl(result.ttl_seconds),
+              result.memory_bytes === null || result.memory_bytes === undefined
+                ? "Memory unavailable"
+                : formatRedisBytes(result.memory_bytes),
+            ].join(" · ");
       metaElement.textContent = metadata;
     }
     if (notice) {
@@ -598,6 +624,15 @@ export class RedisCacheTool extends BaseTool {
     }
     content.className = "redis-value-content";
     content.textContent = "";
+    this.valueInspectorText = "";
+    this.valueInspectorIsJson = false;
+    this.valueSearchMatches = 0;
+    this.valueSearchIndex = 0;
+    if (search) {
+      search.value = "";
+      search.disabled = true;
+    }
+    this.updateValueSearchStatus();
 
     if (result.loading) {
       content.textContent = "Reading this value…";
@@ -613,12 +648,16 @@ export class RedisCacheTool extends BaseTool {
     }
 
     const formatted = formatRedisValue(result.value);
+    this.valueInspectorText = formatted.text;
+    this.valueInspectorIsJson = formatted.isJson;
     content.classList.add(formatted.isJson ? "redis-json-content" : "redis-raw-content");
     if (formatted.isJson) content.innerHTML = highlightJson(formatted.text);
     else content.textContent = formatted.text;
+    if (search) search.disabled = false;
     if (result.truncated && notice) {
       notice.hidden = false;
-      notice.textContent = "This value is larger than the safe preview limit and has been truncated. Search and mutation remain separate from this view.";
+      notice.textContent =
+        "This value is larger than the safe preview limit and has been truncated. Search and mutation remain separate from this view.";
     }
   }
 
@@ -626,11 +665,96 @@ export class RedisCacheTool extends BaseTool {
     const root = this.container.querySelector("#redisValueInspector");
     if (root) root.hidden = true;
     this.valueInspectorKey = "";
+    this.valueInspectorText = "";
     if (restoreFocus) {
-      const target = this.valueInspectorTrigger?.isConnected ? this.valueInspectorTrigger : this.container.querySelector("#redisPatternInput");
+      const target = this.valueInspectorTrigger?.isConnected
+        ? this.valueInspectorTrigger
+        : this.container.querySelector("#redisPatternInput");
       this.valueInspectorTrigger = null;
       target?.focus();
     } else this.valueInspectorTrigger = null;
+  }
+
+  searchValue() {
+    const content = this.container.querySelector("#redisValueContent");
+    const query = this.container.querySelector("#redisValueSearch")?.value || "";
+    if (!content) return;
+    if (this.valueInspectorIsJson) content.innerHTML = highlightJson(this.valueInspectorText);
+    else content.textContent = this.valueInspectorText;
+    this.valueSearchMatches = 0;
+    this.valueSearchIndex = 0;
+    if (query) {
+      const source = this.valueInspectorText.toLowerCase();
+      const needle = query.toLowerCase();
+      const ranges = [];
+      for (let index = source.indexOf(needle); index !== -1; index = source.indexOf(needle, index + needle.length)) {
+        ranges.push({ start: index, end: index + needle.length });
+      }
+      this.valueSearchMatches = ranges.length;
+      if (ranges.length) {
+        const walker = document.createTreeWalker(content, 4);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        let offset = 0;
+        let matchIndex = 0;
+        for (const node of nodes) {
+          const nodeEnd = offset + node.textContent.length;
+          if (ranges[matchIndex]?.start < nodeEnd) {
+            const fragment = document.createDocumentFragment();
+            let position = offset;
+            while (matchIndex < ranges.length && ranges[matchIndex].start < nodeEnd) {
+              const match = ranges[matchIndex];
+              const start = Math.max(position, match.start);
+              if (start > position) fragment.append(document.createTextNode(node.textContent.slice(position - offset, start - offset)));
+              const end = Math.min(nodeEnd, match.end);
+              const mark = document.createElement("mark");
+              mark.className = "redis-value-match";
+              mark.dataset.matchIndex = String(matchIndex);
+              mark.textContent = node.textContent.slice(start - offset, end - offset);
+              fragment.append(mark);
+              position = end;
+              if (match.end <= nodeEnd) matchIndex += 1;
+              else break;
+            }
+            if (position < nodeEnd) fragment.append(document.createTextNode(node.textContent.slice(position - offset)));
+            node.replaceWith(fragment);
+          }
+          offset = nodeEnd;
+        }
+      }
+    }
+    this.updateValueSearchStatus();
+    if (this.valueSearchMatches) this.focusValueMatch();
+  }
+
+  navigateValueMatch(direction) {
+    if (!this.valueSearchMatches) return;
+    this.valueSearchIndex = (this.valueSearchIndex + direction + this.valueSearchMatches) % this.valueSearchMatches;
+    this.updateValueSearchStatus();
+    this.focusValueMatch();
+  }
+
+  focusValueMatch() {
+    const content = this.container.querySelector("#redisValueContent");
+    content?.querySelectorAll(".redis-value-match[data-active]").forEach((mark) => mark.removeAttribute("data-active"));
+    const marks = [...(content?.querySelectorAll(`.redis-value-match[data-match-index="${this.valueSearchIndex}"]`) || [])];
+    marks.forEach((mark) => (mark.dataset.active = "true"));
+    marks[0]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
+
+  updateValueSearchStatus() {
+    const count = this.container.querySelector("#redisValueSearchCount");
+    const query = this.container.querySelector("#redisValueSearch")?.value || "";
+    if (count)
+      count.textContent = query
+        ? this.valueSearchMatches
+          ? `${this.valueSearchIndex + 1} of ${this.valueSearchMatches}`
+          : "No matches"
+        : "";
+    for (const id of ["#redisValuePreviousMatch", "#redisValueNextMatch"]) {
+      const button = this.container.querySelector(id);
+      if (button) button.disabled = !this.valueSearchMatches;
+    }
   }
 
   handleResultSelection(event) {
@@ -793,8 +917,6 @@ export class RedisCacheTool extends BaseTool {
     if (testConnection) testConnection.disabled = busy || !this.config?.host;
     const cancelDelete = this.container.querySelector("#redisCancelDelete");
     if (cancelDelete) cancelDelete.disabled = busy;
-    const closeInspector = this.container.querySelector("#redisCloseInspector");
-    if (closeInspector) closeInspector.disabled = busy;
     this.container.querySelectorAll("#redisResults [data-action]").forEach((button) => {
       button.disabled = busy;
     });

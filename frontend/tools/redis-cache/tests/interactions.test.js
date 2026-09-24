@@ -154,7 +154,7 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
   });
 
-  it("opens a read-only formatted JSON value inspector", async () => {
+  it("opens formatted JSON in a searchable modal and restores focus on close", async () => {
     const service = {
       scan: vi.fn(),
       getValue: vi.fn().mockResolvedValue({
@@ -162,7 +162,7 @@ describe("RedisCacheTool interactions", () => {
         kind: "string",
         ttl_seconds: 120,
         memory_bytes: 64,
-        value: '{"customer":"42","active":true}',
+        value: '{"customer":"42","repeat":"42","active":true}',
         supported: true,
         truncated: false,
       }),
@@ -177,17 +177,34 @@ describe("RedisCacheTool interactions", () => {
     tool.scanComplete = true;
     tool.renderResults();
 
-    document.querySelector('[data-action="view"]').click();
+    const view = document.querySelector('[data-action="view"]');
+    view.focus();
+    view.click();
     await settle();
 
     expect(service.getValue).toHaveBeenCalledWith(expect.objectContaining({ host: "cache.internal" }), "session:1");
-    expect(document.querySelector("#redisValueInspector").hidden).toBe(false);
+    const inspector = document.querySelector("#redisValueInspector");
+    expect(inspector.hidden).toBe(false);
+    expect(inspector.getAttribute("role")).toBe("dialog");
+    expect(inspector.parentElement).toBe(document.querySelector(".redis-cache-tool"));
     expect(document.querySelector("#redisValueInspectorKey").textContent).toBe("session:1");
     expect(document.querySelector("#redisValueInspectorMeta").textContent).toContain("string");
     expect(document.querySelector("#redisValueContent").textContent).toContain('"customer"');
     expect(document.querySelector(".redis-json-key").textContent).toBe('"customer"');
     expect(document.querySelector(".redis-json-boolean").textContent).toBe("true");
     expect(document.querySelector("#redisValueContent").innerHTML).not.toContain("<script");
+    const search = document.querySelector("#redisValueSearch");
+    expect(document.activeElement).toBe(search);
+    search.value = "42";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#redisValueSearchCount").textContent).toBe("1 of 2");
+    expect(document.querySelectorAll(".redis-value-match")).toHaveLength(2);
+    expect(document.querySelector(".redis-json-key").textContent).toBe('"customer"');
+    document.querySelector("#redisValueNextMatch").click();
+    expect(document.querySelector("#redisValueSearchCount").textContent).toBe("2 of 2");
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(inspector.hidden).toBe(true);
+    expect(document.activeElement).toBe(view);
   });
 
   it("keeps buffered scan matches available across numbered pages", async () => {
@@ -260,6 +277,7 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector("#redisConnectionDiagnostics").hidden).toBe(true);
     expect(document.querySelector("#redisConnectionDiagnostics").dataset.state).toBe("success");
     expect(document.querySelector("#redisDiagnosticStatus").textContent).toBe("Connection successful");
+    expect(document.querySelector("#redisSearchMessage").textContent).toBe("");
   });
 
   it("shows actionable diagnostics when the Redis endpoint refuses the connection", async () => {
