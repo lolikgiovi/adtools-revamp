@@ -907,8 +907,9 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaDeliveries").replaceChildren();
     try {
       const result = await this.service.publish(this.config(), this.field("kafkaTopic").value.trim(), records);
-      if (!this.container) return;
       const count = result.delivered.length;
+      if (count) UsageTracker.trackToolUse("kafka", "publish", { message_count: count });
+      if (!this.container) return;
       const status = result.failedAt == null ? `${count} ${count === 1 ? "message" : "messages"} delivered.` :
         `${count} delivered; stopped at message ${result.failedAt + 1}: ${result.error || "delivery failed"}`;
       this.message("kafkaPublishStatus", status, result.failedAt != null);
@@ -917,7 +918,6 @@ export class KafkaTool extends BaseTool {
         row.textContent = `#${delivery.index + 1} · partition ${delivery.partition} · offset ${delivery.offset}`;
         this.field("kafkaDeliveries").append(row);
       }
-      if (count) UsageTracker.trackToolUse("kafka", "publish", { message_count: count });
     } catch (error) { this.message("kafkaPublishStatus", String(error), true); }
     finally {
       this.publishing = false;

@@ -356,15 +356,17 @@ export class RedisCacheTool extends BaseTool {
         `${this.keys.length.toLocaleString()} ${this.keys.length === 1 ? "key" : "keys"} on page ${this.currentPage}. ${suffix}`,
         "success",
       );
-      UsageTracker.trackToolUse(
-        "redis-cache",
-        "search",
-        cleanAnalyticsMeta({
-          result_count: this.keys.length,
-          page: this.currentPage,
-          scan_complete: this.scanComplete,
-        }),
-      );
+      if (reset) {
+        UsageTracker.trackToolUse(
+          "redis-cache",
+          "search",
+          cleanAnalyticsMeta({
+            result_count: this.keys.length,
+            page: this.currentPage,
+            scan_complete: this.scanComplete,
+          }),
+        );
+      }
     } catch (error) {
       this.setMessage(this.errorMessage(error), "error");
       this.renderResults();
@@ -748,17 +750,19 @@ export class RedisCacheTool extends BaseTool {
       this.renderResults();
       this.restoreDeleteFocus();
       this.setMessage(`${deleted.toLocaleString()} ${deleted === 1 ? "key" : "keys"} cleared with ${command}.`, "success");
-      UsageTracker.trackToolUse("redis-cache", "clear", cleanAnalyticsMeta({ requested_count: keys.length, deleted_count: deleted }));
+      if (deleted > 0) {
+        UsageTracker.trackToolUse("redis-cache", "clear", cleanAnalyticsMeta({ requested_count: keys.length, deleted_count: deleted }));
+      }
     } catch (error) {
       this.removeClearedResults(clearedKeys);
       this.closeDeleteConfirmation({ restoreFocus: false });
       this.renderResults();
       this.restoreDeleteFocus();
-      if (clearedKeys.size) {
+      if (deleted > 0) {
         UsageTracker.trackToolUse(
           "redis-cache",
           "clear",
-          cleanAnalyticsMeta({ requested_count: keys.length, cleared_batch_count: clearedKeys.size, partial: true }),
+          cleanAnalyticsMeta({ requested_count: keys.length, deleted_count: deleted, partial: true }),
         );
       }
       const prefix = clearedKeys.size ? `${clearedKeys.size.toLocaleString()} keys were processed before the operation stopped. ` : "";

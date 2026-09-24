@@ -1009,17 +1009,14 @@ export class QuickQueryUI {
     const leftScrollContentHeight = (scroll) => {
       const styles = getComputedStyle(scroll);
       return (
-        Array.from(scroll.children).reduce(
-          (height, child) => {
-            if (child === this.elements.schemaContainer) return height + schemaTableHeight();
-            if (child === this.elements.filesContainer) {
-              // Its auto top margin fills unused scroll space and is not intrinsic content height.
-              return height + Math.max(0, outerHeight(child) - toPx(getComputedStyle(child).marginTop));
-            }
-            return height + outerHeight(child);
-          },
-          0,
-        ) +
+        Array.from(scroll.children).reduce((height, child) => {
+          if (child === this.elements.schemaContainer) return height + schemaTableHeight();
+          if (child === this.elements.filesContainer) {
+            // Its auto top margin fills unused scroll space and is not intrinsic content height.
+            return height + Math.max(0, outerHeight(child) - toPx(getComputedStyle(child).marginTop));
+          }
+          return height + outerHeight(child);
+        }, 0) +
         toPx(styles.paddingTop) +
         toPx(styles.paddingBottom) +
         toPx(styles.marginTop) +
