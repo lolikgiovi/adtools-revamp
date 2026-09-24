@@ -116,7 +116,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
           </div>
         </div>
         <div id="rendererSurface" class="renderer-surface">
-          <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+          <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin" hidden></iframe>
         </div>
       </div>
     </div>

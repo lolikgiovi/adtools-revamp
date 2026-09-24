@@ -322,6 +322,10 @@ body.is-resizing * {
   /* do not affect page rendering fidelity */
 }
 
+.renderer-iframe[hidden] {
+  display: none;
+}
+
 .renderer-iframe.is-fixed-viewport {
   border-inline: 1px solid hsl(var(--border));
 }

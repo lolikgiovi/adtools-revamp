@@ -1228,8 +1228,10 @@ class HTMLTemplateTool extends BaseTool {
 
   applyPreviewBackground() {
     const iframe = document.getElementById("htmlRenderer");
+    const surface = document.getElementById("rendererSurface");
     const button = document.getElementById("btnWhitePreviewBg");
     if (iframe) iframe.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "transparent";
+    if (surface) surface.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "";
     if (button) {
       button.setAttribute("aria-pressed", String(this.previewWhiteBackground));
       button.title = this.previewWhiteBackground
@@ -1350,6 +1352,7 @@ class HTMLTemplateTool extends BaseTool {
       const rendered = getPreviewContent(html, this.vtlValues, this.previewVtlMode);
 
       // Use srcdoc for atomic update and secure context
+      iframe.hidden = !rendered.trim();
       iframe.srcdoc = rendered || "";
     } catch (error) {
       UsageTracker.trackEvent(
