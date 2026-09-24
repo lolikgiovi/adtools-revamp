@@ -911,12 +911,13 @@
 
 /* Keep the chosen key visible while scanning wide data sheets. */
 .quick-query-tool-container #spreadsheet-data .handsontable .htCore td.qq-primary-key-cell {
-  background-color: hsl(var(--primary) / 0.2);
+  background-color: color-mix(in srgb, hsl(var(--card)) 84%, hsl(var(--primary)) 16%) !important;
+  color: hsl(var(--card-foreground)) !important;
 }
 
 .quick-query-tool-container #spreadsheet-data .handsontable .htCore td.qq-primary-key-field:not(.current):not(.area),
 .quick-query-tool-container #spreadsheet-data .handsontable .htCore th.qq-primary-key-header {
-  background-color: hsl(var(--primary) / 0.45) !important;
+  background-color: color-mix(in srgb, hsl(var(--card)) 80%, hsl(var(--primary)) 20%) !important;
   color: hsl(var(--foreground)) !important;
   font-weight: 700;
 }
