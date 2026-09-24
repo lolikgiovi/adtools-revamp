@@ -475,8 +475,14 @@
   justify-content: center;
 }
 
-.kafka-tool input:focus-visible,
-.kafka-tool textarea:focus-visible,
+.kafka-tool input[type="text"]:focus,
+.kafka-tool input[type="search"]:focus,
+.kafka-tool textarea:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: hsl(var(--muted-foreground) / 0.7);
+}
+
 .kafka-tool button:focus-visible,
 .kafka-settings summary:focus-visible {
   outline: 2px solid hsl(var(--primary));
@@ -519,15 +525,18 @@
   border-radius: var(--kafka-control-radius) 0 0 var(--kafka-control-radius);
 }
 
-.kafka-topic-picker > input:focus-visible {
+.kafka-topic-picker > input:focus {
   position: relative;
   z-index: 1;
 }
 
-.kafka-topic-picker.is-pointer-focused > input:focus-visible,
-.kafka-template-picker.is-pointer-focused > input:focus-visible {
+.kafka-topic-picker:focus-within > button {
+  border-color: hsl(var(--muted-foreground) / 0.7);
+}
+
+.kafka-topic-picker > button:focus-visible {
   outline: none;
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px hsl(var(--muted-foreground) / 0.7);
 }
 
 .kafka-topic-picker > button {
