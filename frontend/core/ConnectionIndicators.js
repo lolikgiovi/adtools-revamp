@@ -228,7 +228,8 @@ export class ConnectionIndicators {
         const endpoint = service === "kafka" ? kafka.brokers : redis.host ? `${redis.host}:${redis.port}/${redis.database}` : "";
         const connected = service === "kafka" ? Boolean(this.manual.kafka || this.kafkaListening) : Boolean(this.manual.redis);
         const row = element("div", "connection-menu-row");
-        row.append(element("span", "connection-menu-name", connected ? this.manual[service] || endpoint : endpoint || "Not configured"));
+        const label = connected ? this.manual[service] || endpoint : endpoint || "Not configured";
+        row.append(element("span", "connection-menu-name", service === "kafka" ? label.replace(/,\s*/g, ", ") : label));
         this.appendAction(row, connected ? "Disconnect" : "Connect", `${service}-${connected ? "disconnect" : "connect"}`, "", !connected && !endpoint);
         list.append(row);
       }

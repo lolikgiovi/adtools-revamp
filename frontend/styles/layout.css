@@ -105,6 +105,12 @@
   display: none;
 }
 
+.connection-indicator-group {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
 .connection-indicator {
   display: inline-flex;
   align-items: center;
@@ -149,7 +155,7 @@ button.connection-indicator:focus-visible,
   top: calc(100% + 0.65rem);
   right: 0;
   z-index: 5;
-  width: min(20rem, calc(100vw - 1.5rem));
+  width: min(24rem, calc(100vw - 1.5rem));
   padding: 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
@@ -185,10 +191,12 @@ button.connection-indicator:focus-visible,
 
 .connection-menu-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.35rem;
 }
 
 .connection-menu-row {
+  min-width: 0;
   min-height: 38px;
   padding: 0.25rem 0;
 }
@@ -199,18 +207,18 @@ button.connection-indicator:focus-visible,
 
 .connection-menu-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
   font-size: 0.8125rem;
 }
 
-.connection-menu-identity,
-.connection-menu-endpoint {
+.connection-menu-identity {
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.connection-menu-endpoint {
+  overflow-wrap: anywhere;
 }
 
 .connection-menu-action {
@@ -327,6 +335,16 @@ button.connection-indicator:focus-visible,
 
 @media (max-width: 768px) {
   .mobile-search { display: inline-flex; }
+}
+
+@media (max-width: 600px) {
+  .connection-menu {
+    position: fixed;
+    top: calc(57px + 0.65rem);
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
 }
 
 .sidebar[data-state="collapsed"] ~ .main .mobile-search {
