@@ -4,6 +4,7 @@ import { isDbeaverSchema } from "./services/SchemaValidationService.js";
 import { initialSchemaTableSpecification, initialDataTableSpecification } from "./constants.js";
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
+import { OracleDataImportService, ORACLE_IMPORT_MAX_ROWS } from "./services/OracleDataImportService.js";
 import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "./services/DatabaseClipboardService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
@@ -198,6 +199,7 @@ export class QuickQueryUI {
       }
       // Initialize UI components
       this.bindElements();
+      if (isTauri()) this.elements.importOracleDataButton.hidden = false;
 
       // Desktop-only: show button but disable it in web, with native tooltip
       try {
@@ -382,6 +384,16 @@ export class QuickQueryUI {
       excelImportInfo: document.getElementById("excelImportInfo"),
       excelImportRowCount: document.getElementById("excelImportRowCount"),
       clearExcelImportButton: document.getElementById("clearExcelImport"),
+      importOracleDataButton: document.getElementById("importOracleData"),
+      oracleDataOverlay: document.getElementById("oracleDataOverlay"),
+      oracleDataModal: document.getElementById("oracleDataModal"),
+      oracleDataConnection: document.getElementById("oracleDataConnection"),
+      oracleDataEditor: document.getElementById("oracleDataEditor"),
+      oracleDataError: document.getElementById("oracleDataError"),
+      oracleDataSwitchTable: document.getElementById("oracleDataSwitchTable"),
+      fetchOracleDataButton: document.getElementById("fetchOracleData"),
+      closeOracleDataButton: document.getElementById("closeOracleData"),
+      cancelOracleDataButton: document.getElementById("cancelOracleData"),
 
       // UUID generator popover elements
       quickQueryUuidAnchor: document.getElementById("quickQueryUuidAnchor"),
@@ -589,6 +601,29 @@ export class QuickQueryUI {
       // Excel import buttons
       importExcelButton: {
         click: () => this._showExcelImportModal(),
+      },
+      importOracleDataButton: {
+        click: () => this.openOracleDataImport(),
+      },
+      fetchOracleDataButton: {
+        click: () => this.fetchOracleData(),
+      },
+      oracleDataSwitchTable: {
+        click: () => this.switchOracleDataTable(),
+      },
+      closeOracleDataButton: {
+        click: () => this.closeOracleDataImport(),
+      },
+      cancelOracleDataButton: {
+        click: () => this.closeOracleDataImport(),
+      },
+      oracleDataOverlay: {
+        click: (e) => { if (e.target === this.elements.oracleDataOverlay) this.closeOracleDataImport(); },
+      },
+      oracleDataModal: {
+        keydown: (event) => {
+          if (event.key === "Escape") this.closeOracleDataImport();
+        },
       },
       excelFileInput: {
         change: (e) => this.handleExcelFileInput(e),
@@ -1080,6 +1115,14 @@ export class QuickQueryUI {
     }
   }
 
+  setDataSheetColumns(count) {
+    this.dataTable.updateSettings({
+      colHeaders: Array.from({ length: count }, (_, index) => columnIndexToLetter(index)),
+      columns: Array(count).fill({ type: "text" }),
+      minCols: count,
+    });
+  }
+
   setupAutosaveLifecycleListeners() {
     if (this._autosaveLifecycleListenersBound) return;
 
@@ -1423,6 +1466,10 @@ export class QuickQueryUI {
       this.schemaTable?.loadData?.(Array.isArray(tab.schemaData) ? tab.schemaData : [["", "", "", "", "", ""]]);
       this.scheduleSchemaLayoutRefresh();
       this.updateDataSpreadsheet();
+      const draftColumns = tab.inputData?.[0]?.length;
+      if (draftColumns > 0 && draftColumns < (tab.schemaData?.filter?.((row) => row[0]).length || 0)) {
+        this.setDataSheetColumns(draftColumns);
+      }
       this.dataTable?.loadData?.(Array.isArray(tab.inputData) ? tab.inputData : [[], []]);
       this.processedFiles = this.cloneAttachments(tab.attachments);
       if (this.processedFiles.length > 0) {
@@ -1837,6 +1884,8 @@ export class QuickQueryUI {
       } catch (_) {}
       this._splitEditor = null;
     }
+    this._oracleDataEditor?.dispose?.();
+    this._oracleDataEditor = null;
     if (this.schemaTable) {
       try {
         this.schemaTable.destroy();
@@ -3469,6 +3518,135 @@ export class QuickQueryUI {
     // Also clear any imported Excel data
     this.handleClearExcelImport();
     this.scheduleActiveTabDraftSave();
+  }
+
+  // ===== Oracle row import =====
+
+  async openOracleDataImport() {
+    const tableName = this.elements.tableNameInput.value.trim().toUpperCase();
+    const fields = this.schemaTable.getData().filter((row) => row[0]).map((row) => row[0]);
+    if (!/^[A-Z][A-Z0-9_$#]*\.[A-Z][A-Z0-9_$#]*$/.test(tableName) || fields.length === 0) {
+      this.showError("Choose a SCHEMA.TABLE with saved schema fields before importing Oracle rows.");
+      return;
+    }
+    const { OracleEnvImportService } = await import("./services/OracleEnvImportService.js");
+    const connections = OracleEnvImportService.loadConnections();
+    if (!connections.length) {
+      this.showError("No Oracle connections configured. Go to Settings > Oracle Connections.");
+      return;
+    }
+    this._oracleDataConnections = connections;
+    const select = this.elements.oracleDataConnection;
+    select.replaceChildren(...connections.map((connection) => {
+      const option = document.createElement("option");
+      option.value = connection.name;
+      option.textContent = `${connection.name} (${connection.connect_string})`;
+      return option;
+    }));
+    this.elements.oracleDataError.classList.add("hidden");
+    this.elements.oracleDataSwitchTable.classList.add("hidden");
+    this.elements.oracleDataOverlay.classList.remove("hidden");
+    this.elements.oracleDataOverlay.setAttribute("aria-hidden", "false");
+    this.elements.oracleDataModal.classList.remove("hidden");
+    if (!this._oracleDataEditor) {
+      this._oracleDataEditor = createOracleEditor(this.elements.oracleDataEditor, {
+        value: `SELECT * FROM ${tableName}\n`,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 13,
+      });
+    } else {
+      this._oracleDataEditor.setValue(`SELECT * FROM ${tableName}\n`);
+      this._oracleDataEditor.layout();
+    }
+    this._oracleDataEditor.focus();
+  }
+
+  closeOracleDataImport() {
+    if (this._oracleDataBusy) return;
+    this.elements.oracleDataOverlay.classList.add("hidden");
+    this.elements.oracleDataOverlay.setAttribute("aria-hidden", "true");
+    this.elements.oracleDataModal.classList.add("hidden");
+    this.elements.importOracleDataButton?.focus();
+  }
+
+  showOracleDataError(message, tableName = null) {
+    this.elements.oracleDataError.textContent = message;
+    this.elements.oracleDataError.classList.remove("hidden");
+    this._oracleDataOtherTable = tableName;
+    this.elements.oracleDataSwitchTable.classList.toggle("hidden", !tableName);
+    if (tableName) this.elements.oracleDataSwitchTable.textContent = `Use ${tableName} instead`;
+  }
+
+  async switchOracleDataTable() {
+    const tableName = this._oracleDataOtherTable;
+    if (!tableName) return;
+    const saved = await this.storageService.loadSchema(tableName, false);
+    if (!Array.isArray(saved) || !saved.length) {
+      this.showOracleDataError(`No saved schema for ${tableName}. Import its schema first, then retry.`);
+      return;
+    }
+    this._oracleDataBusy = true;
+    try {
+      await this.handleLoadSchema(tableName, { mode: "schema-only", skipChoice: true });
+      this.elements.oracleDataError.classList.add("hidden");
+      this.elements.oracleDataSwitchTable.classList.add("hidden");
+      this._oracleDataOtherTable = null;
+    } catch (error) {
+      this.showOracleDataError(error.message);
+    } finally {
+      this._oracleDataBusy = false;
+    }
+  }
+
+  async fetchOracleData() {
+    if (this._oracleDataBusy) return;
+    const fields = this.schemaTable.getData().filter((row) => row[0]).map((row) => row[0]);
+    const selectedTable = this.elements.tableNameInput.value.trim().toUpperCase();
+    let query;
+    try {
+      query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields, { validateFields: false });
+      if (query.tableName !== selectedTable) {
+        this.showOracleDataError(`This query reads ${query.tableName}, while the selected table is ${selectedTable}.`, query.tableName);
+        return;
+      }
+      query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields);
+    } catch (error) {
+      this.showOracleDataError(error.message);
+      return;
+    }
+    const connection = this._oracleDataConnections.find((item) => item.name === this.elements.oracleDataConnection.value);
+    if (!connection) {
+      this.showOracleDataError("Select an Oracle connection.");
+      return;
+    }
+    this._oracleDataBusy = true;
+    this.elements.fetchOracleDataButton.disabled = true;
+    this.elements.fetchOracleDataButton.textContent = "Fetching…";
+    this.elements.oracleDataError.classList.add("hidden");
+    this.elements.oracleDataSwitchTable.classList.add("hidden");
+    try {
+      const rows = await OracleDataImportService.fetch(connection, query);
+      if (this.elements.tableNameInput.value.trim().toUpperCase() !== selectedTable) {
+        throw new Error("The selected table changed during the fetch. Run the query again.");
+      }
+      this.handleClearExcelImport();
+      this.setDataSheetColumns(query.fields.length);
+      this.dataTable.loadData([query.fields, ...rows]);
+      this.scheduleActiveTabDraftSave();
+      this.eventBus?.emit?.("notification:success", {
+        message: `Loaded ${rows.length.toLocaleString()} Oracle rows into the data sheet${rows.length === ORACLE_IMPORT_MAX_ROWS ? " (1,000 row limit reached)" : ""}.`,
+      });
+      this._oracleDataBusy = false;
+      this.closeOracleDataImport();
+    } catch (error) {
+      this.showOracleDataError(error.message);
+    } finally {
+      this._oracleDataBusy = false;
+      this.elements.fetchOracleDataButton.disabled = false;
+      this.elements.fetchOracleDataButton.textContent = "Fetch rows";
+    }
   }
 
   // ===== Excel Import Methods =====

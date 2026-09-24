@@ -2142,6 +2142,44 @@
   width: min(520px, 92vw);
 }
 
+.qq-oracle-data-content {
+  width: min(820px, 94vw);
+}
+
+.qq-oracle-data-connection {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.qq-oracle-data-hint {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+.qq-oracle-data-editor {
+  height: min(40vh, 320px);
+  min-height: 190px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.qq-oracle-data-error {
+  margin: 0;
+  color: hsl(var(--destructive));
+  font-size: 13px;
+}
+
+.qq-oracle-data-error.hidden,
+#oracleDataSwitchTable.hidden {
+  display: none;
+}
+
 .qq-excel-import-instructions {
   display: flex;
   flex-direction: column;

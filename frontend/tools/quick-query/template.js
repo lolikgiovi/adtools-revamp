@@ -120,6 +120,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
                 <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
+                <button id="importOracleData" class="btn btn-primary btn-sm" type="button" hidden>Import Oracle</button>
                 <button id="toggleDataMaximize" class="btn btn-sm qq-data-maximize" type="button" aria-pressed="false"
                     title="Expand the data sheet to use the available workspace">
                     <svg class="qq-data-maximize-icon qq-data-maximize-icon-expand" viewBox="0 0 16 16" aria-hidden="true">
@@ -411,6 +412,29 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="qq-modal-footer">
             <button id="confirmExcelImport" class="btn btn-primary">Choose File</button>
             <button id="cancelExcelImport" class="btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Oracle row import -->
+<div id="oracleDataOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="oracleDataModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="oracleDataTitle">
+    <div class="qq-modal-content qq-oracle-data-content">
+        <div class="qq-modal-header">
+            <h3 id="oracleDataTitle">Import from Oracle</h3>
+            <button id="closeOracleData" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="qq-modal-body">
+            <label for="oracleDataConnection">Oracle connection</label>
+            <select id="oracleDataConnection" class="qq-oracle-data-connection"></select>
+            <p class="qq-oracle-data-hint">Select exact fields from one SCHEMA.TABLE. WHERE and ORDER BY can be edited. Up to 1,000 rows are fetched into the editable data sheet.</p>
+            <div id="oracleDataEditor" class="qq-oracle-data-editor" aria-label="Oracle SELECT query"></div>
+            <p id="oracleDataError" class="qq-oracle-data-error hidden" role="alert"></p>
+            <button id="oracleDataSwitchTable" class="btn btn-outline hidden" type="button">Use queried table</button>
+        </div>
+        <div class="qq-modal-footer">
+            <button id="fetchOracleData" class="btn btn-primary" type="button">Fetch rows</button>
+            <button id="cancelOracleData" class="btn" type="button">Cancel</button>
         </div>
     </div>
 </div>
