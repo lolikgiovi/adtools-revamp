@@ -5,7 +5,6 @@ import releaseContent from "../../config/release-content.json";
 import {
   ReleaseTips,
   ReleaseTour,
-  buildReleaseTourModel,
   markPendingRelease,
   normalizeReleasePayload,
   takePendingRelease,
@@ -37,51 +36,6 @@ describe("release tour", () => {
     });
     expect(release.notes).toContain("Faster startup");
     expect(release.releaseId).toBe("desktop:beta:1.4.0");
-  });
-
-  it("builds release, next-step, and optional guided-tour slides", () => {
-    const model = buildReleaseTourModel({
-      surface: "web",
-      releaseId: "web:20260905",
-      build: "20260905120000",
-      title: "Web build ready",
-      notes: ["Saved settings are preserved."],
-      tour: [
-        {
-          target: ".header-search",
-          title: "Search",
-          body: "Find tools quickly.",
-        },
-      ],
-    });
-
-    expect(model.slides.map((slide) => slide.kind)).toEqual(["release", "next", "tour"]);
-    expect(model.slides[0].bullets).toEqual(["Saved settings are preserved."]);
-    expect(model.slides[1].action).toMatchObject({ route: "home" });
-    expect(model.tour).toHaveLength(1);
-
-    const desktopModel = buildReleaseTourModel({ surface: "desktop", version: "1.4.0" });
-    expect(desktopModel.slides[1].action).toMatchObject({ route: "settings", focus: "update.autoCheck" });
-  });
-
-  it("uses route-aware tips as the guided continuation of feature slides", () => {
-    const model = buildReleaseTourModel({
-      releaseId: "release-1.3.6",
-      slides: [{ title: "Quick Query", body: "See what changed." }],
-      tour: [],
-      tips: [
-        {
-          id: "quick-query-safe-paste",
-          route: "quick-query",
-          target: "#spreadsheet-data",
-          title: "Paste safely",
-          body: "JSON quotes are preserved.",
-        },
-      ],
-    });
-
-    expect(model.slides.map((slide) => slide.kind)).toEqual(["release", "custom", "tips"]);
-    expect(model.slides.at(-1)).toMatchObject({ title: "See the new features in place" });
   });
 
   it("starts feature tips from the final announcement step", () => {
@@ -150,38 +104,6 @@ describe("release tour", () => {
       ],
       action: { label: "Open search", route: "home", focus: "header-search" },
     });
-  });
-
-  it("normalizes route-aware feature tips", () => {
-    const release = normalizeReleasePayload({
-      releaseId: "release-1.3.6",
-      tips: [
-        {
-          id: "quick-query-data-sheet",
-          route: "quick-query",
-          target: ".quick-query-data-controls",
-          placement: "top",
-          title: "Shape the data sheet",
-          body: "Expand it when you need more room.",
-        },
-        { id: "incomplete", route: "home" },
-      ],
-    });
-
-    expect(release.tips).toEqual([
-      {
-        id: "quick-query-data-sheet",
-        route: "quick-query",
-        target: ".quick-query-data-controls",
-        placement: "top",
-        title: "Shape the data sheet",
-        body: "Expand it when you need more room.",
-        guided: true,
-        completeOn: null,
-        next: null,
-        surfaces: [],
-      },
-    ]);
   });
 
   it("keeps desktop-only import guidance out of the web tour", () => {
@@ -627,26 +549,4 @@ describe("release tour", () => {
     tour.finish();
   });
 
-  it("renders a complete update icon for the What's new context", () => {
-    const tour = new ReleaseTour({
-      release: {
-        releaseId: "web:update-icon",
-        title: "Icon check",
-        summary: "The icon should be recognizable.",
-        tour: [],
-      },
-    });
-
-    expect(tour.open()).toBe(true);
-
-    const icon = document.querySelector(".release-tour-icon");
-    const svg = icon?.querySelector("svg");
-
-    expect(icon?.dataset.icon).toBe("circle-check");
-    expect(svg?.getAttribute("aria-hidden")).toBe("true");
-    expect(svg?.getAttribute("focusable")).toBe("false");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
-    expect(svg?.querySelector("circle")?.getAttribute("r")).toBe("9");
-    expect(svg?.querySelector("path")?.getAttribute("d")).toBe("m8.5 12 2.2 2.2 4.8-5");
-  });
 });

@@ -35,12 +35,6 @@ describe("UsageOverviewService", () => {
     expect(UsageOverviewService.getRegisteredIdentity({ deviceId: "device-123" })).toBeNull();
   });
 
-  it("keeps the deployed Worker as a fallback when the local proxy is unavailable", () => {
-    const urls = UsageOverviewService._resolveUrls("/analytics/public-overview");
-    expect(urls).toContain("https://adtools.lolik.workers.dev/analytics/public-overview");
-    expect(urls.indexOf("/analytics/public-overview")).toBeLessThan(urls.indexOf("https://adtools.lolik.workers.dev/analytics/public-overview"));
-  });
-
   it("fetches the personal and aggregate views with the session header", async () => {
     SessionTokenStore.saveToken("session-token");
     localStorage.setItem("config.analytics.endpoint", "https://worker.example");

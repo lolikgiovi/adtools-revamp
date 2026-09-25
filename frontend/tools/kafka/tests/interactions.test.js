@@ -119,26 +119,6 @@ describe("Kafka publish controls", () => {
     expect(document.activeElement).toBe(historyMode);
   });
 
-  it("keeps payload primary and progressively discloses templates and options", () => {
-    const tool = new KafkaTool(null, { publish: vi.fn() });
-    tool.mount(document.querySelector("#tool"));
-
-    const templates = document.querySelector("#kafkaTemplates");
-    const options = document.querySelector("#kafkaPublishOptions");
-    const payload = document.querySelector(".kafka-value-section");
-    expect(templates.open).toBe(false);
-    expect(options.open).toBe(false);
-    expect(payload.nextElementSibling).toBe(options);
-
-    document.querySelector("#kafkaTemplateToggle").click();
-    expect(templates.open).toBe(true);
-    options.querySelector("summary").click();
-    expect(options.open).toBe(true);
-    expect(document.querySelector("#kafkaSavedList")).not.toBeNull();
-    expect(document.querySelector("#kafkaKey")).not.toBeNull();
-    expect(document.querySelector("#kafkaHeaders")).not.toBeNull();
-  });
-
   it("filters saved templates and closes the picker after preparing one", () => {
     const service = { publish: vi.fn() };
     const tool = new KafkaTool(null, service);

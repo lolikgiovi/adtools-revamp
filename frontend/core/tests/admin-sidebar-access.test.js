@@ -33,20 +33,6 @@ describe("privileged sidebar pages", () => {
     expect(app.buildMenuConfig().footer.map((item) => item.id)).toEqual(["about", "settings", "analytics-dashboard", "approval"]);
   });
 
-  it("marks both pages as web sidebar entries", () => {
-    localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
-    localStorage.setItem("administrator", "true");
-    const app = Object.create(App.prototype);
-    const privilegedItems = app.getPrivilegedSidebarItems();
-
-    expect(privilegedItems).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "analytics-dashboard", name: "Analytics", requiresTauri: false }),
-        expect.objectContaining({ id: "approval", name: "Approval", requiresTauri: false }),
-      ]),
-    );
-  });
-
   it("renders the privileged entries in the web runtime", async () => {
     localStorage.setItem("user.email", "fashalli.bilhaq@bankmandiri.co.id");
     localStorage.setItem("administrator", "true");

@@ -71,6 +71,12 @@ For automated verification:
 * Wait for the current Vitest process to finish before starting another one.
 * Do not start Vitest in watch mode.
 
+### Test design rules
+
+* Never write unit tests after you write code. If isolation testing is necessary, design and write the test before implementing the code.
+* Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact that records the result and how to reproduce it.
+* If you must test a system in isolation, first write down all the ways it could fail, then write the code.
+
 ## Architecture
 
 * **frontend/** — Vanilla JS SPA with Vite, with class-based components extending `BaseTool`.

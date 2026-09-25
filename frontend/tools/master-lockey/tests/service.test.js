@@ -232,16 +232,6 @@ describe("MasterLockeyService", () => {
     });
   });
 
-  describe("formatTimestamp", () => {
-    it("should format recent timestamps", () => {
-      const now = Date.now();
-      expect(service.formatTimestamp(now)).toBe("Just now");
-      expect(service.formatTimestamp(now - 120000)).toContain("min"); // 2 mins ago
-      expect(service.formatTimestamp(now - 7200000)).toContain("hour"); // 2 hours ago
-      expect(service.formatTimestamp(now - 172800000)).toContain("day"); // 2 days ago
-    });
-  });
-
   // =====================
   // Confluence Integration Tests
   // =====================

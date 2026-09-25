@@ -4,7 +4,6 @@ import {
   MINIFIER_OPTIONS,
   loadHtmlMinifier,
   normalizeMinifiedHtml,
-  parseCdnPackageInfo,
 } from "../minifierEngine.js";
 
 describe("html minifier engine", () => {
@@ -42,11 +41,4 @@ describe("html minifier engine", () => {
     expect(() => normalizeMinifiedHtml(undefined)).toThrow(MINIFIER_INVALID_RESULT_MESSAGE);
   });
 
-  it("reports the vendored package identity", () => {
-    expect(parseCdnPackageInfo(minifierSource)).toMatchObject({
-      name: "html-minifier",
-      version: "4.0.0",
-      npmUrl: "https://www.npmjs.com/package/html-minifier/v/4.0.0",
-    });
-  });
 });

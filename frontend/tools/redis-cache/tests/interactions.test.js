@@ -20,30 +20,6 @@ describe("RedisCacheTool interactions", () => {
     localStorage.setItem("config.redis.database", "2");
   });
 
-  it("keeps search primary and stacks connection above saved keys in the side rail", () => {
-    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
-    const tool = new RedisCacheTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-
-    const sidebar = document.querySelector(".redis-sidebar");
-    expect(document.querySelector(".redis-cache-tool h1")).toBeNull();
-    expect(sidebar?.firstElementChild?.classList.contains("redis-connection-panel")).toBe(true);
-    expect(sidebar?.lastElementChild?.classList.contains("redis-favorites")).toBe(true);
-    expect(document.querySelector(".redis-connection-panel #redisTestConnection")).not.toBeNull();
-  });
-
-  it("renders the key search without value-search controls", () => {
-    const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
-    const tool = new RedisCacheTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-
-    expect(document.querySelector("#redisSearchHeading").textContent).toBe("Find cache keys");
-    expect(document.querySelector("#redisKeySearchForm")).not.toBeNull();
-    expect(document.querySelector("#redisValueSearchTab")).toBeNull();
-    expect(document.querySelector("#redisValueSearchForm")).toBeNull();
-    expect(document.querySelector("#redisValueSearchButton")).toBeNull();
-  });
-
   it("keeps pagination at the bottom of the results container", () => {
     const service = { scan: vi.fn(), deleteKeys: vi.fn(), testConnection: vi.fn() };
     const tool = new RedisCacheTool(null, service);

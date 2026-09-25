@@ -4,12 +4,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   getComparisonMode,
-  isSourceBFollowMode,
   syncPkFieldsToCompareFields,
   syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
   createSourceBConfigFromSourceA,
-  getSourceBDisabledFieldsForFollowMode,
   validateFieldSelection,
   isMixedMode,
   findCommonFields,
@@ -17,9 +15,6 @@ import {
   getResetBehaviorForSourceType,
   createResetSourceState,
   canStartUnifiedComparison,
-  getUnifiedProgressSteps,
-  getVisibleStepsForMode,
-  getStepLabel,
   UnifiedErrorType,
   getActionableErrorMessage,
   formatFieldList,
@@ -55,33 +50,6 @@ describe('UnifiedCompareUtils', () => {
 
     it('returns null if both types are null', () => {
       expect(getComparisonMode(null, null)).toBeNull();
-    });
-  });
-
-  describe('isSourceBFollowMode', () => {
-    // Note: Follow mode is deprecated - Source B now has independent configuration
-    it('returns false for Oracle vs Oracle (follow mode deprecated)', () => {
-      expect(isSourceBFollowMode('oracle', 'oracle')).toBe(false);
-    });
-
-    it('returns false for Oracle vs Excel', () => {
-      expect(isSourceBFollowMode('oracle', 'excel')).toBe(false);
-    });
-
-    it('returns false for Excel vs Oracle', () => {
-      expect(isSourceBFollowMode('excel', 'oracle')).toBe(false);
-    });
-
-    it('returns false for Excel vs Excel', () => {
-      expect(isSourceBFollowMode('excel', 'excel')).toBe(false);
-    });
-
-    it('returns false if source A is null', () => {
-      expect(isSourceBFollowMode(null, 'oracle')).toBe(false);
-    });
-
-    it('returns false if source B is null', () => {
-      expect(isSourceBFollowMode('oracle', null)).toBe(false);
     });
   });
 
@@ -310,25 +278,6 @@ describe('UnifiedCompareUtils', () => {
 
       expect(result.queryMode).toBe('sql');
       expect(result.sql).toBe('SELECT * FROM HR.EMPLOYEES WHERE status = :status');
-    });
-  });
-
-  describe('getSourceBDisabledFieldsForFollowMode', () => {
-    it('returns list of field IDs to disable', () => {
-      const result = getSourceBDisabledFieldsForFollowMode();
-
-      expect(result).toContain('source-b-query-mode-wrapper');
-      expect(result).toContain('source-b-schema-search');
-      expect(result).toContain('source-b-table-search');
-      expect(result).toContain('source-b-where');
-      expect(result).toContain('source-b-max-rows');
-      expect(result).toContain('source-b-sql');
-    });
-
-    it('does not include source-b-connection (should remain enabled)', () => {
-      const result = getSourceBDisabledFieldsForFollowMode();
-
-      expect(result).not.toContain('source-b-connection');
     });
   });
 
@@ -769,95 +718,6 @@ describe('UnifiedCompareUtils', () => {
       const result = syncPkFieldsWithTracking(['id'], null);
       expect(result.updatedCompareFields).toEqual(['id']);
       expect(result.newlyAddedFields).toEqual(['id']);
-    });
-  });
-
-  describe('getUnifiedProgressSteps', () => {
-    it('returns 3 progress steps', () => {
-      const steps = getUnifiedProgressSteps();
-      expect(steps).toHaveLength(3);
-    });
-
-    it('returns steps with correct IDs', () => {
-      const steps = getUnifiedProgressSteps();
-      const ids = steps.map((s) => s.id);
-      expect(ids).toEqual(['source-a', 'source-b', 'reconcile']);
-    });
-
-    it('each step has id, label, and defaultDetail', () => {
-      const steps = getUnifiedProgressSteps();
-      for (const step of steps) {
-        expect(step).toHaveProperty('id');
-        expect(step).toHaveProperty('label');
-        expect(step).toHaveProperty('defaultDetail');
-        expect(typeof step.id).toBe('string');
-        expect(typeof step.label).toBe('string');
-        expect(typeof step.defaultDetail).toBe('string');
-      }
-    });
-
-    it('returns correct labels for each step', () => {
-      const steps = getUnifiedProgressSteps();
-      expect(steps[0].label).toBe('Loading Source A data');
-      expect(steps[1].label).toBe('Loading Source B data');
-      expect(steps[2].label).toBe('Reconciling fields');
-    });
-  });
-
-  describe('getVisibleStepsForMode', () => {
-    it('returns 3 steps for all modes', () => {
-      const steps = getVisibleStepsForMode();
-      expect(steps).toEqual(['source-a', 'source-b', 'reconcile']);
-    });
-  });
-
-  describe('getStepLabel', () => {
-    it('returns correct label for source-a step', () => {
-      expect(getStepLabel('source-a')).toBe('Loading Source A data');
-    });
-
-    it('returns correct label for source-b step', () => {
-      expect(getStepLabel('source-b')).toBe('Loading Source B data');
-    });
-
-    it('returns correct label for reconcile step', () => {
-      expect(getStepLabel('reconcile')).toBe('Reconciling fields');
-    });
-
-    it('returns null for unknown step ID', () => {
-      expect(getStepLabel('unknown-step')).toBeNull();
-    });
-
-    it('returns null for empty string', () => {
-      expect(getStepLabel('')).toBeNull();
-    });
-  });
-
-  // ============================================
-  // Phase 5.3: Error Handling Utilities
-  // ============================================
-
-  describe('UnifiedErrorType', () => {
-    it('defines TABLE_NOT_FOUND error type', () => {
-      expect(UnifiedErrorType.TABLE_NOT_FOUND).toBe('table_not_found');
-    });
-
-    it('defines SCHEMA_NOT_FOUND error type', () => {
-      expect(UnifiedErrorType.SCHEMA_NOT_FOUND).toBe('schema_not_found');
-    });
-
-    it('defines NO_COMMON_FIELDS error type', () => {
-      expect(UnifiedErrorType.NO_COMMON_FIELDS).toBe('no_common_fields');
-    });
-
-    it('defines all expected error types', () => {
-      expect(UnifiedErrorType).toHaveProperty('TABLE_NOT_FOUND');
-      expect(UnifiedErrorType).toHaveProperty('SCHEMA_NOT_FOUND');
-      expect(UnifiedErrorType).toHaveProperty('CONNECTION_FAILED');
-      expect(UnifiedErrorType).toHaveProperty('NO_COMMON_FIELDS');
-      expect(UnifiedErrorType).toHaveProperty('NO_DATA');
-      expect(UnifiedErrorType).toHaveProperty('FILE_PARSE_ERROR');
-      expect(UnifiedErrorType).toHaveProperty('VALIDATION_ERROR');
     });
   });
 

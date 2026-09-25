@@ -69,17 +69,6 @@ describe("UsageTracker analytics reliability", () => {
     expect(UsageTracker._state.errorEvents).toHaveLength(0);
   });
 
-  it("exposes a public immediate batch flush wrapper", async () => {
-    AnalyticsSender.sendBatch = vi.fn().mockResolvedValue(true);
-
-    await UsageTracker.flushBatchNow();
-
-    expect(AnalyticsSender.sendBatch).toHaveBeenCalledTimes(1);
-    expect(UsageTracker._state.events).toHaveLength(0);
-    expect(UsageTracker._state.usageLogs).toHaveLength(0);
-    expect(UsageTracker._state.errorEvents).toHaveLength(0);
-  });
-
   it("queues feature usage logs for the next batch instead of sending live logs", () => {
     AnalyticsSender.sendLog = vi.fn();
     localStorage.setItem("user.email", "USER@example.com");
@@ -150,28 +139,6 @@ describe("UsageTracker analytics reliability", () => {
     const payload = UsageTracker._toBatchPayload();
 
     expect(payload.usage_log[0].created_time).toBe("2026-09-04 10:00:00.123");
-  });
-
-  it("queues error events for the next batch", () => {
-    UsageTracker._state.errorEvents = [];
-
-    UsageTracker.queueErrorEvent({
-      user_email: "user@example.com",
-      device_id: "device-1",
-      error_kind: "captured_error",
-      error_name: "Error",
-      message: "boom",
-      created_time: new Date().toISOString(),
-    });
-
-    expect(UsageTracker._state.errorEvents).toEqual([
-      expect.objectContaining({
-        user_email: "user@example.com",
-        device_id: "device-1",
-        error_kind: "captured_error",
-        message: "boom",
-      }),
-    ]);
   });
 
   it("normalizes legacy feature IDs", () => {
