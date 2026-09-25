@@ -30,7 +30,12 @@ export class ValueProcessorService {
     }
 
     if (AUDIT_FIELDS.by.includes(fieldName.toLowerCase())) {
-      const strValue = this._toString(value).trim();
+      const mode = options.auditUserMode || "off";
+      let auditUserValue = value;
+      if (mode === "system") auditUserValue = "SYSTEM";
+      if (mode === "custom") auditUserValue = options.customAuditUser;
+      const strValue = this._toString(auditUserValue).trim();
+      if (mode === "custom" && !strValue) throw new Error("Enter a custom SYSTEM value before generating the query.");
       return strValue ? `'${strValue.replace(/'/g, "''").toUpperCase()}'` : "'SYSTEM'";
     }
 

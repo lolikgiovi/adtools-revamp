@@ -38,6 +38,7 @@ const DATA_TABLE_ROW_HEIGHT = 20;
 const SCHEMA_TABLE_MIN_HEIGHT = 120;
 const SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT = 56;
 const SCHEMA_TABLE_SECTION_GAP = 8;
+const AUDIT_USER_PREFERENCE_KEY = "tool:quick-query:audit-user";
 
 function loadJsZip() {
   if (!jsZipPromise) {
@@ -164,6 +165,9 @@ export class QuickQueryUI {
       }
     };
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
+    this._handleSystemModeDocumentClick = (event) => {
+      if (!this.elements.systemModeControl?.contains(event.target)) this.closeSystemCustomPopover();
+    };
     this._queryTypeDocumentClick = null;
     this._handleUuidGeneratorKeydown = (event) => {
       if (event.key === "Escape") {
@@ -200,6 +204,8 @@ export class QuickQueryUI {
       }
       // Initialize UI components
       this.bindElements();
+      this.restoreAuditUserPreference();
+      this.syncAuditUserMode();
       if (isTauri()) this.elements.importOracleDataButton.hidden = false;
 
       // Desktop-only: show button but disable it in web, with native tooltip
@@ -417,6 +423,14 @@ export class QuickQueryUI {
 
       // Default SYSDATE toggle
       defaultSysdateToggle: document.getElementById("defaultSysdate"),
+      systemModeControl: document.getElementById("systemModeControl"),
+      auditUserMode: document.getElementById("auditUserMode"),
+      customAuditUser: document.getElementById("customAuditUser"),
+      systemCustomLabel: document.getElementById("systemCustomLabel"),
+      systemCustomEdit: document.getElementById("systemCustomEdit"),
+      systemCustomError: document.getElementById("systemCustomError"),
+      systemCustomPopover: document.getElementById("systemCustomPopover"),
+      systemCustomDone: document.getElementById("systemCustomDone"),
 
       // Wrap Text toggle
       toggleWrapText: document.getElementById("toggleWrapText"),
@@ -502,6 +516,26 @@ export class QuickQueryUI {
       },
       toggleWrapText: {
         change: () => this.handleToggleWrapText(),
+      },
+      systemModeControl: {
+        click: (event) => this.handleAuditUserModeChoice(event),
+      },
+      systemCustomDone: {
+        click: () => this.saveCustomAuditUser(),
+      },
+      customAuditUser: {
+        keydown: (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            this.saveCustomAuditUser();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            this.closeSystemCustomPopover({ restoreFocus: true });
+          }
+        },
+        input: () => {
+          if (this.elements.systemCustomError) this.elements.systemCustomError.hidden = true;
+        },
       },
       toggleDataMaximize: {
         click: () => this.toggleDataMaximize(),
@@ -770,6 +804,7 @@ export class QuickQueryUI {
     });
 
     document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.addEventListener("click", this._handleSystemModeDocumentClick);
     document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
     document.addEventListener("keydown", this._handleDataMaximizeKeydown);
   }
@@ -969,6 +1004,104 @@ export class QuickQueryUI {
     if (label) label.textContent = "Wrap";
     checkbox?.setAttribute("aria-label", "Wrap text in data preview cells");
     checkbox?.closest(".data-option-toggle")?.setAttribute("title", `Text wrapping: ${wrapTextOn ? "On" : "Off"}`);
+  }
+
+  syncAuditUserMode() {
+    const mode = this.elements.auditUserMode?.value || "off";
+    const control = this.elements.systemModeControl;
+    control?.classList.toggle("is-on", mode === "system");
+    control?.classList.toggle("is-custom", mode === "custom");
+    if (control) control.dataset.mode = mode;
+    control?.querySelectorAll(".system-mode-choice").forEach((button) => {
+      const selected = button.dataset.auditMode === mode;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    if (mode !== "custom") this.closeSystemCustomPopover();
+  }
+
+  restoreAuditUserPreference() {
+    let preference = {};
+    try {
+      preference = JSON.parse(localStorage.getItem(AUDIT_USER_PREFERENCE_KEY) || "{}") || {};
+    } catch {
+      // Storage can be unavailable or contain an older, invalid value.
+    }
+    this.customAuditUserValue = typeof preference.customAuditUser === "string" ? preference.customAuditUser.trim().toUpperCase() : "";
+    this.elements.customAuditUser.value = this.customAuditUserValue;
+    this.elements.systemCustomLabel.textContent = this.customAuditUserValue || "Custom";
+    const mode = ["off", "system", "custom"].includes(preference.mode) ? preference.mode : "off";
+    this.elements.auditUserMode.value = mode === "custom" && !this.customAuditUserValue ? "off" : mode;
+  }
+
+  persistAuditUserPreference() {
+    try {
+      localStorage.setItem(
+        AUDIT_USER_PREFERENCE_KEY,
+        JSON.stringify({
+          mode: this.elements.auditUserMode.value,
+          customAuditUser: this.customAuditUserValue || "",
+        }),
+      );
+    } catch {
+      // The control remains usable when browser storage is unavailable.
+    }
+  }
+
+  handleAuditUserModeChoice(event) {
+    if (event.target.closest("#systemCustomEdit")) {
+      this.openSystemCustomPopover();
+      return;
+    }
+    const button = event.target.closest(".system-mode-choice");
+    if (!button || !this.elements.systemModeControl?.contains(button)) return;
+    if (button.dataset.auditMode === "custom" && !this.customAuditUserValue) {
+      this._auditModeBeforeCustomEdit = this.elements.auditUserMode.value;
+      this.elements.auditUserMode.value = "custom";
+      this.syncAuditUserMode();
+      this.openSystemCustomPopover();
+      return;
+    }
+    this.elements.auditUserMode.value = button.dataset.auditMode;
+    this.syncAuditUserMode();
+    this.persistAuditUserPreference();
+  }
+
+  openSystemCustomPopover() {
+    if (!this.elements.systemCustomPopover) return;
+    this.elements.customAuditUser.value = this.customAuditUserValue || "";
+    if (this.elements.systemCustomError) this.elements.systemCustomError.hidden = true;
+    this.elements.systemCustomPopover.hidden = false;
+    this.elements.customAuditUser?.focus();
+  }
+
+  saveCustomAuditUser() {
+    const value = this.elements.customAuditUser?.value.trim().toUpperCase() || "";
+    if (!value) {
+      if (this.elements.systemCustomError) this.elements.systemCustomError.hidden = false;
+      this.elements.customAuditUser?.focus();
+      return;
+    }
+    this.customAuditUserValue = value;
+    this.elements.customAuditUser.value = value;
+    this.elements.systemCustomLabel.textContent = value;
+    this.elements.auditUserMode.value = "custom";
+    this._auditModeBeforeCustomEdit = null;
+    this.syncAuditUserMode();
+    this.persistAuditUserPreference();
+    this.closeSystemCustomPopover({ restoreFocus: true });
+  }
+
+  closeSystemCustomPopover({ restoreFocus = false } = {}) {
+    if (!this.elements.systemCustomPopover || this.elements.systemCustomPopover.hidden) return;
+    this.elements.systemCustomPopover.hidden = true;
+    this.elements.customAuditUser.value = this.customAuditUserValue || "";
+    if (this._auditModeBeforeCustomEdit) {
+      this.elements.auditUserMode.value = this._auditModeBeforeCustomEdit;
+      this._auditModeBeforeCustomEdit = null;
+      this.syncAuditUserMode();
+    }
+    if (restoreFocus) this.elements.systemModeControl?.querySelector('[data-audit-mode="custom"]')?.focus();
   }
 
   scheduleDataTableLayoutRefresh() {
@@ -1904,6 +2037,7 @@ export class QuickQueryUI {
     clearTimeout(this._tabUndoTimer);
     this._closedTabs = null;
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.removeEventListener("click", this._handleSystemModeDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
     document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
     if (this._queryTypeDocumentClick) {
@@ -2234,6 +2368,13 @@ export class QuickQueryUI {
         throw new Error("Please fill the schema data first");
       }
 
+      const auditUserMode = this.elements.auditUserMode?.value || "off";
+      const customAuditUser = this.customAuditUserValue || "";
+      if (auditUserMode === "custom" && !customAuditUser) {
+        this.openSystemCustomPopover();
+        throw new Error("Enter a custom SYSTEM value before generating the query.");
+      }
+
       if (isDbeaverSchema(schemaData)) {
         this.adjustDbeaverSchema(schemaData);
 
@@ -2261,7 +2402,8 @@ export class QuickQueryUI {
         }
       }
 
-      const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked };
+      const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
+      if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
       const blobAttachments = findReferencedBlobAttachments(schemaData, inputData, this.processedFiles);
       if (blobAttachments.length > 0) {
         const choice = await this._showBlobAttachmentChoice(blobAttachments.length);
@@ -2956,7 +3098,7 @@ export class QuickQueryUI {
     this.isDataMaximized = Boolean(maximized);
     toolContainer.classList.toggle("data-maximized", this.isDataMaximized);
     const buttonLabel = button.querySelector(".qq-data-maximize-label");
-    const label = this.isDataMaximized ? "Restore Split View" : "Expand Data Sheet";
+    const label = this.isDataMaximized ? "Restore Split View" : "Expand Data";
     if (buttonLabel) {
       buttonLabel.textContent = label;
     } else {
@@ -3436,7 +3578,8 @@ export class QuickQueryUI {
     }
 
     if (autoCopy) {
-      await this.copyQuickQueryUuids();
+      const copied = await this.copyQuickQueryUuids();
+      if (copied) document.dispatchEvent(new CustomEvent("quick-query:uuid-copied", { detail: { count: quantity } }));
     }
   }
 

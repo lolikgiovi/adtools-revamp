@@ -44,6 +44,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <button id="showSavedSchemas" class="btn btn-primary btn-sm">Schemas</button>
                     <button id="pasteDbeaverSchema" class="btn btn-primary btn-sm"
                         title="Copy columns from DBeaver, then paste them into the schema table">Paste from DBeaver</button>
+                    <button id="addFieldNames" class="btn btn-primary btn-sm">Sync Fields</button>
                     <button id="clearAll" class="btn btn-primary btn-sm">Clear All</button>
                     <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
                 </div>
@@ -96,7 +97,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="content-b">
             <div class="button-group quick-query-data-controls">
                 <div class="qq-uuid-generator-anchor" id="quickQueryUuidAnchor">
-                    <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button" aria-expanded="false" aria-controls="quickQueryUuidPopover">Generate UUID</button>
+                    <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button" aria-expanded="false" aria-controls="quickQueryUuidPopover">UUID</button>
                     <div id="quickQueryUuidPopover" class="qq-uuid-generator-popover hidden" role="dialog" aria-labelledby="quickQueryUuidTitle" aria-hidden="true">
                         <div class="qq-uuid-generator-header">
                             <h3 id="quickQueryUuidTitle">UUID Generator</h3>
@@ -115,7 +116,6 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         </div>
                     </div>
                 </div>
-                <button id="addFieldNames" class="btn btn-primary btn-sm">Sync Field Names</button>
                 <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
                 <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
@@ -129,7 +129,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <svg class="qq-data-maximize-icon qq-data-maximize-icon-restore" viewBox="0 0 16 16" aria-hidden="true">
                         <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4M6 6 2 2M10 6l4-4M6 10l-4 4M10 10l4 4" />
                     </svg>
-                    <span class="qq-data-maximize-label">Expand Data Sheet</span>
+                    <span class="qq-data-maximize-label">Expand Data</span>
                 </button>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
                 <label class="qq-contained-toggle data-option-toggle sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
@@ -137,6 +137,25 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <span class="data-option-toggle-label">SYSDATE</span>
                     <span class="qq-contained-toggle-track" aria-hidden="true"><span class="qq-contained-toggle-thumb"></span></span>
                 </label>
+                <div class="qq-contained-toggle system-mode-control" id="systemModeControl" role="group" aria-label="Audit user mode">
+                    <input id="auditUserMode" type="hidden" value="off" />
+                    <div class="system-mode-choices">
+                        <button type="button" class="system-mode-choice is-selected" data-audit-mode="off" aria-pressed="true">Off</button>
+                        <button type="button" class="system-mode-choice" data-audit-mode="system" aria-pressed="false">SYSTEM</button>
+                        <span class="system-mode-custom-choice">
+                            <button type="button" class="system-mode-choice system-mode-custom-button" data-audit-mode="custom" aria-pressed="false" title="Use custom audit user"><span id="systemCustomLabel">Custom</span></button>
+                            <button type="button" class="system-mode-edit" id="systemCustomEdit" aria-label="Edit custom audit user" title="Edit custom audit user">
+                                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 11.5 3a1.4 1.4 0 0 1 2 2L5 13.5l-3 .5.5-3Z" /></svg>
+                            </button>
+                        </span>
+                    </div>
+                    <div class="system-custom-popover" id="systemCustomPopover" hidden>
+                        <label for="customAuditUser">Custom audit user</label>
+                        <input id="customAuditUser" type="text" placeholder="e.g. RXX_SQUAD" autocapitalize="characters" spellcheck="false" />
+                        <span class="system-custom-error" id="systemCustomError" role="alert" hidden>Enter a custom audit user.</span>
+                        <button type="button" id="systemCustomDone">Save</button>
+                    </div>
+                </div>
                 <label class="qq-contained-toggle data-option-toggle wrap-text-toggle" title="Wrap text in data preview cells">
                     <input type="checkbox" id="toggleWrapText" />
                     <span class="wrap-text-toggle-label">Wrap</span>

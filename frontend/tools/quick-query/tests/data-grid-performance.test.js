@@ -58,7 +58,7 @@ function createUi() {
   maximizeButton.id = "toggleDataMaximize";
   const maximizeButtonLabel = document.createElement("span");
   maximizeButtonLabel.className = "qq-data-maximize-label";
-  maximizeButtonLabel.textContent = "Expand Data Sheet";
+  maximizeButtonLabel.textContent = "Expand Data";
   maximizeButton.append(maximizeButtonLabel);
   leftScroll.className = "quick-query-left-scroll";
   filesContainer.id = "files-container";
@@ -96,6 +96,7 @@ describe("Quick Query data-grid performance", () => {
   beforeEach(() => {
     handsontableInstances.length = 0;
     document.body.replaceChildren();
+    localStorage.clear();
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
   });
 
@@ -103,15 +104,97 @@ describe("Quick Query data-grid performance", () => {
     document.body.innerHTML = MAIN_TEMPLATE;
 
     const sysdate = document.getElementById("defaultSysdate");
+    const auditUserMode = document.getElementById("auditUserMode");
+    const systemModeControl = document.getElementById("systemModeControl");
+    const systemCustomPopover = document.getElementById("systemCustomPopover");
     const wrap = document.getElementById("toggleWrapText");
     const editorWrap = document.getElementById("toggleWordWrap");
 
     expect(sysdate.checked).toBe(true);
     expect(wrap.checked).toBe(false);
     expect(sysdate.closest(".qq-contained-toggle").textContent.trim()).toBe("SYSDATE");
+    expect(Array.from(systemModeControl.querySelectorAll(".system-mode-choice"), (button) => button.textContent)).toEqual([
+      "Off",
+      "SYSTEM",
+      "Custom",
+    ]);
+    expect(auditUserMode.value).toBe("off");
+    expect(Array.from(systemModeControl.querySelectorAll(".system-mode-choice"), (button) => button.dataset.auditMode)).toEqual([
+      "off",
+      "system",
+      "custom",
+    ]);
+    expect(systemCustomPopover.hidden).toBe(true);
     expect(wrap.closest(".qq-contained-toggle").textContent.trim()).toBe("Wrap");
     expect(editorWrap.querySelector(".word-wrap-toggle-label").textContent).toBe("Wrap");
     expect(document.querySelectorAll(".qq-contained-toggle-track")).toHaveLength(3);
+  });
+
+  it("cycles through Off, SYSTEM, and a saved custom audit user", () => {
+    document.body.innerHTML = MAIN_TEMPLATE;
+    const auditUserMode = document.getElementById("auditUserMode");
+    const customAuditUser = document.getElementById("customAuditUser");
+    const systemModeControl = document.getElementById("systemModeControl");
+    const systemCustomPopover = document.getElementById("systemCustomPopover");
+    const systemCustomLabel = document.getElementById("systemCustomLabel");
+    const systemCustomEdit = document.getElementById("systemCustomEdit");
+    const systemCustomError = document.getElementById("systemCustomError");
+    const ui = Object.create(QuickQueryUI.prototype);
+    ui.elements = { auditUserMode, customAuditUser, systemModeControl, systemCustomPopover, systemCustomLabel, systemCustomError };
+    ui.restoreAuditUserPreference();
+    const choose = (mode) => ui.handleAuditUserModeChoice({ target: systemModeControl.querySelector(`[data-audit-mode="${mode}"]`) });
+
+    choose("system");
+    expect(auditUserMode.value).toBe("system");
+    expect(systemModeControl.classList.contains("is-on")).toBe(true);
+    expect(systemCustomPopover.hidden).toBe(true);
+
+    choose("custom");
+    expect(auditUserMode.value).toBe("custom");
+    expect(systemModeControl.classList.contains("is-custom")).toBe(true);
+    expect(systemCustomPopover.hidden).toBe(false);
+    expect(document.activeElement).toBe(customAuditUser);
+
+    ui.saveCustomAuditUser();
+    expect(systemCustomError.hidden).toBe(false);
+    expect(systemCustomPopover.hidden).toBe(false);
+
+    customAuditUser.value = "rxx_squad";
+    ui.saveCustomAuditUser();
+    expect(systemCustomLabel.textContent).toBe("RXX_SQUAD");
+    expect(customAuditUser.value).toBe("RXX_SQUAD");
+    expect(systemCustomPopover.hidden).toBe(true);
+
+    ui.handleAuditUserModeChoice({ target: systemCustomEdit });
+    expect(systemCustomPopover.hidden).toBe(false);
+    customAuditUser.value = "unsaved";
+    ui.closeSystemCustomPopover();
+    expect(customAuditUser.value).toBe("RXX_SQUAD");
+    expect(systemCustomPopover.hidden).toBe(true);
+
+    choose("off");
+    expect(auditUserMode.value).toBe("off");
+    expect(systemCustomPopover.hidden).toBe(true);
+    expect(systemModeControl.querySelector('[data-audit-mode="off"]').getAttribute("aria-pressed")).toBe("true");
+
+    choose("custom");
+    expect(auditUserMode.value).toBe("custom");
+    expect(systemCustomPopover.hidden).toBe(true);
+
+    document.body.innerHTML = MAIN_TEMPLATE;
+    const revisited = Object.create(QuickQueryUI.prototype);
+    revisited.elements = {
+      auditUserMode: document.getElementById("auditUserMode"),
+      customAuditUser: document.getElementById("customAuditUser"),
+      systemCustomLabel: document.getElementById("systemCustomLabel"),
+      systemModeControl: document.getElementById("systemModeControl"),
+      systemCustomPopover: document.getElementById("systemCustomPopover"),
+    };
+    revisited.restoreAuditUserPreference();
+    revisited.syncAuditUserMode();
+    expect(revisited.elements.auditUserMode.value).toBe("custom");
+    expect(revisited.elements.systemCustomLabel.textContent).toBe("RXX_SQUAD");
+    expect(revisited.customAuditUserValue).toBe("RXX_SQUAD");
   });
 
   it("constructs the data grid with a finite virtualized viewport and fixed rows", () => {
@@ -420,7 +503,7 @@ describe("Quick Query data-grid performance", () => {
     ui.handleDataMaximizeKeydown({ key: "Escape" });
 
     expect(toolContainer.classList.contains("data-maximized")).toBe(false);
-    expect(maximizeButton.querySelector(".qq-data-maximize-label").textContent).toBe("Expand Data Sheet");
+    expect(maximizeButton.querySelector(".qq-data-maximize-label").textContent).toBe("Expand Data");
     expect(maximizeButton.getAttribute("aria-pressed")).toBe("false");
     expect(maximizeButton.title).toBe("Expand the data sheet to use the available workspace");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ height: 276 }));

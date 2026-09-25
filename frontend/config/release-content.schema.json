@@ -72,9 +72,9 @@
     },
     "tips": {
       "type": "array",
-      "description": "Contextual feature tips shown on their matching route. Each tip is remembered independently after it opens.",
+      "description": "Contextual feature tips shown on their matching route. Action tips are remembered only after completion.",
       "items": { "$ref": "#/$defs/featureTip" },
-      "maxItems": 8
+      "maxItems": 14
     }
   },
   "$defs": {
@@ -165,7 +165,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
-          "description": "Stable identity used to remember that this tip has opened."
+          "description": "Stable identity used to remember that this tip has been completed."
         },
         "route": { "type": "string", "minLength": 1 },
         "target": { "type": "string", "minLength": 1 },
@@ -174,7 +174,32 @@
           "enum": ["top", "right", "bottom", "left"]
         },
         "title": { "type": "string", "minLength": 1 },
-        "body": { "type": "string", "minLength": 1 }
+        "body": { "type": "string", "minLength": 1 },
+        "guided": { "type": "boolean" },
+        "surfaces": { "type": "array", "items": { "type": "string", "enum": ["web", "desktop"] }, "minItems": 1 },
+        "completeOn": { "$ref": "#/$defs/tipCompletion" },
+        "next": { "$ref": "#/$defs/tipStage" }
+      }
+    },
+    "tipCompletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event"],
+      "properties": {
+        "event": { "type": "string", "enum": ["click", "change", "quick-query:uuid-copied"] },
+        "target": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tipStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "body", "completeOn"],
+      "properties": {
+        "target": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 },
+        "placement": { "type": "string", "enum": ["top", "right", "bottom", "left"] },
+        "completeOn": { "$ref": "#/$defs/tipCompletion" }
       }
     }
   }

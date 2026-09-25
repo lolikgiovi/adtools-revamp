@@ -173,7 +173,7 @@ function validateFeatureTip(tip, index) {
     errors.push(`${labelPath(label)} must be an object`);
     return;
   }
-  validateKeys(tip, ["id", "route", "target", "placement", "title", "body"], label);
+  validateKeys(tip, ["id", "route", "target", "placement", "title", "body", "guided", "surfaces", "completeOn", "next"], label);
   requireString(tip.id, `${label}.id`);
   requireString(tip.route, `${label}.route`);
   requireString(tip.target, `${label}.target`);
@@ -185,6 +185,39 @@ function validateFeatureTip(tip, index) {
   if (tip.placement !== undefined && !["top", "right", "bottom", "left"].includes(tip.placement)) {
     errors.push(`${labelPath(`${label}.placement`)} must be top, right, bottom, or left`);
   }
+  if (tip.guided !== undefined && typeof tip.guided !== "boolean") errors.push(`${labelPath(`${label}.guided`)} must be a boolean`);
+  if (
+    tip.surfaces !== undefined &&
+    (!Array.isArray(tip.surfaces) || tip.surfaces.length === 0 || tip.surfaces.some((surface) => !["web", "desktop"].includes(surface)))
+  ) {
+    errors.push(`${labelPath(`${label}.surfaces`)} must contain web or desktop`);
+  }
+  if (tip.completeOn !== undefined) validateTipCompletion(tip.completeOn, `${label}.completeOn`);
+  if (tip.next !== undefined) {
+    if (!isRecord(tip.next)) errors.push(`${labelPath(`${label}.next`)} must be an object`);
+    else {
+      validateKeys(tip.next, ["target", "title", "body", "placement", "completeOn"], `${label}.next`);
+      requireString(tip.next.target, `${label}.next.target`);
+      requireString(tip.next.body, `${label}.next.body`);
+      if (tip.next.title !== undefined) requireString(tip.next.title, `${label}.next.title`);
+      if (tip.next.placement !== undefined && !["top", "right", "bottom", "left"].includes(tip.next.placement)) {
+        errors.push(`${labelPath(`${label}.next.placement`)} must be top, right, bottom, or left`);
+      }
+      validateTipCompletion(tip.next.completeOn, `${label}.next.completeOn`);
+    }
+  }
+}
+
+function validateTipCompletion(completion, label) {
+  if (!isRecord(completion)) {
+    errors.push(`${labelPath(label)} must be an object`);
+    return;
+  }
+  validateKeys(completion, ["event", "target"], label);
+  if (!["click", "change", "quick-query:uuid-copied"].includes(completion.event)) {
+    errors.push(`${labelPath(`${label}.event`)} must be click, change, or quick-query:uuid-copied`);
+  }
+  if (completion.target !== undefined) requireString(completion.target, `${label}.target`);
 }
 
 function validateContent(content) {
@@ -257,7 +290,7 @@ function validateContent(content) {
   if (content.tips !== undefined) {
     if (!Array.isArray(content.tips)) errors.push("release content tips must be an array");
     else {
-      if (content.tips.length > 8) errors.push("release content may contain at most eight contextual tips");
+      if (content.tips.length > 14) errors.push("release content may contain at most fourteen contextual tips");
       const ids = new Set();
       content.tips.forEach((tip, index) => {
         validateFeatureTip(tip, index);

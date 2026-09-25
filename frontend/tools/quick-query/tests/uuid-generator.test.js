@@ -43,7 +43,7 @@ describe("Quick Query UUID generator", () => {
     expect(ui.generateQuickQueryUuids).toHaveBeenCalledWith({ track: false, autoCopy: false });
   });
 
-  it("generates again when Generate UUID is clicked while the popover is open", () => {
+  it("generates again when UUID is clicked while the popover is open", () => {
     const ui = createUuidUi({ open: true });
 
     ui.toggleUuidGenerator({ stopPropagation: vi.fn() });
@@ -57,6 +57,8 @@ describe("Quick Query UUID generator", () => {
     ui.elements.quickQueryUuidQuantity.value = "50";
     ui.copyToClipboard = vi.fn().mockResolvedValue(true);
     ui.createUuid = vi.fn(() => "generated-uuid");
+    const copiedEvent = vi.fn();
+    document.addEventListener("quick-query:uuid-copied", copiedEvent, { once: true });
 
     await ui.generateQuickQueryUuids();
 
@@ -65,5 +67,20 @@ describe("Quick Query UUID generator", () => {
     expect(ui.elements.quickQueryUuidStatus.textContent).toBe("50 UUIDs copied to clipboard");
     expect(ui.uuidAnalyticsSession.generated_count).toBe(50);
     expect(ui.uuidAnalyticsSession.copied_count).toBe(50);
+    expect(copiedEvent).toHaveBeenCalledOnce();
+    expect(copiedEvent.mock.calls[0][0].detail.count).toBe(50);
+  });
+
+  it("does not report tour completion when clipboard copy fails", async () => {
+    const ui = createUuidUi({ output: "", mockGenerate: false });
+    ui.copyToClipboard = vi.fn().mockResolvedValue(false);
+    ui.createUuid = vi.fn(() => "generated-uuid");
+    const copiedEvent = vi.fn();
+    document.addEventListener("quick-query:uuid-copied", copiedEvent, { once: true });
+
+    await ui.generateQuickQueryUuids();
+
+    expect(copiedEvent).not.toHaveBeenCalled();
+    document.removeEventListener("quick-query:uuid-copied", copiedEvent);
   });
 });

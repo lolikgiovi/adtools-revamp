@@ -78,14 +78,24 @@ describe("Quick Query BLOB attachment choice", () => {
     expect(ui._showBlobAttachmentChoice).toHaveBeenCalledWith(1);
     expect(ui._generateQuery).toHaveBeenCalledWith(
       "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
-      { defaultSysdate: true, blobAttachmentMode: "filename" },
+      { defaultSysdate: true, auditUserMode: "off", blobAttachmentMode: "filename" },
     );
 
     ui.dataTable.getData = () => [["id", "document"], ["1", "missing.pdf"]];
     await ui.handleGenerateQuery();
     expect(ui._showBlobAttachmentChoice).toHaveBeenCalledTimes(1);
     expect(ui._generateQuery).toHaveBeenLastCalledWith(
-      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual", { defaultSysdate: true },
+      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
+      { defaultSysdate: true, auditUserMode: "off" },
+    );
+
+    ui.elements.auditUserMode = { value: "custom" };
+    ui.elements.customAuditUser = { value: "R27_ANTARES" };
+    ui.customAuditUserValue = "R27_ANTARES";
+    await ui.handleGenerateQuery();
+    expect(ui._generateQuery).toHaveBeenLastCalledWith(
+      "TEST.DOCUMENTS", "merge", expect.any(Array), expect.any(Array), "manual",
+      { defaultSysdate: true, auditUserMode: "custom", customAuditUser: "R27_ANTARES" },
     );
   });
 });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import releaseContent from "../../config/release-content.json";
 import {
   ReleaseTips,
   ReleaseTour,
@@ -175,11 +176,32 @@ describe("release tour", () => {
         placement: "top",
         title: "Shape the data sheet",
         body: "Expand it when you need more room.",
+        guided: true,
+        completeOn: null,
+        next: null,
+        surfaces: [],
       },
     ]);
   });
 
-  it("shows a contextual tip once after it has opened", () => {
+  it("keeps desktop-only import guidance out of the web tour", () => {
+    const content = {
+      tips: [
+        {
+          id: "oracle",
+          route: "quick-query",
+          target: "#importOracleData",
+          title: "Import Oracle",
+          body: "Open import.",
+          surfaces: ["desktop"],
+        },
+      ],
+    };
+    expect(normalizeReleasePayload({ ...content, surface: "web" }).tips).toHaveLength(0);
+    expect(normalizeReleasePayload({ ...content, surface: "desktop" }).tips).toHaveLength(1);
+  });
+
+  it("keeps a contextual tip unfinished until its target is used", async () => {
     document.body.innerHTML = '<aside class="hidden-sidebar"></aside><button class="header-search">Search</button>';
     document.querySelector(".header-search").getBoundingClientRect = () => ({
       width: 160,
@@ -206,6 +228,7 @@ describe("release tour", () => {
           target: ".header-search",
           title: "Search with Command K",
           body: "Find saved Quick Query tables.",
+          completeOn: { event: "click", target: ".header-search" },
         },
       ],
     };
@@ -215,18 +238,103 @@ describe("release tour", () => {
     expect(tips.openForCurrentRoute()).toBe(true);
     expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Search with Command K");
     expect(document.querySelector(".release-feature-tip")?.textContent).not.toContain("Hidden tip");
+    expect(document.querySelector(".release-feature-tip .release-tour-tooltip-actions")?.children).toHaveLength(0);
+    expect(localStorage.getItem("releaseTip.opened.release-1.3.6.global-search")).toBeNull();
     tips.close();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    document.querySelector(".header-search").click();
+    await Promise.resolve();
+    expect(localStorage.getItem("releaseTip.opened.release-1.3.6.global-search")).toBe("true");
     expect(tips.openForCurrentRoute()).toBe(false);
+    tips.destroy();
+  });
+
+  it("lets Escape close an action tip without recording completion", () => {
+    document.body.innerHTML = '<button id="feature">Feature</button>';
+    document.querySelector("#feature").getBoundingClientRect = () => ({
+      width: 100,
+      height: 30,
+      top: 20,
+      right: 120,
+      bottom: 50,
+      left: 20,
+    });
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "escape-tip",
+        tips: [
+          {
+            id: "feature",
+            route: "home",
+            target: "#feature",
+            title: "Feature",
+            body: "Click it.",
+            completeOn: { event: "click", target: "#feature" },
+          },
+        ],
+      },
+      getRoute: () => "home",
+    });
+    tips.start();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".release-feature-tip")).toBeNull();
+    expect(localStorage.getItem("releaseTip.opened.escape-tip.feature")).toBeNull();
+    expect(tips.openForCurrentRoute()).toBe(false);
+    tips.destroy();
+  });
+
+  it("lets the close icon dismiss a tip without completing it", () => {
+    document.body.innerHTML = '<button id="feature">Feature</button>';
+    document.querySelector("#feature").getBoundingClientRect = () => ({
+      width: 100,
+      height: 30,
+      top: 20,
+      right: 120,
+      bottom: 50,
+      left: 20,
+    });
+    let route = "home";
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "close-tip",
+        tips: [{ id: "feature", route: "home", target: "#feature", title: "Feature", body: "Try it." }],
+      },
+      getRoute: () => route,
+    });
+
+    tips.start();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    const closeButton = document.querySelector(".release-feature-tip-close");
+    expect(closeButton?.getAttribute("aria-label")).toBe("Close feature tip");
+    closeButton.click();
+    expect(document.querySelector(".release-feature-tip")).toBeNull();
+    expect(localStorage.getItem("releaseTip.opened.close-tip.feature")).toBeNull();
+    expect(tips.openForCurrentRoute()).toBe(false);
+    route = "quick-query";
+    expect(tips.openForCurrentRoute()).toBe(false);
+    route = "home";
+    expect(tips.openForCurrentRoute()).toBe(true);
     tips.destroy();
   });
 
   it("chooses a visible target from responsive alternatives", () => {
     document.body.innerHTML = '<button id="compact-mode"></button><button id="wide-mode"></button>';
     document.querySelector("#compact-mode").getBoundingClientRect = () => ({
-      width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
     });
     document.querySelector("#wide-mode").getBoundingClientRect = () => ({
-      width: 90, height: 30, top: 20, right: 110, bottom: 50, left: 20,
+      width: 90,
+      height: 30,
+      top: 20,
+      right: 110,
+      bottom: 50,
+      left: 20,
     });
     const tips = new ReleaseTips({
       release: {
@@ -240,6 +348,172 @@ describe("release tour", () => {
     expect(tips.openForCurrentRoute()).toBe(true);
     expect(tips.activeTip?.id).toBe("mode");
     expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Choose a mode");
+    tips.destroy();
+  });
+
+  it("highlights the visible HTML dropdown trigger and clears its menu", async () => {
+    for (const [tipId, selectId] of [
+      ["html-template-preview-width", "previewViewportSelect"],
+      ["html-template-preview-vtl", "previewVtlModeSelect"],
+    ]) {
+      document.body.innerHTML = `<select id="${selectId}" aria-hidden="true"></select><button id="${selectId}-trigger" aria-expanded="false"></button>`;
+      const native = document.querySelector(`#${selectId}`);
+      const trigger = document.querySelector(`#${selectId}-trigger`);
+      native.getBoundingClientRect = () => ({ width: 1, height: 1, top: 50, right: 21, bottom: 51, left: 20 });
+      trigger.getBoundingClientRect = () => ({ width: 180, height: 36, top: 40, right: 200, bottom: 76, left: 20 });
+      const tip = releaseContent.tips.find((item) => item.id === tipId);
+      const tips = new ReleaseTips({ release: { releaseId: `test-${tipId}`, tips: [tip] }, getRoute: () => "html-template" });
+
+      tips.start();
+      expect(tips.openForCurrentRoute()).toBe(true);
+      tips.reposition();
+      expect(tips.spotlightEl.style.width).toBe("192px");
+      expect(tips.spotlightEl.style.height).toBe("48px");
+      expect(tips.tooltipEl.style.visibility).toBe("");
+      trigger.setAttribute("aria-expanded", "true");
+      await Promise.resolve();
+      expect(tips.tooltipEl.style.visibility).toBe("hidden");
+      trigger.setAttribute("aria-expanded", "false");
+      await Promise.resolve();
+      expect(tips.tooltipEl.style.visibility).toBe("");
+      tips.destroy();
+    }
+  });
+
+  it("requires UUID generation and a successful copy after opening the generator", async () => {
+    document.body.innerHTML = '<button id="quickQueryUuidButton">UUID</button><button id="quickQueryUuidGenerate">Generate</button>';
+    document.querySelectorAll("button").forEach((button) => {
+      button.getBoundingClientRect = () => ({ width: 100, height: 30, top: 20, right: 120, bottom: 50, left: 20 });
+    });
+    let tipPresentDuringClick = false;
+    document.querySelector("#quickQueryUuidButton").addEventListener("click", (event) => {
+      tipPresentDuringClick = Boolean(document.querySelector(".release-feature-tip"));
+      event.stopPropagation();
+    });
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "uuid-tour",
+        tips: [
+          {
+            id: "uuid",
+            route: "quick-query",
+            target: "#quickQueryUuidButton",
+            title: "UUID",
+            body: "Open it.",
+            completeOn: { event: "click", target: "#quickQueryUuidButton" },
+            next: { target: "#quickQueryUuidGenerate", body: "Generate and copy.", completeOn: { event: "quick-query:uuid-copied" } },
+          },
+        ],
+      },
+      getRoute: () => "quick-query",
+    });
+    tips.start();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    document.querySelector("#quickQueryUuidButton").click();
+    await Promise.resolve();
+    expect(tipPresentDuringClick).toBe(true);
+    expect(localStorage.getItem("releaseTip.opened.uuid-tour.uuid")).toBeNull();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Generate and copy.");
+    document.querySelector("#quickQueryUuidGenerate").click();
+    expect(localStorage.getItem("releaseTip.opened.uuid-tour.uuid")).toBeNull();
+    document.dispatchEvent(new CustomEvent("quick-query:uuid-copied"));
+    await Promise.resolve();
+    expect(localStorage.getItem("releaseTip.opened.uuid-tour.uuid")).toBe("true");
+    tips.destroy();
+  });
+
+  it("leaves a skipped action tip unfinished until the user returns to its route", () => {
+    document.body.innerHTML = '<button id="feature">Feature</button>';
+    document.querySelector("#feature").getBoundingClientRect = () => ({
+      width: 100,
+      height: 30,
+      top: 20,
+      right: 120,
+      bottom: 50,
+      left: 20,
+    });
+    let route = "home";
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "skip-tour",
+        tips: [
+          {
+            id: "feature",
+            route: "home",
+            target: "#feature",
+            title: "Feature",
+            body: "Try it.",
+            completeOn: { event: "click", target: "#feature" },
+          },
+        ],
+      },
+      getRoute: () => route,
+    });
+    tips.startGuided();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    document.querySelector(".release-feature-tip .btn-ghost").click();
+    expect(localStorage.getItem("releaseTip.opened.skip-tour.feature")).toBeNull();
+    expect(tips.openForCurrentRoute()).toBe(false);
+    route = "quick-query";
+    expect(tips.openForCurrentRoute()).toBe(false);
+    route = "home";
+    expect(tips.openForCurrentRoute()).toBe(true);
+    tips.destroy();
+  });
+
+  it("waits for the Oracle import dialog to close before showing the audit tip", async () => {
+    document.body.innerHTML = `
+      <button id="importOracleData">Import Oracle</button>
+      <button id="systemModeControl">Audit user</button>
+      <div id="oracleDataModal" class="hidden" role="dialog" aria-modal="true"></div>
+    `;
+    document.querySelectorAll("button").forEach((button) => {
+      button.getBoundingClientRect = () => ({ width: 120, height: 30, top: 20, right: 140, bottom: 50, left: 20 });
+    });
+    const modal = document.querySelector("#oracleDataModal");
+    document.querySelector("#importOracleData").addEventListener("click", () => modal.classList.remove("hidden"));
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "oracle-modal-tour",
+        tips: [
+          {
+            id: "import",
+            route: "quick-query",
+            target: "#importOracleData",
+            title: "Import",
+            body: "Open it.",
+            completeOn: { event: "click", target: "#importOracleData" },
+          },
+          {
+            id: "audit",
+            route: "quick-query",
+            target: "#systemModeControl",
+            title: "Audit",
+            body: "Choose a user.",
+            completeOn: { event: "click", target: "#systemModeControl" },
+          },
+        ],
+      },
+      getRoute: () => "quick-query",
+    });
+    tips.startGuided();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    document.querySelector("#importOracleData").click();
+    await Promise.resolve();
+
+    expect(tips.guidedIndex).toBe(1);
+    expect(tips.openForCurrentRoute()).toBe(false);
+    expect(document.querySelector(".release-feature-tip")).toBeNull();
+    expect(localStorage.getItem("releaseTip.opened.oracle-modal-tour.audit")).toBeNull();
+
+    modal.classList.add("hidden");
+    await vi.waitFor(() => expect(tips.activeTip?.id).toBe("audit"));
+    modal.classList.remove("hidden");
+    await vi.waitFor(() => expect(document.querySelector(".release-feature-tip")).toBeNull());
+    expect(localStorage.getItem("releaseTip.opened.oracle-modal-tour.audit")).toBeNull();
+    modal.classList.add("hidden");
+    await vi.waitFor(() => expect(tips.activeTip?.id).toBe("audit"));
     tips.destroy();
   });
 
@@ -286,7 +560,7 @@ describe("release tour", () => {
     expect(navigated).toEqual(["quick-query", "check-image"]);
     expect(tips.openForCurrentRoute()).toBe(true);
     expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Tip 2 of 2");
-    expect(document.querySelector(".release-feature-tip .btn-primary")?.textContent).toBe("Done");
+    expect(document.querySelector(".release-feature-tip .btn-primary")?.textContent).toBe("Next");
 
     document.querySelector(".release-feature-tip .btn-primary").click();
     expect(tips.guided).toBe(false);

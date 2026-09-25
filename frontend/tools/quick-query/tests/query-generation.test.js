@@ -168,6 +168,16 @@ describe('QueryGenerationService - MERGE generation (lowercase headers)', () => 
     expect(sql).toContain('SELECT * FROM my_table WHERE id IN (1)')
     expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
   })
+
+  it('uses the custom audit user for both MERGE source fields', () => {
+    const sql = svc.generateQuery('my_table', 'merge', schema, inputData, [], {
+      auditUserMode: 'custom',
+      customAuditUser: 'R27_ANTARES',
+    })
+
+    expect(sql.match(/'R27_ANTARES'/g)).toHaveLength(2)
+    expect(sql).not.toContain("'USER1'")
+  })
 })
 
 describe('QueryGenerationService - MERGE generation (uppercase headers)', () => {
@@ -202,6 +212,37 @@ describe('QueryGenerationService - INSERT generation', () => {
     expect(sql.indexOf('------ SELECT Statement --------')).toBeGreaterThan(sql.indexOf('INSERT INTO my_table'))
     expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
   })
+
+  it('uses data sheet audit users in Off mode, with SYSTEM for blanks', () => {
+    const sql = svc.generateQuery('my_table', 'insert', schema, [headers, ['1','menu','10','','entered_user','','']], [], {
+      auditUserMode: 'off',
+    })
+
+    expect(sql).toContain("VALUES (1, 'menu', 10, SYSDATE, 'ENTERED_USER', SYSDATE, 'SYSTEM')")
+  })
+
+  it('overrides both audit users with SYSTEM in On mode', () => {
+    const sql = svc.generateQuery('my_table', 'insert', schema, inputData, [], { auditUserMode: 'system' })
+
+    expect(sql).toContain("VALUES (1, 'menu', 10, SYSDATE, 'SYSTEM', SYSDATE, 'SYSTEM')")
+    expect(sql).not.toContain("'USER1'")
+  })
+
+  it('overrides both audit users with the escaped custom value', () => {
+    const sql = svc.generateQuery('my_table', 'insert', schema, inputData, [], {
+      auditUserMode: 'custom',
+      customAuditUser: " r27_antares's ",
+    })
+
+    expect(sql).toContain("VALUES (1, 'menu', 10, SYSDATE, 'R27_ANTARES''S', SYSDATE, 'R27_ANTARES''S')")
+  })
+
+  it('requires a value in Custom mode', () => {
+    expect(() => svc.generateQuery('my_table', 'insert', schema, inputData, [], {
+      auditUserMode: 'custom',
+      customAuditUser: ' ',
+    })).toThrow('Enter a custom SYSTEM value')
+  })
 })
 
 describe('QueryGenerationService - UPDATE generation', () => {
@@ -230,6 +271,14 @@ describe('QueryGenerationService - UPDATE generation', () => {
     expect(sql).toContain('SELECT "type", "sequence", updated_time, updated_by FROM my_table WHERE id IN (1, 2);')
     expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
     // PK used only in WHERE/ON clauses; not part of SET
+  })
+
+  it('overrides updated_by in SYSTEM On mode without updating created_by', () => {
+    const sql = svc.generateQuery('my_table', 'update', schema, inputData, [], { auditUserMode: 'system' })
+
+    expect(sql).toContain("updated_by = 'SYSTEM'")
+    expect(sql).not.toContain("updated_by = 'USER1'")
+    expect(sql).not.toContain('created_by =')
   })
 
   it('matches the requested UPDATE and SELECT layout', () => {

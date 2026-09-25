@@ -152,7 +152,7 @@ class App {
     this.bindGlobalEvents();
     this.setupDevReleaseTourPreview();
     this._releaseTips = new ReleaseTips({
-      release: releaseContent,
+      release: { ...releaseContent, surface: isTauri() ? "desktop" : "web" },
       eventBus: this.eventBus,
       getRoute: () => this.router?.getCurrentRoute?.() || window.location.hash.slice(1).split("/")[0] || "home",
       onNavigate: (action) => this.handleReleaseTourAction(action),

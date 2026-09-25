@@ -11,7 +11,7 @@ Use this walkthrough when preparing the post-update “What’s new” experienc
 - Web embedding: `npm run build` writes the content into `frontend/public/web-build.json`
 - Desktop embedding: `npm run release:build` copies the content into the generated updater manifest; `npm run release:upload` publishes that manifest
 
-The runtime creates an opening release slide and any authored feature slides. If `tips` are present, the final slide offers a guided continuation that automatically opens each relevant route and highlights the feature in place. Skipped or unavailable tips remain eligible to appear contextually when the user reaches that route later, and each tip is remembered independently once opened. The legacy `tour` field remains available for startup-visible steps when no route-aware tips are authored. The announcement is shown once per `releaseId` after a successful update or newly detected build.
+The runtime creates an opening release slide and any authored feature slides. If guided `tips` are present, the final slide offers a guided continuation that automatically opens each relevant route and highlights the feature in place. Skipped or unavailable tips remain eligible to appear contextually when the user reaches that route later. Tips with `completeOn` are remembered when the named action occurs; older tips without it are remembered when the user selects Got it or Next. The legacy `tour` field remains available for startup-visible steps when no route-aware tips are authored. The announcement is shown once per `releaseId` after a successful update or newly detected build.
 
 ## Agent walkthrough
 
@@ -47,7 +47,7 @@ Edit `frontend/config/release-content.json`. Change `releaseId` for each intenti
 
 Add up to three `tour` steps only when the relevant UI is visible immediately after startup. Use stable selectors, keep each tooltip focused on one task, and verify the selector against the current markup. Set `tour: []` when there is no useful guided action; this disables the default search/sidebar tips for that release.
 
-Use `tips` for guidance that belongs on a particular route. After the slides, the app navigates through these tips in authored order; unfinished tips can still appear contextually later. Each tip needs a stable lowercase `id`, an exact `route`, a visible `target`, a placement, a short title, and one actionable sentence. A tip is remembered as soon as it opens and will not be shown again for that `releaseId`. Keep the list to eight or fewer and omit tips for technical changes with no user action.
+Use `tips` for guidance that belongs on a particular route. After the slides, the app navigates through guided tips in authored order; unfinished tips can still appear contextually later. Each tip needs a stable lowercase `id`, an exact `route`, a visible `target`, a placement, a short title, and one actionable sentence. Add `completeOn` with an event (`click` or `change`) and a selector for the action that completes it. For a two-stage task, add `next` with its own target, body, and `completeOn`. The UUID generator uses the `quick-query:uuid-copied` event to finish only after its clipboard copy succeeds. Set `guided: false` for a tip that should appear only when the user reaches its route. Keep the list to fourteen or fewer; keep the guided portion short and omit tips for technical changes with no user action.
 
 Keep the content direct and calm. Do not add internal ticket IDs, private URLs, secrets, unsupported promises, or decorative copy that does not help the user understand the update.
 
@@ -170,7 +170,7 @@ The example is illustrative; replace its claims, route, selector, URL, and asset
 
 - [ ] `releaseId` identifies this release story and is not changed during unrelated edits.
 - [ ] Every claim is user-visible and verified.
-- [ ] There are no more than three authored slides, three tour steps, and eight contextual tips.
+- [ ] There are no more than three authored slides, three tour steps, and fourteen contextual tips.
 - [ ] Local media is under `frontend/public/release-assets/` and has alt text.
 - [ ] Links have labels and use safe `https://`, route, or local asset references.
 - [ ] Tour selectors are stable and visible after startup.
