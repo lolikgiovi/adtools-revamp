@@ -30,6 +30,7 @@ vi.mock("../../../core/MonacoOracle.js", () => ({
 
 import { QuickQueryUI } from "../main.js";
 import { ValueProcessorService } from "../services/ValueProcessorService.js";
+import { MAIN_TEMPLATE } from "../template.js";
 
 function createUi() {
   const toolContainer = document.createElement("div");
@@ -49,7 +50,7 @@ function createUi() {
   schemaContainer.id = "spreadsheet-schema";
   wrapToggle.id = "toggleWrapText";
   wrapToggleLabel.className = "wrap-text-toggle-label";
-  wrapToggleLabel.textContent = "Wrap Text";
+  wrapToggleLabel.textContent = "Wrap";
   wordWrapButton.id = "toggleWordWrap";
   wordWrapLabel.className = "word-wrap-toggle-label";
   wordWrapLabel.textContent = "Wrap";
@@ -96,6 +97,21 @@ describe("Quick Query data-grid performance", () => {
     handsontableInstances.length = 0;
     document.body.replaceChildren();
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+  });
+
+  it("renders the data options as contained switches with fixed labels", () => {
+    document.body.innerHTML = MAIN_TEMPLATE;
+
+    const sysdate = document.getElementById("defaultSysdate");
+    const wrap = document.getElementById("toggleWrapText");
+    const editorWrap = document.getElementById("toggleWordWrap");
+
+    expect(sysdate.checked).toBe(true);
+    expect(wrap.checked).toBe(false);
+    expect(sysdate.closest(".qq-contained-toggle").textContent.trim()).toBe("SYSDATE");
+    expect(wrap.closest(".qq-contained-toggle").textContent.trim()).toBe("Wrap");
+    expect(editorWrap.querySelector(".word-wrap-toggle-label").textContent).toBe("Wrap");
+    expect(document.querySelectorAll(".qq-contained-toggle-track")).toHaveLength(3);
   });
 
   it("constructs the data grid with a finite virtualized viewport and fixed rows", () => {
@@ -295,7 +311,7 @@ describe("Quick Query data-grid performance", () => {
     ui.handleToggleWrapText();
 
     expect(dataContainer.classList.contains("wrap-text-on")).toBe(true);
-    expect(wrapToggleLabel.textContent).toBe("Wrap Text");
+    expect(wrapToggleLabel.textContent).toBe("Wrap");
     expect(wrapToggle.getAttribute("aria-label")).toBe("Wrap text in data preview cells");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ autoRowSize: true, rowHeights: undefined }));
     expect(ui.dataTable.autoColumnSizePlugin.recalculateAllColumnsWidth).toHaveBeenCalledTimes(1);
@@ -304,13 +320,13 @@ describe("Quick Query data-grid performance", () => {
     ui.handleToggleWrapText();
 
     expect(dataContainer.classList.contains("wrap-text-on")).toBe(false);
-    expect(wrapToggleLabel.textContent).toBe("Wrap Text");
+    expect(wrapToggleLabel.textContent).toBe("Wrap");
     expect(wrapToggle.getAttribute("aria-label")).toBe("Wrap text in data preview cells");
     expect(ui.dataTable.updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ autoRowSize: false, rowHeights: 20 }));
     expect(ui.dataTable.autoColumnSizePlugin.recalculateAllColumnsWidth).toHaveBeenCalledTimes(2);
   });
 
-  it("labels the editor word-wrap button with the action it will perform", () => {
+  it("keeps the editor word-wrap label stable as the switch changes", () => {
     const { ui, wordWrapButton } = createUi();
     let wordWrap = "off";
     ui.editor = {
@@ -324,7 +340,7 @@ describe("Quick Query data-grid performance", () => {
     expect(wordWrapButton.querySelector(".word-wrap-toggle-label").textContent).toBe("Wrap");
 
     ui.handleToggleWordWrap();
-    expect(wordWrapButton.querySelector(".word-wrap-toggle-label").textContent).toBe("Unwrap");
+    expect(wordWrapButton.querySelector(".word-wrap-toggle-label").textContent).toBe("Wrap");
     expect(wordWrapButton.getAttribute("aria-checked")).toBe("true");
 
     ui.handleToggleWordWrap();

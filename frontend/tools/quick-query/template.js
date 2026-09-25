@@ -67,10 +67,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <div class="quick-query-right-panel">
                 <div class="button-group quick-query-right-controls">
-                    <button id="toggleWordWrap" class="word-wrap-toggle" type="button" role="switch" aria-checked="false" aria-label="Turn word wrap on" title="Word wrap: Off">
+                    <button id="toggleWordWrap" class="qq-contained-toggle word-wrap-toggle" type="button" role="switch" aria-checked="false" aria-label="Turn word wrap on" title="Word wrap: Off">
                         <span class="word-wrap-toggle-label">Wrap</span>
-                        <span class="word-wrap-toggle-track" aria-hidden="true">
-                            <span class="word-wrap-toggle-thumb"></span>
+                        <span class="qq-contained-toggle-track" aria-hidden="true">
+                            <span class="qq-contained-toggle-thumb"></span>
                         </span>
                     </button>
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy</button>
@@ -132,16 +132,16 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <span class="qq-data-maximize-label">Expand Data Sheet</span>
                 </button>
                 <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" />
-                <label class="switch sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
+                <label class="qq-contained-toggle data-option-toggle sysdate-toggle" title="Auto-fill created_time/updated_time with SYSDATE">
                     <input type="checkbox" id="defaultSysdate" checked />
-                    <span class="slider"></span>
+                    <span class="data-option-toggle-label">SYSDATE</span>
+                    <span class="qq-contained-toggle-track" aria-hidden="true"><span class="qq-contained-toggle-thumb"></span></span>
                 </label>
-                <span class="sysdate-toggle-label">Default SYSDATE</span>
-                <label class="switch wrap-text-toggle" title="Wrap text in data preview cells">
+                <label class="qq-contained-toggle data-option-toggle wrap-text-toggle" title="Wrap text in data preview cells">
                     <input type="checkbox" id="toggleWrapText" />
-                    <span class="slider"></span>
+                    <span class="wrap-text-toggle-label">Wrap</span>
+                    <span class="qq-contained-toggle-track" aria-hidden="true"><span class="qq-contained-toggle-thumb"></span></span>
                 </label>
-                <span class="wrap-text-toggle-label">Wrap Text</span>
             </div>
             <div id="excelImportInfo" class="excel-import-info hidden">
                 <span class="excel-import-icon">📊</span>

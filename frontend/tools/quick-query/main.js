@@ -966,9 +966,9 @@ export class QuickQueryUI {
     const label = this.elements.wrapTextToggleLabel || document.querySelector(".wrap-text-toggle-label");
 
     this.elements.dataContainer?.classList.toggle("wrap-text-on", wrapTextOn);
-    if (label) label.textContent = "Wrap Text";
+    if (label) label.textContent = "Wrap";
     checkbox?.setAttribute("aria-label", "Wrap text in data preview cells");
-    checkbox?.closest(".switch")?.setAttribute("title", `Text wrapping: ${wrapTextOn ? "On" : "Off"}`);
+    checkbox?.closest(".data-option-toggle")?.setAttribute("title", `Text wrapping: ${wrapTextOn ? "On" : "Off"}`);
   }
 
   scheduleDataTableLayoutRefresh() {
@@ -2925,7 +2925,7 @@ export class QuickQueryUI {
       wordWrapButton.setAttribute("aria-checked", String(isOn));
       wordWrapButton.setAttribute("aria-label", `Turn word wrap ${isOn ? "off" : "on"}`);
       wordWrapButton.setAttribute("title", `Word wrap: ${isOn ? "On" : "Off"}`);
-      if (label) label.textContent = isOn ? "Unwrap" : "Wrap";
+      if (label) label.textContent = "Wrap";
     }
   }
 

@@ -646,7 +646,7 @@
   min-width: 0;
 }
 
-.word-wrap-toggle {
+.qq-contained-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -667,21 +667,24 @@
     color 0.2s ease;
 }
 
-.word-wrap-toggle:hover {
+.qq-contained-toggle:hover {
   background: hsl(var(--muted));
   border-color: hsl(var(--ring));
 }
 
-.word-wrap-toggle:focus-visible {
+.qq-contained-toggle:focus-visible,
+.data-option-toggle:has(input:focus-visible) {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
-.word-wrap-toggle.is-on {
-  border-color: hsl(var(--primary));
+.qq-contained-toggle.is-on,
+.data-option-toggle:has(input:checked) {
+  border-color: #22c55e;
+  background: rgb(74 222 128 / 0.12);
 }
 
-.word-wrap-toggle-track {
+.qq-contained-toggle-track {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
@@ -696,7 +699,7 @@
     border-color 0.2s ease;
 }
 
-.word-wrap-toggle-thumb {
+.qq-contained-toggle-thumb {
   width: 10px;
   height: 10px;
   border-radius: 5px;
@@ -707,13 +710,15 @@
     transform 0.2s ease;
 }
 
-.word-wrap-toggle.is-on .word-wrap-toggle-track {
-  background: hsl(var(--primary));
-  border-color: hsl(var(--primary));
+.qq-contained-toggle.is-on .qq-contained-toggle-track,
+.data-option-toggle input:checked ~ .qq-contained-toggle-track {
+  background: #4ade80;
+  border-color: #4ade80;
 }
 
-.word-wrap-toggle.is-on .word-wrap-toggle-thumb {
-  background: hsl(var(--primary-foreground));
+.qq-contained-toggle.is-on .qq-contained-toggle-thumb,
+.data-option-toggle input:checked ~ .qq-contained-toggle-track .qq-contained-toggle-thumb {
+  background: #fff;
   transform: translateX(14px);
 }
 
@@ -1628,66 +1633,16 @@
   width: 30%;
 }
 
-/* Sysdate toggle switch (reuses settings page pattern) */
-.quick-query-data-controls .switch {
+/* Keep the data sheet options aligned with the editor's contained Wrap control. */
+.quick-query-data-controls .data-option-toggle {
   position: relative;
-  display: inline-block;
-  width: 2.5rem;
-  height: 1.25rem;
-  flex-shrink: 0;
 }
 
-.quick-query-data-controls .switch input {
+.quick-query-data-controls .data-option-toggle input {
+  position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
-}
-
-.quick-query-data-controls .switch .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--toggle-off-bg, #e5e7eb);
-  transition:
-    background-color 0.2s ease,
-    box-shadow 0.2s ease;
-  border-radius: 9999px;
-}
-
-.quick-query-data-controls .switch .slider::before {
-  position: absolute;
-  content: "";
-  height: 1rem;
-  width: 1rem;
-  left: 0.125rem;
-  bottom: 0.125rem;
-  background-color: white;
-  transition: transform 0.2s ease;
-  border-radius: 9999px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-.quick-query-data-controls .switch input:checked + .slider {
-  background-color: var(--toggle-on-bg, #4ade80);
-}
-
-.quick-query-data-controls .switch input:checked + .slider::before {
-  transform: translateX(1.25rem);
-}
-
-.sysdate-toggle-label {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-  user-select: none;
-}
-
-.wrap-text-toggle-label {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-  user-select: none;
 }
 
 /* Attachments controls: compact slim buttons */
