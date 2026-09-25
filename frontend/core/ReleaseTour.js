@@ -907,31 +907,32 @@ export class ReleaseTips {
     let tip = null;
     let target = null;
     for (const candidate of candidates) {
-      let candidateTarget = null;
+      let candidateTargets = [];
       try {
-        candidateTarget = document.querySelector(candidate.target);
+        candidateTargets = document.querySelectorAll(candidate.target);
       } catch (_) {}
-      if (!candidateTarget) continue;
-
-      let targetRect = candidateTarget.getBoundingClientRect?.();
-      if (targetRect && (targetRect.bottom <= 0 || targetRect.top >= window.innerHeight)) {
-        try {
-          candidateTarget.scrollIntoView({ block: "center", behavior: "auto" });
-        } catch (_) {}
-        targetRect = candidateTarget.getBoundingClientRect?.();
+      for (const candidateTarget of candidateTargets) {
+        let targetRect = candidateTarget.getBoundingClientRect?.();
+        if (targetRect?.width > 0 && targetRect.height > 0 && (targetRect.bottom <= 0 || targetRect.top >= window.innerHeight)) {
+          try {
+            candidateTarget.scrollIntoView({ block: "center", behavior: "auto" });
+          } catch (_) {}
+          targetRect = candidateTarget.getBoundingClientRect?.();
+        }
+        const isVisible =
+          targetRect &&
+          targetRect.width > 0 &&
+          targetRect.height > 0 &&
+          targetRect.right > 0 &&
+          targetRect.bottom > 0 &&
+          targetRect.left < window.innerWidth &&
+          targetRect.top < window.innerHeight;
+        if (!isVisible) continue;
+        tip = candidate;
+        target = candidateTarget;
+        break;
       }
-      const isVisible =
-        targetRect &&
-        targetRect.width > 0 &&
-        targetRect.height > 0 &&
-        targetRect.right > 0 &&
-        targetRect.bottom > 0 &&
-        targetRect.left < window.innerWidth &&
-        targetRect.top < window.innerHeight;
-      if (!isVisible) continue;
-      tip = candidate;
-      target = candidateTarget;
-      break;
+      if (tip) break;
     }
     if (!tip || !target) {
       if (this.guided && this.guidedTip?.route === route) {

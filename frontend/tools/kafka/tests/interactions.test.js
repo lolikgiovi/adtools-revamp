@@ -184,6 +184,61 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaHeaders").value).toBe('{"source":"uat","traceId":"abc"}');
   });
 
+  it("generates a lowercase adt trace ID for the selected destinations without publishing", () => {
+    const service = { publish: vi.fn() };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    const headers = document.querySelector("#kafkaHeaders");
+    const key = document.querySelector("#kafkaKey");
+    const generate = document.querySelector("#kafkaGenerateTraceId");
+    const toHeader = document.querySelector("#kafkaTraceToHeader");
+    const toKey = document.querySelector("#kafkaTraceToKey");
+    headers.value = '{"source":"uat"}';
+
+    generate.click();
+    const first = JSON.parse(headers.value).traceId;
+    expect(first).toMatch(/^adt-[0-9a-f]{12}$/);
+    expect(JSON.parse(headers.value).source).toBe("uat");
+    expect(key.value).toBe("");
+    expect(tool.records()[0].headers).toContainEqual({ key: "traceId", value: first });
+
+    toKey.checked = true;
+    generate.click();
+    const second = JSON.parse(headers.value).traceId;
+    expect(second).not.toBe(first);
+    expect(key.value).toBe(second);
+    expect(tool.records()[0].key).toBe(second);
+
+    toHeader.checked = false;
+    generate.click();
+    expect(key.value).toMatch(/^adt-[0-9a-f]{12}$/);
+    expect(key.value).not.toBe(second);
+    expect(JSON.parse(headers.value).traceId).toBe(second);
+    expect(service.publish).not.toHaveBeenCalled();
+  });
+
+  it("keeps the draft unchanged when selected trace ID destinations are invalid", () => {
+    const tool = new KafkaTool(null, { publish: vi.fn() });
+    tool.mount(document.querySelector("#tool"));
+    const headers = document.querySelector("#kafkaHeaders");
+    const key = document.querySelector("#kafkaKey");
+    const generate = document.querySelector("#kafkaGenerateTraceId");
+    document.querySelector("#kafkaTraceToKey").checked = true;
+    headers.value = "{bad";
+    key.value = "existing";
+
+    generate.click();
+    expect(headers.value).toBe("{bad");
+    expect(key.value).toBe("existing");
+    expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("Fix header JSON");
+
+    document.querySelector("#kafkaTraceToHeader").checked = false;
+    document.querySelector("#kafkaTraceToKey").checked = false;
+    generate.click();
+    expect(key.value).toBe("existing");
+    expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("Select");
+  });
+
   it("keeps topic browsing and template saving in the publish pane flow", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));

@@ -14,7 +14,7 @@
       "id": "execute",
       "name": "Execute",
       "order": 20,
-      "requiresTauri": false
+      "requiresTauri": true
     },
     {
       "id": "general",
@@ -92,7 +92,7 @@
       "name": "Kafka",
       "category": "execute",
       "icon": "kafka",
-      "requiresTauri": false,
+      "requiresTauri": true,
       "order": 56
     },
     {

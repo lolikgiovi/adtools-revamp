@@ -2,79 +2,112 @@
   "$schema": "./release-content.schema.json",
   "releaseId": "release-1.3.7",
   "version": "1.3.7",
-  "title": "Work across messages, cache, and drafts",
-  "summary": "AD Tools 1.3.7 adds Kafka and Redis Cache workflows and makes it easier to manage multiple editor drafts.",
+  "title": "Find and use your tools faster",
+  "summary": "Search from the sidebar, manage desktop connections from the header, and use new Quick Query, Redis Cache, and Kafka workflows.",
   "notes": [
-    "Kafka can publish messages, browse topics, listen live, and search retained messages by payload, key, or header.",
-    "Redis Cache can find keys in bounded pages, inspect a key's value, and clear selected keys after confirmation.",
-    "HTML Editor keeps multiple documents in tabs, with tab actions and Undo for closed tabs.",
-    "Quick Query tabs now have more flexible management and layout.",
-    "Preview adds viewport presets and VTL mode controls, and Check Image can check multiple environments in one run."
+    "Search has moved to the top of the sidebar; click it or press ⌘K.",
+    "Desktop connection status in the header opens controls for Oracle, Kafka, and Redis.",
+    "Quick Query generates one or many UUIDs and copies them when you select Generate.",
+    "Import Oracle brings query results into Quick Query.",
+    "Redis Cache helps you find, save, inspect, and clear cache keys.",
+    "Kafka supports reusable Publish drafts, topic favorites, message search, and live listening."
   ],
   "slides": [
     {
-      "title": "Publish and inspect Kafka messages",
-      "body": "Set a bootstrap server, then work with topics and messages from one place.",
+      "title": "Generate and import in Quick Query",
+      "body": "Create UUIDs for immediate use, or fill the data sheet from an Oracle query.",
       "bullets": [
-        "Compose a payload and choose a topic to publish.",
-        "Switch to Listen for live messages or search retained messages from a chosen time.",
-        "Reuse a received message as an editable Publish draft."
+        "Open Generate UUID, choose a count, and select Generate; the result is copied to your clipboard.",
+        "Select Import Oracle to run a query and bring its results into the data sheet."
       ],
-      "action": { "label": "Open Kafka", "route": "kafka" }
+      "action": { "label": "Open Quick Query", "route": "quick-query" }
     },
     {
-      "title": "Find and inspect Redis cache keys",
-      "body": "Search a configured Redis connection, inspect individual values, and clear keys when needed.",
+      "title": "Find and clear Redis cache keys",
+      "body": "Set up a Redis connection, search for keys, and save the ones you use often.",
       "bullets": [
-        "Browse key results in bounded pages and keep frequently used keys close at hand.",
-        "Open a key's value to find text within it.",
-        "Review a confirmation before clearing one or more keys."
+        "Enter the host, port, and password in Settings, then test the connection.",
+        "Search with a Redis wildcard such as *config* or words such as app config; spaces become wildcards.",
+        "Save keys for quick access later, and confirm before clearing a key or selected keys."
       ],
       "action": { "label": "Open Redis Cache", "route": "redis-cache" }
     },
     {
-      "title": "Keep more drafts in reach",
-      "body": "HTML Editor and Quick Query make it easier to move between active pieces of work.",
+      "title": "Publish, search, and listen with Kafka",
+      "body": "Keep frequent topics and payloads close, then find past messages or follow new ones live.",
       "bullets": [
-        "Keep separate HTML documents in tabs and use the tab menu to manage them.",
-        "Undo a bulk tab close in HTML Editor or Quick Query."
+        "Favorite a topic and save a Publish template for repeated messages.",
+        "Add an optional trace ID in the message headers.",
+        "In Listen, search a topic by trace ID, CIF, or payload from a chosen time, or switch to Live."
       ],
-      "action": { "label": "Open HTML Editor", "route": "html-template" }
+      "action": { "label": "Open Kafka", "route": "kafka" }
     }
   ],
   "tour": [],
   "tips": [
     {
-      "id": "kafka-broker-settings",
-      "route": "kafka",
-      "target": "#kafkaConnectionSettings > summary",
+      "id": "sidebar-search",
+      "route": "home",
+      "target": ".header-search, .mobile-search",
       "placement": "bottom",
-      "title": "Start with a broker",
-      "body": "Open Broker settings and enter a bootstrap server before testing the connection."
+      "title": "Search from here",
+      "body": "Search is now at the top of the sidebar. Click it or press ⌘K to find tools, pages, and saved Quick Query schemas."
+    },
+    {
+      "id": "header-connections",
+      "route": "home",
+      "target": ".connection-indicator[data-connection='oracle']",
+      "placement": "bottom",
+      "title": "Manage connections in the header",
+      "body": "Click an Oracle, Kafka, or Redis status to view its connection and connect or disconnect it."
+    },
+    {
+      "id": "quick-query-generate-uuid",
+      "route": "quick-query",
+      "target": "#quickQueryUuidButton",
+      "placement": "bottom",
+      "title": "Generate ready-to-use UUIDs",
+      "body": "Open Generate UUID, choose one or more, then select Generate to copy them to your clipboard."
+    },
+    {
+      "id": "quick-query-import-oracle",
+      "route": "quick-query",
+      "target": "#importOracleData",
+      "placement": "bottom",
+      "title": "Import from Oracle",
+      "body": "Select Import Oracle, enter a query, and bring its results into the data sheet."
     },
     {
       "id": "redis-connection-settings",
       "route": "redis-cache",
       "target": "#redisOpenSettings",
       "placement": "bottom",
-      "title": "Connect Redis Cache",
-      "body": "Open Settings to configure a Redis connection, then test it before finding keys."
+      "title": "Set up Redis",
+      "body": "Open Settings to enter the Redis host, port, and password, then use Test connection."
     },
     {
-      "id": "html-document-tabs",
-      "route": "html-template",
-      "target": "#btnNewHtmlDocument",
+      "id": "redis-find-keys",
+      "route": "redis-cache",
+      "target": "#redisPatternInput",
       "placement": "bottom",
-      "title": "Open another document",
-      "body": "Select New HTML document to work in a separate tab; use a tab's menu for more actions."
+      "title": "Find cache keys",
+      "body": "Search with *config* or type app config; spaces become wildcards. Save useful keys for quick access and clear them after confirmation."
     },
     {
-      "id": "quick-query-tabs",
-      "route": "quick-query",
-      "target": "#quickQueryAddTab",
+      "id": "kafka-publish-topic",
+      "route": "kafka",
+      "target": "#kafkaTopicPicker",
       "placement": "bottom",
-      "title": "Keep queries separate",
-      "body": "Select New tab to start another Quick Query workspace without closing the current one."
+      "title": "Reuse a Publish draft",
+      "body": "Favorite a topic, save a template for repeated publishing, and add an optional trace ID in Options > Headers."
+    },
+    {
+      "id": "kafka-listen-modes",
+      "route": "kafka",
+      "target": "#kafkaListenFlow, #kafkaHistoryMode",
+      "placement": "bottom",
+      "title": "Search or listen live",
+      "body": "Choose a topic and search by trace ID, CIF, or payload from a chosen time; switch to Live for new messages."
     }
   ]
 }

@@ -220,6 +220,29 @@ describe("release tour", () => {
     tips.destroy();
   });
 
+  it("chooses a visible target from responsive alternatives", () => {
+    document.body.innerHTML = '<button id="compact-mode"></button><button id="wide-mode"></button>';
+    document.querySelector("#compact-mode").getBoundingClientRect = () => ({
+      width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0,
+    });
+    document.querySelector("#wide-mode").getBoundingClientRect = () => ({
+      width: 90, height: 30, top: 20, right: 110, bottom: 50, left: 20,
+    });
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "release-responsive-tip",
+        tips: [{ id: "mode", route: "home", target: "#compact-mode, #wide-mode", title: "Choose a mode", body: "Start here." }],
+      },
+      getRoute: () => "home",
+    });
+
+    tips.start();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(tips.activeTip?.id).toBe("mode");
+    expect(document.querySelector(".release-feature-tip")?.textContent).toContain("Choose a mode");
+    tips.destroy();
+  });
+
   it("navigates through feature tips as one guided flow", () => {
     document.body.innerHTML = '<div id="spreadsheet-data"></div><button id="savedReferencesButton">Saved references</button>';
     document.querySelectorAll("#spreadsheet-data, #savedReferencesButton").forEach((element) => {

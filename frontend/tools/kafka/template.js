@@ -99,7 +99,18 @@ export const KafkaTemplate = /*html*/ `
                   <label class="kafka-key-field" for="kafkaKey">Key <span>optional</span><input id="kafkaKey" type="text" autocomplete="off" placeholder="Message key" /></label>
 
                   <div id="kafkaHeadersSection" class="kafka-editor-section">
-                    <div class="kafka-editor-heading"><label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label><div class="kafka-editor-controls"><button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button><button id="kafkaExpandHeaders" class="btn btn-ghost btn-sm" type="button" aria-controls="kafkaHeadersEditor" aria-expanded="false">Expand</button></div></div>
+                    <div class="kafka-editor-heading">
+                      <label id="kafkaHeadersLabel" for="kafkaHeaders">Headers</label>
+                      <div class="kafka-editor-controls">
+                        <button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button>
+                        <button id="kafkaGenerateTraceId" class="btn btn-ghost btn-sm" type="button">Generate trace ID</button>
+                        <button id="kafkaExpandHeaders" class="btn btn-ghost btn-sm" type="button" aria-controls="kafkaHeadersEditor" aria-expanded="false">Expand</button>
+                      </div>
+                    </div>
+                    <div class="kafka-trace-targets" role="group" aria-label="Generated trace ID destinations">
+                      <label><input id="kafkaTraceToHeader" type="checkbox" checked /> traceId header</label>
+                      <label><input id="kafkaTraceToKey" type="checkbox" /> Message key</label>
+                    </div>
                     <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
                     <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
                     <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>

@@ -15,6 +15,8 @@ describe("tool categories", () => {
         .sort((a, b) => a.order - b.order)
         .map((tool) => tool.id),
     ).toEqual(["run-query", "run-batch", "redis-cache", "kafka"]);
+    expect(toolsConfig.categories.find((category) => category.id === CATEGORIES.EXECUTE)?.requiresTauri).toBe(true);
+    expect(toolsConfig.tools.filter((tool) => tool.category === CATEGORIES.EXECUTE).every((tool) => tool.requiresTauri)).toBe(true);
 
     expect(CATEGORIES.TEMPLATE).toBe("template");
     expect(normalizeCategory("templates")).toBe(CATEGORIES.TEMPLATE);

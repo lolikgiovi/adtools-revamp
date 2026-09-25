@@ -741,6 +741,27 @@
   gap: 8px;
 }
 
+#kafkaHeadersSection .kafka-editor-heading,
+#kafkaHeadersSection .kafka-editor-controls {
+  flex-wrap: wrap;
+}
+
+.kafka-trace-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0 0 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.kafka-trace-targets label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
 .kafka-json-editor {
   display: none;
   height: clamp(128px, 18dvh, 220px);

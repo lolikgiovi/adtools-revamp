@@ -132,6 +132,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaValue").addEventListener("input", () => this.updateCount());
     this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
     this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
+    this.field("kafkaGenerateTraceId").addEventListener("click", () => this.generateTraceId());
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
     this.field("kafkaExpandHeaders").addEventListener("click", () => this.setHeadersExpanded());
     this.field("kafkaListen").addEventListener("click", () => this.toggleListening());
@@ -465,6 +466,31 @@ export class KafkaTool extends BaseTool {
       this.message(`kafka${name}Status`, "Invalid JSON. Fix the syntax before formatting.", true);
       this.jsonEditors[name]?.focus();
     }
+  }
+
+  generateTraceId() {
+    const toHeader = this.field("kafkaTraceToHeader").checked;
+    const toKey = this.field("kafkaTraceToKey").checked;
+    if (!toHeader && !toKey) {
+      this.message("kafkaPublishStatus", "Select the traceId header, message key, or both.", true);
+      return;
+    }
+    let headers;
+    if (toHeader) {
+      try { headers = JSON.parse(this.field("kafkaHeaders").value || "{}"); }
+      catch (_) { this.message("kafkaPublishStatus", "Fix header JSON before generating a trace ID.", true); return; }
+      if (!headers || Array.isArray(headers) || typeof headers !== "object" ||
+        Object.entries(headers).some(([name, value]) => !name || typeof value !== "string")) {
+        this.message("kafkaPublishStatus", "Headers need a JSON object with string values.", true);
+        return;
+      }
+    }
+    const random = globalThis.crypto.getRandomValues(new Uint8Array(6));
+    const traceId = `adt-${Array.from(random, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    if (toHeader) this.setJsonValue("Headers", JSON.stringify({ ...headers, traceId }, null, 2));
+    if (toKey) this.field("kafkaKey").value = traceId;
+    this.updateCount();
+    this.message("kafkaPublishStatus", `Generated ${traceId} for ${[toHeader && "traceId header", toKey && "message key"].filter(Boolean).join(" and ")}.`);
   }
 
   validateJson(name) {

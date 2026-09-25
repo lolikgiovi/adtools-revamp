@@ -252,13 +252,16 @@ pub async fn kafka_publish(
         if serde_json::from_str::<serde_json::Value>(&record.value).is_err() {
             return Err("Every message value must be valid JSON.".into());
         }
-        if record.headers.len() > 20
-            || record
-                .headers
-                .iter()
-                .any(|h| h.key.is_empty() || h.key.len() > 128 || h.value.len() > 4096)
+        if record
+            .headers
+            .iter()
+            .any(|h| h.key.is_empty() || h.key.len() > 128 || h.value.len() > 4096)
         {
-            return Err("Use at most 20 headers with short names and values.".into());
+            return Err("Use headers with names up to 128 bytes and values up to 4 KB.".into());
+        }
+        let header_bytes: usize = record.headers.iter().map(|h| h.key.len() + h.value.len()).sum();
+        if record.value.len() + record.key.as_ref().map_or(0, String::len) + header_bytes > MAX_MESSAGE_BYTES {
+            return Err("Each message, including its key and headers, must be 1 MB or less.".into());
         }
     }
     let _active = guard.start()?;
