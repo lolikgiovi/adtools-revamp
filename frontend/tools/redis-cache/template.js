@@ -10,13 +10,12 @@ export const RedisCacheTemplate = /*html*/ `
         </div>
         <div class="redis-search-panel">
           <form id="redisKeySearchForm" class="redis-search-form">
-            <label class="redis-search-field" for="redisPatternInput">
-              <span>Key pattern</span>
+            <div class="redis-search-field">
               <div class="redis-search-control">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
-                <input id="redisPatternInput" type="text" maxlength="512" placeholder="session:user:*" autocomplete="off" spellcheck="false" />
+                <input id="redisPatternInput" type="text" maxlength="512" placeholder="session:user:*" aria-label="Key pattern" autocomplete="off" spellcheck="false" />
               </div>
-            </label>
+            </div>
             <button id="redisSearchButton" class="btn btn-primary" type="submit">Find keys</button>
           </form>
         </div>
@@ -67,7 +66,6 @@ export const RedisCacheTemplate = /*html*/ `
           <div class="redis-section-heading redis-connection-heading">
             <div>
               <h2 id="redisConnectionHeading">Connection</h2>
-              <p>Test the configured Redis endpoint before searching.</p>
             </div>
           </div>
 
@@ -135,7 +133,6 @@ export const RedisCacheTemplate = /*html*/ `
           <div class="redis-section-heading redis-favorites-heading">
             <div>
               <h2 id="redisFavoritesHeading">Saved keys</h2>
-              <p>Saved on this device for quick clearing.</p>
             </div>
             <span id="redisFavoritesCount" class="redis-favorites-count">0</span>
           </div>

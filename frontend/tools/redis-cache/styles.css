@@ -918,10 +918,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.redis-favorite-item > div {
+.redis-favorite-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 5px;
+}
+
+.redis-favorite-primary-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.redis-favorite-actions > [data-favorite-action="unfavorite"] {
+  margin-left: auto;
 }
 
 .redis-cache-tool ::selection {

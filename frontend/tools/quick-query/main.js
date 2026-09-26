@@ -875,6 +875,7 @@ export class QuickQueryUI {
 
     const wrapTextOn = Boolean(this.elements.toggleWrapText?.checked);
     this.syncDataWrapTextToggle(wrapTextOn);
+    const dataContainer = this.elements.dataContainer;
 
     const dataTableConfig = {
       ...initialDataTableSpecification,
@@ -895,6 +896,12 @@ export class QuickQueryUI {
         if (header) header.textContent = `${columnIndexToLetter(col)}${isPrimaryKey ? " [PK]" : ""}`;
         if (isPrimaryKey) TH.title = `Primary key: ${fieldName}`;
         else TH.removeAttribute("title");
+      },
+      afterInit: function () {
+        // Run after AutoColumnSize, but before ManualColumnResize, so users can still expand a column themselves.
+        this.addHook("modifyColWidth", (width) =>
+          !dataContainer.classList.contains("wrap-text-on") && Number.isFinite(width) ? Math.min(width, 300) : width,
+        );
       },
       // A finite height keeps Handsontable virtualized instead of rendering every data row into the page.
       height: this.getDataTableViewportHeight(),

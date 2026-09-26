@@ -97,6 +97,7 @@ export class RedisCacheTool extends BaseTool {
     this.pageScanLimitReached = false;
     this.activePattern = "";
     this.pendingDeleteKeys = [];
+    this.pendingUnfavoriteKey = null;
     this.deleteTrigger = null;
     this.valueInspectorKey = "";
     this.valueInspectorTrigger = null;
@@ -172,7 +173,10 @@ export class RedisCacheTool extends BaseTool {
     this.container.querySelector("#redisSelectAll")?.addEventListener("click", () => this.toggleSelectAll());
     this.container.querySelector("#redisClearSelected")?.addEventListener("click", () => this.requestDelete([...this.selectedKeys]));
     this.container.querySelector("#redisCancelDelete")?.addEventListener("click", () => this.closeDeleteConfirmation());
-    this.container.querySelector("#redisConfirmDelete")?.addEventListener("click", () => this.confirmDelete());
+    this.container.querySelector("#redisConfirmDelete")?.addEventListener("click", () => {
+      if (this.pendingUnfavoriteKey) this.confirmUnfavorite();
+      else this.confirmDelete();
+    });
     this.container.querySelector("#redisDeleteConfirmation")?.addEventListener("keydown", (event) => {
       const confirmation = event.currentTarget;
       if (event.key === "Escape" && !this.busy) {
@@ -809,7 +813,17 @@ export class RedisCacheTool extends BaseTool {
       value.textContent = key;
       value.title = key;
       const actions = document.createElement("div");
-      actions.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" data-favorite-action="remove">Remove</button><button type="button" class="btn btn-danger btn-sm" data-favorite-action="clear">Clear</button>`;
+      actions.className = "redis-favorite-actions";
+      actions.innerHTML = `
+        <div class="redis-favorite-primary-actions">
+          <button type="button" class="btn btn-ghost btn-sm" data-favorite-action="view">View</button>
+          <button type="button" class="btn btn-danger btn-sm" data-favorite-action="delete">Delete</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-favorite-action="unfavorite">Unfavorite</button>
+      `;
+      for (const button of actions.querySelectorAll("button")) {
+        button.setAttribute("aria-label", `${button.textContent} ${key}`);
+      }
       item.append(value, actions);
       root.appendChild(item);
     });
@@ -819,29 +833,55 @@ export class RedisCacheTool extends BaseTool {
     const button = event.target.closest("[data-favorite-action]");
     const key = button?.closest(".redis-favorite-item")?.dataset.key;
     if (!button || !key) return;
-    if (button.dataset.favoriteAction === "remove") this.toggleFavorite(key);
-    if (button.dataset.favoriteAction === "clear") this.requestDelete([key]);
+    if (button.dataset.favoriteAction === "view") this.viewValue(key);
+    if (button.dataset.favoriteAction === "delete") this.requestDelete([key], { label: "Delete" });
+    if (button.dataset.favoriteAction === "unfavorite") this.requestUnfavorite(key);
   }
 
-  requestDelete(keys) {
+  requestUnfavorite(key) {
+    if (this.busy || !this.favorites.includes(key)) return;
+    this.pendingDeleteKeys = [];
+    this.pendingUnfavoriteKey = key;
+    this.deleteTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    this.container.querySelector("#redisDeleteTitle").textContent = "Unfavorite saved key?";
+    this.container.querySelector("#redisDeleteDescription").textContent =
+      `Remove ${key} from Saved keys on this device? The Redis key will remain.`;
+    const confirmButton = this.container.querySelector("#redisConfirmDelete");
+    confirmButton.textContent = "Unfavorite";
+    this.container.querySelector("#redisDeleteConfirmation").hidden = false;
+    confirmButton.focus();
+  }
+
+  confirmUnfavorite() {
+    const key = this.pendingUnfavoriteKey;
+    if (!key || this.busy) return;
+    this.toggleFavorite(key);
+    this.closeDeleteConfirmation();
+  }
+
+  requestDelete(keys, { label = "Clear" } = {}) {
     if (this.busy || !this.requireConfiguration()) return;
+    this.pendingUnfavoriteKey = null;
     this.pendingDeleteKeys = [...new Set(keys.map(String).filter(Boolean))];
     if (!this.pendingDeleteKeys.length) return;
     this.deleteTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const confirmation = this.container.querySelector("#redisDeleteConfirmation");
+    const title = this.container.querySelector("#redisDeleteTitle");
     const description = this.container.querySelector("#redisDeleteDescription");
     const confirmButton = this.container.querySelector("#redisConfirmDelete");
     const count = this.pendingDeleteKeys.length;
+    if (title) title.textContent = label === "Delete" ? "Delete saved cache key?" : "Clear selected cache keys?";
     if (description) {
       description.textContent = `${count} ${count === 1 ? "key" : "keys"} will be removed from ${this.config.host}:${this.config.port}, database ${this.config.database}. This cannot be undone.`;
     }
-    if (confirmButton) confirmButton.textContent = `Clear ${count === 1 ? "key" : `${count} keys`}`;
+    if (confirmButton) confirmButton.textContent = `${label} ${count === 1 ? "key" : `${count} keys`}`;
     if (confirmation) confirmation.hidden = false;
     confirmButton?.focus();
   }
 
   closeDeleteConfirmation({ restoreFocus = true } = {}) {
     this.pendingDeleteKeys = [];
+    this.pendingUnfavoriteKey = null;
     const confirmation = this.container.querySelector("#redisDeleteConfirmation");
     if (confirmation) confirmation.hidden = true;
     if (restoreFocus) this.restoreDeleteFocus();

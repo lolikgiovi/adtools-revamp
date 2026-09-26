@@ -223,13 +223,41 @@ describe("RedisCacheTool interactions", () => {
     const tool = new RedisCacheTool(null, service);
     tool.mount(document.querySelector("#tool"));
 
-    document.querySelector('[data-favorite-action="clear"]').click();
+    document.querySelector('[data-favorite-action="delete"]').click();
     document.querySelector("#redisConfirmDelete").click();
     await settle();
 
     expect(service.deleteKeys).toHaveBeenCalledWith(expect.any(Object), ["feature:flags"]);
     expect(document.querySelector(".redis-favorite-item code").textContent).toBe("feature:flags");
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("DEL");
+  });
+
+  it("shows View and Delete on the left and confirms Unfavorite without deleting the Redis key", () => {
+    const service = { scan: vi.fn(), deleteKeys: vi.fn(), getValue: vi.fn(), testConnection: vi.fn() };
+    localStorage.setItem("tool:redis-cache:favorites", JSON.stringify(["feature:flags"]));
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    const actions = document.querySelector(".redis-favorite-item > div");
+    expect([...actions.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["View", "Delete", "Unfavorite"]);
+    expect(actions.firstElementChild.querySelectorAll("button")).toHaveLength(2);
+    actions.querySelector('[data-favorite-action="unfavorite"]').click();
+
+    expect(document.querySelector("#redisDeleteConfirmation").hidden).toBe(false);
+    expect(document.querySelector("#redisDeleteTitle").textContent).toContain("Unfavorite");
+    expect(document.querySelector("#redisConfirmDelete").textContent).toBe("Unfavorite");
+    expect(document.querySelector(".redis-favorite-item")).not.toBeNull();
+    expect(service.deleteKeys).not.toHaveBeenCalled();
+
+    document.querySelector("#redisCancelDelete").click();
+    expect(document.querySelector(".redis-favorite-item")).not.toBeNull();
+
+    document.querySelector('[data-favorite-action="unfavorite"]').click();
+    document.querySelector("#redisConfirmDelete").click();
+    expect(document.querySelector("#redisDeleteConfirmation").hidden).toBe(true);
+    expect(document.querySelector(".redis-favorite-item")).toBeNull();
+    expect(localStorage.getItem("tool:redis-cache:favorites")).toBe("[]");
+    expect(service.deleteKeys).not.toHaveBeenCalled();
   });
 
   it("locks other Redis operations during a connection test", async () => {
