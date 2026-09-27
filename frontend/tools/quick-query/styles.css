@@ -418,7 +418,7 @@
   min-height: 120px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 6px;
   background: hsl(var(--background));
 }

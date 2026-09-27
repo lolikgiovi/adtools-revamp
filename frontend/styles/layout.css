@@ -408,7 +408,7 @@ button.connection-indicator:focus-visible,
 }
 
 /* Main content */
-.main {
+.sidebar-provider > .main {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -423,7 +423,7 @@ button.connection-indicator:focus-visible,
 
 /* Desktop: Main content adjusts for sidebar */
 @media (min-width: 769px) {
-  .main {
+  .sidebar-provider > .main {
     margin-left: var(--sidebar-width);
     /* Default expanded sidebar width */
   }
@@ -431,7 +431,7 @@ button.connection-indicator:focus-visible,
 
 /* Mobile: No margin needed */
 @media (max-width: 768px) {
-  .main {
+  .sidebar-provider > .main {
     margin-left: 0;
   }
 }

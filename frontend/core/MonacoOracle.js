@@ -4,6 +4,7 @@ import { configureMonacoWorkers } from "./MonacoWorkers.js";
 
 export const ORACLE_LANGUAGE_ID = "oracle-dml";
 export const ORACLE_THEME = "oracle-dml-dark";
+let oracleCompletionProvider;
 
 export function ensureMonacoWorkers() {
   try {
@@ -200,7 +201,7 @@ export function setupMonacoOracle() {
     });
 
     // Completion provider
-    monaco.languages.registerCompletionItemProvider(ORACLE_LANGUAGE_ID, {
+    oracleCompletionProvider ??= monaco.languages.registerCompletionItemProvider(ORACLE_LANGUAGE_ID, {
       triggerCharacters: [" ", "("],
       provideCompletionItems: () => ({
         suggestions: [
@@ -264,6 +265,10 @@ export function setupMonacoOracle() {
   } catch (e) {
     console.warn("Failed to register Oracle SQL language; falling back to sql", e);
   }
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => oracleCompletionProvider?.dispose());
 }
 
 export function createOracleEditor(container, options = {}) {
