@@ -200,35 +200,44 @@ export function setupMonacoOracle() {
       },
     });
 
-    // Completion provider
+    // Oracle SQL completions are shared by every editable Oracle editor.
     oracleCompletionProvider ??= monaco.languages.registerCompletionItemProvider(ORACLE_LANGUAGE_ID, {
-      triggerCharacters: [" ", "("],
-      provideCompletionItems: () => ({
-        suggestions: [
-          ...dmlKeywords.map((k) => ({
-            label: k.toUpperCase(),
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: k.toUpperCase(),
-          })),
-          ...functions.map((f) => ({
-            label: f.toUpperCase(),
-            kind: monaco.languages.CompletionItemKind.Function,
-            insertText: `${f.toUpperCase()}(`,
-          })),
-          ...specialKeywords.map((s) => ({
-            label: s.toUpperCase(),
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: s.toUpperCase(),
-          })),
-          {
-            label: "FETCH FIRST ROWS ONLY",
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: "FETCH FIRST ${1:10} ROWS ONLY",
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            documentation: "Oracle row-limiting clause (12c+).",
-          },
-        ],
-      }),
+      provideCompletionItems: (model, position) => {
+        const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+        if (/\.\w*$/.test(linePrefix)) return { suggestions: [] };
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: position.column,
+        };
+        const keyword = (label) => ({ label, kind: monaco.languages.CompletionItemKind.Keyword, insertText: label, range });
+        const snippet = (label, insertText, documentation) => ({
+          label,
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          documentation,
+          range,
+        });
+        return {
+          suggestions: [
+            ...dmlKeywords.map((value) => keyword(value.toUpperCase())),
+            ...["AS", "CASE", "END", "EXISTS", "IN", "IS", "LIKE", "NULL", "ROWNUM", "DUAL"].map(keyword),
+            ...specialKeywords.map((value) => keyword(value.toUpperCase())),
+            ...functions.map((value) => ({
+              label: value.toUpperCase(),
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: `${value.toUpperCase()}($0)`,
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              range,
+            })),
+            snippet("FETCH FIRST … ROWS ONLY", "FETCH FIRST ${1:10} ROWS ONLY", "Oracle row-limiting clause (12c+)."),
+            snippet("IS NOT NULL", "IS NOT NULL", "Oracle null predicate."),
+          ],
+        };
+      },
     });
 
     // Theme definition (kept consistent with Quick Query)
@@ -284,9 +293,16 @@ export function createOracleEditor(container, options = {}) {
     scrollbar: { alwaysConsumeMouseWheel: false },
     wordWrap: "on",
     fontSize: 12,
-    suggestOnTriggerCharacters: false,
+    quickSuggestions: { other: true, comments: false, strings: false },
+    suggestOnTriggerCharacters: true,
+    wordBasedSuggestions: "off",
   };
-  const editor = monaco.editor.create(container, { ...defaults, ...options });
+  const editorOptions = { ...defaults, ...options };
+  if (editorOptions.readOnly) {
+    editorOptions.quickSuggestions = false;
+    editorOptions.suggestOnTriggerCharacters = false;
+  }
+  const editor = monaco.editor.create(container, editorOptions);
   const model = editor.getModel();
   if (model) {
     monaco.editor.setModelLanguage(model, ORACLE_LANGUAGE_ID);

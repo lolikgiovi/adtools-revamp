@@ -593,15 +593,6 @@ export class JenkinsRunner extends BaseTool {
       fontSize: 11,
       tabSize: 2,
       insertSpaces: true,
-      // Disable Monaco suggestions/autocomplete in Jenkins Runner
-      quickSuggestions: false,
-      suggestOnTriggerCharacters: false,
-      wordBasedSuggestions: false,
-      snippetSuggestions: "none",
-      parameterHints: { enabled: false },
-      inlineSuggest: { enabled: false },
-      acceptSuggestionOnEnter: "off",
-      tabCompletion: "off",
     });
 
     // Apply any pending SQL routed from Quick Query or session storage
@@ -630,14 +621,6 @@ export class JenkinsRunner extends BaseTool {
         fontSize: 11,
         tabSize: 2,
         insertSpaces: true,
-        quickSuggestions: false,
-        suggestOnTriggerCharacters: false,
-        wordBasedSuggestions: false,
-        snippetSuggestions: "none",
-        parameterHints: { enabled: false },
-        inlineSuggest: { enabled: false },
-        acceptSuggestionOnEnter: "off",
-        tabCompletion: "off",
       });
     }
 

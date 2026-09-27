@@ -153,7 +153,9 @@ class JSONTools extends BaseTool {
       formatOnType: true,
       tabSize: 2,
       insertSpaces: true,
-      suggestOnTriggerCharacters: false,
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: "off",
     });
 
     // Create Monaco Editor for the right/output panel (editable)
@@ -170,7 +172,9 @@ class JSONTools extends BaseTool {
       formatOnType: true,
       tabSize: 2,
       insertSpaces: true,
-      suggestOnTriggerCharacters: false,
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: "off",
     });
 
     // Load saved content from localStorage

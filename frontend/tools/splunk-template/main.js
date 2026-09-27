@@ -1,6 +1,8 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.main.js";
+import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { SplunkVTLEditorTemplate } from "./template.js";
 import { getIconSvg } from "./icon.js";
@@ -43,6 +45,24 @@ const VTL_FUNCTIONS = [
   ["get", "Format the current date and time", '$date.get("yyyy-MM-dd HH:mm:ss")'],
   ["convertDate", "Convert a timestamp or date", "$date.convertDate($context.value, \"yyyy-MM-dd'T'HH:mm:ss\")"],
 ];
+
+const VTL_DIRECTIVES = [
+  ["#if", "#if(${1:condition})\n$0\n#end"],
+  ["#elseif", "#elseif(${1:condition})"],
+  ["#else", "#else"],
+  ["#end", "#end"],
+  ["#set", "#set($${1:name} = ${2:value})"],
+  ["#foreach", "#foreach($${1:item} in $${2:items})\n$0\n#end"],
+];
+
+function parameterPaths(value, prefix = "", depth = 0) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || depth > 4) return [];
+  return Object.entries(value).flatMap(([key, nested]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return [];
+    const path = prefix ? `${prefix}.${key}` : key;
+    return [path, ...parameterPaths(nested, path, depth + 1)];
+  });
+}
 
 class SplunkVTLEditor extends BaseTool {
   constructor(eventBus) {
@@ -120,9 +140,11 @@ class SplunkVTLEditor extends BaseTool {
   }
 
   async registerVtlLanguage() {
-    configureMonacoWorkers(self, { editor: editorWorker });
+    configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
 
-    monaco.languages.register({ id: "vtl-splunk" });
+    if (!monaco.languages.getLanguages().some((language) => language.id === "vtl-splunk")) {
+      monaco.languages.register({ id: "vtl-splunk" });
+    }
     monaco.languages.setLanguageConfiguration("vtl-splunk", {
       comments: { lineComment: "##", blockComment: ["#*", "*#"] },
       brackets: [
@@ -161,19 +183,65 @@ class SplunkVTLEditor extends BaseTool {
 
     this._languageDisposables.push(
       monaco.languages.registerCompletionItemProvider("vtl-splunk", {
-        triggerCharacters: ["$", "."],
+        triggerCharacters: ["$", ".", "#"],
         provideCompletionItems: (model, position) => {
           const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
-          const namespace = linePrefix.match(/\$(format|date)\.$/)?.[1];
-          if (!namespace && linePrefix.endsWith("$")) return { suggestions: [] };
-          const functions = namespace ? VTL_FUNCTIONS.filter(([, , expression]) => expression.startsWith(`$${namespace}.`)) : VTL_FUNCTIONS;
+          const rangeFrom = (startColumn) => ({
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn,
+            endColumn: position.column,
+          });
+          const directive = linePrefix.match(/#[A-Za-z]*$/);
+          if (directive) {
+            const range = rangeFrom(position.column - directive[0].length);
+            return {
+              suggestions: VTL_DIRECTIVES.map(([label, insertText]) => ({
+                label,
+                kind: monaco.languages.CompletionItemKind.Snippet,
+                insertText,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range,
+              })),
+            };
+          }
+          const functionCall = linePrefix.match(/\$(format|date)\.([A-Za-z]*)$/);
+          if (functionCall) {
+            const range = rangeFrom(position.column - functionCall[2].length);
+            return {
+              suggestions: VTL_FUNCTIONS.filter(([, , expression]) => expression.startsWith(`$${functionCall[1]}.`)).map(
+                ([name, detail, expression]) => ({
+                  label: name,
+                  kind: monaco.languages.CompletionItemKind.Function,
+                  detail,
+                  documentation: { value: `\`${expression}\`` },
+                  insertText: `${name}($0)`,
+                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                  range,
+                }),
+              ),
+            };
+          }
+          const variable = linePrefix.match(/\$!?\{?[A-Za-z_][A-Za-z0-9_.]*$|\$!?\{?$/);
+          if (!variable) return { suggestions: [] };
+          let values = {};
+          try {
+            values = JSON.parse(this.parametersEditor?.getValue() || "{}") || {};
+          } catch (_) {}
+          const references = new Set(["context", "format", "date"]);
+          parameterPaths(values).forEach((path) => {
+            references.add(path);
+            references.add(`context.${path}`);
+          });
+          const quiet = variable[0].startsWith("$!");
+          const wrapped = variable[0].includes("{");
+          const range = rangeFrom(position.column - variable[0].length);
           return {
-            suggestions: functions.map(([name, detail, expression]) => ({
-              label: name,
-              kind: monaco.languages.CompletionItemKind.Function,
-              detail,
-              documentation: { value: `\`${expression}\`` },
-              insertText: namespace ? expression.replace(`$${namespace}.`, "") : expression,
+            suggestions: [...references].map((path) => ({
+              label: `$${path}`,
+              kind: monaco.languages.CompletionItemKind.Variable,
+              insertText: `$${quiet ? "!" : ""}${wrapped ? "{" : ""}${path}${wrapped ? "}" : ""}`,
+              range,
             })),
           };
         },
@@ -208,6 +276,9 @@ class SplunkVTLEditor extends BaseTool {
       scrollBeyondLastLine: false,
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "on",
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: "off",
       fontSize: 12,
       tabSize: 2,
       insertSpaces: true,
@@ -253,6 +324,9 @@ class SplunkVTLEditor extends BaseTool {
       scrollBeyondLastLine: false,
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "on",
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: "off",
       fontSize: 12,
       tabSize: 2,
       insertSpaces: true,

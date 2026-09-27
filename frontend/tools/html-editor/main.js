@@ -17,6 +17,23 @@ import "./styles.css";
 
 const PREVIEW_VIEWPORT_MIN_WIDTH = 240;
 const PREVIEW_VIEWPORT_MAX_WIDTH = 1440;
+const VTL_DIRECTIVES = [
+  ["#if", "#if(${1:condition})\n$0\n#end"],
+  ["#elseif", "#elseif(${1:condition})"],
+  ["#else", "#else"],
+  ["#end", "#end"],
+  ["#set", "#set($${1:name} = ${2:value})"],
+  ["#foreach", "#foreach($${1:item} in $${2:items})\n$0\n#end"],
+];
+
+function vtlValuePaths(value, prefix = "", depth = 0) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || depth > 4) return [];
+  return Object.entries(value).flatMap(([key, nested]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return [];
+    const path = prefix ? `${prefix}.${key}` : key;
+    return [path, ...vtlValuePaths(nested, path, depth + 1)];
+  });
+}
 const DEFAULT_HTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`;
 // Representative CSS viewport widths; hardware pixel resolution is a separate device property.
 const PREVIEW_VIEWPORT_PRESETS = [
@@ -38,6 +55,7 @@ class HTMLTemplateTool extends BaseTool {
     super({ id: "html-template", eventBus, isHeavyTool: true });
 
     this.editor = null;
+    this._velocityCompletionProvider = null;
     this.minifyWorker = null;
     this.minifierAvailable = false;
     this.lastRenderedHTML = "";
@@ -177,6 +195,7 @@ class HTMLTemplateTool extends BaseTool {
     }
     await this.initializeMonacoEditor();
     if (sequence !== this._mountSequence || !this.container) return;
+    this.registerVelocityCompletions();
     try {
       this.previewWhiteBackground = localStorage.getItem(this._previewBackgroundStorageKey) === "white";
     } catch (_) {}
@@ -208,6 +227,8 @@ class HTMLTemplateTool extends BaseTool {
     clearTimeout(this._undoTimer);
     clearTimeout(this.vtlAnalyticsTimer);
     this.vtlAnalyticsTimer = null;
+    this._velocityCompletionProvider?.dispose();
+    this._velocityCompletionProvider = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -763,10 +784,55 @@ class HTMLTemplateTool extends BaseTool {
       formatOnType: true,
       tabSize: 2,
       insertSpaces: true,
-      suggestOnTriggerCharacters: false,
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: "off",
     });
 
     this.inputSource = "restored";
+  }
+
+  registerVelocityCompletions() {
+    this._velocityCompletionProvider?.dispose();
+    this._velocityCompletionProvider = monaco.languages.registerCompletionItemProvider("html", {
+      triggerCharacters: ["$", "#"],
+      provideCompletionItems: (model, position) => {
+        if (!model.uri.toString().startsWith("inmemory://html-template/")) return { suggestions: [] };
+        const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+        const directive = linePrefix.match(/#[A-Za-z]*$/);
+        const variable = linePrefix.match(/\$!?\{?[A-Za-z_][A-Za-z0-9_.]*$|\$!?\{?$/);
+        const match = directive || variable;
+        if (!match) return { suggestions: [] };
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: position.column - match[0].length,
+          endColumn: position.column,
+        };
+        if (directive) {
+          return {
+            suggestions: VTL_DIRECTIVES.map(([label, insertText]) => ({
+              label,
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText,
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              range,
+            })),
+          };
+        }
+        const quiet = variable[0].startsWith("$!");
+        const wrapped = variable[0].includes("{");
+        const paths = new Set(["baseUrl", ...extractVtlVariables(model.getValue()), ...vtlValuePaths(this.vtlValues)]);
+        return {
+          suggestions: [...paths].map((path) => ({
+            label: `$${path}`,
+            kind: monaco.languages.CompletionItemKind.Variable,
+            insertText: `$${quiet ? "!" : ""}${wrapped ? "{" : ""}${path}${wrapped ? "}" : ""}`,
+            range,
+          })),
+        };
+      },
+    });
   }
 
   initializeWorker() {

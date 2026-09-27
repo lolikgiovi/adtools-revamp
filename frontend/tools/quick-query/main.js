@@ -817,15 +817,6 @@ export class QuickQueryUI {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       wordWrap: "off",
-      // Disable Monaco suggestions/autocomplete in Quick Query
-      quickSuggestions: false,
-      suggestOnTriggerCharacters: false,
-      wordBasedSuggestions: false,
-      snippetSuggestions: "none",
-      parameterHints: { enabled: false },
-      inlineSuggest: { enabled: false },
-      acceptSuggestionOnEnter: "off",
-      tabCompletion: "off",
     });
     this.editor.onDidChangeModelContent(() => {
       if (!this._isHydratingTab) {

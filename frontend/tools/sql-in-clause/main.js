@@ -70,6 +70,10 @@ class SQLInClauseTool extends BaseTool {
       scrollBeyondLastLine: false,
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "on",
+      // This editor accepts raw values, one per line, rather than SQL source.
+      quickSuggestions: false,
+      suggestOnTriggerCharacters: false,
+      wordBasedSuggestions: "off",
       formatOnPaste: true,
       formatOnType: false,
       tabSize: 2,
