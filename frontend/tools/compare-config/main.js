@@ -1803,88 +1803,81 @@ class CompareConfigTool extends BaseTool {
    * Bind field selection events for unified mode
    */
   bindUnifiedFieldSelectionEvents() {
-    const pkSearch = document.getElementById("unified-pk-search");
-    const pkDropdown = document.getElementById("unified-pk-field-list");
-    document.querySelector("#unified-pk-select .pk-input-shell")?.addEventListener("click", (event) => {
-      if (!event.target.closest("button")) pkSearch?.focus();
+    this.bindUnifiedPickerEvents("pk");
+    this.bindUnifiedPickerEvents("compare");
+
+    document.getElementById("btn-unified-select-all-fields")?.addEventListener("click", () => {
+      this.unified.selectedCompareFields = [...this.unified.fields.common];
+      this.renderUnifiedFieldSelection();
+      this.saveUnifiedTablePrefsToIndexedDB();
     });
-    pkSearch?.addEventListener("focus", () => {
-      pkDropdown?.classList.add("open");
-      pkSearch.setAttribute("aria-expanded", "true");
-      this.renderPkOptions();
+  }
+
+  bindUnifiedPickerEvents(kind) {
+    const prefix = `unified-${kind}`;
+    const selectedKey = kind === "pk" ? "selectedPkFields" : "selectedCompareFields";
+    const search = document.getElementById(`${prefix}-search`);
+    const dropdown = document.getElementById(`${prefix}-field-list`);
+    const picker = document.getElementById(`${prefix}-select`);
+    if (!search || !dropdown || !picker) return;
+    this._fieldPickerHighlights ??= {};
+
+    picker.querySelector(".pk-input-shell")?.addEventListener("click", (event) => {
+      if (!event.target.closest("button")) search.focus();
     });
-    pkSearch?.addEventListener("input", () => {
-      this._pkHighlightedIndex = -1;
-      pkDropdown?.classList.add("open");
-      pkSearch.setAttribute("aria-expanded", "true");
-      this.renderPkOptions();
+    search.addEventListener("focus", () => {
+      dropdown.classList.add("open");
+      search.setAttribute("aria-expanded", "true");
+      this.renderUnifiedPickerOptions(kind);
     });
-    pkSearch?.addEventListener("keydown", (event) => {
+    search.addEventListener("input", () => {
+      this._fieldPickerHighlights[kind] = -1;
+      dropdown.classList.add("open");
+      search.setAttribute("aria-expanded", "true");
+      this.renderUnifiedPickerOptions(kind);
+    });
+    search.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        pkDropdown?.classList.remove("open");
-        pkSearch.setAttribute("aria-expanded", "false");
-        pkSearch.removeAttribute("aria-activedescendant");
+        dropdown.classList.remove("open");
+        search.setAttribute("aria-expanded", "false");
+        search.removeAttribute("aria-activedescendant");
       } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        const count = pkDropdown?.querySelectorAll(".pk-option").length || 0;
+        const count = dropdown.querySelectorAll(".pk-option").length;
         if (!count) return;
-        this._pkHighlightedIndex = event.key === "ArrowDown"
-          ? Math.min((this._pkHighlightedIndex ?? -1) + 1, count - 1)
-          : this._pkHighlightedIndex > 0 ? this._pkHighlightedIndex - 1 : count - 1;
-        pkDropdown.classList.add("open");
-        pkSearch.setAttribute("aria-expanded", "true");
-        this.renderPkOptions();
-        pkDropdown.querySelector(".pk-option.highlighted")?.scrollIntoView?.({ block: "nearest" });
+        const current = this._fieldPickerHighlights[kind] ?? -1;
+        this._fieldPickerHighlights[kind] = event.key === "ArrowDown"
+          ? Math.min(current + 1, count - 1)
+          : current > 0 ? current - 1 : count - 1;
+        dropdown.classList.add("open");
+        search.setAttribute("aria-expanded", "true");
+        this.renderUnifiedPickerOptions(kind);
+        dropdown.querySelector(".pk-option.highlighted")?.scrollIntoView?.({ block: "nearest" });
       } else if (event.key === "Enter") {
-        const option = pkDropdown?.querySelector(".pk-option.highlighted") || pkDropdown?.querySelector(".pk-option");
-        if (option && pkDropdown.classList.contains("open")) {
+        const option = dropdown.querySelector(".pk-option.highlighted") || dropdown.querySelector(".pk-option");
+        if (option && dropdown.classList.contains("open")) {
           event.preventDefault();
           option.click();
         }
       }
     });
-    this.addDocumentListener("click", (event) => {
-      if (!document.getElementById("unified-pk-select")?.contains(event.target)) {
-        pkDropdown?.classList.remove("open");
-        pkSearch?.setAttribute("aria-expanded", "false");
-      }
+    for (const eventName of ["click", "focusin"]) {
+      this.addDocumentListener(eventName, (event) => {
+        if (!picker.contains(event.target)) {
+          dropdown.classList.remove("open");
+          search.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+
+    const clearId = kind === "pk" ? "btn-unified-deselect-all-pk" : "btn-unified-deselect-all-fields";
+    document.getElementById(clearId)?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.unified[selectedKey] = [];
+      this.renderUnifiedFieldSelection();
+      this.saveUnifiedTablePrefsToIndexedDB();
+      search.focus();
     });
-    this.addDocumentListener("focusin", (event) => {
-      if (!document.getElementById("unified-pk-select")?.contains(event.target)) {
-        pkDropdown?.classList.remove("open");
-        pkSearch?.setAttribute("aria-expanded", "false");
-      }
-    });
-    // Select All / Clear buttons for PK
-    const deselectAllPkBtn = document.getElementById("btn-unified-deselect-all-pk");
-
-    if (deselectAllPkBtn) {
-      deselectAllPkBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.unified.selectedPkFields = [];
-        this.renderUnifiedFieldSelection();
-        this.saveUnifiedTablePrefsToIndexedDB();
-        pkSearch?.focus();
-      });
-    }
-
-    // Select All / Clear buttons for compare fields
-    const selectAllFieldsBtn = document.getElementById("btn-unified-select-all-fields");
-    const deselectAllFieldsBtn = document.getElementById("btn-unified-deselect-all-fields");
-
-    if (selectAllFieldsBtn) {
-      selectAllFieldsBtn.addEventListener("click", () => {
-        this.unified.selectedCompareFields = [...this.unified.fields.common];
-        this.renderUnifiedFieldSelection();
-      });
-    }
-
-    if (deselectAllFieldsBtn) {
-      deselectAllFieldsBtn.addEventListener("click", () => {
-        this.unified.selectedCompareFields = [];
-        this.renderUnifiedFieldSelection();
-      });
-    }
   }
 
   /**
@@ -3986,73 +3979,49 @@ class CompareConfigTool extends BaseTool {
   }
 
   /**
-   * Render the field selection checkboxes
+   * Render both multi-field pickers
    */
   renderUnifiedFieldSelection() {
-    const pkFieldList = document.getElementById("unified-pk-field-list");
-    const compareFieldList = document.getElementById("unified-compare-field-list");
-
-    if (!pkFieldList || !compareFieldList) return;
-
-    const { common } = this.unified.fields;
-    const { selectedPkFields, selectedCompareFields, _pkAutoAddedFields } = this.unified;
-
-    this.renderPkOptions();
-    const selectedContainer = document.getElementById("unified-pk-selected");
-    if (selectedContainer) {
+    for (const kind of ["pk", "compare"]) {
+      const prefix = `unified-${kind}`;
+      const selectedKey = kind === "pk" ? "selectedPkFields" : "selectedCompareFields";
+      const selected = this.unified[selectedKey];
+      const selectedContainer = document.getElementById(`${prefix}-selected`);
+      if (!selectedContainer) continue;
+      this.renderUnifiedPickerOptions(kind);
       selectedContainer.replaceChildren();
-      selectedPkFields.forEach((field) => {
+      selected.forEach((field) => {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "pk-selected-chip";
         chip.textContent = `${field} ×`;
-        chip.setAttribute("aria-label", `Remove ${field} from primary keys`);
+        chip.setAttribute("aria-label", `Remove ${field} from ${kind === "pk" ? "primary keys" : "comparison fields"}`);
         chip.addEventListener("click", (event) => {
           event.stopPropagation();
-          this.togglePkField(field);
-          document.getElementById("unified-pk-search")?.focus();
+          this.toggleUnifiedField(kind, field);
+          document.getElementById(`${prefix}-search`)?.focus();
         });
         selectedContainer.append(chip);
       });
+      const clearId = kind === "pk" ? "btn-unified-deselect-all-pk" : "btn-unified-deselect-all-fields";
+      const clearButton = document.getElementById(clearId);
+      if (clearButton) clearButton.disabled = selected.length === 0;
     }
-    const clearPkButton = document.getElementById("btn-unified-deselect-all-pk");
-    if (clearPkButton) clearPkButton.disabled = selectedPkFields.length === 0;
-
-    // Render compare fields with animation class for newly auto-added PK fields
-    compareFieldList.innerHTML = common
-      .map((field) => {
-        const isAutoAdded = _pkAutoAddedFields.includes(field);
-        const animationClass = isAutoAdded ? "pk-auto-added" : "";
-        return `
-      <label class="field-chip ${animationClass}">
-        <input type="checkbox" name="unified-compare-field" value="${field}"
-               ${selectedCompareFields.includes(field) ? "checked" : ""}
-               ${isAutoAdded ? 'class="pk-synced"' : ""}>
-        <span>${field}</span>
-      </label>
-    `;
-      })
-      .join("");
-
-    // Clear the auto-added tracking after render (animation will play once)
-    if (_pkAutoAddedFields.length > 0) {
-      setTimeout(() => {
-        this.unified._pkAutoAddedFields = [];
-      }, 600);
-    }
-
-    // Bind comparison field events
-    this.bindUnifiedFieldCheckboxEvents();
-
-    // Update compare button state
     this.updateUnifiedCompareButtonState();
   }
 
-  renderPkOptions() {
-    const dropdown = document.getElementById("unified-pk-field-list");
-    const search = document.getElementById("unified-pk-search");
+  renderUnifiedPickerOptions(kind) {
+    const prefix = `unified-${kind}`;
+    const selectedKey = kind === "pk" ? "selectedPkFields" : "selectedCompareFields";
+    const dropdown = document.getElementById(`${prefix}-field-list`);
+    const search = document.getElementById(`${prefix}-search`);
     if (!dropdown || !search) return;
-    const fields = this.unified.fields.common.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
+    const common = this.unified.fields.common;
+    const selected = this.unified[selectedKey];
+    const isDeferred = (field) => kind === "compare"
+      && (/^(created_|updated_)/i.test(field) || this.unified.selectedPkFields.includes(field));
+    const ordered = [...common.filter((field) => !isDeferred(field)), ...common.filter(isDeferred)];
+    const fields = ordered.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
     dropdown.replaceChildren();
     if (fields.length === 0) {
       search.removeAttribute("aria-activedescendant");
@@ -4066,20 +4035,20 @@ class CompareConfigTool extends BaseTool {
       const option = document.createElement("button");
       option.type = "button";
       option.className = "searchable-option pk-option";
-      option.id = `unified-pk-option-${index}`;
+      option.id = `${prefix}-option-${index}`;
       option.role = "option";
-      option.setAttribute("aria-selected", String(this.unified.selectedPkFields.includes(field)));
-      option.classList.toggle("highlighted", index === this._pkHighlightedIndex);
-      option.textContent = `${this.unified.selectedPkFields.includes(field) ? "✓  " : ""}${field}`;
+      option.setAttribute("aria-selected", String(selected.includes(field)));
+      option.classList.toggle("highlighted", index === this._fieldPickerHighlights?.[kind]);
+      option.textContent = `${selected.includes(field) ? "✓  " : ""}${field}`;
       option.addEventListener("click", (event) => {
         event.stopPropagation();
-        this.togglePkField(field);
+        this.toggleUnifiedField(kind, field);
         search.value = "";
-        this._pkHighlightedIndex = -1;
+        this._fieldPickerHighlights[kind] = -1;
         search.focus();
         dropdown.classList.add("open");
         search.setAttribute("aria-expanded", "true");
-        this.renderPkOptions();
+        this.renderUnifiedPickerOptions(kind);
       });
       dropdown.append(option);
     });
@@ -4089,25 +4058,15 @@ class CompareConfigTool extends BaseTool {
   }
 
   togglePkField(field) {
-    const selected = this.unified.selectedPkFields;
-    this.unified.selectedPkFields = selected.includes(field) ? selected.filter((item) => item !== field) : [...selected, field];
-    this.renderUnifiedFieldSelection();
-    this.saveUnifiedTablePrefsToIndexedDB();
+    this.toggleUnifiedField("pk", field);
   }
 
-  /**
-   * Bind events to field checkboxes
-   */
-  bindUnifiedFieldCheckboxEvents() {
-    // Compare field checkboxes
-    const fieldCheckboxes = document.querySelectorAll('input[name="unified-compare-field"]');
-    fieldCheckboxes.forEach((cb) => {
-      cb.addEventListener("change", () => {
-        const checked = Array.from(document.querySelectorAll('input[name="unified-compare-field"]:checked')).map((c) => c.value);
-        this.unified.selectedCompareFields = checked;
-        this.updateUnifiedCompareButtonState();
-      });
-    });
+  toggleUnifiedField(kind, field) {
+    const selectedKey = kind === "pk" ? "selectedPkFields" : "selectedCompareFields";
+    const selected = this.unified[selectedKey];
+    this.unified[selectedKey] = selected.includes(field) ? selected.filter((item) => item !== field) : [...selected, field];
+    this.renderUnifiedFieldSelection();
+    this.saveUnifiedTablePrefsToIndexedDB();
   }
 
   /**

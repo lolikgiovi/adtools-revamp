@@ -3902,6 +3902,10 @@
   max-width: 440px;
 }
 
+.compare-select {
+  max-width: 720px;
+}
+
 .pk-input-shell {
   display: flex;
   align-items: center;

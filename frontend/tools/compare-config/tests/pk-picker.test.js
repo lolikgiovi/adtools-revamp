@@ -61,4 +61,46 @@ describe("Compare Config PK picker", () => {
     clear.click();
     expect(tool.unified.selectedPkFields).toEqual([]);
   });
+
+  it("uses the same tag picker for comparison fields and puts audit and PK options last", () => {
+    document.body.innerHTML = CompareConfigTemplate;
+    const tool = Object.assign(Object.create(CompareConfigTool.prototype), {
+      unified: {
+        fields: { common: ["CREATED_TIME", "CONFIG_ID", "PARAMETER_KEY", "DESCRIPTION", "UPDATED_BY"] },
+        selectedPkFields: ["PARAMETER_KEY"],
+        selectedCompareFields: ["CONFIG_ID", "DESCRIPTION"],
+        _pkAutoAddedFields: [],
+        options: { rowMatching: "key" },
+      },
+      _documentListenerCleanups: documentCleanups,
+      saveUnifiedTablePrefsToIndexedDB: vi.fn(),
+    });
+    tool.bindUnifiedFieldSelectionEvents();
+    tool.renderUnifiedFieldSelection();
+
+    const compareSearch = document.getElementById("unified-compare-search");
+    const compareDropdown = document.getElementById("unified-compare-field-list");
+    const compareShell = document.querySelector("#unified-compare-select .pk-input-shell");
+    expect(compareShell.contains(compareSearch)).toBe(true);
+    expect(compareShell.querySelectorAll(".pk-selected-chip")).toHaveLength(2);
+    compareSearch.dispatchEvent(new Event("focus"));
+    expect([...compareDropdown.querySelectorAll(".pk-option")].map((option) => option.textContent.trim())).toEqual([
+      "✓  CONFIG_ID", "✓  DESCRIPTION", "CREATED_TIME", "PARAMETER_KEY", "UPDATED_BY",
+    ]);
+
+    tool.togglePkField("DESCRIPTION");
+    expect([...compareDropdown.querySelectorAll(".pk-option")].map((option) => option.textContent.trim())).toEqual([
+      "✓  CONFIG_ID", "CREATED_TIME", "PARAMETER_KEY", "✓  DESCRIPTION", "UPDATED_BY",
+    ]);
+    compareSearch.value = "created";
+    compareSearch.dispatchEvent(new Event("input"));
+    compareDropdown.querySelector(".pk-option").click();
+    expect(tool.unified.selectedCompareFields).toContain("CREATED_TIME");
+    expect(compareShell.querySelectorAll(".pk-selected-chip")).toHaveLength(3);
+
+    document.getElementById("btn-unified-deselect-all-fields").click();
+    expect(tool.unified.selectedCompareFields).toEqual([]);
+    document.getElementById("btn-unified-select-all-fields").click();
+    expect(tool.unified.selectedCompareFields).toHaveLength(5);
+  });
 });
