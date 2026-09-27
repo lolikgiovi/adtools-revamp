@@ -25,7 +25,6 @@ import {
   cleanCompareConfigAnalyticsMeta,
 } from "./lib/compare-config-analytics.js";
 import {
-  syncPkFieldsWithTracking,
   validateOracleToOracleConfig,
   isMixedMode,
   validateMixedModeConfig,
@@ -65,7 +64,7 @@ class CompareConfigTool extends BaseTool {
         type: null, // 'oracle' or 'excel'
         // Oracle config
         connection: null, // { name, connect_string }
-        queryMode: "table", // 'table' or 'sql'
+        queryMode: "sql", // 'table' or 'sql'
         schema: null,
         table: null,
         sql: "",
@@ -86,7 +85,7 @@ class CompareConfigTool extends BaseTool {
       sourceB: {
         type: null,
         connection: null,
-        queryMode: "table",
+        queryMode: "sql",
         schema: null,
         table: null,
         sql: "",
@@ -138,6 +137,7 @@ class CompareConfigTool extends BaseTool {
     this.gridView.onSortChange = () => {
       this.renderResults();
     };
+    this.sqlEditors = new Map();
   }
 
   getIconSvg() {
@@ -175,6 +175,40 @@ class CompareConfigTool extends BaseTool {
       // Initialize unified mode UI for web (pre-selects Excel mode)
       this.initUnifiedModeUI();
     }
+    if (isTauri() && this.oracleClientReady) await this.initializeSqlEditors();
+  }
+
+  async initializeSqlEditors() {
+    try {
+      const { createOracleEditor } = await import("../../core/MonacoOracle.js");
+      if (!this.container) return;
+      for (const source of ["A", "B"]) {
+        const prefix = `source-${source.toLowerCase()}`;
+        const container = document.getElementById(`${prefix}-sql-editor`);
+        const textarea = document.getElementById(`${prefix}-sql`);
+        if (!container || !textarea) continue;
+        const editor = createOracleEditor(container, {
+          value: textarea.value,
+          readOnly: source === "B" && Boolean(this.unified.sourceB.useSourceAQuery),
+          ariaLabel: `${source === "A" ? "Source A" : "Source B"} SQL Query`,
+        });
+        editor.onDidChangeModelContent(() => {
+          if (textarea.value === editor.getValue()) return;
+          textarea.value = editor.getValue();
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        this.sqlEditors.set(source, editor);
+        container.style.display = "block";
+        textarea.style.display = "none";
+      }
+    } catch (error) {
+      console.warn("SQL editor unavailable; using text input:", error);
+    }
+  }
+
+  setSqlEditorValue(source, value) {
+    const editor = this.sqlEditors.get(source);
+    if (editor && editor.getValue() !== value) editor.setValue(value);
   }
 
   /**
@@ -1153,6 +1187,8 @@ class CompareConfigTool extends BaseTool {
   }
 
   onUnmount() {
+    for (const editor of this.sqlEditors?.values() || []) editor.dispose();
+    this.sqlEditors?.clear();
     this.invalidateUnifiedLoadRequests();
     this._documentListenerCleanups.splice(0).forEach((cleanup) => {
       try {
@@ -1221,6 +1257,18 @@ class CompareConfigTool extends BaseTool {
   // Unified Mode Table Preferences (IndexedDB)
   // =============================================================================
 
+  getUnifiedPreferenceTable() {
+    const source = this.unified.sourceA;
+    if (source.type !== "oracle") return null;
+    if (source.queryMode === "table") {
+      return source.schema && source.table ? { schema: source.schema.toUpperCase(), table: source.table.toUpperCase() } : null;
+    }
+    const match = source.sql.match(/\bfrom\s+(?:("?[A-Za-z][\w$#]*"?)\s*\.\s*)?("?[A-Za-z][\w$#]*"?)/i);
+    if (!match) return null;
+    const schema = (match[1] || source.schema)?.replaceAll('"', "");
+    return { schema: schema?.toUpperCase() || null, table: match[2].replaceAll('"', "").toUpperCase() };
+  }
+
   /**
    * Loads saved preferences for the current unified table from IndexedDB
    * Called after field reconciliation to apply saved PK and field selections
@@ -1228,23 +1276,25 @@ class CompareConfigTool extends BaseTool {
   async loadUnifiedTablePrefsFromIndexedDB() {
     if (!IndexedDBManager.isIndexedDBAvailable()) return;
 
-    const sourceA = this.unified.sourceA;
-    if (sourceA.type !== "oracle" || sourceA.queryMode !== "table") return;
-    if (!sourceA.schema || !sourceA.table) return;
+    const identity = this.getUnifiedPreferenceTable();
+    if (!identity?.schema) return;
 
     try {
-      const prefs = await IndexedDBManager.getSchemaTablePrefs(null, sourceA.schema, sourceA.table);
+      const prefs = await IndexedDBManager.getSchemaTablePrefs(null, identity.schema, identity.table);
 
       if (prefs) {
         const commonFields = this.unified.fields.common;
 
-        const validPkFields = (prefs.selectedPkFields || []).filter((f) => commonFields.includes(f));
-        if (validPkFields.length > 0) {
+        const availableFields = (stored) => [...new Set(stored
+          .map((field) => commonFields.find((name) => name.toUpperCase() === field.toUpperCase()))
+          .filter(Boolean))];
+        const validPkFields = availableFields(prefs.selectedPkFields || []);
+        if (Array.isArray(prefs.selectedPkFields)) {
           this.unified.selectedPkFields = validPkFields;
         }
 
-        const validFields = (prefs.selectedFields || []).filter((f) => commonFields.includes(f));
-        if (validFields.length > 0) {
+        const validFields = availableFields(prefs.selectedFields || []);
+        if (Array.isArray(prefs.selectedFields)) {
           this.unified.selectedCompareFields = validFields;
         }
 
@@ -1260,7 +1310,7 @@ class CompareConfigTool extends BaseTool {
           if (dataCompRadio) dataCompRadio.checked = true;
         }
 
-        console.log(`Loaded unified prefs for ${sourceA.schema}.${sourceA.table}:`, {
+        console.log(`Loaded unified prefs for ${identity.schema}.${identity.table}:`, {
           pkFields: this.unified.selectedPkFields.length,
           compareFields: this.unified.selectedCompareFields.length,
         });
@@ -1277,22 +1327,21 @@ class CompareConfigTool extends BaseTool {
   async saveUnifiedTablePrefsToIndexedDB() {
     if (!IndexedDBManager.isIndexedDBAvailable()) return;
 
-    const sourceA = this.unified.sourceA;
-    if (sourceA.type !== "oracle" || sourceA.queryMode !== "table") return;
-    if (!sourceA.schema || !sourceA.table) return;
+    const identity = this.getUnifiedPreferenceTable();
+    if (!identity?.schema) return;
 
     try {
       await IndexedDBManager.saveSchemaTablePrefs({
-        connectionId: sourceA.connection?.name || "",
-        schema: sourceA.schema,
-        table: sourceA.table,
+        connectionId: "",
+        schema: identity.schema,
+        table: identity.table,
         selectedPkFields: this.unified.selectedPkFields || [],
         selectedFields: this.unified.selectedCompareFields || [],
         rowMatching: this.unified.options.rowMatching,
         dataComparison: this.unified.options.dataComparison,
       });
 
-      console.log(`Saved unified prefs for ${sourceA.schema}.${sourceA.table}`);
+      console.log(`Saved unified prefs for ${identity.schema}.${identity.table}`);
     } catch (error) {
       console.warn("Failed to save unified table preferences:", error);
     }
@@ -1493,7 +1542,7 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
-    // SQL textarea
+    // The textarea is the fallback and the synchronized value for Monaco.
     const sqlInput = document.getElementById(`${prefix}-sql`);
     if (sqlInput) {
       sqlInput.addEventListener("input", (e) => {
@@ -1507,6 +1556,7 @@ class CompareConfigTool extends BaseTool {
           const sqlB = document.getElementById("source-b-sql");
           this.unified.sourceB.sql = e.target.value;
           if (sqlB) sqlB.value = e.target.value;
+          this.setSqlEditorValue("B", e.target.value);
         }
       });
     }
@@ -1520,13 +1570,14 @@ class CompareConfigTool extends BaseTool {
           const sqlB = document.getElementById("source-b-sql");
           if (useQueryACheckbox.checked) {
             // Copy Source A's SQL to Source B and disable editing
-            if (this.unified.sourceA.sql) {
-              this.unified.sourceB.sql = this.unified.sourceA.sql;
-              if (sqlB) sqlB.value = this.unified.sourceA.sql;
-            }
+            this.unified.sourceB.sql = this.unified.sourceA.sql;
+            if (sqlB) sqlB.value = this.unified.sourceA.sql;
+            this.setSqlEditorValue("B", this.unified.sourceA.sql);
             if (sqlB) sqlB.disabled = true;
+            this.sqlEditors.get("B")?.updateOptions({ readOnly: true });
           } else {
             if (sqlB) sqlB.disabled = false;
+            this.sqlEditors.get("B")?.updateOptions({ readOnly: false });
           }
           this.updateUnifiedLoadButtonState();
         });
@@ -1752,28 +1803,46 @@ class CompareConfigTool extends BaseTool {
    * Bind field selection events for unified mode
    */
   bindUnifiedFieldSelectionEvents() {
+    const pkSearch = document.getElementById("unified-pk-search");
+    const pkDropdown = document.getElementById("unified-pk-field-list");
+    pkSearch?.addEventListener("focus", () => {
+      pkDropdown?.classList.add("open");
+      pkSearch.setAttribute("aria-expanded", "true");
+      this.renderPkOptions();
+    });
+    pkSearch?.addEventListener("input", () => this.renderPkOptions());
+    pkSearch?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        pkDropdown?.classList.remove("open");
+        pkSearch.setAttribute("aria-expanded", "false");
+      } else if (event.key === "Enter") {
+        const first = pkDropdown?.querySelector(".pk-option");
+        if (first) {
+          event.preventDefault();
+          first.click();
+        }
+      }
+    });
+    document.getElementById("unified-pk-select")?.addEventListener("focusout", (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        pkDropdown?.classList.remove("open");
+        pkSearch?.setAttribute("aria-expanded", "false");
+      }
+    });
+    this.addDocumentListener("click", (event) => {
+      if (!document.getElementById("unified-pk-select")?.contains(event.target)) {
+        pkDropdown?.classList.remove("open");
+        pkSearch?.setAttribute("aria-expanded", "false");
+      }
+    });
     // Select All / Clear buttons for PK
-    const selectAllPkBtn = document.getElementById("btn-unified-select-all-pk");
     const deselectAllPkBtn = document.getElementById("btn-unified-deselect-all-pk");
-
-    if (selectAllPkBtn) {
-      selectAllPkBtn.addEventListener("click", () => {
-        this.unified.selectedPkFields = [...this.unified.fields.common];
-        // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
-        const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
-          this.unified.selectedPkFields,
-          this.unified.selectedCompareFields,
-        );
-        this.unified.selectedCompareFields = updatedCompareFields;
-        this.unified._pkAutoAddedFields = newlyAddedFields;
-        this.renderUnifiedFieldSelection();
-      });
-    }
 
     if (deselectAllPkBtn) {
       deselectAllPkBtn.addEventListener("click", () => {
         this.unified.selectedPkFields = [];
         this.renderUnifiedFieldSelection();
+        this.saveUnifiedTablePrefsToIndexedDB();
       });
     }
 
@@ -2001,7 +2070,7 @@ class CompareConfigTool extends BaseTool {
     if (!btn || !dropdown || !label) return;
 
     // Update label based on current state
-    const currentMode = this.unified[sourceKey].queryMode || "table";
+    const currentMode = this.unified[sourceKey].queryMode || "sql";
     label.textContent = currentMode === "table" ? "By Table" : "By Raw SQL";
 
     // Update active state in dropdown
@@ -2055,7 +2124,7 @@ class CompareConfigTool extends BaseTool {
     this.unified[sourceKey] = {
       type: null,
       connection: null,
-      queryMode: "table",
+      queryMode: "sql",
       schema: null,
       table: null,
       sql: "",
@@ -2231,6 +2300,11 @@ class CompareConfigTool extends BaseTool {
 
     if (oracleConfig) oracleConfig.style.display = type === "oracle" ? "flex" : "none";
     if (excelConfig) excelConfig.style.display = type === "excel" ? "block" : "none";
+    const mode = this.unified[sourceKey].queryMode;
+    const tableConfig = document.getElementById(`${prefix}-table-config`);
+    const sqlConfig = document.getElementById(`${prefix}-sql-config`);
+    if (tableConfig) tableConfig.style.display = mode === "table" ? "flex" : "none";
+    if (sqlConfig) sqlConfig.style.display = mode === "sql" ? "block" : "none";
 
     // Show/hide "Use same query as Source A" checkbox for Source B SQL mode
     if (source === "B") {
@@ -2245,6 +2319,7 @@ class CompareConfigTool extends BaseTool {
           useQueryACheckbox.checked = true;
           const sqlB = document.getElementById("source-b-sql");
           if (sqlB) sqlB.disabled = true;
+          this.sqlEditors.get("B")?.updateOptions({ readOnly: true });
         }
       }
     }
@@ -2500,10 +2575,10 @@ class CompareConfigTool extends BaseTool {
           if (useQueryACheckbox) useQueryACheckbox.checked = true;
           const sqlB = document.getElementById("source-b-sql");
           if (sqlB) sqlB.disabled = true;
-          if (this.unified.sourceA.sql) {
-            this.unified.sourceB.sql = this.unified.sourceA.sql;
-            if (sqlB) sqlB.value = this.unified.sourceA.sql;
-          }
+          this.sqlEditors.get("B")?.updateOptions({ readOnly: true });
+          this.unified.sourceB.sql = this.unified.sourceA.sql;
+          if (sqlB) sqlB.value = this.unified.sourceA.sql;
+          this.setSqlEditorValue("B", this.unified.sourceA.sql);
         }
       }
     }
@@ -3676,9 +3751,15 @@ class CompareConfigTool extends BaseTool {
       onlyInB: reconciled.onlyInB,
     };
 
-    // Default: select all common fields for comparison
-    this.unified.selectedPkFields = [];
-    this.unified.selectedCompareFields = [...reconciled.common];
+    const table = this.getUnifiedPreferenceTable()?.table.toLowerCase();
+    const suggested = table === "config" ? ["PARAMETER_KEY"] : table === "config_integration" ? ["SERVICE_CODE", "ENVIRONMENT"] : [];
+    this.unified.selectedPkFields = suggested
+      .map((name) => reconciled.common.find((field) => field.toUpperCase() === name))
+      .filter(Boolean);
+    this.unified.selectedCompareFields = reconciled.common.filter(
+      (field) => field.toUpperCase() !== "PARAMETER_KEY" && !this.unified.selectedPkFields.includes(field)
+        && !/^(created_|updated_)/i.test(field),
+    );
   }
 
   /**
@@ -3813,22 +3894,29 @@ class CompareConfigTool extends BaseTool {
       if (whereInput) whereInput.value = "";
       if (maxRowsInput) maxRowsInput.value = "100";
       if (sqlInput) sqlInput.value = "";
+      this.setSqlEditorValue(source, "");
+      if (source === "B") {
+        const useQueryA = document.getElementById("source-b-use-sql-a");
+        if (useQueryA) useQueryA.checked = false;
+        if (sqlInput) sqlInput.disabled = false;
+        this.sqlEditors.get("B")?.updateOptions({ readOnly: false });
+      }
 
-      // Reset query mode dropdown to table
+      // Reset query mode dropdown to raw SQL
       const queryModeLabel = document.getElementById(`${prefix}-query-mode-label`);
       const queryModeDropdown = document.getElementById(`${prefix}-query-mode-dropdown`);
-      if (queryModeLabel) queryModeLabel.textContent = "By Table";
+      if (queryModeLabel) queryModeLabel.textContent = "By Raw SQL";
       if (queryModeDropdown) {
         queryModeDropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
-          opt.classList.toggle("active", opt.dataset.value === "table");
+          opt.classList.toggle("active", opt.dataset.value === "sql");
         });
       }
 
-      // Show table config, hide SQL config
+      // Show SQL config, hide table config
       const tableConfig = document.getElementById(`${prefix}-table-config`);
       const sqlConfig = document.getElementById(`${prefix}-sql-config`);
-      if (tableConfig) tableConfig.style.display = "flex";
-      if (sqlConfig) sqlConfig.style.display = "none";
+      if (tableConfig) tableConfig.style.display = "none";
+      if (sqlConfig) sqlConfig.style.display = "block";
     } else if (sourceType === "excel") {
       // For Excel: keep file list visible, clear selection
       const fileSearchInput = document.getElementById(`${prefix}-file-search`);
@@ -3887,18 +3975,20 @@ class CompareConfigTool extends BaseTool {
     const { common } = this.unified.fields;
     const { selectedPkFields, selectedCompareFields, _pkAutoAddedFields } = this.unified;
 
-    // Render PK fields
-    pkFieldList.innerHTML = common
-      .map(
-        (field) => `
-      <label class="field-chip">
-        <input type="checkbox" name="unified-pk-field" value="${field}"
-               ${selectedPkFields.includes(field) ? "checked" : ""}>
-        <span>${field}</span>
-      </label>
-    `,
-      )
-      .join("");
+    this.renderPkOptions();
+    const selectedContainer = document.getElementById("unified-pk-selected");
+    if (selectedContainer) {
+      selectedContainer.replaceChildren();
+      selectedPkFields.forEach((field) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "pk-selected-chip";
+        chip.textContent = `${field} ×`;
+        chip.setAttribute("aria-label", `Remove ${field} from primary keys`);
+        chip.addEventListener("click", () => this.togglePkField(field));
+        selectedContainer.append(chip);
+      });
+    }
 
     // Render compare fields with animation class for newly auto-added PK fields
     compareFieldList.innerHTML = common
@@ -3923,37 +4013,49 @@ class CompareConfigTool extends BaseTool {
       }, 600);
     }
 
-    // Bind checkbox events
+    // Bind comparison field events
     this.bindUnifiedFieldCheckboxEvents();
 
     // Update compare button state
     this.updateUnifiedCompareButtonState();
   }
 
+  renderPkOptions() {
+    const dropdown = document.getElementById("unified-pk-field-list");
+    const search = document.getElementById("unified-pk-search");
+    if (!dropdown || !search) return;
+    const fields = this.unified.fields.common.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
+    dropdown.replaceChildren();
+    if (fields.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "pk-option-empty";
+      empty.textContent = "No matching fields";
+      dropdown.append(empty);
+      return;
+    }
+    fields.forEach((field) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "searchable-option pk-option";
+      option.role = "option";
+      option.setAttribute("aria-selected", String(this.unified.selectedPkFields.includes(field)));
+      option.textContent = `${this.unified.selectedPkFields.includes(field) ? "✓  " : ""}${field}`;
+      option.addEventListener("click", () => this.togglePkField(field));
+      dropdown.append(option);
+    });
+  }
+
+  togglePkField(field) {
+    const selected = this.unified.selectedPkFields;
+    this.unified.selectedPkFields = selected.includes(field) ? selected.filter((item) => item !== field) : [...selected, field];
+    this.renderUnifiedFieldSelection();
+    this.saveUnifiedTablePrefsToIndexedDB();
+  }
+
   /**
    * Bind events to field checkboxes
    */
   bindUnifiedFieldCheckboxEvents() {
-    // PK checkboxes
-    const pkCheckboxes = document.querySelectorAll('input[name="unified-pk-field"]');
-    pkCheckboxes.forEach((cb) => {
-      cb.addEventListener("change", () => {
-        const checked = Array.from(document.querySelectorAll('input[name="unified-pk-field"]:checked')).map((c) => c.value);
-        this.unified.selectedPkFields = checked;
-
-        // Phase 1.3: Auto-sync PK fields to comparison fields with tracking for animation
-        const { updatedCompareFields, newlyAddedFields } = syncPkFieldsWithTracking(
-          this.unified.selectedPkFields,
-          this.unified.selectedCompareFields,
-        );
-        this.unified.selectedCompareFields = updatedCompareFields;
-        this.unified._pkAutoAddedFields = newlyAddedFields;
-
-        // Re-render to update the compare field checkboxes
-        this.renderUnifiedFieldSelection();
-      });
-    });
-
     // Compare field checkboxes
     const fieldCheckboxes = document.querySelectorAll('input[name="unified-compare-field"]');
     fieldCheckboxes.forEach((cb) => {

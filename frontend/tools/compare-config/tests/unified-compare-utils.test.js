@@ -566,7 +566,7 @@ describe('UnifiedCompareUtils', () => {
     it('resets all Oracle config fields', () => {
       const result = createResetSourceState('oracle');
       expect(result.connection).toBeNull();
-      expect(result.queryMode).toBe('table');
+      expect(result.queryMode).toBe('sql');
       expect(result.schema).toBeNull();
       expect(result.table).toBeNull();
       expect(result.sql).toBe('');

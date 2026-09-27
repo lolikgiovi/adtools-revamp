@@ -108,21 +108,21 @@ export const CompareConfigTemplate = /* html */ `
                                 <label>Query Mode</label>
                                 <div class="config-dropdown" id="source-a-query-mode-wrapper">
                                     <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-a-query-mode-btn">
-                                        <span id="source-a-query-mode-label">By Table</span>
+                                        <span id="source-a-query-mode-label">By Raw SQL</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
                                     <div class="config-dropdown-menu" id="source-a-query-mode-dropdown">
-                                        <button class="config-dropdown-option active" data-value="table">By Table</button>
-                                        <button class="config-dropdown-option" data-value="sql">By Raw SQL</button>
+                                        <button class="config-dropdown-option" data-value="table">By Table</button>
+                                        <button class="config-dropdown-option active" data-value="sql">By Raw SQL</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Table Mode Config -->
-                        <div class="table-mode-config" id="source-a-table-config">
+                        <div class="table-mode-config" id="source-a-table-config" style="display: none;">
                             <div class="schema-table-row">
                                 <div class="form-group">
                                     <label>Schema</label>
@@ -151,9 +151,10 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
 
                         <!-- Raw SQL Mode Config -->
-                        <div class="sql-mode-config" id="source-a-sql-config" style="display: none;">
+                        <div class="sql-mode-config" id="source-a-sql-config">
                             <div class="form-group">
-                                <label>SQL Query</label>
+                                <label for="source-a-sql">SQL Query</label>
+                                <div id="source-a-sql-editor" class="compare-sql-editor" aria-label="Source A SQL Query"></div>
                                 <textarea id="source-a-sql" class="form-textarea sql-input"
                                           placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
                             </div>
@@ -287,20 +288,20 @@ export const CompareConfigTemplate = /* html */ `
                                 <label>Query Mode</label>
                                 <div class="config-dropdown" id="source-b-query-mode-wrapper">
                                     <button type="button" class="btn btn-secondary config-dropdown-btn" id="source-b-query-mode-btn">
-                                        <span id="source-b-query-mode-label">By Table</span>
+                                        <span id="source-b-query-mode-label">By Raw SQL</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
                                     <div class="config-dropdown-menu" id="source-b-query-mode-dropdown">
-                                        <button class="config-dropdown-option active" data-value="table">By Table</button>
-                                        <button class="config-dropdown-option" data-value="sql">By Raw SQL</button>
+                                        <button class="config-dropdown-option" data-value="table">By Table</button>
+                                        <button class="config-dropdown-option active" data-value="sql">By Raw SQL</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="table-mode-config" id="source-b-table-config">
+                        <div class="table-mode-config" id="source-b-table-config" style="display: none;">
                             <div class="schema-table-row">
                                 <div class="form-group">
                                     <label>Schema</label>
@@ -328,15 +329,18 @@ export const CompareConfigTemplate = /* html */ `
                             </div>
                         </div>
 
-                        <div class="sql-mode-config" id="source-b-sql-config" style="display: none;">
+                        <div class="sql-mode-config" id="source-b-sql-config">
                             <div class="form-group">
-                                <label>SQL Query</label>
+                                <div class="sql-label-row">
+                                    <label for="source-b-sql">SQL Query</label>
+                                    <label class="checkbox-label use-source-a-label" id="source-b-use-sql-a-wrapper">
+                                        <input type="checkbox" id="source-b-use-sql-a">
+                                        Use same query as Source A
+                                    </label>
+                                </div>
+                                <div id="source-b-sql-editor" class="compare-sql-editor" aria-label="Source B SQL Query"></div>
                                 <textarea id="source-b-sql" class="form-textarea sql-input"
                                           placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
-                                <label class="checkbox-label use-source-a-label" id="source-b-use-sql-a-wrapper" style="display: none;">
-                                    <input type="checkbox" id="source-b-use-sql-a">
-                                    Use same query as Source A
-                                </label>
                             </div>
                         </div>
 
@@ -495,13 +499,16 @@ export const CompareConfigTemplate = /* html */ `
                 <div class="field-selection-section">
                     <div class="field-header">
                         <h4 class="field-title">Primary Key Selection</h4>
-                        <div class="field-actions">
-                            <button class="btn btn-ghost btn-sm" id="btn-unified-select-all-pk">Select All</button>
-                            <button class="btn btn-ghost btn-sm" id="btn-unified-deselect-all-pk">Clear</button>
-                        </div>
+                        <button class="btn btn-ghost btn-sm" id="btn-unified-deselect-all-pk" type="button">Clear</button>
                     </div>
                     <p class="field-help">Select field(s) to use as primary key for matching rows</p>
-                    <div id="unified-pk-field-list" class="field-list"></div>
+                    <div class="searchable-select pk-select" id="unified-pk-select">
+                        <input id="unified-pk-search" class="form-input searchable-input" type="text"
+                               placeholder="Search fields..." autocomplete="off" aria-label="Search primary key fields"
+                               aria-controls="unified-pk-field-list" aria-expanded="false">
+                        <div id="unified-pk-field-list" class="searchable-dropdown pk-dropdown" role="listbox" aria-multiselectable="true"></div>
+                    </div>
+                    <div id="unified-pk-selected" class="pk-selected-fields" aria-live="polite"></div>
                 </div>
 
                 <!-- Comparison Fields Selection -->

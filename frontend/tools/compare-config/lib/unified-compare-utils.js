@@ -303,7 +303,7 @@ export function createResetSourceState(sourceType, existingExcelFiles = []) {
   return {
     type: sourceType, // Keep the type so UI stays on same source type
     connection: null,
-    queryMode: 'table',
+    queryMode: 'sql',
     schema: null,
     table: null,
     sql: '',

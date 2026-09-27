@@ -3369,7 +3369,33 @@
   min-width: 0;
 }
 
-/* SQL Input Textarea */
+/* SQL query editor */
+.compare-sql-editor {
+  display: none;
+  height: 150px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.compare-sql-editor:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.sql-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.sql-label-row .use-source-a-label {
+  margin: 0;
+}
+
+/* SQL Input Textarea fallback */
 .sql-input {
   min-height: 100px;
   font-family: var(--font-mono, monospace);
@@ -3862,7 +3888,7 @@
    ============================================ */
 
 .use-source-a-label {
-  display: flex !important;
+  display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
@@ -3870,6 +3896,59 @@
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   user-select: none;
+}
+
+.pk-select {
+  max-width: 440px;
+}
+
+.pk-dropdown {
+  max-height: 220px;
+  border-top: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.pk-option {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.pk-option[aria-selected="true"] {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.pk-option:focus-visible,
+.pk-selected-chip:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.pk-option-empty {
+  padding: 0.625rem 0.875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.pk-selected-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.pk-selected-chip {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
 }
 
 .use-source-a-label input[type="checkbox"] {
