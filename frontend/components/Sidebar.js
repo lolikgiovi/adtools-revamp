@@ -401,7 +401,9 @@ class Sidebar {
     // If runtime detection might not be ready yet, re-render once shortly
     if (!runtimeIsTauri && !this._runtimeRetry) {
       this._runtimeRetry = true;
-      setTimeout(() => this.renderTools(), 150);
+      setTimeout(() => {
+        if (isTauri()) void this.renderTools();
+      }, 150);
     }
 
     const pinnedToolIds = this.getPinnedToolIds();

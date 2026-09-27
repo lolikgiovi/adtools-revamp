@@ -406,7 +406,9 @@ class App {
     if (!isTauri() && !this._runtimeRetryHome) {
       this._runtimeRetryHome = true;
       setTimeout(() => {
-        if (this.isNavigationCurrent(navigationId, "home")) this.showHome(navigationId);
+        // Tauri can expose its runtime bridge just after the first render.
+        // Only repeat Home setup when the runtime actually changed.
+        if (isTauri() && this.isNavigationCurrent(navigationId, "home")) this.showHome(navigationId);
       }, 150);
     }
 
