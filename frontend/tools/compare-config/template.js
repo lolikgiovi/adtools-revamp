@@ -504,7 +504,8 @@ export const CompareConfigTemplate = /* html */ `
                     <p class="field-help">Select field(s) to use as primary key for matching rows</p>
                     <div class="searchable-select pk-select" id="unified-pk-select">
                         <input id="unified-pk-search" class="form-input searchable-input" type="text"
-                               placeholder="Search fields..." autocomplete="off" aria-label="Search primary key fields"
+                               placeholder="Search fields..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                               aria-label="Search primary key fields"
                                aria-controls="unified-pk-field-list" aria-expanded="false">
                         <div id="unified-pk-field-list" class="searchable-dropdown pk-dropdown" role="listbox" aria-multiselectable="true"></div>
                     </div>

@@ -1810,26 +1810,43 @@ class CompareConfigTool extends BaseTool {
       pkSearch.setAttribute("aria-expanded", "true");
       this.renderPkOptions();
     });
-    pkSearch?.addEventListener("input", () => this.renderPkOptions());
+    pkSearch?.addEventListener("input", () => {
+      this._pkHighlightedIndex = -1;
+      pkDropdown?.classList.add("open");
+      pkSearch.setAttribute("aria-expanded", "true");
+      this.renderPkOptions();
+    });
     pkSearch?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         pkDropdown?.classList.remove("open");
         pkSearch.setAttribute("aria-expanded", "false");
+        pkSearch.removeAttribute("aria-activedescendant");
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const count = pkDropdown?.querySelectorAll(".pk-option").length || 0;
+        if (!count) return;
+        this._pkHighlightedIndex = event.key === "ArrowDown"
+          ? Math.min((this._pkHighlightedIndex ?? -1) + 1, count - 1)
+          : this._pkHighlightedIndex > 0 ? this._pkHighlightedIndex - 1 : count - 1;
+        pkDropdown.classList.add("open");
+        pkSearch.setAttribute("aria-expanded", "true");
+        this.renderPkOptions();
+        pkDropdown.querySelector(".pk-option.highlighted")?.scrollIntoView?.({ block: "nearest" });
       } else if (event.key === "Enter") {
-        const first = pkDropdown?.querySelector(".pk-option");
-        if (first) {
+        const option = pkDropdown?.querySelector(".pk-option.highlighted") || pkDropdown?.querySelector(".pk-option");
+        if (option && pkDropdown.classList.contains("open")) {
           event.preventDefault();
-          first.click();
+          option.click();
         }
       }
     });
-    document.getElementById("unified-pk-select")?.addEventListener("focusout", (event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) {
+    this.addDocumentListener("click", (event) => {
+      if (!document.getElementById("unified-pk-select")?.contains(event.target)) {
         pkDropdown?.classList.remove("open");
         pkSearch?.setAttribute("aria-expanded", "false");
       }
     });
-    this.addDocumentListener("click", (event) => {
+    this.addDocumentListener("focusin", (event) => {
       if (!document.getElementById("unified-pk-select")?.contains(event.target)) {
         pkDropdown?.classList.remove("open");
         pkSearch?.setAttribute("aria-expanded", "false");
@@ -4027,22 +4044,37 @@ class CompareConfigTool extends BaseTool {
     const fields = this.unified.fields.common.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
     dropdown.replaceChildren();
     if (fields.length === 0) {
+      search.removeAttribute("aria-activedescendant");
       const empty = document.createElement("div");
       empty.className = "pk-option-empty";
       empty.textContent = "No matching fields";
       dropdown.append(empty);
       return;
     }
-    fields.forEach((field) => {
+    fields.forEach((field, index) => {
       const option = document.createElement("button");
       option.type = "button";
       option.className = "searchable-option pk-option";
+      option.id = `unified-pk-option-${index}`;
       option.role = "option";
       option.setAttribute("aria-selected", String(this.unified.selectedPkFields.includes(field)));
+      option.classList.toggle("highlighted", index === this._pkHighlightedIndex);
       option.textContent = `${this.unified.selectedPkFields.includes(field) ? "✓  " : ""}${field}`;
-      option.addEventListener("click", () => this.togglePkField(field));
+      option.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.togglePkField(field);
+        search.value = "";
+        this._pkHighlightedIndex = -1;
+        search.focus();
+        dropdown.classList.add("open");
+        search.setAttribute("aria-expanded", "true");
+        this.renderPkOptions();
+      });
       dropdown.append(option);
     });
+    const active = dropdown.querySelector(".pk-option.highlighted");
+    if (active) search.setAttribute("aria-activedescendant", active.id);
+    else search.removeAttribute("aria-activedescendant");
   }
 
   togglePkField(field) {
