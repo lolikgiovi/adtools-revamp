@@ -154,7 +154,8 @@ class JSONTools extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
       quickSuggestions: { other: true, comments: false, strings: true },
-      suggestOnTriggerCharacters: true,
+      // JSON's quote trigger opens a $schema-only menu in an empty root object.
+      suggestOnTriggerCharacters: false,
       wordBasedSuggestions: "off",
     });
 
@@ -173,7 +174,7 @@ class JSONTools extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
       quickSuggestions: { other: true, comments: false, strings: true },
-      suggestOnTriggerCharacters: true,
+      suggestOnTriggerCharacters: false,
       wordBasedSuggestions: "off",
     });
 
