@@ -546,43 +546,55 @@ export const CompareConfigTemplate = /* html */ `
 
                 <!-- Comparison Options -->
                 <div class="unified-comparison-options">
-                    <div class="settings-row">
-                        <div class="setting-group">
-                            <label>Row Matching:</label>
-                            <div class="radio-group">
-                                <label class="radio-label">
+                    <div class="comparison-option-groups">
+                        <fieldset class="comparison-option-group">
+                            <legend>Match rows by</legend>
+                            <div class="comparison-choice-list">
+                                <label class="comparison-choice">
                                     <input type="radio" name="unified-row-matching" value="key" checked>
-                                    <span>By Primary Key</span>
+                                    <span class="comparison-choice-copy">
+                                        <strong>Primary key</strong>
+                                        <small>Match the same record even when row order differs.</small>
+                                    </span>
                                 </label>
-                                <label class="radio-label">
+                                <label class="comparison-choice">
                                     <input type="radio" name="unified-row-matching" value="position">
-                                    <span>By Row Position</span>
+                                    <span class="comparison-choice-copy">
+                                        <strong>Row position</strong>
+                                        <small>Use only when both sources have the same row order.</small>
+                                    </span>
                                 </label>
                             </div>
-                        </div>
+                        </fieldset>
 
-                        <div class="setting-group">
-                            <label>Data Comparison:</label>
-                            <div class="radio-group">
-                                <label class="radio-label">
+                        <fieldset class="comparison-option-group">
+                            <legend>Compare values as</legend>
+                            <div class="comparison-choice-list">
+                                <label class="comparison-choice">
                                     <input type="radio" name="unified-data-comparison" value="strict" checked>
-                                    <span>Strict (as-is)</span>
+                                    <span class="comparison-choice-copy">
+                                        <strong>Exact text</strong>
+                                        <small>Show differences in formatting and values.</small>
+                                    </span>
                                 </label>
-                                <label class="radio-label">
+                                <label class="comparison-choice">
                                     <input type="radio" name="unified-data-comparison" value="normalized">
-                                    <span>Normalized</span>
+                                    <span class="comparison-choice-copy">
+                                        <strong>Equivalent values</strong>
+                                        <small>Ignore equivalent date, number, and whitespace formats.</small>
+                                    </span>
                                 </label>
                             </div>
-                        </div>
-
-                        <div class="setting-group">
-                            <label class="checkbox-label" title="Enable case-insensitive field name matching (e.g., PARAMETER_KEY matches parameter_key)">
-                                <input type="checkbox" id="unified-normalize-fields">
-                                <span>Normalize Field Names</span>
-                                <span class="setting-hint">(case-insensitive)</span>
-                            </label>
-                        </div>
+                        </fieldset>
                     </div>
+
+                    <label class="comparison-field-toggle">
+                        <input type="checkbox" id="unified-normalize-fields">
+                        <span class="comparison-choice-copy">
+                            <strong>Ignore column name case</strong>
+                            <small>Match names such as PARAMETER_KEY and parameter_key.</small>
+                        </span>
+                    </label>
                 </div>
 
                 <!-- Compare Button -->
