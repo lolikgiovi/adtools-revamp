@@ -499,17 +499,22 @@ export const CompareConfigTemplate = /* html */ `
                 <div class="field-selection-section">
                     <div class="field-header">
                         <h4 class="field-title">Primary Key Selection</h4>
-                        <button class="btn btn-ghost btn-sm" id="btn-unified-deselect-all-pk" type="button">Clear</button>
                     </div>
                     <p class="field-help">Select field(s) to use as primary key for matching rows</p>
                     <div class="searchable-select pk-select" id="unified-pk-select">
-                        <input id="unified-pk-search" class="form-input searchable-input" type="text"
-                               placeholder="Search fields..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                               aria-label="Search primary key fields"
-                               aria-controls="unified-pk-field-list" aria-expanded="false">
+                        <div class="pk-input-shell">
+                            <div class="pk-input-flow">
+                                <div id="unified-pk-selected" class="pk-selected-fields" aria-live="polite"></div>
+                                <input id="unified-pk-search" class="form-input searchable-input" type="text"
+                                       placeholder="Search fields..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                                       aria-label="Search primary key fields"
+                                       aria-controls="unified-pk-field-list" aria-expanded="false">
+                            </div>
+                            <button class="pk-clear-btn" id="btn-unified-deselect-all-pk" type="button"
+                                    aria-label="Clear primary key selection">Clear</button>
+                        </div>
                         <div id="unified-pk-field-list" class="searchable-dropdown pk-dropdown" role="listbox" aria-multiselectable="true"></div>
                     </div>
-                    <div id="unified-pk-selected" class="pk-selected-fields" aria-live="polite"></div>
                 </div>
 
                 <!-- Comparison Fields Selection -->

@@ -46,9 +46,19 @@ describe("Compare Config PK picker", () => {
     expect(dropdown.querySelector(".pk-option").classList.contains("highlighted")).toBe(true);
     search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(tool.unified.selectedPkFields).toEqual(["PARAMETER_KEY", "ENVIRONMENT"]);
-    expect(document.querySelectorAll(".pk-selected-chip")).toHaveLength(2);
+    const shell = document.querySelector(".pk-input-shell");
+    const clear = document.getElementById("btn-unified-deselect-all-pk");
+    expect(shell.contains(search)).toBe(true);
+    expect(shell.contains(clear)).toBe(true);
+    expect(shell.querySelectorAll(".pk-selected-chip")).toHaveLength(2);
+    expect(shell.querySelector(".pk-selected-chip").compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tool.saveUnifiedTablePrefsToIndexedDB).toHaveBeenCalledTimes(2);
     expect(search.getAttribute("autocorrect")).toBe("off");
     expect(search.getAttribute("spellcheck")).toBe("false");
+
+    shell.querySelector(".pk-selected-chip").click();
+    expect(tool.unified.selectedPkFields).toEqual(["ENVIRONMENT"]);
+    clear.click();
+    expect(tool.unified.selectedPkFields).toEqual([]);
   });
 });

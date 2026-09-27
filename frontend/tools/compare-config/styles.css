@@ -3902,8 +3902,74 @@
   max-width: 440px;
 }
 
-.pk-select .searchable-input {
+.pk-input-shell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.4rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--card));
+  cursor: text;
+}
+
+.pk-input-shell:focus-within {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+.pk-input-flow {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.pk-input-flow .searchable-input {
+  flex: 1 1 7rem;
+  width: auto;
+  min-width: 6rem;
+  min-height: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: text;
   font-size: 0.8rem;
+}
+
+.pk-input-flow .searchable-input:focus {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.pk-clear-btn {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.125rem;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.pk-clear-btn:hover:not(:disabled) {
+  color: hsl(var(--foreground));
+}
+
+.pk-clear-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pk-clear-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .pk-dropdown {
@@ -3941,13 +4007,11 @@
 }
 
 .pk-selected-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  margin-top: 0.5rem;
+  display: contents;
 }
 
 .pk-selected-chip {
+  flex: 0 0 auto;
   padding: 0.25rem 0.5rem;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);

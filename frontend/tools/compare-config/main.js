@@ -1805,6 +1805,9 @@ class CompareConfigTool extends BaseTool {
   bindUnifiedFieldSelectionEvents() {
     const pkSearch = document.getElementById("unified-pk-search");
     const pkDropdown = document.getElementById("unified-pk-field-list");
+    document.querySelector("#unified-pk-select .pk-input-shell")?.addEventListener("click", (event) => {
+      if (!event.target.closest("button")) pkSearch?.focus();
+    });
     pkSearch?.addEventListener("focus", () => {
       pkDropdown?.classList.add("open");
       pkSearch.setAttribute("aria-expanded", "true");
@@ -1856,10 +1859,12 @@ class CompareConfigTool extends BaseTool {
     const deselectAllPkBtn = document.getElementById("btn-unified-deselect-all-pk");
 
     if (deselectAllPkBtn) {
-      deselectAllPkBtn.addEventListener("click", () => {
+      deselectAllPkBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
         this.unified.selectedPkFields = [];
         this.renderUnifiedFieldSelection();
         this.saveUnifiedTablePrefsToIndexedDB();
+        pkSearch?.focus();
       });
     }
 
@@ -4002,10 +4007,16 @@ class CompareConfigTool extends BaseTool {
         chip.className = "pk-selected-chip";
         chip.textContent = `${field} ×`;
         chip.setAttribute("aria-label", `Remove ${field} from primary keys`);
-        chip.addEventListener("click", () => this.togglePkField(field));
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.togglePkField(field);
+          document.getElementById("unified-pk-search")?.focus();
+        });
         selectedContainer.append(chip);
       });
     }
+    const clearPkButton = document.getElementById("btn-unified-deselect-all-pk");
+    if (clearPkButton) clearPkButton.disabled = selectedPkFields.length === 0;
 
     // Render compare fields with animation class for newly auto-added PK fields
     compareFieldList.innerHTML = common
