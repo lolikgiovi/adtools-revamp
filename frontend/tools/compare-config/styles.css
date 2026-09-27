@@ -756,10 +756,11 @@
 /* Results Toolbar - Summary + Actions on same line */
 .results-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .results-toolbar .results-summary {
@@ -773,6 +774,7 @@
   align-items: flex-end;
   gap: 0.25rem;
   flex-shrink: 0;
+  min-width: min(100%, 340px);
 }
 
 .results-actions-row {
@@ -799,6 +801,29 @@
 
 .results-actions .results-search-input {
   width: 100%;
+}
+
+.results-count,
+.summary-breakdown {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.summary-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.row-limit-warning {
+  padding: 0.55rem 0.75rem;
+  background: hsl(var(--warning) / 0.12);
+  border: 1px solid hsl(var(--warning) / 0.35);
+  border-radius: var(--radius);
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .results-search-box {
@@ -829,6 +854,10 @@
 
 .results-search-input::placeholder {
   color: hsl(var(--muted-foreground));
+}
+
+.results-search-input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .results-search-input:focus {
@@ -1073,8 +1102,9 @@
 }
 
 .summary-stat.selected {
-  border-bottom: 1px solid hsl(var(--primary));
-  box-shadow: 0 2px 8px hsl(var(--primary) / 0.2);
+  background: hsl(var(--primary) / 0.12);
+  border-color: hsl(var(--primary));
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.12);
 }
 
 .summary-stat.selected::after {
@@ -1166,18 +1196,21 @@
 
 .status-badge.status-match {
   background: hsl(var(--success) / 0.15);
-  color: hsl(var(--success));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--success) / 0.45);
 }
 
 .status-badge.status-differ {
   background: hsl(var(--warning) / 0.15);
-  color: hsl(var(--warning));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--warning) / 0.45);
 }
 
 .status-badge.status-only-in-env1,
 .status-badge.status-only-in-env2 {
   background: hsl(var(--info) / 0.15);
-  color: hsl(var(--info));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--info) / 0.45);
 }
 
 /* Expand button */
@@ -1199,6 +1232,11 @@
   border-collapse: collapse;
   font-size: 0.85rem;
   margin-top: 0.5rem;
+  table-layout: fixed;
+}
+
+.field-comparison-table .field-name {
+  width: 32%;
 }
 
 .field-comparison-table th,
@@ -1228,6 +1266,32 @@
 .field-diff-row .field-value {
   font-family: var(--font-mono, monospace);
   font-size: 0.8rem;
+  color: hsl(var(--foreground));
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.detail-json-value {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 72ch;
+  line-height: 1.55;
+  color: hsl(var(--foreground));
+}
+
+.json-changes {
+  margin-top: 0.5rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
+}
+
+.json-changes strong {
+  font-weight: 700;
 }
 
 .field-diff-row.is-different .field-name {
@@ -1704,7 +1768,7 @@
   border-right: 1px solid hsl(var(--border) / 0.3); /* Softer divider between envs */
   color: hsl(var(--foreground));
   font-size: 0.8rem;
-  word-break: break-all;
+  overflow-wrap: anywhere;
   line-height: 1.4;
   vertical-align: middle;
   background-color: hsl(var(--card)); /* Opaque background by default */
@@ -1773,9 +1837,54 @@
 .excel-table .status-header,
 .excel-table .status-cell {
   left: 300px;
-  width: 90px;
-  min-width: 90px;
+  width: 160px;
+  min-width: 160px;
   text-align: center;
+}
+
+.excel-table .status-badge {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.excel-table .pk-cell-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.excel-table .pk-cell .pk-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.excel-table .pk-inline-status {
+  display: none;
+}
+
+.excel-table .pk-cell {
+  cursor: pointer;
+}
+
+.grid-inspect-button {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  color: hsl(var(--primary));
+  padding: 0.25rem;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.grid-inspect-button:hover {
+  text-decoration: underline;
+}
+
+.grid-inspect-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .excel-table thead .sticky-col {
@@ -1828,13 +1937,13 @@
 }
 
 .val-cell.is-diff.env-1 {
-  background-color: hsl(var(--destructive) / var(--diff-cell-env1-bg-opacity));
-  color: hsl(var(--diff-cell-env1-fg));
+  background-color: hsl(var(--destructive) / 0.09);
+  color: hsl(var(--foreground));
 }
 
 .val-cell.is-diff.env-2 {
-  background-color: hsl(var(--success) / var(--diff-cell-env2-bg-opacity));
-  color: hsl(var(--diff-cell-env2-fg));
+  background-color: hsl(var(--success) / 0.09);
+  color: hsl(var(--foreground));
 }
 
 /* Status Labels (inside table) */
@@ -1850,19 +1959,57 @@
 
 .excel-table .status-badge.status-match {
   background: hsl(var(--success) / 0.1);
-  color: hsl(var(--success));
+  color: hsl(var(--foreground));
 }
 .excel-table .status-badge.status-differ {
   background: hsl(var(--warning) / 0.1);
-  color: hsl(var(--warning));
+  color: hsl(var(--foreground));
 }
 .excel-table .status-badge.status-only-in-env1 {
   background: hsl(var(--destructive) / 0.1);
-  color: hsl(var(--destructive));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--destructive) / 0.45);
 }
 .excel-table .status-badge.status-only-in-env2 {
   background: hsl(var(--blue) / 0.1);
-  color: hsl(var(--blue));
+  color: hsl(var(--foreground));
+}
+
+@media (max-width: 850px) {
+  .excel-table .index-header,
+  .excel-table .index-cell {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .excel-table .pk-header,
+  .excel-table .pk-cell {
+    left: 40px;
+    width: 200px;
+    min-width: 200px;
+  }
+
+  .excel-table .status-header,
+  .excel-table .status-cell {
+    display: none;
+  }
+
+  .excel-table .pk-cell-content {
+    flex-wrap: wrap;
+  }
+
+  .excel-table .pk-cell .pk-value {
+    flex-basis: 100%;
+  }
+
+  .excel-table .pk-inline-status {
+    display: inline-block;
+  }
+
+  .excel-table .val-cell {
+    width: 220px;
+    min-width: 220px;
+  }
 }
 
 /* Cleanup old experiments */
@@ -2517,15 +2664,15 @@
    ============================================ */
 
 .diff-insert {
-  background-color: hsl(var(--diff-insert-bg));
-  color: hsl(var(--diff-insert-fg));
+  background-color: hsl(var(--success) / 0.25);
+  color: hsl(var(--foreground));
   padding: 1px 0px;
   border-radius: 2px;
 }
 
 .diff-delete {
-  background-color: hsl(var(--diff-delete-bg));
-  color: hsl(var(--diff-delete-fg));
+  background-color: hsl(var(--destructive) / 0.25);
+  color: hsl(var(--foreground));
   /* text-decoration: line-through; */
   padding: 1px 0px;
   border-radius: 2px;
@@ -3618,7 +3765,9 @@
   font-size: 0.8125rem;
   font-weight: 500;
   text-align: center;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
 .comparison-choice:hover {

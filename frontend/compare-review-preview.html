@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Compare Config visual check</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>body { padding: 1rem; background: hsl(var(--background)); }</style>
+  </head>
+  <body>
+    <script type="module">
+      import { CompareConfigTemplate } from "./tools/compare-config/template.js";
+      import { CompareConfigTool } from "./tools/compare-config/main.js";
+
+      if (new URLSearchParams(location.search).has("dark")) document.documentElement.classList.add("dark");
+      const shell = document.createElement("div");
+      shell.innerHTML = CompareConfigTemplate;
+      const section = shell.querySelector("#results-section");
+      document.body.append(section);
+      section.addEventListener("click", (event) => { section.dataset.clicked = event.target.className; });
+      section.style.display = "flex";
+      const tool = new CompareConfigTool({ emit() {} });
+      const inspect = tool.gridView.onInspect;
+      tool.gridView.onInspect = (index) => { section.dataset.inspected = String(index); inspect(index); };
+      const attach = tool.gridView.attachEventListeners.bind(tool.gridView);
+      tool.gridView.attachEventListeners = (container) => { section.dataset.attached = String(Boolean(container.querySelector('.excel-table'))); attach(container); };
+      tool.queryMode = "unified";
+      tool.unified.selectedPkFields = ["PARAMETER_KEY"];
+      const jsonA = JSON.stringify({ loanMultiplier: "1", isNeedSpouse: "0", isNeedSpouseInfo: "1", adminValue: "1", feeThreshold: "1", categoryContent: "1", rule: { enabled: true, days: 180 } });
+      const jsonB = JSON.stringify({ loanMultiplier: "1", isNeedSpouse: "1", isNeedSpouseInfo: "1", adminValue: "1", feeThreshold: "1", categoryContent: "1", rule: { enabled: true, days: 365 } });
+      tool.results.unified = {
+        env1_name: "(UAT1 COMP) SQL Query",
+        env2_name: "(PREPROD COMP) SQL Query",
+        summary: { total: 4, matches: 1, differs: 2, only_in_env1: 1, only_in_env2: 0 },
+        _metadata: { keyColumns: ["PARAMETER_KEY"], compareFields: ["PARAMETER_VALUE"], sourceLimits: [{ name: "UAT1 COMP", rowCount: 500, maxRows: 500 }] },
+        rows: [
+          { key: { PARAMETER_KEY: "loan.deposito.whitelist.lov" }, env1_data: { PARAMETER_VALUE: jsonA }, env2_data: { PARAMETER_VALUE: jsonB }, status: "differ", differences: ["PARAMETER_VALUE"] },
+          { key: { PARAMETER_KEY: "renewal.loan.deposito.end.days" }, env1_data: { PARAMETER_VALUE: "180" }, env2_data: { PARAMETER_VALUE: "365" }, status: "differ", differences: ["PARAMETER_VALUE"] },
+          { key: { PARAMETER_KEY: "early.settlement.service.failed" }, env1_data: { PARAMETER_VALUE: "CONFIG_ONLY_IN_UAT" }, env2_data: null, status: "only_in_env1", differences: ["PARAMETER_VALUE"] },
+          { key: { PARAMETER_KEY: "same.value" }, env1_data: { PARAMETER_VALUE: "on" }, env2_data: { PARAMETER_VALUE: "on" }, status: "match", differences: [] },
+        ],
+      };
+      section.querySelector("#results-title").textContent = `${tool.results.unified.env1_name} vs ${tool.results.unified.env2_name}`;
+      tool.renderSummary();
+      section.dataset.renderStep = "summary";
+      tool.renderResults();
+      section.dataset.renderStep = "results";
+      section.dataset.hasInspect = typeof tool.gridView.onInspect;
+      section.querySelector('table')?.addEventListener('click', (event) => { section.dataset.tableClick = event.target.className; });
+      window.previewTool = tool;
+    </script>
+  </body>
+</html>

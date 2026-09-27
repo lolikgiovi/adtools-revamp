@@ -18,6 +18,8 @@ export class VerticalCardView {
    */
   render(comparisons, env1Name, env2Name, options = {}) {
     this.compareFields = options.compareFields || null;
+    this.env1Name = env1Name;
+    this.env2Name = env2Name;
 
     if (!comparisons || comparisons.length === 0) {
       return `
@@ -64,7 +66,7 @@ export class VerticalCardView {
    * Renders a single comparison card
    */
   renderCard(comparison, env1Name, env2Name) {
-    const statusClass = comparison.status.toLowerCase().replace("_", "-");
+    const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
     const pkDisplay = this.formatPrimaryKey(comparison.key);
 
@@ -72,7 +74,7 @@ export class VerticalCardView {
       <div class="comparison-card status-${statusClass}">
         <div class="card-header">
           <div class="card-pk">${this.escapeHtml(pkDisplay)}</div>
-          <span class="status-badge status-${statusClass}">${statusLabel}</span>
+          <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
         </div>
         <div class="card-body">
           ${this.renderCardContent(comparison, env1Name, env2Name)}
@@ -132,7 +134,9 @@ export class VerticalCardView {
             <h4>${this.escapeHtml(env1Name)}</h4>
             <div class="diff-fields">
               ${allFields
-                .map((fieldName) => this.renderCardDiffField(fieldName, env1Data[fieldName], diffFields.has(fieldName), "removed", diffDetails[fieldName]))
+                .map((fieldName) =>
+                  this.renderCardDiffField(fieldName, env1Data[fieldName], diffFields.has(fieldName), "removed", diffDetails[fieldName]),
+                )
                 .join("")}
             </div>
           </div>
@@ -140,7 +144,9 @@ export class VerticalCardView {
             <h4>${this.escapeHtml(env2Name)}</h4>
             <div class="diff-fields">
               ${allFields
-                .map((fieldName) => this.renderCardDiffField(fieldName, env2Data[fieldName], diffFields.has(fieldName), "added", diffDetails[fieldName]))
+                .map((fieldName) =>
+                  this.renderCardDiffField(fieldName, env2Data[fieldName], diffFields.has(fieldName), "added", diffDetails[fieldName]),
+                )
                 .join("")}
             </div>
           </div>
@@ -228,7 +234,7 @@ export class VerticalCardView {
             <span class="card-data-key">${this.escapeHtml(key)}:</span>
             <span class="card-data-value">${this.escapeHtml(this.formatValue(value))}</span>
           </div>
-        `
+        `,
           )
           .join("")}
       </div>
@@ -239,15 +245,16 @@ export class VerticalCardView {
    * Gets a human-readable status label
    */
   getStatusLabel(status) {
+    const sourceLabel = (name, fallback) => name?.match(/^\(([^)]+)\)/)?.[1] || name || fallback;
     switch (status) {
       case "match":
         return "Match";
       case "differ":
         return "Differ";
       case "only_in_env1":
-        return "Only in Env 1";
+        return `Only in ${sourceLabel(this.env1Name, "Source A")}`;
       case "only_in_env2":
-        return "Only in Env 2";
+        return `Only in ${sourceLabel(this.env2Name, "Source B")}`;
       default:
         return status;
     }

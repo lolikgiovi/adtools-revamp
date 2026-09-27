@@ -93,7 +93,7 @@ export class MasterDetailView {
    * Renders a single master list item
    */
   renderMasterItem(comparison, index) {
-    const statusClass = comparison.status.toLowerCase().replace("_", "-");
+    const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
     const isSelected = index === this.selectedIndex;
     const pkDisplay = this.formatPrimaryKey(comparison.key);
@@ -102,7 +102,7 @@ export class MasterDetailView {
       <div class="master-item ${isSelected ? "selected" : ""} status-${statusClass}"
            data-index="${index}">
         <div class="master-item-pk">${this.escapeHtml(pkDisplay)}</div>
-        <span class="status-badge status-${statusClass}">${statusLabel}</span>
+        <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
       </div>
     `;
   }
@@ -129,7 +129,7 @@ export class MasterDetailView {
    * Renders detail panel header
    */
   renderDetailHeader(comparison) {
-    const statusClass = comparison.status.toLowerCase().replace("_", "-");
+    const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
     const pkDisplay = this.formatPrimaryKey(comparison.key);
 
@@ -139,7 +139,7 @@ export class MasterDetailView {
           <h3>${this.escapeHtml(pkDisplay)}</h3>
         </div>
         <div class="detail-nav">
-          <span class="status-badge status-${statusClass}">${statusLabel}</span>
+          <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
           <button class="btn btn-outline btn-sm" id="btn-prev-detail" ${this.selectedIndex === 0 ? "disabled" : ""}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"></polyline>
@@ -168,7 +168,7 @@ export class MasterDetailView {
       return `
         <div class="detail-body">
           <div class="detail-message">
-            <p>This record only exists in <strong>${this.env1Name}</strong></p>
+            <p>This record only exists in <strong>${this.escapeHtml(this.env1Name)}</strong></p>
           </div>
           ${this.renderDetailData(comparison.env1_data, this.env1Name)}
         </div>
@@ -179,7 +179,7 @@ export class MasterDetailView {
       return `
         <div class="detail-body">
           <div class="detail-message">
-            <p>This record only exists in <strong>${this.env2Name}</strong></p>
+            <p>This record only exists in <strong>${this.escapeHtml(this.env2Name)}</strong></p>
           </div>
           ${this.renderDetailData(comparison.env2_data, this.env2Name)}
         </div>
@@ -225,7 +225,13 @@ export class MasterDetailView {
             <tbody>
               ${allFields
                 .map((fieldName) =>
-                  this.renderDetailDiffRow(fieldName, env1Data[fieldName], env2Data[fieldName], diffFields.has(fieldName), diffDetails[fieldName]),
+                  this.renderDetailDiffRow(
+                    fieldName,
+                    env1Data[fieldName],
+                    env2Data[fieldName],
+                    diffFields.has(fieldName),
+                    diffDetails[fieldName],
+                  ),
                 )
                 .join("")}
             </tbody>
@@ -246,9 +252,22 @@ export class MasterDetailView {
   renderDetailDiffRow(fieldName, env1Value, env2Value, isDifferent, diffInfo = null) {
     const env1Display = this.formatValue(env1Value);
     const env2Display = this.formatValue(env2Value);
+    const json1 = this.parseJsonValue(env1Value);
+    const json2 = this.parseJsonValue(env2Value);
 
-    const env1Class = isDifferent ? "field-value diff-removed" : "field-value";
-    const env2Class = isDifferent ? "field-value diff-added" : "field-value";
+    const env1Class = "field-value";
+    const env2Class = "field-value";
+
+    if (json1 && json2) {
+      const changes = isDifferent ? this.renderJsonChanges(json1.value, json2.value) : "";
+      return `
+        <tr class="field-diff-row ${isDifferent ? "is-different" : ""}">
+          <td class="field-name">${this.escapeHtml(fieldName)}${changes}</td>
+          <td class="${env1Class}"><pre class="detail-json-value">${this.escapeHtml(json1.pretty)}</pre></td>
+          <td class="${env2Class}"><pre class="detail-json-value">${this.escapeHtml(json2.pretty)}</pre></td>
+        </tr>
+      `;
+    }
 
     // Check if we have character-level diff details
     if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
@@ -269,6 +288,46 @@ export class MasterDetailView {
         <td class="${env2Class}">${this.escapeHtml(env2Display)}</td>
       </tr>
     `;
+  }
+
+  parseJsonValue(value) {
+    if (typeof value !== "string" && (typeof value !== "object" || value === null)) return null;
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (typeof parsed !== "object" || parsed === null) return null;
+      return { value: parsed, pretty: JSON.stringify(parsed, null, 2) };
+    } catch {
+      return null;
+    }
+  }
+
+  renderReadableValue(value) {
+    const json = this.parseJsonValue(value);
+    return json ? `<pre class="detail-json-value">${this.escapeHtml(json.pretty)}</pre>` : this.escapeHtml(this.formatValue(value));
+  }
+
+  renderJsonChanges(before, after) {
+    const first = this.flattenJson(before);
+    const second = this.flattenJson(after);
+    const paths = [...new Set([...first.keys(), ...second.keys()])];
+    const changes = paths.filter((path) => first.get(path) !== second.get(path));
+    if (changes.length === 0) return '<div class="json-changes">Text differs; JSON properties match.</div>';
+    const visible = changes.slice(0, 20);
+    return `<div class="json-changes" aria-label="Changed JSON properties">
+      ${visible.map((path) => `<div><strong>${this.escapeHtml(path)}</strong>: ${this.escapeHtml(first.get(path) ?? "Missing")} → ${this.escapeHtml(second.get(path) ?? "Missing")}</div>`).join("")}
+      ${changes.length > visible.length ? `<div>+${changes.length - visible.length} more changed properties</div>` : ""}
+    </div>`;
+  }
+
+  flattenJson(value, path = "", result = new Map()) {
+    if (value !== null && typeof value === "object" && Object.keys(value).length > 0) {
+      for (const [key, child] of Object.entries(value)) {
+        this.flattenJson(child, path ? `${path}.${key}` : key, result);
+      }
+    } else {
+      result.set(path || "value", JSON.stringify(value));
+    }
+    return result;
   }
 
   /**
@@ -324,7 +383,7 @@ export class MasterDetailView {
                 ([key, value]) => `
               <tr>
                 <td class="data-key">${this.escapeHtml(key)}</td>
-                <td class="data-value">${this.escapeHtml(this.formatValue(value))}</td>
+                <td class="data-value">${this.renderReadableValue(value)}</td>
               </tr>
             `,
               )
@@ -386,15 +445,16 @@ export class MasterDetailView {
    * Gets a human-readable status label
    */
   getStatusLabel(status) {
+    const sourceLabel = (name, fallback) => name?.match(/^\(([^)]+)\)/)?.[1] || name || fallback;
     switch (status) {
       case "match":
         return "Match";
       case "differ":
         return "Differ";
       case "only_in_env1":
-        return "Only in Env 1";
+        return `Only in ${sourceLabel(this.env1Name, "Source A")}`;
       case "only_in_env2":
-        return "Only in Env 2";
+        return `Only in ${sourceLabel(this.env2Name, "Source B")}`;
       default:
         return status;
     }

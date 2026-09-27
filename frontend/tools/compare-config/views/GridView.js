@@ -29,6 +29,7 @@ export class GridView {
 
     // Search/filter state
     this.searchQuery = ""; // Lowercase search query for highlighting
+    this.onInspect = null;
   }
 
   /**
@@ -121,6 +122,8 @@ export class GridView {
       displayEnv1Name = "Reference";
       displayEnv2Name = "Comparator";
     }
+    this.displayEnv1Name = displayEnv1Name;
+    this.displayEnv2Name = displayEnv2Name;
 
     return `
       <div class="excel-table-container">
@@ -204,6 +207,11 @@ export class GridView {
         }
       });
     }
+
+    container.querySelector(".excel-table")?.addEventListener("click", (event) => {
+      const keyCell = event.target.closest(".pk-cell");
+      if (keyCell && this.onInspect) this.onInspect(Number(keyCell.dataset.index));
+    });
 
     // Only set up observer if there are more rows to load
     if (this.renderedCount >= this.comparisons.length) {
@@ -317,7 +325,7 @@ export class GridView {
    * Renders a single row
    */
   renderRow(comparison, fields, hasSourceFile = false, showStatus = true, rowIndex = 0) {
-    const statusClass = comparison.status.toLowerCase().replace("_", "-");
+    const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status, hasSourceFile);
     const pkValue = this.formatPrimaryKey(comparison.key);
     const diffFields = new Set(comparison.differences || []);
@@ -336,12 +344,18 @@ export class GridView {
               )}</td>`
             : ""
         }
-        <td class="sticky-col pk-cell" title="${this.escapeHtml(pkValue)}">${pkDisplay}</td>
+        <td class="sticky-col pk-cell" data-index="${rowIndex - 1}" title="${this.escapeHtml(pkValue)}">
+          <div class="pk-cell-content">
+            <span class="pk-value">${pkDisplay}</span>
+            ${showStatus ? `<span class="pk-inline-status status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>` : ""}
+            <button type="button" class="grid-inspect-button" data-index="${rowIndex - 1}" aria-label="Inspect ${this.escapeHtml(pkValue)}">Inspect</button>
+          </div>
+        </td>
         ${
           showStatus
             ? `
           <td class="sticky-col status-cell">
-            <span class="status-badge status-${statusClass}">${statusLabel}</span>
+            <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
           </td>
         `
             : ""
@@ -353,7 +367,7 @@ export class GridView {
 
             const hasV1 = v1 !== undefined;
             const hasV2 = v2 !== undefined;
-            const isDifferent = diffFields.has(fieldName);
+            const isDifferent = diffFields.has(fieldName) || comparison.status === "only_in_env1" || comparison.status === "only_in_env2";
             const fieldDiff = diffDetails[fieldName];
 
             return this.renderCellPair(v1, v2, hasV1, hasV2, isDifferent, fieldDiff);
@@ -373,8 +387,10 @@ export class GridView {
    * @param {Object} diffInfo - Character-level diff info from _diffDetails
    */
   renderCellPair(v1, v2, hasV1, hasV2, isDifferent, diffInfo = null) {
-    const val1 = hasV1 ? this.formatValue(v1) : "";
-    const val2 = hasV2 ? this.formatValue(v2) : "";
+    const val1 = hasV1 ? this.formatValue(v1) : "Missing";
+    const val2 = hasV2 ? this.formatValue(v2) : "Missing";
+    const previewLimit = 100;
+    const isLong = val1.length > previewLimit || val2.length > previewLimit;
 
     let c1Class = "val-cell env-1";
     let c2Class = "val-cell env-2";
@@ -388,7 +404,7 @@ export class GridView {
     }
 
     // Check if we have character-level diff details
-    if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
+    if (!isLong && isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
       // Render with character-level highlighting (search highlight applied after)
       let { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
       if (this.searchQuery) {
@@ -403,8 +419,10 @@ export class GridView {
 
     // Standard rendering (cell-level diff or no diff details)
     // Apply search highlighting if active
-    const display1 = this.searchQuery ? this.highlightSearchMatch(val1) : this.escapeHtml(val1);
-    const display2 = this.searchQuery ? this.highlightSearchMatch(val2) : this.escapeHtml(val2);
+    const preview1 = isLong && val1.length > previewLimit ? `${val1.slice(0, previewLimit)}…` : val1;
+    const preview2 = isLong && val2.length > previewLimit ? `${val2.slice(0, previewLimit)}…` : val2;
+    const display1 = this.searchQuery ? this.highlightSearchMatch(preview1) : this.escapeHtml(preview1);
+    const display2 = this.searchQuery ? this.highlightSearchMatch(preview2) : this.escapeHtml(preview2);
     return `
       <td class="${c1Class}">${display1}</td>
       <td class="${c2Class} field-boundary">${display2}</td>
@@ -474,9 +492,9 @@ export class GridView {
       case "differ":
         return "Differ";
       case "only_in_env1":
-        return isExcel ? "Only in Reference" : "Only in Env 1";
+        return isExcel ? "Only in Reference" : `Only in ${this.displayEnv1Name || "Source A"}`;
       case "only_in_env2":
-        return isExcel ? "Only in Comparator" : "Only in Env 2";
+        return isExcel ? "Only in Comparator" : `Only in ${this.displayEnv2Name || "Source B"}`;
       default:
         return status;
     }
@@ -539,6 +557,9 @@ export class GridView {
    */
   formatEnvName(envName) {
     if (!envName || typeof envName !== "string") return envName;
+
+    const sqlQueryMatch = envName.match(/^\(([^)]+)\)\s+SQL Query$/i);
+    if (sqlQueryMatch) return sqlQueryMatch[1];
 
     // Match pattern: (ENV_NAME) followed by TABLE.FIELD
     const dbPattern = /^\(([^)]+)\)\s+\S+\.\S+/i;

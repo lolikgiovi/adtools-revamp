@@ -48,7 +48,7 @@ class CompareConfigTool extends BaseTool {
     this._unifiedLoadRequestId = 0;
     this._unifiedParseControllers = new Map();
 
-    this.statusFilter = "differ"; // Default to showing differences; can be null (all), "match", "differ", "only_in_env1", "only_in_env2"
+    this.statusFilter = "differ"; // Includes changed values and rows present in only one source
     this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
     this.searchFilter = ""; // Search/filter keyword for results
 
@@ -136,6 +136,16 @@ class CompareConfigTool extends BaseTool {
     // Set up sort change callback for GridView
     this.gridView.onSortChange = () => {
       this.renderResults();
+    };
+    this.gridView.onInspect = (index) => {
+      const selectedRow = this.gridView.comparisons[index];
+      this.masterDetailView.selectedIndex = Math.max(0, this.getFilteredComparisons().indexOf(selectedRow));
+      this.changeView("master-detail");
+      const label = document.getElementById("view-type-label");
+      if (label) label.textContent = "Detail View";
+      document.querySelectorAll(".view-option").forEach((option) => {
+        option.classList.toggle("active", option.dataset.value === "master-detail");
+      });
     };
     this.sqlEditors = new Map();
   }
@@ -377,8 +387,8 @@ class CompareConfigTool extends BaseTool {
         // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
         const savedView = settings.currentView || "grid";
         this.currentView = savedView === "expandable" ? "grid" : savedView;
-        // Default to "differ" filter if not set (null means "all")
-        this.statusFilter = settings.statusFilter !== undefined ? settings.statusFilter : "differ";
+        // Older saved filters are grouped into the two review states.
+        this.statusFilter = settings.statusFilter === "match" ? "match" : "differ";
         // Restore saved source types
         if (settings.sourceAType) this.unified.sourceA.type = settings.sourceAType;
         if (settings.sourceBType) this.unified.sourceB.type = settings.sourceBType;
@@ -393,7 +403,7 @@ class CompareConfigTool extends BaseTool {
         if (!savedSettings) {
           const savedView = parsed.currentView || "grid";
           this.currentView = savedView === "expandable" ? "grid" : savedView;
-          this.statusFilter = parsed.statusFilter !== undefined ? parsed.statusFilter : "differ";
+          this.statusFilter = parsed.statusFilter === "match" ? "match" : "differ";
         }
         // Migrate results to IndexedDB
         if (parsed.results && IndexedDBManager.isIndexedDBAvailable()) {
@@ -887,6 +897,10 @@ class CompareConfigTool extends BaseTool {
 
     const { env1_name, env2_name, _metadata } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
+    const count = document.getElementById("results-count");
+    if (count) {
+      count.textContent = `Showing ${comparisons.length} ${this.statusFilter === "match" ? "matching" : "differing"} records${this.searchFilter ? " for this search" : ""}`;
+    }
 
     // Get the selected compare fields from metadata (for unified mode) or use null for auto-detection
     const compareFields = _metadata?.compareFields || null;
@@ -894,13 +908,14 @@ class CompareConfigTool extends BaseTool {
     if (this.currentView === "vertical") {
       resultsContent.innerHTML = this.verticalCardView.render(comparisons, env1_name, env2_name, { compareFields });
     } else if (this.currentView === "master-detail") {
+      if (this.masterDetailView.selectedIndex >= comparisons.length) this.masterDetailView.selectedIndex = 0;
       resultsContent.innerHTML = this.masterDetailView.render(comparisons, env1_name, env2_name, { compareFields });
       this.masterDetailView.attachEventListeners(resultsContent);
     } else {
       const sortedComparisons = this.gridView.sortComparisons(comparisons);
       resultsContent.innerHTML = this.gridView.render(sortedComparisons, env1_name, env2_name, {
         compareFields,
-        showStatus: this.statusFilter === null,
+        showStatus: this.statusFilter === "differ",
       });
       this.gridView.attachEventListeners(resultsContent);
     }
@@ -931,35 +946,30 @@ class CompareConfigTool extends BaseTool {
     `
       : "";
 
-    // Set environment names for summary
-    const env1Name = this.results.unified?.env1Name || "Source A";
-    const env2Name = this.results.unified?.env2Name || "Source B";
+    const env1Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env1_name || "Source A"));
+    const env2Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env2_name || "Source B"));
+    const differingTotal = summary.differs + summary.only_in_env1 + summary.only_in_env2;
+    const reachedLimits = (this.results[this.queryMode]._metadata?.sourceLimits || []).filter(
+      (source) => source.rowCount >= source.maxRows,
+    );
+    const rowLimitWarning = reachedLimits.length
+      ? `<div class="row-limit-warning" role="status">${reachedLimits.map((source) => this.gridView.escapeHtml(this.gridView.formatEnvName(source.name))).join(" and ")} reached Max Rows. This comparison may omit records. Increase the limit and rerun before checking completeness.</div>`
+      : "";
 
-    // Render summary cards as clickable filter buttons
-    // Note: Rust CompareSummary uses 'total', 'matches', 'differs'
+    // Keep missing record counts visible while grouping them in the Differing review queue.
     summaryContainer.innerHTML = `
       ${noPkWarning}
-      <div class="summary-cards">
-        <button class="summary-stat ${this.statusFilter === null ? "selected" : ""}" data-filter="all">
-          <div class="stat-value">${summary.total}</div>
-          <div class="stat-label">Total Records</div>
-        </button>
-        <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match">
-          <div class="stat-value">${summary.matches}</div>
-          <div class="stat-label">Matching</div>
-        </button>
-        <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ">
-          <div class="stat-value">${summary.differs}</div>
-          <div class="stat-label">Differing</div>
-        </button>
-        <button class="summary-stat only-env1 ${this.statusFilter === "only_in_env1" ? "selected" : ""}" data-filter="only_in_env1">
-          <div class="stat-value">${summary.only_in_env1}</div>
-          <div class="stat-label">Only in ${env1Name}</div>
-        </button>
-        <button class="summary-stat only-env2 ${this.statusFilter === "only_in_env2" ? "selected" : ""}" data-filter="only_in_env2">
-          <div class="stat-value">${summary.only_in_env2}</div>
-          <div class="stat-label">Only in ${env2Name}</div>
-        </button>
+      ${rowLimitWarning}
+      <div class="summary-review">
+        <div class="summary-cards" role="group" aria-label="Filter comparison results">
+          <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ" aria-pressed="${this.statusFilter === "differ"}">
+            <span class="stat-value">${differingTotal}</span><span class="stat-label">Differing</span>
+          </button>
+          <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match" aria-pressed="${this.statusFilter === "match"}">
+            <span class="stat-value">${summary.matches}</span><span class="stat-label">Matching</span>
+          </button>
+        </div>
+        <div class="summary-breakdown">${summary.total} records compared · ${summary.differs} records with changed values · ${summary.only_in_env1} Only in ${env1Name} · ${summary.only_in_env2} Only in ${env2Name}</div>
       </div>
     `;
 
@@ -977,8 +987,7 @@ class CompareConfigTool extends BaseTool {
    * Applies status filter to comparison results
    */
   applyStatusFilter(filter) {
-    // Set filter (null means show all)
-    this.statusFilter = filter === "all" ? null : filter;
+    this.statusFilter = filter === "match" ? "match" : "differ";
 
     // Re-render the view with filtered results
     this.renderSummary(); // Update selected state
@@ -1010,14 +1019,22 @@ class CompareConfigTool extends BaseTool {
     // Check all field values in env1_data and env2_data
     if (comp.env1_data) {
       for (const val of Object.values(comp.env1_data)) {
-        if (val !== null && val !== undefined && String(val).toLowerCase().includes(query)) {
+        if (
+          val !== null &&
+          val !== undefined &&
+          (typeof val === "object" ? JSON.stringify(val) : String(val)).toLowerCase().includes(query)
+        ) {
           return true;
         }
       }
     }
     if (comp.env2_data) {
       for (const val of Object.values(comp.env2_data)) {
-        if (val !== null && val !== undefined && String(val).toLowerCase().includes(query)) {
+        if (
+          val !== null &&
+          val !== undefined &&
+          (typeof val === "object" ? JSON.stringify(val) : String(val)).toLowerCase().includes(query)
+        ) {
           return true;
         }
       }
@@ -1045,9 +1062,7 @@ class CompareConfigTool extends BaseTool {
     let rows = this.results[this.queryMode].rows || [];
 
     // Filter by status
-    if (this.statusFilter) {
-      rows = rows.filter((comp) => comp.status === this.statusFilter);
-    }
+    rows = rows.filter((comp) => (this.statusFilter === "match" ? comp.status === "match" : comp.status !== "match"));
 
     // Filter by search query
     if (this.searchFilter) {
@@ -1285,9 +1300,9 @@ class CompareConfigTool extends BaseTool {
       if (prefs) {
         const commonFields = this.unified.fields.common;
 
-        const availableFields = (stored) => [...new Set(stored
-          .map((field) => commonFields.find((name) => name.toUpperCase() === field.toUpperCase()))
-          .filter(Boolean))];
+        const availableFields = (stored) => [
+          ...new Set(stored.map((field) => commonFields.find((name) => name.toUpperCase() === field.toUpperCase())).filter(Boolean)),
+        ];
         const validPkFields = availableFields(prefs.selectedPkFields || []);
         if (Array.isArray(prefs.selectedPkFields)) {
           this.unified.selectedPkFields = validPkFields;
@@ -1853,9 +1868,8 @@ class CompareConfigTool extends BaseTool {
         const count = dropdown.querySelectorAll(".pk-option").length;
         if (!count) return;
         const current = this._fieldPickerHighlights[kind] ?? -1;
-        this._fieldPickerHighlights[kind] = event.key === "ArrowDown"
-          ? Math.min(current + 1, count - 1)
-          : current > 0 ? current - 1 : count - 1;
+        this._fieldPickerHighlights[kind] =
+          event.key === "ArrowDown" ? Math.min(current + 1, count - 1) : current > 0 ? current - 1 : count - 1;
         dropdown.classList.add("open");
         search.setAttribute("aria-expanded", "true");
         this.renderUnifiedPickerOptions(kind);
@@ -3779,8 +3793,8 @@ class CompareConfigTool extends BaseTool {
       .map((name) => reconciled.common.find((field) => field.toUpperCase() === name))
       .filter(Boolean);
     this.unified.selectedCompareFields = reconciled.common.filter(
-      (field) => field.toUpperCase() !== "PARAMETER_KEY" && !this.unified.selectedPkFields.includes(field)
-        && !/^(created_|updated_)/i.test(field),
+      (field) =>
+        field.toUpperCase() !== "PARAMETER_KEY" && !this.unified.selectedPkFields.includes(field) && !/^(created_|updated_)/i.test(field),
     );
   }
 
@@ -4026,8 +4040,8 @@ class CompareConfigTool extends BaseTool {
     if (!dropdown || !search) return;
     const common = this.unified.fields.common;
     const selected = this.unified[selectedKey];
-    const isDeferred = (field) => kind === "compare"
-      && (/^(created_|updated_)/i.test(field) || this.unified.selectedPkFields.includes(field));
+    const isDeferred = (field) =>
+      kind === "compare" && (/^(created_|updated_)/i.test(field) || this.unified.selectedPkFields.includes(field));
     const ordered = [...common.filter((field) => !isDeferred(field)), ...common.filter(isDeferred)];
     const fields = ordered.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
     optionsContainer.replaceChildren();
@@ -4232,6 +4246,18 @@ class CompareConfigTool extends BaseTool {
         keyColumns: pkFields,
         rowMatching: rowMatching,
         compareFields: compareFields,
+        sourceLimits: [
+          sourceA.type === "oracle" && {
+            name: sourceA.data.metadata.sourceName,
+            rowCount: sourceA.data.rows.length,
+            maxRows: sourceA.maxRows,
+          },
+          sourceB.type === "oracle" && {
+            name: sourceB.data.metadata.sourceName,
+            rowCount: sourceB.data.rows.length,
+            maxRows: sourceB.maxRows,
+          },
+        ].filter(Boolean),
       };
 
       this.updateCompareProgressStep("compare", "done", `${viewResult.rows.length} records`);
