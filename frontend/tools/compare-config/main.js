@@ -1806,10 +1806,17 @@ class CompareConfigTool extends BaseTool {
     this.bindUnifiedPickerEvents("pk");
     this.bindUnifiedPickerEvents("compare");
 
-    document.getElementById("btn-unified-select-all-fields")?.addEventListener("click", () => {
+    document.getElementById("btn-unified-select-all-fields")?.addEventListener("click", (event) => {
+      event.stopPropagation();
       this.unified.selectedCompareFields = [...this.unified.fields.common];
       this.renderUnifiedFieldSelection();
       this.saveUnifiedTablePrefsToIndexedDB();
+      const search = document.getElementById("unified-compare-search");
+      if (search) {
+        search.value = "";
+        search.focus();
+      }
+      this.renderUnifiedPickerOptions("compare");
     });
   }
 
@@ -4014,6 +4021,7 @@ class CompareConfigTool extends BaseTool {
     const prefix = `unified-${kind}`;
     const selectedKey = kind === "pk" ? "selectedPkFields" : "selectedCompareFields";
     const dropdown = document.getElementById(`${prefix}-field-list`);
+    const optionsContainer = document.getElementById(`${prefix}-options`) || dropdown;
     const search = document.getElementById(`${prefix}-search`);
     if (!dropdown || !search) return;
     const common = this.unified.fields.common;
@@ -4022,13 +4030,13 @@ class CompareConfigTool extends BaseTool {
       && (/^(created_|updated_)/i.test(field) || this.unified.selectedPkFields.includes(field));
     const ordered = [...common.filter((field) => !isDeferred(field)), ...common.filter(isDeferred)];
     const fields = ordered.filter((field) => field.toLowerCase().includes(search.value.trim().toLowerCase()));
-    dropdown.replaceChildren();
+    optionsContainer.replaceChildren();
     if (fields.length === 0) {
       search.removeAttribute("aria-activedescendant");
       const empty = document.createElement("div");
       empty.className = "pk-option-empty";
       empty.textContent = "No matching fields";
-      dropdown.append(empty);
+      optionsContainer.append(empty);
       return;
     }
     fields.forEach((field, index) => {
@@ -4050,7 +4058,7 @@ class CompareConfigTool extends BaseTool {
         search.setAttribute("aria-expanded", "true");
         this.renderUnifiedPickerOptions(kind);
       });
-      dropdown.append(option);
+      optionsContainer.append(option);
     });
     const active = dropdown.querySelector(".pk-option.highlighted");
     if (active) search.setAttribute("aria-activedescendant", active.id);

@@ -3899,11 +3899,7 @@
 }
 
 .pk-select {
-  max-width: 440px;
-}
-
-.compare-select {
-  max-width: 720px;
+  width: 100%;
 }
 
 .pk-input-shell {
@@ -3980,6 +3976,21 @@
   max-height: 220px;
   border-top: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
+}
+
+.picker-dropdown-actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+.picker-dropdown-actions .btn {
+  font-size: 0.75rem;
 }
 
 .pk-option {

@@ -521,25 +521,26 @@ export const CompareConfigTemplate = /* html */ `
                 <div class="field-selection-section">
                     <div class="field-header">
                         <h4 class="field-title">Fields to Compare</h4>
-                        <div class="field-actions">
-                            <button class="btn btn-ghost btn-sm" id="btn-unified-select-all-fields" type="button">Select All</button>
-                        </div>
                     </div>
                     <p class="field-help">Select fields to include in comparison</p>
-                    <div class="searchable-select pk-select compare-select" id="unified-compare-select">
+                    <div class="searchable-select pk-select" id="unified-compare-select">
                         <div class="pk-input-shell">
                             <div class="pk-input-flow">
                                 <div id="unified-compare-selected" class="pk-selected-fields" aria-live="polite"></div>
                                 <input id="unified-compare-search" class="form-input searchable-input" type="text"
                                        placeholder="Search fields..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                        aria-label="Search fields to compare"
-                                       aria-controls="unified-compare-field-list" aria-expanded="false">
+                                       aria-controls="unified-compare-options" aria-expanded="false">
                             </div>
                             <button class="pk-clear-btn" id="btn-unified-deselect-all-fields" type="button"
                                     aria-label="Clear comparison fields">Clear</button>
                         </div>
-                        <div id="unified-compare-field-list" class="searchable-dropdown pk-dropdown"
-                             role="listbox" aria-multiselectable="true"></div>
+                        <div id="unified-compare-field-list" class="searchable-dropdown pk-dropdown">
+                            <div class="picker-dropdown-actions">
+                                <button class="btn btn-ghost btn-sm" id="btn-unified-select-all-fields" type="button">Select All</button>
+                            </div>
+                            <div id="unified-compare-options" role="listbox" aria-multiselectable="true"></div>
+                        </div>
                     </div>
                 </div>
 

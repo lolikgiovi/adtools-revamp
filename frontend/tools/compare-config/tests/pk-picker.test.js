@@ -81,6 +81,7 @@ describe("Compare Config PK picker", () => {
     const compareSearch = document.getElementById("unified-compare-search");
     const compareDropdown = document.getElementById("unified-compare-field-list");
     const compareShell = document.querySelector("#unified-compare-select .pk-input-shell");
+    expect(compareDropdown.contains(document.getElementById("btn-unified-select-all-fields"))).toBe(true);
     expect(compareShell.contains(compareSearch)).toBe(true);
     expect(compareShell.querySelectorAll(".pk-selected-chip")).toHaveLength(2);
     compareSearch.dispatchEvent(new Event("focus"));
