@@ -6,6 +6,7 @@ import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
+import { registerJsonToolsCompletions } from "./jsonCompletion.js";
 import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { bucketSize, cleanAnalyticsMeta, getJsonComplexityMeta, getObjectShapeMeta, summarizeText } from "../../core/AnalyticsMeta.js";
@@ -154,8 +155,7 @@ class JSONTools extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
       quickSuggestions: { other: true, comments: false, strings: true },
-      // JSON's quote trigger opens a $schema-only menu in an empty root object.
-      suggestOnTriggerCharacters: false,
+      suggestOnTriggerCharacters: true,
       wordBasedSuggestions: "off",
     });
 
@@ -174,9 +174,11 @@ class JSONTools extends BaseTool {
       tabSize: 2,
       insertSpaces: true,
       quickSuggestions: { other: true, comments: false, strings: true },
-      suggestOnTriggerCharacters: false,
+      suggestOnTriggerCharacters: true,
       wordBasedSuggestions: "off",
     });
+
+    this.disposeJsonCompletions = registerJsonToolsCompletions(monaco, [this.editor.getModel(), this.outputEditor.getModel()]);
 
     // Load saved content from localStorage
     try {
@@ -1162,6 +1164,8 @@ class JSONTools extends BaseTool {
   }
 
   onUnmount() {
+    this.disposeJsonCompletions?.();
+    this.disposeJsonCompletions = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
