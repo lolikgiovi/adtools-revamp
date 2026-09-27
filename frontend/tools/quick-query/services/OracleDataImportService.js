@@ -2,6 +2,9 @@ import { OracleConnectionService } from "../../../core/OracleConnectionService.j
 
 const IDENTIFIER = "[A-Za-z][A-Za-z0-9_$#]*";
 const TABLE_PATTERN = new RegExp(`^(${IDENTIFIER})\\.(${IDENTIFIER})(?=\\s|$)`, "i");
+const FIELD_PATTERN = new RegExp(`^(?:(${IDENTIFIER})\\.)?(${IDENTIFIER})(?:\\s+(?:AS\\s+)?(${IDENTIFIER}))?$`, "i");
+const TABLE_ALIAS_PATTERN = new RegExp(`^(${IDENTIFIER})(?=\\s|$)`, "i");
+const CLAUSE_PATTERN = /^(WHERE|ORDER\s+BY|FETCH|OFFSET)\b/i;
 export const ORACLE_IMPORT_MAX_ROWS = 1000;
 
 // Mask quoted text and comments so keywords inside filters cannot be mistaken for SQL structure.
@@ -70,14 +73,24 @@ export class OracleDataImportService {
     const tablePart = masked.slice(from.index + 4).trimStart();
     const table = TABLE_PATTERN.exec(tablePart);
     if (!table) throw new Error("Use an exact SCHEMA.TABLE name after FROM.");
-    const remainder = tablePart.slice(table[0].length).trim();
-    if (remainder && !/^(WHERE|ORDER\s+BY|FETCH|OFFSET)\b/i.test(remainder)) {
-      throw new Error("Table aliases and additional tables are not supported.");
+    let remainder = tablePart.slice(table[0].length).trim();
+    let tableAlias = null;
+    if (remainder && !CLAUSE_PATTERN.test(remainder)) {
+      const alias = TABLE_ALIAS_PATTERN.exec(remainder);
+      if (!alias) throw new Error("Import supports one table only.");
+      tableAlias = alias[1].toUpperCase();
+      remainder = remainder.slice(alias[0].length).trim();
+      if (remainder && !CLAUSE_PATTERN.test(remainder)) throw new Error("Import supports one table only.");
     }
-    const fields = projection === "*" ? [...schemaFields] : projection.split(",").map((field) => field.trim());
-    if (!fields.length || fields.some((field) => !new RegExp(`^${IDENTIFIER}$`).test(field))) {
-      throw new Error("Select * or exact field names separated by commas, without aliases or expressions.");
+    const star = projection === "*" || (tableAlias && projection.toUpperCase() === `${tableAlias}.*`);
+    const selections = star ? [] : projection.split(",").map((field) => FIELD_PATTERN.exec(field.trim()));
+    if (!star && (!selections.length || selections.some((selection) => !selection))) {
+      throw new Error("Select * or field names with optional table qualifiers and aliases, without expressions.");
     }
+    if (selections.some((selection) => selection[1] && selection[1].toUpperCase() !== (tableAlias || table[2].toUpperCase()))) {
+      throw new Error("Selected field qualifiers must match the queried table or its alias.");
+    }
+    const fields = star ? [...schemaFields] : selections.map((selection) => (selection[3] || selection[2]).toUpperCase());
     const schemaSet = new Set(schemaFields);
     if (validateFields && fields.some((field) => !schemaSet.has(field))) {
       throw new Error(`Selected fields must exactly match the schema: ${fields.filter((field) => !schemaSet.has(field)).join(", ")}.`);
