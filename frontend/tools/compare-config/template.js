@@ -550,19 +550,13 @@ export const CompareConfigTemplate = /* html */ `
                         <fieldset class="comparison-option-group">
                             <legend>Match rows by</legend>
                             <div class="comparison-choice-list">
-                                <label class="comparison-choice">
+                                <label class="comparison-choice" title="Match the same record even when row order differs">
                                     <input type="radio" name="unified-row-matching" value="key" checked>
-                                    <span class="comparison-choice-copy">
-                                        <strong>Primary key</strong>
-                                        <small>Match the same record even when row order differs.</small>
-                                    </span>
+                                    <span>Primary key</span>
                                 </label>
-                                <label class="comparison-choice">
+                                <label class="comparison-choice" title="Compare rows in the same order on both sides">
                                     <input type="radio" name="unified-row-matching" value="position">
-                                    <span class="comparison-choice-copy">
-                                        <strong>Row position</strong>
-                                        <small>Use only when both sources have the same row order.</small>
-                                    </span>
+                                    <span>Row position</span>
                                 </label>
                             </div>
                         </fieldset>
@@ -570,30 +564,21 @@ export const CompareConfigTemplate = /* html */ `
                         <fieldset class="comparison-option-group">
                             <legend>Compare values as</legend>
                             <div class="comparison-choice-list">
-                                <label class="comparison-choice">
+                                <label class="comparison-choice" title="Show differences in formatting and values">
                                     <input type="radio" name="unified-data-comparison" value="strict" checked>
-                                    <span class="comparison-choice-copy">
-                                        <strong>Exact text</strong>
-                                        <small>Show differences in formatting and values.</small>
-                                    </span>
+                                    <span>Exact text</span>
                                 </label>
-                                <label class="comparison-choice">
+                                <label class="comparison-choice" title="Ignore equivalent date, number, and whitespace formats">
                                     <input type="radio" name="unified-data-comparison" value="normalized">
-                                    <span class="comparison-choice-copy">
-                                        <strong>Equivalent values</strong>
-                                        <small>Ignore equivalent date, number, and whitespace formats.</small>
-                                    </span>
+                                    <span>Equivalent values</span>
                                 </label>
                             </div>
                         </fieldset>
                     </div>
 
-                    <label class="comparison-field-toggle">
+                    <label class="comparison-field-toggle" title="Match names such as PARAMETER_KEY and parameter_key">
                         <input type="checkbox" id="unified-normalize-fields">
-                        <span class="comparison-choice-copy">
-                            <strong>Ignore column name case</strong>
-                            <small>Match names such as PARAMETER_KEY and parameter_key.</small>
-                        </span>
+                        <span>Ignore column name case</span>
                     </label>
                 </div>
 
