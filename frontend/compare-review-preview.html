@@ -20,6 +20,7 @@
       section.addEventListener("click", (event) => { section.dataset.clicked = event.target.className; });
       section.style.display = "flex";
       const tool = new CompareConfigTool({ emit() {} });
+      tool.bindEvents();
       const inspect = tool.gridView.onInspect;
       tool.gridView.onInspect = (index) => { section.dataset.inspected = String(index); inspect(index); };
       const attach = tool.gridView.attachEventListeners.bind(tool.gridView);

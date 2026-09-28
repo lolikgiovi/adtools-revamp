@@ -30,6 +30,9 @@ export class GridView {
     // Search/filter state
     this.searchQuery = ""; // Lowercase search query for highlighting
     this.onInspect = null;
+    this.columnFilters = {};
+    this.activeFilterColumn = null;
+    this.onColumnFilterChange = null;
   }
 
   /**
@@ -41,13 +44,13 @@ export class GridView {
    * @param {Array<string>} options.compareFields - Fields to display (from user selection). If provided, only these fields are shown.
    */
   render(comparisons, env1Name, env2Name, options = {}) {
-    const { compareFields, showStatus = true } = options;
+    const { compareFields, showStatus = true, allComparisons = comparisons } = options;
 
     // Reset lazy loading state
     this.renderedCount = 0;
     this.comparisons = comparisons || [];
     this.cleanupObserver();
-    if (!comparisons || comparisons.length === 0) {
+    if (!allComparisons || allComparisons.length === 0) {
       return `
         <div class="placeholder-message">
           <p>No records found matching the criteria.</p>
@@ -59,7 +62,7 @@ export class GridView {
     const fieldsWithDiffs = new Set();
     const allFieldNames = new Set();
 
-    comparisons.forEach((comp) => {
+    allComparisons.forEach((comp) => {
       if (comp.env1_data) Object.keys(comp.env1_data).forEach((f) => allFieldNames.add(f));
       if (comp.env2_data) Object.keys(comp.env2_data).forEach((f) => allFieldNames.add(f));
       if (comp.differences) {
@@ -86,8 +89,8 @@ export class GridView {
     let pkHeaderName = "PRIMARY KEY";
     let pkFieldsSet = new Set();
     let pkFields = ["PRIMARY KEY"];
-    if (comparisons.length > 0 && comparisons[0].key) {
-      const pkKeys = Object.keys(comparisons[0].key);
+    if (allComparisons.length > 0 && allComparisons[0].key) {
+      const pkKeys = Object.keys(allComparisons[0].key);
       if (pkKeys.length > 0) {
         pkFields = pkKeys;
         pkHeaderName = pkKeys.join(", ").toUpperCase();
@@ -105,13 +108,13 @@ export class GridView {
 
     // Cache for lazy loading (after PK filtering)
     this.fieldsToDisplay = fieldsToDisplay;
-    this.hasSourceFile = comparisons.some((c) => c._sourceFile);
+    this.hasSourceFile = allComparisons.some((c) => c._sourceFile);
     this.showStatus = showStatus;
     this.pkHeaderName = pkHeaderName;
     this.pkFields = pkFields;
 
     // Check if any row has a source file (for multi-file Excel compare)
-    const hasSourceFile = comparisons.some((c) => c._sourceFile);
+    const hasSourceFile = this.hasSourceFile;
 
     // When env names are identical (e.g., same filename in Excel compare), use Reference/Comparator labels
     let displayEnv1Name = this.formatEnvName(env1Name);
@@ -130,24 +133,24 @@ export class GridView {
             <thead>
               <tr class="h-row-1">
                 <th rowspan="2" class="sticky-col index-header">#</th>
-                ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
+                ${hasSourceFile ? `<th rowspan="2" class="sticky-col source-header">${this.renderFilterHeader("SOURCE FILE", "sourceFile")}</th>` : ""}
                 ${pkFields.map((field, index) => `
                   <th rowspan="2" class="sticky-col pk-header ${index === 0 ? "sortable" : ""}"
                     ${index === 0 ? `id="pk-sort-header" title="Click to sort by ${this.escapeHtml(pkHeaderName)}"` : ""}
                     style="${this.getStickyOffsets(index, hasSourceFile)}">
-                    <span class="pk-header-content">${this.escapeHtml(field)}
+                    <span class="pk-header-content">${this.renderFilterHeader(field, `key:${field}`)}
                       ${index === 0 ? `<span class="sort-indicator">${this.getSortIndicator()}</span>` : ""}
                     </span>
                   </th>
                 `).join("")}
                 ${showStatus ? `
                   <th rowspan="2" class="sticky-col status-header"
-                    style="${this.getStickyOffsets(pkFields.length, hasSourceFile)}">STATUS</th>
+                    style="${this.getStickyOffsets(pkFields.length, hasSourceFile)}">${this.renderFilterHeader("STATUS", "status")}</th>
                 ` : ""}
                 ${fieldsToDisplay
                   .map(
                     (f) => `
-                  <th colspan="2" class="field-header-main" title="${this.escapeHtml(f)}">${this.escapeHtml(this.extractFieldName(f))}</th>
+                  <th colspan="2" class="field-header-main" title="${this.escapeHtml(f)}">${this.renderFilterHeader(this.extractFieldName(f), `field:${f}`)}</th>
                 `,
                   )
                   .join("")}
@@ -168,7 +171,8 @@ export class GridView {
               </tr>
             </thead>
             <tbody id="grid-tbody">
-              ${this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile, showStatus)}
+              ${comparisons.length ? this.renderInitialBatch(comparisons, fieldsToDisplay, this.hasSourceFile, showStatus) :
+                `<tr><td class="grid-empty" colspan="${1 + Number(hasSourceFile) + pkFields.length + Number(showStatus) + fieldsToDisplay.length * 2}">No records match these filters.</td></tr>`}
             </tbody>
           </table>
           ${this.renderedCount < comparisons.length ? '<div id="grid-load-more-sentinel" aria-hidden="true"></div>' : ""}
@@ -177,6 +181,25 @@ export class GridView {
 
       </div>
     `;
+  }
+
+  renderFilterHeader(label, column) {
+    const escapedColumn = this.escapeHtml(column);
+    const value = this.columnFilters[column] || "";
+    const isOpen = this.activeFilterColumn === column;
+    const control = column === "status"
+      ? `<select class="grid-column-filter-select" data-column="status" aria-label="Filter status">
+          <option value="">All statuses</option>
+          ${["differ", "only_in_env1", "only_in_env2", "match"].map((status) =>
+            `<option value="${status}" ${value === status ? "selected" : ""}>${this.escapeHtml(this.getStatusLabel(status, this.hasSourceFile))}</option>`).join("")}
+        </select>`
+      : `<input type="search" class="grid-column-filter-input" data-column="${escapedColumn}"
+          aria-label="Filter ${this.escapeHtml(label)}" placeholder="Filter…" value="${this.escapeHtml(value)}">`;
+    return `<span class="grid-filter-heading"><span>${this.escapeHtml(label)}</span>
+      <button type="button" class="grid-filter-toggle ${value ? "is-active" : ""}" data-filter-column="${escapedColumn}"
+        aria-label="Filter ${this.escapeHtml(label)}" aria-expanded="${isOpen}" title="Filter ${this.escapeHtml(label)}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
+      </button></span>${isOpen ? `<div class="grid-filter-control">${control}</div>` : ""}`;
   }
 
   /**
@@ -200,6 +223,21 @@ export class GridView {
   attachEventListeners(container) {
     // Clean up any existing observer
     this.cleanupObserver();
+
+    container.querySelectorAll(".grid-filter-toggle").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.activeFilterColumn = this.activeFilterColumn === button.dataset.filterColumn ? null : button.dataset.filterColumn;
+        this.onColumnFilterChange?.();
+      });
+    });
+    container.querySelectorAll(".grid-column-filter-input, .grid-column-filter-select").forEach((control) => {
+      control.addEventListener("click", (event) => event.stopPropagation());
+      control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
+        this.columnFilters[control.dataset.column] = control.value;
+        this.onColumnFilterChange?.({ focusColumn: control.dataset.column, cursor: control.selectionStart });
+      });
+    });
 
     // Attach sort click handler to PK header
     const pkHeader = container.querySelector("#pk-sort-header");

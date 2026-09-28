@@ -680,6 +680,13 @@ export const CompareConfigTemplate = /* html */ `
                 </div>
                 <div class="results-actions">
                     <div class="results-actions-row">
+                    <div class="results-search-box" id="results-search-box">
+                        <button type="button" id="results-search-toggle" class="results-search-toggle" aria-label="Search results" aria-controls="results-search-input" aria-expanded="false" title="Search results">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                        </button>
+                        <input type="search" id="results-search-input" class="results-search-input" aria-label="Search compared records" placeholder="Search results…" />
+                        <button type="button" id="results-search-clear" class="results-search-clear" aria-label="Clear search" title="Clear search" style="display: none;">×</button>
+                    </div>
                     <div class="view-dropdown" id="view-dropdown">
                         <button class="btn btn-secondary btn-sm" id="btn-view">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
@@ -702,14 +709,6 @@ export const CompareConfigTemplate = /* html */ `
                                     <rect x="3" y="14" width="7" height="7"></rect>
                                 </svg>
                                 Summary Grid
-                            </button>
-                            <button class="view-option" data-value="vertical">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="18" height="5" rx="1"></rect>
-                                    <rect x="3" y="10" width="18" height="5" rx="1"></rect>
-                                    <rect x="3" y="17" width="18" height="5" rx="1"></rect>
-                                </svg>
-                                Cards
                             </button>
                             <button class="view-option" data-value="master-detail">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -761,19 +760,6 @@ export const CompareConfigTemplate = /* html */ `
                         </div>
                     </div>
                     <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
-                    </div>
-                    <div class="results-search-box" id="results-search-box">
-                        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.35-4.35"></path>
-                        </svg>
-                        <input type="search" id="results-search-input" class="results-search-input" aria-label="Search compared records" placeholder="Search keys and values..." />
-                        <button id="results-search-clear" class="results-search-clear" title="Clear search" style="display: none;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
                     </div>
                 </div>
             </div>

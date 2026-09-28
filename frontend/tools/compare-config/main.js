@@ -9,7 +9,6 @@ import { BaseTool } from "../../core/BaseTool.js";
 import { getIconSvg } from "./icon.js";
 import "diff2html/bundles/css/diff2html.min.css";
 import "./styles.css";
-import { VerticalCardView } from "./views/VerticalCardView.js";
 import { MasterDetailView } from "./views/MasterDetailView.js";
 import { GridView } from "./views/GridView.js";
 import { isTauri } from "../../core/Runtime.js";
@@ -50,7 +49,7 @@ class CompareConfigTool extends BaseTool {
     this._unifiedParseControllers = new Map();
 
     this.statusFilter = "differ"; // Includes changed values and rows present in only one source
-    this.currentView = "grid"; // Default view: "grid" (Summary Grid), "vertical" (Cards), "master-detail" (Detail View)
+    this.currentView = "grid"; // Summary Grid or Detail View
     this.searchFilter = ""; // Search/filter keyword for results
 
     // Results storage (unified mode only)
@@ -130,13 +129,21 @@ class CompareConfigTool extends BaseTool {
     };
 
     // View instances
-    this.verticalCardView = new VerticalCardView();
     this.masterDetailView = new MasterDetailView();
     this.gridView = new GridView();
 
     // Set up sort change callback for GridView
     this.gridView.onSortChange = () => {
       this.renderResults();
+    };
+    this.gridView.onColumnFilterChange = ({ focusColumn, cursor } = {}) => {
+      this.renderResults();
+      if (focusColumn) {
+        const control = [...document.querySelectorAll(".grid-column-filter-input, .grid-column-filter-select")]
+          .find((element) => element.dataset.column === focusColumn);
+        control?.focus();
+        if (control?.tagName === "INPUT" && cursor !== null) control.setSelectionRange(cursor, cursor);
+      }
     };
     this.gridView.onInspect = (index) => {
       const selectedRow = this.gridView.comparisons[index];
@@ -387,7 +394,7 @@ class CompareConfigTool extends BaseTool {
         const settings = JSON.parse(savedSettings);
         // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
         const savedView = settings.currentView || "grid";
-        this.currentView = savedView === "expandable" ? "grid" : savedView;
+        this.currentView = ["grid", "master-detail"].includes(savedView) ? savedView : "grid";
         // Older saved filters are grouped into the two review states.
         this.statusFilter = settings.statusFilter === "match" ? "match" : "differ";
         // Restore saved source types
@@ -403,7 +410,7 @@ class CompareConfigTool extends BaseTool {
         // Migrate settings if not already loaded
         if (!savedSettings) {
           const savedView = parsed.currentView || "grid";
-          this.currentView = savedView === "expandable" ? "grid" : savedView;
+          this.currentView = ["grid", "master-detail"].includes(savedView) ? savedView : "grid";
           this.statusFilter = parsed.statusFilter === "match" ? "match" : "differ";
         }
         // Migrate results to IndexedDB
@@ -440,6 +447,10 @@ class CompareConfigTool extends BaseTool {
       // Set view type selector
       const viewTypeSelect = document.getElementById("view-type");
       if (viewTypeSelect) viewTypeSelect.value = this.currentView;
+      const viewLabel = document.getElementById("view-type-label");
+      if (viewLabel) viewLabel.textContent = this.currentView === "master-detail" ? "Detail View" : "Summary Grid";
+      document.querySelectorAll(".view-option").forEach((option) =>
+        option.classList.toggle("active", option.dataset.value === this.currentView));
     } else {
       // Clear invalid/stale results
       this.results.unified = null;
@@ -589,9 +600,26 @@ class CompareConfigTool extends BaseTool {
       });
     });
 
-    // Results search/filter input
+    // Compact results search
     const searchInput = document.getElementById("results-search-input");
     const searchClearBtn = document.getElementById("results-search-clear");
+    const searchBox = document.getElementById("results-search-box");
+    const searchToggle = document.getElementById("results-search-toggle");
+    const setSearchOpen = (open) => {
+      searchBox?.classList.toggle("is-open", open);
+      searchToggle?.setAttribute("aria-expanded", String(open));
+      if (open) searchInput?.focus();
+    };
+    searchToggle?.addEventListener("click", () => setSearchOpen(!searchBox?.classList.contains("is-open")));
+    searchInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        searchToggle?.focus();
+      }
+    });
+    this.addDocumentListener("click", (event) => {
+      if (!searchBox?.contains(event.target)) setSearchOpen(false);
+    });
 
     if (searchInput) {
       let debounceTimer;
@@ -615,22 +643,8 @@ class CompareConfigTool extends BaseTool {
           searchInput.value = "";
           searchClearBtn.style.display = "none";
           this.applySearchFilter("");
-        }
-      });
-    }
-
-    // Filter toggle button
-    const filterToggleBtn = document.getElementById("btn-toggle-filter");
-    const searchBox = document.getElementById("results-search-box");
-
-    if (filterToggleBtn && searchBox) {
-      filterToggleBtn.addEventListener("click", () => {
-        const isVisible = searchBox.style.display !== "none";
-        searchBox.style.display = isVisible ? "none" : "flex";
-        filterToggleBtn.classList.toggle("active", !isVisible);
-        // Focus the input when showing
-        if (!isVisible && searchInput) {
-          searchInput.focus();
+          setSearchOpen(false);
+          searchToggle?.focus();
         }
       });
     }
@@ -908,9 +922,8 @@ class CompareConfigTool extends BaseTool {
     // Get the selected compare fields from metadata (for unified mode) or use null for auto-detection
     const compareFields = _metadata?.compareFields || null;
 
-    if (this.currentView === "vertical") {
-      resultsContent.innerHTML = this.verticalCardView.render(comparisons, env1_name, env2_name, { compareFields });
-    } else if (this.currentView === "master-detail") {
+    this.masterDetailView.disposeTextDiff?.();
+    if (this.currentView === "master-detail") {
       if (this.masterDetailView.selectedIndex >= comparisons.length) this.masterDetailView.selectedIndex = 0;
       resultsContent.innerHTML = this.masterDetailView.render(comparisons, env1_name, env2_name, { compareFields });
       this.masterDetailView.attachEventListeners(resultsContent);
@@ -918,7 +931,9 @@ class CompareConfigTool extends BaseTool {
       const sortedComparisons = this.gridView.sortComparisons(comparisons);
       resultsContent.innerHTML = this.gridView.render(sortedComparisons, env1_name, env2_name, {
         compareFields,
-        showStatus: this.statusFilter === "differ",
+        showStatus: true,
+        allComparisons: (this.results[this.queryMode].rows || []).filter((row) =>
+          this.statusFilter === "match" ? row.status === "match" : row.status !== "match"),
       });
       this.gridView.attachEventListeners(resultsContent);
     }
@@ -995,6 +1010,7 @@ class CompareConfigTool extends BaseTool {
    */
   applySearchFilter(query) {
     this.searchFilter = query.trim().toLowerCase();
+    document.getElementById("results-search-box")?.classList.toggle("has-query", Boolean(this.searchFilter));
     this.gridView.searchQuery = this.searchFilter; // Pass to GridView for highlighting
     this.renderResults();
   }
@@ -1065,6 +1081,21 @@ class CompareConfigTool extends BaseTool {
       rows = rows.filter((comp) => this.matchesSearchQuery(comp, this.searchFilter));
     }
 
+    for (const [column, value] of Object.entries(this.gridView.columnFilters)) {
+      if (!value) continue;
+      if (column === "status") {
+        rows = rows.filter((comp) => comp.status === value);
+      } else {
+        const query = value.toLowerCase();
+        rows = rows.filter((comp) => {
+          const field = column.slice(column.indexOf(":") + 1);
+          const values = column === "sourceFile" ? [comp._sourceFile] : column.startsWith("key:")
+            ? [comp.key?.[field]] : [comp.env1_data?.[field], comp.env2_data?.[field]];
+          return values.some((item) => this.gridView.formatValue(item).toLowerCase().includes(query));
+        });
+      }
+    }
+
     return rows;
   }
 
@@ -1076,7 +1107,7 @@ class CompareConfigTool extends BaseTool {
    * Changes the results view type
    */
   changeView(viewType) {
-    this.currentView = viewType;
+    this.currentView = viewType === "master-detail" ? "master-detail" : "grid";
     this.renderResults();
     this.saveToolState();
   }
@@ -1198,6 +1229,8 @@ class CompareConfigTool extends BaseTool {
   }
 
   onUnmount() {
+    this.masterDetailView.disposeTextDiff();
+    this.gridView.cleanupObserver();
     for (const editor of this.sqlEditors?.values() || []) editor.dispose();
     this.sqlEditors?.clear();
     this.invalidateUnifiedLoadRequests();
@@ -3835,6 +3868,16 @@ class CompareConfigTool extends BaseTool {
    */
   handleUnifiedNewComparison() {
     // 1. Always clear results
+    this.masterDetailView.disposeTextDiff();
+    this.gridView.columnFilters = {};
+    this.gridView.activeFilterColumn = null;
+    this.searchFilter = "";
+    this.gridView.searchQuery = "";
+    const searchInput = document.getElementById("results-search-input");
+    if (searchInput) searchInput.value = "";
+    document.getElementById("results-search-box")?.classList.remove("is-open");
+    document.getElementById("results-search-box")?.classList.remove("has-query");
+    document.getElementById("results-search-toggle")?.setAttribute("aria-expanded", "false");
     this.results.unified = null;
     const resultsSection = document.getElementById("results-section");
     if (resultsSection) resultsSection.style.display = "none";

@@ -52,6 +52,28 @@ afterEach(() => {
 });
 
 describe("GridView progressive rendering", () => {
+  it("offers filters for each key, status, and compared field", () => {
+    const view = new GridView();
+    const root = document.createElement("div");
+    const rows = [{
+        key: { SERVICE_CODE: "emas-release-hold-fund", ENVIRONMENT: "PROD" },
+        env1_data: { VALUE: "enabled" }, env2_data: { VALUE: "disabled" },
+        differences: ["VALUE"], status: "differ",
+      }];
+    const render = () => {
+      root.innerHTML = view.render(rows, "UAT", "PROD", { compareFields: ["VALUE"] });
+      view.attachEventListeners(root);
+    };
+    view.onColumnFilterChange = render;
+    render();
+    document.body.appendChild(root);
+    const filterIds = [...root.querySelectorAll(".grid-filter-toggle")].map((button) => button.dataset.filterColumn);
+    expect(filterIds).toEqual(["key:SERVICE_CODE", "key:ENVIRONMENT", "status", "field:VALUE"]);
+
+    root.querySelector('[data-filter-column="key:ENVIRONMENT"]').click();
+    expect(root.querySelector('.grid-column-filter-input[data-column="key:ENVIRONMENT"]')).not.toBeNull();
+  });
+
   it("renders composite keys as separate compact columns with status shown once", () => {
     const view = new GridView();
     const root = document.createElement("div");

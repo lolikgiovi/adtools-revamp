@@ -17,6 +17,10 @@ export class MasterDetailView {
     this.comparisons = [];
     this.env1Name = "";
     this.env2Name = "";
+    this.selectedDiffField = null;
+    this.diffEditor = null;
+    this.diffModels = [];
+    this.diffMountId = 0;
   }
 
   /**
@@ -274,24 +278,80 @@ export class MasterDetailView {
       return '<div class="detail-body"><p class="detail-message">No changed fields to display.</p></div>';
     }
 
-    const sections = visibleFields.map((field) => {
-      const [oldText, newText] = this.formatDiffPair(before, after, field);
-      const patch = createTwoFilesPatch("Before", "After", oldText, newText, "", "", { context: 3 });
-      const diff = renderDiffHtml(patch, {
-        drawFileList: false,
-        outputFormat: "side-by-side",
-        matching: "lines",
-        diffStyle: "char",
-      });
-      return `<section class="detail-text-diff-field" aria-label="${this.escapeHtml(field)} difference">
-        <h4>${this.escapeHtml(field)}</h4>${diff}
-      </section>`;
+    if (!visibleFields.includes(this.selectedDiffField)) this.selectedDiffField = visibleFields[0];
+    const field = this.selectedDiffField;
+    const [oldText, newText] = this.formatDiffPair(before, after, field);
+    const patch = createTwoFilesPatch("Before", "After", oldText, newText, "", "", { context: 3 });
+    const fallback = renderDiffHtml(patch, {
+      drawFileList: false,
+      outputFormat: "side-by-side",
+      matching: "lines",
+      diffStyle: "char",
     });
 
     return `<div class="detail-body detail-text-diff">
+      <div class="detail-diff-toolbar"><label for="detail-diff-field">Changed field</label>
+        <select id="detail-diff-field" aria-label="Changed field">${visibleFields.map((name) =>
+          `<option value="${this.escapeHtml(name)}" ${name === field ? "selected" : ""}>${this.escapeHtml(name)}</option>`).join("")}</select>
+      </div>
       <div class="detail-diff-legend"><span>${this.escapeHtml(this.env1Name)}</span><span>${this.escapeHtml(this.env2Name)}</span></div>
-      ${sections.join("")}
+      <div class="compare-monaco-diff" aria-label="${this.escapeHtml(field)} text comparison"></div>
+      <section class="detail-text-diff-field detail-diff-fallback" aria-label="${this.escapeHtml(field)} difference">${fallback}</section>
     </div>`;
+  }
+
+  disposeTextDiff() {
+    this.diffMountId += 1;
+    this.diffEditor?.dispose();
+    this.diffEditor = null;
+    this.diffModels.forEach((model) => model.dispose());
+    this.diffModels = [];
+    this.diffResizeObserver?.disconnect();
+    this.diffResizeObserver = null;
+    if (this.diffThemeListener) document.removeEventListener("themeChange", this.diffThemeListener);
+    this.diffThemeListener = null;
+  }
+
+  async mountTextDiff(container) {
+    const host = container.querySelector(".compare-monaco-diff");
+    if (!host || import.meta.env.MODE === "test") return;
+    const mountId = ++this.diffMountId;
+    try {
+      const [editorWorkerModule, jsonWorkerModule, workers] = await Promise.all([
+        import("monaco-editor/esm/vs/editor/editor.worker?worker"),
+        import("monaco-editor/esm/vs/language/json/json.worker?worker"),
+        import("../../../core/MonacoWorkers.js"),
+      ]);
+      if (mountId !== this.diffMountId || !host.isConnected) return;
+      workers.configureMonacoWorkers(self, { editor: editorWorkerModule.default, json: jsonWorkerModule.default });
+      const monaco = await import("monaco-editor/esm/vs/editor/editor.main.js");
+      if (mountId !== this.diffMountId || !host.isConnected) return;
+      this.diffThemeListener = () => monaco.editor.setTheme("vs-dark");
+      this.diffThemeListener();
+      document.addEventListener("themeChange", this.diffThemeListener);
+      const comparison = this.comparisons[this.selectedIndex];
+      const [before, after] = this.formatDiffPair(comparison.env1_data || {}, comparison.env2_data || {}, this.selectedDiffField);
+      const jsonValues = [before, after].every((value) => { try { JSON.parse(value); return true; } catch { return false; } });
+      this.diffModels = [monaco.editor.createModel(before, jsonValues ? "json" : "plaintext"),
+        monaco.editor.createModel(after, jsonValues ? "json" : "plaintext")];
+      host.style.display = "block";
+      this.diffEditor = monaco.editor.createDiffEditor(host, {
+        readOnly: true, originalEditable: false, automaticLayout: true, minimap: { enabled: false },
+        scrollBeyondLastLine: false, wordWrap: "on", diffWordWrap: "on", renderSideBySide: host.clientWidth >= 660,
+        useInlineViewWhenSpaceIsLimited: false,
+        renderOverviewRuler: false, fontSize: 12, lineNumbersMinChars: 3,
+      });
+      this.diffEditor.setModel({ original: this.diffModels[0], modified: this.diffModels[1] });
+      if (typeof ResizeObserver !== "undefined") {
+        this.diffResizeObserver = new ResizeObserver(() =>
+          this.diffEditor?.updateOptions({ renderSideBySide: host.clientWidth >= 660 }));
+        this.diffResizeObserver.observe(host);
+      }
+      host.classList.add("is-ready");
+      container.querySelector(".detail-diff-fallback")?.classList.add("is-hidden");
+    } catch (error) {
+      console.warn("Monaco diff unavailable; showing text comparison", error);
+    }
   }
 
   formatDiffPair(before, after, field) {
@@ -468,6 +528,11 @@ export class MasterDetailView {
    * Attaches event listeners (called after render)
    */
   attachEventListeners(container) {
+    container.querySelector("#detail-diff-field")?.addEventListener("change", (event) => {
+      this.selectedDiffField = event.target.value;
+      this.selectItem(this.selectedIndex, container);
+    });
+    this.mountTextDiff(container);
     container.querySelectorAll("[data-detail-mode]").forEach((button) => {
       button.addEventListener("click", () => {
         this.detailMode = button.dataset.detailMode;
@@ -508,6 +573,7 @@ export class MasterDetailView {
    * Selects an item and updates the view
    */
   selectItem(index, container) {
+    this.disposeTextDiff();
     this.selectedIndex = index;
 
     // Re-render the entire view (pass compareFields to preserve user selection)
