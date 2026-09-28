@@ -37,6 +37,22 @@ describe("AnalyticsDashboardPage pagination", () => {
     page.unmount();
   });
 
+  it("scopes overview to the selected range and hides the range control where it is ignored", () => {
+    const page = createPage();
+    page.currentTab = "overview";
+    page.updateRangeVisibility();
+
+    expect(page.container.querySelector(".dashboard-range").hidden).toBe(false);
+    const monthKey = page.getCacheKey("overview");
+    page.selectedRange = "7d";
+    expect(page.getCacheKey("overview")).not.toBe(monthKey);
+
+    page.currentTab = "tools";
+    page.updateRangeVisibility();
+    expect(page.container.querySelector(".dashboard-range").hidden).toBe(true);
+    page.unmount();
+  });
+
   it("loads the first page and appends the next page without losing rows", async () => {
     const page = createPage();
     const firstRows = Array.from({ length: 100 }, (_, index) => ({ time: `00:${index}`, user: `user-${index}`, action: "open" }));

@@ -235,16 +235,15 @@ describe("dashboard query performance boundaries", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.data).toHaveLength(8);
+    expect(data.data).toHaveLength(7);
     expect(data.data.map((metric) => metric.metric)).toEqual([
-      "Active users today",
-      "Active users 7d",
-      "Tool opens 7d",
-      "Successful tool uses 7d",
-      "Uncaught errors 24h",
-      "Affected users 7d",
-      "Most used tool 30d",
-      "Noisiest error 7d",
+      "Active users",
+      "Tool opens",
+      "Successful tool uses",
+      "Uncaught errors",
+      "Affected users",
+      "Most used tool",
+      "Noisiest error",
     ]);
     expect(maximumActiveScalars).toBeGreaterThan(1);
   });

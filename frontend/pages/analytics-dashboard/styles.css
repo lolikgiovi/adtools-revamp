@@ -119,6 +119,11 @@
   min-width: 0;
 }
 
+/* The range control is hidden on tabs that ignore it; keep [hidden] stronger than the flex display above. */
+.dashboard-range[hidden] {
+  display: none;
+}
+
 .dashboard-range-label,
 .dashboard-search-label {
   position: absolute;

@@ -1542,7 +1542,8 @@ export const handleDashboardQuery = withAuth(async (request, env) => {
     }
 
     if (tab.id === "overview") {
-      return executeOverviewQuery(env, "tab:overview:v3");
+      const rangeConfig = getDashboardRangeConfig(range);
+      return executeOverviewQuery(env, `tab:overview:${rangeConfig.id}:v1`, rangeConfig);
     }
 
     if (tab.id === "opportunities") {
@@ -1676,7 +1677,7 @@ function dashboardJson(body, status = 200) {
   });
 }
 
-async function executeOverviewQuery(env, cacheKey) {
+async function executeOverviewQuery(env, cacheKey, rangeConfig) {
   try {
     if (!env.DB) {
       return dashboardJson({ ok: false, error: "Database not available", tabId: "overview" }, 200);
@@ -1684,74 +1685,58 @@ async function executeOverviewQuery(env, cacheKey) {
 
     const body = await coalesceDashboardQuery(cacheKey, async () => {
       const tables = await getDashboardTables(env);
-      const deduplicatedUsage7d = buildDeduplicatedUsageLogQuery(getDashboardRangeConfig("7d"));
-      const canonicalUsageToday = buildCanonicalToolUsageQuery(getDashboardRangeConfig("today"));
-      const normalizedUsage7d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("7d"));
-      const normalizedUsage30d = buildCanonicalToolUsageQuery(getDashboardRangeConfig("30d"));
+      const rangePhrase = rangeConfig.phrase || rangeConfig.label;
+      const deduplicatedUsage = buildDeduplicatedUsageLogQuery(rangeConfig);
+      const canonicalUsage = buildCanonicalToolUsageQuery(rangeConfig);
       const metricDefinitions = [
         {
-          metric: "Active users today",
+          metric: "Active users",
           value: safeDashboardScalar(
             env,
             tables,
             ["tool_usage"],
             `WITH deduplicated_usage AS (
-            ${canonicalUsageToday}
+            ${canonicalUsage}
           )
           SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM deduplicated_usage`,
             "0",
           ),
-          context: "People with live usage today",
+          context: `People with live usage ${rangePhrase}`,
         },
         {
-          metric: "Active users 7d",
-          value: safeDashboardScalar(
-            env,
-            tables,
-            ["tool_usage"],
-            `WITH deduplicated_usage AS (
-            ${normalizedUsage7d}
-          )
-          SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
-            FROM deduplicated_usage`,
-            "0",
-          ),
-          context: "People with live usage in the last 7 days",
-        },
-        {
-          metric: "Tool opens 7d",
+          metric: "Tool opens",
           value: safeDashboardScalar(
             env,
             tables,
             ["usage_log"],
             `WITH deduplicated_usage AS (
-            ${deduplicatedUsage7d}
+            ${deduplicatedUsage}
           )
           SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM deduplicated_usage
             WHERE action = 'open'`,
             "0",
           ),
-          context: "Shell-level tool open events",
+          context: `Shell-level tool open events ${rangePhrase}`,
         },
         {
-          metric: "Successful tool uses 7d",
+          metric: "Successful tool uses",
           value: safeDashboardScalar(
             env,
             tables,
             ["tool_usage"],
             `WITH normalized_usage AS (
-            ${normalizedUsage7d}
+            ${canonicalUsage}
           )
           SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM normalized_usage`,
             "0",
           ),
-          context: "Completed, value-producing tool uses",
+          context: `Completed, value-producing tool uses ${rangePhrase}`,
         },
         {
-          metric: "Uncaught errors 24h",
+          metric: "Uncaught errors",
           value: safeDashboardScalar(
             env,
             tables,
@@ -1759,13 +1744,13 @@ async function executeOverviewQuery(env, cacheKey) {
             `SELECT CAST(COUNT(*) AS TEXT) AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
-              AND created_time >= datetime('now', '+7 hours', '-1 day')`,
+              ${rangeConfig.where("created_time")}`,
             "0",
           ),
-          context: "Immediate frontend error reports",
+          context: `Immediate frontend error reports ${rangePhrase}`,
         },
         {
-          metric: "Affected users 7d",
+          metric: "Affected users",
           value: safeDashboardScalar(
             env,
             tables,
@@ -1773,19 +1758,19 @@ async function executeOverviewQuery(env, cacheKey) {
             `SELECT CAST(COUNT(DISTINCT user_email) AS TEXT) AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
-              AND created_time >= datetime('now', '+7 hours', '-7 days')`,
+              ${rangeConfig.where("created_time")}`,
             "0",
           ),
-          context: "Users with uncaught errors",
+          context: `Users with uncaught errors ${rangePhrase}`,
         },
         {
-          metric: "Most used tool 30d",
+          metric: "Most used tool",
           value: safeDashboardScalar(
             env,
             tables,
             ["tool_usage"],
             `WITH normalized_usage AS (
-            ${normalizedUsage30d}
+            ${canonicalUsage}
           )
           SELECT tool_id || ' (' || COUNT(*) || ')' AS value
             FROM normalized_usage
@@ -1794,10 +1779,10 @@ async function executeOverviewQuery(env, cacheKey) {
             LIMIT 1`,
             "-",
           ),
-          context: "Tool with the most completed uses",
+          context: `Tool with the most completed uses ${rangePhrase}`,
         },
         {
-          metric: "Noisiest error 7d",
+          metric: "Noisiest error",
           value: safeDashboardScalar(
             env,
             tables,
@@ -1805,13 +1790,13 @@ async function executeOverviewQuery(env, cacheKey) {
             `SELECT COALESCE(tool_id, route, 'unknown') || ' / ' || error_name || ' (' || COUNT(*) || ')' AS value
             FROM error_events
             WHERE COALESCE(user_email, '') != '${EXCLUDED_ANALYTICS_EMAIL}'
-              AND created_time >= datetime('now', '+7 hours', '-7 days')
+              ${rangeConfig.where("created_time")}
             GROUP BY COALESCE(tool_id, route, 'unknown'), error_name
             ORDER BY COUNT(*) DESC, MAX(created_time) DESC
             LIMIT 1`,
             "-",
           ),
-          context: "Top uncaught error cluster",
+          context: `Top uncaught error cluster ${rangePhrase}`,
         },
       ];
       const data = await Promise.all(
@@ -2390,26 +2375,31 @@ function getDashboardRangeConfig(range) {
     today: {
       id: "today",
       label: "today",
+      phrase: "today",
       where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', 'start of day')`,
     },
     "7d": {
       id: "7d",
       label: "the last 7 days",
+      phrase: "in the last 7 days",
       where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-7 days')`,
     },
     "30d": {
       id: "30d",
       label: "the last 30 days",
+      phrase: "in the last 30 days",
       where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-30 days')`,
     },
     "90d": {
       id: "90d",
       label: "the last 90 days",
+      phrase: "in the last 90 days",
       where: (column) => `AND datetime(${column}) >= datetime('now', '+7 hours', '-90 days')`,
     },
     all: {
       id: "all",
       label: "all time",
+      phrase: "across all time",
       where: () => "",
     },
   };
