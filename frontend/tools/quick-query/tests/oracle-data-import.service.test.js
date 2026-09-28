@@ -21,12 +21,19 @@ describe("Oracle row import", () => {
     expect(query.fields).toEqual(["ID", "STATUS"]);
   });
 
-  it("rejects aliases, expressions, unknown columns, and other data sources", () => {
-    expect(() => OracleDataImportService.parseQuery("SELECT ID AS KEY FROM APP.ITEM", schema)).toThrow("without aliases");
-    expect(() => OracleDataImportService.parseQuery("SELECT LOWER(NAME) FROM APP.ITEM", schema)).toThrow("without aliases");
+  it("rejects expressions, unknown columns, and other data sources", () => {
+    expect(() => OracleDataImportService.parseQuery("SELECT LOWER(NAME) FROM APP.ITEM", schema)).toThrow("without expressions");
     expect(() => OracleDataImportService.parseQuery("SELECT MISSING FROM APP.ITEM", schema)).toThrow("exactly match");
+    expect(() => OracleDataImportService.parseQuery("SELECT ID AS KEY FROM APP.ITEM", schema)).toThrow("exactly match");
     expect(() => OracleDataImportService.parseQuery("SELECT ID FROM APP.ITEM JOIN APP.OTHER ON 1=1", schema)).toThrow("one table");
     expect(() => OracleDataImportService.parseQuery("SELECT ID FROM APP.ITEM; DELETE FROM APP.ITEM", schema)).toThrow("one SELECT");
+  });
+
+  it("accepts qualified and aliased fields that resolve to schema columns", () => {
+    const query = OracleDataImportService.parseQuery("SELECT A.ID AS ID, A.NAME AS NAME FROM APP.ITEM A", schema);
+    expect(query.tableName).toBe("APP.ITEM");
+    expect(query.fields).toEqual(["ID", "NAME"]);
+    expect(() => OracleDataImportService.parseQuery("SELECT B.ID FROM APP.ITEM A", schema)).toThrow("qualifiers must match");
   });
 
   it("fetches through the shared Oracle bridge and checks returned column names", async () => {

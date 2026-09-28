@@ -1230,8 +1230,8 @@ class CompareConfigTool extends BaseTool {
   }
 
   onUnmount() {
-    this.masterDetailView.disposeTextDiff();
-    this.gridView.cleanupObserver();
+    this.masterDetailView?.disposeTextDiff();
+    this.gridView?.cleanupObserver();
     for (const editor of this.sqlEditors?.values() || []) editor.dispose();
     this.sqlEditors?.clear();
     this.invalidateUnifiedLoadRequests();
