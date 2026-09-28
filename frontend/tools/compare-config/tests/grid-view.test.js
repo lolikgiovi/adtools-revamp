@@ -52,6 +52,37 @@ afterEach(() => {
 });
 
 describe("GridView progressive rendering", () => {
+  it("renders composite keys as separate compact columns with status shown once", () => {
+    const view = new GridView();
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [{
+        key: { SERVICE_CODE: "emas-release-hold-fund", ENVIRONMENT: "PROD" },
+        env1_data: { value: "enabled" },
+        env2_data: null,
+        differences: ["value"],
+        status: "only_in_env1",
+      }],
+      "(UAT1 COMP) SQL Query",
+      "(PREPROD COMP) SQL Query",
+      { compareFields: ["value"], showStatus: true },
+    );
+    document.body.appendChild(root);
+    const onInspect = vi.fn();
+    view.onInspect = onInspect;
+    view.attachEventListeners(root);
+
+    expect([...root.querySelectorAll(".pk-header")].map((cell) => cell.textContent.replace(/\s+/g, " ").trim())).toEqual([
+      "SERVICE_CODE ⇅",
+      "ENVIRONMENT",
+    ]);
+    expect([...root.querySelectorAll(".pk-cell")].map((cell) => cell.textContent.trim())).toEqual(["emas-release-hold-fund", "PROD"]);
+    expect(root.querySelectorAll(".status-cell .status-badge")).toHaveLength(1);
+    expect(root.querySelectorAll(".pk-cell .status-badge")).toHaveLength(0);
+    root.querySelectorAll(".pk-cell")[1].click();
+    expect(onInspect).toHaveBeenCalledWith(0);
+  });
+
   it("renders the first batch and appends every remaining row in order", () => {
     vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
     const view = new GridView();

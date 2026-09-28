@@ -7,9 +7,13 @@
  * - Click to select and view details
  * - Efficient for reviewing many comparisons one-by-one
  */
+import { createTwoFilesPatch } from "diff";
+import { html as renderDiffHtml } from "diff2html";
+
 export class MasterDetailView {
   constructor() {
     this.selectedIndex = 0;
+    this.detailMode = "fields";
     this.comparisons = [];
     this.env1Name = "";
     this.env2Name = "";
@@ -120,9 +124,20 @@ export class MasterDetailView {
     return `
       <div class="detail-content">
         ${this.renderDetailHeader(comparison)}
+        ${comparison.status !== "match" ? this.renderDetailModeSwitch() : ""}
         ${this.renderDetailBody(comparison)}
       </div>
     `;
+  }
+
+  renderDetailModeSwitch() {
+    const fieldsActive = this.detailMode === "fields";
+    const textDiffActive = this.detailMode === "text-diff";
+    return `<div class="detail-mode-switch" role="group" aria-label="Record detail display">
+      <button type="button" data-detail-mode="fields" aria-pressed="${fieldsActive}" class="${fieldsActive ? "active" : ""}">Fields</button>
+      <button type="button" data-detail-mode="text-diff" aria-pressed="${textDiffActive}"
+        class="${textDiffActive ? "active" : ""}">Text diff</button>
+    </div>`;
   }
 
   /**
@@ -164,6 +179,10 @@ export class MasterDetailView {
    * Renders detail panel body
    */
   renderDetailBody(comparison) {
+    if (this.detailMode === "text-diff" && comparison.status !== "match") {
+      return this.renderTextDiff(comparison);
+    }
+
     if (comparison.status === "only_in_env1") {
       return `
         <div class="detail-body">
@@ -239,6 +258,57 @@ export class MasterDetailView {
         </div>
       </div>
     `;
+  }
+
+  renderTextDiff(comparison) {
+    const before = comparison.env1_data || {};
+    const after = comparison.env2_data || {};
+    const fields = comparison.status === "differ"
+      ? comparison.differences || []
+      : [...new Set([...Object.keys(before), ...Object.keys(after)])];
+    const visibleFields = this.compareFields?.length
+      ? fields.filter((field) => this.compareFields.includes(field))
+      : fields;
+
+    if (visibleFields.length === 0) {
+      return '<div class="detail-body"><p class="detail-message">No changed fields to display.</p></div>';
+    }
+
+    const sections = visibleFields.map((field) => {
+      const [oldText, newText] = this.formatDiffPair(before, after, field);
+      const patch = createTwoFilesPatch("Before", "After", oldText, newText, "", "", { context: 3 });
+      const diff = renderDiffHtml(patch, {
+        drawFileList: false,
+        outputFormat: "side-by-side",
+        matching: "lines",
+        diffStyle: "char",
+      });
+      return `<section class="detail-text-diff-field" aria-label="${this.escapeHtml(field)} difference">
+        <h4>${this.escapeHtml(field)}</h4>${diff}
+      </section>`;
+    });
+
+    return `<div class="detail-body detail-text-diff">
+      <div class="detail-diff-legend"><span>${this.escapeHtml(this.env1Name)}</span><span>${this.escapeHtml(this.env2Name)}</span></div>
+      ${sections.join("")}
+    </div>`;
+  }
+
+  formatDiffPair(before, after, field) {
+    const oldValue = Object.hasOwn(before, field) ? before[field] : undefined;
+    const newValue = Object.hasOwn(after, field) ? after[field] : undefined;
+    const oldText = oldValue === undefined ? "(missing)" : this.formatValue(oldValue);
+    const newText = newValue === undefined ? "(missing)" : this.formatValue(newValue);
+    const oldJson = this.parseJsonValue(oldValue);
+    const newJson = this.parseJsonValue(newValue);
+
+    // Pretty-print changed JSON for readable lines, but retain raw text when formatting alone caused a strict difference.
+    if (oldJson && newJson && JSON.stringify(oldJson.value) !== JSON.stringify(newJson.value)) {
+      return [oldJson.pretty, newJson.pretty];
+    }
+    if (oldJson && newValue === undefined) return [oldJson.pretty, newText];
+    if (newJson && oldValue === undefined) return [oldText, newJson.pretty];
+    return [oldText, newText];
   }
 
   /**
@@ -398,6 +468,13 @@ export class MasterDetailView {
    * Attaches event listeners (called after render)
    */
   attachEventListeners(container) {
+    container.querySelectorAll("[data-detail-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.detailMode = button.dataset.detailMode;
+        this.selectItem(this.selectedIndex, container);
+        container.querySelector(`[data-detail-mode="${this.detailMode}"]`)?.focus();
+      });
+    });
     // Master item click
     container.querySelectorAll(".master-item").forEach((item) => {
       item.addEventListener("click", (e) => {

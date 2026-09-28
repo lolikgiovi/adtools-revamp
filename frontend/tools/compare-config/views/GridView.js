@@ -71,11 +71,9 @@ export class GridView {
     // If compareFields is provided (user selection), use those fields only
     // Otherwise, fall back to smart diff view (fields with differences)
     let fieldsToDisplay;
-    let isUserSelected = false;
     if (compareFields && compareFields.length > 0) {
       // User-selected fields - preserve their selection order
       fieldsToDisplay = compareFields;
-      isUserSelected = true;
     } else {
       // Auto-detect: show fields with differences, or all fields if none differ
       const activeFields = Array.from(allFieldNames)
@@ -84,15 +82,14 @@ export class GridView {
       fieldsToDisplay = activeFields.length > 0 ? activeFields : Array.from(allFieldNames).sort();
     }
 
-    // For footer info: count how many fields have differences
-    const diffFieldCount = fieldsWithDiffs.size;
-
     // 3. Determine PK Header name from actual metadata and filter out PK fields from display
     let pkHeaderName = "PRIMARY KEY";
     let pkFieldsSet = new Set();
+    let pkFields = ["PRIMARY KEY"];
     if (comparisons.length > 0 && comparisons[0].key) {
       const pkKeys = Object.keys(comparisons[0].key);
       if (pkKeys.length > 0) {
+        pkFields = pkKeys;
         pkHeaderName = pkKeys.join(", ").toUpperCase();
         // Create a set of PK field names (case-insensitive) to filter from display
         pkKeys.forEach((k) => {
@@ -111,6 +108,7 @@ export class GridView {
     this.hasSourceFile = comparisons.some((c) => c._sourceFile);
     this.showStatus = showStatus;
     this.pkHeaderName = pkHeaderName;
+    this.pkFields = pkFields;
 
     // Check if any row has a source file (for multi-file Excel compare)
     const hasSourceFile = comparisons.some((c) => c._sourceFile);
@@ -133,13 +131,19 @@ export class GridView {
               <tr class="h-row-1">
                 <th rowspan="2" class="sticky-col index-header">#</th>
                 ${hasSourceFile ? '<th rowspan="2" class="sticky-col source-header">SOURCE FILE</th>' : ""}
-                <th rowspan="2" class="sticky-col pk-header sortable" id="pk-sort-header" title="Click to sort by ${this.escapeHtml(pkHeaderName)}">
-                  <span class="pk-header-content">
-                    ${this.escapeHtml(pkHeaderName)}
-                    <span class="sort-indicator">${this.getSortIndicator()}</span>
-                  </span>
-                </th>
-                ${showStatus ? '<th rowspan="2" class="sticky-col status-header">STATUS</th>' : ""}
+                ${pkFields.map((field, index) => `
+                  <th rowspan="2" class="sticky-col pk-header ${index === 0 ? "sortable" : ""}"
+                    ${index === 0 ? `id="pk-sort-header" title="Click to sort by ${this.escapeHtml(pkHeaderName)}"` : ""}
+                    style="${this.getStickyOffsets(index, hasSourceFile)}">
+                    <span class="pk-header-content">${this.escapeHtml(field)}
+                      ${index === 0 ? `<span class="sort-indicator">${this.getSortIndicator()}</span>` : ""}
+                    </span>
+                  </th>
+                `).join("")}
+                ${showStatus ? `
+                  <th rowspan="2" class="sticky-col status-header"
+                    style="${this.getStickyOffsets(pkFields.length, hasSourceFile)}">STATUS</th>
+                ` : ""}
                 ${fieldsToDisplay
                   .map(
                     (f) => `
@@ -151,7 +155,7 @@ export class GridView {
               <tr class="h-row-2">
                 ${fieldsToDisplay
                   .map(
-                    (f) => `
+                    () => `
                   <th class="env-header-sub env-1">
                     <div class="h-label-clip">${this.escapeHtml(displayEnv1Name)}</div>
                   </th>
@@ -327,12 +331,10 @@ export class GridView {
   renderRow(comparison, fields, hasSourceFile = false, showStatus = true, rowIndex = 0) {
     const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status, hasSourceFile);
-    const pkValue = this.formatPrimaryKey(comparison.key);
     const diffFields = new Set(comparison.differences || []);
     const diffDetails = comparison._diffDetails || {};
 
-    // Apply search highlighting to PK value
-    const pkDisplay = this.searchQuery ? this.highlightSearchMatch(pkValue) : this.escapeHtml(pkValue);
+    const pkFields = this.pkFields || Object.keys(comparison.key || {});
 
     return `
       <tr class="data-row status-${statusClass}">
@@ -344,17 +346,20 @@ export class GridView {
               )}</td>`
             : ""
         }
-        <td class="sticky-col pk-cell" data-index="${rowIndex - 1}" title="${this.escapeHtml(pkValue)}">
-          <div class="pk-cell-content">
-            <span class="pk-value">${pkDisplay}</span>
-            ${showStatus ? `<span class="pk-inline-status status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>` : ""}
-            <button type="button" class="grid-inspect-button" data-index="${rowIndex - 1}" aria-label="Inspect ${this.escapeHtml(pkValue)}">Inspect</button>
-          </div>
-        </td>
+        ${pkFields.map((field, index) => {
+          const value = comparison.key?.[field];
+          const display = this.formatValue(value);
+          const valueHtml = this.searchQuery ? this.highlightSearchMatch(display) : this.escapeHtml(display);
+          return `<td class="sticky-col pk-cell" data-index="${rowIndex - 1}" title="${this.escapeHtml(display)}"
+            style="${this.getStickyOffsets(index, hasSourceFile)}">
+            <button type="button" class="grid-inspect-button"
+              aria-label="Inspect ${this.escapeHtml(field)}: ${this.escapeHtml(display)}">${valueHtml}</button>
+          </td>`;
+        }).join("")}
         ${
           showStatus
             ? `
-          <td class="sticky-col status-cell">
+          <td class="sticky-col status-cell" style="${this.getStickyOffsets(pkFields.length, hasSourceFile)}">
             <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
           </td>
         `
@@ -375,6 +380,21 @@ export class GridView {
           .join("")}
       </tr>
     `;
+  }
+
+  getStickyOffsets(keyIndex, hasSourceFile) {
+    const sourceWide = hasSourceFile ? 150 : 0;
+    const sourceCompact = hasSourceFile ? 130 : 0;
+    const keyOffsetWide = keyIndex === 0 ? 0 : 190 + (keyIndex - 1) * 130;
+    const keyOffsetCompact = keyIndex === 0 ? 0 : 170 + (keyIndex - 1) * 110;
+    const keyWidthWide = keyIndex === 0 ? 190 : 130;
+    const keyWidthCompact = keyIndex === 0 ? 170 : 110;
+    return [
+      `--sticky-left: ${50 + sourceWide + keyOffsetWide}px`,
+      `--sticky-left-compact: ${40 + sourceCompact + keyOffsetCompact}px`,
+      `--pk-width: ${keyWidthWide}px`,
+      `--pk-width-compact: ${keyWidthCompact}px`,
+    ].join("; ");
   }
 
   /**

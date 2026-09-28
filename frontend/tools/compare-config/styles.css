@@ -1693,6 +1693,98 @@
   overflow-y: auto;
 }
 
+.detail-mode-switch {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.detail-mode-switch button {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.detail-mode-switch button:hover,
+.detail-mode-switch button.active {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--border));
+}
+
+.detail-mode-switch button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.detail-text-diff {
+  --d2h-bg-color: hsl(var(--card));
+  --d2h-border-color: hsl(var(--border));
+  --d2h-dim-color: hsl(var(--muted-foreground));
+  --d2h-line-border-color: hsl(var(--border));
+  --d2h-file-header-bg-color: hsl(var(--muted));
+  --d2h-file-header-border-color: hsl(var(--border));
+  --d2h-info-bg-color: hsl(var(--muted) / 0.55);
+  --d2h-info-border-color: hsl(var(--border));
+  --d2h-empty-placeholder-bg-color: hsl(var(--muted) / 0.4);
+  --d2h-empty-placeholder-border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.dark .detail-text-diff {
+  --d2h-ins-bg-color: hsl(145 55% 25% / 0.35);
+  --d2h-ins-highlight-bg-color: hsl(145 55% 35% / 0.5);
+  --d2h-del-bg-color: hsl(0 55% 30% / 0.35);
+  --d2h-del-highlight-bg-color: hsl(0 55% 40% / 0.5);
+  --d2h-ins-label-color: hsl(145 70% 72%);
+  --d2h-del-label-color: hsl(0 80% 75%);
+}
+
+.detail-diff-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.detail-text-diff-field h4 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.85rem;
+}
+
+.detail-text-diff .d2h-file-header {
+  display: none;
+}
+
+.detail-text-diff .d2h-file-wrapper {
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+
+.detail-text-diff .d2h-diff-table {
+  min-width: 640px;
+  font-family: var(--font-mono, monospace);
+}
+
+.detail-text-diff .d2h-code-line-ctn {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .detail-text-diff .d2h-diff-table {
+    min-width: 560px;
+  }
+}
+
 .detail-message {
   margin-bottom: 1rem;
   font-size: 0.9rem;
@@ -1750,7 +1842,7 @@
 
 .excel-table {
   width: max-content;
-  min-width: 100%;
+  min-width: 0;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.8rem;
@@ -1775,6 +1867,11 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-size: 0.75rem;
+}
+
+.excel-table th,
+.excel-table td {
+  box-sizing: border-box;
 }
 
 .excel-table .field-header-main {
@@ -1837,9 +1934,18 @@
 
 .excel-table .pk-header,
 .excel-table .pk-cell {
+  left: var(--sticky-left);
+  width: var(--pk-width);
+  min-width: var(--pk-width);
+  max-width: var(--pk-width);
+}
+
+.excel-table .source-header,
+.excel-table .source-cell {
   left: 50px;
-  width: 250px;
-  min-width: 250px;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
 }
 
 /* Sortable PK Header */
@@ -1872,31 +1978,11 @@
 
 .excel-table .status-header,
 .excel-table .status-cell {
-  left: 300px;
-  width: 160px;
-  min-width: 160px;
+  left: var(--sticky-left);
+  width: 130px;
+  min-width: 130px;
+  max-width: 130px;
   text-align: center;
-}
-
-.excel-table .status-badge {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.excel-table .pk-cell-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.excel-table .pk-cell .pk-value {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.excel-table .pk-inline-status {
-  display: none;
 }
 
 .excel-table .pk-cell {
@@ -1904,13 +1990,18 @@
 }
 
 .grid-inspect-button {
-  flex-shrink: 0;
+  display: block;
+  width: 100%;
   border: 0;
   background: none;
-  color: hsl(var(--primary));
-  padding: 0.25rem;
+  color: hsl(var(--foreground));
+  padding: 0;
   font: inherit;
-  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -1985,12 +2076,15 @@
 /* Status Labels (inside table) */
 .excel-table .status-badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 0.65rem;
+  max-width: 112px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: normal;
+  line-height: 1.2;
 }
 
 .excel-table .status-badge.status-match {
@@ -2020,26 +2114,23 @@
 
   .excel-table .pk-header,
   .excel-table .pk-cell {
+    left: var(--sticky-left-compact);
+    width: var(--pk-width-compact);
+    min-width: var(--pk-width-compact);
+    max-width: var(--pk-width-compact);
+  }
+
+  .excel-table .source-header,
+  .excel-table .source-cell {
     left: 40px;
-    width: 200px;
-    min-width: 200px;
+    width: 130px;
+    min-width: 130px;
+    max-width: 130px;
   }
 
   .excel-table .status-header,
   .excel-table .status-cell {
-    display: none;
-  }
-
-  .excel-table .pk-cell-content {
-    flex-wrap: wrap;
-  }
-
-  .excel-table .pk-cell .pk-value {
-    flex-basis: 100%;
-  }
-
-  .excel-table .pk-inline-status {
-    display: inline-block;
+    left: var(--sticky-left-compact);
   }
 
   .excel-table .val-cell {
@@ -2330,7 +2421,7 @@
    RESPONSIVE - VIEWS
    ============================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .master-detail-view {
     grid-template-columns: 1fr;
   }
@@ -2338,6 +2429,9 @@
   .master-pane {
     max-height: 200px;
   }
+}
+
+@media (max-width: 768px) {
 
   .card-grid {
     grid-template-columns: 1fr;

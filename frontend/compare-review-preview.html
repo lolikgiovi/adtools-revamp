@@ -40,6 +40,12 @@
           { key: { PARAMETER_KEY: "same.value" }, env1_data: { PARAMETER_VALUE: "on" }, env2_data: { PARAMETER_VALUE: "on" }, status: "match", differences: [] },
         ],
       };
+      if (new URLSearchParams(location.search).has("composite")) {
+        tool.results.unified._metadata.keyColumns = ["SERVICE_CODE", "ENVIRONMENT"];
+        tool.results.unified.rows.forEach((row) => {
+          row.key = { SERVICE_CODE: row.key.PARAMETER_KEY, ENVIRONMENT: "PROD" };
+        });
+      }
       section.querySelector("#results-title").textContent = `${tool.results.unified.env1_name} vs ${tool.results.unified.env2_name}`;
       tool.renderSummary();
       section.dataset.renderStep = "summary";

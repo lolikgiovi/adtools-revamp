@@ -127,6 +127,7 @@ describe("comparison review results", () => {
 
     root.querySelector('[data-detail-mode="text-diff"]').click();
     expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('[data-detail-mode="text-diff"]'));
     expect(root.querySelector(".detail-text-diff").textContent).toContain("enabled");
     expect(root.querySelector(".detail-text-diff").textContent).toContain("UAT");
     expect(root.querySelector(".detail-text-diff").textContent).toContain("Pre-production");
@@ -137,5 +138,46 @@ describe("comparison review results", () => {
     expect(root.querySelector(".detail-text-diff").textContent).toContain("old");
     root.querySelector('[data-detail-mode="fields"]').click();
     expect(root.querySelector(".detail-text-diff")).toBeNull();
+  });
+
+  it("shows strict JSON text differences even when parsed values are equivalent", () => {
+    const view = new MasterDetailView();
+    view.detailMode = "text-diff";
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [{
+        status: "differ",
+        key: { id: "format" },
+        env1_data: { value: '{"enabled":true}' },
+        env2_data: { value: '{ "enabled": true }' },
+        differences: ["value"],
+      }],
+      "UAT",
+      "Pre-production",
+      { compareFields: ["value"] },
+    );
+
+    expect(root.querySelector(".detail-text-diff .d2h-del")).not.toBeNull();
+    expect(root.querySelector(".detail-text-diff .d2h-ins")).not.toBeNull();
+  });
+
+  it("opens the text diff from a grid inspection in the full results flow", () => {
+    document.body.innerHTML = '<div id="results-content"></div><span id="view-type-label"></span>';
+    const tool = new CompareConfigTool({ emit: vi.fn() });
+    tool.queryMode = "unified";
+    tool.results.unified = {
+      env1_name: "UAT",
+      env2_name: "Pre-production",
+      _metadata: { compareFields: ["value"] },
+      rows: [{
+        status: "differ", key: { id: "config" },
+        env1_data: { value: "before" }, env2_data: { value: "after" }, differences: ["value"],
+      }],
+    };
+
+    tool.renderResults();
+    document.querySelector(".grid-inspect-button").click();
+    document.querySelector('[data-detail-mode="text-diff"]').click();
+    expect(document.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
   });
 });
