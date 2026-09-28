@@ -899,7 +899,9 @@ class CompareConfigTool extends BaseTool {
     const comparisons = this.getFilteredComparisons();
     const count = document.getElementById("results-count");
     if (count) {
-      count.textContent = `Showing ${comparisons.length} ${this.statusFilter === "match" ? "matching" : "differing"} records${this.searchFilter ? " for this search" : ""}`;
+      count.textContent = this.searchFilter
+        ? `Showing ${comparisons.length} ${this.statusFilter === "match" ? "matching" : "differing"} records for this search`
+        : "";
     }
 
     // Get the selected compare fields from metadata (for unified mode) or use null for auto-detection
@@ -949,17 +951,11 @@ class CompareConfigTool extends BaseTool {
     const env1Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env1_name || "Source A"));
     const env2Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env2_name || "Source B"));
     const differingTotal = summary.differs + summary.only_in_env1 + summary.only_in_env2;
-    const reachedLimits = (this.results[this.queryMode]._metadata?.sourceLimits || []).filter(
-      (source) => source.rowCount >= source.maxRows,
-    );
-    const rowLimitWarning = reachedLimits.length
-      ? `<div class="row-limit-warning" role="status">${reachedLimits.map((source) => this.gridView.escapeHtml(this.gridView.formatEnvName(source.name))).join(" and ")} reached Max Rows. This comparison may omit records. Increase the limit and rerun before checking completeness.</div>`
-      : "";
 
     // Keep missing record counts visible while grouping them in the Differing review queue.
     summaryContainer.innerHTML = `
       ${noPkWarning}
-      ${rowLimitWarning}
+      <div class="summary-breakdown">${summary.total} records compared · ${summary.differs} records with changed values · ${summary.only_in_env1} Only in ${env1Name} · ${summary.only_in_env2} Only in ${env2Name}</div>
       <div class="summary-review">
         <div class="summary-cards" role="group" aria-label="Filter comparison results">
           <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ" aria-pressed="${this.statusFilter === "differ"}">
@@ -969,7 +965,6 @@ class CompareConfigTool extends BaseTool {
             <span class="stat-value">${summary.matches}</span><span class="stat-label">Matching</span>
           </button>
         </div>
-        <div class="summary-breakdown">${summary.total} records compared · ${summary.differs} records with changed values · ${summary.only_in_env1} Only in ${env1Name} · ${summary.only_in_env2} Only in ${env2Name}</div>
       </div>
     `;
 

@@ -32,7 +32,8 @@ describe("comparison review results", () => {
     expect([...document.querySelectorAll(".summary-stat")].map((button) => button.dataset.filter)).toEqual(["differ", "match"]);
     expect(document.querySelector('[data-filter="differ"] .stat-value').textContent).toBe("3");
     expect(document.getElementById("results-summary").textContent).toContain("Only in UAT");
-    expect(document.getElementById("results-summary").textContent).toContain("row limit");
+    expect(document.querySelector(".summary-breakdown").textContent).toContain("4 records compared");
+    expect(document.querySelector(".row-limit-warning")).toBeNull();
     expect(tool.getFilteredComparisons().map((row) => row.key.id)).toEqual(["b", "c", "d"]);
     document.querySelector('[data-filter="match"]').click();
     expect(tool.getFilteredComparisons().map((row) => row.key.id)).toEqual(["a"]);
@@ -101,5 +102,40 @@ describe("comparison review results", () => {
     expect(root.querySelector(".json-changes").textContent).toContain('"1"');
     expect(root.querySelectorAll(".detail-json-value")).toHaveLength(2);
     expect(root.querySelector(".detail-json-value").textContent).toContain("\n");
+  });
+
+  it("switches a selected record between field and side-by-side text diffs", () => {
+    const view = new MasterDetailView();
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [
+        {
+          status: "differ",
+          key: { id: "config" },
+          env1_data: { value: '{"enabled":"0","note":"<script>"}' },
+          env2_data: { value: '{"enabled":"1","note":"<script>"}' },
+          differences: ["value"],
+        },
+        { status: "only_in_env1", key: { id: "removed" }, env1_data: { value: "old" }, env2_data: null },
+      ],
+      "UAT",
+      "Pre-production",
+      { compareFields: ["value"] },
+    );
+    document.body.appendChild(root);
+    view.attachEventListeners(root);
+
+    root.querySelector('[data-detail-mode="text-diff"]').click();
+    expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("enabled");
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("UAT");
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("Pre-production");
+    expect(root.querySelector(".detail-text-diff script")).toBeNull();
+
+    root.querySelector('[data-index="1"]').click();
+    expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("old");
+    root.querySelector('[data-detail-mode="fields"]').click();
+    expect(root.querySelector(".detail-text-diff")).toBeNull();
   });
 });
