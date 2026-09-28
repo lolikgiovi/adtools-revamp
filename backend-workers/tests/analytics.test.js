@@ -94,6 +94,29 @@ function mockDashboardTables(env, tableNames) {
   });
 }
 
+function mockRegisteredDevice(env, { deviceId, email, userId = "user-1" }) {
+  const originalPrepare = env.DB.prepare;
+  env.DB.prepare = vi.fn((sql) => {
+    if (sql.includes("FROM device d")) {
+      const row = { deviceId, email, userId };
+      const resolve = (boundDeviceId) => (boundDeviceId === deviceId ? row : null);
+      return {
+        run: vi.fn(async () => ({ success: true })),
+        all: vi.fn(async () => ({ results: [row] })),
+        first: vi.fn(async () => row),
+        bind: (boundDeviceId) => ({
+          sql,
+          args: [boundDeviceId],
+          run: vi.fn(async () => ({ success: true })),
+          first: vi.fn(async () => resolve(boundDeviceId)),
+          all: vi.fn(async () => ({ results: resolve(boundDeviceId) ? [row] : [] })),
+        }),
+      };
+    }
+    return originalPrepare(sql);
+  });
+}
+
 describe("Analytics endpoints", () => {
   let env;
 
@@ -330,6 +353,71 @@ describe("Analytics endpoints", () => {
     expect(env.DB.batch).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts usage from a registered device without a session", async () => {
+    mockRegisteredDevice(env, { deviceId: "known-device", email: "device.owner@bankmandiri.co.id" });
+
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-Id": "known-device" },
+        body: JSON.stringify({
+          device_id: "known-device",
+          usage_log: [{ tool_id: "quick-query", action: "open", created_time: "2026-01-02 10:00:00+07:00" }],
+          tool_usage: [{ event_id: "device-use-1", tool_id: "quick-query", action: "merge", properties: {} }],
+        }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.ok).toBe(true);
+
+    const usageLog = env.DB.executed.find((item) => String(item.sql).includes("INSERT OR IGNORE INTO usage_log"));
+    expect(usageLog.args[0]).toBe("device.owner@bankmandiri.co.id");
+    expect(usageLog.args[1]).toBe("known-device");
+    const toolUsage = env.DB.executed.find((item) => String(item.sql).includes("INSERT OR IGNORE INTO tool_usage"));
+    expect(toolUsage.args[1]).toBe("device.owner@bankmandiri.co.id");
+    expect(toolUsage.args[2]).toBe("known-device");
+  });
+
+  it("accepts device-identified usage from the body when no device header is sent", async () => {
+    mockRegisteredDevice(env, { deviceId: "body-device", email: "body.owner@bankmandiri.co.id" });
+
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: "body-device", tool_id: "quick-query", action: "open" }),
+      }),
+      env,
+    );
+
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.inserted).toBe(1);
+
+    const insert = env.DB.executed.find((item) => String(item.sql).includes("INSERT OR IGNORE INTO usage_log"));
+    expect(insert.args[0]).toBe("body.owner@bankmandiri.co.id");
+    expect(insert.args[1]).toBe("body-device");
+  });
+
+  it("rejects usage from an unregistered device without a session", async () => {
+    mockRegisteredDevice(env, { deviceId: "known-device", email: "device.owner@bankmandiri.co.id" });
+
+    const response = await worker.fetch(
+      new Request("http://localhost/analytics/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-Id": "unknown-device" },
+        body: JSON.stringify({ usage_log: [{ tool_id: "quick-query", action: "open" }] }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(401);
+    expect(env.DB.executed.some((item) => String(item.sql).includes("INSERT OR IGNORE INTO usage_log"))).toBe(false);
+  });
+
   it("accepts POST /analytics/log", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/analytics/log", {
@@ -436,10 +524,62 @@ describe("Analytics endpoints", () => {
     expect(data.mode).toBe("computed-overview");
     expect(data.data).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ metric: "Active users today", value: "0" }),
-        expect.objectContaining({ metric: "Uncaught errors 24h", value: "0" }),
+        expect.objectContaining({ metric: "Active users", value: "0" }),
+        expect.objectContaining({ metric: "Uncaught errors", value: "0" }),
       ]),
     );
+  });
+
+  it("scopes overview metrics to the requested time range", async () => {
+    mockDashboardTables(env, ["tool_usage", "usage_log", "error_events"]);
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+
+    try {
+      const login = await worker.fetch(
+        new Request("http://localhost/dashboard/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: "testpassword123" }),
+        }),
+        env,
+      );
+      const { token } = await login.json();
+
+      const requestOverview = async (range) =>
+        worker.fetch(
+          new Request("http://localhost/dashboard/query", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ tabId: "overview", range }),
+          }),
+          env,
+        );
+
+      const sevenDayData = await (await requestOverview("7d")).json();
+      const sevenDayQueries = env.DB.executed.map((item) => item.sql);
+      env.DB.executed.length = 0;
+      await (await requestOverview("all")).json();
+      const allTimeQueries = env.DB.executed.map((item) => item.sql);
+
+      expect(sevenDayData.data.map((metric) => metric.metric)).toEqual([
+        "Active users",
+        "Tool opens",
+        "Successful tool uses",
+        "Uncaught errors",
+        "Affected users",
+        "Most used tool",
+        "Noisiest error",
+      ]);
+      expect(sevenDayData.data[0].context).toBe("People with live usage in the last 7 days");
+      expect(sevenDayQueries.some((sql) => sql.includes("'-7 days'"))).toBe(true);
+      expect(sevenDayQueries.some((sql) => sql.includes("'-30 days'"))).toBe(false);
+      expect(allTimeQueries.some((sql) => sql.includes("'-7 days'") || sql.includes("'-30 days'"))).toBe(false);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("returns safe computed Who insights with a time range", async () => {

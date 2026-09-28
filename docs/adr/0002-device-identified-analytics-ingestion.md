@@ -1,0 +1,7 @@
+# Accept device-identified analytics ingestion without a session
+
+Usage batches required a session token. Sessions are minted only during registration or approval, live six hours in KV, and nothing renewed them: clients kept posting with the expired token, the worker answered 401, and the client retained the queue and retried forever with the same dead token. Production wrote no analytics between 2026-09-13 and 2026-09-28 apart from the hours following an approval, while dozens of devices were in daily use — the unauthenticated `PATCH /device/version` heartbeat kept `device.last_seen` current, which hid the outage.
+
+`POST /analytics/batch`, `/analytics/log`, and `/analytics/error` now also accept a request that only carries the installation device id (`X-Device-Id` header or `device_id` in the payload). Identity is resolved from the `device` join `users` row created at registration and never from the request body, so rows stay attributed to a real registered user, and an unknown device id is still rejected with 401.
+
+Consequence: a caller who knows an existing device id can attribute usage rows to that device. This is accepted because analytics is an internal adoption measure and the alternative — a session renewal flow plus a desktop release — leaves every installed client dark until its user updates. The authenticated endpoints (`/analytics/overview`, `/feedback/improvement`, and the dashboard routes) still require a session.

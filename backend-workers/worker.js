@@ -125,15 +125,15 @@ export default {
     }
 
     if (url.pathname === "/analytics/batch") {
-      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsBatchPost);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsBatchPost, { allowDeviceFallback: true });
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/log") {
-      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsLogPost);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsLogPost, { allowDeviceFallback: true });
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/error") {
-      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsErrorPost);
+      if (method === "POST") return handleAuthenticatedAnalytics(request, env, handleAnalyticsErrorPost, { allowDeviceFallback: true });
       return methodNotAllowed();
     }
     if (url.pathname === "/analytics/overview") {
@@ -221,7 +221,7 @@ export default {
   },
 };
 
-async function handleAuthenticatedAnalytics(request, env, handler) {
+async function handleAuthenticatedAnalytics(request, env, handler, { allowDeviceFallback = false } = {}) {
   if (Number(request.headers.get("Content-Length") || 0) > 1_000_000) {
     return new Response(JSON.stringify({ ok: false, error: "Analytics payload too large" }), {
       status: 413,
@@ -229,13 +229,57 @@ async function handleAuthenticatedAnalytics(request, env, handler) {
     });
   }
   const session = await getSession(request, env);
-  if (!session?.email || !session?.deviceId) {
-    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
-    });
+  if (session?.email && session?.deviceId) {
+    return handler(request, env, session);
   }
-  return handler(request, env, session);
+  if (allowDeviceFallback) {
+    const deviceSession = await resolveDeviceSession(request, env);
+    if (deviceSession) return handler(request, env, deviceSession);
+  }
+  return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json", ...corsHeaders() },
+  });
+}
+
+/**
+ * Usage reporting has to survive an expired session token: clients keep their installation id
+ * locally and send it with every analytics payload, while sessions only live for six hours.
+ * Identity is resolved from the device row created at registration and never from the request
+ * body, so rows stay attributed to a real registered user.
+ *
+ * Trusting the device id alone is deliberate: a caller who knows an existing device id can
+ * attribute usage rows to that device. Only ingestion uses this fallback; the authenticated
+ * overview, feedback, and dashboard endpoints still require a session.
+ */
+async function resolveDeviceSession(request, env) {
+  const deviceId = await readRequestDeviceId(request);
+  if (!deviceId || !env.DB) return null;
+  try {
+    const row = await env.DB.prepare(
+      `SELECT d.device_id AS deviceId, u.email AS email, u.id AS userId
+        FROM device d
+        JOIN users u ON u.id = d.user_id
+        WHERE d.device_id = ?`,
+    )
+      .bind(deviceId)
+      .first();
+    if (!row?.email || !row?.deviceId) return null;
+    return { email: row.email, deviceId: row.deviceId, userId: row.userId, viaDeviceId: true };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function readRequestDeviceId(request) {
+  const headerId = String(request.headers.get("X-Device-Id") || "").trim();
+  if (headerId) return headerId;
+  try {
+    const body = await request.clone().json();
+    return String(body?.device_id || body?.deviceId || "").trim();
+  } catch (_) {
+    return "";
+  }
 }
 
 async function handlePublicAnalytics(request, env, handler) {
