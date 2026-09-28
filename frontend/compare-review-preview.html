@@ -47,6 +47,20 @@
           row.key = { SERVICE_CODE: row.key.PARAMETER_KEY, ENVIRONMENT: "PROD" };
         });
       }
+      if (new URLSearchParams(location.search).has("long")) {
+        const lines = Array.from({ length: 120 }, (_, index) => `#set($value${index} = ${index})`);
+        const original = lines.join("\n");
+        const changed = lines.map((line, index) => index === 60 ? "#set($value60 = changed)" : line).join("\n");
+        tool.results.unified.rows = Array.from({ length: 203 }, (_, index) => ({
+          key: { SERVICE_CODE: `service-${index + 1}`, ENVIRONMENT: "BETA" },
+          env1_data: { PARAMETER_VALUE: original },
+          env2_data: { PARAMETER_VALUE: changed },
+          status: "differ",
+          differences: ["PARAMETER_VALUE"],
+        }));
+        tool.results.unified.summary = { total: 203, matches: 0, differs: 203, only_in_env1: 0, only_in_env2: 0 };
+        tool.results.unified._metadata.keyColumns = ["SERVICE_CODE", "ENVIRONMENT"];
+      }
       section.querySelector("#results-title").textContent = `${tool.results.unified.env1_name} vs ${tool.results.unified.env2_name}`;
       tool.renderSummary();
       section.dataset.renderStep = "summary";

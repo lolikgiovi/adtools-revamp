@@ -909,6 +909,7 @@ class CompareConfigTool extends BaseTool {
   renderResults() {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.results[this.queryMode]) return;
+    document.getElementById("results-section")?.classList.toggle("detail-results", this.currentView === "master-detail");
 
     const { env1_name, env2_name, _metadata } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
