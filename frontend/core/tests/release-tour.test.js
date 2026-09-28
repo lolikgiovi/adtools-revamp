@@ -273,16 +273,13 @@ describe("release tour", () => {
     tips.destroy();
   });
 
-  it("highlights the visible HTML dropdown trigger and clears its menu", async () => {
+  it("spotlights the preview control each HTML dropdown tip points at", () => {
     for (const [tipId, selectId] of [
       ["html-template-preview-width", "previewViewportSelect"],
       ["html-template-preview-vtl", "previewVtlModeSelect"],
     ]) {
-      document.body.innerHTML = `<select id="${selectId}" aria-hidden="true"></select><button id="${selectId}-trigger" aria-expanded="false"></button>`;
-      const native = document.querySelector(`#${selectId}`);
-      const trigger = document.querySelector(`#${selectId}-trigger`);
-      native.getBoundingClientRect = () => ({ width: 1, height: 1, top: 50, right: 21, bottom: 51, left: 20 });
-      trigger.getBoundingClientRect = () => ({ width: 180, height: 36, top: 40, right: 200, bottom: 76, left: 20 });
+      document.body.innerHTML = `<select id="${selectId}"></select>`;
+      document.querySelector(`#${selectId}`).getBoundingClientRect = () => ({ width: 180, height: 36, top: 40, right: 200, bottom: 76, left: 20 });
       const tip = releaseContent.tips.find((item) => item.id === tipId);
       const tips = new ReleaseTips({ release: { releaseId: `test-${tipId}`, tips: [tip] }, getRoute: () => "html-template" });
 
@@ -292,14 +289,31 @@ describe("release tour", () => {
       expect(tips.spotlightEl.style.width).toBe("192px");
       expect(tips.spotlightEl.style.height).toBe("48px");
       expect(tips.tooltipEl.style.visibility).toBe("");
-      trigger.setAttribute("aria-expanded", "true");
-      await Promise.resolve();
-      expect(tips.tooltipEl.style.visibility).toBe("hidden");
-      trigger.setAttribute("aria-expanded", "false");
-      await Promise.resolve();
-      expect(tips.tooltipEl.style.visibility).toBe("");
       tips.destroy();
     }
+  });
+
+  it("hides the tip while its target reports an expanded menu", async () => {
+    document.body.innerHTML = '<button id="expander" aria-expanded="false">Open</button>';
+    document.querySelector("#expander").getBoundingClientRect = () => ({ width: 180, height: 36, top: 40, right: 200, bottom: 76, left: 20 });
+    const tips = new ReleaseTips({
+      release: {
+        releaseId: "release-expanded-tip",
+        tips: [{ id: "expander", route: "home", target: "#expander", title: "Open it", body: "Toggle the menu." }],
+      },
+      getRoute: () => "home",
+    });
+
+    tips.start();
+    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(tips.tooltipEl.style.visibility).toBe("");
+    document.querySelector("#expander").setAttribute("aria-expanded", "true");
+    await Promise.resolve();
+    expect(tips.tooltipEl.style.visibility).toBe("hidden");
+    document.querySelector("#expander").setAttribute("aria-expanded", "false");
+    await Promise.resolve();
+    expect(tips.tooltipEl.style.visibility).toBe("");
+    tips.destroy();
   });
 
   it("requires UUID generation and a successful copy after opening the generator", async () => {

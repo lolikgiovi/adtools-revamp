@@ -65,6 +65,7 @@
       "title": "Manage connections in the header",
       "body": "Click the Oracle status to open connection controls. You can also manage Kafka and Redis here.",
       "guided": false,
+      "surfaces": ["desktop"],
       "completeOn": { "event": "click", "target": ".connection-indicator[data-connection='oracle']" }
     },
     {
@@ -122,7 +123,7 @@
     {
       "id": "html-template-preview-width",
       "route": "html-template",
-      "target": "#previewViewportSelect-trigger, #previewViewportSelect",
+      "target": "#previewViewportSelect",
       "placement": "left",
       "title": "Check the preview width",
       "body": "Choose a device width or Custom width to see how your HTML fits.",
@@ -131,7 +132,7 @@
     {
       "id": "html-template-preview-vtl",
       "route": "html-template",
-      "target": "#previewVtlModeSelect-trigger, #previewVtlModeSelect",
+      "target": "#previewVtlModeSelect",
       "placement": "left",
       "title": "Compare VTL preview modes",
       "body": "Switch between rendered VTL and showing the VTL syntax plainly.",
