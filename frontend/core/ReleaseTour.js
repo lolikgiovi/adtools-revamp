@@ -1,6 +1,7 @@
 const PENDING_STORAGE_KEY = "releaseTour.pending";
 const SEEN_STORAGE_KEY_PREFIX = "releaseTour.seen.";
 const OPENED_TIP_STORAGE_KEY_PREFIX = "releaseTip.opened.";
+const TRIED_TIP_STORAGE_KEY_PREFIX = "releaseTip.tried.";
 
 const DEFAULT_TOUR_STEPS = [
   {
@@ -806,6 +807,10 @@ function openedTipStorageKey(releaseId, tipId) {
   return `${OPENED_TIP_STORAGE_KEY_PREFIX}${encodeURIComponent(safeString(releaseId))}.${encodeURIComponent(safeString(tipId))}`;
 }
 
+function triedTipStorageKey(releaseId, tipId) {
+  return `${TRIED_TIP_STORAGE_KEY_PREFIX}${encodeURIComponent(safeString(releaseId))}.${encodeURIComponent(safeString(tipId))}`;
+}
+
 function hasOpenedTip(releaseId, tipId) {
   if (!releaseId || !tipId) return true;
   try {
@@ -820,6 +825,26 @@ function markTipOpened(releaseId, tipId) {
   try {
     localStorage.setItem(openedTipStorageKey(releaseId, tipId), "true");
   } catch (_) {}
+}
+
+function hasTriedTip(releaseId, tipId) {
+  if (!releaseId || !tipId) return true;
+  try {
+    return localStorage.getItem(triedTipStorageKey(releaseId, tipId)) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markTipTried(releaseId, tipId) {
+  if (!releaseId || !tipId) return;
+  try {
+    localStorage.setItem(triedTipStorageKey(releaseId, tipId), "true");
+  } catch (_) {}
+}
+
+function hasHandledTip(releaseId, tipId) {
+  return hasOpenedTip(releaseId, tipId) || hasTriedTip(releaseId, tipId);
 }
 
 export class ReleaseTips {
@@ -890,7 +915,7 @@ export class ReleaseTips {
     while (
       this.guidedIndex < this.guidedTips.length &&
       !this.preview &&
-      hasOpenedTip(this.release.releaseId, this.guidedTips[this.guidedIndex].id)
+      hasHandledTip(this.release.releaseId, this.guidedTips[this.guidedIndex].id)
     ) {
       this.guidedIndex += 1;
     }
@@ -962,7 +987,7 @@ export class ReleaseTips {
       ? this.guidedTip?.route === route
         ? [this.guidedTip]
         : []
-      : this.release.tips.filter((item) => item.route === route && (this.preview || !hasOpenedTip(this.release.releaseId, item.id)));
+      : this.release.tips.filter((item) => item.route === route && (this.preview || !hasHandledTip(this.release.releaseId, item.id)));
     let tip = null;
     let target = null;
     for (const candidate of candidates) {
@@ -1036,7 +1061,7 @@ export class ReleaseTips {
     closeButton.type = "button";
     closeButton.setAttribute("aria-label", "Close feature tip");
     appendCloseIcon(closeButton);
-    closeButton.addEventListener("click", () => this.dismissTip());
+    closeButton.addEventListener("click", () => this.dismissTip({ markTried: true }));
     this.tooltipEl.appendChild(closeButton);
 
     const footer = createElement("div", "release-tour-tooltip-footer");
@@ -1130,10 +1155,11 @@ export class ReleaseTips {
     if (event.key !== "Escape" || !this.layerEl) return;
     event.preventDefault();
     event.stopPropagation();
-    this.dismissTip();
+    this.dismissTip({ markTried: true });
   }
 
-  dismissTip() {
+  dismissTip({ markTried = false } = {}) {
+    if (markTried && this.activeTip && !this.preview) markTipTried(this.release.releaseId, this.activeTip.id);
     this.deferredRoute = safeString(this.getRoute()) || "home";
     this.close();
     if (this.guided) this.finishGuided();

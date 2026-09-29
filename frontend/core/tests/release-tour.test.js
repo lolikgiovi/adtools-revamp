@@ -202,6 +202,7 @@ describe("release tour", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(document.querySelector(".release-feature-tip")).toBeNull();
     expect(localStorage.getItem("releaseTip.opened.escape-tip.feature")).toBeNull();
+    expect(localStorage.getItem("releaseTip.tried.escape-tip.feature")).toBe("true");
     expect(tips.openForCurrentRoute()).toBe(false);
     tips.destroy();
   });
@@ -232,12 +233,17 @@ describe("release tour", () => {
     closeButton.click();
     expect(document.querySelector(".release-feature-tip")).toBeNull();
     expect(localStorage.getItem("releaseTip.opened.close-tip.feature")).toBeNull();
+    expect(localStorage.getItem("releaseTip.tried.close-tip.feature")).toBe("true");
     expect(tips.openForCurrentRoute()).toBe(false);
     route = "quick-query";
     expect(tips.openForCurrentRoute()).toBe(false);
     route = "home";
-    expect(tips.openForCurrentRoute()).toBe(true);
+    expect(tips.openForCurrentRoute()).toBe(false);
     tips.destroy();
+    const restartedTips = new ReleaseTips({ release: tips.release, getRoute: () => "home" });
+    restartedTips.start();
+    expect(restartedTips.openForCurrentRoute()).toBe(false);
+    restartedTips.destroy();
   });
 
   it("chooses a visible target from responsive alternatives", () => {
