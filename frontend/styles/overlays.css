@@ -43,10 +43,12 @@ body dialog::backdrop {
 }
 
 body .app-modal-actions > button {
+  box-sizing: border-box;
   width: var(--app-modal-action-width);
   min-width: 0;
   height: var(--app-modal-action-height);
   min-height: var(--app-modal-action-height);
+  max-height: var(--app-modal-action-height);
   flex: 0 1 var(--app-modal-action-width);
   justify-content: center;
   padding: 0 0.25rem;
