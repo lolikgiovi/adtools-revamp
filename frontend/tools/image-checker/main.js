@@ -1484,7 +1484,7 @@ class CheckImageTool extends BaseTool {
     modalContent.className = "image-details-content app-overlay-surface";
 
     const closeButton = document.createElement("button");
-    closeButton.className = "close-modal-button";
+    closeButton.className = "close-modal-button app-overlay-close";
     closeButton.textContent = "×";
     closeButton.type = "button";
     closeButton.setAttribute("aria-label", "Close image details");

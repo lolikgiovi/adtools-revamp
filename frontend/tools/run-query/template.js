@@ -117,7 +117,8 @@ export const JenkinsRunnerTemplate = /*html*/ `
       <div class="jr-modal-content app-overlay-surface">
         <div class="jr-modal-header">
           <h3 id="jr-template-modal-title">Create Template</h3>
-          <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+          <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs app-overlay-close"
+            aria-label="Close modal" title="Close">×</button>
         </div>
           <div class="jr-modal-body">
           <div class="jr-controls">
@@ -152,7 +153,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
             <div class="jr-hint" id="jr-template-hint"></div>
           </div>
         </div>
-        <div class="jr-modal-footer">
+        <div class="jr-modal-footer app-modal-actions">
           <button id="jr-template-modal-save" class="btn btn-primary btn-sm-xs">Save</button>
           <button id="jr-template-modal-cancel" class="btn btn-sm-xs">Cancel</button>
         </div>
@@ -171,12 +172,12 @@ export const JenkinsRunnerTemplate = /*html*/ `
       <div class="jr-modal-content app-overlay-surface">
         <div class="jr-modal-header">
           <h3 id="jr-confirm-modal-title" class="jr-modal-title">Confirm Deletion</h3>
-          <button id="jr-confirm-close" class="btn btn-icon" aria-label="Close">✕</button>
+          <button id="jr-confirm-close" class="btn btn-icon app-overlay-close" aria-label="Close">✕</button>
         </div>
         <div class="jr-modal-body">
           <p id="jr-confirm-message">Are you sure you want to delete this template?</p>
         </div>
-        <div class="jr-modal-footer">
+        <div class="jr-modal-footer app-modal-actions">
           <button id="jr-confirm-delete-btn" class="btn btn-danger btn-sm-xs">Delete</button>
           <button id="jr-confirm-cancel-btn" class="btn btn-sm-xs">Cancel</button>
         </div>
@@ -197,7 +198,8 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <h3 id="jr-split-modal-title" class="jr-modal-title">Split Query</h3>
           <div class="jr-modal-header-actions">
             <button id="jr-split-minimize" class="btn btn-icon btn-sm-xs" aria-label="Minimize to background" title="Run in background">−</button>
-            <button id="jr-split-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
+            <button id="jr-split-modal-close" class="btn btn-icon btn-sm-xs app-overlay-close"
+              aria-label="Close modal" title="Close">×</button>
           </div>
         </div>
         <div class="jr-modal-body jr-split-body" aria-live="polite">
@@ -223,7 +225,7 @@ export const JenkinsRunnerTemplate = /*html*/ `
           <pre id="jr-split-mini-log" class="jr-mini-log" aria-live="polite"></pre>
         </section>
       </div>
-        <div class="jr-modal-footer jr-split-footer">
+        <div class="jr-modal-footer jr-split-footer app-modal-actions">
           <button id="jr-split-execute-all" class="btn btn-primary btn-sm-xs">Execute All</button>
           <button id="jr-split-cancel" class="btn btn-sm-xs">Cancel</button>
         </div>

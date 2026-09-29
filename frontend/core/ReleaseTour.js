@@ -430,7 +430,7 @@ export class ReleaseTour {
     context.appendChild(createElement("span", "release-tour-context-label", "What's new"));
     topbar.appendChild(context);
 
-    const closeButton = createElement("button", "release-tour-close");
+    const closeButton = createElement("button", "release-tour-close app-overlay-close");
     closeButton.type = "button";
     closeButton.setAttribute("aria-label", "Close what's new");
     appendCloseIcon(closeButton);
@@ -442,7 +442,7 @@ export class ReleaseTour {
     this.dialogEl.appendChild(this.progressEl);
     this.contentEl = createElement("div", "release-tour-content");
     this.dialogEl.appendChild(this.contentEl);
-    this.footerEl = createElement("div", "release-tour-footer");
+    this.footerEl = createElement("div", "release-tour-footer app-modal-actions");
     this.dialogEl.appendChild(this.footerEl);
     this.overlayEl.appendChild(this.dialogEl);
     document.body.appendChild(this.overlayEl);
@@ -541,7 +541,7 @@ export class ReleaseTour {
     skipButton.addEventListener("click", () => this.finish());
     this.footerEl.appendChild(skipButton);
 
-    const navigation = createElement("div", "release-tour-navigation");
+    const navigation = createElement("div", "release-tour-navigation app-modal-actions");
     const backButton = createElement("button", "btn btn-secondary release-tour-back", "Back");
     backButton.type = "button";
     backButton.disabled = this.slideIndex === 0;

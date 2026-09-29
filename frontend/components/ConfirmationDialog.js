@@ -52,7 +52,7 @@ export function confirmAction({
   descriptionElement.textContent = description || "Continue with this action?";
 
   const actions = document.createElement("footer");
-  actions.className = "app-confirm-dialog-actions";
+  actions.className = "app-modal-actions app-confirm-dialog-actions";
 
   const cancelButton = document.createElement("button");
   cancelButton.className = "btn btn-secondary btn-sm";

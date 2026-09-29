@@ -134,6 +134,8 @@ export class QuickQueryUI {
     });
     this.tabs = [];
     this.activeTabId = null;
+    this._tabsInitialized = false;
+    this._tabLoadingReasons = new Map();
     this._closedTabs = null;
     this._tabUndoTimer = null;
     this._tabOperation = false;
@@ -215,7 +217,7 @@ export class QuickQueryUI {
       }
       // Initialize UI components
       this.bindElements();
-      this.setTabLoading(true);
+      this.setTabLoading(true, null, "initialization");
       this.restoreAuditUserPreference();
       this.syncAuditUserMode();
       if (isTauri()) this.elements.importOracleDataButton.hidden = false;
@@ -260,6 +262,7 @@ export class QuickQueryUI {
       window.addEventListener("resize", this._handleDataTableViewportResize);
 
       await this.initializeTabs();
+      this._tabsInitialized = true;
     } catch (error) {
       console.error("Failed to initialize Quick Query:", error);
       this.container.innerHTML = `<div class="error-message">Failed to load: ${error.message}</div>`;
@@ -1416,15 +1419,36 @@ export class QuickQueryUI {
     return { id: tab.id, title: tab.title || "Untitled", tableName: tab.tableName || "", lastUpdated: tab.lastUpdated || "" };
   }
 
-  setTabLoading(loading, tabId = null) {
+  setTabLoading(loading, tabId = null, reason = "default") {
+    if (loading) {
+      this._tabLoadingReasons.delete(reason);
+      this._tabLoadingReasons.set(reason, tabId);
+    } else {
+      this._tabLoadingReasons.delete(reason);
+    }
+    const isLoading = this._tabLoadingReasons.size > 0;
+    const loadingTabId = [...this._tabLoadingReasons.values()].reverse().find(Boolean) || null;
     const status = this.container.querySelector("#quickQueryTabLoading");
     const panel = this.container.querySelector("#quickQueryTabPanel");
-    const target = tabId && this.tabs.find((tab) => tab.id === tabId);
-    if (status) status.textContent = target ? `Loading ${this.getTabTitle(target)}…` : "Loading query tabs…";
-    if (status) status.hidden = !loading;
-    panel?.setAttribute("aria-busy", String(loading));
+    const target = loadingTabId && this.tabs.find((tab) => tab.id === loadingTabId);
+    if (status) {
+      const message = status.querySelector(".qq-tab-loading-message");
+      const text = target ? `Loading ${this.getTabTitle(target)}…` : "Loading query tabs…";
+      if (message) message.textContent = text;
+      else status.textContent = text;
+      status.hidden = !isLoading;
+    }
+    panel?.setAttribute("aria-busy", String(isLoading));
+    if (panel) {
+      panel
+        .querySelectorAll(":scope > .content-a > :not(.qq-tab-loading), :scope > .content-b")
+        .forEach((region) => {
+          region.inert = isLoading;
+          region.classList.toggle("qq-tab-loading-hidden", isLoading);
+        });
+    }
     this.elements.tabList?.querySelectorAll(".qq-query-tab").forEach((tab) => {
-      tab.classList.toggle("loading", loading && tab.dataset.tabId === tabId);
+      tab.classList.toggle("loading", isLoading && tab.dataset.tabId === loadingTabId);
     });
   }
 
@@ -1458,7 +1482,7 @@ export class QuickQueryUI {
       this.activeTabId = this.tabs.some((tab) => tab.id === session?.activeTabId) ? session.activeTabId : this.tabs[0]?.id || null;
     }
     this.renderTabs();
-    this.setTabLoading(true, this.activeTabId);
+    this.setTabLoading(true, this.activeTabId, "initialization");
   }
 
   async loadTabDraft(tab) {
@@ -1488,7 +1512,7 @@ export class QuickQueryUI {
       await this.applyTabDraft(await this.loadTabDraft(this.getActiveTab()));
       await this.saveTabSession();
     } finally {
-      this.setTabLoading(false);
+      this.setTabLoading(false, null, "initialization");
     }
   }
 
@@ -1778,11 +1802,19 @@ export class QuickQueryUI {
   }
 
   async switchTab(tabId, focusTab = false) {
-    if (!tabId || tabId === this.activeTabId || this._tabOperation) return;
+    if (!tabId) return;
+    if (!this._tabsInitialized) {
+      try {
+        await this.ready;
+      } catch (_) {
+        return;
+      }
+    }
+    if (tabId === this.activeTabId || this._tabOperation) return;
     const next = this.tabs.find((tab) => tab.id === tabId);
     if (!next) return;
     this._tabOperation = true;
-    this.setTabLoading(true, tabId);
+    this.setTabLoading(true, tabId, "switch");
     try {
       await new Promise((resolve) => setTimeout(resolve, 0));
       await this.flushPendingDataAutosave();
@@ -1795,7 +1827,7 @@ export class QuickQueryUI {
     } catch (error) {
       this.eventBus?.emit("notification:error", { message: error.message });
     } finally {
-      this.setTabLoading(false);
+      this.setTabLoading(false, null, "switch");
       this._tabOperation = false;
     }
   }

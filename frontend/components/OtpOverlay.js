@@ -102,7 +102,7 @@ export async function openOtpOverlay({
                 : '<div class="otp-input-row"><input type="text" class="otp-code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" /><button type="button" class="btn btn-secondary otp-confirm">Confirm</button></div>'
             }
             <div class="otp-error" aria-live="polite"></div>
-            <div class="otp-footer">
+            <div class="otp-footer app-modal-actions">
               <button type="button" class="btn otp-close">Close</button>
             </div>
           </div>

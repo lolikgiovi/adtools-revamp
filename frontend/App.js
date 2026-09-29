@@ -1112,7 +1112,7 @@ class App {
           <span class="update-modal-stage">Waiting…</span>
         </div>
       </div>
-      <div class="update-modal-footer">
+      <div class="update-modal-footer app-modal-actions">
         ${unsupported ? '<button type="button" class="btn btn-sm btn-secondary update-modal-close">Dismiss</button>' : ""}
       </div>
     `;

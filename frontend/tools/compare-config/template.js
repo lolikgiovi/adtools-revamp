@@ -780,7 +780,7 @@ export const CompareConfigTemplate = /* html */ `
         <div class="modal-content app-overlay-surface">
             <div class="modal-header">
                 <h3 id="excel-modal-title">Config</h3>
-                <button class="btn btn-ghost btn-sm btn-close-modal">
+                <button class="btn btn-ghost btn-sm btn-close-modal app-overlay-close" aria-label="Close dialog" type="button">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -790,7 +790,7 @@ export const CompareConfigTemplate = /* html */ `
             <div id="excel-modal-body" class="modal-body">
                 <!-- Content injected via JS -->
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer app-modal-actions">
                 <button class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
                 <button class="btn btn-primary" id="btn-modal-save">Save</button>
             </div>

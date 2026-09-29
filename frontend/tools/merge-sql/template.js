@@ -309,7 +309,8 @@ export const MergeSqlTemplate = /* html */ `
     <div class="modal-content modal-lg app-overlay-surface">
       <div class="modal-header">
         <h3>Duplicate Queries</h3>
-        <button class="btn btn-ghost btn-sm btn-close-modal" id="merge-sql-close-duplicates">
+        <button class="btn btn-ghost btn-sm btn-close-modal app-overlay-close" id="merge-sql-close-duplicates"
+          type="button" aria-label="Close duplicate queries">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -318,7 +319,7 @@ export const MergeSqlTemplate = /* html */ `
       </div>
       <div class="modal-body" id="merge-sql-duplicates-list">
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer app-modal-actions">
         <button class="btn btn-primary" id="merge-sql-duplicates-close-btn">Close</button>
       </div>
     </div>

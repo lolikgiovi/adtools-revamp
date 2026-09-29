@@ -98,7 +98,7 @@ export const RunBatchTemplate = /*html*/ `
     <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-save-modal-title">Save Configuration</h3>
-        <button id="rb-save-modal-close" class="rb-modal-close-btn" aria-label="Close modal" title="Close">
+        <button id="rb-save-modal-close" class="rb-modal-close-btn app-overlay-close" aria-label="Close modal" title="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
@@ -117,7 +117,7 @@ export const RunBatchTemplate = /*html*/ `
           <div class="rb-hint">Optional: Link to batch documentation page</div>
         </div>
       </div>
-      <div class="rb-modal-footer">
+      <div class="rb-modal-footer app-modal-actions">
         <button id="rb-save-modal-cancel" class="btn btn-secondary">Cancel</button>
         <button id="rb-save-modal-confirm" class="btn btn-primary">Save</button>
       </div>
@@ -136,7 +136,7 @@ export const RunBatchTemplate = /*html*/ `
     <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-edit-modal-title">Edit Configuration</h3>
-        <button id="rb-edit-modal-close" class="rb-modal-close-btn" aria-label="Close modal" title="Close">
+        <button id="rb-edit-modal-close" class="rb-modal-close-btn app-overlay-close" aria-label="Close modal" title="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
@@ -168,7 +168,7 @@ export const RunBatchTemplate = /*html*/ `
           <div class="rb-hint">Optional: Link to batch documentation page</div>
         </div>
       </div>
-      <div class="rb-modal-footer">
+      <div class="rb-modal-footer app-modal-actions">
         <button id="rb-edit-modal-cancel" class="btn btn-secondary">Cancel</button>
         <button id="rb-edit-modal-confirm" class="btn btn-primary">Save Changes</button>
       </div>
@@ -187,7 +187,7 @@ export const RunBatchTemplate = /*html*/ `
     <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-confirm-modal-title" class="rb-modal-title">Confirm Deletion</h3>
-        <button id="rb-confirm-close" class="rb-modal-close-btn" aria-label="Close">
+        <button id="rb-confirm-close" class="rb-modal-close-btn app-overlay-close" aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
@@ -197,7 +197,7 @@ export const RunBatchTemplate = /*html*/ `
       <div class="rb-modal-body">
         <p id="rb-confirm-message">Are you sure you want to delete this configuration?</p>
       </div>
-      <div class="rb-modal-footer">
+      <div class="rb-modal-footer app-modal-actions">
         <button id="rb-confirm-cancel-btn" class="btn btn-secondary">Cancel</button>
         <button id="rb-confirm-delete-btn" class="btn btn-danger">Delete</button>
       </div>

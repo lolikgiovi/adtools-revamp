@@ -12,8 +12,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
     </div>
     <div class="quick-query-content" id="quickQueryTabPanel" role="tabpanel">
-        <div id="quickQueryTabLoading" class="qq-tab-loading" role="status" aria-live="polite" hidden>Loading query tab…</div>
         <div class="content-a">
+            <div id="quickQueryTabLoading" class="qq-tab-loading" role="status" aria-live="polite" hidden>
+                <div class="qq-tab-loading-card">
+                    <span class="qq-tab-loading-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                    <span class="qq-tab-loading-message">Loading query tab…</span>
+                </div>
+            </div>
             <div class="quick-query-left-panel">
                 <div class="button-group quick-query-search">
                     <div class="query-type-dropdown" id="queryTypeWrapper">
@@ -112,7 +117,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     >
                         <div class="qq-uuid-generator-header">
                             <h3 id="quickQueryUuidTitle">UUID Generator</h3>
-                            <button id="quickQueryUuidClose" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
+                            <button id="quickQueryUuidClose" class="overlay-close-button app-overlay-close" type="button"
+                                aria-label="Close">&times;</button>
                         </div>
                         <div class="qq-uuid-generator-body">
                             <label for="quickQueryUuidQuantity">Count</label>
@@ -211,7 +217,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="importSchemas" class="btn btn-primary btn-sm">Import</button>
                 <input type="file" id="schemaFileInput" accept=".json" style="display: none;">
             </div>
-            <button id="closeSchemaOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeSchemaOverlay" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="schema-modal-actions">
             <input type="text" id="savedSchemasSearch" placeholder="Search schemas/tables. You can use abbreviation (e.g: cfg.appc, ss.svc)">
@@ -227,7 +233,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-schema-load-mode-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="schemaLoadModeTitle">Load Schema</h3>
-            <button id="closeSchemaLoadMode" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeSchemaLoadMode" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="qq-modal-body">
             <p class="qq-schema-load-mode-question" id="schemaLoadModeQuestion">Load this schema into this tab?</p>
@@ -253,7 +259,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="download-as-modal app-overlay-surface" role="dialog" aria-modal="true" aria-labelledby="downloadAsTitle">
         <div class="download-as-modal-header">
             <h3 id="downloadAsTitle">Save As</h3>
-            <button id="closeDownloadAsOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeDownloadAsOverlay" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="download-as-modal-content">
             <div class="download-as-field">
@@ -275,7 +281,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 </div>
             </div>
         </div>
-        <div class="download-as-modal-footer">
+        <div class="download-as-modal-footer app-modal-actions">
             <button id="downloadAsConfirm" class="btn btn-primary">Download</button>
             <button id="downloadAsCancel" class="btn">Cancel</button>
         </div>
@@ -286,7 +292,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="html-minify-modal app-overlay-surface">
         <div class="html-minify-modal-header">
             <h3>HTML Content Detected</h3>
-            <button id="closeHtmlMinifyOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeHtmlMinifyOverlay" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="html-minify-modal-content">
             <p>We detected HTML content in the following fields:</p>
@@ -294,7 +300,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <p class="html-minify-question">Would you like to minify the HTML before generating the query?</p>
             <p class="html-minify-note">Powered by <a href="https://www.npmjs.com/package/html-minifier" target="_blank" rel="noopener noreferrer">html-minifier</a></p>
         </div>
-        <div class="html-minify-modal-actions">
+        <div class="html-minify-modal-actions app-modal-actions">
             <button id="htmlMinifyConfirm" class="btn btn-primary btn-sm">Yes, Minify</button>
             <button id="htmlMinifySkip" class="btn btn-outline btn-sm">No, Skip</button>
         </div>
@@ -306,7 +312,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-blob-attachment-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="blobAttachmentTitle">BLOB attachment detected</h3>
-            <button id="closeBlobAttachmentModal" class="overlay-close-button" type="button" aria-label="Cancel generation">&times;</button>
+            <button id="closeBlobAttachmentModal" class="overlay-close-button app-overlay-close" type="button"
+                aria-label="Cancel generation">&times;</button>
         </div>
         <div class="qq-modal-body">
             <p id="blobAttachmentDescription" class="qq-blob-attachment-description"></p>
@@ -328,7 +335,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="file-viewer-modal app-overlay-surface">
         <div class="file-viewer-header">
             <h3 id="fileViewerTitle">File Name</h3>
-            <button id="closeFileViewer" class="overlay-close-button">&times;</button>
+            <button id="closeFileViewer" class="overlay-close-button app-overlay-close" type="button"
+                aria-label="Close file viewer">&times;</button>
         </div>
 
         <div class="file-viewer-tabs">
@@ -366,7 +374,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-split-options-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="splitOptionsTitle">Split Query Options</h3>
-            <button id="closeSplitOptions" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeSplitOptions" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="qq-modal-body">
             <div class="qq-split-mode-group">
@@ -385,7 +393,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             </div>
             <p class="qq-hint" id="splitHint">Each chunk will be max 90 KB. SET DEFINE OFF and SELECT statements are excluded from count.</p>
         </div>
-        <div class="qq-modal-footer">
+        <div class="qq-modal-footer app-modal-actions">
             <button id="confirmSplit" class="btn btn-primary">Split Query</button>
             <button id="cancelSplitOptions" class="btn">Cancel</button>
         </div>
@@ -398,7 +406,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-split-results-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="splitResultsTitle">Split Results</h3>
-            <button id="closeSplitResults" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeSplitResults" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="qq-modal-body qq-split-body">
             <aside class="qq-split-sidebar" aria-label="Chunk navigation">
@@ -421,7 +429,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <div id="qq-split-editor" class="qq-monaco-editor" aria-readonly="true"></div>
             </section>
         </div>
-        <div class="qq-modal-footer">
+        <div class="qq-modal-footer app-modal-actions">
             <button id="downloadAllChunks" class="btn btn-primary">Download All (ZIP)</button>
             <button id="cancelSplitResults" class="btn">Close</button>
         </div>
@@ -434,7 +442,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-excel-import-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="excelImportTitle">Import Excel File</h3>
-            <button id="closeExcelImport" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeExcelImport" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
         <div class="qq-modal-body">
             <div class="qq-excel-import-instructions">
@@ -458,7 +466,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 </div>
             </div>
         </div>
-        <div class="qq-modal-footer">
+        <div class="qq-modal-footer app-modal-actions">
             <button id="confirmExcelImport" class="btn btn-primary">Choose File</button>
             <button id="cancelExcelImport" class="btn">Cancel</button>
         </div>
@@ -471,7 +479,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-oracle-data-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="oracleDataTitle">Import from Oracle</h3>
-            <button id="closeOracleData" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
+            <button id="closeOracleData" class="overlay-close-button app-overlay-close" type="button" aria-label="Close">&times;</button>
         </div>
         <div class="qq-modal-body">
             <label for="oracleDataConnection">Oracle connection</label>
@@ -481,7 +489,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <p id="oracleDataError" class="qq-oracle-data-error hidden" role="alert"></p>
             <button id="oracleDataSwitchTable" class="btn btn-outline hidden" type="button">Use queried table</button>
         </div>
-        <div class="qq-modal-footer">
+        <div class="qq-modal-footer app-modal-actions">
             <button id="fetchOracleData" class="btn btn-primary" type="button">Fetch rows</button>
             <button id="cancelOracleData" class="btn" type="button">Cancel</button>
         </div>
@@ -494,7 +502,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     <div class="qq-modal-content qq-oracle-env-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="oracleEnvTitle">Import from Oracle Env</h3>
-            <button id="closeOracleEnvModal" class="overlay-close-button" aria-label="Close">&times;</button>
+            <button id="closeOracleEnvModal" class="overlay-close-button app-overlay-close" aria-label="Close">&times;</button>
         </div>
 
         <!-- Step 1: Pick connection -->
@@ -538,7 +546,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <span id="oracleEnvProgressText" class="qq-progress-text">Connecting...</span>
         </div>
 
-        <div class="qq-modal-footer">
+        <div class="qq-modal-footer app-modal-actions">
             <button id="oracleEnvBack" class="btn hidden">Back</button>
             <button id="oracleEnvNext" class="btn btn-primary">Connect</button>
             <button id="oracleEnvCancel" class="btn">Cancel</button>
