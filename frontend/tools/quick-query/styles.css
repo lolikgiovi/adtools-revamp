@@ -2138,6 +2138,10 @@
   gap: 12px;
 }
 
+.qq-oracle-env-content .hidden {
+  display: none;
+}
+
 .qq-modal-footer {
   display: flex;
   align-items: center;
