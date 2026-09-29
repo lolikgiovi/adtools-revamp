@@ -330,7 +330,9 @@
 }
 
 .quick-query-left-controls > .btn {
-  padding-inline: 7px;
+  gap: 3px;
+  padding-inline: 4px;
+  font-size: 0.75rem;
 }
 
 .quick-query-content {
@@ -428,8 +430,6 @@
 .btn.qq-data-maximize:hover:not(:disabled) {
   border-color: hsl(var(--primary-hover));
   background: hsl(var(--primary-hover));
-  box-shadow: 0 5px 14px hsl(var(--primary) / 0.34);
-  transform: translateY(-1px);
 }
 
 .btn.qq-data-maximize:active:not(:disabled) {
@@ -817,7 +817,24 @@
 
 .quick-query-data-controls > .btn,
 .quick-query-data-controls .qq-uuid-generator-anchor > .btn {
+  gap: 4px;
   padding-inline: 7px;
+}
+
+.quick-query-right-controls > .btn {
+  gap: 3px;
+  padding-inline: 6px;
+  font-size: 0.75rem;
+}
+
+.quick-query-right-controls.button-group {
+  gap: 4px;
+}
+
+.quick-query-right-controls > .qq-contained-toggle {
+  gap: 4px;
+  padding-inline: 6px;
+  font-size: 0.75rem;
 }
 
 .qq-row-actions-anchor {
@@ -833,7 +850,25 @@
   padding-inline: 8px;
 }
 
-.qq-row-actions-trigger svg,
+.btn .qq-action-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+}
+
+.qq-row-actions-trigger > .qq-row-actions-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .qq-import-button svg {
   width: 15px;
   height: 15px;
@@ -845,7 +880,7 @@
   stroke-linejoin: round;
 }
 
-.qq-row-actions-trigger[aria-expanded="true"] svg {
+.qq-row-actions-trigger[aria-expanded="true"] .qq-row-actions-chevron {
   transform: rotate(180deg);
 }
 

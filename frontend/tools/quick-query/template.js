@@ -53,12 +53,45 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     <input type="text" id="tableNameInput" placeholder="schema_name.table_name" value="">
                 </div>
                 <div class="button-group quick-query-left-controls">
-                    <button id="showSavedSchemas" class="btn btn-primary btn-sm">Schemas</button>
+                    <button id="showSavedSchemas" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <ellipse cx="12" cy="5" rx="8" ry="3" />
+                            <path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+                        </svg>
+                        <span>Schemas</span>
+                    </button>
                     <button id="pasteDbeaverSchema" class="btn btn-primary btn-sm"
-                        title="Copy columns from DBeaver, then paste them into the schema table">Paste from DBeaver</button>
-                    <button id="addFieldNames" class="btn btn-primary btn-sm">Sync Fields</button>
-                    <button id="clearAll" class="btn btn-primary btn-sm">Clear All</button>
-                    <button id="generateQuery" class="btn btn-primary btn-sm">Generate Query</button>
+                        title="Copy columns from DBeaver, then paste them into the schema table">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="8" y="8" width="12" height="13" rx="2" />
+                            <path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2" />
+                            <path d="M14 12v5m-2.5-2.5h5" />
+                        </svg>
+                        <span>Paste from DBeaver</span>
+                    </button>
+                    <button id="addFieldNames" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 6h10M4 12h7M4 18h10M17 10l3 2-3 2M20 12h-6" />
+                        </svg>
+                        <span>Sync Fields</span>
+                    </button>
+                    <button id="clearAll" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+                        </svg>
+                        <span>Clear All</span>
+                    </button>
+                    <button id="generateQuery" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-10-2 12" />
+                        </svg>
+                        <span>Generate Query</span>
+                    </button>
                 </div>
 
                 <div class="quick-query-left-scroll">
@@ -86,11 +119,43 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                             <span class="qq-contained-toggle-thumb"></span>
                         </span>
                     </button>
-                    <button id="copySQL" class="btn btn-primary btn-sm">Copy</button>
-                    <button id="downloadSQL" class="btn btn-primary btn-sm">Save</button>
-                    <button id="downloadAs" class="btn btn-primary btn-sm">Save As</button>
-                    <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
-                    <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Run Query</button>
+                    <button id="copySQL" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="8" y="8" width="13" height="13" rx="2" />
+                            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                        </svg>
+                        <span>Copy</span>
+                    </button>
+                    <button id="downloadSQL" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 3h12l4 4v14H3V3h2zM7 3v6h10V3M7 21v-8h10v8" />
+                        </svg>
+                        <span>Save</span>
+                    </button>
+                    <button id="downloadAs" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 3h12l4 4v14H3V3h2zM7 3v6h10V3M7 21v-8h10v8M17 16h5m-2.5-2.5v5" />
+                        </svg>
+                        <span>Save As</span>
+                    </button>
+                    <button id="splitQuery" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="16" rx="2" />
+                            <path d="M12 4v16M8 9l-2 3 2 3m8-6 2 3-2 3" />
+                        </svg>
+                        <span>Split</span>
+                    </button>
+                    <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="m8 5 12 7-12 7V5z" />
+                        </svg>
+                        <span>Run Query</span>
+                    </button>
                 </div>
                 <div id="warningMessages"></div>
                 <div id="errorMessages"></div>
@@ -107,7 +172,16 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="content-b">
             <div class="button-group quick-query-data-controls">
                 <div class="qq-uuid-generator-anchor" id="quickQueryUuidAnchor">
-                    <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button" aria-expanded="false" aria-controls="quickQueryUuidPopover">UUID</button>
+                    <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button"
+                        aria-expanded="false" aria-controls="quickQueryUuidPopover">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="16" rx="2" />
+                            <circle cx="9" cy="10" r="2" />
+                            <path d="M6 16c.7-1.3 1.7-2 3-2s2.3.7 3 2m2-5h4m-4 4h4" />
+                        </svg>
+                        <span>UUID</span>
+                    </button>
                     <div
                         id="quickQueryUuidPopover"
                         class="qq-uuid-generator-popover app-popover-surface hidden"
@@ -136,8 +210,12 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <div id="modifyRowsAnchor" class="qq-row-actions-anchor">
                     <button id="modifyRowsButton" class="btn btn-primary btn-sm qq-row-actions-trigger" type="button"
                         aria-haspopup="menu" aria-expanded="false" aria-controls="modifyRowsMenu">
-                        Modify Rows
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 5h16M4 12h8M4 19h8M17 9v6m-3-3h6" />
+                        </svg>
+                        <span>Modify Rows</span>
+                        <svg class="qq-row-actions-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
                     </button>
                     <div id="modifyRowsMenu" class="qq-row-actions-menu app-popover-surface" role="menu"
                         aria-label="Modify rows" hidden>
@@ -145,7 +223,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         <button id="removeDataRow" type="button" role="menuitem">Remove Last Row</button>
                     </div>
                 </div>
-                <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
+                <button id="clearData" class="btn btn-primary btn-sm">
+                    <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m3 16 9-9 8 8-6 6H6l-3-5zM7 12l8 8M14 7l3-3a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3l-3 3" />
+                    </svg>
+                    <span>Clear Data</span>
+                </button>
                 <button id="importExcel" class="btn btn-primary btn-sm qq-import-button" type="button">
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5h7l3 3V14.5H3zM10 1.5v3h3M5 7h6M5 10h6M8 7v6" /></svg>
                     Import Excel
