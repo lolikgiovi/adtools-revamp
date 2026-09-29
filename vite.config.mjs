@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     open: false,
+    strictPort: true,
     proxy: {
       "/register": "http://localhost:8787",
       "/analytics": "http://localhost:8787",
