@@ -59,7 +59,7 @@ export const JSONToolsTemplate = /* html */ `
                             </svg>
                             Options
                         </button>
-                        <div class="extract-options-menu" style="display: none;">
+                        <div class="extract-options-menu app-popover-surface" style="display: none;">
                             <div class="options-group">
                                 <span class="options-group-label">Key Type</span>
                                 <label><input type="radio" name="extract-type" value="simple" checked> Simple Keys</label>

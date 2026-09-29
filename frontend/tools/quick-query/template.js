@@ -23,7 +23,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
-                        <div class="query-type-dropdown-menu" id="queryTypeDropdown" role="dialog" aria-label="Query type options" aria-hidden="true">
+                        <div
+                            id="queryTypeDropdown"
+                            class="query-type-dropdown-menu app-popover-surface"
+                            role="dialog"
+                            aria-label="Query type options"
+                            aria-hidden="true"
+                        >
                             <div class="query-type-search-wrap">
                                 <svg class="query-type-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                                     <circle cx="11" cy="11" r="6.5"></circle>
@@ -97,7 +103,13 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <div class="button-group quick-query-data-controls">
                 <div class="qq-uuid-generator-anchor" id="quickQueryUuidAnchor">
                     <button id="quickQueryUuidButton" class="btn btn-primary btn-sm" type="button" aria-expanded="false" aria-controls="quickQueryUuidPopover">UUID</button>
-                    <div id="quickQueryUuidPopover" class="qq-uuid-generator-popover hidden" role="dialog" aria-labelledby="quickQueryUuidTitle" aria-hidden="true">
+                    <div
+                        id="quickQueryUuidPopover"
+                        class="qq-uuid-generator-popover app-popover-surface hidden"
+                        role="dialog"
+                        aria-labelledby="quickQueryUuidTitle"
+                        aria-hidden="true"
+                    >
                         <div class="qq-uuid-generator-header">
                             <h3 id="quickQueryUuidTitle">UUID Generator</h3>
                             <button id="quickQueryUuidClose" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
@@ -121,7 +133,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         Modify Rows
                         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
                     </button>
-                    <div id="modifyRowsMenu" class="qq-row-actions-menu" role="menu" aria-label="Modify rows" hidden>
+                    <div id="modifyRowsMenu" class="qq-row-actions-menu app-popover-surface" role="menu"
+                        aria-label="Modify rows" hidden>
                         <button id="addDataRow" type="button" role="menuitem">Add Row</button>
                         <button id="removeDataRow" type="button" role="menuitem">Remove Last Row</button>
                     </div>
@@ -163,7 +176,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                             </button>
                         </span>
                     </div>
-                    <div class="system-custom-popover" id="systemCustomPopover" hidden>
+                    <div class="system-custom-popover app-popover-surface" id="systemCustomPopover" hidden>
                         <label for="customAuditUser">Custom audit user</label>
                         <input id="customAuditUser" type="text" placeholder="e.g. RXX_SQUAD" autocapitalize="characters" spellcheck="false" />
                         <span class="system-custom-error" id="systemCustomError" role="alert" hidden>Enter a custom audit user.</span>
@@ -186,8 +199,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="schemaOverlay" class="schema-overlay hidden">
-    <div class="schema-modal">
+<div id="schemaOverlay" class="schema-overlay app-overlay-backdrop hidden">
+    <div class="schema-modal app-overlay-surface">
         <div class="schema-modal-header">
             <h3>Saved Schemas</h3>
             <div class="schema-modal-header-actions">
@@ -209,9 +222,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="schemaLoadModeOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="schemaLoadModeOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="schemaLoadModeModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="schemaLoadModeTitle">
-    <div class="qq-modal-content qq-schema-load-mode-content">
+    <div class="qq-modal-content qq-schema-load-mode-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="schemaLoadModeTitle">Load Schema</h3>
             <button id="closeSchemaLoadMode" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -236,8 +249,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="downloadAsOverlay" class="download-as-overlay hidden">
-    <div class="download-as-modal" role="dialog" aria-modal="true" aria-labelledby="downloadAsTitle">
+<div id="downloadAsOverlay" class="download-as-overlay app-overlay-backdrop hidden">
+    <div class="download-as-modal app-overlay-surface" role="dialog" aria-modal="true" aria-labelledby="downloadAsTitle">
         <div class="download-as-modal-header">
             <h3 id="downloadAsTitle">Save As</h3>
             <button id="closeDownloadAsOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -269,8 +282,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="htmlMinifyOverlay" class="html-minify-overlay hidden">
-    <div class="html-minify-modal">
+<div id="htmlMinifyOverlay" class="html-minify-overlay app-overlay-backdrop hidden">
+    <div class="html-minify-modal app-overlay-surface">
         <div class="html-minify-modal-header">
             <h3>HTML Content Detected</h3>
             <button id="closeHtmlMinifyOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -288,9 +301,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="blobAttachmentOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="blobAttachmentOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="blobAttachmentModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="blobAttachmentTitle" aria-describedby="blobAttachmentDescription">
-    <div class="qq-modal-content qq-blob-attachment-content">
+    <div class="qq-modal-content qq-blob-attachment-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="blobAttachmentTitle">BLOB attachment detected</h3>
             <button id="closeBlobAttachmentModal" class="overlay-close-button" type="button" aria-label="Cancel generation">&times;</button>
@@ -311,8 +324,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
     </div>
 </div>
 
-<div id="fileViewerOverlay" class="file-viewer-overlay hidden">
-    <div class="file-viewer-modal">
+<div id="fileViewerOverlay" class="file-viewer-overlay app-overlay-backdrop hidden">
+    <div class="file-viewer-modal app-overlay-surface">
         <div class="file-viewer-header">
             <h3 id="fileViewerTitle">File Name</h3>
             <button id="closeFileViewer" class="overlay-close-button">&times;</button>
@@ -348,9 +361,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <!-- Split Options Modal -->
-<div id="splitOptionsOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="splitOptionsOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="splitOptionsModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="splitOptionsTitle">
-    <div class="qq-modal-content qq-split-options-content">
+    <div class="qq-modal-content qq-split-options-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="splitOptionsTitle">Split Query Options</h3>
             <button id="closeSplitOptions" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -380,9 +393,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <!-- Split Results Modal -->
-<div id="splitResultsOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="splitResultsOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="splitResultsModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="splitResultsTitle">
-    <div class="qq-modal-content qq-split-results-content">
+    <div class="qq-modal-content qq-split-results-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="splitResultsTitle">Split Results</h3>
             <button id="closeSplitResults" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -416,9 +429,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <!-- Excel Import Instruction Modal -->
-<div id="excelImportOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="excelImportOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="excelImportModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="excelImportTitle">
-    <div class="qq-modal-content qq-excel-import-content">
+    <div class="qq-modal-content qq-excel-import-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="excelImportTitle">Import Excel File</h3>
             <button id="closeExcelImport" class="overlay-close-button" aria-label="Close">&times;</button>
@@ -453,9 +466,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <!-- Oracle row import -->
-<div id="oracleDataOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="oracleDataOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="oracleDataModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="oracleDataTitle">
-    <div class="qq-modal-content qq-oracle-data-content">
+    <div class="qq-modal-content qq-oracle-data-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="oracleDataTitle">Import from Oracle</h3>
             <button id="closeOracleData" class="overlay-close-button" type="button" aria-label="Close">&times;</button>
@@ -476,9 +489,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <!-- Oracle Env Import Modal -->
-<div id="oracleEnvOverlay" class="qq-modal-overlay hidden" aria-hidden="true"></div>
+<div id="oracleEnvOverlay" class="qq-modal-overlay app-overlay-backdrop hidden" aria-hidden="true"></div>
 <div id="oracleEnvModal" class="qq-modal hidden" role="dialog" aria-modal="true" aria-labelledby="oracleEnvTitle">
-    <div class="qq-modal-content qq-oracle-env-content">
+    <div class="qq-modal-content qq-oracle-env-content app-overlay-surface">
         <div class="qq-modal-header">
             <h3 id="oracleEnvTitle">Import from Oracle Env</h3>
             <button id="closeOracleEnvModal" class="overlay-close-button" aria-label="Close">&times;</button>

@@ -305,8 +305,8 @@ export const MergeSqlTemplate = /* html */ `
   </div>
 
   <!-- Duplicates Modal -->
-  <div class="modal-overlay" id="merge-sql-duplicates-modal" style="display: none;">
-    <div class="modal-content modal-lg">
+  <div class="modal-overlay app-overlay-backdrop" id="merge-sql-duplicates-modal" style="display: none;">
+    <div class="modal-content modal-lg app-overlay-surface">
       <div class="modal-header">
         <h3>Duplicate Queries</h3>
         <button class="btn btn-ghost btn-sm btn-close-modal" id="merge-sql-close-duplicates">

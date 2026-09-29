@@ -29,3 +29,6 @@
 
 /* Shared custom searchable dropdowns */
 @import "./styles/searchable-dropdown.css";
+
+/* Consistent blocking dialogs, backdrops, and anchored surfaces */
+@import "./styles/overlays.css";

@@ -16,6 +16,7 @@ import { getIconSvg } from "./icon.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getQuickQueryTableInteractionKey } from "../../core/RecentInteractionStore.js";
 import { isTauri } from "../../core/Runtime.js";
+import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
@@ -1595,7 +1596,7 @@ export class QuickQueryUI {
     this.closeTabContextMenu();
 
     const menu = document.createElement("div");
-    menu.className = "qq-tab-context-menu";
+    menu.className = "qq-tab-context-menu app-popover-surface";
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", `Options for ${this.getTabTitle(this.tabs[tabIndex])}`);
 
@@ -4252,7 +4253,12 @@ export class QuickQueryUI {
       return;
     }
 
-    if (!confirm("Are you sure you want to clear all saved schemas? This cannot be undone.")) {
+    const confirmed = await confirmAction({
+      title: "Clear all saved schemas?",
+      description: "This cannot be undone. All saved schemas will be removed.",
+      confirmLabel: "Clear schemas",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -4449,7 +4455,12 @@ export class QuickQueryUI {
   }
 
   async handleDeleteSchema(fullName) {
-    if (confirm(`Delete schema for ${fullName}?`)) {
+    const confirmed = await confirmAction({
+      title: "Delete schema?",
+      description: `Delete schema for "${fullName}"?`,
+      confirmLabel: "Delete schema",
+    });
+    if (confirmed) {
       await this.flushPendingDataAutosave();
 
       const deleted = await this.storageService.deleteSchema(fullName);
@@ -4909,7 +4920,7 @@ export class QuickQueryUI {
 
     // Create dropdown container
     const dropdownContainer = document.createElement("div");
-    dropdownContainer.className = "table-search-dropdown";
+    dropdownContainer.className = "table-search-dropdown app-popover-surface";
     dropdownContainer.style.display = "none";
     container.appendChild(dropdownContainer);
 

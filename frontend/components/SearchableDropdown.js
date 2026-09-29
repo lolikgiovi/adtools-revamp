@@ -121,7 +121,7 @@ export class SearchableDropdown {
 
     this.menu = document.createElement("div");
     this.menu.id = menuId;
-    this.menu.className = "ad-searchable-dropdown-menu";
+    this.menu.className = "ad-searchable-dropdown-menu app-popover-surface";
     this.menu.setAttribute("role", "dialog");
     this.menu.setAttribute("aria-label", accessibleLabel ? `${accessibleLabel} options` : "Select an option");
     this.menu.setAttribute("aria-hidden", "true");

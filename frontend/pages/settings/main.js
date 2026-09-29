@@ -1,6 +1,7 @@
 import { SettingsTemplate } from "./template.js";
 import "./styles.css";
 import { SettingsService } from "./service.js";
+import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
@@ -775,7 +776,14 @@ class SettingsPage {
           const idx = parseInt(deleteBtn.dataset.index, 10);
           let conns = this.service.getValue(storageKey, "oracle-connections", []);
           const conn = conns[idx];
-          if (conn && confirm(`Delete connection "${conn.name}"?`)) {
+          if (
+            conn &&
+            (await confirmAction({
+              title: "Delete connection?",
+              description: `Delete connection "${conn.name}" and its saved credentials?`,
+              confirmLabel: "Delete connection",
+            }))
+          ) {
             // Delete credentials from keychain
             try {
               await invoke("delete_oracle_credentials", { name: conn.name });

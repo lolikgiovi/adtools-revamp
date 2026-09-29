@@ -67,7 +67,7 @@ export const SplunkVTLEditorTemplate = /* html */ `
             <button id="btnCopyVtl" class="btn btn-secondary btn-sm" type="button" title="Copy template">Copy</button>
             <details id="editorMoreActions" class="vtl-actions-menu">
               <summary class="btn btn-secondary btn-sm">More</summary>
-              <div class="vtl-actions-menu-popover">
+              <div class="vtl-actions-menu-popover app-popover-surface">
                 <button id="btnMinifyVtl" type="button">Minify template</button>
                 <button id="btnPasteVtl" type="button">Paste from clipboard</button>
                 <button id="btnClearVtl" class="is-destructive" type="button">Clear template</button>

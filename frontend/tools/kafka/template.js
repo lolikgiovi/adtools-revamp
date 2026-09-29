@@ -13,7 +13,7 @@ export const KafkaTemplate = /*html*/ `
           <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
           <details id="kafkaConnectionSettings" class="kafka-settings">
             <summary><span>Broker settings</span><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
-            <div class="kafka-settings-popover">
+            <div class="kafka-settings-popover app-popover-surface">
               <label for="kafkaBrokers">Bootstrap server</label>
               <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
               <p class="kafka-setting-note">PLAINTEXT connection</p>
@@ -46,7 +46,7 @@ export const KafkaTemplate = /*html*/ `
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
                     </button>
                     <button id="kafkaTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaTopicOptions" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-                    <div id="kafkaTopicMenu" class="kafka-topic-menu" hidden>
+                    <div id="kafkaTopicMenu" class="kafka-topic-menu app-popover-surface" hidden>
                       <div class="kafka-topic-menu-heading"><strong>Topics</strong><button id="kafkaTopicRefresh" type="button">Refresh</button></div>
                       <p id="kafkaTopicStatus" role="status" aria-live="polite"></p>
                       <div id="kafkaTopicOptions" role="listbox" aria-label="Broker topics"></div>
@@ -65,7 +65,7 @@ export const KafkaTemplate = /*html*/ `
                   <button id="kafkaTemplateToggle" type="button" aria-label="Browse templates" aria-controls="kafkaSavedList" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
                   <details id="kafkaTemplates" class="kafka-templates">
                     <summary class="kafka-visually-hidden" tabindex="-1" aria-hidden="true">Templates</summary>
-                    <div id="kafkaSavedPanel" class="kafka-templates-content">
+                    <div id="kafkaSavedPanel" class="kafka-templates-content app-popover-surface">
                       <div class="kafka-template-menu-heading"><strong>Saved templates</strong><span id="kafkaTemplateCount" class="kafka-subhead-note"></span></div>
                       <p id="kafkaTemplateStatus" role="status" aria-live="polite"></p>
                       <div id="kafkaSavedList" role="listbox" aria-label="Saved templates"></div>
@@ -157,7 +157,7 @@ export const KafkaTemplate = /*html*/ `
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" /></svg>
               </button>
               <button id="kafkaListenTopicToggle" type="button" aria-label="Browse topics" aria-controls="kafkaListenTopicOptions" aria-expanded="false"><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></button>
-              <div id="kafkaListenTopicMenu" class="kafka-topic-menu" hidden>
+              <div id="kafkaListenTopicMenu" class="kafka-topic-menu app-popover-surface" hidden>
                 <div class="kafka-topic-menu-heading"><strong>Topics</strong><button id="kafkaListenTopicRefresh" type="button">Refresh</button></div>
                 <p id="kafkaListenTopicStatus" role="status" aria-live="polite"></p>
                 <div id="kafkaListenTopicOptions" role="listbox" aria-label="Broker topics for listening"></div>
@@ -178,7 +178,13 @@ export const KafkaTemplate = /*html*/ `
                     <span id="kafkaHistoryDisplay"></span>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                   </button>
-                  <div id="kafkaHistoryCalendar" class="kafka-date-popover" role="dialog" aria-labelledby="kafkaHistoryCalendarTitle" hidden>
+                  <div
+                    id="kafkaHistoryCalendar"
+                    class="kafka-date-popover app-popover-surface"
+                    role="dialog"
+                    aria-labelledby="kafkaHistoryCalendarTitle"
+                    hidden
+                  >
                     <div class="kafka-date-header">
                       <h3 id="kafkaHistoryCalendarTitle"></h3>
                       <div class="kafka-date-nav" aria-label="Change month">

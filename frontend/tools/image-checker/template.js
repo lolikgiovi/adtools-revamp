@@ -57,7 +57,7 @@ export const imageCheckerTemplate = /*html*/ `
               </button>
               <div
                 id="envSelectorMenu"
-                class="environment-select-menu"
+                class="environment-select-menu app-popover-surface"
                 role="group"
                 aria-labelledby="environmentSelectLabel"
                 hidden

@@ -93,9 +93,9 @@ export const RunBatchTemplate = /*html*/ `
   </div>
 
   <!-- Save Config Modal -->
-  <div id="rb-save-modal-overlay" class="rb-modal-overlay" style="display:none" aria-hidden="true"></div>
+  <div id="rb-save-modal-overlay" class="rb-modal-overlay app-overlay-backdrop" style="display:none" aria-hidden="true"></div>
   <div id="rb-save-modal" class="rb-modal" role="dialog" aria-modal="true" aria-labelledby="rb-save-modal-title" style="display:none">
-    <div class="rb-modal-content">
+    <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-save-modal-title">Save Configuration</h3>
         <button id="rb-save-modal-close" class="rb-modal-close-btn" aria-label="Close modal" title="Close">
@@ -125,8 +125,15 @@ export const RunBatchTemplate = /*html*/ `
   </div>
 
   <!-- Edit Config Modal -->
-  <div id="rb-edit-modal" class="rb-modal" role="dialog" aria-modal="true" aria-labelledby="rb-edit-modal-title" style="display:none">
-    <div class="rb-modal-content">
+  <div
+    id="rb-edit-modal"
+    class="rb-modal app-overlay-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rb-edit-modal-title"
+    style="display:none"
+  >
+    <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-edit-modal-title">Edit Configuration</h3>
         <button id="rb-edit-modal-close" class="rb-modal-close-btn" aria-label="Close modal" title="Close">
@@ -169,8 +176,15 @@ export const RunBatchTemplate = /*html*/ `
   </div>
 
   <!-- Confirm Delete Modal -->
-  <div id="rb-confirm-modal" class="rb-modal" role="dialog" aria-modal="true" aria-labelledby="rb-confirm-modal-title" style="display:none">
-    <div class="rb-modal-content">
+  <div
+    id="rb-confirm-modal"
+    class="rb-modal app-overlay-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rb-confirm-modal-title"
+    style="display:none"
+  >
+    <div class="rb-modal-content app-overlay-surface">
       <div class="rb-modal-header">
         <h3 id="rb-confirm-modal-title" class="rb-modal-title">Confirm Deletion</h3>
         <button id="rb-confirm-close" class="rb-modal-close-btn" aria-label="Close">

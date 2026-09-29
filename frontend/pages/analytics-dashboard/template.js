@@ -65,8 +65,8 @@ export const AnalyticsDashboardTemplate = /*html*/ `
     </div>
 
     <!-- Row Detail Modal -->
-    <div class="row-detail-overlay" id="row-detail-overlay">
-      <div class="row-detail-modal">
+    <div class="row-detail-overlay app-overlay-backdrop" id="row-detail-overlay">
+      <div class="row-detail-modal app-overlay-surface">
         <div class="row-detail-header">
           <h3>Row Details</h3>
           <button type="button" class="row-detail-close" id="row-detail-close">

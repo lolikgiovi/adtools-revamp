@@ -410,7 +410,7 @@ class HTMLTemplateTool extends BaseTool {
     this.closeDocumentMenu();
     const menu = document.createElement("div");
     menu.id = "htmlDocumentTabMenu";
-    menu.className = "html-document-tab-menu";
+    menu.className = "html-document-tab-menu app-popover-surface";
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", `Options for ${this.documents[index].name}`);
     const actions = [

@@ -417,13 +417,13 @@ export class ReleaseTour {
     this.previousActiveElement = document.activeElement;
     this.mode = "modal";
 
-    this.overlayEl = createElement("div", "release-tour-overlay");
+    this.overlayEl = createElement("div", "release-tour-overlay app-overlay-backdrop");
     this.overlayEl.setAttribute("role", "dialog");
     this.overlayEl.setAttribute("aria-modal", "true");
     this.overlayEl.setAttribute("aria-labelledby", "release-tour-title");
     this.overlayEl.setAttribute("aria-describedby", "release-tour-description");
 
-    this.dialogEl = createElement("div", "release-tour-dialog");
+    this.dialogEl = createElement("div", "release-tour-dialog app-overlay-surface");
     const topbar = createElement("div", "release-tour-topbar");
     const context = createElement("div", "release-tour-context");
     appendUpdateIcon(context);

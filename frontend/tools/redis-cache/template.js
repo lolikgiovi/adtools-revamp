@@ -21,8 +21,16 @@ export const RedisCacheTemplate = /*html*/ `
         </div>
         <p id="redisSearchMessage" class="redis-search-message" role="status" aria-live="polite"></p>
 
-        <div id="redisDeleteConfirmation" class="redis-delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="redisDeleteTitle" aria-describedby="redisDeleteDescription" hidden>
-          <div class="redis-delete-dialog" role="document">
+        <div
+          id="redisDeleteConfirmation"
+          class="redis-delete-confirmation app-overlay-backdrop"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="redisDeleteTitle"
+          aria-describedby="redisDeleteDescription"
+          hidden
+        >
+          <div class="redis-delete-dialog app-overlay-surface" role="document">
             <div class="redis-delete-dialog-body">
               <div class="redis-delete-mark" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M12 8v5"></path><path d="M12 17h.01"></path><path d="M10.3 3.8 2.5 17.3A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.7L13.7 3.8a2 2 0 0 0-3.4 0Z"></path></svg>
@@ -140,8 +148,15 @@ export const RedisCacheTemplate = /*html*/ `
         </section>
       </aside>
     </main>
-    <div id="redisValueInspector" class="redis-value-inspector" role="dialog" aria-modal="true" aria-labelledby="redisValueInspectorHeading" hidden>
-      <div class="redis-value-inspector-dialog" role="document">
+    <div
+      id="redisValueInspector"
+      class="redis-value-inspector app-overlay-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="redisValueInspectorHeading"
+      hidden
+    >
+      <div class="redis-value-inspector-dialog app-overlay-surface" role="document">
         <div class="redis-value-inspector-header">
           <div>
             <h3 id="redisValueInspectorHeading">Value inspector</h3>

@@ -1475,13 +1475,13 @@ class CheckImageTool extends BaseTool {
   /* ──────────────── Modal ──────────────── */
   showImageDetails(result, imagePath) {
     const modal = document.createElement("div");
-    modal.className = "image-details-modal";
+    modal.className = "image-details-modal app-overlay-backdrop";
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
     modal.setAttribute("aria-labelledby", "imageDetailsHeading");
 
     const modalContent = document.createElement("div");
-    modalContent.className = "image-details-content";
+    modalContent.className = "image-details-content app-overlay-surface";
 
     const closeButton = document.createElement("button");
     closeButton.className = "close-modal-button";

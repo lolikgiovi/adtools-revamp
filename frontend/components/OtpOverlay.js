@@ -85,8 +85,8 @@ export async function openOtpOverlay({
   return new Promise((resolve, reject) => {
     try {
       const overlay = createElement(`
-        <div class="otp-modal" role="dialog" aria-modal="true" aria-label="Verify access">
-          <div class="otp-dialog">
+        <div class="otp-modal app-overlay-backdrop" role="dialog" aria-modal="true" aria-label="Verify access">
+          <div class="otp-dialog app-overlay-surface">
             <h3>Verify access</h3>
             <p class="otp-email-status"></p>
             <div class="otp-actions">

@@ -5,6 +5,7 @@
 
 import "./styles.css";
 import { BaseTool } from "../../core/BaseTool.js";
+import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { getIconSvg } from "./icon.js";
 import { MergeSqlTemplate } from "./template.js";
 import { MergeSqlService } from "./service.js";
@@ -818,7 +819,11 @@ export class MergeSqlTool extends BaseTool {
     const entry = this.fileEditorModels.get(this.activeEditorFileId);
     if (!fileItem || !entry) return;
 
-    const confirmed = window.confirm(`Revert "${fileItem.name}" to its original content? All your edits will be lost.`);
+    const confirmed = await confirmAction({
+      title: "Revert to original content?",
+      description: `All edits to "${fileItem.name}" will be lost.`,
+      confirmLabel: "Revert file",
+    });
     if (!confirmed) return;
 
     const originalContent = await MergeSqlService.readFileContent(fileItem.file);

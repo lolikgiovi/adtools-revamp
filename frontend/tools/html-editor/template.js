@@ -30,7 +30,14 @@ export const HTMLTemplateToolTemplate = /* html */ `
         <div id="htmlEditor" class="monaco-editor-container"></div>
 
         <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
-        <div id="vtlModal" class="vtl-modal" role="dialog" aria-modal="false" aria-label="VTL Variables" style="display:none;">
+        <div
+          id="vtlModal"
+          class="vtl-modal app-popover-surface"
+          role="dialog"
+          aria-modal="false"
+          aria-label="VTL Variables"
+          style="display:none;"
+        >
           <div class="vtl-modal-header">
             <h4 class="vtl-modal-title">VTL Variables</h4>
             <div style="display:flex;gap:.5rem;align-items:center;">

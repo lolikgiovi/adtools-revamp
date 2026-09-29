@@ -112,9 +112,9 @@ export const JenkinsRunnerTemplate = /*html*/ `
     </div>
     <!-- Global Modals and Overlays (moved outside hidden template tab) -->
     <!-- Template Modal Overlay and Dialog -->
-    <div id="jr-template-modal-overlay" class="jr-modal-overlay" style="display:none" aria-hidden="true"></div>
+    <div id="jr-template-modal-overlay" class="jr-modal-overlay app-overlay-backdrop" style="display:none" aria-hidden="true"></div>
     <div id="jr-template-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-template-modal-title" style="display:none">
-      <div class="jr-modal-content">
+      <div class="jr-modal-content app-overlay-surface">
         <div class="jr-modal-header">
           <h3 id="jr-template-modal-title">Create Template</h3>
           <button id="jr-template-modal-close" class="btn btn-icon btn-sm-xs" aria-label="Close modal" title="Close">×</button>
@@ -160,8 +160,15 @@ export const JenkinsRunnerTemplate = /*html*/ `
     </div>
 
     <!-- Confirm Delete Modal -->
-    <div id="jr-confirm-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-confirm-modal-title" style="display:none">
-      <div class="jr-modal-content">
+    <div
+      id="jr-confirm-modal"
+      class="jr-modal app-overlay-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="jr-confirm-modal-title"
+      style="display:none"
+    >
+      <div class="jr-modal-content app-overlay-surface">
         <div class="jr-modal-header">
           <h3 id="jr-confirm-modal-title" class="jr-modal-title">Confirm Deletion</h3>
           <button id="jr-confirm-close" class="btn btn-icon" aria-label="Close">✕</button>
@@ -177,10 +184,15 @@ export const JenkinsRunnerTemplate = /*html*/ `
     </div>
 
     <!-- Split Query Modal Overlay -->
-    <div id="jr-split-modal-overlay" class="jr-modal-overlay jr-split-overlay" style="display:none" aria-hidden="true"></div>
+    <div
+      id="jr-split-modal-overlay"
+      class="jr-modal-overlay jr-split-overlay app-overlay-backdrop"
+      style="display:none"
+      aria-hidden="true"
+    ></div>
     <!-- Split Query Modal -->
     <div id="jr-split-modal" class="jr-modal" role="dialog" aria-modal="true" aria-labelledby="jr-split-modal-title" style="display:none">
-      <div class="jr-modal-content jr-split-modal-content">
+      <div class="jr-modal-content jr-split-modal-content app-overlay-surface">
         <div class="jr-modal-header">
           <h3 id="jr-split-modal-title" class="jr-modal-title">Split Query</h3>
           <div class="jr-modal-header-actions">

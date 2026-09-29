@@ -734,7 +734,7 @@ class Sidebar {
     if (!anchor || this.state?.isMobile || this.getPinEducationShown() >= Sidebar.MAX_PIN_EDUCATION_SHOWN) return;
 
     const education = document.createElement("div");
-    education.className = "sidebar-pin-education";
+    education.className = "sidebar-pin-education app-popover-surface";
     education.setAttribute("role", "status");
     education.setAttribute("aria-live", "polite");
     education.setAttribute("data-placement", "right");
@@ -836,7 +836,7 @@ class Sidebar {
     const action = isPinned ? "unpin" : "pin";
     const actionLabel = isPinned ? "Unpin" : "Pin";
     const menu = document.createElement("div");
-    menu.className = "sidebar-pin-context-menu";
+    menu.className = "sidebar-pin-context-menu app-popover-surface";
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", `${actionLabel} ${this.getToolName(toolId)}`);
     menu.innerHTML = `

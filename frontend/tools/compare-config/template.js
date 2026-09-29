@@ -101,7 +101,7 @@ export const CompareConfigTemplate = /* html */ `
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
-                                    <div class="config-dropdown-menu" id="source-a-connection-dropdown"></div>
+                                    <div class="config-dropdown-menu app-popover-surface" id="source-a-connection-dropdown"></div>
                                 </div>
                             </div>
                             <div class="form-group query-mode-group">
@@ -113,7 +113,7 @@ export const CompareConfigTemplate = /* html */ `
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
-                                    <div class="config-dropdown-menu" id="source-a-query-mode-dropdown">
+                                    <div class="config-dropdown-menu app-popover-surface" id="source-a-query-mode-dropdown">
                                         <button class="config-dropdown-option" data-value="table">By Table</button>
                                         <button class="config-dropdown-option active" data-value="sql">By Raw SQL</button>
                                     </div>
@@ -273,7 +273,7 @@ export const CompareConfigTemplate = /* html */ `
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
-                                    <div class="config-dropdown-menu" id="source-b-connection-dropdown"></div>
+                                    <div class="config-dropdown-menu app-popover-surface" id="source-b-connection-dropdown"></div>
                                 </div>
                                 <!-- Follow Mode Badge (shown in Oracle vs Oracle mode) -->
                                 <div class="follow-mode-badge" id="source-b-follow-mode-note" style="display: none;">
@@ -293,7 +293,7 @@ export const CompareConfigTemplate = /* html */ `
                                             <polyline points="6 9 12 15 18 9"></polyline>
                                         </svg>
                                     </button>
-                                    <div class="config-dropdown-menu" id="source-b-query-mode-dropdown">
+                                    <div class="config-dropdown-menu app-popover-surface" id="source-b-query-mode-dropdown">
                                         <button class="config-dropdown-option" data-value="table">By Table</button>
                                         <button class="config-dropdown-option active" data-value="sql">By Raw SQL</button>
                                     </div>
@@ -595,8 +595,8 @@ export const CompareConfigTemplate = /* html */ `
         </div>
 
         <!-- Load Data Progress Overlay -->
-        <div id="unified-progress-overlay" class="progress-overlay" style="display: none;">
-            <div class="progress-card">
+        <div id="unified-progress-overlay" class="progress-overlay app-overlay-backdrop" style="display: none;">
+            <div class="progress-card app-overlay-surface">
                 <div class="progress-header">
                     <div class="progress-spinner"></div>
                     <h3 id="unified-progress-title">Loading Data</h3>
@@ -628,8 +628,8 @@ export const CompareConfigTemplate = /* html */ `
         </div>
 
         <!-- Compare Data Progress Overlay -->
-        <div id="compare-progress-overlay" class="progress-overlay" style="display: none;">
-            <div class="progress-card">
+        <div id="compare-progress-overlay" class="progress-overlay app-overlay-backdrop" style="display: none;">
+            <div class="progress-card app-overlay-surface">
                 <div class="progress-header">
                     <div class="progress-spinner"></div>
                     <h3 id="compare-progress-title">Comparing Data</h3>
@@ -700,7 +700,7 @@ export const CompareConfigTemplate = /* html */ `
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
-                        <div class="view-dropdown-menu" id="view-dropdown-menu">
+                        <div class="view-dropdown-menu app-popover-surface" id="view-dropdown-menu">
                             <button class="view-option active" data-value="grid">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="3" y="3" width="7" height="7"></rect>
@@ -733,7 +733,7 @@ export const CompareConfigTemplate = /* html */ `
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </button>
-                        <div class="export-dropdown-menu" id="export-dropdown-menu">
+                        <div class="export-dropdown-menu app-popover-surface" id="export-dropdown-menu">
                             <button class="export-option" id="btn-export-json">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -776,8 +776,8 @@ export const CompareConfigTemplate = /* html */ `
     </div>
 
     <!-- Generic Modal for Pairing & Config -->
-    <div id="excel-modal-overlay" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
+    <div id="excel-modal-overlay" class="modal-overlay app-overlay-backdrop" style="display: none;">
+        <div class="modal-content app-overlay-surface">
             <div class="modal-header">
                 <h3 id="excel-modal-title">Config</h3>
                 <button class="btn btn-ghost btn-sm btn-close-modal">

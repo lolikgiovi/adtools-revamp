@@ -1067,9 +1067,9 @@ class App {
     // Ensure only one modal exists
     if (!this._updateModalEl) {
       const overlay = document.createElement("div");
-      overlay.className = "update-overlay";
+      overlay.className = "update-overlay app-overlay-backdrop";
       const modal = document.createElement("div");
-      modal.className = "update-modal";
+      modal.className = "update-modal app-overlay-surface";
       modal.setAttribute("role", "dialog");
       modal.setAttribute("aria-modal", "true");
       modal.setAttribute("aria-labelledby", "update-modal-title");

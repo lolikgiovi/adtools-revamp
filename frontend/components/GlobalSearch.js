@@ -39,13 +39,13 @@ class GlobalSearch {
   _buildDOM() {
     // Overlay
     this.overlayEl = document.createElement("div");
-    this.overlayEl.className = "global-search-overlay";
+    this.overlayEl.className = "global-search-overlay app-overlay-backdrop";
     this.overlayEl.setAttribute("aria-hidden", "true");
     this.overlayEl.style.display = "none";
 
     // Modal
     this.modalEl = document.createElement("div");
-    this.modalEl.className = "global-search-modal";
+    this.modalEl.className = "global-search-modal app-overlay-surface";
     this.modalEl.setAttribute("role", "dialog");
     this.modalEl.setAttribute("aria-modal", "true");
     this.modalEl.setAttribute("aria-labelledby", "global-search-label");
