@@ -815,6 +815,7 @@ export class QuickQueryUI {
     this.editor = createOracleEditor(this.elements.queryEditor, {
       value: "",
       automaticLayout: true,
+      scrollbar: { alwaysConsumeMouseWheel: true },
       fontSize: 10.5,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -3390,6 +3391,7 @@ export class QuickQueryUI {
         this._splitEditor = createOracleEditor(container, {
           value: "",
           automaticLayout: true,
+          scrollbar: { alwaysConsumeMouseWheel: true },
           readOnly: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
@@ -3802,6 +3804,7 @@ export class QuickQueryUI {
       this._oracleDataEditor = createOracleEditor(this.elements.oracleDataEditor, {
         value: `SELECT * FROM ${tableName}\n`,
         automaticLayout: true,
+        scrollbar: { alwaysConsumeMouseWheel: true },
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         fontSize: 13,

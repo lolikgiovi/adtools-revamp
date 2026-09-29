@@ -450,6 +450,12 @@
   background: hsl(var(--background));
 }
 
+#queryEditor .monaco-scrollable-element,
+#qq-split-editor .monaco-scrollable-element,
+#oracleDataEditor .monaco-scrollable-element {
+  overscroll-behavior: contain;
+}
+
 /* Override global monaco-editor-container to keep all corners rounded in Quick Query */
 #queryEditor .monaco-editor-container {
   border-radius: 6px;
