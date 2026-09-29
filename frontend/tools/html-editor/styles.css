@@ -342,6 +342,7 @@ body.is-resizing * {
   max-width: 100%;
 }
 
+.env-select,
 .preview-viewport-select {
   width: fit-content;
   min-width: 0;

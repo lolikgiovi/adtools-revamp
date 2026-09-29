@@ -63,9 +63,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
       <div class="pane renderer-pane">
         <div class="pane-header">
           <div class="renderer-actions">
-            <div id="envControls" class="env-controls" style="display:inline-flex;gap:.5rem;align-items:center;margin-right:.5rem;">
-              <label for="envSelector" class="env-label">ENV:</label>
-              <select id="envSelector" class="env-select" title="Select environment"></select>
+            <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;margin-right:.5rem;">
+              <select id="envSelector" class="env-select" aria-label="Select environment" title="Select environment"></select>
             </div>
 
             <select
