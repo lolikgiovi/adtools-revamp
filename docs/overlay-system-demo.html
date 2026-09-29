@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AD Tools — Overlay system preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        --page: #f4f5f7;
+        --panel: #fff;
+        --panel-raised: #fff;
+        --ink: #20232a;
+        --muted: #6b7280;
+        --quiet: #9198a4;
+        --line: #d7dbe2;
+        --line-strong: #c5cbd5;
+        --soft: #f2f3f6;
+        --accent: #3d4658;
+        --accent-ink: #fff;
+        --danger: #bd3f45;
+        --danger-soft: #fff1f1;
+        --success: #287c5b;
+        --scrim: rgb(15 19 27 / 42%);
+        --focus: #5c83df;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+      }
+
+      button { color: inherit; font: inherit; }
+      button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+      [hidden] { display: none !important; }
+
+      .demo-shell {
+        width: min(100% - 40px, 1120px);
+        margin: 0 auto;
+        padding: 34px 0 42px;
+      }
+
+      .demo-heading {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        margin: 0 0 7px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .11em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(23px, 4vw, 30px);
+        font-weight: 680;
+        letter-spacing: -.035em;
+        line-height: 1.15;
+      }
+
+      .intro {
+        max-width: 55ch;
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .theme-button,
+      .mode-button,
+      .button {
+        min-height: 38px;
+        border: 1px solid var(--line-strong);
+        border-radius: 7px;
+        background: var(--panel);
+        cursor: pointer;
+        transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+      }
+
+      .theme-button { flex: none; padding: 0 12px; font-size: 13px; }
+      .theme-button:hover, .mode-button:hover, .button:hover { background: var(--soft); }
+
+      .mode-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 12px;
+      }
+
+      .mode-switch {
+        display: inline-flex;
+        gap: 3px;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--soft);
+      }
+
+      .mode-button {
+        min-height: 32px;
+        padding: 0 12px;
+        border-color: transparent;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .mode-button[aria-pressed="true"] {
+        border-color: var(--line);
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      .interaction-hint { margin: 0; color: var(--muted); font-size: 12px; }
+
+      .app-frame {
+        position: relative;
+        min-height: 620px;
+        overflow: hidden;
+        border: 1px solid var(--line-strong);
+        border-radius: 11px;
+        background: var(--panel);
+        isolation: isolate;
+      }
+
+      .workspace { min-height: inherit; background: var(--panel); }
+
+      .app-topbar {
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .brand, .topbar-actions, .profile, .page-title-row, .toolbar, .row-main, .row-actions {
+        display: flex;
+        align-items: center;
+      }
+
+      .brand { gap: 10px; font-size: 13px; font-weight: 700; }
+      .brand-mark {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 6px;
+        background: var(--accent);
+        color: var(--accent-ink);
+        font-size: 10px;
+        letter-spacing: -.04em;
+      }
+
+      .topbar-actions { gap: 16px; color: var(--muted); font-size: 12px; }
+      .profile { gap: 8px; }
+      .avatar {
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--soft);
+        color: var(--ink);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .app-layout { display: grid; min-height: 563px; grid-template-columns: 190px minmax(0, 1fr); }
+      .sidebar {
+        padding: 19px 12px;
+        border-right: 1px solid var(--line);
+        background: color-mix(in srgb, var(--panel) 94%, var(--soft));
+      }
+
+      .nav-label {
+        margin: 0 0 9px 9px;
+        color: var(--quiet);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+      }
+
+      .nav-item {
+        display: flex;
+        height: 36px;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 3px;
+        padding: 0 10px;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .nav-item.active { background: var(--soft); color: var(--ink); font-weight: 650; }
+      .nav-icon { width: 15px; color: var(--quiet); text-align: center; font-size: 14px; }
+
+      .main-content { min-width: 0; padding: 28px clamp(18px, 4vw, 42px) 32px; }
+      .breadcrumb { margin: 0 0 8px; color: var(--muted); font-size: 11px; }
+      .page-title-row { justify-content: space-between; gap: 16px; }
+      h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.03em; }
+      .button { padding: 0 12px; font-size: 12px; font-weight: 600; }
+      .button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+      .button.primary:hover { filter: brightness(1.12); }
+
+      .summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0 28px; }
+      .summary {
+        min-height: 86px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .summary-label { color: var(--muted); font-size: 11px; }
+      .summary-value { margin-top: 8px; font-size: 19px; font-weight: 680; letter-spacing: -.03em; }
+      .summary-detail { margin-left: 6px; color: var(--success); font-size: 10px; font-weight: 600; }
+
+      .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+      h3 { margin: 0; font-size: 14px; font-weight: 650; }
+      .toolbar { gap: 8px; }
+      .button.small { min-height: 32px; padding: 0 10px; font-size: 11px; }
+
+      .table {
+        overflow: visible;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      .table-header, .table-row {
+        display: grid;
+        grid-template-columns: minmax(160px, 1.6fr) minmax(90px, .75fr) minmax(100px, .8fr) 40px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 15px;
+      }
+      .table-header {
+        min-height: 36px;
+        border-bottom: 1px solid var(--line);
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+      }
+      .table-row { min-height: 53px; border-bottom: 1px solid var(--line); }
+      .table-row:last-child { border-bottom: 0; }
+      .row-main { min-width: 0; gap: 10px; }
+      .file-icon {
+        display: grid;
+        width: 29px;
+        height: 29px;
+        flex: none;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .file-name { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+      .file-subtitle { margin-top: 3px; color: var(--muted); font-size: 10px; }
+      .cell { color: var(--muted); font-size: 11px; }
+      .status { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-size: 10px; font-weight: 600; }
+      .status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+      .row-actions { position: relative; justify-content: flex-end; }
+      .icon-button {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 17px;
+      }
+      .icon-button:hover, .icon-button[aria-expanded="true"] { border-color: var(--line); background: var(--soft); color: var(--ink); }
+
+      .popover {
+        position: absolute;
+        z-index: 4;
+        top: 34px;
+        right: 0;
+        width: 188px;
+        padding: 5px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--panel-raised);
+        color: var(--ink);
+      }
+      .popover-item {
+        display: flex;
+        width: 100%;
+        min-height: 34px;
+        align-items: center;
+        gap: 9px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font-size: 11px;
+        text-align: left;
+      }
+      .popover-item:hover { background: var(--soft); }
+      .popover-item.destructive { color: var(--danger); }
+      .popover-separator { height: 1px; margin: 4px 5px; background: var(--line); }
+      .popover-shortcut { margin-left: auto; color: var(--quiet); font-size: 10px; }
+
+      .dialog-layer {
+        position: absolute;
+        z-index: 10;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        border: 0;
+        background: var(--scrim);
+        -webkit-backdrop-filter: blur(2px) saturate(.82);
+        backdrop-filter: blur(2px) saturate(.82);
+        cursor: default;
+      }
+      .dialog {
+        position: relative;
+        width: min(100%, 448px);
+        overflow: hidden;
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        background: var(--panel-raised);
+        color: var(--ink);
+      }
+      .dialog-header { display: flex; align-items: flex-start; gap: 13px; padding: 21px 22px 13px; }
+      .dialog-symbol {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        flex: none;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--danger) 23%, var(--line));
+        border-radius: 9px;
+        background: var(--danger-soft);
+        color: var(--danger);
+        font-size: 17px;
+      }
+      .dialog-heading { min-width: 0; flex: 1; padding-top: 1px; }
+      .dialog-kicker { margin: 0 0 4px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+      h4 { margin: 0; font-size: 17px; font-weight: 680; letter-spacing: -.02em; line-height: 1.3; }
+      .dialog-close { margin: -5px -7px 0 0; }
+      .dialog-body { padding: 0 22px 20px 71px; }
+      .dialog-copy { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+      .dialog-meta { display: flex; align-items: center; gap: 8px; margin-top: 15px; color: var(--muted); font-size: 11px; }
+      .query-chip { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--soft); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; }
+      .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 93%, var(--soft)); }
+      .dialog-footer .button { min-height: 36px; padding: 0 12px; font-size: 11px; }
+      .button.destructive { border-color: var(--danger); background: var(--danger); color: white; }
+      .button.destructive:hover { filter: brightness(1.08); }
+
+      .demo-notes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin: 12px 0 0;
+        padding: 0;
+        color: var(--muted);
+        font-size: 11px;
+        list-style: none;
+      }
+      .demo-notes li { display: flex; align-items: center; gap: 7px; }
+      .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+      .demo-status { min-height: 17px; margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+
+      .dark {
+        color-scheme: dark;
+        --page: #17191d;
+        --panel: #202329;
+        --panel-raised: #24272e;
+        --ink: #f1f2f4;
+        --muted: #a3a8b2;
+        --quiet: #7f8590;
+        --line: #373b44;
+        --line-strong: #505661;
+        --soft: #2a2e36;
+        --accent: #d8dce5;
+        --accent-ink: #24272e;
+        --danger: #f0787d;
+        --danger-soft: #3a2529;
+        --success: #80c49e;
+        --scrim: rgb(0 0 0 / 48%);
+        --focus: #91adff;
+      }
+
+      @media (max-width: 680px) {
+        .demo-shell { width: min(100% - 24px, 1120px); padding-top: 24px; }
+        .demo-heading { align-items: flex-start; }
+        .app-frame { min-height: 590px; }
+        .app-layout { grid-template-columns: 54px minmax(0, 1fr); }
+        .sidebar { padding: 15px 8px; }
+        .nav-label, .nav-text { display: none; }
+        .nav-item { justify-content: center; padding: 0; }
+        .main-content { padding: 22px 14px 24px; }
+        .summary-row { gap: 7px; }
+        .summary { min-height: 75px; padding: 11px 9px; }
+        .summary-label { font-size: 9px; }
+        .summary-value { font-size: 16px; }
+        .summary-detail { display: block; margin: 4px 0 0; }
+        .table-header, .table-row { grid-template-columns: minmax(130px, 1.6fr) minmax(76px, .8fr) 32px; gap: 7px; padding: 0 9px; }
+        .table-header span:nth-child(3), .table-row > .cell:nth-of-type(3) { display: none; }
+        .file-icon { width: 25px; height: 25px; }
+        .file-name { font-size: 10px; }
+        .file-subtitle { font-size: 9px; }
+        .cell { font-size: 9px; }
+        .topbar-actions { gap: 8px; font-size: 10px; }
+        .mode-bar { align-items: flex-start; flex-direction: column; }
+        .dialog-layer { padding: 14px; }
+        .dialog-header { padding: 18px 17px 12px; }
+        .dialog-body { padding: 0 17px 18px 66px; }
+        .dialog-footer { padding: 12px 17px; }
+        .demo-notes { gap: 8px 12px; }
+      }
+
+      @media (max-width: 420px) {
+        .demo-heading { gap: 12px; }
+        .theme-button { min-height: 34px; padding: 0 9px; font-size: 11px; }
+        .interaction-hint { max-width: 19ch; line-height: 1.4; }
+        .app-topbar { padding: 0 11px; }
+        .brand { gap: 7px; font-size: 11px; }
+        .topbar-actions .topbar-context { display: none; }
+        .page-title-row { align-items: flex-start; flex-direction: column; }
+        .summary-row { margin-top: 18px; }
+        .section-heading { align-items: flex-start; flex-direction: column; }
+        .dialog-symbol { width: 32px; height: 32px; }
+        .dialog-header { gap: 10px; }
+        .dialog-body { padding-left: 59px; }
+        .dialog-copy { font-size: 12px; }
+        .dialog-footer .button { padding: 0 9px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="demo-heading">
+        <div>
+          <p class="eyebrow">AD Tools · UI preview</p>
+          <h1>Overlay system</h1>
+          <p class="intro">A shared visual treatment for focused dialogs and lightweight anchored menus. Switch the preview and theme to compare both.</p>
+        </div>
+        <button class="theme-button" id="theme-toggle" type="button" aria-pressed="false">Use dark theme</button>
+      </header>
+
+      <div class="mode-bar">
+        <div class="mode-switch" role="group" aria-label="Choose overlay preview">
+          <button class="mode-button" type="button" data-mode="dialog" aria-pressed="true">Blocking dialog</button>
+          <button class="mode-button" type="button" data-mode="popover" aria-pressed="false">Anchored menu</button>
+        </div>
+        <p class="interaction-hint" id="interaction-hint">Click the backdrop, press Escape, or choose an action.</p>
+      </div>
+
+      <section class="app-frame" id="preview" data-theme="light" aria-label="AD Tools overlay preview">
+        <div class="workspace" id="workspace" inert aria-hidden="true">
+          <header class="app-topbar">
+            <div class="brand"><span class="brand-mark" aria-hidden="true">AD</span><span>AD Tools</span></div>
+            <div class="topbar-actions">
+              <span class="topbar-context">Quick Query</span>
+              <span class="profile"><span class="avatar" aria-hidden="true">JD</span><span>Jane D.</span></span>
+            </div>
+          </header>
+
+          <div class="app-layout">
+            <aside class="sidebar" aria-label="Example navigation">
+              <p class="nav-label">Workspace</p>
+              <div class="nav-item"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></div>
+              <div class="nav-item active"><span class="nav-icon" aria-hidden="true">⌕</span><span class="nav-text">Quick Query</span></div>
+              <div class="nav-item"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Compare Config</span></div>
+              <div class="nav-item"><span class="nav-icon" aria-hidden="true">◈</span><span class="nav-text">Connections</span></div>
+              <p class="nav-label" style="margin-top: 25px">Manage</p>
+              <div class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-text">Settings</span></div>
+            </aside>
+
+            <section class="main-content" aria-label="Example query workspace">
+              <p class="breadcrumb">Workspace <span aria-hidden="true">/</span> Quick Query</p>
+              <div class="page-title-row">
+                <h2>Recent queries</h2>
+                <button class="button primary" id="open-dialog" type="button">New query</button>
+              </div>
+
+              <div class="summary-row" aria-label="Query summary">
+                <div class="summary"><div class="summary-label">Saved queries</div><div class="summary-value">24 <span class="summary-detail">+3 this week</span></div></div>
+                <div class="summary"><div class="summary-label">Last run</div><div class="summary-value">2 min <span class="summary-detail">ago</span></div></div>
+                <div class="summary"><div class="summary-label">Connection</div><div class="summary-value">UAT1 <span class="summary-detail">Connected</span></div></div>
+              </div>
+
+              <div class="section-heading">
+                <h3>Saved query drafts</h3>
+                <div class="toolbar"><button class="button small" type="button">Filter</button><button class="button small" type="button">Sort: recent</button></div>
+              </div>
+
+              <div class="table" role="table" aria-label="Saved query drafts">
+                <div class="table-header" role="row"><span role="columnheader">Name</span><span role="columnheader">Status</span><span role="columnheader">Updated</span><span aria-hidden="true"></span></div>
+                <div class="table-row" role="row">
+                  <div class="row-main" role="cell"><span class="file-icon" aria-hidden="true">SQL</span><div><div class="file-name">Customer lookup</div><div class="file-subtitle">SELECT · 3 tables</div></div></div>
+                  <div class="cell" role="cell"><span class="status">Saved</span></div><div class="cell" role="cell">Today, 10:42</div>
+                  <div class="row-actions" role="cell"><button class="icon-button" id="menu-trigger" type="button" aria-label="More actions for Customer lookup" aria-haspopup="menu" aria-expanded="false">···</button>
+                    <div class="popover" id="query-menu" role="menu" aria-label="Customer lookup actions" hidden>
+                      <button class="popover-item" type="button" role="menuitem"><span aria-hidden="true">↗</span>Open query<span class="popover-shortcut">↵</span></button>
+                      <button class="popover-item" type="button" role="menuitem"><span aria-hidden="true">⧉</span>Duplicate</button>
+                      <button class="popover-item" type="button" role="menuitem"><span aria-hidden="true">✎</span>Rename</button>
+                      <div class="popover-separator" role="separator"></div>
+                      <button class="popover-item destructive" type="button" role="menuitem"><span aria-hidden="true">⌫</span>Delete query</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="table-row" role="row">
+                  <div class="row-main" role="cell"><span class="file-icon" aria-hidden="true">SQL</span><div><div class="file-name">Daily reconciliation</div><div class="file-subtitle">SELECT · 2 tables</div></div></div>
+                  <div class="cell" role="cell"><span class="status">Saved</span></div><div class="cell" role="cell">Yesterday</div><div class="row-actions" role="cell"><button class="icon-button" type="button" aria-label="More actions for Daily reconciliation">···</button></div>
+                </div>
+                <div class="table-row" role="row">
+                  <div class="row-main" role="cell"><span class="file-icon" aria-hidden="true">SQL</span><div><div class="file-name">Product catalogue</div><div class="file-subtitle">SELECT · 1 table</div></div></div>
+                  <div class="cell" role="cell"><span class="status">Saved</span></div><div class="cell" role="cell">Sep 24, 2026</div><div class="row-actions" role="cell"><button class="icon-button" type="button" aria-label="More actions for Product catalogue">···</button></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="dialog-layer" id="dialog-layer">
+          <button class="scrim" id="scrim" type="button" aria-label="Close dialog"></button>
+          <section class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-copy">
+            <div class="dialog-header">
+              <span class="dialog-symbol" aria-hidden="true">↶</span>
+              <div class="dialog-heading"><p class="dialog-kicker">Quick Query</p><h4 id="dialog-title">Discard unsaved changes?</h4></div>
+              <button class="icon-button dialog-close" id="close-dialog" type="button" aria-label="Close dialog">×</button>
+            </div>
+            <div class="dialog-body">
+              <p class="dialog-copy" id="dialog-copy">Your query has edits that haven't been saved. Discard them and leave this view?</p>
+              <div class="dialog-meta"><span>Unsaved draft</span><code class="query-chip">customer_lookup.sql</code></div>
+            </div>
+            <footer class="dialog-footer">
+              <button class="button" id="keep-editing" type="button">Keep editing</button>
+              <button class="button destructive" id="discard-changes" type="button">Discard changes</button>
+            </footer>
+          </section>
+        </div>
+      </section>
+
+      <ul class="demo-notes" aria-label="Component details">
+        <li><span class="note-dot" aria-hidden="true"></span>Backdrop: 42% dim + 2px blur</li>
+        <li><span class="note-dot" aria-hidden="true"></span>Surface: 1px visible border</li>
+        <li><span class="note-dot" aria-hidden="true"></span>Dialog closes on Escape or backdrop click</li>
+        <li><span class="note-dot" aria-hidden="true"></span>Menu stays anchored to its trigger</li>
+      </ul>
+      <p class="demo-status" id="demo-status" role="status" aria-live="polite"></p>
+    </main>
+
+    <script>
+      const preview = document.querySelector("#preview");
+      const workspace = document.querySelector("#workspace");
+      const dialogLayer = document.querySelector("#dialog-layer");
+      const dialog = document.querySelector("#dialog");
+      const menu = document.querySelector("#query-menu");
+      const menuTrigger = document.querySelector("#menu-trigger");
+      const status = document.querySelector("#demo-status");
+      let activeMode = "dialog";
+      let dialogOpen = true;
+      let returnFocusTo = document.querySelector('[data-mode="dialog"]');
+
+      function setMode(mode, { focus = false } = {}) {
+        activeMode = mode;
+        const isDialog = mode === "dialog";
+        dialogOpen = isDialog;
+        dialogLayer.hidden = !dialogOpen;
+        workspace.inert = isDialog;
+        workspace.setAttribute("aria-hidden", String(isDialog));
+        menu.hidden = isDialog;
+        menuTrigger.setAttribute("aria-expanded", String(!isDialog));
+        document.querySelectorAll("[data-mode]").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+        });
+        document.querySelector("#interaction-hint").textContent = isDialog
+          ? "Click the backdrop, press Escape, or choose an action."
+          : "The menu stays beside its trigger; click outside or press Escape to close it.";
+        if (focus) {
+          if (isDialog) document.querySelector("#keep-editing").focus();
+          else menuTrigger.focus();
+        }
+      }
+
+      function closeDialog() {
+        if (activeMode !== "dialog" || !dialogOpen) return;
+        dialogOpen = false;
+        dialogLayer.hidden = true;
+        workspace.inert = false;
+        workspace.setAttribute("aria-hidden", "false");
+        menu.hidden = true;
+        menuTrigger.setAttribute("aria-expanded", "false");
+        if (returnFocusTo?.isConnected) returnFocusTo.focus();
+        status.textContent = "Dialog closed. Select it above or choose New query to reopen it.";
+      }
+
+      document.querySelectorAll("[data-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          status.textContent = "";
+          if (button.dataset.mode === "dialog") {
+            returnFocusTo = button;
+            setMode("dialog", { focus: true });
+          } else {
+            setMode("popover", { focus: true });
+          }
+        });
+      });
+
+      document.querySelector("#theme-toggle").addEventListener("click", (event) => {
+        const dark = preview.dataset.theme !== "dark";
+        preview.dataset.theme = dark ? "dark" : "light";
+        preview.classList.toggle("dark", dark);
+        event.currentTarget.setAttribute("aria-pressed", String(dark));
+        event.currentTarget.textContent = dark ? "Use light theme" : "Use dark theme";
+      });
+
+      document.querySelector("#open-dialog").addEventListener("click", (event) => {
+        returnFocusTo = event.currentTarget;
+        status.textContent = "";
+        setMode("dialog", { focus: true });
+      });
+      document.querySelector("#scrim").addEventListener("click", closeDialog);
+      document.querySelector("#close-dialog").addEventListener("click", closeDialog);
+      document.querySelector("#keep-editing").addEventListener("click", closeDialog);
+      document.querySelector("#discard-changes").addEventListener("click", () => {
+        closeDialog();
+        status.textContent = "Demo action: unsaved query changes discarded.";
+      });
+
+      menuTrigger.addEventListener("click", () => {
+        if (activeMode === "dialog") return;
+        const willOpen = menu.hidden;
+        menu.hidden = !willOpen;
+        menuTrigger.setAttribute("aria-expanded", String(willOpen));
+        if (willOpen) menu.querySelector('[role="menuitem"]').focus();
+      });
+      menu.addEventListener("click", (event) => {
+        const item = event.target.closest('[role="menuitem"]');
+        if (!item) return;
+        status.textContent = `Demo action: ${item.textContent.trim()} selected.`;
+        menu.hidden = true;
+        menuTrigger.setAttribute("aria-expanded", "false");
+        menuTrigger.focus();
+      });
+
+      document.addEventListener("pointerdown", (event) => {
+        if (activeMode === "popover" && !menu.hidden && !menu.contains(event.target) && !menuTrigger.contains(event.target)) {
+          menu.hidden = true;
+          menuTrigger.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+        if (activeMode === "dialog") closeDialog();
+        else if (!menu.hidden) {
+          menu.hidden = true;
+          menuTrigger.setAttribute("aria-expanded", "false");
+          menuTrigger.focus();
+          }
+          return;
+        }
+        if (activeMode !== "dialog" || !dialogOpen || event.key !== "Tab") return;
+        const focusable = [...dialog.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+
+      // Keep the dialog visible in the opening preview and put focus on its safe action.
+      document.querySelector("#keep-editing").focus({ preventScroll: true });
+    </script>
+  </body>
+</html>

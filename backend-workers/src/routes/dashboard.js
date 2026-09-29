@@ -431,7 +431,7 @@ ORDER BY errors_30d DESC, last_seen DESC`,
     AND e.action = 'query_generated'
     AND u.email != 'fashalli.bilhaq@bankmandiri.co.id'
 )
-SELECT table_name,
+SELECT UPPER(TRIM(table_name)) AS table_name,
   query_type,
   COUNT(*) AS generations,
   COUNT(DISTINCT email) AS users,
@@ -441,7 +441,7 @@ SELECT table_name,
   MAX(created_time) AS last_seen
 FROM qq
 WHERE COALESCE(table_name, '') != ''
-GROUP BY table_name, query_type
+GROUP BY UPPER(TRIM(table_name)), query_type
 ORDER BY generations DESC, last_seen DESC
 LIMIT 150`,
   },
@@ -1356,8 +1356,10 @@ function mergeStoredTabsWithDefaults(storedTabs) {
   const merged = DEFAULT_TABS.map((defaultTab) => {
     const storedTab = storedById.get(defaultTab.id);
     if (!storedTab) return defaultTab;
-    // These tabs use the built-in paginated endpoint, so their SQL must match its current contract.
-    return ["daily", "events"].includes(defaultTab.id) ? { ...storedTab, query: defaultTab.query } : storedTab;
+    // Keep endpoint-owned built-in SQL current when stored copies outlive code changes.
+    return ["daily", "events", "qq-table-usage"].includes(defaultTab.id)
+      ? { ...storedTab, query: defaultTab.query }
+      : storedTab;
   });
   const defaultIds = new Set(DEFAULT_TABS.map((tab) => tab.id));
   const customTabs = storedTabs.filter((tab) => tab?.id && !defaultIds.has(tab.id));
