@@ -1241,13 +1241,19 @@
 }
 
 .overlay-close-button {
-  background: none;
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
   border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
   font-size: 1.5rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 0 8px;
-  color: hsl(var(--destructive));
-  background-color: hsl(var(--background));
+  transition: color 140ms ease;
 }
 
 .schema-modal-header .overlay-close-button {
@@ -1257,7 +1263,22 @@
 }
 
 .overlay-close-button:hover {
-  background-color: hsl(var(--background));
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+
+.overlay-close-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.qq-modal-footer > .btn,
+.download-as-modal-footer > .btn {
+  width: 7.5rem;
+  min-width: 0;
+  min-height: 40px;
+  flex: 0 1 7.5rem;
+  justify-content: center;
 }
 
 /* Header actions aligned with title */
