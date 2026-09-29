@@ -1440,12 +1440,12 @@ export class QuickQueryUI {
     }
     panel?.setAttribute("aria-busy", String(isLoading));
     if (panel) {
-      panel
-        .querySelectorAll(":scope > .content-a > :not(.qq-tab-loading), :scope > .content-b")
-        .forEach((region) => {
-          region.inert = isLoading;
-          region.classList.toggle("qq-tab-loading-hidden", isLoading);
-        });
+      const contentA = panel.querySelector(".content-a");
+      const contentB = panel.querySelector(".content-b");
+      Array.from(contentA?.children || []).forEach((region) => {
+        if (region !== status) region.inert = isLoading;
+      });
+      if (contentB) contentB.inert = isLoading;
     }
     this.elements.tabList?.querySelectorAll(".qq-query-tab").forEach((tab) => {
       tab.classList.toggle("loading", isLoading && tab.dataset.tabId === loadingTabId);

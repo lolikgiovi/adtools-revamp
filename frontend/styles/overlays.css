@@ -2,8 +2,8 @@
 :root {
   --app-overlay-scrim: rgb(8 11 18 / 42%);
   --app-overlay-blur: 2px;
-  --app-modal-action-width: 7.5rem;
-  --app-modal-action-height: 40px;
+  --app-modal-action-width: 6.75rem;
+  --app-modal-action-height: 36px;
 }
 
 body .app-overlay-backdrop {
@@ -49,8 +49,8 @@ body .app-modal-actions > button {
   min-height: var(--app-modal-action-height);
   flex: 0 1 var(--app-modal-action-width);
   justify-content: center;
-  padding: 0 0.5rem;
-  font-size: 0.8125rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 

@@ -84,9 +84,13 @@
   }
 }
 
-.qq-tab-loading-hidden,
-.qq-tab-loading-hidden * {
+.quick-query-content[aria-busy="true"] > .content-a > :not(.qq-tab-loading),
+.quick-query-content[aria-busy="true"] > .content-b {
   visibility: hidden !important;
+}
+
+.quick-query-content[aria-busy="true"] > .content-b {
+  display: none !important;
 }
 
 .quick-query-content .button-group {
