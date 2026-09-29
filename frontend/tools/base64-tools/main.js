@@ -68,9 +68,72 @@ class Base64Tools extends BaseTool {
 
   async onMount() {
     this.bindToolEvents();
+    this.bindPreviewEvents();
     this.setupFileHandling();
     this.switchMode(this.currentMode);
     this.restoreFileCards();
+  }
+
+  onUnmount() {
+    this.closePreview();
+    this.clearOutputFiles("decode");
+  }
+
+  bindPreviewEvents() {
+    const dialog = this.container.querySelector("#base64-preview-dialog");
+    dialog?.querySelector("#base64-preview-close")?.addEventListener("click", () => dialog.close());
+    dialog?.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog?.addEventListener("close", () => this.releasePreview());
+  }
+
+  openPreview(fileData) {
+    const dialog = this.container?.querySelector("#base64-preview-dialog");
+    if (!dialog) return;
+
+    this.releasePreview();
+    const content = dialog.querySelector("#base64-preview-content");
+    const details = dialog.querySelector("#base64-preview-details");
+    const title = dialog.querySelector("#base64-preview-title");
+    const type = fileData.isImage ? fileData.content.type : fileData.isFile ? fileData.content.type : "text/plain";
+    const name = fileData.processedName;
+    title.textContent = name;
+    details.textContent = `${Base64ToolsService.formatFileSize(fileData.size)} · ${Base64ToolsConstants.getFileTypeLabel(type)}`;
+
+    if (type.startsWith("image/")) {
+      const image = document.createElement("img");
+      image.alt = name;
+      image.src = URL.createObjectURL(new Blob([fileData.content.content], { type }));
+      this.previewUrl = image.src;
+      content.appendChild(image);
+    } else if (type === "application/pdf") {
+      const frame = document.createElement("iframe");
+      frame.title = name;
+      frame.src = URL.createObjectURL(new Blob([fileData.content.content], { type }));
+      this.previewUrl = frame.src;
+      content.appendChild(frame);
+    } else {
+      const text = document.createElement("pre");
+      text.textContent = fileData.content;
+      content.appendChild(text);
+    }
+
+    dialog.showModal();
+    dialog.querySelector("#base64-preview-close").focus();
+  }
+
+  releasePreview() {
+    const content = this.container?.querySelector("#base64-preview-content");
+    if (content) content.replaceChildren();
+    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+    this.previewUrl = null;
+  }
+
+  closePreview() {
+    const dialog = this.container?.querySelector("#base64-preview-dialog");
+    if (dialog?.open) dialog.close();
+    this.releasePreview();
   }
 
   bindToolEvents() {
@@ -443,7 +506,7 @@ class Base64Tools extends BaseTool {
 
   buildFileCard(data, actions = {}) {
     const { variant, name, size, type, previewUrl, dimensions } = data;
-    const { remove, download, copy } = actions;
+    const { remove, download, copy, preview } = actions;
 
     const card = document.createElement("div");
     card.className = "file-card";
@@ -524,7 +587,9 @@ class Base64Tools extends BaseTool {
         </button>`
       : "";
 
-    card.innerHTML = infoInner + removeBtn + copyBtn + downloadBtn;
+    const previewBtn = preview ? `<button class="btn btn-sm preview-btn" type="button" title="Preview file">Preview</button>` : "";
+
+    card.innerHTML = infoInner + removeBtn + copyBtn + previewBtn + downloadBtn;
 
     if (remove) {
       const btn = card.querySelector(".file-card-remove");
@@ -538,6 +603,10 @@ class Base64Tools extends BaseTool {
     if (download) {
       const btn = card.querySelector(".download-btn");
       btn?.addEventListener("click", download);
+      card.classList.add("processed-file-card");
+    }
+    if (preview) {
+      card.querySelector(".preview-btn")?.addEventListener("click", preview);
       card.classList.add("processed-file-card");
     }
 
@@ -952,6 +1021,7 @@ class Base64Tools extends BaseTool {
       if (fileData.isImage) {
         const imageData = fileData.content;
         const actions = {
+          ...(mode === "decode" ? { preview: () => this.openPreview(fileData) } : {}),
           download: () => {
             const blob = new Blob([imageData.content], { type: imageData.type });
             this.downloadBlob(blob, imageData.name);
@@ -977,6 +1047,7 @@ class Base64Tools extends BaseTool {
       } else if (fileData.isFile) {
         const fileInfo = fileData.content;
         const actions = {
+          ...(mode === "decode" && fileInfo.type === "application/pdf" ? { preview: () => this.openPreview(fileData) } : {}),
           download: () => {
             const blob = new Blob([fileInfo.content], { type: fileInfo.type });
             this.downloadBlob(blob, fileInfo.name);
@@ -1000,6 +1071,7 @@ class Base64Tools extends BaseTool {
       } else {
         // Text file (encoded result)
         const actions = {
+          ...(mode === "decode" ? { preview: () => this.openPreview(fileData) } : {}),
           download: () => this.downloadProcessedFile(fileData),
         };
 
@@ -1171,6 +1243,7 @@ class Base64Tools extends BaseTool {
 
   clearOutputFiles(mode) {
     const container = this.validateContainer();
+    if (mode === "decode") this.closePreview();
 
     const outputTextfield = container.querySelector(`#${mode}-output`);
     if (outputTextfield) {

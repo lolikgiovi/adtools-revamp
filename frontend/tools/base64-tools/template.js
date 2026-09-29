@@ -249,5 +249,15 @@ export const Base64ToolsTemplate = /* html */ `
     </div>
   </div>
 
+  <dialog id="base64-preview-dialog" class="base64-preview-dialog" aria-labelledby="base64-preview-title">
+    <div class="base64-preview-header">
+      <div>
+        <h3 id="base64-preview-title">Preview</h3>
+        <p id="base64-preview-details"></p>
+      </div>
+      <button id="base64-preview-close" class="btn btn-sm" type="button" aria-label="Close preview">Close</button>
+    </div>
+    <div id="base64-preview-content" class="base64-preview-content"></div>
+  </dialog>
 </div>
 `;
