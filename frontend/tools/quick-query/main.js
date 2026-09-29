@@ -204,6 +204,7 @@ export class QuickQueryUI {
       }
       // Initialize UI components
       this.bindElements();
+      this.setTabLoading(true);
       this.restoreAuditUserPreference();
       this.syncAuditUserMode();
       if (isTauri()) this.elements.importOracleDataButton.hidden = false;
@@ -232,13 +233,14 @@ export class QuickQueryUI {
       this.clearError();
       // Ensure attachments toolbar visibility reflects initial state
       this.updateAttachmentControlsState();
-      setupMonacoOracle();
-
       // Initialize IndexedDB storage service BEFORE setting up UI components
       // to prevent race conditions where early user interactions trigger storage calls
       await this.storageService.init();
       this._storageReady = true;
 
+      await this.prepareTabPreview();
+
+      setupMonacoOracle();
       await this.initializeComponents();
       this.setupEventListeners();
       this.setupQueryTypeDropdown();
@@ -1371,37 +1373,84 @@ export class QuickQueryUI {
     };
   }
 
-  async initializeTabs() {
-    const savedTabs = await this.storageService.getAllQueryTabs();
+  tabSummary(tab) {
+    return { id: tab.id, title: tab.title || "Untitled", tableName: tab.tableName || "", lastUpdated: tab.lastUpdated || "" };
+  }
+
+  setTabLoading(loading, tabId = null) {
+    const status = this.container.querySelector("#quickQueryTabLoading");
+    const panel = this.container.querySelector("#quickQueryTabPanel");
+    const target = tabId && this.tabs.find((tab) => tab.id === tabId);
+    if (status) status.textContent = target ? `Loading ${this.getTabTitle(target)}…` : "Loading query tabs…";
+    if (status) status.hidden = !loading;
+    panel?.setAttribute("aria-busy", String(loading));
+    this.elements.tabList?.querySelectorAll(".qq-query-tab").forEach((tab) => {
+      tab.classList.toggle("loading", loading && tab.dataset.tabId === tabId);
+    });
+  }
+
+  async prepareTabPreview() {
     const session = await this.storageService.loadQueryTabSession();
-    const savedById = new Map(savedTabs.map((tab) => [tab.id, this.createTabDraft(tab)]));
-    const orderedIds = Array.isArray(session?.tabOrder) ? session.tabOrder.filter((id) => savedById.has(id)) : [];
-    const remaining = savedTabs
-      .map((tab) => tab.id)
-      .filter((id) => !orderedIds.includes(id))
-      .sort((a, b) => new Date(savedById.get(b)?.lastUpdated || 0) - new Date(savedById.get(a)?.lastUpdated || 0));
-
-    this.tabs = [...orderedIds, ...remaining]
-      .map((id) => savedById.get(id))
-      .filter(Boolean)
-      .slice(0, 10);
-
-    if (this.tabs.length === 0) {
-      const initialTab = this.createTabDraft();
-      this.tabs = [initialTab];
-      this.activeTabId = initialTab.id;
-      this.renderTabs();
-      await this.applyTabDraft(initialTab);
-      await this.loadMostRecentSchema({ mode: "schema-data", skipChoice: true });
-      await this.saveActiveTabDraft();
-      await this.saveTabSession();
-      return;
+    const summaries = session?.tabSummaries;
+    const ids = await this.storageService.getQueryTabIds();
+    const matches =
+      Array.isArray(summaries) &&
+      Array.isArray(ids) &&
+      ids.length === summaries.length &&
+      ids.every((id) => summaries.some((tab) => tab.id === id));
+    if (matches) {
+      const byId = new Map(summaries.map((tab) => [tab.id, tab]));
+      this.tabs = (session.tabOrder || [])
+        .map((id) => byId.get(id))
+        .filter(Boolean)
+        .concat(summaries.filter((tab) => !(session.tabOrder || []).includes(tab.id)))
+        .slice(0, 15)
+        .map((tab) => ({ ...tab, _unloaded: true }));
+      this.activeTabId = this.tabs.some((tab) => tab.id === session.activeTabId) ? session.activeTabId : this.tabs[0]?.id || null;
+    } else {
+      const savedTabs = await this.storageService.getAllQueryTabs();
+      const byId = new Map(savedTabs.map((tab) => [tab.id, tab]));
+      const orderedIds = Array.isArray(session?.tabOrder) ? session.tabOrder.filter((id) => byId.has(id)) : [];
+      const remaining = savedTabs
+        .map((tab) => tab.id)
+        .filter((id) => !orderedIds.includes(id))
+        .sort((a, b) => new Date(byId.get(b)?.lastUpdated || 0) - new Date(byId.get(a)?.lastUpdated || 0));
+      this.tabs = [...orderedIds, ...remaining].map((id) => this.createTabDraft(byId.get(id))).slice(0, 15);
+      this.activeTabId = this.tabs.some((tab) => tab.id === session?.activeTabId) ? session.activeTabId : this.tabs[0]?.id || null;
     }
-
-    this.activeTabId = savedById.has(session?.activeTabId) ? session.activeTabId : this.tabs[0].id;
     this.renderTabs();
-    await this.applyTabDraft(this.getActiveTab());
-    await this.saveTabSession();
+    this.setTabLoading(true, this.activeTabId);
+  }
+
+  async loadTabDraft(tab) {
+    if (!tab?._unloaded) return tab;
+    const saved = await this.storageService.getQueryTab(tab.id);
+    if (!saved) throw new Error(`Could not load query tab ${tab.id}`);
+    const loaded = this.createTabDraft(saved);
+    const index = this.tabs.findIndex((item) => item.id === tab.id);
+    if (index !== -1) this.tabs[index] = loaded;
+    return loaded;
+  }
+
+  async initializeTabs() {
+    try {
+      if (this.tabs.length === 0) {
+        const initialTab = this.createTabDraft();
+        this.tabs = [initialTab];
+        this.activeTabId = initialTab.id;
+        this.renderTabs();
+        await this.applyTabDraft(initialTab);
+        await this.loadMostRecentSchema({ mode: "schema-data", skipChoice: true });
+        await this.saveActiveTabDraft();
+        await this.saveTabSession();
+        return;
+      }
+
+      await this.applyTabDraft(await this.loadTabDraft(this.getActiveTab()));
+      await this.saveTabSession();
+    } finally {
+      this.setTabLoading(false);
+    }
   }
 
   getActiveTab() {
@@ -1685,19 +1734,31 @@ export class QuickQueryUI {
     return this.storageService.saveQueryTabSession({
       tabOrder: this.tabs.map((tab) => tab.id),
       activeTabId: this.activeTabId,
+      tabSummaries: this.tabs.map((tab) => this.tabSummary(tab)),
     });
   }
 
   async switchTab(tabId, focusTab = false) {
     if (!tabId || tabId === this.activeTabId || this._tabOperation) return;
-    await this.flushPendingDataAutosave();
-    await this.saveActiveTabDraft();
     const next = this.tabs.find((tab) => tab.id === tabId);
     if (!next) return;
-    this.activeTabId = tabId;
-    await this.applyTabDraft(next);
-    await this.saveTabSession();
-    if (focusTab) this.elements.tabList?.querySelector(`[data-tab-id="${tabId}"] .qq-query-tab-label`)?.focus();
+    this._tabOperation = true;
+    this.setTabLoading(true, tabId);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await this.flushPendingDataAutosave();
+      if (!(await this.saveActiveTabDraft())) throw new Error("The current query tab could not be saved.");
+      const loaded = await this.loadTabDraft(next);
+      this.activeTabId = tabId;
+      await this.applyTabDraft(loaded);
+      await this.saveTabSession();
+      if (focusTab) this.elements.tabList?.querySelector(`[data-tab-id="${tabId}"] .qq-query-tab-label`)?.focus();
+    } catch (error) {
+      this.eventBus?.emit("notification:error", { message: error.message });
+    } finally {
+      this.setTabLoading(false);
+      this._tabOperation = false;
+    }
   }
 
   async createNewTab({ activate = true } = {}) {
@@ -1746,7 +1807,7 @@ export class QuickQueryUI {
     if (this.tabs.length >= 15 || this._tabOperation) return null;
     await this.flushPendingDataAutosave();
     await this.saveActiveTabDraft();
-    const source = this.tabs.find((tab) => tab.id === tabId);
+    const source = await this.loadTabDraft(this.tabs.find((tab) => tab.id === tabId));
     if (!source) return null;
     const duplicate = this.createTabDraft({
       ...source,
@@ -1817,6 +1878,7 @@ export class QuickQueryUI {
         this.eventBus?.emit("notification:error", { message: "The current tab could not be saved. Try closing it again." });
         return false;
       }
+      await Promise.all(this.tabs.filter((tab) => idsToClose.has(tab.id) && tab._unloaded).map((tab) => this.loadTabDraft(tab)));
       const previousActiveId = this.activeTabId;
       const activeIndex = this.tabs.findIndex((tab) => tab.id === previousActiveId);
       const closed = this.tabs.flatMap((tab, index) => (idsToClose.has(tab.id) ? [{ tab: structuredClone(tab), index }] : []));
@@ -1838,7 +1900,8 @@ export class QuickQueryUI {
       }
       this.tabs = remaining;
       this.activeTabId = next.id;
-      if (next.id !== previousActiveId) await this.applyTabDraft(next);
+      if (next.id !== previousActiveId) await this.applyTabDraft(await this.loadTabDraft(next));
+      await this.saveTabSession();
       this.renderTabs();
       this.elements.tabList?.querySelector(`[data-tab-id="${next.id}"] .qq-query-tab-label`)?.focus();
       this._closedTabs = { closed, previousActiveId, replacementId: replacement?.id || null };
@@ -1901,7 +1964,8 @@ export class QuickQueryUI {
       const activeChanged = nextActiveId !== this.activeTabId;
       this.tabs = order;
       this.activeTabId = nextActiveId;
-      if (activeChanged) await this.applyTabDraft(this.getActiveTab());
+      if (activeChanged) await this.applyTabDraft(await this.loadTabDraft(this.getActiveTab()));
+      await this.saveTabSession();
       this.renderTabs();
       this.elements.tabList?.querySelector(`[data-tab-id="${nextActiveId}"] .qq-query-tab-label`)?.focus();
       this._closedTabs = null;
@@ -1914,7 +1978,7 @@ export class QuickQueryUI {
   }
 
   async renameTab(tabId) {
-    const tab = this.tabs.find((item) => item.id === tabId);
+    const tab = await this.loadTabDraft(this.tabs.find((item) => item.id === tabId));
     if (!tab) return;
     const tabEl = this.elements.tabList?.querySelector(`[data-tab-id="${tabId}"]`);
     if (!tabEl) return;
@@ -3705,7 +3769,10 @@ export class QuickQueryUI {
 
   async openOracleDataImport() {
     const tableName = this.elements.tableNameInput.value.trim().toUpperCase();
-    const fields = this.schemaTable.getData().filter((row) => row[0]).map((row) => row[0]);
+    const fields = this.schemaTable
+      .getData()
+      .filter((row) => row[0])
+      .map((row) => row[0]);
     if (!/^[A-Z][A-Z0-9_$#]*\.[A-Z][A-Z0-9_$#]*$/.test(tableName) || fields.length === 0) {
       this.showError("Choose a SCHEMA.TABLE with saved schema fields before importing Oracle rows.");
       return;
@@ -3718,12 +3785,14 @@ export class QuickQueryUI {
     }
     this._oracleDataConnections = connections;
     const select = this.elements.oracleDataConnection;
-    select.replaceChildren(...connections.map((connection) => {
-      const option = document.createElement("option");
-      option.value = connection.name;
-      option.textContent = `${connection.name} (${connection.connect_string})`;
-      return option;
-    }));
+    select.replaceChildren(
+      ...connections.map((connection) => {
+        const option = document.createElement("option");
+        option.value = connection.name;
+        option.textContent = `${connection.name} (${connection.connect_string})`;
+        return option;
+      }),
+    );
     this.elements.oracleDataError.classList.add("hidden");
     this.elements.oracleDataSwitchTable.classList.add("hidden");
     this.elements.oracleDataOverlay.classList.remove("hidden");
@@ -3783,7 +3852,10 @@ export class QuickQueryUI {
 
   async fetchOracleData() {
     if (this._oracleDataBusy) return;
-    const fields = this.schemaTable.getData().filter((row) => row[0]).map((row) => row[0]);
+    const fields = this.schemaTable
+      .getData()
+      .filter((row) => row[0])
+      .map((row) => row[0]);
     const selectedTable = this.elements.tableNameInput.value.trim().toUpperCase();
     let query;
     try {

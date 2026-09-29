@@ -12,6 +12,7 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
     </div>
     <div class="quick-query-content" id="quickQueryTabPanel" role="tabpanel">
+        <div id="quickQueryTabLoading" class="qq-tab-loading" role="status" aria-live="polite" hidden>Loading query tab…</div>
         <div class="content-a">
             <div class="quick-query-left-panel">
                 <div class="button-group quick-query-search">

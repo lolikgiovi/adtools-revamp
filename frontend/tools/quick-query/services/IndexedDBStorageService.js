@@ -596,6 +596,19 @@ export class IndexedDBStorageService {
     }
   }
 
+  async getQueryTabIds() {
+    try {
+      return await new Promise((resolve, reject) => {
+        const request = this.db.transaction(TAB_STORE, "readonly").objectStore(TAB_STORE).getAllKeys();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error("Error loading query tab ids:", error);
+      return null;
+    }
+  }
+
   async deleteQueryTab(tabId) {
     if (!tabId) return false;
     try {
@@ -645,6 +658,7 @@ export class IndexedDBStorageService {
         id: TAB_SESSION_KEY,
         tabOrder: Array.isArray(session?.tabOrder) ? session.tabOrder : [],
         activeTabId: session?.activeTabId || null,
+        tabSummaries: Array.isArray(session?.tabSummaries) ? session.tabSummaries : undefined,
         lastUpdated: new Date().toISOString(),
       });
       return true;
