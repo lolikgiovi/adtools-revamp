@@ -224,9 +224,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
 </div>
 
 <div id="downloadAsOverlay" class="download-as-overlay hidden">
-    <div class="download-as-modal">
+    <div class="download-as-modal" role="dialog" aria-modal="true" aria-labelledby="downloadAsTitle">
         <div class="download-as-modal-header">
-            <h3>Download As</h3>
+            <h3 id="downloadAsTitle">Save As</h3>
             <button id="closeDownloadAsOverlay" class="overlay-close-button" aria-label="Close">&times;</button>
         </div>
         <div class="download-as-modal-content">
@@ -241,8 +241,11 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
             <div class="download-as-field">
                 <label for="downloadAsFilename">File Name</label>
                 <div class="download-as-filename-row">
-                    <input type="text" id="downloadAsFilename" placeholder="filename.sql" autocomplete="off">
-                    <button id="downloadAsSetDefault" class="btn btn-outline btn-sm">Set to Default</button>
+                    <div class="download-as-filename-input">
+                        <input type="text" id="downloadAsFilename" placeholder="File name" autocomplete="off" aria-describedby="downloadAsExtension">
+                        <span id="downloadAsExtension" class="download-as-extension">.sql</span>
+                    </div>
+                    <button id="downloadAsSetDefault" class="btn btn-outline btn-sm" type="button">Reset name</button>
                 </div>
             </div>
         </div>

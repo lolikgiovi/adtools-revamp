@@ -2943,19 +2943,15 @@ export class QuickQueryUI {
     }
   }
 
-  _getDownloadAsDefaultFilename() {
+  _getDownloadAsDefaultName() {
     const tableNameRaw = this.elements.tableNameInput.value.trim();
     const parts = tableNameRaw.split(".");
-    const schemaName = (parts[0] || "").toUpperCase();
-    const tableName = (parts[1] || parts[0] || "").toUpperCase();
     const squadName = (this.elements.downloadAsSquadName.value || "").trim();
     const featureName = (this.elements.downloadAsFeatureName.value || "").trim();
+    const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(new Date());
+    const tableName = parts.length > 1 ? `${parts[0]}.${parts.slice(1).join(".")}` : tableNameRaw || "query";
 
-    let base = schemaName && tableName && schemaName !== tableName ? `${schemaName}.${tableName}` : schemaName || tableName || "query";
-
-    if (squadName) base += ` (${squadName})`;
-    if (featureName) base += ` [${featureName}]`;
-    return `${base}.sql`;
+    return [squadName && `[${squadName}]`, `[${date}]`, featureName && `[${featureName}]`, tableName].filter(Boolean).join(" ");
   }
 
   _openDownloadAsOverlay() {
@@ -2977,7 +2973,7 @@ export class QuickQueryUI {
     }
 
     // Set initial filename
-    this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+    this.elements.downloadAsFilename.value = this._getDownloadAsDefaultName();
 
     // Track whether the user has manually edited the filename
     this._downloadAsFilenameEdited = false;
@@ -2988,7 +2984,7 @@ export class QuickQueryUI {
     // Squad/feature name inputs update filename if not manually edited
     const syncFilename = () => {
       if (!this._downloadAsFilenameEdited) {
-        this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+        this.elements.downloadAsFilename.value = this._getDownloadAsDefaultName();
       }
     };
 
@@ -2996,6 +2992,7 @@ export class QuickQueryUI {
     const onFeatureInput = () => syncFilename();
     const onFilenameInput = () => {
       this._downloadAsFilenameEdited = true;
+      this.elements.downloadAsFilename.value = this.elements.downloadAsFilename.value.replace(/\.sql$/i, "");
     };
 
     const closeBtn = document.getElementById("closeDownloadAsOverlay");
@@ -3020,14 +3017,14 @@ export class QuickQueryUI {
 
     const onSetDefault = () => {
       this._downloadAsFilenameEdited = false;
-      this.elements.downloadAsFilename.value = this._getDownloadAsDefaultFilename();
+      this.elements.downloadAsFilename.value = this._getDownloadAsDefaultName();
     };
 
     const onConfirm = () => {
       const squadName = this.elements.downloadAsSquadName.value.trim();
       const featureName = this.elements.downloadAsFeatureName.value.trim();
-      let filename = this.elements.downloadAsFilename.value.trim();
-      if (!filename) filename = this._getDownloadAsDefaultFilename();
+      const name = this.elements.downloadAsFilename.value.trim().replace(/\.sql$/i, "").trim() || this._getDownloadAsDefaultName();
+      const filename = `${name}.sql`;
 
       // Persist squad/feature to localStorage
       const DOWNLOAD_AS_KEY = "tool:quick-query:download-as";
