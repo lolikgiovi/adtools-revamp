@@ -39,6 +39,7 @@ const SCHEMA_TABLE_MIN_HEIGHT = 120;
 const SCHEMA_TABLE_ATTACHMENTS_FALLBACK_HEIGHT = 56;
 const SCHEMA_TABLE_SECTION_GAP = 8;
 const AUDIT_USER_PREFERENCE_KEY = "tool:quick-query:audit-user";
+const ORACLE_DATA_IMPORT_DRAFT_KEY = "tool:quick-query:oracle-data-import:";
 
 function loadJsZip() {
   if (!jsZipPromise) {
@@ -165,6 +166,15 @@ export class QuickQueryUI {
       }
     };
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
+    this._handleModifyRowsDocumentClick = (event) => {
+      if (!this.elements.modifyRowsAnchor?.contains(event.target)) this.closeModifyRowsMenu();
+    };
+    this._handleModifyRowsKeydown = (event) => {
+      if (event.key === "Escape" && !this.elements.modifyRowsMenu?.hidden) {
+        this.closeModifyRowsMenu();
+        this.elements.modifyRowsButton.focus();
+      }
+    };
     this._handleSystemModeDocumentClick = (event) => {
       if (!this.elements.systemModeControl?.contains(event.target)) this.closeSystemCustomPopover();
     };
@@ -394,6 +404,9 @@ export class QuickQueryUI {
       excelImportRowCount: document.getElementById("excelImportRowCount"),
       clearExcelImportButton: document.getElementById("clearExcelImport"),
       importOracleDataButton: document.getElementById("importOracleData"),
+      modifyRowsAnchor: document.getElementById("modifyRowsAnchor"),
+      modifyRowsButton: document.getElementById("modifyRowsButton"),
+      modifyRowsMenu: document.getElementById("modifyRowsMenu"),
       oracleDataOverlay: document.getElementById("oracleDataOverlay"),
       oracleDataModal: document.getElementById("oracleDataModal"),
       oracleDataConnection: document.getElementById("oracleDataConnection"),
@@ -634,6 +647,25 @@ export class QuickQueryUI {
       removeDataRow: {
         click: () => this.handleRemoveDataRow(),
       },
+      modifyRowsButton: {
+        click: () => this.toggleModifyRowsMenu(),
+        keydown: (event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            this.openModifyRowsMenu();
+            this.elements.modifyRowsMenu.querySelector("button")?.focus();
+          }
+        },
+      },
+      modifyRowsMenu: {
+        keydown: (event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          const buttons = [...this.elements.modifyRowsMenu.querySelectorAll("button")];
+          const direction = event.key === "ArrowDown" ? 1 : -1;
+          buttons[(buttons.indexOf(document.activeElement) + direction + buttons.length) % buttons.length]?.focus();
+        },
+      },
       clearData: {
         click: () => this.handleClearData(),
       },
@@ -644,6 +676,9 @@ export class QuickQueryUI {
       },
       importOracleDataButton: {
         click: () => this.openOracleDataImport(),
+      },
+      oracleDataConnection: {
+        change: () => this.saveOracleDataImportDraft(),
       },
       fetchOracleDataButton: {
         click: () => this.fetchOracleData(),
@@ -806,8 +841,10 @@ export class QuickQueryUI {
     });
 
     document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.addEventListener("click", this._handleModifyRowsDocumentClick);
     document.addEventListener("click", this._handleSystemModeDocumentClick);
     document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
+    document.addEventListener("keydown", this._handleModifyRowsKeydown);
     document.addEventListener("keydown", this._handleDataMaximizeKeydown);
   }
 
@@ -2100,8 +2137,10 @@ export class QuickQueryUI {
     clearTimeout(this._tabUndoTimer);
     this._closedTabs = null;
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
+    document.removeEventListener("click", this._handleModifyRowsDocumentClick);
     document.removeEventListener("click", this._handleSystemModeDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
+    document.removeEventListener("keydown", this._handleModifyRowsKeydown);
     document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
     if (this._queryTypeDocumentClick) {
       document.removeEventListener("click", this._queryTypeDocumentClick);
@@ -2121,6 +2160,7 @@ export class QuickQueryUI {
       } catch (_) {}
       this._splitEditor = null;
     }
+    this._oracleDataEditorChangeDisposable?.dispose?.();
     this._oracleDataEditor?.dispose?.();
     this._oracleDataEditor = null;
     if (this.schemaTable) {
@@ -3597,6 +3637,22 @@ export class QuickQueryUI {
     quickQueryUuidButton?.setAttribute("aria-expanded", "false");
   }
 
+  openModifyRowsMenu() {
+    this.elements.modifyRowsMenu.hidden = false;
+    this.elements.modifyRowsButton.setAttribute("aria-expanded", "true");
+  }
+
+  closeModifyRowsMenu() {
+    if (!this.elements.modifyRowsMenu) return;
+    this.elements.modifyRowsMenu.hidden = true;
+    this.elements.modifyRowsButton?.setAttribute("aria-expanded", "false");
+  }
+
+  toggleModifyRowsMenu() {
+    if (this.elements.modifyRowsMenu.hidden) this.openModifyRowsMenu();
+    else this.closeModifyRowsMenu();
+  }
+
   isUuidGeneratorOpen() {
     return !!this.elements.quickQueryUuidPopover && !this.elements.quickQueryUuidPopover.classList.contains("hidden");
   }
@@ -3766,6 +3822,28 @@ export class QuickQueryUI {
 
   // ===== Oracle row import =====
 
+  loadOracleDataImportDraft(tableName) {
+    try {
+      const draft = JSON.parse(localStorage.getItem(`${ORACLE_DATA_IMPORT_DRAFT_KEY}${tableName}`) || "{}");
+      return draft && typeof draft === "object" ? draft : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  saveOracleDataImportDraft() {
+    if (!this._oracleDataDraftTable || !this._oracleDataEditor) return;
+    try {
+      localStorage.setItem(
+        `${ORACLE_DATA_IMPORT_DRAFT_KEY}${this._oracleDataDraftTable}`,
+        JSON.stringify({
+          query: this._oracleDataEditor.getValue(),
+          connectionName: this.elements.oracleDataConnection.value,
+        }),
+      );
+    } catch (_) {}
+  }
+
   async openOracleDataImport() {
     const tableName = this.elements.tableNameInput.value.trim().toUpperCase();
     const fields = this.schemaTable
@@ -3783,6 +3861,9 @@ export class QuickQueryUI {
       return;
     }
     this._oracleDataConnections = connections;
+    this._oracleDataDraftTable = tableName;
+    const draft = this.loadOracleDataImportDraft(tableName);
+    const queryText = typeof draft.query === "string" ? draft.query : `SELECT * FROM ${tableName}\n`;
     const select = this.elements.oracleDataConnection;
     select.replaceChildren(
       ...connections.map((connection) => {
@@ -3792,6 +3873,7 @@ export class QuickQueryUI {
         return option;
       }),
     );
+    if (connections.some((connection) => connection.name === draft.connectionName)) select.value = draft.connectionName;
     this.elements.oracleDataError.classList.add("hidden");
     this.elements.oracleDataSwitchTable.classList.add("hidden");
     this.elements.oracleDataOverlay.classList.remove("hidden");
@@ -3799,15 +3881,16 @@ export class QuickQueryUI {
     this.elements.oracleDataModal.classList.remove("hidden");
     if (!this._oracleDataEditor) {
       this._oracleDataEditor = createOracleEditor(this.elements.oracleDataEditor, {
-        value: `SELECT * FROM ${tableName}\n`,
+        value: queryText,
         automaticLayout: true,
         scrollbar: { alwaysConsumeMouseWheel: true },
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         fontSize: 13,
       });
+      this._oracleDataEditorChangeDisposable = this._oracleDataEditor.onDidChangeModelContent(() => this.saveOracleDataImportDraft());
     } else {
-      this._oracleDataEditor.setValue(`SELECT * FROM ${tableName}\n`);
+      this._oracleDataEditor.setValue(queryText);
       this._oracleDataEditor.layout();
     }
     this._oracleDataEditor.focus();
@@ -3815,6 +3898,7 @@ export class QuickQueryUI {
 
   closeOracleDataImport() {
     if (this._oracleDataBusy) return;
+    this.saveOracleDataImportDraft();
     this.elements.oracleDataOverlay.classList.add("hidden");
     this.elements.oracleDataOverlay.setAttribute("aria-hidden", "true");
     this.elements.oracleDataModal.classList.add("hidden");
@@ -3840,6 +3924,8 @@ export class QuickQueryUI {
     this._oracleDataBusy = true;
     try {
       await this.handleLoadSchema(tableName, { mode: "schema-only", skipChoice: true });
+      this._oracleDataDraftTable = tableName;
+      this.saveOracleDataImportDraft();
       this.elements.oracleDataError.classList.add("hidden");
       this.elements.oracleDataSwitchTable.classList.add("hidden");
       this._oracleDataOtherTable = null;
@@ -3852,6 +3938,7 @@ export class QuickQueryUI {
 
   async fetchOracleData() {
     if (this._oracleDataBusy) return;
+    this.saveOracleDataImportDraft();
     const fields = this.schemaTable
       .getData()
       .filter((row) => row[0])

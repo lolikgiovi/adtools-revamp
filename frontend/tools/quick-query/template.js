@@ -76,10 +76,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         </span>
                     </button>
                     <button id="copySQL" class="btn btn-primary btn-sm">Copy</button>
-                    <div class="split-btn">
-                        <button id="downloadSQL" class="btn btn-primary btn-sm split-btn-main">Save</button>
-                        <button id="downloadAs" class="btn btn-primary btn-sm split-btn-chevron" aria-label="Download As" title="Save As">&#9660;</button>
-                    </div>
+                    <button id="downloadSQL" class="btn btn-primary btn-sm">Save</button>
+                    <button id="downloadAs" class="btn btn-primary btn-sm">Save As</button>
                     <button id="splitQuery" class="btn btn-primary btn-sm">Split</button>
                     <button id="executeInJenkinsRunner" class="btn btn-primary btn-sm">Run Query</button>
                 </div>
@@ -117,11 +115,26 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         </div>
                     </div>
                 </div>
-                <button id="addDataRow" class="btn btn-primary btn-sm">Add Row</button>
-                <button id="removeDataRow" class="btn btn-primary btn-sm">Remove Last Row</button>
+                <div id="modifyRowsAnchor" class="qq-row-actions-anchor">
+                    <button id="modifyRowsButton" class="btn btn-primary btn-sm qq-row-actions-trigger" type="button"
+                        aria-haspopup="menu" aria-expanded="false" aria-controls="modifyRowsMenu">
+                        Modify Rows
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+                    </button>
+                    <div id="modifyRowsMenu" class="qq-row-actions-menu" role="menu" aria-label="Modify rows" hidden>
+                        <button id="addDataRow" type="button" role="menuitem">Add Row</button>
+                        <button id="removeDataRow" type="button" role="menuitem">Remove Last Row</button>
+                    </div>
+                </div>
                 <button id="clearData" class="btn btn-primary btn-sm">Clear Data</button>
-                <button id="importExcel" class="btn btn-primary btn-sm">Import Excel</button>
-                <button id="importOracleData" class="btn btn-primary btn-sm" type="button" hidden>Import Oracle</button>
+                <button id="importExcel" class="btn btn-primary btn-sm qq-import-button" type="button">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5h7l3 3V14.5H3zM10 1.5v3h3M5 7h6M5 10h6M8 7v6" /></svg>
+                    Import Excel
+                </button>
+                <button id="importOracleData" class="btn btn-primary btn-sm qq-import-button" type="button" hidden>
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="3.5" rx="5.5" ry="2" /><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2" /></svg>
+                    Import Oracle
+                </button>
                 <button id="toggleDataMaximize" class="btn btn-sm qq-data-maximize" type="button" aria-pressed="false"
                     title="Expand the data sheet to use the available workspace">
                     <svg class="qq-data-maximize-icon qq-data-maximize-icon-expand" viewBox="0 0 16 16" aria-hidden="true">

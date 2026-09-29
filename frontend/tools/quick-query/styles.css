@@ -500,27 +500,6 @@
   opacity: 1 !important;
 }
 
-/* Split button */
-.split-btn {
-  display: inline-flex;
-  align-items: stretch;
-}
-
-.split-btn .split-btn-main {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-.split-btn .split-btn-chevron {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  padding-left: 7px;
-  padding-right: 7px;
-  font-size: 0.6rem;
-  line-height: 1;
-}
-
 /* Quick Query buttons use btn-primary btn-sm from global system */
 /* Local overrides removed - now inheriting from global styles.css */
 
@@ -776,6 +755,89 @@
 .quick-query-data-controls > .btn,
 .quick-query-data-controls .qq-uuid-generator-anchor > .btn {
   padding-inline: 7px;
+}
+
+.qq-row-actions-anchor {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.qq-row-actions-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 8px;
+}
+
+.qq-row-actions-trigger svg,
+.qq-import-button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.qq-row-actions-trigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.qq-row-actions-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 900;
+  min-width: 160px;
+  padding: 3px;
+  border: 1px solid hsl(var(--primary));
+  border-radius: var(--radius);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.qq-row-actions-menu[hidden] {
+  display: none;
+}
+
+.qq-row-actions-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.qq-row-actions-menu button:hover,
+.qq-row-actions-menu button:focus-visible {
+  background: hsl(var(--primary-hover));
+  color: hsl(var(--primary-foreground));
+}
+
+.qq-row-actions-menu button:focus-visible {
+  outline: 2px solid hsl(var(--primary-foreground));
+  outline-offset: -2px;
+}
+
+.qq-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qq-import-button[hidden] {
+  display: none;
 }
 
 .quick-query-data-controls:has(.system-custom-popover:not([hidden])) {
