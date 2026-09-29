@@ -37,7 +37,8 @@
   align-items: center;
   flex: 0 0 auto;
   min-width: 86px;
-  max-width: 190px;
+  width: max-content;
+  max-width: 500px;
   height: 38px;
   border-right: 1px solid hsl(var(--border));
   border-bottom: 2px solid transparent;
