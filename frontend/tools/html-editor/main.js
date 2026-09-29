@@ -926,11 +926,16 @@ class HTMLTemplateTool extends BaseTool {
     const btnCloseVtl = document.getElementById("btnCloseVtl");
     const btnResetVtl = document.getElementById("btnResetVtl");
     const btnImport = document.getElementById("btnImportHtml");
+    const btnSaveAs = document.getElementById("btnSaveAsHtml");
     const htmlFileInput = document.getElementById("htmlFileInput");
 
     // Import button
     if (btnImport) {
       btnImport.addEventListener("click", () => this.handleImportClick());
+    }
+
+    if (btnSaveAs) {
+      btnSaveAs.addEventListener("click", () => void this.handleSaveAsClick());
     }
 
     // File input change handler (web)
@@ -1514,6 +1519,62 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   // ===== Import HTML Methods =====
+
+  getHtmlSaveFileName() {
+    const documentName = String(this.activeDocument?.name || "Untitled").trim();
+    const safeName = documentName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/, "") || "Untitled";
+    return /\.html?$/i.test(safeName) ? safeName : `${safeName}.html`;
+  }
+
+  async handleSaveAsClick() {
+    if (!this.editor) return;
+
+    const content = this.editor.getValue();
+    const fileName = this.getHtmlSaveFileName();
+    try {
+      if (isTauri()) {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+        const selected = await save({
+          filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
+          defaultPath: fileName,
+          title: "Save HTML File As",
+        });
+        if (!selected) return;
+        await writeTextFile(selected, content);
+        this.showSuccess(`Saved ${selected.split(/[\\/]/).pop()}`);
+        return;
+      }
+
+      if (typeof window.showSaveFilePicker === "function") {
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: "HTML document", accept: { "text/html": [".html", ".htm"] } }],
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        this.showSuccess(`Saved ${fileHandle.name}`);
+        return;
+      }
+
+      const blob = new Blob([content], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.showSuccess(`Downloaded ${fileName}`);
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      console.error("Failed to save HTML:", error);
+      this.showError("Failed to save HTML file");
+    }
+  }
 
   /**
    * Handle Import button click
