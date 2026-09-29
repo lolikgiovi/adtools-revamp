@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import releaseContent from "../../config/release-content.json";
 import {
   ReleaseTips,
   ReleaseTour,
@@ -286,7 +285,7 @@ describe("release tour", () => {
     ]) {
       document.body.innerHTML = `<select id="${selectId}"></select>`;
       document.querySelector(`#${selectId}`).getBoundingClientRect = () => ({ width: 180, height: 36, top: 40, right: 200, bottom: 76, left: 20 });
-      const tip = releaseContent.tips.find((item) => item.id === tipId);
+      const tip = { id: tipId, route: "html-template", target: `#${selectId}`, title: "Preview", body: "Choose a mode." };
       const tips = new ReleaseTips({ release: { releaseId: `test-${tipId}`, tips: [tip] }, getRoute: () => "html-template" });
 
       tips.start();
