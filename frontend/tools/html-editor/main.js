@@ -1642,7 +1642,7 @@ class HTMLTemplateTool extends BaseTool {
     let safeAvailable = true;
     if (findings.length) {
       const explanation = document.createElement("p");
-      explanation.textContent = "Choose a finding to jump to the source and highlight it in the rendered Windows example. Switch preview modes on the right to compare.";
+      explanation.textContent = "Choose a finding to jump to the source and highlight it.";
       report.appendChild(explanation);
       const list = document.createElement("div");
       list.className = "html-encoding-findings";
@@ -1723,7 +1723,7 @@ class HTMLTemplateTool extends BaseTool {
       }
     }
     const guidance = document.createElement("p");
-    guidance.textContent = "Windows example simulates UTF-8 decoded as Windows-1252. Toad settings may differ. After replacing, use Save As and verify the stored BLOB or CLOB in the WebView.";
+    guidance.textContent = "Windows example simulates UTF-8 decoded as Windows-1252.";
     report.appendChild(guidance);
     report.hidden = false;
     const previewModes = this.container?.querySelector("#htmlEncodingPreviewModes");
