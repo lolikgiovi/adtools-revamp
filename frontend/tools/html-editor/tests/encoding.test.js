@@ -1,7 +1,7 @@
 import {
   analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, prepareToadSafeHtmlBytes, prepareUtf8HtmlBytes,
   simulateWindows1252Import,
-  markEncodingPreview,
+  markEncodingPreview, visibleTextOffsets,
 } from "../encoding.js";
 
 // Failure modes: source bytes decoded with the wrong charset, preexisting mojibake,
@@ -81,6 +81,16 @@ describe("HTML editor encoding", () => {
     expect(marked).toContain('const x="Â ";');
     expect(marked).toContain('content:"Â "');
     expect(markEncodingPreview("<p>A&#160;B</p>", "&#160;")).toContain('<mark class="adtools-encoding-preview-mark">&#160;</mark>');
+  });
+
+  it("maps source occurrences to visible HTML text and targets one preview occurrence", () => {
+    const html = '<p title=" ">First </p><script>const x=" ";</script><p>Second </p>';
+    const visible = visibleTextOffsets(html, " ");
+    expect(visible).toEqual([html.indexOf(" ", html.indexOf("First")), html.lastIndexOf(" ")]);
+    const marked = markEncodingPreview(html, " ", 1);
+    expect(marked.match(/adtools-encoding-preview-mark/g)).toHaveLength(2);
+    expect(marked.match(/id="adtools-encoding-target"/g)).toHaveLength(1);
+    expect(marked).toContain('<p>Second<mark class="adtools-encoding-preview-mark" id="adtools-encoding-target"> </mark></p>');
   });
 
   it("flags a conflicting charset and exports matching UTF-8 bytes without editing input", () => {

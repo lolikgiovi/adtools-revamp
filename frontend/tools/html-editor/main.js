@@ -7,7 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import { HtmlDocumentStore } from "./documentStore.js";
-import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import } from "./encoding.js";
+import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import, visibleTextOffsets } from "./encoding.js";
 import MinifyWorker from "./minify.worker.js?worker";
 import { buildVtlValuesExport, deleteVtlValue, extractVtlVariables, getPreviewContent, getVtlValue, setVtlValue } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -101,6 +101,7 @@ class HTMLTemplateTool extends BaseTool {
     this._mountSequence = 0;
     this._pendingFormat = null;
     this._encodingDecorations = null;
+    this._encodingActiveDecoration = null;
     this._encodingDiffEditor = null;
     this._encodingDiffModels = [];
     this._encodingReviewSource = null;
@@ -241,6 +242,8 @@ class HTMLTemplateTool extends BaseTool {
     this.clearEncodingReview();
     this._encodingDecorations?.dispose();
     this._encodingDecorations = null;
+    this._encodingActiveDecoration?.dispose();
+    this._encodingActiveDecoration = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -802,6 +805,7 @@ class HTMLTemplateTool extends BaseTool {
     });
 
     this._encodingDecorations = this.editor.createDecorationsCollection();
+    this._encodingActiveDecoration = this.editor.createDecorationsCollection();
     this.editor.onDidChangeModel(() => this.clearEncodingReview());
 
     this.inputSource = "restored";
@@ -1451,7 +1455,14 @@ class HTMLTemplateTool extends BaseTool {
         : null;
       let preview = rendered;
       if (needle) {
-        try { preview = markEncodingPreview(rendered, needle); } catch (_) { /* Keep the rendered preview when source markup is incomplete. */ }
+        try {
+          preview = markEncodingPreview(rendered, needle, selected.previewIndex);
+          if (preview.includes('id="adtools-encoding-target"')) {
+            preview += '<script data-adtools-encoding-scroll>window.addEventListener("load", function () {' +
+              'requestAnimationFrame(function () { document.getElementById("adtools-encoding-target")?.scrollIntoView({block:"center",inline:"nearest"}); });' +
+              '}, {once:true});</script>';
+          }
+        } catch (_) { /* Keep the rendered preview when source markup is incomplete. */ }
       }
 
       // Use srcdoc for atomic update and secure context
@@ -1564,6 +1575,7 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingDiffModels.forEach((model) => model.dispose());
     this._encodingDiffModels = [];
     this._encodingDecorations?.clear();
+    this._encodingActiveDecoration?.clear();
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
@@ -1642,11 +1654,13 @@ class HTMLTemplateTool extends BaseTool {
     let safeAvailable = true;
     if (findings.length) {
       const explanation = document.createElement("p");
-      explanation.textContent = "Choose a finding to jump to the source and highlight it.";
+      explanation.textContent = "Click a finding again to move through its occurrences in the source and preview.";
       report.appendChild(explanation);
       const list = document.createElement("div");
       list.className = "html-encoding-findings";
       findings.forEach((finding) => {
+        const visibleOffsets = visibleTextOffsets(source, finding.character);
+        let nextIndex = 0;
         const button = document.createElement("button");
         button.type = "button";
         button.className = "html-encoding-finding";
@@ -1655,6 +1669,8 @@ class HTMLTemplateTool extends BaseTool {
         heading.textContent = `${finding.name} · ${finding.codePoint} · ${finding.count}× · first at line ${finding.firstLine}`;
         const comparison = document.createElement("span");
         comparison.className = "html-encoding-comparison";
+        const location = document.createElement("span");
+        location.className = "html-encoding-location";
         [
           ["Original", visible(finding.character)],
           ["Windows example", visible(finding.simulated)],
@@ -1669,12 +1685,23 @@ class HTMLTemplateTool extends BaseTool {
           cell.append(caption, sample);
           comparison.appendChild(cell);
         });
-        button.append(heading, comparison);
+        button.append(heading, comparison, location);
         button.addEventListener("click", () => {
-          const position = model.getPositionAt(finding.offsets[0]);
-          this.editor.setSelection(new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + finding.character.length));
-          this.editor.revealLineInCenter(position.lineNumber);
-          this.setEncodingPreviewMode("windows", finding);
+          const occurrence = nextIndex;
+          nextIndex = (nextIndex + 1) % finding.offsets.length;
+          const offset = finding.offsets[occurrence];
+          const start = model.getPositionAt(offset);
+          const end = model.getPositionAt(offset + finding.character.length);
+          const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+          this.editor.setSelection(range);
+          this.editor.revealRangeInCenter(range);
+          this._encodingActiveDecoration?.set([{ range, options: { inlineClassName: "html-encoding-active" } }]);
+          list.querySelectorAll(".html-encoding-finding").forEach((item) => item.classList.remove("is-active"));
+          button.classList.add("is-active");
+          const previewIndex = visibleOffsets.indexOf(offset);
+          location.textContent = `Occurrence ${occurrence + 1} of ${finding.count} · line ${start.lineNumber}` +
+            (previewIndex < 0 ? " · source only" : " · shown in preview");
+          this.setEncodingPreviewMode("windows", { ...finding, previewIndex });
         });
         list.appendChild(button);
       });

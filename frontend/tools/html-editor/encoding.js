@@ -148,42 +148,79 @@ function tagEnd(html, from) {
   throw new Error("Unclosed HTML tag; automatic replacement is unavailable.");
 }
 
-/** Add visual markers to preview text only; source HTML and code blocks stay untouched. */
-export function markEncodingPreview(input, needle) {
-  const html = String(input);
-  if (!needle) return html;
-  const marker = `<mark class="adtools-encoding-preview-mark">${needle}</mark>`;
-  const parts = [];
+function visibleTextSegments(html) {
+  const segments = [];
   let index = 0;
   while (index < html.length) {
     if (html[index] !== "<") {
       const next = html.indexOf("<", index);
       const end = next < 0 ? html.length : next;
-      parts.push(html.slice(index, end).split(needle).join(marker));
+      segments.push([index, end]);
       index = end;
       continue;
     }
     if (html.startsWith("<!--", index)) {
       const end = html.indexOf("-->", index + 4);
-      if (end < 0) return html;
-      parts.push(html.slice(index, end + 3));
+      if (end < 0) return null;
       index = end + 3;
       continue;
     }
     const end = tagEnd(html, index);
-    const tag = html.slice(index, end);
-    const rawElement = tag.match(/^<(script|style)\b/i)?.[1];
+    const rawElement = html.slice(index, end).match(/^<(script|style)\b/i)?.[1];
     if (rawElement) {
       const close = new RegExp(`</${rawElement}\\s*>`, "gi");
       close.lastIndex = end;
-      if (!close.exec(html)) return html;
-      parts.push(html.slice(index, close.lastIndex));
+      if (!close.exec(html)) return null;
       index = close.lastIndex;
       continue;
     }
-    parts.push(tag);
     index = end;
   }
+  return segments;
+}
+
+/** Source offsets that correspond to rendered text, excluding markup and code. */
+export function visibleTextOffsets(input, needle) {
+  const html = String(input);
+  if (!needle) return [];
+  const segments = visibleTextSegments(html);
+  if (!segments) return [];
+  return segments.flatMap(([start, end]) => {
+    const offsets = [];
+    let offset = html.indexOf(needle, start);
+    while (offset >= 0 && offset < end && offset + needle.length <= end) {
+      offsets.push(offset);
+      offset = html.indexOf(needle, offset + needle.length);
+    }
+    return offsets;
+  });
+}
+
+/** Add visual markers to preview text only; source HTML and code blocks stay untouched. */
+export function markEncodingPreview(input, needle, activeIndex = -1) {
+  const html = String(input);
+  if (!needle) return html;
+  const segments = visibleTextSegments(html);
+  if (!segments) return html;
+  const parts = [];
+  let cursor = 0;
+  let occurrence = 0;
+  for (const [start, end] of segments) {
+    parts.push(html.slice(cursor, start));
+    let from = start;
+    let offset = html.indexOf(needle, start);
+    while (offset >= 0 && offset < end && offset + needle.length <= end) {
+      parts.push(html.slice(from, offset));
+      const target = occurrence === activeIndex ? ' id="adtools-encoding-target"' : "";
+      parts.push(`<mark class="adtools-encoding-preview-mark"${target}>${needle}</mark>`);
+      occurrence += 1;
+      from = offset + needle.length;
+      offset = html.indexOf(needle, from);
+    }
+    parts.push(html.slice(from, end));
+    cursor = end;
+  }
+  parts.push(html.slice(cursor));
   return parts.join("");
 }
 
