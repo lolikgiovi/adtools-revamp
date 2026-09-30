@@ -19,17 +19,31 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <input type="file" id="htmlFileInput" accept=".html,.htm" style="display: none;" />
             <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
             <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" title="Save HTML File As">Save As</button>
-            <button id="btnCheckHtmlEncoding" class="btn btn-secondary btn-sm" type="button" title="Check charset and possible corrupted characters">Check Encoding</button>
-            <button id="btnFormatHtml" class="btn btn-primary btn-sm" title="Format HTML">Format</button>
-            <button id="btnMinifyHtml" class="btn btn-primary btn-sm" title="Minify HTML">Minify</button>
-            <button id="btnExtractVtl" class="btn btn-primary btn-sm" title="Extract VTL Fields">Extract VTL Fields</button>
-            <button id="btnCopyHtml" class="btn btn-secondary btn-sm" title="Copy HTML">Copy</button>
-            <button id="btnPasteHtml" class="btn btn-secondary btn-sm" title="Paste HTML">Paste</button>
-            <button id="btnClearHtml" class="btn btn-secondary btn-sm" title="Clear HTML">Clear</button>
+            <details class="html-toolbar-menu html-edit-action">
+              <summary class="btn btn-secondary btn-sm">Format</summary>
+              <div class="html-toolbar-menu-content">
+                <button id="btnFormatHtml" type="button">Format HTML</button>
+                <button id="btnMinifyHtml" type="button">Minify HTML</button>
+              </div>
+            </details>
+            <button id="btnExtractVtl" class="btn btn-secondary btn-sm html-edit-action" title="Extract Velocity fields">Velocity</button>
+            <details class="html-toolbar-menu html-edit-action">
+              <summary class="btn btn-secondary btn-sm">More</summary>
+              <div class="html-toolbar-menu-content">
+                <button id="btnCopyHtml" type="button">Copy</button>
+                <button id="btnPasteHtml" type="button">Paste</button>
+                <button id="btnClearHtml" type="button">Clear</button>
+              </div>
+            </details>
+          </div>
+          <div class="html-workspace-tabs" role="group" aria-label="HTML editor phase">
+            <button id="htmlModeEdit" type="button" aria-pressed="true">Edit</button>
+            <button id="htmlModeEncoding" type="button" aria-pressed="false">Encoding</button>
           </div>
         </div>
         <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>
         <div id="htmlEditor" class="monaco-editor-container"></div>
+        <div id="htmlEncodingDiff" class="html-encoding-diff" aria-label="Original and ASCII-safe HTML source diff" hidden></div>
 
         <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
         <div
@@ -68,7 +82,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <div id="htmlEncodingPreviewModes" class="html-encoding-preview-modes" role="group" aria-label="Encoding preview" hidden>
               <button type="button" data-encoding-preview="original" aria-pressed="true">Original</button>
               <button type="button" data-encoding-preview="windows" aria-pressed="false">Windows example</button>
-              <button type="button" data-encoding-preview="safe" aria-pressed="false">Fixed</button>
+              <button type="button" data-encoding-preview="safe" aria-pressed="false" title="Preview the result of Replace all">After replacement</button>
             </div>
             <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;margin-right:.5rem;">
               <select id="envSelector" class="env-select" aria-label="Select environment" title="Select environment"></select>

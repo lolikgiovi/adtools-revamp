@@ -104,9 +104,11 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingActiveDecoration = null;
     this._encodingDiffEditor = null;
     this._encodingDiffModels = [];
+    this._encodingDiffToggle = null;
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
+    this.workspaceMode = "edit";
     this.previewEncodingMode = "original";
     this._encodingPreviewFinding = null;
     this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
@@ -792,6 +794,8 @@ class HTMLTemplateTool extends BaseTool {
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
+      overviewRulerLanes: 3,
+      overviewRulerBorder: false,
       scrollBeyondLastLine: false,
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: "on",
@@ -806,7 +810,10 @@ class HTMLTemplateTool extends BaseTool {
 
     this._encodingDecorations = this.editor.createDecorationsCollection();
     this._encodingActiveDecoration = this.editor.createDecorationsCollection();
-    this.editor.onDidChangeModel(() => this.clearEncodingReview());
+    this.editor.onDidChangeModel(() => {
+      if (this.workspaceMode === "encoding") this.showEncodingReport();
+      else this.clearEncodingReview();
+    });
 
     this.inputSource = "restored";
   }
@@ -946,7 +953,6 @@ class HTMLTemplateTool extends BaseTool {
     const btnResetVtl = document.getElementById("btnResetVtl");
     const btnImport = document.getElementById("btnImportHtml");
     const btnSaveAs = document.getElementById("btnSaveAsHtml");
-    const btnCheckEncoding = document.getElementById("btnCheckHtmlEncoding");
     const htmlFileInput = document.getElementById("htmlFileInput");
 
     // Import button
@@ -957,7 +963,13 @@ class HTMLTemplateTool extends BaseTool {
     if (btnSaveAs) {
       btnSaveAs.addEventListener("click", () => void this.handleSaveAsClick());
     }
-    btnCheckEncoding?.addEventListener("click", () => this.showEncodingReport());
+    this.container.querySelector("#htmlModeEdit")?.addEventListener("click", () => this.setWorkspaceMode("edit"));
+    this.container.querySelector("#htmlModeEncoding")?.addEventListener("click", () => this.setWorkspaceMode("encoding"));
+    this.container.querySelectorAll(".html-toolbar-menu").forEach((menu) => {
+      menu.addEventListener("click", (event) => {
+        if (event.target.closest("button")) menu.open = false;
+      });
+    });
     this.container.querySelectorAll("[data-encoding-preview]").forEach((button) => {
       button.addEventListener("click", () => this.setEncodingPreviewMode(button.dataset.encodingPreview));
     });
@@ -1277,7 +1289,9 @@ class HTMLTemplateTool extends BaseTool {
       clearTimeout(this._previewTimer);
       const id = this.activeDocumentId;
       this._previewTimer = setTimeout(() => {
-        if (id === this.activeDocumentId && value !== this.lastRenderedHTML) this.renderPreview(value);
+        if (id !== this.activeDocumentId) return;
+        if (this.workspaceMode === "encoding") this.showEncodingReport();
+        else if (value !== this.lastRenderedHTML) this.renderPreview(value);
       }, 300);
       this.scheduleDocumentSave();
     });
@@ -1403,6 +1417,7 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   getPreviewViewportWidth() {
+    if (this.workspaceMode === "encoding") return null;
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.value === this.previewViewportMode);
     if (preset?.width) return preset.width;
     if (this.previewViewportMode === "custom") {
@@ -1569,6 +1584,23 @@ class HTMLTemplateTool extends BaseTool {
     return /\.html?$/i.test(safeName) ? safeName : `${safeName}.html`;
   }
 
+  setWorkspaceMode(mode) {
+    if (!["edit", "encoding"].includes(mode) || !this.editor || mode === this.workspaceMode) return;
+    this.workspaceMode = mode;
+    const root = this.container.matches(".html-template") ? this.container : this.container.querySelector(".html-template");
+    root?.classList.toggle("is-encoding-mode", mode === "encoding");
+    this.container.querySelector("#htmlModeEdit")?.setAttribute("aria-pressed", String(mode === "edit"));
+    this.container.querySelector("#htmlModeEncoding")?.setAttribute("aria-pressed", String(mode === "encoding"));
+    this.container.querySelectorAll(".html-toolbar-menu").forEach((menu) => { menu.open = false; });
+    this.applyPreviewViewport();
+    if (mode === "encoding") this.showEncodingReport();
+    else {
+      this.clearEncodingReview();
+      this.renderPreview(this.editor.getValue(), true);
+    }
+    this.editor.layout();
+  }
+
   clearEncodingReview() {
     this._encodingDiffEditor?.dispose();
     this._encodingDiffEditor = null;
@@ -1579,8 +1611,13 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
+    this._encodingDiffToggle = null;
     this.previewEncodingMode = "original";
     this._encodingPreviewFinding = null;
+    const diff = this.container?.querySelector("#htmlEncodingDiff");
+    if (diff) diff.hidden = true;
+    const sourceEditor = this.container?.querySelector("#htmlEditor");
+    if (sourceEditor) sourceEditor.hidden = false;
     const previewModes = this.container?.querySelector("#htmlEncodingPreviewModes");
     if (previewModes) previewModes.hidden = true;
     const report = this.container?.querySelector("#htmlEncodingReport");
@@ -1597,14 +1634,20 @@ class HTMLTemplateTool extends BaseTool {
     this.renderPreview(this.editor.getValue(), true);
   }
 
-  showEncodingDiff(host) {
-    if (!host || !this._encodingReviewSource || !this._encodingReviewSafe) return;
+  showEncodingDiff() {
+    const host = this.container?.querySelector("#htmlEncodingDiff");
+    const sourceEditor = this.container?.querySelector("#htmlEditor");
+    if (!host || !sourceEditor || !this._encodingReviewSource || !this._encodingReviewSafe) return;
     if (this._encodingDiffEditor) {
       host.hidden = !host.hidden;
       if (!host.hidden) this._encodingDiffEditor.layout();
+      sourceEditor.hidden = !host.hidden;
+      if (!sourceEditor.hidden) this.editor.layout();
+      if (this._encodingDiffToggle) this._encodingDiffToggle.textContent = host.hidden ? "Review source diff" : "Back to editor";
       return;
     }
     host.hidden = false;
+    sourceEditor.hidden = true;
     this._encodingDiffModels = [
       monaco.editor.createModel(this._encodingReviewSource, "html"),
       monaco.editor.createModel(this._encodingReviewSafe, "html"),
@@ -1619,14 +1662,15 @@ class HTMLTemplateTool extends BaseTool {
       diffWordWrap: "on",
       renderSideBySide: host.clientWidth >= 650,
       useInlineViewWhenSpaceIsLimited: false,
-      renderOverviewRuler: false,
+      renderOverviewRuler: true,
       fontSize: 12,
     });
     this._encodingDiffEditor.setModel({ original: this._encodingDiffModels[0], modified: this._encodingDiffModels[1] });
     this._encodingDiffEditor.layout();
+    if (this._encodingDiffToggle) this._encodingDiffToggle.textContent = "Back to editor";
   }
 
-  showEncodingReport(importEncoding = null) {
+  showEncodingReport(importEncoding = this.activeDocument?.importEncoding || null) {
     const report = this.container?.querySelector("#htmlEncodingReport");
     if (!report || !this.editor) return;
     this.clearEncodingReview();
@@ -1639,12 +1683,17 @@ class HTMLTemplateTool extends BaseTool {
         model.getPositionAt(offset).lineNumber, model.getPositionAt(offset).column,
         model.getPositionAt(offset + finding.character.length).lineNumber, model.getPositionAt(offset + finding.character.length).column,
       ),
-      options: { inlineClassName: "html-encoding-risk", hoverMessage: { value: `${finding.name} (${finding.codePoint})` } },
+      options: {
+        inlineClassName: "html-encoding-risk",
+        hoverMessage: { value: `${finding.name} (${finding.codePoint})` },
+        overviewRuler: { color: "#f59e0b", position: monaco.editor.OverviewRulerLane.Center },
+      },
     }))));
     report.replaceChildren();
     const summary = document.createElement("p");
-    summary.textContent = `${importEncoding ? `Imported as ${importEncoding.toUpperCase()}. ` : ""}HTML charset: ${charset || "not declared"}. ` +
-      (findings.length ? `${findings.reduce((total, finding) => total + finding.count, 0)} highlighted characters in ${findings.length} group${findings.length === 1 ? "" : "s"}.` : "No non-ASCII characters found.");
+    const total = findings.reduce((sum, finding) => sum + finding.count, 0);
+    summary.textContent = `${importEncoding ? `Imported as ${importEncoding.toUpperCase()} · ` : ""}${charset || "Charset not declared"} · ` +
+      (findings.length ? `${total} characters to review` : "No non-ASCII characters found");
     report.appendChild(summary);
     issues.filter((issue) => issue.code !== "non_ascii").forEach((issue) => {
       const item = document.createElement("p");
@@ -1654,7 +1703,7 @@ class HTMLTemplateTool extends BaseTool {
     let safeAvailable = true;
     if (findings.length) {
       const explanation = document.createElement("p");
-      explanation.textContent = "Click a finding again to move through its occurrences in the source and preview.";
+      explanation.textContent = "Windows example shows UTF-8 read as Windows-1252. Click a finding to inspect each occurrence.";
       report.appendChild(explanation);
       const list = document.createElement("div");
       list.className = "html-encoding-findings";
@@ -1666,15 +1715,18 @@ class HTMLTemplateTool extends BaseTool {
         button.className = "html-encoding-finding";
         const visible = (value) => value.replaceAll(" ", "␣");
         const heading = document.createElement("strong");
-        heading.textContent = `${finding.name} · ${finding.codePoint} · ${finding.count}× · first at line ${finding.firstLine}`;
+        heading.textContent = `${finding.name} · ${finding.codePoint}`;
+        const count = document.createElement("span");
+        count.className = "html-encoding-count";
+        count.textContent = `${finding.count} found`;
         const comparison = document.createElement("span");
         comparison.className = "html-encoding-comparison";
         const location = document.createElement("span");
         location.className = "html-encoding-location";
         [
           ["Original", visible(finding.character)],
-          ["Windows example", visible(finding.simulated)],
-          ["Fixed source", finding.replacement],
+          ["Windows", visible(finding.simulated)],
+          ["ASCII fix", finding.replacement],
         ].forEach(([label, value]) => {
           const cell = document.createElement("span");
           cell.className = "html-encoding-comparison-cell";
@@ -1685,8 +1737,10 @@ class HTMLTemplateTool extends BaseTool {
           cell.append(caption, sample);
           comparison.appendChild(cell);
         });
-        button.append(heading, comparison, location);
+        button.append(count, heading, comparison, location);
         button.addEventListener("click", () => {
+          const diffHost = this.container.querySelector("#htmlEncodingDiff");
+          if (diffHost && !diffHost.hidden) this.showEncodingDiff();
           const occurrence = nextIndex;
           nextIndex = (nextIndex + 1) % finding.offsets.length;
           const offset = finding.offsets[occurrence];
@@ -1695,12 +1749,18 @@ class HTMLTemplateTool extends BaseTool {
           const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
           this.editor.setSelection(range);
           this.editor.revealRangeInCenter(range);
-          this._encodingActiveDecoration?.set([{ range, options: { inlineClassName: "html-encoding-active" } }]);
+          this._encodingActiveDecoration?.set([{
+            range,
+            options: {
+              inlineClassName: "html-encoding-active",
+              overviewRuler: { color: "#ef4444", position: monaco.editor.OverviewRulerLane.Right },
+            },
+          }]);
           list.querySelectorAll(".html-encoding-finding").forEach((item) => item.classList.remove("is-active"));
           button.classList.add("is-active");
           const previewIndex = visibleOffsets.indexOf(offset);
-          location.textContent = `Occurrence ${occurrence + 1} of ${finding.count} · line ${start.lineNumber}` +
-            (previewIndex < 0 ? " · source only" : " · shown in preview");
+          location.textContent = `${occurrence + 1} / ${finding.count} · line ${start.lineNumber}` +
+            (previewIndex < 0 ? " · source only" : "");
           this.setEncodingPreviewMode("windows", { ...finding, previewIndex });
         });
         list.appendChild(button);
@@ -1718,15 +1778,12 @@ class HTMLTemplateTool extends BaseTool {
           diffButton.type = "button";
           diffButton.className = "btn btn-secondary btn-sm";
           diffButton.textContent = "Review source diff";
-          const diffHost = document.createElement("div");
-          diffHost.className = "html-encoding-diff";
-          diffHost.setAttribute("aria-label", "Original and ASCII-safe HTML source diff");
-          diffHost.hidden = true;
-          diffButton.addEventListener("click", () => this.showEncodingDiff(diffHost));
+          this._encodingDiffToggle = diffButton;
+          diffButton.addEventListener("click", () => this.showEncodingDiff());
           const replaceButton = document.createElement("button");
           replaceButton.type = "button";
           replaceButton.className = "btn btn-primary btn-sm";
-          replaceButton.textContent = `Replace all ${findings.reduce((total, finding) => total + finding.count, 0)} in editor`;
+          replaceButton.textContent = `Replace all ${total} in editor`;
           replaceButton.addEventListener("click", () => {
             if (this.activeDocumentId !== this._encodingReviewDocumentId || this.editor.getValue() !== this._encodingReviewSource) {
               this.showEncodingReport();
@@ -1740,7 +1797,7 @@ class HTMLTemplateTool extends BaseTool {
             this.showSuccess("Replaced upload-sensitive characters. Undo is available in the editor.");
           });
           actions.append(diffButton, replaceButton);
-          report.append(actions, diffHost);
+          report.append(actions);
         }
       } catch (error) {
         safeAvailable = false;
@@ -1750,7 +1807,11 @@ class HTMLTemplateTool extends BaseTool {
       }
     }
     const guidance = document.createElement("p");
-    guidance.textContent = "Windows example simulates UTF-8 decoded as Windows-1252.";
+    guidance.textContent = !findings.length
+      ? "No upload-sensitive characters remain. Windows example should match Original."
+      : safeAvailable
+        ? "After replacement previews the ASCII-safe result; compare it with Windows example. Replace all applies it."
+        : "Automatic replacement is unavailable for this source; review the finding in the editor.";
     report.appendChild(guidance);
     report.hidden = false;
     const previewModes = this.container?.querySelector("#htmlEncodingPreviewModes");
@@ -1875,9 +1936,10 @@ class HTMLTemplateTool extends BaseTool {
   async _loadHtmlContent(content, name = null, encoding = null) {
     const document = await this.newDocument(name, content);
     if (!document) return;
+    document.importEncoding = encoding;
     this.inputSource = "import";
     this.showSuccess("HTML file opened in a new tab");
-    this.showEncodingReport(encoding);
+    if (this.workspaceMode === "encoding") this.showEncodingReport(encoding);
     this.trackAnalytics("input_acquired", {
       source: "import",
       session_id: this.analyticsSessionId,
