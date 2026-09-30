@@ -8,6 +8,7 @@ import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import { HtmlDocumentStore } from "./documentStore.js";
 import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import, visibleTextOffsets } from "./encoding.js";
+import { withEncodingPreviewBridge } from "./previewBridge.js";
 import MinifyWorker from "./minify.worker.js?worker";
 import { buildVtlValuesExport, deleteVtlValue, extractVtlVariables, getPreviewContent, getVtlValue, setVtlValue } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -36,39 +37,6 @@ function vtlValuePaths(value, prefix = "", depth = 0) {
   });
 }
 const DEFAULT_HTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`;
-function withPreviewScrollBridge(html, key) {
-  return `${html}<script data-adtools-preview-scroll>
-(() => {
-  const key = ${JSON.stringify(key)};
-  let applyingSync = false;
-  const extent = () => ({
-    x: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-    y: Math.max(0, document.documentElement.scrollHeight - innerHeight),
-  });
-  addEventListener("scroll", () => {
-    if (applyingSync) return;
-    const max = extent();
-    parent.postMessage({
-      type: "adtools:preview-scroll", key,
-      x: max.x ? scrollX / max.x : 0,
-      y: max.y ? scrollY / max.y : 0,
-    }, "*");
-  }, { passive: true });
-  addEventListener("message", (event) => {
-    const data = event.data;
-    if (event.source !== parent || data?.type !== "adtools:preview-sync" || data.key !== key) return;
-    const max = extent();
-    const x = Math.max(0, Math.min(1, Number(data.x) || 0)) * max.x;
-    const y = Math.max(0, Math.min(1, Number(data.y) || 0)) * max.y;
-    if (Math.abs(scrollX - x) < 1 && Math.abs(scrollY - y) < 1) return;
-    applyingSync = true;
-    scrollTo(x, y);
-    requestAnimationFrame(() => { applyingSync = false; });
-  });
-})();
-</script>`;
-}
-
 // Representative CSS viewport widths; hardware pixel resolution is a separate device property.
 const PREVIEW_VIEWPORT_PRESETS = [
   { value: "responsive", label: "Fit · Responsive", width: null },
@@ -1532,13 +1500,6 @@ class HTMLTemplateTool extends BaseTool {
         if (!needle) return rendered;
         try {
           const preview = markEncodingPreview(rendered, needle, selected.previewIndex);
-          if (preview.includes('id="adtools-encoding-target"')) {
-            return preview + '<script data-adtools-encoding-scroll>window.addEventListener("load", function () {' +
-              'requestAnimationFrame(function () {' +
-              'document.getElementById("adtools-encoding-target")?.scrollIntoView({block:"center",inline:"nearest"});' +
-              '});' +
-              '}, {once:true});</script>';
-          }
           return preview;
         } catch (_) { return rendered; /* Keep the rendered preview when source markup is incomplete. */ }
       };
@@ -1546,7 +1507,13 @@ class HTMLTemplateTool extends BaseTool {
       // Use srcdoc for atomic update and secure context
       const preview = buildPreview(comparing ? "windows" : this.previewEncodingMode);
       iframe.hidden = !preview.trim();
-      iframe.srcdoc = comparing ? withPreviewScrollBridge(preview, scrollKey) : preview || "";
+      const hasTarget = preview.includes('id="adtools-encoding-target"');
+      iframe.srcdoc = preview && (comparing || (this.workspaceMode === "encoding" && hasTarget))
+        ? withEncodingPreviewBridge(preview, {
+          key: scrollKey || "",
+          target: hasTarget,
+        })
+        : preview || "";
       if (afterIframe) {
         const afterPreview = comparing ? buildPreview("safe") : "";
         afterIframe.hidden = !afterPreview.trim();
@@ -1554,7 +1521,10 @@ class HTMLTemplateTool extends BaseTool {
           // Wait for the newly shown pane to get a layout before navigating its iframe.
           requestAnimationFrame(() => {
             if (renderSequence === this._previewRenderSequence && afterPane?.isConnected && !afterPane.hidden) {
-              afterIframe.srcdoc = withPreviewScrollBridge(afterPreview, scrollKey);
+              afterIframe.srcdoc = withEncodingPreviewBridge(afterPreview, {
+                key: scrollKey,
+                target: afterPreview.includes('id="adtools-encoding-target"'),
+              });
             }
           });
         } else {
@@ -1742,7 +1712,7 @@ class HTMLTemplateTool extends BaseTool {
       scrollBeyondLastLine: false,
       wordWrap: "on",
       diffWordWrap: "on",
-      renderSideBySide: host.clientWidth >= 650,
+      renderSideBySide: true,
       useInlineViewWhenSpaceIsLimited: false,
       renderOverviewRuler: true,
       fontSize: 12,
