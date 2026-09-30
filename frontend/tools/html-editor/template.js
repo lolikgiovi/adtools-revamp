@@ -44,7 +44,12 @@ export const HTMLTemplateToolTemplate = /* html */ `
           </div>
           <div class="html-workspace-tabs" role="group" aria-label="HTML editor phase">
             <button id="htmlModeEdit" type="button" aria-pressed="true">Edit</button>
-            <button id="htmlModeEncoding" type="button" aria-pressed="false">Encoding</button>
+            <button
+              id="htmlModeEncoding"
+              type="button"
+              aria-pressed="false"
+              title="Check for characters that may change in Windows text imports"
+            >Encoding</button>
           </div>
         </div>
         <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>

@@ -2,17 +2,45 @@
   "$schema": "./release-content.schema.json",
   "releaseId": "release-1.3.8",
   "version": "1.3.8",
-  "title": "Quick Query and file saving fixes",
-  "summary": "Quick Query is easier to scroll and save from, with smoother Oracle imports and HTML file saving.",
+  "title": "Review HTML encoding before export",
+  "summary": "The HTML Editor flags characters at risk in Windows text imports and lets you compare previews and inspect fixes before applying them.",
   "notes": [
-    "Quick Query editors keep scrolling inside the editor.",
-    "Oracle import remembers your draft query between visits.",
-    "Quick Query Save As has clearer file naming and a separate .sql extension.",
+    "HTML Template flags characters at risk in Windows text imports. Compare previews and review supported fixes before applying them.",
     "HTML Template can save the current document as an HTML file.",
+    "Quick Query editors keep scrolling inside the editor, and Oracle import remembers your draft query.",
+    "Quick Query Save As has clearer file naming and a separate .sql extension.",
     "Base64 Tools can preview decoded files before saving them.",
     "Dashboard Overview now applies the selected time range to its metrics."
   ],
-  "slides": [],
+  "slides": [
+    {
+      "title": "Preview encoding fixes before applying them",
+      "body": "Find characters at risk in Windows text imports, compare previews, and inspect supported source fixes before applying them.",
+      "bullets": [
+        "Select a finding to step through its occurrences in the editor.",
+        "Compare previews and review the source diff before replacing characters.",
+        "Replace all applies supported fixes in the editor; Undo remains available."
+      ],
+      "action": {
+        "label": "Open HTML Template",
+        "route": "html-template"
+      }
+    }
+  ],
   "tour": [],
-  "tips": []
+  "tips": [
+    {
+      "id": "html-encoding-review",
+      "route": "html-template",
+      "target": "#htmlModeEncoding",
+      "placement": "bottom",
+      "title": "Review HTML encoding",
+      "body": "Open Encoding to find characters at risk in Windows text imports, compare previews, and review supported replacements.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "#htmlModeEncoding"
+      }
+    }
+  ]
 }

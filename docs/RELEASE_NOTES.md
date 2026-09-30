@@ -1,5 +1,7 @@
 # AD Tools 1.3.8
 
+- **HTML Template** — Review characters at risk in Windows text imports. Compare the Windows example and ASCII-safe preview, inspect the source diff,
+  and apply supported replacements with Undo available.
 - **Quick Query** — Scrolling stays inside query editors. Oracle import keeps your draft query, and Save As has clearer SQL file naming.
 - **HTML Template** — Save the current document as an HTML file.
 - **Base64 Tools** — Preview a decoded file before saving it.
