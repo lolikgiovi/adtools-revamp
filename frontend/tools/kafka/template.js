@@ -85,7 +85,13 @@ export const KafkaTemplate = /*html*/ `
               </div>
 
               <div class="kafka-editor-section kafka-value-section">
-                <div class="kafka-editor-heading"><label id="kafkaValueLabel" for="kafkaValue">Payload</label><div class="kafka-editor-controls"><label class="switch kafka-bulk-toggle" title="Publish the payload as a JSON array"><input id="kafkaBulk" type="checkbox" /><span class="slider"></span></label><span class="kafka-toggle-label">Bulk</span><button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button></div></div>
+                <div class="kafka-editor-heading">
+                  <label id="kafkaValueLabel" for="kafkaValue">Payload</label>
+                  <div class="kafka-editor-controls">
+                    <button id="kafkaGenerateUuid" class="btn btn-ghost btn-sm" type="button" title="Generate and copy a UUID">Generate UUID</button>
+                    <button id="kafkaFormatValue" class="btn btn-ghost btn-sm" type="button">Format</button>
+                  </div>
+                </div>
                 <div id="kafkaValueEditor" class="kafka-json-editor" aria-labelledby="kafkaValueLabel"></div>
                 <textarea id="kafkaValue" class="kafka-editor-fallback" rows="11" spellcheck="false">{
   "example": "value"

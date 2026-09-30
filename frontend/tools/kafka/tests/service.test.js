@@ -1,28 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { MAX_KAFKA_BATCH, parseMessages, rankKafkaTopics, receivedMessageToDraft } from "../service.js";
+import { parseMessages, rankKafkaTopics, receivedMessageToDraft } from "../service.js";
 
 describe("Kafka message preparation", () => {
   it("creates one record for one JSON request", () => {
-    expect(parseMessages('{"cif":"30000758049"}', false, "account-1", '{"source":"ad-tools"}')).toEqual([
+    expect(parseMessages('{"cif":"30000758049"}', "account-1", '{"source":"ad-tools"}')).toEqual([
       { key: "account-1", value: '{"cif":"30000758049"}', headers: [{ key: "source", value: "ad-tools" }] },
     ]);
   });
 
-  it("maps each array element to exactly one message", () => {
-    const records = parseMessages('[{"id":1},{"id":2}]', true);
-    expect(records.map((record) => record.value)).toEqual(['{"id":1}', '{"id":2}']);
-    expect(records).toHaveLength(2);
+  it("keeps an array payload in one Kafka record", () => {
+    expect(parseMessages('[{"id":1},{"id":2}]')).toEqual([
+      { key: null, value: '[{"id":1},{"id":2}]', headers: [] },
+    ]);
   });
 
-  it("rejects invalid or oversized bulk input before publishing", () => {
-    expect(() => parseMessages('{"id":1}', true)).toThrow("JSON array");
-    expect(() => parseMessages("[]", true)).toThrow("1 to 100");
-    expect(() => parseMessages(JSON.stringify(Array.from({ length: MAX_KAFKA_BATCH + 1 }, (_, id) => ({ id }))), true)).toThrow("1 to 100");
-    expect(() => parseMessages("{bad", false)).toThrow("valid JSON");
+  it("rejects invalid JSON before publishing", () => {
+    expect(() => parseMessages("{bad")).toThrow("valid JSON");
   });
 
   it("requires string header values", () => {
-    expect(() => parseMessages("{}", false, "", '{"retry":3}')).toThrow("Headers");
+    expect(() => parseMessages("{}", "", '{"retry":3}')).toThrow("Headers");
   });
 
   it("copies a received JSON message and its headers into a publish draft", () => {
@@ -32,7 +29,7 @@ describe("Kafka message preparation", () => {
       keyIsUtf8: true, valueIsUtf8: true,
     });
     expect(draft).toEqual({ topic: "orders.test", key: " key ", headers: '{\n  "source": "uat",\n  "traceId": "abc"\n}', value: '{"id":1}' });
-    expect(parseMessages(draft.value, false, draft.key, draft.headers)[0].key).toBe(" key ");
+    expect(parseMessages(draft.value, draft.key, draft.headers)[0].key).toBe(" key ");
   });
 
   it("rejects received messages whose content cannot be reproduced by the JSON publisher", () => {

@@ -127,13 +127,13 @@ export class KafkaTool extends BaseTool {
       this.renderRequests();
     });
     this.field("kafkaTemplateSearch").addEventListener("keydown", (event) => this.handleTemplateKeydown(event));
-    this.field("kafkaBulk").addEventListener("change", () => this.updateCount());
     this.field("kafkaKey").addEventListener("input", () => this.updateCount());
     this.field("kafkaValue").addEventListener("input", () => this.updateCount());
     this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
     this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
     this.field("kafkaGenerateTraceId").addEventListener("click", () => this.generateTraceId());
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
+    this.field("kafkaGenerateUuid").addEventListener("click", () => this.generateUuid());
     this.field("kafkaExpandHeaders").addEventListener("click", () => this.setHeadersExpanded());
     this.field("kafkaListen").addEventListener("click", () => this.toggleListening());
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
@@ -463,6 +463,11 @@ export class KafkaTool extends BaseTool {
     }
   }
 
+  generateUuid() {
+    const uuid = globalThis.crypto.randomUUID();
+    this.copyToClipboard(uuid, this.field("kafkaGenerateUuid"));
+  }
+
   generateTraceId() {
     const toHeader = this.field("kafkaTraceToHeader").checked;
     const toKey = this.field("kafkaTraceToKey").checked;
@@ -500,8 +505,6 @@ export class KafkaTool extends BaseTool {
       if (name === "Headers" && (!parsed || Array.isArray(parsed) || typeof parsed !== "object" ||
         Object.entries(parsed).some(([key, value]) => !key || typeof value !== "string"))) {
         this.message(status, "Headers need a JSON object with string values.", true);
-      } else if (name === "Value" && this.field("kafkaBulk").checked && (!Array.isArray(parsed) || !parsed.length || parsed.length > 100)) {
-        this.message(status, "Bulk value needs an array of 1 to 100 messages.", true);
       } else this.message(status, "Valid JSON");
     } catch (_) { this.message(status, "Invalid JSON. Check the highlighted syntax.", true); }
   }
@@ -892,26 +895,23 @@ export class KafkaTool extends BaseTool {
   }
 
   records() {
-    return parseMessages(this.field("kafkaValue").value, this.field("kafkaBulk").checked,
-      this.field("kafkaKey").value, this.field("kafkaHeaders").value);
+    return parseMessages(this.field("kafkaValue").value, this.field("kafkaKey").value, this.field("kafkaHeaders").value);
   }
 
   updateCount() {
     this.updateOptionsSummary();
     this.validateJson("Headers");
     this.validateJson("Value");
-    const bulk = this.field("kafkaBulk").checked;
     const button = this.field("kafkaPublish");
     try {
       const count = this.records().length;
       const ready = this.config().brokers && this.field("kafkaTopic").value.trim();
-      this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click${bulk ? " · 100 maximum" : ""}` :
+      this.message("kafkaCount", ready ? `${count} ${count === 1 ? "message" : "messages"} per click` :
         (!this.config().brokers ? "Set up a broker to publish." : ""));
       button.textContent = "Publish";
       button.disabled = this.publishing || !ready;
     } catch (_error) {
-      this.message("kafkaCount", this.field("kafkaValue").value ? "" :
-        (bulk ? "Enter a JSON array of 1 to 100 messages." : "Enter one JSON value."));
+      this.message("kafkaCount", this.field("kafkaValue").value ? "" : "Enter one JSON value.");
       button.textContent = "Publish";
       button.disabled = true;
     }
@@ -957,7 +957,7 @@ export class KafkaTool extends BaseTool {
     catch (error) { this.message("kafkaPublishStatus", error.message, true); return; }
     const request = {
       name, topic: this.field("kafkaTopic").value.trim(), key: this.field("kafkaKey").value,
-      headers: this.field("kafkaHeaders").value, value: this.field("kafkaValue").value, bulk: this.field("kafkaBulk").checked,
+      headers: this.field("kafkaHeaders").value, value: this.field("kafkaValue").value,
       favorite: Boolean(this.requests.find((item) => item.name === name)?.favorite),
     };
     if (!request.topic) { this.message("kafkaPublishStatus", "Enter a topic before saving.", true); return; }
@@ -1068,7 +1068,6 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaKey").value = request.key || "";
     this.setJsonValue("Headers", request.headers || "{}");
     this.setJsonValue("Value", request.value);
-    this.field("kafkaBulk").checked = Boolean(request.bulk);
     this.field("kafkaPublishOptions").open = Boolean(request.key || (request.headers && request.headers.trim() !== "{}"));
     this.updateCount(); this.message("kafkaPublishStatus", `Loaded “${request.name}”. Review it before publishing.`);
     if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
@@ -1255,7 +1254,6 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaKey").value = draft.key;
       this.setJsonValue("Headers", draft.headers);
       this.setJsonValue("Value", draft.value);
-      this.field("kafkaBulk").checked = false;
       this.field("kafkaRequestName").value = "";
       this.field("kafkaPublishOptions").open = Boolean(draft.key || draft.headers !== "{}");
       this.updateCount();

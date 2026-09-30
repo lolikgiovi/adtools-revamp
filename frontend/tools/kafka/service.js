@@ -1,7 +1,6 @@
 export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
 export const KAFKA_REQUESTS_KEY = "tool:kafka:requests";
 export const KAFKA_TOPIC_FAVORITES_KEY = "tool:kafka:topic-favorites";
-export const MAX_KAFKA_BATCH = 100;
 
 export function rankKafkaTopics(topics, query, limit = 40) {
   const needle = String(query || "").trim().toLowerCase();
@@ -38,7 +37,7 @@ export function rankKafkaTopics(topics, query, limit = 40) {
   return matches.slice(0, limit).map(({ topic }) => topic);
 }
 
-export function parseMessages(value, bulk, key = "", headersText = "{}") {
+export function parseMessages(value, key = "", headersText = "{}") {
   let parsed;
   let headers;
   try {
@@ -51,12 +50,8 @@ export function parseMessages(value, bulk, key = "", headersText = "{}") {
       Object.entries(headers).some(([name, text]) => !name || typeof text !== "string")) {
     throw new Error("Headers must be a JSON object with string values.");
   }
-  if (bulk && (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > MAX_KAFKA_BATCH)) {
-    throw new Error(`Bulk value must be a JSON array with 1 to ${MAX_KAFKA_BATCH} elements.`);
-  }
-  const values = bulk ? parsed : [parsed];
   const recordHeaders = Object.entries(headers).map(([name, text]) => ({ key: name, value: text }));
-  return values.map((item) => ({ key: key === "" ? null : key, value: JSON.stringify(item), headers: recordHeaders }));
+  return [{ key: key === "" ? null : key, value: JSON.stringify(parsed), headers: recordHeaders }];
 }
 
 export function receivedMessageToDraft(message) {

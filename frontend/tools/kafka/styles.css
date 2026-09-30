@@ -819,60 +819,6 @@
   min-height: 220px;
 }
 
-.kafka-tool .switch {
-  position: relative;
-  display: inline-flex;
-  width: 2rem;
-  height: 1rem;
-  flex: none;
-}
-
-.kafka-tool .switch input {
-  width: 0;
-  height: 0;
-  opacity: 0;
-}
-
-.kafka-tool .switch .slider {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  background-color: var(--toggle-off-bg, #e5e7eb);
-  cursor: pointer;
-  transition: background-color 140ms ease, box-shadow 140ms ease;
-}
-
-.kafka-tool .switch .slider::before {
-  position: absolute;
-  bottom: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: white;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
-  content: "";
-  transition: transform 140ms ease;
-}
-
-.kafka-tool .switch input:checked + .slider {
-  background-color: var(--toggle-on-bg, #4ade80);
-}
-
-.kafka-tool .switch input:checked + .slider::before {
-  transform: translateX(1rem);
-}
-
-.kafka-tool .switch input:focus-visible + .slider {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 3px;
-}
-
-.kafka-toggle-label {
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  user-select: none;
-}
 
 .kafka-topic-action-row > #kafkaPublish,
 .kafka-template-action-row > #kafkaTemplateSaveToggle {
@@ -1416,8 +1362,6 @@ body.is-resizing * {
 @media (prefers-reduced-motion: reduce) {
   .kafka-picker-chevron,
   .kafka-publish-options > summary::after,
-  .kafka-tool .switch .slider,
-  .kafka-tool .switch .slider::before,
   .kafka-resizer::before {
     transition: none;
   }

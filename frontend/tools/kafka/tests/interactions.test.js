@@ -12,19 +12,36 @@ describe("Kafka publish controls", () => {
     localStorage.clear();
   });
 
-  it("renders boolean options as accessible toggle controls", () => {
+  it("places the UUID action before Format and removes the bulk toggle", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
 
-    for (const id of ["kafkaBulk"]) {
-      const input = document.querySelector(`#${id}`);
-      expect(input.type).toBe("checkbox");
-      expect(input.closest(".switch")).not.toBeNull();
-      expect(input.nextElementSibling.classList.contains("slider")).toBe(true);
+    expect(document.querySelector("#kafkaBulk")).toBeNull();
+    const generate = document.querySelector("#kafkaGenerateUuid");
+    expect(generate).not.toBeNull();
+    expect(generate.nextElementSibling).toBe(document.querySelector("#kafkaFormatValue"));
+  });
+
+  it("copies a generated UUID without changing the payload", async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
+    try {
+      const tool = new KafkaTool(null, { publish: vi.fn() });
+      tool.mount(document.querySelector("#tool"));
+      const payload = document.querySelector("#kafkaValue");
+      const originalPayload = payload.value;
+
+      document.querySelector("#kafkaGenerateUuid").click();
+      await settle();
+
+      expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+      expect(clipboard.writeText.mock.calls[0][0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(payload.value).toBe(originalPayload);
+    } finally {
+      if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+      else delete navigator.clipboard;
     }
-    expect(document.querySelector("#kafkaListen").textContent).toBe("Start listening");
-    expect(document.querySelector("#kafkaListen").getAttribute("aria-pressed")).toBe("false");
-    expect(document.querySelector("#kafkaStop")).toBeNull();
   });
 
   it("starts with a safe payload example and keeps the desktop split search-first", () => {
@@ -344,30 +361,31 @@ describe("Kafka publish controls", () => {
     expect(service.publish).not.toHaveBeenCalled();
   });
 
-  it("sends one explicit bulk click once and locks the button until delivery", async () => {
+  it("publishes an array payload as one message and locks the button until delivery", async () => {
     let finish;
     const service = { publish: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
     const tool = new KafkaTool(null, service);
     tool.mount(document.querySelector("#tool"));
     document.querySelector("#kafkaBrokers").value = "broker:9092";
     document.querySelector("#kafkaTopic").value = "orders.test";
-    document.querySelector("#kafkaBulk").click();
     const value = document.querySelector("#kafkaValue");
     value.value = '[{"id":1},{"id":2}]';
     value.dispatchEvent(new Event("input"));
 
     expect(document.querySelector("#kafkaPublish").textContent).toBe("Publish");
-    expect(document.querySelector("#kafkaCount").textContent).toContain("2 messages per click");
+    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
     document.querySelector("#kafkaPublish").click();
     document.querySelector("#kafkaPublish").click();
     expect(service.publish).toHaveBeenCalledTimes(1);
-    expect(service.publish.mock.calls[0][2].map((item) => item.value)).toEqual(['{"id":1}', '{"id":2}']);
+    expect(service.publish.mock.calls[0][2]).toEqual([
+      { key: null, value: '[{"id":1},{"id":2}]', headers: [] },
+    ]);
     expect(document.querySelector("#kafkaPublish").disabled).toBe(true);
 
-    finish({ delivered: [{ index: 0, partition: 0, offset: 35 }, { index: 1, partition: 0, offset: 36 }], failedAt: null });
+    finish({ delivered: [{ index: 0, partition: 0, offset: 35 }], failedAt: null });
     await settle();
-    expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("2 messages delivered");
-    expect(document.querySelectorAll("#kafkaDeliveries p")).toHaveLength(2);
+    expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("1 message delivered");
+    expect(document.querySelectorAll("#kafkaDeliveries p")).toHaveLength(1);
     expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
   });
 
@@ -561,7 +579,6 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaKey").value).toBe("account-1");
     expect(JSON.parse(document.querySelector("#kafkaHeaders").value)).toEqual({ source: "uat" });
     expect(document.querySelector("#kafkaValue").value).toBe('{"id":1}');
-    expect(document.querySelector("#kafkaBulk").checked).toBe(false);
     expect(document.querySelector("#kafkaRequestName").value).toBe("");
     expect(service.publish).not.toHaveBeenCalled();
     expect(localStorage.getItem("tool:kafka:requests")).toBeNull();

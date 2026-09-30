@@ -1,3 +1,8 @@
+# Unreleased
+
+- **Kafka** — Generate and copy UUIDs from the payload editor. Publishing sends one JSON payload per message;
+  bulk payload publishing is removed.
+
 # AD Tools 1.3.8
 
 - **HTML Template** — Review characters at risk in Windows text imports. Compare the Windows example and ASCII-safe preview, inspect the source diff,
