@@ -823,6 +823,8 @@ export class JenkinsRunner extends BaseTool {
       if (templateTagsInput) templateTagsInput.value = "";
       if (templateTagsErrorEl) templateTagsErrorEl.style.display = "none";
       activateFocusTrap(templateModal, () => closeTemplateModal(true));
+      // Monaco was initialized while this dialog was hidden; measure it after opening.
+      relayoutEditors();
     };
 
     const closeTemplateModal = (clear = true) => {
