@@ -221,7 +221,17 @@
 .html-toolbar-menu { position: relative; }
 .html-toolbar-menu summary { list-style: none; cursor: pointer; }
 .html-toolbar-menu summary::-webkit-details-marker { display: none; }
-.html-toolbar-menu summary::after { content: "⌄"; margin-left: 0.4rem; }
+.html-toolbar-menu summary > .html-toolbar-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.html-toolbar-menu[open] .html-toolbar-chevron { transform: rotate(180deg); }
 .html-toolbar-menu-content {
   position: absolute;
   z-index: 30;

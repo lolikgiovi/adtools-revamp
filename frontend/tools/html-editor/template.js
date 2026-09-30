@@ -20,7 +20,10 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
             <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" title="Save HTML File As">Save As</button>
             <details class="html-toolbar-menu html-edit-action">
-              <summary class="btn btn-secondary btn-sm">Format</summary>
+              <summary class="btn btn-secondary btn-sm">
+                Format
+                <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </summary>
               <div class="html-toolbar-menu-content">
                 <button id="btnFormatHtml" type="button">Format HTML</button>
                 <button id="btnMinifyHtml" type="button">Minify HTML</button>
@@ -28,7 +31,10 @@ export const HTMLTemplateToolTemplate = /* html */ `
             </details>
             <button id="btnExtractVtl" class="btn btn-secondary btn-sm html-edit-action" title="Extract Velocity fields">Velocity</button>
             <details class="html-toolbar-menu html-edit-action">
-              <summary class="btn btn-secondary btn-sm">More</summary>
+              <summary class="btn btn-secondary btn-sm">
+                More
+                <svg class="html-toolbar-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </summary>
               <div class="html-toolbar-menu-content">
                 <button id="btnCopyHtml" type="button">Copy</button>
                 <button id="btnPasteHtml" type="button">Paste</button>
