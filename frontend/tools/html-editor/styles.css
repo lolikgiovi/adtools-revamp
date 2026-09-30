@@ -287,6 +287,43 @@ body.is-resizing * {
   overflow: visible;
 }
 
+.html-encoding-report {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.45);
+  color: hsl(var(--foreground));
+  font-size: 0.78rem;
+  line-height: 1.4;
+  max-height: min(58vh, 540px);
+  overflow: auto;
+  flex: 0 0 auto;
+}
+
+.html-encoding-report[hidden] { display: none; }
+.html-encoding-report p { margin: 0.15rem 0; }
+.html-encoding-findings { display: grid; gap: 0.3rem; margin: 0.4rem 0; }
+.html-encoding-finding {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 5px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.html-encoding-finding:hover, .html-encoding-finding:focus-visible { border-color: hsl(var(--ring)); }
+.html-encoding-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+.html-encoding-diff { width: 100%; height: 300px; border: 1px solid hsl(var(--border)); border-radius: 5px; overflow: hidden; }
+.html-encoding-diff[hidden] { display: none; }
+.monaco-editor .html-encoding-risk {
+  background: rgba(245, 158, 11, 0.32);
+  border-bottom: 2px solid #f59e0b;
+  border-radius: 2px;
+}
+
 .pane-header {
   display: flex;
   flex-wrap: wrap;

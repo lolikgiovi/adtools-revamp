@@ -7,6 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import { HtmlDocumentStore } from "./documentStore.js";
+import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, prepareToadSafeHtmlBytes } from "./encoding.js";
 import MinifyWorker from "./minify.worker.js?worker";
 import { buildVtlValuesExport, deleteVtlValue, extractVtlVariables, getPreviewContent, getVtlValue, setVtlValue } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -99,6 +100,12 @@ class HTMLTemplateTool extends BaseTool {
     };
     this._mountSequence = 0;
     this._pendingFormat = null;
+    this._encodingDecorations = null;
+    this._encodingDiffEditor = null;
+    this._encodingDiffModels = [];
+    this._encodingReviewSource = null;
+    this._encodingReviewSafe = null;
+    this._encodingReviewDocumentId = null;
     this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
     this._handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") void this.flushActiveDocument().catch(() => {});
@@ -229,6 +236,9 @@ class HTMLTemplateTool extends BaseTool {
     this.vtlAnalyticsTimer = null;
     this._velocityCompletionProvider?.dispose();
     this._velocityCompletionProvider = null;
+    this.clearEncodingReview();
+    this._encodingDecorations?.dispose();
+    this._encodingDecorations = null;
     if (this.editor) {
       this.editor.dispose();
       this.editor = null;
@@ -789,6 +799,9 @@ class HTMLTemplateTool extends BaseTool {
       wordBasedSuggestions: "off",
     });
 
+    this._encodingDecorations = this.editor.createDecorationsCollection();
+    this.editor.onDidChangeModel(() => this.clearEncodingReview());
+
     this.inputSource = "restored";
   }
 
@@ -927,6 +940,8 @@ class HTMLTemplateTool extends BaseTool {
     const btnResetVtl = document.getElementById("btnResetVtl");
     const btnImport = document.getElementById("btnImportHtml");
     const btnSaveAs = document.getElementById("btnSaveAsHtml");
+    const btnCheckEncoding = document.getElementById("btnCheckHtmlEncoding");
+    const btnSaveToad = document.getElementById("btnSaveHtmlToad");
     const htmlFileInput = document.getElementById("htmlFileInput");
 
     // Import button
@@ -937,6 +952,8 @@ class HTMLTemplateTool extends BaseTool {
     if (btnSaveAs) {
       btnSaveAs.addEventListener("click", () => void this.handleSaveAsClick());
     }
+    btnCheckEncoding?.addEventListener("click", () => this.showEncodingReport());
+    btnSaveToad?.addEventListener("click", () => void this.handleSaveToadClick());
 
     // File input change handler (web)
     if (htmlFileInput) {
@@ -1247,6 +1264,7 @@ class HTMLTemplateTool extends BaseTool {
 
     // Render and autosave only the active document.
     this.editor.onDidChangeModelContent(() => {
+      this.clearEncodingReview();
       const value = this.editor.getValue();
       if (!this.programmaticEditorChange) this.inputSource = "manual";
       clearTimeout(this._previewTimer);
@@ -1526,6 +1544,185 @@ class HTMLTemplateTool extends BaseTool {
     return /\.html?$/i.test(safeName) ? safeName : `${safeName}.html`;
   }
 
+  clearEncodingReview() {
+    this._encodingDiffEditor?.dispose();
+    this._encodingDiffEditor = null;
+    this._encodingDiffModels.forEach((model) => model.dispose());
+    this._encodingDiffModels = [];
+    this._encodingDecorations?.clear();
+    this._encodingReviewSource = null;
+    this._encodingReviewSafe = null;
+    this._encodingReviewDocumentId = null;
+    const report = this.container?.querySelector("#htmlEncodingReport");
+    if (report) report.hidden = true;
+  }
+
+  showEncodingDiff(host) {
+    if (!host || !this._encodingReviewSource || !this._encodingReviewSafe) return;
+    if (this._encodingDiffEditor) {
+      host.hidden = !host.hidden;
+      if (!host.hidden) this._encodingDiffEditor.layout();
+      return;
+    }
+    host.hidden = false;
+    this._encodingDiffModels = [
+      monaco.editor.createModel(this._encodingReviewSource, "html"),
+      monaco.editor.createModel(this._encodingReviewSafe, "html"),
+    ];
+    this._encodingDiffEditor = monaco.editor.createDiffEditor(host, {
+      readOnly: true,
+      originalEditable: false,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: "on",
+      diffWordWrap: "on",
+      renderSideBySide: host.clientWidth >= 650,
+      useInlineViewWhenSpaceIsLimited: false,
+      renderOverviewRuler: false,
+      fontSize: 12,
+    });
+    this._encodingDiffEditor.setModel({ original: this._encodingDiffModels[0], modified: this._encodingDiffModels[1] });
+    this._encodingDiffEditor.layout();
+  }
+
+  showEncodingReport(importEncoding = null) {
+    const report = this.container?.querySelector("#htmlEncodingReport");
+    if (!report || !this.editor) return;
+    this.clearEncodingReview();
+    const source = this.editor.getValue();
+    const { charset, issues } = analyzeHtmlEncoding(source);
+    const findings = listEncodingCharacters(source);
+    const model = this.editor.getModel();
+    this._encodingDecorations?.set(findings.flatMap((finding) => finding.offsets.map((offset) => ({
+      range: new monaco.Range(
+        model.getPositionAt(offset).lineNumber, model.getPositionAt(offset).column,
+        model.getPositionAt(offset + finding.character.length).lineNumber, model.getPositionAt(offset + finding.character.length).column,
+      ),
+      options: { inlineClassName: "html-encoding-risk", hoverMessage: { value: `${finding.name} (${finding.codePoint})` } },
+    }))));
+    report.replaceChildren();
+    const summary = document.createElement("p");
+    summary.textContent = `${importEncoding ? `Imported as ${importEncoding.toUpperCase()}. ` : ""}HTML charset: ${charset || "not declared"}. ` +
+      (findings.length ? `${findings.reduce((total, finding) => total + finding.count, 0)} highlighted characters in ${findings.length} group${findings.length === 1 ? "" : "s"}.` : "No non-ASCII characters found.");
+    report.appendChild(summary);
+    issues.filter((issue) => issue.code !== "non_ascii").forEach((issue) => {
+      const item = document.createElement("p");
+      item.textContent = issue.message;
+      report.appendChild(item);
+    });
+    if (findings.length) {
+      const explanation = document.createElement("p");
+      explanation.textContent = "Click a character to locate it. Windows-1252 is an illustrative Toad decoding, not a measured result from your environment.";
+      report.appendChild(explanation);
+      const list = document.createElement("div");
+      list.className = "html-encoding-findings";
+      findings.forEach((finding) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "html-encoding-finding";
+        const visible = (value) => value.replaceAll(" ", "␣");
+        button.textContent = `${finding.name} ${finding.codePoint} · ${finding.count}× · line ${finding.firstLine} · ` +
+          `${visible(finding.character)} → Windows: ${visible(finding.simulated)} · safe source: ${finding.replacement}`;
+        button.addEventListener("click", () => {
+          const position = model.getPositionAt(finding.offsets[0]);
+          this.editor.setSelection(new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + finding.character.length));
+          this.editor.revealLineInCenter(position.lineNumber);
+          this.editor.focus();
+        });
+        list.appendChild(button);
+      });
+      report.appendChild(list);
+      try {
+        const safe = convertHtmlForToad(source);
+        if (safe !== source) {
+          this._encodingReviewSource = source;
+          this._encodingReviewSafe = safe;
+          this._encodingReviewDocumentId = this.activeDocumentId;
+          const actions = document.createElement("div");
+          actions.className = "html-encoding-actions";
+          const diffButton = document.createElement("button");
+          diffButton.type = "button";
+          diffButton.className = "btn btn-secondary btn-sm";
+          diffButton.textContent = "Review source diff";
+          const diffHost = document.createElement("div");
+          diffHost.className = "html-encoding-diff";
+          diffHost.setAttribute("aria-label", "Original and ASCII-safe HTML source diff");
+          diffHost.hidden = true;
+          diffButton.addEventListener("click", () => this.showEncodingDiff(diffHost));
+          const replaceButton = document.createElement("button");
+          replaceButton.type = "button";
+          replaceButton.className = "btn btn-primary btn-sm";
+          replaceButton.textContent = `Replace all ${findings.reduce((total, finding) => total + finding.count, 0)} in editor`;
+          replaceButton.addEventListener("click", () => {
+            if (this.activeDocumentId !== this._encodingReviewDocumentId || this.editor.getValue() !== this._encodingReviewSource) {
+              this.showEncodingReport();
+              return;
+            }
+            this.editor.pushUndoStop();
+            this.editor.executeEdits("toad-safe-html", [{ range: this.editor.getModel().getFullModelRange(), text: safe }]);
+            this.editor.pushUndoStop();
+            this.showEncodingReport();
+            this.showSuccess("Replaced upload-sensitive characters. Undo is available in the editor.");
+          });
+          actions.append(diffButton, replaceButton);
+          report.append(actions, diffHost);
+        }
+      } catch (error) {
+        const warning = document.createElement("p");
+        warning.textContent = error.message;
+        report.appendChild(warning);
+      }
+    }
+    const guidance = document.createElement("p");
+    guidance.textContent = "After replacing, use Save As or Save for Toad (ASCII). Verify the stored BLOB/CLOB and WebView output after upload.";
+    report.appendChild(guidance);
+    report.hidden = false;
+  }
+
+  async handleSaveToadClick() {
+    if (!this.editor) return;
+    try {
+      const bytes = prepareToadSafeHtmlBytes(this.editor.getValue());
+      const fileName = this.getHtmlSaveFileName().replace(/\.html?$/i, "-toad.html");
+      if (isTauri()) {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        const { writeFile } = await import("@tauri-apps/plugin-fs");
+        const selected = await save({
+          filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
+          defaultPath: fileName,
+          title: "Save ASCII-safe HTML for Toad",
+        });
+        if (!selected) return;
+        await writeFile(selected, bytes);
+        this.showSuccess(`Saved ${selected.split(/[\\/]/).pop()} as ASCII-safe HTML`);
+      } else if (typeof window.showSaveFilePicker === "function") {
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: "HTML document", accept: { "text/html": [".html", ".htm"] } }],
+        });
+        const writable = await fileHandle.createWritable();
+        try { await writable.write(bytes); } finally { await writable.close(); }
+        this.showSuccess(`Saved ${fileHandle.name} as ASCII-safe HTML`);
+      } else {
+        const url = URL.createObjectURL(new Blob([bytes], { type: "text/html;charset=utf-8" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        this.showSuccess(`Downloaded ${fileName} as ASCII-safe HTML`);
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      console.error("Failed to save HTML for Toad:", error);
+      this.showError(error?.message || "Failed to save HTML for Toad");
+    }
+  }
+
   async handleSaveAsClick() {
     if (!this.editor) return;
 
@@ -1598,7 +1795,7 @@ class HTMLTemplateTool extends BaseTool {
   async _handleImportTauri() {
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
-      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const { readFile } = await import("@tauri-apps/plugin-fs");
 
       const selected = await open({
         multiple: false,
@@ -1610,9 +1807,8 @@ class HTMLTemplateTool extends BaseTool {
         return; // User cancelled
       }
 
-      // Read file contents as text
-      const content = await readTextFile(selected);
-      await this._loadHtmlContent(content, selected.split(/[\\/]/).pop());
+      const { html, encoding } = decodeHtmlBytes(await readFile(selected));
+      await this._loadHtmlContent(html, selected.split(/[\\/]/).pop(), encoding);
     } catch (error) {
       console.error("Failed to import HTML (Tauri):", error);
       this.trackAnalytics("input_error", { source: "import", error_type: error?.name || "file_read_error" });
@@ -1623,35 +1819,28 @@ class HTMLTemplateTool extends BaseTool {
   /**
    * Handle file input change (web)
    */
-  handleFileInputChange(e) {
+  async handleFileInputChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result;
-      if (typeof content === "string") {
-        void this._loadHtmlContent(content, file.name);
-      }
-    };
-    reader.onerror = () => {
-      this.trackAnalytics("input_error", { source: "import", error_type: "file_read_error" });
-      this.showError("Failed to read HTML file");
-    };
-    reader.readAsText(file);
-
-    // Reset file input for subsequent selections
     e.target.value = "";
+    try {
+      const { html, encoding } = decodeHtmlBytes(await file.arrayBuffer());
+      await this._loadHtmlContent(html, file.name, encoding);
+    } catch (error) {
+      this.trackAnalytics("input_error", { source: "import", error_type: "file_read_error" });
+      this.showError(error.message || "Failed to read HTML file");
+    }
   }
 
   /**
    * Load HTML content into the editor
    */
-  async _loadHtmlContent(content, name = null) {
+  async _loadHtmlContent(content, name = null, encoding = null) {
     const document = await this.newDocument(name, content);
     if (!document) return;
     this.inputSource = "import";
     this.showSuccess("HTML file opened in a new tab");
+    this.showEncodingReport(encoding);
     this.trackAnalytics("input_acquired", {
       source: "import",
       session_id: this.analyticsSessionId,

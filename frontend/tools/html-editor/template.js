@@ -19,6 +19,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <input type="file" id="htmlFileInput" accept=".html,.htm" style="display: none;" />
             <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
             <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" title="Save HTML File As">Save As</button>
+            <button id="btnCheckHtmlEncoding" class="btn btn-secondary btn-sm" type="button" title="Check charset and possible corrupted characters">Check Encoding</button>
+            <button id="btnSaveHtmlToad" class="btn btn-secondary btn-sm" type="button" title="Encode HTML text and attributes as ASCII character references for Toad upload">Save for Toad (ASCII)</button>
             <button id="btnFormatHtml" class="btn btn-primary btn-sm" title="Format HTML">Format</button>
             <button id="btnMinifyHtml" class="btn btn-primary btn-sm" title="Minify HTML">Minify</button>
             <button id="btnExtractVtl" class="btn btn-primary btn-sm" title="Extract VTL Fields">Extract VTL Fields</button>
@@ -27,6 +29,7 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <button id="btnClearHtml" class="btn btn-secondary btn-sm" title="Clear HTML">Clear</button>
           </div>
         </div>
+        <div id="htmlEncodingReport" class="html-encoding-report" role="status" aria-live="polite" hidden></div>
         <div id="htmlEditor" class="monaco-editor-container"></div>
 
         <!-- Modeless VTL modal positioned over the editor (bottom-left) -->
