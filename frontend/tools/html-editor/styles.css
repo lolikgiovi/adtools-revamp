@@ -456,6 +456,45 @@ body.is-resizing * {
   background: hsl(var(--background));
 }
 
+.renderer-surface.is-comparing {
+  flex-direction: row;
+}
+
+.renderer-preview-pane {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.renderer-preview-pane[hidden],
+.renderer-preview-label[hidden] {
+  display: none;
+}
+
+.renderer-surface.is-comparing .renderer-preview-pane + .renderer-preview-pane {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.renderer-preview-label {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.55);
+  color: hsl(var(--foreground));
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.renderer-preview-frame {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .renderer-iframe {
   flex: 1;
   min-width: 0;

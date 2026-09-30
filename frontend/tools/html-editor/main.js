@@ -36,6 +36,39 @@ function vtlValuePaths(value, prefix = "", depth = 0) {
   });
 }
 const DEFAULT_HTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Preview</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello, \${username}!</h1>\n  <script>\n    console.log('Inline script running');\n  </script>\n</body>\n</html>`;
+function withPreviewScrollBridge(html, key) {
+  return `${html}<script data-adtools-preview-scroll>
+(() => {
+  const key = ${JSON.stringify(key)};
+  let applyingSync = false;
+  const extent = () => ({
+    x: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+    y: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+  });
+  addEventListener("scroll", () => {
+    if (applyingSync) return;
+    const max = extent();
+    parent.postMessage({
+      type: "adtools:preview-scroll", key,
+      x: max.x ? scrollX / max.x : 0,
+      y: max.y ? scrollY / max.y : 0,
+    }, "*");
+  }, { passive: true });
+  addEventListener("message", (event) => {
+    const data = event.data;
+    if (event.source !== parent || data?.type !== "adtools:preview-sync" || data.key !== key) return;
+    const max = extent();
+    const x = Math.max(0, Math.min(1, Number(data.x) || 0)) * max.x;
+    const y = Math.max(0, Math.min(1, Number(data.y) || 0)) * max.y;
+    if (Math.abs(scrollX - x) < 1 && Math.abs(scrollY - y) < 1) return;
+    applyingSync = true;
+    scrollTo(x, y);
+    requestAnimationFrame(() => { applyingSync = false; });
+  });
+})();
+</script>`;
+}
+
 // Representative CSS viewport widths; hardware pixel resolution is a separate device property.
 const PREVIEW_VIEWPORT_PRESETS = [
   { value: "responsive", label: "Fit · Responsive", width: null },
@@ -105,12 +138,23 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingDiffEditor = null;
     this._encodingDiffModels = [];
     this._encodingDiffToggle = null;
+    this._encodingCompareToggle = null;
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
     this.workspaceMode = "edit";
     this.previewEncodingMode = "original";
     this._encodingPreviewFinding = null;
+    this._previewScrollKey = null;
+    this._handlePreviewScrollMessage = (event) => {
+      const data = event.data;
+      if (data?.type !== "adtools:preview-scroll" || data.key !== this._previewScrollKey) return;
+      const before = this.container?.querySelector("#htmlRenderer");
+      const after = this.container?.querySelector("#htmlRendererAfter");
+      const destination = event.source === before?.contentWindow ? after : event.source === after?.contentWindow ? before : null;
+      if (!destination || destination.hidden) return;
+      destination.contentWindow?.postMessage({ type: "adtools:preview-sync", key: data.key, x: data.x, y: data.y }, "*");
+    };
     this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
     this._handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") void this.flushActiveDocument().catch(() => {});
@@ -215,6 +259,7 @@ class HTMLTemplateTool extends BaseTool {
     this.bindDocumentEvents();
     this.bindToolEvents();
     window.addEventListener("pagehide", this._handlePageHide);
+    window.addEventListener("message", this._handlePreviewScrollMessage);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
     // Setup ENV dropdown and baseUrl special handling
     this.setupEnvDropdown();
@@ -230,6 +275,7 @@ class HTMLTemplateTool extends BaseTool {
   onUnmount() {
     this._mountSequence += 1;
     window.removeEventListener("pagehide", this._handlePageHide);
+    window.removeEventListener("message", this._handlePreviewScrollMessage);
     document.removeEventListener("visibilitychange", this._handleVisibilityChange);
     this.closeDocumentMenu();
     const finalSave = this.flushActiveDocument().catch(() => {});
@@ -1329,18 +1375,20 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   applyIframeSandbox() {
-    const iframe = document.getElementById("htmlRenderer");
-    if (!iframe) return;
     const base = ["allow-scripts", "allow-forms"]; // keep safe
     if (this.sandboxSameOriginAllowed) base.push("allow-same-origin");
-    iframe.setAttribute("sandbox", base.join(" "));
+    ["htmlRenderer", "htmlRendererAfter"].forEach((id) => {
+      document.getElementById(id)?.setAttribute("sandbox", base.join(" "));
+    });
   }
 
   applyPreviewBackground() {
-    const iframe = document.getElementById("htmlRenderer");
     const surface = document.getElementById("rendererSurface");
     const button = document.getElementById("btnWhitePreviewBg");
-    if (iframe) iframe.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "transparent";
+    ["htmlRenderer", "htmlRendererAfter"].forEach((id) => {
+      const iframe = document.getElementById(id);
+      if (iframe) iframe.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "transparent";
+    });
     if (surface) surface.style.backgroundColor = this.previewWhiteBackground ? "#ffffff" : "";
     if (button) {
       button.setAttribute("aria-pressed", String(this.previewWhiteBackground));
@@ -1449,40 +1497,70 @@ class HTMLTemplateTool extends BaseTool {
 
   renderPreview(html, force = false) {
     const iframe = document.getElementById("htmlRenderer");
+    const afterIframe = document.getElementById("htmlRendererAfter");
+    const afterPane = document.getElementById("htmlPreviewAfterPane");
+    const beforeLabel = document.getElementById("htmlPreviewBeforeLabel");
+    const surface = document.getElementById("rendererSurface");
     if (!iframe) return;
 
     if (!force && html === this.lastRenderedHTML) return;
     this.lastRenderedHTML = html;
+    const renderSequence = this._previewRenderSequence = (this._previewRenderSequence || 0) + 1;
 
     // Ensure sandbox set
     this.applyIframeSandbox();
     this.applyPreviewBackground();
 
-    // Apply VTL substitutions only when the preview is in rendered mode.
+    const comparing = this.workspaceMode === "encoding" && this.previewEncodingMode === "compare";
+    const scrollKey = comparing ? `${this.analyticsSessionId}:${renderSequence}` : null;
+    this._previewScrollKey = scrollKey;
+    surface?.classList.toggle("is-comparing", comparing);
+    if (afterPane) afterPane.hidden = !comparing;
+    if (beforeLabel) beforeLabel.hidden = !comparing;
+
+    // Apply the same VTL mode and selected finding to both sides of a comparison.
     try {
-      const previewHtml = this.previewEncodingMode === "windows"
-        ? simulateWindows1252Import(html)
-        : this.previewEncodingMode === "safe" ? convertHtmlForToad(html) : html;
-      const rendered = getPreviewContent(previewHtml, this.vtlValues, this.previewVtlMode);
-      const selected = this._encodingPreviewFinding;
-      const needle = selected
-        ? this.previewEncodingMode === "windows" ? selected.simulated : this.previewEncodingMode === "safe" ? selected.replacement : selected.character
-        : null;
-      let preview = rendered;
-      if (needle) {
+      const buildPreview = (mode) => {
+        const previewHtml = mode === "windows"
+          ? simulateWindows1252Import(html)
+          : mode === "safe" ? convertHtmlForToad(html) : html;
+        const rendered = getPreviewContent(previewHtml, this.vtlValues, this.previewVtlMode);
+        const selected = this._encodingPreviewFinding;
+        const needle = selected
+          ? mode === "windows" ? selected.simulated : mode === "safe" ? selected.replacement : selected.character
+          : null;
+        if (!needle) return rendered;
         try {
-          preview = markEncodingPreview(rendered, needle, selected.previewIndex);
+          const preview = markEncodingPreview(rendered, needle, selected.previewIndex);
           if (preview.includes('id="adtools-encoding-target"')) {
-            preview += '<script data-adtools-encoding-scroll>window.addEventListener("load", function () {' +
-              'requestAnimationFrame(function () { document.getElementById("adtools-encoding-target")?.scrollIntoView({block:"center",inline:"nearest"}); });' +
+            return preview + '<script data-adtools-encoding-scroll>window.addEventListener("load", function () {' +
+              'requestAnimationFrame(function () {' +
+              'document.getElementById("adtools-encoding-target")?.scrollIntoView({block:"center",inline:"nearest"});' +
+              '});' +
               '}, {once:true});</script>';
           }
-        } catch (_) { /* Keep the rendered preview when source markup is incomplete. */ }
-      }
+          return preview;
+        } catch (_) { return rendered; /* Keep the rendered preview when source markup is incomplete. */ }
+      };
 
       // Use srcdoc for atomic update and secure context
+      const preview = buildPreview(comparing ? "windows" : this.previewEncodingMode);
       iframe.hidden = !preview.trim();
-      iframe.srcdoc = preview || "";
+      iframe.srcdoc = comparing ? withPreviewScrollBridge(preview, scrollKey) : preview || "";
+      if (afterIframe) {
+        const afterPreview = comparing ? buildPreview("safe") : "";
+        afterIframe.hidden = !afterPreview.trim();
+        if (comparing) {
+          // Wait for the newly shown pane to get a layout before navigating its iframe.
+          requestAnimationFrame(() => {
+            if (renderSequence === this._previewRenderSequence && afterPane?.isConnected && !afterPane.hidden) {
+              afterIframe.srcdoc = withPreviewScrollBridge(afterPreview, scrollKey);
+            }
+          });
+        } else {
+          afterIframe.srcdoc = "";
+        }
+      }
     } catch (error) {
       UsageTracker.trackEvent(
         "html-template",
@@ -1612,6 +1690,7 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
     this._encodingDiffToggle = null;
+    this._encodingCompareToggle = null;
     this.previewEncodingMode = "original";
     this._encodingPreviewFinding = null;
     const diff = this.container?.querySelector("#htmlEncodingDiff");
@@ -1625,12 +1704,15 @@ class HTMLTemplateTool extends BaseTool {
   }
 
   setEncodingPreviewMode(mode, finding = this._encodingPreviewFinding) {
-    if (!["original", "windows", "safe"].includes(mode) || !this.editor) return;
+    if (!["original", "windows", "safe", "compare"].includes(mode) || !this.editor) return;
     this.previewEncodingMode = mode;
     this._encodingPreviewFinding = finding;
     this.container?.querySelectorAll("[data-encoding-preview]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.encodingPreview === mode));
     });
+    if (this._encodingCompareToggle) {
+      this._encodingCompareToggle.textContent = mode === "compare" ? "Close preview comparison" : "Compare previews";
+    }
     this.renderPreview(this.editor.getValue(), true);
   }
 
@@ -1643,7 +1725,7 @@ class HTMLTemplateTool extends BaseTool {
       if (!host.hidden) this._encodingDiffEditor.layout();
       sourceEditor.hidden = !host.hidden;
       if (!sourceEditor.hidden) this.editor.layout();
-      if (this._encodingDiffToggle) this._encodingDiffToggle.textContent = host.hidden ? "Review source diff" : "Back to editor";
+      if (this._encodingDiffToggle) this._encodingDiffToggle.textContent = host.hidden ? "Review fix diff" : "Back to editor";
       return;
     }
     host.hidden = false;
@@ -1761,7 +1843,7 @@ class HTMLTemplateTool extends BaseTool {
           const previewIndex = visibleOffsets.indexOf(offset);
           location.textContent = `${occurrence + 1} / ${finding.count} · line ${start.lineNumber}` +
             (previewIndex < 0 ? " · source only" : "");
-          this.setEncodingPreviewMode("windows", { ...finding, previewIndex });
+          this.setEncodingPreviewMode(this.previewEncodingMode === "compare" ? "compare" : "windows", { ...finding, previewIndex });
         });
         list.appendChild(button);
       });
@@ -1777,9 +1859,17 @@ class HTMLTemplateTool extends BaseTool {
           const diffButton = document.createElement("button");
           diffButton.type = "button";
           diffButton.className = "btn btn-secondary btn-sm";
-          diffButton.textContent = "Review source diff";
+          diffButton.textContent = "Review fix diff";
           this._encodingDiffToggle = diffButton;
           diffButton.addEventListener("click", () => this.showEncodingDiff());
+          const compareButton = document.createElement("button");
+          compareButton.type = "button";
+          compareButton.className = "btn btn-secondary btn-sm";
+          compareButton.textContent = "Compare previews";
+          this._encodingCompareToggle = compareButton;
+          compareButton.addEventListener("click", () => {
+            this.setEncodingPreviewMode(this.previewEncodingMode === "compare" ? "windows" : "compare");
+          });
           const replaceButton = document.createElement("button");
           replaceButton.type = "button";
           replaceButton.className = "btn btn-primary btn-sm";
@@ -1796,7 +1886,7 @@ class HTMLTemplateTool extends BaseTool {
             this.setEncodingPreviewMode("windows", null);
             this.showSuccess("Replaced upload-sensitive characters. Undo is available in the editor.");
           });
-          actions.append(diffButton, replaceButton);
+          actions.append(diffButton, compareButton, replaceButton);
           report.append(actions);
         }
       } catch (error) {
@@ -1810,7 +1900,7 @@ class HTMLTemplateTool extends BaseTool {
     guidance.textContent = !findings.length
       ? "No upload-sensitive characters remain. Windows example should match Original."
       : safeAvailable
-        ? "After replacement previews the ASCII-safe result; compare it with Windows example. Replace all applies it."
+        ? "Compare previews shows both rendered results side by side. Scroll either pane to move both. Replace all applies the fix."
         : "Automatic replacement is unavailable for this source; review the finding in the editor.";
     report.appendChild(guidance);
     report.hidden = false;
@@ -1818,6 +1908,8 @@ class HTMLTemplateTool extends BaseTool {
     if (previewModes) previewModes.hidden = false;
     const safeButton = previewModes?.querySelector('[data-encoding-preview="safe"]');
     if (safeButton) safeButton.disabled = !safeAvailable;
+    const compareModeButton = previewModes?.querySelector('[data-encoding-preview="compare"]');
+    if (compareModeButton) compareModeButton.disabled = !safeAvailable;
     this.setEncodingPreviewMode("original", null);
   }
 

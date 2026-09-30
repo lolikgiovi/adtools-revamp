@@ -20,15 +20,25 @@ Verified in a local Vite browser session on 2026-09-30.
 
 4. Open Encoding. Confirm Format, Velocity, More, and viewport size are hidden, while Render VTL remains. The report shows two nonbreaking spaces.
 5. Click the finding twice. Confirm the indicator advances from `1 / 2 · line 3` to `2 / 2 · line 4`, Monaco selects each character, and the rendered preview follows it.
-6. Open Review source diff. Confirm the diff occupies the editor area and shows `&#160;` in the proposed source. Select After replacement and confirm the preview no longer displays the Windows example's `Â`.
-7. Click Replace all. Confirm the editor contains `&#160;`, the report has no non-ASCII findings, and Windows example renders cleanly. Switch to Edit and confirm its controls and viewport selector return.
+6. Click Compare previews. Confirm the rendered preview shows Windows example (`Â`) and After replacement (the intended space) in a vertical split with separate labels. Scroll either pane and confirm the other follows. Click the finding again and confirm both panes scroll to the same occurrence and highlight it.
+7. Open Review fix diff. Confirm the source diff occupies the editor area while the rendered comparison stays visible, and the proposed source shows `&#160;`.
+8. Click Replace all. Confirm the editor contains `&#160;`, the report has no non-ASCII findings, and Windows example renders cleanly. Switch to Edit and confirm its controls and viewport selector return.
 
 ## Scrollbar markers
 
 1. Use a longer HTML file with non-ASCII characters on separated lines and open Encoding.
 2. Confirm amber marks appear in the source editor's right overview ruler at each risky line. Click a finding and confirm its active location gets a red mark; click again to move that mark.
-3. Open Review source diff. Confirm Monaco's overview ruler marks the changed source regions. Return to Edit and confirm the encoding marks clear.
+3. Open Review fix diff. Confirm Monaco's overview ruler marks the changed source regions. Return to Edit and confirm the encoding marks clear.
+
+## Rendered comparison check
+
+1. Paste a longer HTML document containing two visible U+00A0 spaces several paragraphs apart, with enough vertical spacing to require preview scrolling.
+2. Open Encoding and click Compare previews. Confirm both iframes render side by side at the normal right-pane width (Windows example contains `Â`; After replacement does not).
+3. Focus the Windows pane and press Page Down. Confirm both panes move to the same paragraph. Focus the After replacement pane and press Page Down; confirm both move together again.
+4. Click the nonbreaking-space finding twice. Confirm the counter advances from `1 / 2` to `2 / 2`, Monaco follows each source line, and both rendered panes scroll to the selected paragraph with a yellow marker.
+5. Keep the comparison open and click Review fix diff. Confirm the code diff and both rendered results can be inspected together.
+6. Click Replace all. Confirm the resulting source contains `&#160;`, no findings remain, and the Windows example renders without `Â`.
 
 ## Result
 
-All steps passed in the browser. Focused encoding, Velocity, and minifier tests passed (29 tests); the Vite production build passed. No live Toad or mobile WebView environment was part of this check.
+All steps passed in the browser. The rendered comparison check used a 30-paragraph HTML sample with U+00A0 on paragraphs 2 and 25. After one Page Down in the Windows pane, scroll offsets were 448 and 445.5 pixels; after one Page Down in the replacement pane they were 898.5 and 893.5 pixels. The small offset difference matches the documents' different scroll heights. The focused encoding suite passed (15 tests), ESLint reported no errors, and the Vite production build passed. No live Toad or mobile WebView environment was part of this check.

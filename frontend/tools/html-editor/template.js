@@ -89,6 +89,8 @@ export const HTMLTemplateToolTemplate = /* html */ `
               <button type="button" data-encoding-preview="original" aria-pressed="true">Original</button>
               <button type="button" data-encoding-preview="windows" aria-pressed="false">Windows example</button>
               <button type="button" data-encoding-preview="safe" aria-pressed="false" title="Preview the result of Replace all">After replacement</button>
+              <button type="button" data-encoding-preview="compare" aria-pressed="false"
+                title="Compare Windows example and after replacement">Compare</button>
             </div>
             <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;margin-right:.5rem;">
               <select id="envSelector" class="env-select" aria-label="Select environment" title="Select environment"></select>
@@ -149,7 +151,18 @@ export const HTMLTemplateToolTemplate = /* html */ `
           </div>
         </div>
         <div id="rendererSurface" class="renderer-surface">
-          <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin" hidden></iframe>
+          <div class="renderer-preview-pane">
+            <div id="htmlPreviewBeforeLabel" class="renderer-preview-label" hidden>Windows example</div>
+            <div class="renderer-preview-frame">
+              <iframe id="htmlRenderer" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin" hidden></iframe>
+            </div>
+          </div>
+          <div id="htmlPreviewAfterPane" class="renderer-preview-pane" hidden>
+            <div class="renderer-preview-label">After replacement</div>
+            <div class="renderer-preview-frame">
+              <iframe id="htmlRendererAfter" class="renderer-iframe" sandbox="allow-scripts allow-forms allow-same-origin" hidden></iframe>
+            </div>
+          </div>
         </div>
       </div>
     </div>
