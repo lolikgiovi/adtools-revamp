@@ -18,7 +18,12 @@ import { getQuickQueryTableInteractionKey } from "../../core/RecentInteractionSt
 import { isTauri } from "../../core/Runtime.js";
 import { confirmAction } from "../../components/ConfirmationDialog.js";
 import { openOtpOverlay } from "../../components/OtpOverlay.js";
-import { convertDbeaverSchemaRows, importSchemasPayload, parseDbeaverSchemaClipboard } from "./services/SchemaImportService.js";
+import {
+  alignDataToImportedSchema,
+  convertDbeaverSchemaRows,
+  importSchemasPayload,
+  parseDbeaverSchemaClipboard,
+} from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
 import { SplitWorkerService } from "./services/SplitWorkerService.js";
@@ -4770,7 +4775,38 @@ export class QuickQueryUI {
         );
 
         this.showOracleEnvProgress("Importing into storage...", 90);
-        const count = await importSchemasPayload(payload, this.storageService);
+        await this.flushPendingDataAutosave();
+        const savedTables = await this.storageService.getAllTables();
+        const existingNames = new Map(savedTables.map((table) => [table.fullName.toUpperCase(), table.fullName]));
+        const activeName = this.elements.tableNameInput.value.trim();
+        const importedNames = new Set();
+        const resolveFullName = (fullName) =>
+          existingNames.get(fullName.toUpperCase()) || (activeName.toUpperCase() === fullName.toUpperCase() ? activeName : fullName);
+        const count = await importSchemasPayload(payload, this.storageService, {
+          resolveFullName,
+          onImported: (fullName) => importedNames.add(fullName.toUpperCase()),
+        });
+
+        if (importedNames.has(activeName.toUpperCase())) {
+          const savedName = resolveFullName(activeName);
+          const importedSchema = await this.storageService.loadSchema(savedName);
+          if (importedSchema) {
+            const currentData = this.dataTable.getData();
+            const wasHydrating = this._isHydratingTab;
+            this._isHydratingTab = true;
+            try {
+              this.elements.tableNameInput.value = savedName;
+              this.schemaTable.loadData(importedSchema);
+              this.updateDataSpreadsheet();
+              this.dataTable.loadData(alignDataToImportedSchema(currentData, importedSchema));
+              this.scheduleSchemaLayoutRefresh();
+            } finally {
+              this._isHydratingTab = wasHydrating;
+            }
+            this.scheduleActiveTabDraftSave();
+            await this.flushPendingDataAutosave();
+          }
+        }
 
         this.hideOracleEnvProgress();
         this.closeOracleEnvOverlay();

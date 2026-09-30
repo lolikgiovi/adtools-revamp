@@ -47,7 +47,7 @@ export function parseDbeaverSchemaClipboard(text) {
   return convertDbeaverSchemaRows(parseClipboardRows(text));
 }
 
-export async function importSchemasPayload(payload, storageService) {
+export async function importSchemasPayload(payload, storageService, { resolveFullName, onImported } = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Unsupported KV schema format");
   }
@@ -75,11 +75,28 @@ export async function importSchemasPayload(payload, storageService) {
     const tables = schemaObj?.tables || {};
     for (const [tableName, tableSchema] of Object.entries(tables)) {
       const rows = convertJsonSchemaToRows(tableSchema);
-      if (rows && (await storageService.saveSchema(`${schemaName}.${tableName}`, rows))) {
+      const fullName = `${schemaName}.${tableName}`;
+      const savedName = resolveFullName?.(fullName) || fullName;
+      if (rows && (await storageService.saveSchema(savedName, rows))) {
         importCount += 1;
+        onImported?.(savedName);
       }
     }
   }
 
   return importCount;
+}
+
+export function alignDataToImportedSchema(data, schemaRows) {
+  const fields = schemaRows.map((row) => row[0]);
+  const rows = Array.isArray(data) ? data : [];
+  const oldFields = Array.isArray(rows[0]) ? rows[0] : [];
+  const oldIndexes = new Map(oldFields.map((field, index) => [String(field || "").toUpperCase(), index]));
+  const values = rows.slice(1).map((row) =>
+    fields.map((field) => {
+      const index = oldIndexes.get(String(field).toUpperCase());
+      return index === undefined ? null : (row?.[index] ?? null);
+    }),
+  );
+  return [fields, ...(values.length ? values : [Array(fields.length).fill(null)])];
 }
