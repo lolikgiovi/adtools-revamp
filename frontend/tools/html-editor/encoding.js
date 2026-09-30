@@ -57,7 +57,7 @@ export function analyzeHtmlEncoding(html) {
       .map(([character, count]) => `U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")} (${count})`);
     issues.push({
       code: "non_ascii",
-      message: `${nonAscii.length} non-ASCII characters may be damaged by a Windows text import: ${examples.join(", ")}. Use Save for Toad (ASCII) when these are in HTML text or attributes.`,
+      message: `${nonAscii.length} non-ASCII characters may be damaged by a Windows text import: ${examples.join(", ")}. Review and replace them before Save As.`,
     });
   }
   return { charset, issues };
@@ -131,6 +131,11 @@ export function listEncodingCharacters(html) {
   return [...findings.values()].sort((a, b) => b.count - a.count || a.offsets[0] - b.offsets[0]);
 }
 
+/** Example of the common failure: UTF-8 file bytes opened as Windows-1252 text. */
+export function simulateWindows1252Import(html) {
+  return new TextDecoder("windows-1252").decode(new TextEncoder().encode(String(html)));
+}
+
 function tagEnd(html, from) {
   let quote = null;
   for (let index = from + 1; index < html.length; index += 1) {
@@ -140,7 +145,46 @@ function tagEnd(html, from) {
     } else if (character === '"' || character === "'") quote = character;
     else if (character === ">") return index + 1;
   }
-  throw new Error("Unclosed HTML tag; Toad-safe export was not created.");
+  throw new Error("Unclosed HTML tag; automatic replacement is unavailable.");
+}
+
+/** Add visual markers to preview text only; source HTML and code blocks stay untouched. */
+export function markEncodingPreview(input, needle) {
+  const html = String(input);
+  if (!needle) return html;
+  const marker = `<mark class="adtools-encoding-preview-mark">${needle}</mark>`;
+  const parts = [];
+  let index = 0;
+  while (index < html.length) {
+    if (html[index] !== "<") {
+      const next = html.indexOf("<", index);
+      const end = next < 0 ? html.length : next;
+      parts.push(html.slice(index, end).split(needle).join(marker));
+      index = end;
+      continue;
+    }
+    if (html.startsWith("<!--", index)) {
+      const end = html.indexOf("-->", index + 4);
+      if (end < 0) return html;
+      parts.push(html.slice(index, end + 3));
+      index = end + 3;
+      continue;
+    }
+    const end = tagEnd(html, index);
+    const tag = html.slice(index, end);
+    const rawElement = tag.match(/^<(script|style)\b/i)?.[1];
+    if (rawElement) {
+      const close = new RegExp(`</${rawElement}\\s*>`, "gi");
+      close.lastIndex = end;
+      if (!close.exec(html)) return html;
+      parts.push(html.slice(index, close.lastIndex));
+      index = close.lastIndex;
+      continue;
+    }
+    parts.push(tag);
+    index = end;
+  }
+  return parts.join("");
 }
 
 /** Encode visible HTML text and attribute values without rewriting scripts, styles, or VTL expressions. */
@@ -154,7 +198,7 @@ export function convertHtmlForToad(input) {
       const end = next < 0 ? html.length : next;
       const text = html.slice(index, end);
       if (hasNonAscii(text) && /#(?:set|if|elseif|foreach|macro|define)\s*\(/i.test(text)) {
-        throw new Error("Non-ASCII in a VTL directive needs manual review; Toad-safe export was not created.");
+        throw new Error("Non-ASCII in a VTL directive needs manual review; automatic replacement is unavailable.");
       }
       parts.push(encodeCharacterReferences(text));
       index = end;
@@ -162,9 +206,9 @@ export function convertHtmlForToad(input) {
     }
     if (html.startsWith("<!--", index)) {
       const end = html.indexOf("-->", index + 4);
-      if (end < 0) throw new Error("Unclosed HTML comment; Toad-safe export was not created.");
+      if (end < 0) throw new Error("Unclosed HTML comment; automatic replacement is unavailable.");
       const comment = html.slice(index, end + 3);
-      if (hasNonAscii(comment)) throw new Error("Non-ASCII in an HTML comment needs manual review; Toad-safe export was not created.");
+      if (hasNonAscii(comment)) throw new Error("Non-ASCII in an HTML comment needs manual review; automatic replacement is unavailable.");
       parts.push(comment);
       index = end + 3;
       continue;
@@ -176,15 +220,15 @@ export function convertHtmlForToad(input) {
       const close = new RegExp(`</${rawElement}\\s*>`, "gi");
       close.lastIndex = end;
       const match = close.exec(html);
-      if (!match) throw new Error(`Unclosed ${rawElement} element; Toad-safe export was not created.`);
+      if (!match) throw new Error(`Unclosed ${rawElement} element; automatic replacement is unavailable.`);
       const block = html.slice(index, close.lastIndex);
-      if (hasNonAscii(block)) throw new Error(`Non-ASCII in a ${rawElement} element needs manual review; Toad-safe export was not created.`);
+      if (hasNonAscii(block)) throw new Error(`Non-ASCII in a ${rawElement} element needs manual review; automatic replacement is unavailable.`);
       parts.push(block);
       index = close.lastIndex;
       continue;
     }
     const converted = tag.replace(/(["'])([\s\S]*?)\1/g, (_, quote, value) => `${quote}${encodeCharacterReferences(value)}${quote}`);
-    if (hasNonAscii(converted)) throw new Error("Non-ASCII in HTML markup needs manual review; Toad-safe export was not created.");
+    if (hasNonAscii(converted)) throw new Error("Non-ASCII in HTML markup needs manual review; automatic replacement is unavailable.");
     parts.push(converted);
     index = end;
   }

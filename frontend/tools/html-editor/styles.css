@@ -294,7 +294,7 @@ body.is-resizing * {
   color: hsl(var(--foreground));
   font-size: 0.78rem;
   line-height: 1.4;
-  max-height: min(58vh, 540px);
+  max-height: min(42vh, 420px);
   overflow: auto;
   flex: 0 0 auto;
 }
@@ -314,6 +314,20 @@ body.is-resizing * {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
+.html-encoding-finding strong { display: block; margin-bottom: 0.35rem; font-size: 0.8rem; }
+.html-encoding-comparison { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
+.html-encoding-comparison-cell { display: grid; gap: 0.1rem; min-width: 0; }
+.html-encoding-comparison-cell small { color: hsl(var(--muted-foreground)); font-size: 0.68rem; }
+.html-encoding-comparison-cell code {
+  display: block;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow-x: auto;
+}
 .html-encoding-finding:hover, .html-encoding-finding:focus-visible { border-color: hsl(var(--ring)); }
 .html-encoding-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
 .html-encoding-diff { width: 100%; height: 300px; border: 1px solid hsl(var(--border)); border-radius: 5px; overflow: hidden; }
@@ -323,6 +337,22 @@ body.is-resizing * {
   border-bottom: 2px solid #f59e0b;
   border-radius: 2px;
 }
+
+.html-encoding-preview-modes { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid hsl(var(--border)); border-radius: 6px; }
+.html-encoding-preview-modes[hidden] { display: none; }
+.html-encoding-preview-modes button {
+  padding: 0.2rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 0.73rem;
+  cursor: pointer;
+}
+.html-encoding-preview-modes button[aria-pressed="true"] { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.html-encoding-preview-modes button:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 520px) { .html-encoding-comparison { grid-template-columns: 1fr; } }
 
 .pane-header {
   display: flex;

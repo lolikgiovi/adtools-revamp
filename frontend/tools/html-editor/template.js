@@ -20,7 +20,6 @@ export const HTMLTemplateToolTemplate = /* html */ `
             <button id="btnImportHtml" class="btn btn-primary btn-sm" title="Import HTML File">Import</button>
             <button id="btnSaveAsHtml" class="btn btn-primary btn-sm" title="Save HTML File As">Save As</button>
             <button id="btnCheckHtmlEncoding" class="btn btn-secondary btn-sm" type="button" title="Check charset and possible corrupted characters">Check Encoding</button>
-            <button id="btnSaveHtmlToad" class="btn btn-secondary btn-sm" type="button" title="Encode HTML text and attributes as ASCII character references for Toad upload">Save for Toad (ASCII)</button>
             <button id="btnFormatHtml" class="btn btn-primary btn-sm" title="Format HTML">Format</button>
             <button id="btnMinifyHtml" class="btn btn-primary btn-sm" title="Minify HTML">Minify</button>
             <button id="btnExtractVtl" class="btn btn-primary btn-sm" title="Extract VTL Fields">Extract VTL Fields</button>
@@ -66,6 +65,11 @@ export const HTMLTemplateToolTemplate = /* html */ `
       <div class="pane renderer-pane">
         <div class="pane-header">
           <div class="renderer-actions">
+            <div id="htmlEncodingPreviewModes" class="html-encoding-preview-modes" role="group" aria-label="Encoding preview" hidden>
+              <button type="button" data-encoding-preview="original" aria-pressed="true">Original</button>
+              <button type="button" data-encoding-preview="windows" aria-pressed="false">Windows example</button>
+              <button type="button" data-encoding-preview="safe" aria-pressed="false">Fixed</button>
+            </div>
             <div id="envControls" class="env-controls" style="display:inline-flex;align-items:center;margin-right:.5rem;">
               <select id="envSelector" class="env-select" aria-label="Select environment" title="Select environment"></select>
             </div>

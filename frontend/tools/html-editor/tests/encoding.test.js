@@ -1,5 +1,7 @@
 import {
   analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, prepareToadSafeHtmlBytes, prepareUtf8HtmlBytes,
+  simulateWindows1252Import,
+  markEncodingPreview,
 } from "../encoding.js";
 
 // Failure modes: source bytes decoded with the wrong charset, preexisting mojibake,
@@ -47,7 +49,7 @@ describe("HTML editor encoding", () => {
     expect(html).toContain("“Hi”");
   });
 
-  it("refuses a Toad-safe export when non-ASCII is embedded in code or comments", () => {
+  it("refuses automatic replacement when non-ASCII is embedded in code or comments", () => {
     expect(() => prepareToadSafeHtmlBytes('<script>const word = "é";</script>')).toThrow(/script/i);
     expect(() => prepareToadSafeHtmlBytes("<style>/* é */</style>")).toThrow(/style/i);
     expect(() => prepareToadSafeHtmlBytes("<!-- é -->")).toThrow(/comment/i);
@@ -64,6 +66,21 @@ describe("HTML editor encoding", () => {
 
   it("returns the exact edited HTML for diff review and undoable replacement", () => {
     expect(convertHtmlForToad("<p>“Hi” </p>")).toBe("<p>&#8220;Hi&#8221;&#160;</p>");
+  });
+
+  it("simulates UTF-8 bytes decoded as Windows-1252 for the rendered preview", () => {
+    expect(simulateWindows1252Import("<p>It’s — fine</p>")).toBe("<p>Itâ€™sÂ â€” fine</p>");
+    expect(simulateWindows1252Import(convertHtmlForToad("<p>It’s — fine</p>"))).toBe("<p>It&#8217;s&#160;&#8212; fine</p>");
+  });
+
+  it("marks visible rendered text without changing tags, attributes, scripts, or styles", () => {
+    const html = '<style>p::after{content:"Â "}</style><p title="Â ">AÂ B</p><script>const x="Â ";</script>';
+    const marked = markEncodingPreview(html, "Â ");
+    expect(marked).toContain('title="Â "');
+    expect(marked).toContain('<mark class="adtools-encoding-preview-mark">Â </mark>');
+    expect(marked).toContain('const x="Â ";');
+    expect(marked).toContain('content:"Â "');
+    expect(markEncodingPreview("<p>A&#160;B</p>", "&#160;")).toContain('<mark class="adtools-encoding-preview-mark">&#160;</mark>');
   });
 
   it("flags a conflicting charset and exports matching UTF-8 bytes without editing input", () => {

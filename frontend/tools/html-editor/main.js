@@ -7,7 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import { HTMLTemplateToolTemplate } from "./template.js";
 import { HtmlDocumentStore } from "./documentStore.js";
-import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, prepareToadSafeHtmlBytes } from "./encoding.js";
+import { analyzeHtmlEncoding, convertHtmlForToad, decodeHtmlBytes, listEncodingCharacters, markEncodingPreview, simulateWindows1252Import } from "./encoding.js";
 import MinifyWorker from "./minify.worker.js?worker";
 import { buildVtlValuesExport, deleteVtlValue, extractVtlVariables, getPreviewContent, getVtlValue, setVtlValue } from "./service.js";
 import { getIconSvg } from "./icon.js";
@@ -106,6 +106,8 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
+    this.previewEncodingMode = "original";
+    this._encodingPreviewFinding = null;
     this._handlePageHide = () => void this.flushActiveDocument().catch(() => {});
     this._handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") void this.flushActiveDocument().catch(() => {});
@@ -941,7 +943,6 @@ class HTMLTemplateTool extends BaseTool {
     const btnImport = document.getElementById("btnImportHtml");
     const btnSaveAs = document.getElementById("btnSaveAsHtml");
     const btnCheckEncoding = document.getElementById("btnCheckHtmlEncoding");
-    const btnSaveToad = document.getElementById("btnSaveHtmlToad");
     const htmlFileInput = document.getElementById("htmlFileInput");
 
     // Import button
@@ -953,7 +954,9 @@ class HTMLTemplateTool extends BaseTool {
       btnSaveAs.addEventListener("click", () => void this.handleSaveAsClick());
     }
     btnCheckEncoding?.addEventListener("click", () => this.showEncodingReport());
-    btnSaveToad?.addEventListener("click", () => void this.handleSaveToadClick());
+    this.container.querySelectorAll("[data-encoding-preview]").forEach((button) => {
+      button.addEventListener("click", () => this.setEncodingPreviewMode(button.dataset.encodingPreview));
+    });
 
     // File input change handler (web)
     if (htmlFileInput) {
@@ -1438,11 +1441,22 @@ class HTMLTemplateTool extends BaseTool {
 
     // Apply VTL substitutions only when the preview is in rendered mode.
     try {
-      const rendered = getPreviewContent(html, this.vtlValues, this.previewVtlMode);
+      const previewHtml = this.previewEncodingMode === "windows"
+        ? simulateWindows1252Import(html)
+        : this.previewEncodingMode === "safe" ? convertHtmlForToad(html) : html;
+      const rendered = getPreviewContent(previewHtml, this.vtlValues, this.previewVtlMode);
+      const selected = this._encodingPreviewFinding;
+      const needle = selected
+        ? this.previewEncodingMode === "windows" ? selected.simulated : this.previewEncodingMode === "safe" ? selected.replacement : selected.character
+        : null;
+      let preview = rendered;
+      if (needle) {
+        try { preview = markEncodingPreview(rendered, needle); } catch (_) { /* Keep the rendered preview when source markup is incomplete. */ }
+      }
 
       // Use srcdoc for atomic update and secure context
-      iframe.hidden = !rendered.trim();
-      iframe.srcdoc = rendered || "";
+      iframe.hidden = !preview.trim();
+      iframe.srcdoc = preview || "";
     } catch (error) {
       UsageTracker.trackEvent(
         "html-template",
@@ -1553,8 +1567,22 @@ class HTMLTemplateTool extends BaseTool {
     this._encodingReviewSource = null;
     this._encodingReviewSafe = null;
     this._encodingReviewDocumentId = null;
+    this.previewEncodingMode = "original";
+    this._encodingPreviewFinding = null;
+    const previewModes = this.container?.querySelector("#htmlEncodingPreviewModes");
+    if (previewModes) previewModes.hidden = true;
     const report = this.container?.querySelector("#htmlEncodingReport");
     if (report) report.hidden = true;
+  }
+
+  setEncodingPreviewMode(mode, finding = this._encodingPreviewFinding) {
+    if (!["original", "windows", "safe"].includes(mode) || !this.editor) return;
+    this.previewEncodingMode = mode;
+    this._encodingPreviewFinding = finding;
+    this.container?.querySelectorAll("[data-encoding-preview]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.encodingPreview === mode));
+    });
+    this.renderPreview(this.editor.getValue(), true);
   }
 
   showEncodingDiff(host) {
@@ -1611,9 +1639,10 @@ class HTMLTemplateTool extends BaseTool {
       item.textContent = issue.message;
       report.appendChild(item);
     });
+    let safeAvailable = true;
     if (findings.length) {
       const explanation = document.createElement("p");
-      explanation.textContent = "Click a character to locate it. Windows-1252 is an illustrative Toad decoding, not a measured result from your environment.";
+      explanation.textContent = "Choose a finding to jump to the source and highlight it in the rendered Windows example. Switch preview modes on the right to compare.";
       report.appendChild(explanation);
       const list = document.createElement("div");
       list.className = "html-encoding-findings";
@@ -1622,13 +1651,30 @@ class HTMLTemplateTool extends BaseTool {
         button.type = "button";
         button.className = "html-encoding-finding";
         const visible = (value) => value.replaceAll(" ", "␣");
-        button.textContent = `${finding.name} ${finding.codePoint} · ${finding.count}× · line ${finding.firstLine} · ` +
-          `${visible(finding.character)} → Windows: ${visible(finding.simulated)} · safe source: ${finding.replacement}`;
+        const heading = document.createElement("strong");
+        heading.textContent = `${finding.name} · ${finding.codePoint} · ${finding.count}× · first at line ${finding.firstLine}`;
+        const comparison = document.createElement("span");
+        comparison.className = "html-encoding-comparison";
+        [
+          ["Original", visible(finding.character)],
+          ["Windows example", visible(finding.simulated)],
+          ["Fixed source", finding.replacement],
+        ].forEach(([label, value]) => {
+          const cell = document.createElement("span");
+          cell.className = "html-encoding-comparison-cell";
+          const caption = document.createElement("small");
+          caption.textContent = label;
+          const sample = document.createElement("code");
+          sample.textContent = value;
+          cell.append(caption, sample);
+          comparison.appendChild(cell);
+        });
+        button.append(heading, comparison);
         button.addEventListener("click", () => {
           const position = model.getPositionAt(finding.offsets[0]);
           this.editor.setSelection(new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + finding.character.length));
           this.editor.revealLineInCenter(position.lineNumber);
-          this.editor.focus();
+          this.setEncodingPreviewMode("windows", finding);
         });
         list.appendChild(button);
       });
@@ -1663,64 +1709,28 @@ class HTMLTemplateTool extends BaseTool {
             this.editor.executeEdits("toad-safe-html", [{ range: this.editor.getModel().getFullModelRange(), text: safe }]);
             this.editor.pushUndoStop();
             this.showEncodingReport();
+            this.setEncodingPreviewMode("windows", null);
             this.showSuccess("Replaced upload-sensitive characters. Undo is available in the editor.");
           });
           actions.append(diffButton, replaceButton);
           report.append(actions, diffHost);
         }
       } catch (error) {
+        safeAvailable = false;
         const warning = document.createElement("p");
         warning.textContent = error.message;
         report.appendChild(warning);
       }
     }
     const guidance = document.createElement("p");
-    guidance.textContent = "After replacing, use Save As or Save for Toad (ASCII). Verify the stored BLOB/CLOB and WebView output after upload.";
+    guidance.textContent = "Windows example simulates UTF-8 decoded as Windows-1252. Toad settings may differ. After replacing, use Save As and verify the stored BLOB or CLOB in the WebView.";
     report.appendChild(guidance);
     report.hidden = false;
-  }
-
-  async handleSaveToadClick() {
-    if (!this.editor) return;
-    try {
-      const bytes = prepareToadSafeHtmlBytes(this.editor.getValue());
-      const fileName = this.getHtmlSaveFileName().replace(/\.html?$/i, "-toad.html");
-      if (isTauri()) {
-        const { save } = await import("@tauri-apps/plugin-dialog");
-        const { writeFile } = await import("@tauri-apps/plugin-fs");
-        const selected = await save({
-          filters: [{ name: "HTML Files", extensions: ["html", "htm"] }],
-          defaultPath: fileName,
-          title: "Save ASCII-safe HTML for Toad",
-        });
-        if (!selected) return;
-        await writeFile(selected, bytes);
-        this.showSuccess(`Saved ${selected.split(/[\\/]/).pop()} as ASCII-safe HTML`);
-      } else if (typeof window.showSaveFilePicker === "function") {
-        const fileHandle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [{ description: "HTML document", accept: { "text/html": [".html", ".htm"] } }],
-        });
-        const writable = await fileHandle.createWritable();
-        try { await writable.write(bytes); } finally { await writable.close(); }
-        this.showSuccess(`Saved ${fileHandle.name} as ASCII-safe HTML`);
-      } else {
-        const url = URL.createObjectURL(new Blob([bytes], { type: "text/html;charset=utf-8" }));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        this.showSuccess(`Downloaded ${fileName} as ASCII-safe HTML`);
-      }
-    } catch (error) {
-      if (error?.name === "AbortError") return;
-      console.error("Failed to save HTML for Toad:", error);
-      this.showError(error?.message || "Failed to save HTML for Toad");
-    }
+    const previewModes = this.container?.querySelector("#htmlEncodingPreviewModes");
+    if (previewModes) previewModes.hidden = false;
+    const safeButton = previewModes?.querySelector('[data-encoding-preview="safe"]');
+    if (safeButton) safeButton.disabled = !safeAvailable;
+    this.setEncodingPreviewMode("original", null);
   }
 
   async handleSaveAsClick() {
