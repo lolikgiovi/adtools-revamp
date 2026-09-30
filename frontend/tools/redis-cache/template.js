@@ -6,7 +6,7 @@ export const RedisCacheTemplate = /*html*/ `
           <div>
             <h2 id="redisSearchHeading">Find cache keys</h2>
           </div>
-          <span class="redis-scan-badge">10 results per page · SCAN 100/request</span>
+          <span class="redis-scan-badge">Up to 10 keys per page</span>
         </div>
         <div class="redis-search-panel">
           <form id="redisKeySearchForm" class="redis-search-form">

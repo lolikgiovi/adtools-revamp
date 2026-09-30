@@ -9,7 +9,6 @@ import "./styles.css";
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 const REDIS_RESULTS_PAGE_SIZE = 10;
 const REDIS_SCAN_COUNT = 100;
-const REDIS_MAX_PAGE_SCAN_REQUESTS = 25;
 
 export function formatRedisValue(value) {
   if (typeof value === "string") {
@@ -94,7 +93,6 @@ export class RedisCacheTool extends BaseTool {
     this.selectedKeys = new Set();
     this.cursor = 0;
     this.scanComplete = false;
-    this.pageScanLimitReached = false;
     this.activePattern = "";
     this.pendingDeleteKeys = [];
     this.pendingUnfavoriteKey = null;
@@ -136,7 +134,7 @@ export class RedisCacheTool extends BaseTool {
       const button = event.target.closest("[data-redis-page]");
       if (!button || button.disabled) return;
       const pageValue = button.dataset.redisPage;
-      const targetPage = pageValue === "previous" ? this.currentPage - 1 : pageValue === "next" ? this.currentPage + 1 : Number(pageValue);
+      const targetPage = this.currentPage + (pageValue === "previous" ? -1 : 1);
       this.goToPage(targetPage);
     });
     this.container.querySelector("#redisTestConnection")?.addEventListener("click", () => this.testConnection());
@@ -331,7 +329,6 @@ export class RedisCacheTool extends BaseTool {
       this.selectedKeys.clear();
       this.cursor = 0;
       this.scanComplete = false;
-      this.pageScanLimitReached = false;
       this.activePattern = pattern;
       this.closeValueInspector({ restoreFocus: false });
     }
@@ -360,20 +357,15 @@ export class RedisCacheTool extends BaseTool {
   async loadResultPage(targetPage, { reset = false, pattern = this.activePattern } = {}) {
     this.setBusy(true, reset ? "Searching…" : "Scanning…");
     this.setMessage(`Scanning database ${this.config.database} with ${pattern}`, "neutral");
-    let scanRequests = 0;
     try {
       while (this.resultPages.length < targetPage && this.hasUnloadedPage()) {
-        scanRequests += await this.scanNextResultPage(pattern);
+        await this.scanNextResultPage(pattern);
       }
       if (!this.resultPages.length) await this.scanNextResultPage(pattern);
       this.currentPage = Math.min(targetPage, this.resultPages.length);
       this.syncCurrentPage();
       this.renderResults();
-      const suffix = this.scanComplete
-        ? "Scan complete."
-        : this.pageScanLimitReached || scanRequests >= REDIS_MAX_PAGE_SCAN_REQUESTS
-          ? "More keyspace remains; use the pagination controls to continue."
-          : "More keyspace remains.";
+      const suffix = this.hasUnloadedPage() ? "More keyspace to scan." : "Scan complete.";
       this.setMessage(
         `${this.keys.length.toLocaleString()} ${this.keys.length === 1 ? "key" : "keys"} on page ${this.currentPage}. ${suffix}`,
         "success",
@@ -399,12 +391,7 @@ export class RedisCacheTool extends BaseTool {
 
   async scanNextResultPage(pattern) {
     const pageKeys = [];
-    let scanRequests = 0;
-    while (
-      pageKeys.length < REDIS_RESULTS_PAGE_SIZE &&
-      (this.pendingKeys.length > 0 || !this.scanComplete) &&
-      scanRequests < REDIS_MAX_PAGE_SCAN_REQUESTS
-    ) {
+    while (pageKeys.length < REDIS_RESULTS_PAGE_SIZE && (this.pendingKeys.length > 0 || !this.scanComplete)) {
       while (this.pendingKeys.length && pageKeys.length < REDIS_RESULTS_PAGE_SIZE) {
         pageKeys.push(this.pendingKeys.shift());
       }
@@ -419,16 +406,12 @@ export class RedisCacheTool extends BaseTool {
       });
       this.cursor = Number(result?.cursor) || 0;
       this.scanComplete = this.cursor === 0;
-      scanRequests += 1;
     }
 
     while (this.pendingKeys.length && pageKeys.length < REDIS_RESULTS_PAGE_SIZE) {
       pageKeys.push(this.pendingKeys.shift());
     }
-    this.pageScanLimitReached =
-      scanRequests >= REDIS_MAX_PAGE_SCAN_REQUESTS && !this.scanComplete && pageKeys.length < REDIS_RESULTS_PAGE_SIZE;
-    this.resultPages.push(pageKeys);
-    return scanRequests;
+    if (pageKeys.length || !this.resultPages.length) this.resultPages.push(pageKeys);
   }
 
   syncCurrentPage() {
@@ -455,7 +438,7 @@ export class RedisCacheTool extends BaseTool {
       const empty = document.createElement("div");
       empty.className = "redis-empty-state";
       empty.innerHTML = this.activePattern
-        ? `<h3>No keys in this page</h3><p>${this.hasUnloadedPage() ? "Use the pagination controls to continue through the keyspace." : "Try a broader pattern or confirm the database number."}</p>`
+        ? "<h3>No matching keys</h3><p>Try a broader pattern or confirm the database number.</p>"
         : `<svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="13" rx="15" ry="6"></ellipse><path d="M9 13v10c0 3.3 6.7 6 15 6s15-2.7 15-6V13"></path><path d="M9 23v10c0 3.3 6.7 6 15 6 4.1 0 7.8-.7 10.5-1.9"></path><path d="m36 33 6 6m0-6-6 6"></path></svg><h3>Search the keyspace</h3><p>Results appear here in bounded pages. No values are fetched.</p>`;
       root.appendChild(empty);
       this.renderPagination();
@@ -486,43 +469,23 @@ export class RedisCacheTool extends BaseTool {
     const summary = document.createElement("span");
     summary.className = "redis-pagination-summary";
     summary.id = "redisPaginationSummary";
-    summary.textContent = `Page ${this.currentPage} of ${this.hasUnloadedPage() ? `${pageCount}+` : pageCount}`;
+    summary.textContent = this.hasUnloadedPage() ? `Page ${this.currentPage} · More to scan` : `Page ${this.currentPage} of ${pageCount}`;
 
     const controls = document.createElement("div");
     controls.className = "redis-pagination-controls";
     controls.appendChild(this.createPaginationButton("Previous", "previous", this.currentPage <= 1));
-
-    const pages = this.getPaginationPages(pageCount);
-    pages.forEach((page, index) => {
-      if (index > 0 && page - pages[index - 1] > 1) {
-        const ellipsis = document.createElement("span");
-        ellipsis.className = "redis-pagination-ellipsis";
-        ellipsis.setAttribute("aria-hidden", "true");
-        ellipsis.textContent = "…";
-        controls.appendChild(ellipsis);
-      }
-      controls.appendChild(this.createPaginationButton(String(page), String(page), false, page === this.currentPage));
-    });
-
     controls.appendChild(this.createPaginationButton("Next", "next", !hasNextPage));
     root.append(summary, controls);
   }
 
-  getPaginationPages(pageCount) {
-    return [...new Set([1, pageCount, this.currentPage - 1, this.currentPage, this.currentPage + 1])]
-      .filter((page) => page >= 1 && page <= pageCount)
-      .sort((left, right) => left - right);
-  }
-
-  createPaginationButton(label, page, disabled = false, current = false) {
+  createPaginationButton(label, page, disabled = false) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `btn btn-ghost btn-sm redis-pagination-button${current ? " redis-pagination-page-current" : ""}`;
+    button.className = "btn btn-ghost btn-sm redis-pagination-button";
     button.dataset.redisPage = page;
     button.disabled = disabled || this.busy;
     button.textContent = label;
-    button.setAttribute("aria-label", page === "previous" || page === "next" ? `${label} page` : `Page ${page}`);
-    if (current) button.setAttribute("aria-current", "page");
+    button.setAttribute("aria-label", `${label} page`);
     return button;
   }
 
@@ -974,9 +937,6 @@ export class RedisCacheTool extends BaseTool {
     const hasNextPage = this.currentPage < this.resultPages.length || this.hasUnloadedPage();
     pagination?.querySelector('[data-redis-page="previous"]')?.toggleAttribute("disabled", this.busy || this.currentPage <= 1);
     pagination?.querySelector('[data-redis-page="next"]')?.toggleAttribute("disabled", this.busy || !hasNextPage);
-    pagination?.querySelectorAll('[data-redis-page]:not([data-redis-page="previous"]):not([data-redis-page="next"])').forEach((button) => {
-      button.disabled = this.busy;
-    });
     if (selectAll) {
       selectAll.disabled = this.busy || !this.keys.length;
       selectAll.textContent = this.keys.length && this.keys.every((key) => this.selectedKeys.has(key)) ? "Clear selection" : "Select all";

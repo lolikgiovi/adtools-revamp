@@ -857,22 +857,9 @@
 }
 
 .redis-pagination-button {
-  min-width: 34px;
   height: 34px;
   justify-content: center;
-  padding: 0 9px;
-}
-
-.redis-pagination-page-current {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-  font-weight: 700;
-}
-
-.redis-pagination-ellipsis {
-  padding: 0 3px;
-  color: hsl(var(--muted-foreground));
-  user-select: none;
+  padding: 0 12px;
 }
 
 .redis-favorites-heading {

@@ -35,7 +35,8 @@ describe("RedisCacheTool interactions", () => {
     expect(document.querySelector("#redisLoadMore")).toBeNull();
     expect(pagination.hidden).toBe(false);
     expect(document.querySelector("#redisResults").nextElementSibling).toBe(pagination);
-    expect(pagination.querySelector('[data-redis-page="1"]').getAttribute("aria-current")).toBe("page");
+    expect(pagination.querySelector("#redisPaginationSummary").textContent).toBe("Page 1 · More to scan");
+    expect(pagination.querySelectorAll("[data-redis-page]")).toHaveLength(2);
     expect(pagination.querySelector('[data-redis-page="previous"]').disabled).toBe(true);
     expect(document.querySelector("#redisResults").getAttribute("role")).toBe("region");
   });
@@ -82,12 +83,12 @@ describe("RedisCacheTool interactions", () => {
     document.querySelector('[data-redis-page="next"]').click();
     await settle();
     expect(service.scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ database: 2 }), "*session*", 44, 100);
-    expect(document.querySelector('[data-redis-page="2"]').getAttribute("aria-current")).toBe("page");
+    expect(document.querySelector("#redisPaginationSummary").textContent).toBe("Page 2 of 2");
 
-    document.querySelector('[data-redis-page="1"]').click();
+    document.querySelector('[data-redis-page="previous"]').click();
     await settle();
     expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:1");
-    document.querySelector('[data-redis-page="2"]').click();
+    document.querySelector('[data-redis-page="next"]').click();
     await settle();
 
     for (const checkbox of document.querySelectorAll(".redis-key-select")) {
@@ -126,6 +127,29 @@ describe("RedisCacheTool interactions", () => {
     expect(service.scan).toHaveBeenNthCalledWith(1, expect.objectContaining({ database: 2 }), "*session*", 0, 100);
     expect(service.scan).toHaveBeenNthCalledWith(2, expect.objectContaining({ database: 2 }), "*session*", 44, 100);
     expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(10);
+    expect(document.querySelector("#redisPagination").hidden).toBe(true);
+    expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
+  });
+
+  it("scans past 25 sparse batches before showing the final short page", async () => {
+    let batch = 0;
+    const service = {
+      scan: vi.fn().mockImplementation(async () => {
+        batch += 1;
+        return batch === 31 ? { cursor: 0, keys: ["session:1", "session:2", "session:3"] } : { cursor: batch, keys: [] };
+      }),
+      deleteKeys: vi.fn(),
+      testConnection: vi.fn(),
+    };
+    const tool = new RedisCacheTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+
+    document.querySelector("#redisPatternInput").value = "session";
+    document.querySelector("#redisKeySearchForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(service.scan).toHaveBeenCalledTimes(31);
+    expect(document.querySelectorAll(".redis-key-table tbody tr")).toHaveLength(3);
     expect(document.querySelector("#redisPagination").hidden).toBe(true);
     expect(document.querySelector("#redisSearchMessage").textContent).toContain("Scan complete.");
   });
@@ -199,7 +223,7 @@ describe("RedisCacheTool interactions", () => {
     await settle();
 
     expect(service.scan).toHaveBeenCalledTimes(1);
-    expect(document.querySelector("#redisPaginationSummary").textContent).toBe("Page 1 of 1+");
+    expect(document.querySelector("#redisPaginationSummary").textContent).toBe("Page 1 · More to scan");
     expect(document.querySelector(".redis-key-table tbody tr code").textContent).toBe("session:1");
 
     document.querySelector('[data-redis-page="next"]').click();
