@@ -1439,6 +1439,7 @@ export class QuickQueryUI {
       status.hidden = !isLoading;
     }
     panel?.setAttribute("aria-busy", String(isLoading));
+    if (!isLoading) this.scheduleDataTableLayoutRefresh();
     if (panel) {
       const contentA = panel.querySelector(".content-a");
       const contentB = panel.querySelector(".content-b");
@@ -4000,7 +4001,10 @@ export class QuickQueryUI {
     this.elements.oracleDataError.classList.add("hidden");
     this.elements.oracleDataSwitchTable.classList.add("hidden");
     try {
-      const rows = await OracleDataImportService.fetch(connection, query);
+      const blobFields = new Set(this.schemaTable.getData()
+        .filter((row) => String(row[1]).trim().toUpperCase() === "BLOB")
+        .map((row) => row[0]));
+      const rows = await OracleDataImportService.fetch(connection, query, blobFields);
       if (this.elements.tableNameInput.value.trim().toUpperCase() !== selectedTable) {
         throw new Error("The selected table changed during the fetch. Run the query again.");
       }

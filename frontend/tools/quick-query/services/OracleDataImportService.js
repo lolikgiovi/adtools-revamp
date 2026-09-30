@@ -99,7 +99,7 @@ export class OracleDataImportService {
     return { sql: statement, tableName: `${table[1]}.${table[2]}`.toUpperCase(), fields };
   }
 
-  static async fetch(connection, query) {
+  static async fetch(connection, query, blobFields = new Set()) {
     const result = await OracleConnectionService.queryViaSidecar(
       connection.name, connection, query.sql, ORACLE_IMPORT_MAX_ROWS,
     );
@@ -111,6 +111,13 @@ export class OracleDataImportService {
     if (result.rows.some((row) => !Array.isArray(row) || row.length !== query.fields.length)) {
       throw new Error("Oracle returned an unexpected row shape.");
     }
-    return result.rows;
+    return result.rows.map((row) => row.map((value, index) => {
+      if (!blobFields.has(query.fields[index]) || value == null) return value;
+      if (value.__adtools_type !== "oracle_blob" || value.encoding !== "base64" || typeof value.data !== "string") {
+        throw new Error(`Oracle returned an unsupported BLOB value for ${query.fields[index]}.`);
+      }
+      // Keep the encoding marker in the cell so generation can distinguish bytes from ordinary BLOB text.
+      return `data:application/octet-stream;base64,${value.data}`;
+    }));
   }
 }

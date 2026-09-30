@@ -262,6 +262,7 @@ export class QueryGenerationService {
     // 3. Map schema with field name as key
     const schemaMap = new Map(schemaData.map((row) => [row[0], row]));
     const blobAttachments = new Map();
+    const importedBlobs = new Map();
 
     // 4. Process each row of data
     const processedRows = dataRows.map((rowData, rowIndex) => {
@@ -298,6 +299,19 @@ export class QueryGenerationService {
                 blobAttachments.set(matchingBlob, `quick_query_blob_${blobAttachments.size + 1}`);
               }
               return { fieldName, formattedValue: blobAttachments.get(matchingBlob) };
+            }
+
+            // Oracle row imports put their BLOB bytes in the grid as a Base64 data URI.
+            // Decode those bytes in the same PL/SQL block used for attached files.
+            if (dataType.trim().toUpperCase() === "BLOB" &&
+              typeof value === "string" && /^data:application\/octet-stream;base64,/i.test(value)) {
+              let blob = importedBlobs.get(value);
+              if (!blob) {
+                blob = { name: `imported ${fieldName} BLOB`, processedFormats: { base64: value } };
+                importedBlobs.set(value, blob);
+                blobAttachments.set(blob, `quick_query_blob_${blobAttachments.size + 1}`);
+              }
+              return { fieldName, formattedValue: blobAttachments.get(blob) };
             }
 
             // Check if value matches any attachment
