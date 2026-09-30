@@ -1,8 +1,8 @@
 .kafka-tool {
-  --kafka-control-height: 40px;
-  --kafka-compact-height: 32px;
-  --kafka-control-radius: 10px;
-  --kafka-section-gap: 16px;
+  --kafka-control-height: 36px;
+  --kafka-compact-height: 28px;
+  --kafka-control-radius: 9px;
+  --kafka-section-gap: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -243,11 +243,11 @@
 
 .kafka-pane-header {
   box-sizing: border-box;
-  height: 48px;
-  min-height: 48px;
+  height: 38px;
+  min-height: 38px;
   flex: none;
   align-items: center;
-  padding: 7px 14px;
+  padding: 5px 12px;
   border-bottom: 1px solid hsl(var(--border));
 }
 
@@ -256,7 +256,7 @@
 }
 
 .kafka-pane-header h2 {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.2;
 }
 
@@ -265,7 +265,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 14px;
+  padding: 12px;
 }
 
 .kafka-publish-grid {
@@ -297,7 +297,7 @@
 }
 
 .kafka-template-action-row {
-  margin-top: 12px;
+  margin-top: var(--kafka-section-gap);
 }
 
 .kafka-topic-action-row {
@@ -473,6 +473,7 @@
   box-sizing: border-box;
   border-radius: var(--kafka-control-radius);
   justify-content: center;
+  font-size: 14px;
 }
 
 .kafka-tool input[type="text"]:focus,
@@ -523,6 +524,42 @@
   padding-right: 8px;
   border: 1px solid hsl(var(--border));
   border-radius: var(--kafka-control-radius) 0 0 var(--kafka-control-radius);
+  font-size: 14px;
+}
+
+.kafka-tool .ad-searchable-dropdown-trigger {
+  height: var(--kafka-control-height);
+  min-height: var(--kafka-control-height);
+  padding: 0 10px !important;
+  border-radius: var(--kafka-control-radius) !important;
+  font-size: 14px;
+  box-shadow: none !important;
+}
+
+.kafka-tool .ad-searchable-dropdown-menu {
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--kafka-control-radius);
+}
+
+.kafka-tool .ad-searchable-dropdown-search-wrap {
+  min-height: 30px;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 7px;
+}
+
+.kafka-tool .ad-searchable-dropdown-search {
+  padding: 4px 0 !important;
+  font-size: 12px;
+}
+
+.kafka-tool .ad-searchable-dropdown-option {
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .kafka-topic-picker > input:focus {
@@ -1023,15 +1060,15 @@
   display: inline-flex;
   flex: none;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
   border-radius: 8px;
   background: hsl(var(--muted));
 }
 
 .kafka-listen-mode-button {
   min-width: 64px;
-  height: 28px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 9px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -1109,12 +1146,12 @@
 
 .kafka-history-form input[type="text"],
 .kafka-history-form select {
-  height: 36px;
+  height: 34px;
 }
 
 .kafka-history-form > #kafkaHistorySearch {
-  height: 36px;
-  min-height: 36px;
+  height: 34px;
+  min-height: 34px;
   box-sizing: border-box;
 }
 
@@ -1136,8 +1173,17 @@
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
+}
+
+.kafka-history-field .ad-searchable-dropdown-trigger {
+  height: 34px;
+  min-height: 34px;
+}
+
+.kafka-history-form input[type="text"] {
+  font-size: 14px;
 }
 
 .kafka-history-form select:focus-visible {
