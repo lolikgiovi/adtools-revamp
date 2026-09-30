@@ -392,6 +392,14 @@ pub struct SearchResult {
     limited: bool,
 }
 
+fn resolve_search_start(offset: Offset, end: i64) -> Result<Option<i64>, String> {
+    match offset {
+        Offset::Offset(-1) | Offset::Invalid => Ok(None),
+        Offset::Offset(start) if start >= 0 => Ok((start < end).then_some(start)),
+        _ => Err("Could not resolve a start offset for a partition.".into()),
+    }
+}
+
 #[tauri::command]
 pub async fn kafka_search_history(
     config: KafkaConfig,
@@ -452,13 +460,11 @@ pub async fn kafka_search_history(
         let mut assignment = TopicPartitionList::new();
         let mut remaining = std::collections::HashSet::new();
         for entry in starts.elements() {
+            entry.error().map_err(|error| {
+                format!("Could not resolve start offset for partition {}: {error}", entry.partition())
+            })?;
             let end = ends[&entry.partition()];
-            let start = match entry.offset() {
-                Offset::Offset(offset) => offset,
-                Offset::Invalid => end,
-                _ => return Err("Could not resolve a start offset for a partition.".into()),
-            };
-            if start < end {
+            if let Some(start) = resolve_search_start(entry.offset(), end)? {
                 assignment
                     .add_partition_offset(&topic, entry.partition(), Offset::Offset(start))
                     .map_err(|e| e.to_string())?;
@@ -587,4 +593,27 @@ pub fn kafka_stop_listener(state: State<'_, ListenerState>) -> Result<(), String
         running.store(false, Ordering::SeqCst);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod search_offset_tests {
+    use super::*;
+
+    #[test]
+    fn timestamp_lookup_without_a_matching_record_skips_the_partition() {
+        assert_eq!(resolve_search_start(Offset::Offset(-1), 42).unwrap(), None);
+        assert_eq!(resolve_search_start(Offset::Invalid, 42).unwrap(), None);
+    }
+
+    #[test]
+    fn timestamp_lookup_with_a_record_uses_its_offset() {
+        assert_eq!(resolve_search_start(Offset::Offset(12), 42).unwrap(), Some(12));
+        assert_eq!(resolve_search_start(Offset::Offset(42), 42).unwrap(), None);
+    }
+
+    #[test]
+    fn unexpected_lookup_offsets_still_fail() {
+        assert!(resolve_search_start(Offset::Beginning, 42).is_err());
+        assert!(resolve_search_start(Offset::Offset(-2), 42).is_err());
+    }
 }

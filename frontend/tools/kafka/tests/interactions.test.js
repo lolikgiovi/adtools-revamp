@@ -251,31 +251,37 @@ describe("Kafka publish controls", () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  it("uses a custom responsive history picker instead of a native datetime control", () => {
+  it("offers only the requested rolling history ranges, defaulting to 24 hours", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
 
-    const input = document.querySelector("#kafkaHistorySince");
-    const trigger = document.querySelector("#kafkaHistoryTrigger");
-    const calendar = document.querySelector("#kafkaHistoryCalendar");
-    expect(input.type).toBe("hidden");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    const range = document.querySelector("#kafkaHistoryRange");
+    expect(range?.value).toBe("24");
+    expect([...range.options].map(({ textContent }) => textContent.trim())).toEqual([
+      "Last 1 hour", "Last 24 hours", "Last 3 days", "Last 7 days", "Last 14 days", "Last 30 days", "Last 60 days",
+    ]);
+    expect(document.querySelector("#kafkaHistoryCalendar")).toBeNull();
+  });
 
-    trigger.click();
-    expect(calendar.hidden).toBe(false);
-    expect(document.querySelectorAll("#kafkaHistoryDays .kafka-date-day")).toHaveLength(42);
-
-    const hours = document.querySelector("#kafkaHistoryHours");
-    const minutes = document.querySelector("#kafkaHistoryMinutes");
-    hours.value = "01";
-    minutes.value = "05";
-    hours.dispatchEvent(new Event("input", { bubbles: true }));
-    minutes.dispatchEvent(new Event("input", { bubbles: true }));
-    document.querySelector("#kafkaHistoryApply").click();
-
-    expect(input.value).toMatch(/T01:05$/);
-    expect(calendar.hidden).toBe(true);
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  it("calculates the selected range from the time Search is submitted", async () => {
+    const service = { searchHistory: vi.fn().mockResolvedValue({ matches: [], scanned: 0, limited: false }) };
+    const tool = new KafkaTool(null, service);
+    tool.mount(document.querySelector("#tool"));
+    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    document.querySelector("#kafkaListenTopic").value = "orders.test";
+    document.querySelector("#kafkaHistoryQuery").value = "trace-id";
+    const range = document.querySelector("#kafkaHistoryRange");
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_780_000_000_000);
+    try {
+      range.value = "1";
+      await tool.searchHistory();
+      expect(service.searchHistory.mock.calls[0][3]).toBe(now() - 60 * 60 * 1000);
+      range.value = "1440";
+      await tool.searchHistory();
+      expect(service.searchHistory.mock.calls[1][3]).toBe(now() - 60 * 24 * 60 * 60 * 1000);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("keeps broker setup compact and shows the tested bootstrap server", async () => {
@@ -336,28 +342,6 @@ describe("Kafka publish controls", () => {
     format.click();
     expect(article.querySelector("pre").textContent).toContain("\n  \"id\": 1");
     expect(service.publish).not.toHaveBeenCalled();
-  });
-
-  it("places the history picker above or below based on available space", () => {
-    const tool = new KafkaTool(null, { publish: vi.fn() });
-    tool.mount(document.querySelector("#tool"));
-
-    const trigger = document.querySelector("#kafkaHistoryTrigger");
-    const calendar = document.querySelector("#kafkaHistoryCalendar");
-    const originalInnerHeight = window.innerHeight;
-    Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
-    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({ top: 40, bottom: 84 });
-    vi.spyOn(calendar, "getBoundingClientRect").mockReturnValue({ height: 360 });
-
-    trigger.click();
-    expect(calendar.classList.contains("is-above")).toBe(false);
-    trigger.click();
-
-    trigger.getBoundingClientRect.mockReturnValue({ top: 600, bottom: 644 });
-    trigger.click();
-    expect(calendar.classList.contains("is-above")).toBe(true);
-
-    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
   });
 
   it("sends one explicit bulk click once and locks the button until delivery", async () => {

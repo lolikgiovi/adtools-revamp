@@ -3,9 +3,10 @@ import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
 import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, KAFKA_TOPIC_FAVORITES_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, readKafkaTopicFavorites, receivedMessageToDraft } from "./service.js";
 import { KafkaTemplate } from "./template.js";
-import { KafkaDateTimePicker } from "./date-picker.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
+
+const HISTORY_RANGE_HOURS = new Set([1, 24, 72, 168, 336, 720, 1440]);
 
 export class KafkaTool extends BaseTool {
   constructor(eventBus, service = new KafkaService()) {
@@ -29,7 +30,6 @@ export class KafkaTool extends BaseTool {
     this.jsonEditors = {};
     this.receivedMessages = new WeakMap();
     this.historyRequestId = 0;
-    this.historyPicker = null;
     this.favoriteTopics = [];
     this.visibleRequests = [];
     this.activeTemplateIndex = -1;
@@ -139,10 +139,6 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryResults").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryForm").addEventListener("submit", (event) => { event.preventDefault(); this.searchHistory(); });
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    this.field("kafkaHistorySince").value = new Date(yesterday.getTime() - yesterday.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-    this.historyPicker = new KafkaDateTimePicker({ root: this.field("kafkaHistoryPicker"), input: this.field("kafkaHistorySince") });
-    this.historyPicker.mount();
     this.setListenMode("history");
     this.updateTopicFavorite();
     this.updateTopicFavorite("listen");
@@ -158,7 +154,6 @@ export class KafkaTool extends BaseTool {
     this.closeTopicMenu();
     this.closeTopicMenu("listen");
     this.closeTemplateMenu();
-    this.historyPicker?.close();
     this.setHeadersExpanded(false);
     this.setTemplateSaveOpen(false);
     this.stopListening();
@@ -171,8 +166,6 @@ export class KafkaTool extends BaseTool {
     this.historyRequestId++;
     this.closeTopicMenu();
     this.closeTopicMenu("listen");
-    this.historyPicker?.destroy();
-    this.historyPicker = null;
     this.cleanupResizer();
     this.setHeadersExpanded(false);
     this.closeTemplateMenu();
@@ -252,7 +245,6 @@ export class KafkaTool extends BaseTool {
     if (this.field("kafkaLiveView")) this.field("kafkaLiveView").hidden = !live;
     if (this.field("kafkaHistoryView")) this.field("kafkaHistoryView").hidden = live;
     this.updateListeningButtonVisibility();
-    if (live) this.historyPicker?.close();
     if (focus) (live ? liveButton : historyButton)?.focus();
   }
   updateListeningButtonVisibility() {
@@ -1156,11 +1148,12 @@ export class KafkaTool extends BaseTool {
     this.setListenMode("history");
     const topic = this.field("kafkaListenTopic").value.trim();
     const query = this.field("kafkaHistoryQuery").value.trim();
-    const sinceMs = new Date(this.field("kafkaHistorySince").value).getTime();
+    const rangeHours = Number(this.field("kafkaHistoryRange").value);
     if (!this.config().brokers || !topic) { this.message("kafkaHistoryStatus", "Enter bootstrap servers and a topic to search.", true); return; }
-    if (query.length < 3 || !Number.isFinite(sinceMs) || sinceMs > Date.now()) {
-      this.message("kafkaHistoryStatus", "Enter at least 3 characters and choose a start time in the past.", true); return;
+    if (query.length < 3 || !HISTORY_RANGE_HOURS.has(rangeHours)) {
+      this.message("kafkaHistoryStatus", "Enter at least 3 characters and choose a search range.", true); return;
     }
+    const sinceMs = Date.now() - rangeHours * 60 * 60 * 1000;
     const requestId = ++this.historyRequestId;
     const button = this.field("kafkaHistorySearch");
     this.searchingHistory = true;

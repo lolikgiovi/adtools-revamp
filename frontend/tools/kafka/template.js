@@ -171,43 +171,16 @@ export const KafkaTemplate = /*html*/ `
               <label class="kafka-visually-hidden" for="kafkaHistoryQuery">Search retained messages</label>
               <input id="kafkaHistoryQuery" type="text" minlength="3" maxlength="200" required placeholder="Trace ID, payload, key, or header" autocomplete="off" spellcheck="false" aria-label="Trace ID, payload, key, or header" />
               <div class="kafka-history-field">
-                <label class="kafka-visually-hidden" for="kafkaHistoryTrigger">Since</label>
-                <div id="kafkaHistoryPicker" class="kafka-date-picker">
-                  <input id="kafkaHistorySince" type="hidden" required />
-                  <button id="kafkaHistoryTrigger" class="kafka-date-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="kafkaHistoryCalendar">
-                    <span id="kafkaHistoryDisplay"></span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-                  </button>
-                  <div
-                    id="kafkaHistoryCalendar"
-                    class="kafka-date-popover app-popover-surface"
-                    role="dialog"
-                    aria-labelledby="kafkaHistoryCalendarTitle"
-                    hidden
-                  >
-                    <div class="kafka-date-header">
-                      <h3 id="kafkaHistoryCalendarTitle"></h3>
-                      <div class="kafka-date-nav" aria-label="Change month">
-                        <button id="kafkaHistoryPrevious" class="kafka-date-nav-button" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
-                        <button id="kafkaHistoryNext" class="kafka-date-nav-button" type="button" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
-                      </div>
-                    </div>
-                    <div class="kafka-date-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-                    <div id="kafkaHistoryDays" class="kafka-date-days" role="grid" aria-label="Calendar days"></div>
-                    <div class="kafka-date-time">
-                      <div><strong>Start time</strong><span>Local time</span></div>
-                      <div class="kafka-time-fields">
-                        <label>Hour<input id="kafkaHistoryHours" type="text" inputmode="numeric" maxlength="2" aria-label="Hour" /></label>
-                        <span aria-hidden="true">:</span>
-                        <label>Minute<input id="kafkaHistoryMinutes" type="text" inputmode="numeric" maxlength="2" aria-label="Minute" /></label>
-                      </div>
-                    </div>
-                    <div class="kafka-date-footer">
-                      <button id="kafkaHistoryNow" class="btn btn-ghost btn-sm" type="button">Now</button>
-                      <div class="kafka-date-footer-actions"><button id="kafkaHistoryCancel" class="btn btn-ghost btn-sm" type="button">Cancel</button><button id="kafkaHistoryApply" class="btn btn-primary btn-sm" type="button">Apply</button></div>
-                    </div>
-                  </div>
-                </div>
+                <label class="kafka-visually-hidden" for="kafkaHistoryRange">Search range</label>
+                <select id="kafkaHistoryRange" required>
+                  <option value="1">Last 1 hour</option>
+                  <option value="24" selected>Last 24 hours</option>
+                  <option value="72">Last 3 days</option>
+                  <option value="168">Last 7 days</option>
+                  <option value="336">Last 14 days</option>
+                  <option value="720">Last 30 days</option>
+                  <option value="1440">Last 60 days</option>
+                </select>
               </div>
               <button id="kafkaHistorySearch" class="btn btn-secondary btn-sm" type="submit" disabled>Search</button>
             </form>

@@ -1162,7 +1162,7 @@
 }
 
 .kafka-history-form input[type="text"],
-.kafka-history-form .kafka-date-trigger {
+.kafka-history-form select {
   height: 36px;
 }
 
@@ -1176,272 +1176,27 @@
   margin-top: 0;
 }
 
-.kafka-history-field,
-.kafka-date-picker {
+.kafka-history-field {
   min-width: 0;
 }
 
-.kafka-date-picker {
-  position: relative;
-}
-
-.kafka-date-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.kafka-history-form select {
+  display: block;
   width: 100%;
-  gap: 8px;
-  margin: 0;
-  padding: 8px 10px;
+  box-sizing: border-box;
+  padding: 0 10px;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font: inherit;
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: left;
   cursor: pointer;
 }
 
-.kafka-date-trigger:hover,
-.kafka-date-trigger[aria-expanded="true"] {
-  border-color: hsl(var(--ring));
-  background: hsl(var(--muted));
-}
-
-.kafka-date-trigger svg,
-.kafka-date-nav-button svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.kafka-date-trigger svg {
-  color: hsl(var(--muted-foreground));
-}
-
-.kafka-date-trigger > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kafka-date-popover {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 60;
-  width: min(340px, calc(100vw - 32px));
-  box-sizing: border-box;
-  overflow-y: auto;
-  padding: 14px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 12px;
-  background: hsl(var(--card));
-  box-shadow: 0 16px 40px hsl(var(--foreground) / 0.2);
-  color: hsl(var(--foreground));
-}
-
-.kafka-date-popover[hidden] {
-  display: none;
-}
-
-.kafka-date-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.kafka-date-header h3 {
-  margin: 0;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-}
-
-.kafka-date-nav,
-.kafka-date-footer-actions {
-  display: flex;
-  gap: 5px;
-}
-
-.kafka-date-nav-button {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid hsl(var(--border));
-  border-radius: 7px;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-}
-
-.kafka-date-nav-button:hover:not(:disabled) {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-}
-
-.kafka-date-nav-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-
-.kafka-date-weekdays,
-.kafka-date-days {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 3px;
-}
-
-.kafka-date-weekdays {
-  margin-bottom: 5px;
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.kafka-date-day {
-  min-width: 0;
-  height: 32px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: hsl(var(--foreground));
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-
-.kafka-date-day:hover:not(:disabled),
-.kafka-date-day:focus-visible {
-  border-color: hsl(var(--ring));
-  background: hsl(var(--muted));
-}
-
-.kafka-date-day.is-outside {
-  color: hsl(var(--muted-foreground));
-  opacity: 0.55;
-}
-
-.kafka-date-day.is-today {
-  box-shadow: inset 0 0 0 1px hsl(var(--primary));
-}
-
-.kafka-date-day.is-selected {
-  border-color: hsl(var(--primary));
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-weight: 700;
-  opacity: 1;
-}
-
-.kafka-date-day:disabled {
-  cursor: not-allowed;
-  opacity: 0.25;
-}
-
-.kafka-date-time {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.kafka-date-time > div:first-child {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.kafka-date-time strong {
-  font-size: 12px;
-}
-
-.kafka-date-time > div:first-child span {
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-}
-
-.kafka-time-fields {
-  display: grid;
-  grid-template-columns: 52px 10px 52px;
-  align-items: end;
-  gap: 4px;
-}
-
-.kafka-time-fields label {
-  display: grid;
-  gap: 4px;
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-  font-weight: 600 !important;
-  letter-spacing: 0;
-  text-align: center;
-  text-transform: none;
-}
-
-.kafka-date-time .kafka-time-fields input[type="text"] {
-  width: 52px;
-  max-width: 52px;
-  height: 32px;
-  margin: 0;
-  padding: 5px 3px;
-  box-sizing: border-box;
-  border-radius: 7px;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-.kafka-time-fields > span {
-  padding-bottom: 7px;
-  color: hsl(var(--muted-foreground));
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.kafka-date-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.kafka-date-footer .btn {
-  min-width: 0;
-  height: 32px;
-  justify-content: center;
-}
-
-.kafka-date-footer #kafkaHistoryNow {
-  padding-inline: 0;
-  color: hsl(var(--muted-foreground));
-}
-
-.kafka-date-footer #kafkaHistoryNow:hover {
-  color: hsl(var(--foreground));
+.kafka-history-form select:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 #kafkaHistoryStatus {
@@ -1644,20 +1399,7 @@ body.is-resizing * {
     grid-column: auto;
   }
 
-  .kafka-date-popover {
-    position: fixed;
-    top: auto;
-    right: 16px;
-    bottom: 16px;
-    left: 16px;
-    width: auto;
-    max-height: calc(100dvh - 32px);
-    overflow-y: auto;
-  }
 
-  .kafka-date-day {
-    height: 36px;
-  }
 }
 
 @media (max-width: 420px) {
