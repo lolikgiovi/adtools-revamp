@@ -1,9 +1,13 @@
-# Unreleased
+# AD Tools 1.3.9
 
-- **Kafka** — Generate and copy UUIDs from the payload editor. Publishing sends one JSON payload per message;
-  bulk payload publishing is removed.
+- **Kafka** — Generate and copy a UUID directly from the payload editor.
+- **Kafka** — Keep multiple request tabs open; drafts and the active tab are restored when you reopen Kafka.
+- **Kafka** — Retained-history search handles partitions without matching records and offers search ranges up to 60 days.
+- **Run Query** — The template editor now lays out correctly when its modal opens.
 
-# AD Tools 1.3.8
+## Earlier release notes
+
+### AD Tools 1.3.8
 
 - **HTML Template** — Review characters at risk in Windows text imports. Compare the Windows example and ASCII-safe preview, inspect the source diff,
   and apply supported replacements with Undo available.
@@ -11,8 +15,6 @@
 - **HTML Template** — Save the current document as an HTML file.
 - **Base64 Tools** — Preview a decoded file before saving it.
 - **Dashboard** — Overview metrics now follow the selected time range.
-
-## Earlier release notes
 
 ### AD Tools 1.3.7
 
