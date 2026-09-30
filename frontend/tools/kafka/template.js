@@ -1,34 +1,46 @@
 export const KafkaTemplate = /*html*/ `
   <div class="kafka-tool">
-    <section id="kafkaConnection" class="kafka-connection" data-state="ready" aria-labelledby="kafkaConnectionHeading">
-      <div class="kafka-connection-bar">
-        <div class="kafka-connection-state">
-          <span class="kafka-status-dot" aria-hidden="true"></span>
-          <div>
-            <h2 id="kafkaConnectionHeading">Kafka</h2>
-            <p id="kafkaConnectionStatus" role="status" aria-live="polite">Add a bootstrap server to get started.</p>
-          </div>
-        </div>
-        <div class="kafka-connection-actions">
-          <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
-          <details id="kafkaConnectionSettings" class="kafka-settings">
-            <summary><span>Broker settings</span><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
-            <div class="kafka-settings-popover app-popover-surface">
-              <label for="kafkaBrokers">Bootstrap server</label>
-              <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
-              <p class="kafka-setting-note">PLAINTEXT connection</p>
-            </div>
-          </details>
-        </div>
+    <div class="kafka-tab-strip" aria-label="Kafka tabs">
+      <div id="kafkaTabList" class="kafka-tab-list" role="tablist" aria-label="Kafka sessions"></div>
+      <button id="kafkaAddTab" class="kafka-tab-add" type="button" aria-label="New Kafka tab" title="New Kafka tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+      </button>
+      <div id="kafkaTabUndo" class="kafka-tab-undo" hidden>
+        <span id="kafkaTabUndoMessage">Tab closed</span>
+        <button id="kafkaUndoCloseTab" type="button">Undo</button>
       </div>
-    </section>
-
+    </div>
     <nav class="kafka-flow-nav" aria-label="Kafka workflow on small screens">
       <button id="kafkaPublishFlow" class="kafka-flow-button is-active" type="button" aria-controls="kafkaPublishPanel" aria-pressed="true">Publish</button>
       <button id="kafkaListenFlow" class="kafka-flow-button" type="button" aria-controls="kafkaListenPanel" aria-pressed="false">Listen</button>
     </nav>
 
-    <div id="kafkaWorkspace" class="kafka-workspace">
+    <div id="kafkaWorkspace" class="kafka-workspace" role="tabpanel" tabindex="0" aria-label="Kafka session">
+      <section id="kafkaConnection" class="kafka-connection" data-state="ready" aria-labelledby="kafkaConnectionHeading">
+        <div class="kafka-connection-bar">
+          <div class="kafka-connection-state">
+            <span class="kafka-status-dot" aria-hidden="true"></span>
+            <div>
+              <h2 id="kafkaConnectionHeading">Kafka</h2>
+              <p id="kafkaConnectionStatus" role="status" aria-live="polite">Add a bootstrap server to get started.</p>
+            </div>
+          </div>
+          <div class="kafka-connection-actions">
+            <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
+            <details id="kafkaConnectionSettings" class="kafka-settings">
+              <summary><span>Broker settings</span><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
+              <div class="kafka-settings-popover app-popover-surface">
+                <label for="kafkaBrokers">Bootstrap server</label>
+                <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
+                <p class="kafka-setting-note">PLAINTEXT connection</p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
       <section id="kafkaPublishPanel" class="kafka-pane kafka-publish-pane is-active" aria-labelledby="kafkaComposeHeading">
         <div class="kafka-pane-header">
           <div>
@@ -110,15 +122,21 @@ export const KafkaTemplate = /*html*/ `
                       <div class="kafka-editor-controls">
                         <button id="kafkaFormatHeaders" class="btn btn-ghost btn-sm" type="button">Format</button>
                         <button id="kafkaGenerateTraceId" class="btn btn-ghost btn-sm" type="button">Generate trace ID</button>
-                        <button id="kafkaExpandHeaders" class="btn btn-ghost btn-sm" type="button" aria-controls="kafkaHeadersEditor" aria-expanded="false">Expand</button>
+                        <div class="kafka-view-switch" role="group" aria-label="Header view format">
+                          <button id="kafkaHeadersJsonMode" class="is-active" type="button" aria-pressed="true">JSON</button>
+                          <button id="kafkaHeadersKeyValueMode" type="button" aria-pressed="false">Key-value</button>
+                        </div>
                       </div>
                     </div>
-                    <div class="kafka-trace-targets" role="group" aria-label="Generated trace ID destinations">
-                      <label><input id="kafkaTraceToHeader" type="checkbox" checked /> traceId header</label>
-                      <label><input id="kafkaTraceToKey" type="checkbox" /> Message key</label>
+                    <div id="kafkaHeadersJsonView">
+                      <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
+                      <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
                     </div>
-                    <div id="kafkaHeadersEditor" class="kafka-json-editor" aria-labelledby="kafkaHeadersLabel"></div>
-                    <textarea id="kafkaHeaders" class="kafka-editor-fallback" rows="4" spellcheck="false">{}</textarea>
+                    <div id="kafkaHeadersKeyValueView" class="kafka-header-key-value" hidden>
+                      <p id="kafkaHeadersEmpty" class="kafka-header-empty" hidden>No headers yet.</p>
+                      <div id="kafkaHeaderRows" class="kafka-header-rows"></div>
+                      <button id="kafkaAddHeader" class="btn btn-ghost btn-sm" type="button">Add header</button>
+                    </div>
                     <p id="kafkaHeadersStatus" class="kafka-json-status" role="status" aria-live="polite"></p>
                   </div>
                 </div>

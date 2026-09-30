@@ -7,6 +7,9 @@ import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
 
 const HISTORY_RANGE_HOURS = new Set([1, 24, 72, 168, 336, 720, 1440]);
+const KAFKA_TABS_KEY = "tool:kafka:tabs";
+const MAX_KAFKA_TABS = 15;
+const DEFAULT_KAFKA_VALUE = '{\n  "example": "value"\n}';
 
 export class KafkaTool extends BaseTool {
   constructor(eventBus, service = new KafkaService()) {
@@ -28,12 +31,27 @@ export class KafkaTool extends BaseTool {
     this.activeTopicIndex = -1;
     this.topicPickerSource = "publish";
     this.jsonEditors = {};
+    this.headersMode = "json";
+    this.headerRows = [];
     this.receivedMessages = new WeakMap();
     this.historyRequestId = 0;
     this.favoriteTopics = [];
     this.visibleRequests = [];
     this.activeTemplateIndex = -1;
     this.selectedRequestName = "";
+    this.tabs = [];
+    this.activeTabId = null;
+    this.tabTitleTopicSource = "publish";
+    this._restoringTab = false;
+    this._tabSaveTimer = null;
+    this._tabStorageErrorShown = false;
+    this._tabOperation = false;
+    this._tabContextMenu = null;
+    this._tabContextTrigger = null;
+    this._handleTabContextDismiss = null;
+    this._handleTabContextKeydown = null;
+    this._closedTabs = null;
+    this._tabUndoTimer = null;
     this._resizerCleanup = null;
   }
 
@@ -41,15 +59,21 @@ export class KafkaTool extends BaseTool {
   render() { return KafkaTemplate; }
 
   onMount() {
+    this.headersMode = "json";
+    this.headerRows = [];
     this.headerDisconnectHandler = () => { void this.stopListening(); };
     globalThis.addEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
     const config = readKafkaConfig();
     this.field("kafkaBrokers").value = config.brokers;
     this.requests = readKafkaRequests();
     this.favoriteTopics = readKafkaTopicFavorites();
+    this.restoreTabSession();
     this.renderRequests();
     const connectionSettings = this.field("kafkaConnectionSettings");
-    connectionSettings.addEventListener("toggle", () => this.updateConnectionSettingsLayout());
+    connectionSettings.addEventListener("toggle", () => {
+      this.updateConnectionSettingsLayout();
+      this.scheduleTabSave();
+    });
     this.setConnectionSettingsOpen(!config.brokers);
     const templatePicker = this.field("kafkaTemplates");
     templatePicker.addEventListener("toggle", () => this.updateTemplateMenuLayout());
@@ -82,6 +106,12 @@ export class KafkaTool extends BaseTool {
       }
     };
     document.addEventListener("click", this.outsideTopicClick);
+    this.field("kafkaTabList").addEventListener("click", (event) => this.handleTabListClick(event));
+    this.field("kafkaTabList").addEventListener("dblclick", (event) => this.handleTabListDoubleClick(event));
+    this.field("kafkaTabList").addEventListener("contextmenu", (event) => this.handleTabListContextMenu(event));
+    this.field("kafkaTabList").addEventListener("keydown", (event) => this.handleTabListKeydown(event));
+    this.field("kafkaAddTab").addEventListener("click", () => this.createNewTab());
+    this.field("kafkaUndoCloseTab").addEventListener("click", () => this.undoCloseTabs());
     this.field("kafkaTemplatePicker").addEventListener("focusout", (event) => {
       if (!this.field("kafkaTemplatePicker").contains(event.relatedTarget)) this.closeTemplateMenu();
     });
@@ -91,10 +121,7 @@ export class KafkaTool extends BaseTool {
     this.field("kafkaTemplateSearch").addEventListener("blur", () => this.field("kafkaTemplatePicker").classList.remove("is-pointer-focused"));
     this.field("kafkaTemplateFavorite").addEventListener("click", () => this.toggleTemplateFavorite());
     this.headersEscapeHandler = (event) => {
-      if (event.key === "Escape" && this.field("kafkaHeadersSection")?.classList.contains("is-expanded")) {
-        event.preventDefault();
-        this.setHeadersExpanded(false);
-      } else if (event.key === "Escape" && !this.field("kafkaTemplateSave")?.hidden) {
+      if (event.key === "Escape" && !this.field("kafkaTemplateSave")?.hidden) {
         event.preventDefault();
         this.setTemplateSaveOpen(false, true);
       } else if (event.key === "Escape" && this.field("kafkaTemplates")?.open) {
@@ -127,38 +154,782 @@ export class KafkaTool extends BaseTool {
       this.renderRequests();
     });
     this.field("kafkaTemplateSearch").addEventListener("keydown", (event) => this.handleTemplateKeydown(event));
+    for (const id of [
+      "kafkaBrokers",
+      "kafkaTopic",
+      "kafkaListenTopic",
+      "kafkaTemplateSearch",
+      "kafkaRequestName",
+      "kafkaKey",
+      "kafkaValue",
+      "kafkaHeaders",
+      "kafkaHeaderRows",
+      "kafkaHistoryQuery",
+    ]) {
+      this.field(id).addEventListener("input", () => {
+        if (id === "kafkaTopic") this.tabTitleTopicSource = "publish";
+        if (id === "kafkaListenTopic") this.tabTitleTopicSource = "listen";
+        this.scheduleTabSave();
+      });
+    }
+    this.field("kafkaHistoryRange").addEventListener("change", () => this.scheduleTabSave());
+    this.field("kafkaPublishOptions").addEventListener("toggle", () => this.scheduleTabSave());
     this.field("kafkaKey").addEventListener("input", () => this.updateCount());
     this.field("kafkaValue").addEventListener("input", () => this.updateCount());
     this.field("kafkaHeaders").addEventListener("input", () => this.updateCount());
+    this.field("kafkaHeadersJsonMode").addEventListener("click", () => this.setHeadersMode("json"));
+    this.field("kafkaHeadersKeyValueMode").addEventListener("click", () => this.setHeadersMode("key-value"));
+    this.field("kafkaHeaderRows").addEventListener("input", (event) => this.handleHeaderRowsInput(event));
+    this.field("kafkaHeaderRows").addEventListener("click", (event) => this.handleHeaderRowsClick(event));
+    this.field("kafkaAddHeader").addEventListener("click", () => this.addHeaderRow());
     this.field("kafkaFormatHeaders").addEventListener("click", () => this.formatJson("Headers"));
     this.field("kafkaGenerateTraceId").addEventListener("click", () => this.generateTraceId());
     this.field("kafkaFormatValue").addEventListener("click", () => this.formatJson("Value"));
     this.field("kafkaGenerateUuid").addEventListener("click", () => this.generateUuid());
-    this.field("kafkaExpandHeaders").addEventListener("click", () => this.setHeadersExpanded());
     this.field("kafkaListen").addEventListener("click", () => this.toggleListening());
     this.field("kafkaMessages").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryResults").addEventListener("click", (event) => this.handleReceivedClick(event));
     this.field("kafkaHistoryForm").addEventListener("submit", (event) => { event.preventDefault(); this.searchHistory(); });
-    this.setListenMode("history");
+    this.applyTabDraft(this.getActiveTab());
+    this.renderTabs();
     this.updateTopicFavorite();
     this.updateTopicFavorite("listen");
     this.updateActionAvailability();
     this.initializeResizer();
     this.updateCount();
-    if (!config.brokers) this.field("kafkaBrokers").focus();
+    this.flushTabSave();
+    if (!this.config().brokers) this.field("kafkaBrokers").focus();
+    this.tabPageHideHandler = () => this.flushTabSave();
+    globalThis.addEventListener("pagehide", this.tabPageHideHandler);
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
   }
 
+  restoreTabSession() {
+    let session = null;
+    try {
+      session = JSON.parse(localStorage.getItem(KAFKA_TABS_KEY) || "null");
+    } catch (_) {}
+
+    const seenIds = new Set();
+    const savedTabs = Array.isArray(session?.tabs)
+      ? session.tabs.map((tab) => this.normalizeTabDraft(tab)).filter((tab) => {
+        if (!tab || seenIds.has(tab.id)) return false;
+        seenIds.add(tab.id);
+        return true;
+      }).slice(0, MAX_KAFKA_TABS)
+      : [];
+    this.tabs = savedTabs.length ? savedTabs : [this.createTabDraft()];
+    this.activeTabId = this.tabs.some((tab) => tab.id === session?.activeTabId)
+      ? session.activeTabId
+      : this.tabs[0].id;
+  }
+
+  normalizeTabDraft(tab) {
+    if (!tab || typeof tab !== "object") return null;
+    const text = (value, fallback = "") => typeof value === "string" ? value : fallback;
+    const id = text(tab.id);
+    if (!/^[\w-]+$/.test(id)) return null;
+    const range = Number(tab.historyRange);
+    return {
+      id,
+      title: text(tab.title),
+      brokers: text(tab.brokers),
+      flow: tab.flow === "listen" ? "listen" : "publish",
+      listenMode: tab.listenMode === "live" ? "live" : "history",
+      publishTopic: text(tab.publishTopic),
+      listenTopic: text(tab.listenTopic),
+      titleTopicSource: tab.titleTopicSource === "listen" ? "listen" : "publish",
+      selectedRequestName: text(tab.selectedRequestName),
+      templateSearch: text(tab.templateSearch),
+      requestName: text(tab.requestName),
+      key: text(tab.key),
+      headers: text(tab.headers, "{}"),
+      value: text(tab.value, DEFAULT_KAFKA_VALUE),
+      headersMode: tab.headersMode === "key-value" ? "key-value" : "json",
+      headerRows: Array.isArray(tab.headerRows)
+        ? tab.headerRows.filter((row) => row && typeof row === "object").map((row) => ({
+          key: text(row.key),
+          value: text(row.value),
+        }))
+        : [],
+      publishOptionsOpen: Boolean(tab.publishOptionsOpen),
+      templateSaveOpen: Boolean(tab.templateSaveOpen),
+      connectionSettingsOpen: Boolean(tab.connectionSettingsOpen),
+      historyQuery: text(tab.historyQuery),
+      historyRange: HISTORY_RANGE_HOURS.has(range) ? String(range) : "24",
+      createdAt: text(tab.createdAt, new Date().toISOString()),
+      updatedAt: text(tab.updatedAt, new Date().toISOString()),
+    };
+  }
+
+  createTabDraft(overrides = {}) {
+    const now = new Date().toISOString();
+    const tab = {
+      id: "",
+      title: "",
+      brokers: this.field("kafkaBrokers")?.value || "",
+      flow: "publish",
+      listenMode: "history",
+      publishTopic: "",
+      listenTopic: "",
+      titleTopicSource: "publish",
+      selectedRequestName: "",
+      templateSearch: "",
+      requestName: "",
+      key: "",
+      headers: "{}",
+      value: DEFAULT_KAFKA_VALUE,
+      headersMode: "json",
+      headerRows: [],
+      publishOptionsOpen: false,
+      templateSaveOpen: false,
+      connectionSettingsOpen: !this.field("kafkaBrokers")?.value.trim(),
+      historyQuery: "",
+      historyRange: "24",
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+    tab.id = overrides.id || globalThis.crypto?.randomUUID?.() || `kafka-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    tab.title = typeof overrides.title === "string" ? overrides.title : "";
+    tab.headerRows = Array.isArray(overrides.headerRows)
+      ? overrides.headerRows.map((row) => ({ key: String(row.key || ""), value: String(row.value || "") }))
+      : [];
+    return tab;
+  }
+
+  getActiveTab() {
+    return this.tabs.find((tab) => tab.id === this.activeTabId) || this.tabs[0] || null;
+  }
+
+  getTabTitle(tab) {
+    const customTitle = tab?.title?.trim();
+    if (customTitle) return customTitle;
+    const templateName = tab?.selectedRequestName?.trim();
+    const primaryTopic = tab?.titleTopicSource === "listen" ? tab.listenTopic : tab.publishTopic;
+    const topic = (primaryTopic || tab?.publishTopic || tab?.listenTopic || "").trim();
+    return (tab?.titleTopicSource !== "listen" && templateName) || topic || templateName || "Untitled";
+  }
+
+  captureCurrentTabDraft() {
+    const active = this.getActiveTab();
+    if (!active || !this.container) return active;
+    return {
+      ...active,
+      updatedAt: new Date().toISOString(),
+      brokers: this.field("kafkaBrokers").value,
+      flow: this.field("kafkaListenFlow").getAttribute("aria-pressed") === "true" ? "listen" : "publish",
+      listenMode: this.field("kafkaLiveMode").getAttribute("aria-selected") === "true" ? "live" : "history",
+      publishTopic: this.field("kafkaTopic").value,
+      listenTopic: this.field("kafkaListenTopic").value,
+      titleTopicSource: this.tabTitleTopicSource,
+      selectedRequestName: this.selectedRequestName,
+      templateSearch: this.field("kafkaTemplateSearch").value,
+      requestName: this.field("kafkaRequestName").value,
+      key: this.field("kafkaKey").value,
+      headers: this.field("kafkaHeaders").value,
+      value: this.field("kafkaValue").value,
+      headersMode: this.headersMode,
+      headerRows: this.headerRows.map((row) => ({ key: row.key, value: row.value })),
+      publishOptionsOpen: this.field("kafkaPublishOptions").open,
+      templateSaveOpen: !this.field("kafkaTemplateSave").hidden,
+      connectionSettingsOpen: this.field("kafkaConnectionSettings").open,
+      historyQuery: this.field("kafkaHistoryQuery").value,
+      historyRange: this.field("kafkaHistoryRange").value,
+    };
+  }
+
+  applyTabDraft(tab) {
+    if (!tab || !this.container) return;
+    this._restoringTab = true;
+    try {
+      const previousBrokers = this.field("kafkaBrokers").value;
+      this.field("kafkaBrokers").value = tab.brokers || "";
+      if (previousBrokers !== this.field("kafkaBrokers").value) {
+        this.saveConnection();
+        this.invalidateTopics();
+        this.setConnectionState(this.config().brokers ? "ready" : "empty");
+      }
+      this.field("kafkaTopic").value = tab.publishTopic;
+      this.field("kafkaListenTopic").value = tab.listenTopic;
+      this.field("kafkaTemplateSearch").value = tab.templateSearch;
+      this.field("kafkaRequestName").value = tab.requestName;
+      this.field("kafkaKey").value = tab.key;
+      this.field("kafkaHistoryQuery").value = tab.historyQuery;
+      this.field("kafkaHistoryRange").value = tab.historyRange;
+      this.selectedRequestName = tab.selectedRequestName;
+      this.tabTitleTopicSource = tab.titleTopicSource;
+
+      this.headersMode = "json";
+      this.applyHeadersMode("json");
+      this.setJsonValue("Headers", tab.headers);
+      this.setJsonValue("Value", tab.value);
+      this.headersMode = tab.headersMode;
+      this.headerRows = tab.headerRows.map((row) => ({ key: row.key, value: row.value }));
+      if (tab.headersMode === "key-value" && !this.headerRows.length) {
+        const parsed = this.parseHeadersValue(tab.headers);
+        if (parsed.valid) this.headerRows = Object.entries(parsed.headers).map(([key, value]) => ({ key, value }));
+      }
+      this.renderHeaderRows();
+      this.applyHeadersMode(this.headersMode);
+
+      this.field("kafkaPublishOptions").open = tab.publishOptionsOpen;
+      this.field("kafkaTemplateSave").hidden = !tab.templateSaveOpen;
+      this.field("kafkaTemplateSaveToggle").setAttribute("aria-expanded", String(tab.templateSaveOpen));
+      this.field("kafkaConnectionSettings").open = tab.connectionSettingsOpen;
+      this.updateConnectionSettingsLayout();
+      this.setFlow(tab.flow);
+      this.setListenMode(tab.listenMode);
+      this.field("kafkaMessages").replaceChildren();
+      this.field("kafkaMessages").append(Object.assign(document.createElement("p"), {
+        className: "kafka-empty",
+        textContent: this.config().brokers ? "Choose a topic and start listening." : "Add a bootstrap server, then enter a topic to listen.",
+      }));
+      this.field("kafkaHistoryResults").replaceChildren();
+      this.message("kafkaPublishStatus", "");
+      this.message("kafkaListenStatus", "");
+      this.message("kafkaHistoryStatus", "");
+      this.renderRequests();
+      this.updateTopicFavorite();
+      this.updateTopicFavorite("listen");
+      this.updateCount();
+      this.updateActionAvailability();
+      this.setListeningButton();
+    } finally {
+      this._restoringTab = false;
+    }
+  }
+
+  renderTabs() {
+    const root = this.field("kafkaTabList");
+    if (!root) return;
+    root.replaceChildren();
+    this.tabs.forEach((tab) => {
+      const item = document.createElement("div");
+      const active = tab.id === this.activeTabId;
+      item.className = `kafka-tab${active ? " active" : ""}`;
+      item.dataset.tabId = tab.id;
+
+      const label = document.createElement("button");
+      label.type = "button";
+      label.id = `kafka-tab-${tab.id}`;
+      label.className = "kafka-tab-label";
+      label.dataset.tabId = tab.id;
+      label.setAttribute("role", "tab");
+      label.setAttribute("aria-selected", String(active));
+      label.setAttribute("aria-controls", "kafkaWorkspace");
+      label.tabIndex = active ? 0 : -1;
+      label.textContent = this.getTabTitle(tab);
+      label.title = `${this.getTabTitle(tab)} · Double-click to rename`;
+
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "kafka-tab-close";
+      close.dataset.closeTabId = tab.id;
+      close.title = `Close ${this.getTabTitle(tab)}`;
+      close.disabled = this.tabs.length <= 1;
+      close.setAttribute("aria-label", `Close ${this.getTabTitle(tab)}`);
+      close.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+
+      item.append(label, close);
+      root.append(item);
+    });
+    const add = this.field("kafkaAddTab");
+    if (add) {
+      add.disabled = this.tabs.length >= MAX_KAFKA_TABS;
+      add.title = add.disabled ? `Maximum ${MAX_KAFKA_TABS} tabs` : "New tab";
+    }
+    this.field("kafkaWorkspace")?.setAttribute("aria-labelledby", `kafka-tab-${this.activeTabId}`);
+    this.scrollActiveTabIntoView();
+  }
+
+  scrollActiveTabIntoView() {
+    const root = this.field("kafkaTabList");
+    const active = Array.from(root?.children || []).find((tab) => tab.dataset.tabId === this.activeTabId);
+    active?.scrollIntoView?.({ behavior: "auto", block: "nearest", inline: "nearest" });
+  }
+
+  focusTabLabel(tabId) {
+    Array.from(this.field("kafkaTabList")?.querySelectorAll(".kafka-tab-label") || [])
+      .find((label) => label.dataset.tabId === tabId)?.focus();
+  }
+
+  updateActiveTabTitle() {
+    const active = this.getActiveTab();
+    if (!active) return;
+    const title = this.getTabTitle(this.captureCurrentTabDraft());
+    const label = Array.from(this.field("kafkaTabList")?.querySelectorAll(".kafka-tab-label") || [])
+      .find((button) => button.dataset.tabId === active.id);
+    if (label) {
+      label.textContent = title;
+      label.title = `${title} · Double-click to rename`;
+      const close = label.parentElement?.querySelector(".kafka-tab-close");
+      close?.setAttribute("title", `Close ${title}`);
+      close?.setAttribute("aria-label", `Close ${title}`);
+    }
+  }
+
+  scheduleTabSave() {
+    if (this._restoringTab || !this.getActiveTab() || !this.container) return;
+    this.updateActiveTabTitle();
+    clearTimeout(this._tabSaveTimer);
+    this._tabSaveTimer = setTimeout(() => this.flushTabSave(), 180);
+  }
+
+  flushTabSave() {
+    clearTimeout(this._tabSaveTimer);
+    this._tabSaveTimer = null;
+    if (!this.getActiveTab()) return false;
+    const active = this.captureCurrentTabDraft();
+    if (active) {
+      const index = this.tabs.findIndex((tab) => tab.id === active.id);
+      if (index !== -1) this.tabs[index] = active;
+    }
+    try {
+      localStorage.setItem(KAFKA_TABS_KEY, JSON.stringify({
+        version: 1,
+        tabs: this.tabs,
+        activeTabId: this.activeTabId,
+      }));
+      this._tabStorageErrorShown = false;
+      return true;
+    } catch (_) {
+      if (!this._tabStorageErrorShown) {
+        this._tabStorageErrorShown = true;
+        this.eventBus?.emit("notification:error", {
+          message: "Kafka tabs could not be saved. Check the available browser storage.",
+        });
+      }
+      return false;
+    }
+  }
+
+  handleTabListClick(event) {
+    const close = event.target.closest("[data-close-tab-id]");
+    if (close) {
+      this.closeTab(close.dataset.closeTabId);
+      return;
+    }
+    const label = event.target.closest("[role='tab'][data-tab-id]");
+    if (label) this.switchTab(label.dataset.tabId, true);
+  }
+
+  handleTabListDoubleClick(event) {
+    const label = event.target.closest(".kafka-tab-label");
+    if (label) this.renameTab(label.dataset.tabId);
+  }
+
+  handleTabListContextMenu(event) {
+    const tab = event.target.closest(".kafka-tab");
+    if (!tab) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.openTabContextMenu(event, tab.dataset.tabId, tab.querySelector(".kafka-tab-label"));
+  }
+
+  handleTabListKeydown(event) {
+    const tab = event.target.closest(".kafka-tab");
+    if (!tab) return;
+    if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+      event.preventDefault();
+      const rect = tab.getBoundingClientRect();
+      this.openTabContextMenu(event, tab.dataset.tabId, tab.querySelector(".kafka-tab-label"), rect.left, rect.bottom + 4);
+      return;
+    }
+    const index = this.tabs.findIndex((item) => item.id === tab.dataset.tabId);
+    if (index < 0) return;
+    let nextIndex = index;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % this.tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + this.tabs.length) % this.tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = this.tabs.length - 1;
+    else return;
+    event.preventDefault();
+    this.switchTab(this.tabs[nextIndex].id, true);
+  }
+
+  openTabContextMenu(event, tabId, trigger = null, x = event.clientX, y = event.clientY) {
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex < 0 || this._tabOperation) return;
+    this.closeTabContextMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "kafka-tab-context-menu app-popover-surface";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", `Options for ${this.getTabTitle(this.tabs[tabIndex])}`);
+    const hasOtherTabs = this.tabs.length > 1;
+    const actions = [
+      { label: "Rename", run: () => this.renameTab(tabId) },
+      { label: "Duplicate", run: () => this.duplicateTab(tabId), disabled: this.tabs.length >= MAX_KAFKA_TABS },
+      { separator: true },
+      { label: "Close", run: () => this.closeTab(tabId), disabled: !hasOtherTabs },
+      { label: "Close Other Tabs", run: () => this.closeOtherTabs(tabId), disabled: !hasOtherTabs },
+      { label: "Close Tabs to the Left", run: () => this.closeTabsToLeft(tabId), disabled: tabIndex === 0 },
+      { label: "Close Tabs to the Right", run: () => this.closeTabsToRight(tabId), disabled: tabIndex === this.tabs.length - 1 },
+      { label: "Close All Tabs", run: () => this.closeAllTabs() },
+    ];
+    actions.forEach((action) => {
+      if (action.separator) {
+        const separator = document.createElement("div");
+        separator.className = "kafka-tab-context-menu-separator";
+        separator.setAttribute("role", "separator");
+        menu.appendChild(separator);
+        return;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "menuitem");
+      button.textContent = action.label;
+      button.disabled = Boolean(action.disabled);
+      button.addEventListener("click", () => {
+        this.closeTabContextMenu();
+        void action.run();
+      });
+      menu.appendChild(button);
+    });
+    menu.addEventListener("keydown", (keydownEvent) => {
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(keydownEvent.key)) return;
+      const enabled = [...menu.querySelectorAll("button:not(:disabled)")];
+      const current = enabled.indexOf(document.activeElement);
+      const next = keydownEvent.key === "Home"
+        ? 0
+        : keydownEvent.key === "End"
+          ? enabled.length - 1
+          : (current + (keydownEvent.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+      keydownEvent.preventDefault();
+      enabled[next]?.focus();
+    });
+
+    document.body.appendChild(menu);
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+    const margin = 8;
+    const maxLeft = Math.max(margin, viewportWidth - menu.offsetWidth - margin);
+    const maxTop = Math.max(margin, viewportHeight - menu.offsetHeight - margin);
+    menu.style.left = `${Math.min(Math.max(x, margin), maxLeft)}px`;
+    menu.style.top = `${Math.min(Math.max(y, margin), maxTop)}px`;
+    this._tabContextMenu = menu;
+    this._tabContextTrigger = trigger;
+    this._handleTabContextDismiss = (dismissEvent) => {
+      if (!menu.contains(dismissEvent.target)) this.closeTabContextMenu();
+    };
+    this._handleTabContextKeydown = (keydownEvent) => {
+      if (keydownEvent.key === "Escape") {
+        keydownEvent.preventDefault();
+        this.closeTabContextMenu(true);
+      }
+    };
+    document.addEventListener("pointerdown", this._handleTabContextDismiss);
+    document.addEventListener("keydown", this._handleTabContextKeydown);
+    menu.querySelector("button:not(:disabled)")?.focus();
+  }
+
+  closeTabContextMenu(restoreFocus = false) {
+    const trigger = this._tabContextTrigger;
+    this._tabContextMenu?.remove();
+    this._tabContextMenu = null;
+    this._tabContextTrigger = null;
+    if (this._handleTabContextDismiss) {
+      document.removeEventListener("pointerdown", this._handleTabContextDismiss);
+      this._handleTabContextDismiss = null;
+    }
+    if (this._handleTabContextKeydown) {
+      document.removeEventListener("keydown", this._handleTabContextKeydown);
+      this._handleTabContextKeydown = null;
+    }
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
+  }
+
+  renameTab(tabId) {
+    if (this._tabOperation) return;
+    const tab = this.tabs.find((item) => item.id === tabId);
+    const tabElement = Array.from(this.field("kafkaTabList")?.children || [])
+      .find((item) => item.dataset.tabId === tabId);
+    const label = tabElement?.querySelector(".kafka-tab-label");
+    if (!tab || !label) return;
+    const currentTitle = this.getTabTitle(tab);
+    const input = document.createElement("input");
+    input.className = "kafka-tab-rename";
+    input.value = currentTitle;
+    input.setAttribute("aria-label", "Rename tab");
+    label.replaceWith(input);
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      const nextTitle = input.value.trim().slice(0, 120);
+      const previousTitle = tab.title;
+      if (save && nextTitle && nextTitle !== currentTitle) tab.title = nextTitle;
+      this.renderTabs();
+      if (tab.title !== previousTitle && !this.flushTabSave()) {
+        tab.title = previousTitle;
+        this.renderTabs();
+      }
+      this.focusTabLabel(tabId);
+    };
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener("blur", () => finish(true));
+    input.focus();
+    input.select();
+  }
+
+  switchTab(tabId, focus = false) {
+    if (!tabId || tabId === this.activeTabId || this._tabOperation || !this.tabs.some((tab) => tab.id === tabId)) return false;
+    if (!this.flushTabSave()) return false;
+    this.closeTabContextMenu();
+    this._tabOperation = true;
+    const previousTabId = this.activeTabId;
+    try {
+      void this.stopListening();
+      this.activeTabId = tabId;
+      this.applyTabDraft(this.getActiveTab());
+      this.renderTabs();
+      if (!this.flushTabSave()) {
+        this.activeTabId = previousTabId;
+        this.applyTabDraft(this.getActiveTab());
+        this.renderTabs();
+        return false;
+      }
+      if (focus) this.focusTabLabel(tabId);
+      return true;
+    } finally {
+      this._tabOperation = false;
+    }
+  }
+
+  createNewTab() {
+    if (this.tabs.length >= MAX_KAFKA_TABS || this._tabOperation || !this.flushTabSave()) return null;
+    this._tabOperation = true;
+    const previousTabs = this.tabs;
+    const previousTabId = this.activeTabId;
+    const tab = this.createTabDraft();
+    try {
+      void this.stopListening();
+      this.tabs = [...this.tabs, tab];
+      this.activeTabId = tab.id;
+      this.applyTabDraft(tab);
+      this.renderTabs();
+      if (!this.flushTabSave()) {
+        this.tabs = previousTabs;
+        this.activeTabId = previousTabId;
+        this.applyTabDraft(this.getActiveTab());
+        this.renderTabs();
+        return null;
+      }
+      this.focusTabLabel(tab.id);
+      return tab;
+    } finally {
+      this._tabOperation = false;
+    }
+  }
+
+  cloneTabDraft(tab) {
+    return { ...tab, headerRows: tab.headerRows.map((row) => ({ ...row })) };
+  }
+
+  duplicateTab(tabId) {
+    if (this.tabs.length >= MAX_KAFKA_TABS || this._tabOperation || !this.flushTabSave()) return null;
+    const sourceIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (sourceIndex < 0) return null;
+    const source = this.tabs[sourceIndex];
+    const duplicate = this.createTabDraft({
+      ...source,
+      id: undefined,
+      title: `${this.getTabTitle(source)} copy`,
+      updatedAt: new Date().toISOString(),
+    });
+    const previousTabs = this.tabs;
+    const previousTabId = this.activeTabId;
+    this._tabOperation = true;
+    try {
+      if (source.id === this.activeTabId) void this.stopListening();
+      this.tabs = [...this.tabs.slice(0, sourceIndex + 1), duplicate, ...this.tabs.slice(sourceIndex + 1)];
+      this.activeTabId = duplicate.id;
+      this.applyTabDraft(duplicate);
+      this.renderTabs();
+      if (!this.flushTabSave()) {
+        this.tabs = previousTabs;
+        this.activeTabId = previousTabId;
+        this.applyTabDraft(this.getActiveTab());
+        this.renderTabs();
+        return null;
+      }
+      this.focusTabLabel(duplicate.id);
+      return duplicate;
+    } finally {
+      this._tabOperation = false;
+    }
+  }
+
+  closeTab(tabId) {
+    const index = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (this.tabs.length <= 1 || index < 0) return false;
+    const remaining = this.tabs.filter((tab) => tab.id !== tabId);
+    const nextActiveId = tabId === this.activeTabId
+      ? remaining[Math.min(index, remaining.length - 1)]?.id
+      : this.activeTabId;
+    return this.closeTabs([tabId], { nextActiveId });
+  }
+
+  closeOtherTabs(tabId) {
+    if (this.tabs.length <= 1 || !this.tabs.some((tab) => tab.id === tabId)) return false;
+    return this.closeTabs(this.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id), { nextActiveId: tabId });
+  }
+
+  closeTabsToLeft(tabId) {
+    const index = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (index <= 0) return false;
+    return this.closeTabs(this.tabs.slice(0, index).map((tab) => tab.id), { nextActiveId: tabId });
+  }
+
+  closeTabsToRight(tabId) {
+    const index = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (index < 0 || index >= this.tabs.length - 1) return false;
+    return this.closeTabs(this.tabs.slice(index + 1).map((tab) => tab.id), { nextActiveId: tabId });
+  }
+
+  closeAllTabs() {
+    if (!this.tabs.length) return false;
+    return this.closeTabs(this.tabs.map((tab) => tab.id), { createReplacement: true });
+  }
+
+  closeTabs(tabIds, { nextActiveId = null, createReplacement = false } = {}) {
+    if (this._tabOperation || !this.flushTabSave()) return false;
+    const idsToClose = new Set((Array.isArray(tabIds) ? tabIds : [tabIds])
+      .filter((id) => this.tabs.some((tab) => tab.id === id)));
+    if (!idsToClose.size || (!createReplacement && idsToClose.size >= this.tabs.length)) return false;
+
+    this.closeTabContextMenu();
+    this._tabOperation = true;
+    const previousTabs = this.tabs;
+    const previousActiveId = this.activeTabId;
+    const activeIndex = this.tabs.findIndex((tab) => tab.id === previousActiveId);
+    try {
+      const closed = this.tabs.flatMap((tab, index) => idsToClose.has(tab.id)
+        ? [{ tab: this.cloneTabDraft(tab), index }]
+        : []);
+      const remaining = this.tabs.filter((tab) => !idsToClose.has(tab.id));
+      const replacement = remaining.length ? null : this.createTabDraft();
+      if (replacement) remaining.push(replacement);
+      const requestedNext = remaining.find((tab) => tab.id === nextActiveId);
+      const currentActive = remaining.find((tab) => tab.id === previousActiveId);
+      const next = requestedNext || currentActive || remaining[Math.min(Math.max(activeIndex, 0), remaining.length - 1)];
+
+      this.tabs = remaining;
+      this.activeTabId = next.id;
+      if (next.id !== previousActiveId) {
+        void this.stopListening();
+        this.applyTabDraft(next);
+      }
+      this.renderTabs();
+      if (!this.flushTabSave()) {
+        this.tabs = previousTabs;
+        this.activeTabId = previousActiveId;
+        this.applyTabDraft(this.getActiveTab());
+        this.renderTabs();
+        return false;
+      }
+      this._closedTabs = {
+        closed,
+        previousActiveId,
+        replacementId: replacement?.id || null,
+        replacementBaseline: replacement ? this.cloneTabDraft(replacement) : null,
+      };
+      this.showTabUndo(closed.length);
+      this.focusTabLabel(next.id);
+      return true;
+    } finally {
+      this._tabOperation = false;
+    }
+  }
+
+  isEmptyReplacementTab(tab, baseline) {
+    if (!tab || !baseline) return false;
+    const ignoredFields = new Set(["id", "createdAt", "updatedAt"]);
+    return Object.keys(baseline).every((key) => {
+      if (ignoredFields.has(key)) return true;
+      if (key === "headerRows") return JSON.stringify(tab.headerRows) === JSON.stringify(baseline.headerRows);
+      return tab[key] === baseline[key];
+    });
+  }
+
+  showTabUndo(count) {
+    clearTimeout(this._tabUndoTimer);
+    this.field("kafkaTabUndoMessage").textContent = `${count} tab${count === 1 ? "" : "s"} closed`;
+    this.field("kafkaTabUndo").hidden = false;
+    this._tabUndoTimer = setTimeout(() => {
+      this._closedTabs = null;
+      if (this.field("kafkaTabUndo")) this.field("kafkaTabUndo").hidden = true;
+    }, 8000);
+  }
+
+  undoCloseTabs() {
+    if (this._tabOperation || !this._closedTabs || !this.flushTabSave()) return false;
+    const { closed, previousActiveId, replacementId, replacementBaseline } = this._closedTabs;
+    const previousTabs = this.tabs;
+    const currentActiveId = this.activeTabId;
+    const replacement = this.tabs.find((tab) => tab.id === replacementId);
+    const dropReplacement = replacement && this.isEmptyReplacementTab(replacement, replacementBaseline);
+    const restored = this.tabs.filter((tab) => !dropReplacement || tab.id !== replacementId);
+    closed.forEach(({ tab, index }) => restored.splice(Math.min(index, restored.length), 0, this.cloneTabDraft(tab)));
+    if (restored.length > MAX_KAFKA_TABS) {
+      this.eventBus?.emit("notification:error", { message: "Close a tab before restoring the previous tabs." });
+      return false;
+    }
+
+    this._tabOperation = true;
+    try {
+      const nextActiveId = restored.some((tab) => tab.id === previousActiveId) ? previousActiveId : currentActiveId;
+      this.tabs = restored;
+      this.activeTabId = nextActiveId;
+      if (nextActiveId !== currentActiveId) {
+        void this.stopListening();
+        this.applyTabDraft(this.getActiveTab());
+      }
+      this.renderTabs();
+      if (!this.flushTabSave()) {
+        this.tabs = previousTabs;
+        this.activeTabId = currentActiveId;
+        this.applyTabDraft(this.getActiveTab());
+        this.renderTabs();
+        return false;
+      }
+      this._closedTabs = null;
+      clearTimeout(this._tabUndoTimer);
+      this.field("kafkaTabUndo").hidden = true;
+      this.focusTabLabel(nextActiveId);
+      return true;
+    } finally {
+      this._tabOperation = false;
+    }
+  }
+
   onSoftDeactivate() {
+    this.flushTabSave();
+    this.closeTabContextMenu();
     this.historyRequestId++;
     this.closeTopicMenu();
     this.closeTopicMenu("listen");
     this.closeTemplateMenu();
-    this.setHeadersExpanded(false);
     this.setTemplateSaveOpen(false);
+    this.flushTabSave();
     this.stopListening();
   }
   onUnmount() {
+    this.closeTabContextMenu();
+    clearTimeout(this._tabUndoTimer);
+    this._tabUndoTimer = null;
+    this._closedTabs = null;
+    this.flushTabSave();
+    globalThis.removeEventListener("pagehide", this.tabPageHideHandler);
     globalThis.removeEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
     document.removeEventListener("click", this.outsideTopicClick);
     document.removeEventListener("keydown", this.headersEscapeHandler);
@@ -167,9 +938,9 @@ export class KafkaTool extends BaseTool {
     this.closeTopicMenu();
     this.closeTopicMenu("listen");
     this.cleanupResizer();
-    this.setHeadersExpanded(false);
     this.closeTemplateMenu();
     this.setTemplateSaveOpen(false);
+    this.flushTabSave();
     Object.values(this.jsonEditors).forEach((editor) => editor.dispose());
     this.jsonEditors = {};
     this.stopListening();
@@ -231,6 +1002,7 @@ export class KafkaTool extends BaseTool {
     listenButton?.setAttribute("aria-pressed", String(!publish));
     this.field("kafkaPublishPanel")?.classList.toggle("is-active", publish);
     this.field("kafkaListenPanel")?.classList.toggle("is-active", !publish);
+    this.scheduleTabSave();
   }
   setListenMode(mode, focus = false) {
     const live = mode === "live";
@@ -246,6 +1018,7 @@ export class KafkaTool extends BaseTool {
     if (this.field("kafkaHistoryView")) this.field("kafkaHistoryView").hidden = live;
     this.updateListeningButtonVisibility();
     if (focus) (live ? liveButton : historyButton)?.focus();
+    this.scheduleTabSave();
   }
   updateListeningButtonVisibility() {
     const button = this.field("kafkaListen");
@@ -378,21 +1151,6 @@ export class KafkaTool extends BaseTool {
     this._resizerCleanup = null;
   }
 
-  setHeadersExpanded(expanded = !this.field("kafkaHeadersSection")?.classList.contains("is-expanded")) {
-    const section = this.field("kafkaHeadersSection");
-    const button = this.field("kafkaExpandHeaders");
-    if (!section || !button) return;
-    section.classList.toggle("is-expanded", expanded);
-    button.textContent = expanded ? "Compact" : "Expand";
-    button.setAttribute("aria-expanded", String(expanded));
-    button.setAttribute("aria-label", expanded ? "Use compact headers editor" : "Expand headers editor inline");
-    if (expanded) {
-      this.jsonEditors.Headers?.focus();
-      if (!this.jsonEditors.Headers) this.field("kafkaHeaders")?.focus();
-    }
-    this.jsonEditors.Headers?.layout?.();
-  }
-
   setTemplateSaveOpen(open, returnFocus = false) {
     const panel = this.field("kafkaTemplateSave");
     const toggle = this.field("kafkaTemplateSaveToggle");
@@ -401,6 +1159,7 @@ export class KafkaTool extends BaseTool {
     toggle.setAttribute("aria-expanded", String(open));
     if (open) this.field("kafkaRequestName")?.focus();
     else if (returnFocus) toggle.focus();
+    this.scheduleTabSave();
   }
 
   async initializeJsonEditors() {
@@ -447,8 +1206,18 @@ export class KafkaTool extends BaseTool {
   }
 
   setJsonValue(name, value) {
-    this.field(`kafka${name}`).value = value;
-    this.jsonEditors[name]?.setValue(value);
+    const input = this.field(`kafka${name}`);
+    input.value = value;
+    if (name === "Headers" && this.headersMode === "key-value") {
+      const parsed = this.parseHeadersValue(value);
+      if (parsed.valid) {
+        this.headerRows = Object.entries(parsed.headers).map(([key, text]) => ({ key, value: text }));
+        this.renderHeaderRows();
+      } else this.applyHeadersMode("json");
+    }
+    const editor = this.jsonEditors[name];
+    if (editor && editor.getValue() !== value) editor.setValue(value);
+    this.scheduleTabSave();
   }
 
   formatJson(name) {
@@ -463,49 +1232,205 @@ export class KafkaTool extends BaseTool {
     }
   }
 
+  parseHeadersValue(value) {
+    let headers;
+    try { headers = JSON.parse(value || "{}"); }
+    catch (_) { return { valid: false, error: "Invalid JSON. Check the highlighted syntax." }; }
+    if (!headers || Array.isArray(headers) || typeof headers !== "object" ||
+      Object.entries(headers).some(([key, text]) => !key || typeof text !== "string")) {
+      return { valid: false, error: "Headers need a JSON object with string values." };
+    }
+    return { valid: true, headers };
+  }
+
+  getHeaderRowsState() {
+    const headers = Object.create(null);
+    const names = new Set();
+    for (const row of this.headerRows) {
+      if (!row.key || names.has(row.key)) {
+        return { valid: false, error: "Header names must be non-empty and unique." };
+      }
+      names.add(row.key);
+      headers[row.key] = row.value;
+    }
+    return { valid: true, headers };
+  }
+
+  renderHeaderRows() {
+    const root = this.field("kafkaHeaderRows");
+    const empty = this.field("kafkaHeadersEmpty");
+    if (!root || !empty) return;
+    root.replaceChildren();
+    empty.hidden = this.headerRows.length > 0;
+    this.headerRows.forEach((header, index) => {
+      const row = document.createElement("div");
+      row.className = "kafka-header-row";
+
+      const key = document.createElement("textarea");
+      key.rows = 1;
+      key.value = header.key;
+      key.placeholder = "Header name";
+      key.setAttribute("aria-label", `Header name ${index + 1}`);
+      key.dataset.headerIndex = String(index);
+      key.dataset.headerField = "key";
+
+      const value = document.createElement("textarea");
+      value.rows = 1;
+      value.value = header.value;
+      value.placeholder = "Value";
+      value.setAttribute("aria-label", `Value for ${header.key || `header ${index + 1}`}`);
+      value.dataset.headerIndex = String(index);
+      value.dataset.headerField = "value";
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-ghost btn-sm";
+      remove.textContent = "Remove";
+      remove.setAttribute("aria-label", `Remove ${header.key || `header ${index + 1}`}`);
+      remove.dataset.removeHeader = String(index);
+
+      row.append(key, value, remove);
+      root.append(row);
+    });
+  }
+
+  applyHeadersMode(mode) {
+    const json = mode === "json";
+    this.headersMode = json ? "json" : "key-value";
+    this.field("kafkaHeadersJsonView").hidden = !json;
+    this.field("kafkaHeadersKeyValueView").hidden = json;
+    this.field("kafkaFormatHeaders").hidden = !json;
+    const jsonButton = this.field("kafkaHeadersJsonMode");
+    const keyValueButton = this.field("kafkaHeadersKeyValueMode");
+    jsonButton.classList.toggle("is-active", json);
+    keyValueButton.classList.toggle("is-active", !json);
+    jsonButton.setAttribute("aria-pressed", String(json));
+    keyValueButton.setAttribute("aria-pressed", String(!json));
+    if (json) this.jsonEditors.Headers?.layout?.();
+  }
+
+  setHeadersMode(mode) {
+    if (mode === this.headersMode) return true;
+    if (mode === "key-value") {
+      const parsed = this.parseHeadersValue(this.field("kafkaHeaders").value);
+      if (!parsed.valid) {
+        this.message("kafkaHeadersStatus", parsed.error, true);
+        this.jsonEditors.Headers?.focus();
+        if (!this.jsonEditors.Headers) this.field("kafkaHeaders")?.focus();
+        return false;
+      }
+      this.headerRows = Object.entries(parsed.headers).map(([key, value]) => ({ key, value }));
+      this.renderHeaderRows();
+      this.applyHeadersMode("key-value");
+    } else {
+      const state = this.getHeaderRowsState();
+      if (!state.valid) {
+        this.message("kafkaHeadersStatus", state.error, true);
+        this.field("kafkaHeaderRows")?.querySelector("[data-header-field='key']")?.focus();
+        return false;
+      }
+      this.writeHeadersJson(state.headers);
+      this.applyHeadersMode("json");
+    }
+    this.updateCount();
+    this.scheduleTabSave();
+    return true;
+  }
+
+  writeHeadersJson(headers) {
+    const value = JSON.stringify(headers, null, 2);
+    const input = this.field("kafkaHeaders");
+    input.value = value;
+    const editor = this.jsonEditors.Headers;
+    if (editor && editor.getValue() !== value) editor.setValue(value);
+  }
+
+  handleHeaderRowsInput(event) {
+    const input = event.target.closest("[data-header-field]");
+    if (!input) return;
+    const index = Number(input.dataset.headerIndex);
+    if (!this.headerRows[index]) return;
+    this.headerRows[index][input.dataset.headerField] = input.value;
+    const state = this.getHeaderRowsState();
+    if (state.valid) this.writeHeadersJson(state.headers);
+    this.updateCount();
+    this.scheduleTabSave();
+  }
+
+  handleHeaderRowsClick(event) {
+    const button = event.target.closest("button[data-remove-header]");
+    if (!button) return;
+    const index = Number(button.dataset.removeHeader);
+    this.headerRows.splice(index, 1);
+    this.renderHeaderRows();
+    const state = this.getHeaderRowsState();
+    if (state.valid) this.writeHeadersJson(state.headers);
+    this.updateCount();
+    this.scheduleTabSave();
+    const nextIndex = Math.min(index, this.headerRows.length - 1);
+    if (nextIndex >= 0) {
+      const selector = `[data-header-index="${nextIndex}"][data-header-field="key"]`;
+      this.field("kafkaHeaderRows")?.querySelector(selector)?.focus();
+    } else this.field("kafkaAddHeader")?.focus();
+  }
+
+  addHeaderRow() {
+    this.headerRows.push({ key: "", value: "" });
+    this.renderHeaderRows();
+    this.updateCount();
+    this.scheduleTabSave();
+    const index = this.headerRows.length - 1;
+    const selector = `[data-header-index="${index}"][data-header-field="key"]`;
+    this.field("kafkaHeaderRows")?.querySelector(selector)?.focus();
+  }
+
   generateUuid() {
     const uuid = globalThis.crypto.randomUUID();
     this.copyToClipboard(uuid, this.field("kafkaGenerateUuid"));
   }
 
   generateTraceId() {
-    const toHeader = this.field("kafkaTraceToHeader").checked;
-    const toKey = this.field("kafkaTraceToKey").checked;
-    if (!toHeader && !toKey) {
-      this.message("kafkaPublishStatus", "Select the traceId header, message key, or both.", true);
+    const rows = this.headersMode === "key-value" ? this.getHeaderRowsState() : null;
+    if (rows && !rows.valid) {
+      this.message("kafkaPublishStatus", rows.error, true);
       return;
     }
-    let headers;
-    if (toHeader) {
-      try { headers = JSON.parse(this.field("kafkaHeaders").value || "{}"); }
-      catch (_) { this.message("kafkaPublishStatus", "Fix header JSON before generating a trace ID.", true); return; }
-      if (!headers || Array.isArray(headers) || typeof headers !== "object" ||
-        Object.entries(headers).some(([name, value]) => !name || typeof value !== "string")) {
-        this.message("kafkaPublishStatus", "Headers need a JSON object with string values.", true);
-        return;
-      }
+    const parsed = this.parseHeadersValue(this.field("kafkaHeaders").value);
+    if (!parsed.valid) {
+      const error = parsed.error.startsWith("Invalid JSON")
+        ? "Fix header JSON before generating a trace ID."
+        : parsed.error;
+      this.message("kafkaPublishStatus", error, true);
+      return;
     }
     const random = globalThis.crypto.getRandomValues(new Uint8Array(6));
     const traceId = `adt-${Array.from(random, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-    if (toHeader) this.setJsonValue("Headers", JSON.stringify({ ...headers, traceId }, null, 2));
-    if (toKey) this.field("kafkaKey").value = traceId;
+    this.setJsonValue("Headers", JSON.stringify({ ...parsed.headers, traceId }, null, 2));
+    this.field("kafkaKey").value = traceId;
     this.updateCount();
-    this.message("kafkaPublishStatus", `Generated ${traceId} for ${[toHeader && "traceId header", toKey && "message key"].filter(Boolean).join(" and ")}.`);
+    this.message("kafkaPublishStatus", `Generated ${traceId} for the traceId header and message key.`);
   }
 
   validateJson(name) {
     const input = this.field(`kafka${name}`);
     const status = `kafka${name}Status`;
+    if (name === "Headers" && this.headersMode === "key-value") {
+      const rows = this.getHeaderRowsState();
+      this.message(status, rows.valid ? "Valid JSON" : rows.error, !rows.valid);
+      return;
+    }
     if (!input.value.trim() && name === "Value") {
       this.message(status, "");
       return;
     }
+    if (name === "Headers") {
+      const headers = this.parseHeadersValue(input.value);
+      this.message(status, headers.valid ? "Valid JSON" : headers.error, !headers.valid);
+      return;
+    }
     try {
-      const parsed = JSON.parse(input.value || (name === "Headers" ? "{}" : ""));
-      if (name === "Headers" && (!parsed || Array.isArray(parsed) || typeof parsed !== "object" ||
-        Object.entries(parsed).some(([key, value]) => !key || typeof value !== "string"))) {
-        this.message(status, "Headers need a JSON object with string values.", true);
-      } else this.message(status, "Valid JSON");
+      JSON.parse(input.value);
+      this.message(status, "Valid JSON");
     } catch (_) { this.message(status, "Invalid JSON. Check the highlighted syntax.", true); }
   }
 
@@ -852,18 +1777,21 @@ export class KafkaTool extends BaseTool {
 
   selectTopic(topic, source = "publish") {
     if (!topic) return;
+    this.tabTitleTopicSource = source;
     const ids = this.topicPickerIds(source);
     this.field(ids.input).value = topic;
     this.updateTopicFavorite(source);
     this.closeTopicMenu(source);
     if (source === "listen") {
       this.updateActionAvailability();
+      this.scheduleTabSave();
       return;
     }
     this.closeTemplateMenu();
     this.selectedRequestName = "";
     this.field("kafkaTemplateSearch").value = "";
     this.renderRequests();
+    this.scheduleTabSave();
   }
 
   message(id, text, error = false) {
@@ -895,6 +1823,10 @@ export class KafkaTool extends BaseTool {
   }
 
   records() {
+    if (this.headersMode === "key-value") {
+      const headers = this.getHeaderRowsState();
+      if (!headers.valid) throw new Error(headers.error);
+    }
     return parseMessages(this.field("kafkaValue").value, this.field("kafkaKey").value, this.field("kafkaHeaders").value);
   }
 
@@ -971,6 +1903,7 @@ export class KafkaTool extends BaseTool {
     this.setTemplateSaveOpen(false);
     this.openTemplateMenu();
     this.message("kafkaPublishStatus", `Saved “${name}” on this device.`);
+    this.scheduleTabSave();
   }
 
   updateOptionsSummary() {
@@ -980,7 +1913,9 @@ export class KafkaTool extends BaseTool {
     const headers = this.field("kafkaHeaders")?.value.trim();
     const parts = [];
     if (key) parts.push("Key");
-    if (headers && headers !== "{}") {
+    const invalidRows = this.headersMode === "key-value" && !this.getHeaderRowsState().valid;
+    if (invalidRows) parts.push("Headers need attention");
+    else if (headers && headers !== "{}") {
       try {
         const parsed = JSON.parse(headers);
         const valid = parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
@@ -1055,10 +1990,11 @@ export class KafkaTool extends BaseTool {
         this.selectedRequestName = "";
         this.field("kafkaTemplateSearch").value = "";
       }
-      this.renderRequests(); this.message("kafkaPublishStatus", `Deleted “${request.name}”.`); return;
+      this.renderRequests(); this.message("kafkaPublishStatus", `Deleted “${request.name}”.`); this.scheduleTabSave(); return;
     }
     this.field("kafkaRequestName").value = request.name;
     this.field("kafkaTopic").value = request.topic;
+    this.tabTitleTopicSource = "publish";
     this.closeTopicMenu();
     this.closeTemplateMenu();
     this.selectedRequestName = request.name;
@@ -1070,6 +2006,7 @@ export class KafkaTool extends BaseTool {
     this.setJsonValue("Value", request.value);
     this.field("kafkaPublishOptions").open = Boolean(request.key || (request.headers && request.headers.trim() !== "{}"));
     this.updateCount(); this.message("kafkaPublishStatus", `Loaded “${request.name}”. Review it before publishing.`);
+    this.scheduleTabSave();
     if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
     else this.field("kafkaValue").focus();
   }
@@ -1245,6 +2182,7 @@ export class KafkaTool extends BaseTool {
     try {
       const draft = receivedMessageToDraft(message);
       this.field("kafkaTopic").value = draft.topic;
+      this.tabTitleTopicSource = "publish";
       this.closeTopicMenu();
       this.closeTemplateMenu();
       this.selectedRequestName = "";
@@ -1258,6 +2196,7 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaPublishOptions").open = Boolean(draft.key || draft.headers !== "{}");
       this.updateCount();
       this.setFlow("publish");
+      this.scheduleTabSave();
       this.message("kafkaPublishStatus", `Loaded message at offset ${message.offset}. Review it before publishing.`);
       this.field("kafkaComposeHeading").scrollIntoView?.({ behavior: "smooth", block: "start" });
       if (this.jsonEditors.Value) this.jsonEditors.Value.focus();
