@@ -89,8 +89,20 @@ export function prepareUtf8HtmlBytes(input) {
   return result;
 }
 
+const STRAIGHT_QUOTES = new Map([["‘", "'"], ["’", "'"], ["“", '"'], ["”", '"']]);
+
 function encodeCharacterReferences(text) {
-  return Array.from(text, (character) => character.codePointAt(0) > 127 ? `&#${character.codePointAt(0)};` : character).join("");
+  return Array.from(text, (character) => STRAIGHT_QUOTES.get(character) ||
+    (character.codePointAt(0) > 127 ? `&#${character.codePointAt(0)};` : character)).join("");
+}
+
+function encodeAttributeValue(value, delimiter) {
+  const converted = encodeCharacterReferences(value);
+  if (!converted.includes(delimiter)) return `${delimiter}${converted}${delimiter}`;
+  const alternate = delimiter === '"' ? "'" : '"';
+  if (!converted.includes(alternate)) return `${alternate}${converted}${alternate}`;
+  const escaped = converted.replaceAll(delimiter, delimiter === '"' ? "&quot;" : "&#39;");
+  return `${delimiter}${escaped}${delimiter}`;
 }
 
 function hasNonAscii(text) {
@@ -118,7 +130,7 @@ export function listEncodingCharacters(html) {
           firstLine: line,
           offsets: [],
           simulated: new TextDecoder("windows-1252").decode(new TextEncoder().encode(character)),
-          replacement: `&#${codePoint};`,
+          replacement: STRAIGHT_QUOTES.get(character) || `&#${codePoint};`,
         });
       }
       const finding = findings.get(character);
@@ -224,7 +236,7 @@ export function markEncodingPreview(input, needle, activeIndex = -1) {
   return parts.join("");
 }
 
-/** Encode visible HTML text and attribute values without rewriting scripts, styles, or VTL expressions. */
+/** Convert visible HTML text and attribute values without rewriting scripts, styles, or VTL expressions. */
 export function convertHtmlForToad(input) {
   const html = String(input).replace(/^\ufeff/, "");
   const parts = [];
@@ -264,7 +276,7 @@ export function convertHtmlForToad(input) {
       index = close.lastIndex;
       continue;
     }
-    const converted = tag.replace(/(["'])([\s\S]*?)\1/g, (_, quote, value) => `${quote}${encodeCharacterReferences(value)}${quote}`);
+    const converted = tag.replace(/(["'])([\s\S]*?)\1/g, (_, quote, value) => encodeAttributeValue(value, quote));
     if (hasNonAscii(converted)) throw new Error("Non-ASCII in HTML markup needs manual review; automatic replacement is unavailable.");
     parts.push(converted);
     index = end;
