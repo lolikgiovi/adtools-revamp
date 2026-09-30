@@ -3986,7 +3986,7 @@ export class QuickQueryUI {
     let query;
     try {
       query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields, { validateFields: false });
-      if (query.tableName !== selectedTable) {
+      if (!query.hasJoin && query.tableName !== selectedTable) {
         this.showOracleDataError(`This query reads ${query.tableName}, while the selected table is ${selectedTable}.`, query.tableName);
         return;
       }
