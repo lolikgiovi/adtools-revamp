@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { KafkaTool } from "../main.js";
+import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY } from "../service.js";
 
 vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn() } }));
+
+function mountWithBroker(tool) {
+  const profile = { id: "test-broker", name: "broker:9092", brokers: "broker:9092" };
+  localStorage.setItem(KAFKA_BROKERS_KEY, JSON.stringify([profile]));
+  localStorage.setItem(KAFKA_ACTIVE_BROKER_KEY, profile.id);
+  tool.mount(document.querySelector("#tool"));
+}
 
 describe("Kafka analytics", () => {
   beforeEach(() => {
@@ -15,8 +23,7 @@ describe("Kafka analytics", () => {
     let finish;
     const service = { publish: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBroker(tool);
     document.querySelector("#kafkaTopic").value = "orders.test";
 
     const pendingPublish = tool.publish();
@@ -32,8 +39,7 @@ describe("Kafka analytics", () => {
       .mockResolvedValueOnce({ delivered: [{ index: 0, partition: 0, offset: 1 }], failedAt: 1, error: "delivery failed" })
       .mockResolvedValueOnce({ delivered: [], failedAt: 0, error: "delivery failed" }) };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBroker(tool);
     document.querySelector("#kafkaTopic").value = "orders.test";
 
     await tool.publish();

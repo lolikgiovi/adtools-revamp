@@ -17,6 +17,7 @@ vi.mock("../OracleConnectionService.js", () => ({
 
 import { ConnectionIndicators } from "../ConnectionIndicators.js";
 import { OracleConnectionService } from "../OracleConnectionService.js";
+import { KAFKA_ACTIVE_BROKER_KEY, KAFKA_BROKERS_KEY } from "../../tools/kafka/service.js";
 
 describe("connection indicators", () => {
   let indicators;
@@ -31,6 +32,10 @@ describe("connection indicators", () => {
       return null;
     });
     localStorage.clear();
+    const broker = { id: "test-broker", name: "broker:9092", brokers: "broker:9092" };
+    localStorage.setItem(KAFKA_BROKERS_KEY, JSON.stringify([broker]));
+    localStorage.setItem(KAFKA_ACTIVE_BROKER_KEY, broker.id);
+    localStorage.setItem("config.redis.host", "cache.local");
     oracle.ready = false;
     oracle.pools = [];
     document.body.innerHTML = `<div class="connection-indicators">${["oracle", "kafka", "redis"].map((service) =>
@@ -42,8 +47,6 @@ describe("connection indicators", () => {
   afterEach(() => { indicators.destroy(); native.mockRestore(); vi.clearAllMocks(); });
 
   it("shows configured services as on demand until an operation or listener is active", () => {
-    localStorage.setItem("tool:kafka:connection", JSON.stringify({ brokers: "broker:9092" }));
-    localStorage.setItem("config.redis.host", "cache.local");
     indicators.render();
     expect(detail("kafka")).toBe("On demand");
     expect(detail("redis")).toBe("On demand");
@@ -89,8 +92,6 @@ describe("connection indicators", () => {
   });
 
   it("connects and disconnects Kafka and Redis from their menus", async () => {
-    localStorage.setItem("tool:kafka:connection", JSON.stringify({ brokers: "broker:9092" }));
-    localStorage.setItem("config.redis.host", "cache.local");
     document.querySelector('[data-connection="kafka"]').click();
     document.querySelector('[data-connection-action="kafka-connect"]').click();
     await vi.waitFor(() => expect(detail("kafka")).toBe("broker:9092"));

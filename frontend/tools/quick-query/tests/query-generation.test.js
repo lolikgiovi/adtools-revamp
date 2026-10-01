@@ -268,7 +268,7 @@ describe('QueryGenerationService - UPDATE generation', () => {
     expect(sql).not.toContain('Selected fields after update')
     expect(sql.match(/------ SELECT Statement --------/g)).toHaveLength(1)
     expect(sql.indexOf('------ SELECT Statement --------')).toBeGreaterThan(sql.lastIndexOf('UPDATE my_table'))
-    expect(sql).toContain('SELECT "type", "sequence", updated_time, updated_by FROM my_table WHERE id IN (1, 2);')
+    expect(sql).toContain('SELECT id, "type", "sequence", updated_time, updated_by FROM my_table WHERE id IN (1, 2);')
     expect(sql).toContain("SELECT id, updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;")
     // PK used only in WHERE/ON clauses; not part of SET
   })
@@ -310,7 +310,7 @@ WHERE custody_order_id = 'ORD000000003225';
 
 
 ------ SELECT Statement --------
-SELECT pickup_branch_code, pickup_branch_name, pickup_branch_address, updated_time, updated_by FROM BULLION.CUSTODY_ACCOUNT WHERE custody_order_id IN ('ORD000000003225');
+SELECT custody_order_id, pickup_branch_code, pickup_branch_name, pickup_branch_address, updated_time, updated_by FROM BULLION.CUSTODY_ACCOUNT WHERE custody_order_id IN ('ORD000000003225');
 SELECT * FROM BULLION.CUSTODY_ACCOUNT WHERE custody_order_id IN ('ORD000000003225');
 SELECT custody_order_id, updated_time FROM BULLION.CUSTODY_ACCOUNT WHERE updated_time >= SYSDATE - INTERVAL '2' MINUTE;`)
   })

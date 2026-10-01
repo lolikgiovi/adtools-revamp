@@ -21,11 +21,13 @@ describe("Oracle row import", () => {
     expect(query.fields).toEqual(["ID", "STATUS"]);
   });
 
-  it("rejects expressions, unknown columns, and other data sources", () => {
+  it("rejects expressions and unknown columns while accepting supported joins", () => {
     expect(() => OracleDataImportService.parseQuery("SELECT LOWER(NAME) FROM APP.ITEM", schema)).toThrow("without expressions");
     expect(() => OracleDataImportService.parseQuery("SELECT MISSING FROM APP.ITEM", schema)).toThrow("exactly match");
     expect(() => OracleDataImportService.parseQuery("SELECT ID AS KEY FROM APP.ITEM", schema)).toThrow("exactly match");
-    expect(() => OracleDataImportService.parseQuery("SELECT ID FROM APP.ITEM JOIN APP.OTHER ON 1=1", schema)).toThrow("one table");
+    const joined = OracleDataImportService.parseQuery("SELECT ID FROM APP.ITEM JOIN APP.OTHER ON 1=1", schema);
+    expect(joined.hasJoin).toBe(true);
+    expect(joined.fields).toEqual(["ID"]);
     expect(() => OracleDataImportService.parseQuery("SELECT ID FROM APP.ITEM; DELETE FROM APP.ITEM", schema)).toThrow("one SELECT");
   });
 

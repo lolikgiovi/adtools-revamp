@@ -1,10 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KafkaTool } from "../main.js";
-import { KAFKA_TOPIC_FAVORITES_KEY } from "../service.js";
+import {
+  KAFKA_ACTIVE_BROKER_KEY,
+  KAFKA_BROKERS_KEY,
+  KAFKA_TOPIC_FAVORITES_KEY,
+  saveKafkaBrokerProfiles,
+} from "../service.js";
 
 vi.mock("../../../core/UsageTracker.js", () => ({ UsageTracker: { trackToolUse: vi.fn() } }));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function seedBrokers(addresses = ["broker:9092"]) {
+  const profiles = addresses.map((brokers, index) => ({
+    id: `test-broker-${index + 1}`,
+    name: brokers,
+    brokers,
+  }));
+  localStorage.setItem(KAFKA_BROKERS_KEY, JSON.stringify(profiles));
+  localStorage.setItem(KAFKA_ACTIVE_BROKER_KEY, profiles[0]?.id || "");
+  return profiles;
+}
+
+function mountWithBrokers(tool, addresses) {
+  const profiles = seedBrokers(addresses);
+  tool.mount(document.querySelector("#tool"));
+  return profiles;
+}
 
 describe("Kafka publish controls", () => {
   beforeEach(() => {
@@ -58,7 +80,8 @@ describe("Kafka publish controls", () => {
     expect(document.querySelector("#kafkaListen").parentElement).toBe(document.querySelector(".kafka-listen-topic-row"));
     expect(document.querySelector("#kafkaLiveView").hidden).toBe(true);
     expect(document.querySelector("#kafkaHistoryView").hidden).toBe(false);
-    expect(document.activeElement).toBe(document.querySelector("#kafkaBrokers"));
+    expect(document.querySelector("#kafkaSetupBrokers").hidden).toBe(false);
+    expect(document.querySelector("#kafkaBrokerSelect").hidden).toBe(true);
     expect(document.querySelector("#kafkaTest").disabled).toBe(true);
     expect(document.querySelector("#kafkaListen").disabled).toBe(true);
     expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
@@ -67,32 +90,25 @@ describe("Kafka publish controls", () => {
     topic.value = "orders.test";
     topic.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaListenTopic").value).toBe("");
-
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
-    expect(document.querySelector("#kafkaTest").disabled).toBe(false);
-    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
-    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
-    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
+    expect(document.querySelector("#kafkaPublish").disabled).toBe(true);
 
     const listenTopic = document.querySelector("#kafkaListenTopic");
     listenTopic.value = "orders.test";
     listenTopic.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(document.querySelector("#kafkaListen").disabled).toBe(false);
-    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(false);
+    expect(document.querySelector("#kafkaListen").disabled).toBe(true);
+    expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
   });
 
-  it("keeps first-run broker settings in the desktop flow and updates action readiness", () => {
+  it("updates action readiness when Settings saves the first broker", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
 
     const connection = document.querySelector("#kafkaConnection");
-    expect(connection.classList.contains("is-settings-open")).toBe(true);
-    expect(document.querySelector("#kafkaConnectionSettings").open).toBe(true);
+    expect(connection.dataset.state).toBe("empty");
+    expect(document.querySelector("#kafkaSetupBrokers").hidden).toBe(false);
+    expect(document.querySelector("#kafkaBrokerSelect").hidden).toBe(true);
     expect(document.querySelector("#kafkaMessages .kafka-empty").textContent).toBe(
-      "Add a bootstrap server, then enter a topic to listen."
+      "Set up a broker, then enter a topic to listen."
     );
 
     const topic = document.querySelector("#kafkaTopic");
@@ -100,12 +116,15 @@ describe("Kafka publish controls", () => {
     topic.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaListen").disabled).toBe(true);
 
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    saveKafkaBrokerProfiles([{ id: "settings-broker", name: "broker:9092", brokers: "broker:9092" }]);
+    expect(connection.dataset.state).toBe("ready");
+    expect(document.querySelector("#kafkaSetupBrokers").hidden).toBe(true);
+    expect(document.querySelector("#kafkaBrokerSelect").hidden).toBe(false);
     expect(document.querySelector("#kafkaTest").disabled).toBe(false);
     expect(document.querySelector("#kafkaListen").disabled).toBe(true);
     expect(document.querySelector("#kafkaHistorySearch").disabled).toBe(true);
+    expect(document.querySelector("#kafkaPublish").disabled).toBe(false);
+    expect(document.querySelector("#kafkaCount").textContent).toContain("1 message per click");
     const listenTopic = document.querySelector("#kafkaListenTopic");
     listenTopic.value = "orders.test";
     listenTopic.dispatchEvent(new Event("input", { bubbles: true }));
@@ -160,7 +179,7 @@ describe("Kafka publish controls", () => {
     expect(service.publish).not.toHaveBeenCalled();
   });
 
-  it("shows option counts and expands headers without changing the JSON contract", () => {
+  it("shows option counts and switches header editors without changing the JSON contract", () => {
     const tool = new KafkaTool(null, { publish: vi.fn() });
     tool.mount(document.querySelector("#tool"));
 
@@ -169,48 +188,38 @@ describe("Kafka publish controls", () => {
     headers.dispatchEvent(new Event("input", { bubbles: true }));
     expect(document.querySelector("#kafkaPublishOptionsSummary").textContent).toBe("2 headers");
 
-    const expand = document.querySelector("#kafkaExpandHeaders");
-    expand.click();
-    expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(true);
-    expect(document.body.classList.contains("kafka-editor-is-expanded")).toBe(false);
-    expect(expand.getAttribute("aria-expanded")).toBe("true");
-    expect(expand.textContent).toBe("Compact");
+    document.querySelector("#kafkaHeadersKeyValueMode").click();
+    expect(document.querySelector("#kafkaHeadersJsonView").hidden).toBe(true);
+    expect(document.querySelector("#kafkaHeadersKeyValueView").hidden).toBe(false);
+    expect(document.querySelectorAll("#kafkaHeaderRows [data-header-field='key']")).toHaveLength(2);
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-    expect(document.querySelector("#kafkaHeadersSection").classList.contains("is-expanded")).toBe(false);
-    expect(document.querySelector("#kafkaHeaders").value).toBe('{"source":"uat","traceId":"abc"}');
+    document.querySelector("#kafkaHeadersJsonMode").click();
+    expect(document.querySelector("#kafkaHeadersJsonView").hidden).toBe(false);
+    expect(JSON.parse(document.querySelector("#kafkaHeaders").value)).toEqual({ source: "uat", traceId: "abc" });
   });
 
-  it("generates a lowercase adt trace ID for the selected destinations without publishing", () => {
+  it("generates a lowercase adt trace ID for the header and key without publishing", () => {
     const service = { publish: vi.fn() };
     const tool = new KafkaTool(null, service);
     tool.mount(document.querySelector("#tool"));
     const headers = document.querySelector("#kafkaHeaders");
     const key = document.querySelector("#kafkaKey");
     const generate = document.querySelector("#kafkaGenerateTraceId");
-    const toHeader = document.querySelector("#kafkaTraceToHeader");
-    const toKey = document.querySelector("#kafkaTraceToKey");
     headers.value = '{"source":"uat"}';
 
     generate.click();
     const first = JSON.parse(headers.value).traceId;
     expect(first).toMatch(/^adt-[0-9a-f]{12}$/);
     expect(JSON.parse(headers.value).source).toBe("uat");
-    expect(key.value).toBe("");
+    expect(key.value).toBe(first);
     expect(tool.records()[0].headers).toContainEqual({ key: "traceId", value: first });
+    expect(tool.records()[0].key).toBe(first);
 
-    toKey.checked = true;
     generate.click();
     const second = JSON.parse(headers.value).traceId;
     expect(second).not.toBe(first);
     expect(key.value).toBe(second);
     expect(tool.records()[0].key).toBe(second);
-
-    toHeader.checked = false;
-    generate.click();
-    expect(key.value).toMatch(/^adt-[0-9a-f]{12}$/);
-    expect(key.value).not.toBe(second);
-    expect(JSON.parse(headers.value).traceId).toBe(second);
     expect(service.publish).not.toHaveBeenCalled();
   });
 
@@ -220,7 +229,6 @@ describe("Kafka publish controls", () => {
     const headers = document.querySelector("#kafkaHeaders");
     const key = document.querySelector("#kafkaKey");
     const generate = document.querySelector("#kafkaGenerateTraceId");
-    document.querySelector("#kafkaTraceToKey").checked = true;
     headers.value = "{bad";
     key.value = "existing";
 
@@ -228,12 +236,6 @@ describe("Kafka publish controls", () => {
     expect(headers.value).toBe("{bad");
     expect(key.value).toBe("existing");
     expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("Fix header JSON");
-
-    document.querySelector("#kafkaTraceToHeader").checked = false;
-    document.querySelector("#kafkaTraceToKey").checked = false;
-    generate.click();
-    expect(key.value).toBe("existing");
-    expect(document.querySelector("#kafkaPublishStatus").textContent).toContain("Select");
   });
 
   it("keeps topic browsing and template saving in the publish pane flow", () => {
@@ -283,8 +285,7 @@ describe("Kafka publish controls", () => {
   it("calculates the selected range from the time Search is submitted", async () => {
     const service = { searchHistory: vi.fn().mockResolvedValue({ matches: [], scanned: 0, limited: false }) };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBrokers(tool);
     document.querySelector("#kafkaListenTopic").value = "orders.test";
     document.querySelector("#kafkaHistoryQuery").value = "trace-id";
     const range = document.querySelector("#kafkaHistoryRange");
@@ -301,23 +302,19 @@ describe("Kafka publish controls", () => {
     }
   });
 
-  it("keeps broker setup compact and shows the tested bootstrap server", async () => {
+  it("tests the selected saved broker and shows its status", async () => {
     const service = { test: vi.fn().mockResolvedValue("Connected to Kafka") };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
+    const [profile] = mountWithBrokers(tool);
 
-    const settings = document.querySelector("#kafkaConnectionSettings");
-    expect(settings.open).toBe(true);
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector("#kafkaSetupBrokers").hidden).toBe(true);
+    expect(document.querySelector("#kafkaBrokerSelect").value).toBe(profile.id);
     document.querySelector("#kafkaTest").click();
     await settle();
 
     expect(service.test).toHaveBeenCalledWith({ brokers: "broker:9092", securityProtocol: "PLAINTEXT" });
     expect(document.querySelector("#kafkaConnectionStatus").textContent).toBe("Test passed · broker:9092");
     expect(document.querySelector("#kafkaConnection").dataset.state).toBe("connected");
-    expect(settings.open).toBe(false);
   });
 
   it("favorites a topic and keeps multiple templates scoped to that topic", () => {
@@ -365,8 +362,7 @@ describe("Kafka publish controls", () => {
     let finish;
     const service = { publish: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBrokers(tool);
     document.querySelector("#kafkaTopic").value = "orders.test";
     const value = document.querySelector("#kafkaValue");
     value.value = '[{"id":1},{"id":2}]';
@@ -406,8 +402,7 @@ describe("Kafka publish controls", () => {
   it("formats both JSON fields and blocks publish when headers are invalid", () => {
     const service = { publish: vi.fn() };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBrokers(tool);
     document.querySelector("#kafkaTopic").value = "orders.test";
     const headers = document.querySelector("#kafkaHeaders");
     const value = document.querySelector("#kafkaValue");
@@ -429,10 +424,7 @@ describe("Kafka publish controls", () => {
   it("browses metadata once and selects a fuzzy topic with the keyboard without publishing", async () => {
     const service = { listTopics: vi.fn().mockResolvedValue(["orders.failed", "orders.created", "streaming.gold.prebook.consumer-uat1"]), publish: vi.fn() };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.focus();
+    mountWithBrokers(tool);
     const input = document.querySelector("#kafkaTopic");
     input.focus();
     await settle();
@@ -457,13 +449,11 @@ describe("Kafka publish controls", () => {
     let finish;
     const service = { listTopics: vi.fn(() => new Promise((resolve) => { finish = resolve; })) };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "first:9092";
-    brokers.focus();
+    const profiles = mountWithBrokers(tool, ["first:9092", "second:9092"]);
     document.querySelector("#kafkaTopic").focus();
-    brokers.value = "second:9092";
-    brokers.dispatchEvent(new Event("input", { bubbles: true }));
+    const brokerSelect = document.querySelector("#kafkaBrokerSelect");
+    brokerSelect.value = profiles[1].id;
+    brokerSelect.dispatchEvent(new Event("change", { bubbles: true }));
     finish(["old.topic"]);
     await settle();
     expect(document.querySelectorAll(".kafka-topic-option")).toHaveLength(0);
@@ -472,10 +462,7 @@ describe("Kafka publish controls", () => {
   it("supports arrow navigation and Escape without submitting the publish form", async () => {
     const service = { listTopics: vi.fn().mockResolvedValue(["orders.created", "orders.failed"]), publish: vi.fn() };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.focus();
+    mountWithBrokers(tool);
     const input = document.querySelector("#kafkaTopic");
     input.focus();
     await settle();
@@ -494,10 +481,7 @@ describe("Kafka publish controls", () => {
   it("selects a topic on pointer down before a blur can close the menu", async () => {
     const service = { listTopics: vi.fn().mockResolvedValue(["orders.created", "orders.failed"]), publish: vi.fn() };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    const brokers = document.querySelector("#kafkaBrokers");
-    brokers.value = "broker:9092";
-    brokers.focus();
+    mountWithBrokers(tool);
     const input = document.querySelector("#kafkaTopic");
     input.focus();
     await settle();
@@ -518,8 +502,7 @@ describe("Kafka publish controls", () => {
       stop: vi.fn().mockResolvedValue(),
     };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBrokers(tool);
     document.querySelector("#kafkaListenTopic").value = "orders.test";
     await tool.startListening();
 
@@ -547,8 +530,7 @@ describe("Kafka publish controls", () => {
       stop: vi.fn().mockResolvedValue(),
     };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
+    mountWithBrokers(tool);
     document.querySelector("#kafkaListenTopic").value = "orders.test";
     await tool.startListening();
     window.dispatchEvent(new Event("adtools:kafka-disconnected"));
@@ -595,9 +577,8 @@ describe("Kafka publish controls", () => {
         value: '{"traceId":"ccfaba827199ab25"}', headers: [], keyIsUtf8: true, valueIsUtf8: true }],
     }), publish: vi.fn() };
     const tool = new KafkaTool(null, service);
-    tool.mount(document.querySelector("#tool"));
+    mountWithBrokers(tool);
     tool.activate();
-    document.querySelector("#kafkaBrokers").value = "broker:9092";
     document.querySelector("#kafkaListenTopic").value = "orders.test";
     document.querySelector("#kafkaHistoryQuery").value = "ccfaba827199ab25";
     document.querySelector("#kafkaHistoryForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

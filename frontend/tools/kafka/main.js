@@ -983,6 +983,7 @@ export class KafkaTool extends BaseTool {
     this.saveConnection();
     this.setConnectionState(this.config().brokers ? "ready" : "empty");
     this.updateActionAvailability();
+    this.updateCount();
     this.scheduleTabSave();
   }
 

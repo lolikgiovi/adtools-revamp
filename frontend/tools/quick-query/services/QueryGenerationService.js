@@ -559,7 +559,7 @@ export class QueryGenerationService {
     if (schemaFieldNames.has("updated_time")) updatedFields.add("updated_time");
     if (schemaFieldNames.has("updated_by")) updatedFields.add("updated_by");
 
-    const selectFieldNames = Array.from(updatedFields).map((field) => this.formatFieldName(field));
+    const selectFieldNames = [...primaryKeys, ...updatedFields].map((field) => this.formatFieldName(field));
     const whereClause = this._buildCompositePkWhereClause(primaryKeys, pkTuples);
 
     return `SELECT ${selectFieldNames.join(", ")} FROM ${tableName} WHERE ${whereClause};`;
