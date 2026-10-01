@@ -244,7 +244,10 @@ export class ConnectionIndicators {
           : "Idle connections close automatically after about 2 minutes.";
         menu.append(element("p", "connection-menu-note", note));
       }
-      if (service === "oracle" && !readOracleConnections().length && this.onOpenSettings) {
+      const needsSettings = service === "oracle"
+        ? !readOracleConnections().length
+        : service === "kafka" && !readKafkaConfig().brokers;
+      if (needsSettings && this.onOpenSettings) {
         const settings = element("button", "connection-menu-action", "Open Settings");
         settings.type = "button";
         settings.dataset.connectionAction = "settings";
@@ -256,7 +259,11 @@ export class ConnectionIndicators {
   async runAction(action, name) {
     if (this.pendingAction) return;
     if (action === "settings") {
+      const service = this.menuService;
       this.closeMenu();
+      if (service === "kafka") {
+        try { localStorage.setItem("settings.focus", "kafka.brokers"); } catch (_) {}
+      }
       this.onOpenSettings?.();
       return;
     }
@@ -276,7 +283,7 @@ export class ConnectionIndicators {
         await this.refreshOracle();
       } else if (action === "kafka-connect") {
         const config = readKafkaConfig();
-        if (!config.brokers) throw new Error("Add Kafka brokers in the Kafka tool first.");
+        if (!config.brokers) throw new Error("Add a Kafka broker in Settings first.");
         this.manual.kafka = await this.native("kafka_connect", { config });
       } else if (action === "kafka-disconnect") {
         await this.native("kafka_disconnect");

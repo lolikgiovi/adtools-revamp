@@ -512,6 +512,137 @@
   color: var(--text-1, #fff);
 }
 
+.setting-item-kafka-brokers {
+  padding: 0.75rem;
+}
+
+.kafka-brokers-header,
+.kafka-broker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kafka-brokers-header {
+  margin-bottom: 10px;
+}
+
+.kafka-broker-add {
+  flex: 0 0 auto;
+}
+
+.kafka-brokers-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.kafka-broker-row {
+  min-width: 0;
+  padding: 9px 0;
+  border-top: 1px solid hsl(var(--border) / 0.55);
+}
+
+.kafka-broker-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kafka-broker-identity strong {
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.kafka-broker-identity span {
+  overflow-wrap: anywhere;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+}
+
+.kafka-broker-actions,
+.kafka-broker-form-footer,
+.kafka-broker-form-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kafka-broker-actions {
+  flex: 0 0 auto;
+}
+
+.kafka-brokers-empty {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+}
+
+.kafka-broker-form {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(220px, 1.3fr);
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border) / 0.55);
+}
+
+.kafka-broker-form[hidden] {
+  display: none;
+}
+
+.kafka-broker-form > label {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+.kafka-broker-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.kafka-broker-input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.kafka-broker-form-footer {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  min-height: 30px;
+}
+
+.kafka-broker-form-status {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+}
+
+.kafka-broker-form-status[data-state="error"] {
+  color: hsl(var(--destructive));
+}
+
+@media (max-width: 620px) {
+  .kafka-broker-form {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .kafka-broker-form > label:not(:first-child) {
+    margin-top: 5px;
+  }
+}
+
 .settings-categories {
   display: flex;
   flex-direction: column;

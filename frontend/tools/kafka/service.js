@@ -1,6 +1,101 @@
 export const KAFKA_CONFIG_KEY = "tool:kafka:connection";
+export const KAFKA_BROKERS_KEY = "tool:kafka:brokers";
+export const KAFKA_ACTIVE_BROKER_KEY = "tool:kafka:active-broker";
+export const KAFKA_TABS_KEY = "tool:kafka:tabs";
 export const KAFKA_REQUESTS_KEY = "tool:kafka:requests";
 export const KAFKA_TOPIC_FAVORITES_KEY = "tool:kafka:topic-favorites";
+
+function stableBrokerId(brokers) {
+  let hash = 2166136261;
+  for (const char of brokers) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `kafka-${(hash >>> 0).toString(36)}`;
+}
+
+function profileFrom(value, index = 0) {
+  const brokers = String(value?.brokers || "").trim();
+  if (!brokers) return null;
+  const fallbackName = brokers.split(",")[0].trim() || `Broker ${index + 1}`;
+  return {
+    id: String(value?.id || "").trim() || stableBrokerId(brokers),
+    name: String(value?.name || value?.label || fallbackName).trim() || fallbackName,
+    brokers,
+  };
+}
+
+function migrateKafkaBrokerProfiles(storage) {
+  const legacyBrokers = new Set();
+  try {
+    const legacy = JSON.parse(storage.getItem(KAFKA_CONFIG_KEY) || "{}");
+    const brokers = String(legacy?.brokers || "").trim();
+    if (brokers) legacyBrokers.add(brokers);
+  } catch (_) {}
+  try {
+    const session = JSON.parse(storage.getItem(KAFKA_TABS_KEY) || "null");
+    for (const tab of Array.isArray(session?.tabs) ? session.tabs : []) {
+      const brokers = String(tab?.brokers || "").trim();
+      if (brokers) legacyBrokers.add(brokers);
+    }
+  } catch (_) {}
+
+  return [...legacyBrokers].map((brokers, index) => profileFrom({
+    id: stableBrokerId(brokers),
+    name: brokers.split(",")[0].trim() || `Broker ${index + 1}`,
+    brokers,
+  }, index));
+}
+
+export function readKafkaBrokerProfiles(storage = localStorage) {
+  try {
+    let raw = storage.getItem(KAFKA_BROKERS_KEY);
+    if (raw === null) {
+      const migrated = migrateKafkaBrokerProfiles(storage).filter(Boolean);
+      storage.setItem(KAFKA_BROKERS_KEY, JSON.stringify(migrated));
+      if (migrated.length && !storage.getItem(KAFKA_ACTIVE_BROKER_KEY)) {
+        storage.setItem(KAFKA_ACTIVE_BROKER_KEY, migrated[0].id);
+      }
+      return migrated;
+    }
+    const profiles = JSON.parse(raw);
+    return Array.isArray(profiles) ? profiles.map(profileFrom).filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function readKafkaActiveBrokerId(storage = localStorage) {
+  const profiles = readKafkaBrokerProfiles(storage);
+  try {
+    const selected = storage.getItem(KAFKA_ACTIVE_BROKER_KEY);
+    return profiles.some((profile) => profile.id === selected) ? selected : profiles[0]?.id || "";
+  } catch (_) {
+    return profiles[0]?.id || "";
+  }
+}
+
+export function saveKafkaBrokerProfiles(value, storage = localStorage) {
+  const profiles = (Array.isArray(value) ? value : []).map(profileFrom).filter(Boolean);
+  storage.setItem(KAFKA_BROKERS_KEY, JSON.stringify(profiles));
+  const selected = storage.getItem(KAFKA_ACTIVE_BROKER_KEY);
+  if (!profiles.some((profile) => profile.id === selected)) {
+    if (profiles.length) storage.setItem(KAFKA_ACTIVE_BROKER_KEY, profiles[0].id);
+    else storage.removeItem(KAFKA_ACTIVE_BROKER_KEY);
+  }
+  globalThis.dispatchEvent?.(new Event("adtools:kafka-brokers-changed"));
+  globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
+  return profiles;
+}
+
+export function saveKafkaActiveBroker(id, storage = localStorage) {
+  const profiles = readKafkaBrokerProfiles(storage);
+  const selected = profiles.find((profile) => profile.id === id);
+  if (selected) storage.setItem(KAFKA_ACTIVE_BROKER_KEY, selected.id);
+  else storage.removeItem(KAFKA_ACTIVE_BROKER_KEY);
+  globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
+  return selected || null;
+}
 
 export function rankKafkaTopics(topics, query, limit = 40) {
   const needle = String(query || "").trim().toLowerCase();
@@ -78,8 +173,10 @@ export function receivedMessageToDraft(message) {
 
 export function readKafkaConfig(storage = localStorage) {
   try {
-    const config = JSON.parse(storage.getItem(KAFKA_CONFIG_KEY) || "{}");
-    return { brokers: String(config.brokers || ""), securityProtocol: "PLAINTEXT" };
+    const profiles = readKafkaBrokerProfiles(storage);
+    const selectedId = readKafkaActiveBrokerId(storage);
+    const selected = profiles.find((profile) => profile.id === selectedId) || profiles[0];
+    return { brokers: selected?.brokers || "", securityProtocol: "PLAINTEXT" };
   } catch (_) {
     return { brokers: "", securityProtocol: "PLAINTEXT" };
   }

@@ -1,13 +1,26 @@
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
 import { getIconSvg } from "./icon.js";
-import { KafkaService, KAFKA_CONFIG_KEY, KAFKA_REQUESTS_KEY, KAFKA_TOPIC_FAVORITES_KEY, parseMessages, rankKafkaTopics, readKafkaConfig, readKafkaRequests, readKafkaTopicFavorites, receivedMessageToDraft } from "./service.js";
+import {
+  KafkaService,
+  KAFKA_REQUESTS_KEY,
+  KAFKA_TABS_KEY,
+  KAFKA_TOPIC_FAVORITES_KEY,
+  parseMessages,
+  rankKafkaTopics,
+  readKafkaActiveBrokerId,
+  readKafkaBrokerProfiles,
+  readKafkaConfig,
+  readKafkaRequests,
+  readKafkaTopicFavorites,
+  receivedMessageToDraft,
+  saveKafkaActiveBroker,
+} from "./service.js";
 import { KafkaTemplate } from "./template.js";
 import { configureMonacoWorkers } from "../../core/MonacoWorkers.js";
 import "./styles.css";
 
 const HISTORY_RANGE_HOURS = new Set([1, 24, 72, 168, 336, 720, 1440]);
-const KAFKA_TABS_KEY = "tool:kafka:tabs";
 const MAX_KAFKA_TABS = 15;
 const DEFAULT_KAFKA_VALUE = '{\n  "example": "value"\n}';
 
@@ -53,6 +66,7 @@ export class KafkaTool extends BaseTool {
     this._closedTabs = null;
     this._tabUndoTimer = null;
     this._resizerCleanup = null;
+    this.brokerProfiles = [];
   }
 
   getIconSvg() { return getIconSvg(); }
@@ -63,18 +77,15 @@ export class KafkaTool extends BaseTool {
     this.headerRows = [];
     this.headerDisconnectHandler = () => { void this.stopListening(); };
     globalThis.addEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
+    this.brokerProfiles = readKafkaBrokerProfiles();
+    this.renderBrokerOptions(readKafkaActiveBrokerId());
     const config = readKafkaConfig();
-    this.field("kafkaBrokers").value = config.brokers;
     this.requests = readKafkaRequests();
     this.favoriteTopics = readKafkaTopicFavorites();
     this.restoreTabSession();
     this.renderRequests();
-    const connectionSettings = this.field("kafkaConnectionSettings");
-    connectionSettings.addEventListener("toggle", () => {
-      this.updateConnectionSettingsLayout();
-      this.scheduleTabSave();
-    });
-    this.setConnectionSettingsOpen(!config.brokers);
+    this.brokerProfilesChangedHandler = () => this.refreshBrokerProfiles();
+    globalThis.addEventListener("adtools:kafka-brokers-changed", this.brokerProfilesChangedHandler);
     const templatePicker = this.field("kafkaTemplates");
     templatePicker.addEventListener("toggle", () => this.updateTemplateMenuLayout());
     this.field("kafkaTemplateToggle").addEventListener("click", () => this.toggleTemplateMenu());
@@ -86,13 +97,8 @@ export class KafkaTool extends BaseTool {
       }
     });
     this.setConnectionState(config.brokers ? "ready" : "empty");
-    this.field("kafkaBrokers").addEventListener("change", () => this.saveConnection());
-    this.field("kafkaBrokers").addEventListener("input", () => {
-      this.invalidateTopics();
-      this.setConnectionState(this.config().brokers ? "ready" : "empty");
-      this.updateCount();
-      this.updateActionAvailability();
-    });
+    this.field("kafkaBrokerSelect").addEventListener("change", () => this.changeBroker());
+    this.field("kafkaSetupBrokers").addEventListener("click", () => this.openBrokerSettings());
     this.bindTopicPicker("publish");
     this.bindTopicPicker("listen");
     this.outsideTopicClick = (event) => {
@@ -101,9 +107,6 @@ export class KafkaTool extends BaseTool {
         this.closeTopicMenu("listen");
       }
       if (this.field("kafkaTemplates")?.open && !this.field("kafkaTemplatePicker")?.contains(event.target)) this.closeTemplateMenu();
-      if (this.field("kafkaConnectionSettings")?.open && !this.field("kafkaConnectionSettings")?.contains(event.target)) {
-        this.setConnectionSettingsOpen(false);
-      }
     };
     document.addEventListener("click", this.outsideTopicClick);
     this.field("kafkaTabList").addEventListener("click", (event) => this.handleTabListClick(event));
@@ -128,10 +131,6 @@ export class KafkaTool extends BaseTool {
         event.preventDefault();
         this.closeTemplateMenu();
         this.field("kafkaTemplateToggle").focus();
-      } else if (event.key === "Escape" && this.field("kafkaConnectionSettings")?.open) {
-        event.preventDefault();
-        this.setConnectionSettingsOpen(false);
-        this.field("kafkaConnectionSettings").querySelector("summary")?.focus();
       }
     };
     document.addEventListener("keydown", this.headersEscapeHandler);
@@ -155,7 +154,6 @@ export class KafkaTool extends BaseTool {
     });
     this.field("kafkaTemplateSearch").addEventListener("keydown", (event) => this.handleTemplateKeydown(event));
     for (const id of [
-      "kafkaBrokers",
       "kafkaTopic",
       "kafkaListenTopic",
       "kafkaTemplateSearch",
@@ -198,7 +196,6 @@ export class KafkaTool extends BaseTool {
     this.initializeResizer();
     this.updateCount();
     this.flushTabSave();
-    if (!this.config().brokers) this.field("kafkaBrokers").focus();
     this.tabPageHideHandler = () => this.flushTabSave();
     globalThis.addEventListener("pagehide", this.tabPageHideHandler);
     if (import.meta.env.MODE !== "test") this.initializeJsonEditors();
@@ -234,6 +231,7 @@ export class KafkaTool extends BaseTool {
       id,
       title: text(tab.title),
       brokers: text(tab.brokers),
+      brokerId: text(tab.brokerId),
       flow: tab.flow === "listen" ? "listen" : "publish",
       listenMode: tab.listenMode === "live" ? "live" : "history",
       publishTopic: text(tab.publishTopic),
@@ -254,7 +252,6 @@ export class KafkaTool extends BaseTool {
         : [],
       publishOptionsOpen: Boolean(tab.publishOptionsOpen),
       templateSaveOpen: Boolean(tab.templateSaveOpen),
-      connectionSettingsOpen: Boolean(tab.connectionSettingsOpen),
       historyQuery: text(tab.historyQuery),
       historyRange: HISTORY_RANGE_HOURS.has(range) ? String(range) : "24",
       createdAt: text(tab.createdAt, new Date().toISOString()),
@@ -267,7 +264,8 @@ export class KafkaTool extends BaseTool {
     const tab = {
       id: "",
       title: "",
-      brokers: this.field("kafkaBrokers")?.value || "",
+      brokers: this.config().brokers,
+      brokerId: this.field("kafkaBrokerSelect")?.value || readKafkaActiveBrokerId(),
       flow: "publish",
       listenMode: "history",
       publishTopic: "",
@@ -283,7 +281,6 @@ export class KafkaTool extends BaseTool {
       headerRows: [],
       publishOptionsOpen: false,
       templateSaveOpen: false,
-      connectionSettingsOpen: !this.field("kafkaBrokers")?.value.trim(),
       historyQuery: "",
       historyRange: "24",
       createdAt: now,
@@ -317,7 +314,8 @@ export class KafkaTool extends BaseTool {
     return {
       ...active,
       updatedAt: new Date().toISOString(),
-      brokers: this.field("kafkaBrokers").value,
+      brokers: this.config().brokers,
+      brokerId: this.field("kafkaBrokerSelect").value,
       flow: this.field("kafkaListenFlow").getAttribute("aria-pressed") === "true" ? "listen" : "publish",
       listenMode: this.field("kafkaLiveMode").getAttribute("aria-selected") === "true" ? "live" : "history",
       publishTopic: this.field("kafkaTopic").value,
@@ -333,7 +331,6 @@ export class KafkaTool extends BaseTool {
       headerRows: this.headerRows.map((row) => ({ key: row.key, value: row.value })),
       publishOptionsOpen: this.field("kafkaPublishOptions").open,
       templateSaveOpen: !this.field("kafkaTemplateSave").hidden,
-      connectionSettingsOpen: this.field("kafkaConnectionSettings").open,
       historyQuery: this.field("kafkaHistoryQuery").value,
       historyRange: this.field("kafkaHistoryRange").value,
     };
@@ -343,13 +340,16 @@ export class KafkaTool extends BaseTool {
     if (!tab || !this.container) return;
     this._restoringTab = true;
     try {
-      const previousBrokers = this.field("kafkaBrokers").value;
-      this.field("kafkaBrokers").value = tab.brokers || "";
-      if (previousBrokers !== this.field("kafkaBrokers").value) {
-        this.saveConnection();
-        this.invalidateTopics();
-        this.setConnectionState(this.config().brokers ? "ready" : "empty");
-      }
+      const previousBrokers = this.config().brokers;
+      const profile = this.brokerProfiles.find((item) => item.id === tab.brokerId)
+        || this.brokerProfiles.find((item) => item.brokers === tab.brokers)
+        || (!tab.brokers ? this.brokerProfiles.find((item) => item.id === readKafkaActiveBrokerId()) : null);
+      this.field("kafkaBrokerSelect").value = profile?.id || "";
+      tab.brokerId = profile?.id || "";
+      tab.brokers = profile?.brokers || "";
+      this.saveConnection();
+      if (previousBrokers !== this.config().brokers) this.invalidateTopics();
+      this.setConnectionState(this.config().brokers ? "ready" : "empty");
       this.field("kafkaTopic").value = tab.publishTopic;
       this.field("kafkaListenTopic").value = tab.listenTopic;
       this.field("kafkaTemplateSearch").value = tab.templateSearch;
@@ -376,14 +376,12 @@ export class KafkaTool extends BaseTool {
       this.field("kafkaPublishOptions").open = tab.publishOptionsOpen;
       this.field("kafkaTemplateSave").hidden = !tab.templateSaveOpen;
       this.field("kafkaTemplateSaveToggle").setAttribute("aria-expanded", String(tab.templateSaveOpen));
-      this.field("kafkaConnectionSettings").open = tab.connectionSettingsOpen;
-      this.updateConnectionSettingsLayout();
       this.setFlow(tab.flow);
       this.setListenMode(tab.listenMode);
       this.field("kafkaMessages").replaceChildren();
       this.field("kafkaMessages").append(Object.assign(document.createElement("p"), {
         className: "kafka-empty",
-        textContent: this.config().brokers ? "Choose a topic and start listening." : "Add a bootstrap server, then enter a topic to listen.",
+        textContent: this.config().brokers ? "Choose a topic and start listening." : "Set up a broker, then enter a topic to listen.",
       }));
       this.field("kafkaHistoryResults").replaceChildren();
       this.message("kafkaPublishStatus", "");
@@ -931,6 +929,7 @@ export class KafkaTool extends BaseTool {
     this.flushTabSave();
     globalThis.removeEventListener("pagehide", this.tabPageHideHandler);
     globalThis.removeEventListener("adtools:kafka-disconnected", this.headerDisconnectHandler);
+    globalThis.removeEventListener("adtools:kafka-brokers-changed", this.brokerProfilesChangedHandler);
     document.removeEventListener("click", this.outsideTopicClick);
     document.removeEventListener("keydown", this.headersEscapeHandler);
     this.topicRequestId++;
@@ -946,50 +945,117 @@ export class KafkaTool extends BaseTool {
     this.stopListening();
   }
   field(id) { return this.container?.querySelector(`#${id}`); }
-  config() { return { brokers: this.field("kafkaBrokers").value.trim(), securityProtocol: "PLAINTEXT" }; }
+  config() {
+    const profile = this.brokerProfiles.find((item) => item.id === this.field("kafkaBrokerSelect")?.value);
+    return { brokers: profile?.brokers || "", securityProtocol: "PLAINTEXT" };
+  }
+
+  renderBrokerOptions(selectedId = this.field("kafkaBrokerSelect")?.value || "") {
+    const select = this.field("kafkaBrokerSelect");
+    if (!select) return;
+    select.replaceChildren();
+    for (const profile of this.brokerProfiles) {
+      const option = document.createElement("option");
+      option.value = profile.id;
+      option.textContent = profile.name;
+      select.appendChild(option);
+    }
+    const selected = this.brokerProfiles.some((profile) => profile.id === selectedId) ? selectedId : this.brokerProfiles[0]?.id || "";
+    select.value = selected;
+  }
+
+  refreshBrokerProfiles() {
+    const previousConfig = this.config();
+    const tab = this.getActiveTab();
+    this.brokerProfiles = readKafkaBrokerProfiles();
+    const matchingProfile = this.brokerProfiles.find((profile) => profile.id === tab?.brokerId)
+      || this.brokerProfiles.find((profile) => profile.brokers === tab?.brokers)
+      || this.brokerProfiles[0];
+    this.renderBrokerOptions(matchingProfile?.id || "");
+    if (tab) {
+      tab.brokerId = this.field("kafkaBrokerSelect").value;
+      tab.brokers = this.config().brokers;
+    }
+    if (previousConfig.brokers !== this.config().brokers) {
+      void this.stopListening();
+      this.invalidateTopics();
+    }
+    this.saveConnection();
+    this.setConnectionState(this.config().brokers ? "ready" : "empty");
+    this.updateActionAvailability();
+    this.scheduleTabSave();
+  }
+
+  changeBroker() {
+    const selected = this.brokerProfiles.find((profile) => profile.id === this.field("kafkaBrokerSelect").value);
+    if (!selected) return;
+    const tab = this.getActiveTab();
+    const previousBrokers = tab?.brokers || "";
+    if (previousBrokers !== selected.brokers) {
+      void this.stopListening();
+      this.invalidateTopics();
+    }
+    if (tab) {
+      tab.brokerId = selected.id;
+      tab.brokers = selected.brokers;
+    }
+    this.saveConnection();
+    this.setConnectionState("ready");
+    this.updateCount();
+    this.updateActionAvailability();
+    this.scheduleTabSave();
+  }
+
+  openBrokerSettings() {
+    try { localStorage.setItem("settings.focus", "kafka.brokers"); } catch (_) {}
+    if (window.app?.router?.navigate) window.app.router.navigate("settings");
+    else this.eventBus?.emit?.("route:change", { path: "settings" });
+  }
+
   setConnectionState(state, text = "") {
     const section = this.field("kafkaConnection");
     const status = this.field("kafkaConnectionStatus");
     if (!section || !status) return;
-    const brokers = this.config().brokers;
+    const profile = this.brokerProfiles.find((item) => item.id === this.field("kafkaBrokerSelect")?.value);
     const labels = {
-      empty: "Add a bootstrap server to get started.",
-      ready: brokers ? `Not tested · ${brokers}` : "Add a bootstrap server to get started.",
+      empty: "No broker saved yet.",
+      ready: profile ? `Not tested · ${profile.name}` : "No broker saved yet.",
       checking: "Checking connection…",
-      connected: brokers ? `Test passed · ${brokers}` : "Connection test passed",
-      error: text || "Connection failed. Check broker settings.",
+      connected: profile ? `Test passed · ${profile.name}` : "Connection test passed",
+      error: text || "Connection failed. Check the saved broker in Settings.",
     };
     section.dataset.state = state;
     status.textContent = text || labels[state] || labels.ready;
     status.dataset.state = state === "error" ? "error" : "ok";
     status.title = state === "connected" && text ? text : "";
   }
-  setConnectionSettingsOpen(open) {
-    const settings = this.field("kafkaConnectionSettings");
-    if (!settings) return;
-    settings.open = Boolean(open);
-    this.updateConnectionSettingsLayout();
-  }
-  updateConnectionSettingsLayout() {
-    const settings = this.field("kafkaConnectionSettings");
-    this.field("kafkaConnection")?.classList.toggle("is-settings-open", Boolean(settings?.open));
-  }
   updateActionAvailability() {
     const hasBrokers = Boolean(this.config().brokers);
     const hasTopic = Boolean(this.field("kafkaListenTopic")?.value.trim());
     const ready = hasBrokers && hasTopic;
     const testButton = this.field("kafkaTest");
+    const brokerSelect = this.field("kafkaBrokerSelect");
+    const setupButton = this.field("kafkaSetupBrokers");
     const listenButton = this.field("kafkaListen");
     const historyButton = this.field("kafkaHistorySearch");
     const emptyMessage = this.field("kafkaMessages")?.querySelector(".kafka-empty");
 
-    if (testButton) testButton.disabled = !hasBrokers || this.testingConnection;
+    if (brokerSelect) {
+      const isEmpty = !this.brokerProfiles.length;
+      brokerSelect.hidden = isEmpty;
+      brokerSelect.closest(".ad-searchable-dropdown")?.toggleAttribute("hidden", isEmpty);
+    }
+    if (testButton) {
+      testButton.hidden = !this.brokerProfiles.length;
+      testButton.disabled = !hasBrokers || this.testingConnection;
+    }
+    if (setupButton) setupButton.hidden = this.brokerProfiles.length > 0;
     if (listenButton && !this.listening && !["Connecting…", "Stopping…"].includes(listenButton.textContent)) {
       listenButton.disabled = !ready;
     }
     if (historyButton) historyButton.disabled = !ready || this.searchingHistory;
     if (emptyMessage) {
-      emptyMessage.textContent = !hasBrokers ? "Add a bootstrap server, then enter a topic to listen." : "";
+      emptyMessage.textContent = !hasBrokers ? "Set up a broker, then enter a topic to listen." : "";
     }
   }
   setFlow(flow) {
@@ -1435,8 +1501,15 @@ export class KafkaTool extends BaseTool {
   }
 
   saveConnection() {
-    localStorage.setItem(KAFKA_CONFIG_KEY, JSON.stringify(this.config()));
-    globalThis.dispatchEvent?.(new Event("adtools:connection-settings-changed"));
+    const profile = saveKafkaActiveBroker(this.field("kafkaBrokerSelect")?.value || "");
+    const tab = this.getActiveTab();
+    if (tab && profile) {
+      tab.brokerId = profile.id;
+      tab.brokers = profile.brokers;
+    } else if (tab) {
+      tab.brokerId = "";
+      tab.brokers = "";
+    }
   }
 
   invalidateTopics() {
@@ -1801,7 +1874,7 @@ export class KafkaTool extends BaseTool {
 
   async testConnection() {
     if (!this.config().brokers) {
-      this.field("kafkaBrokers").focus();
+      this.openBrokerSettings();
       return;
     }
     this.saveConnection();
@@ -1811,9 +1884,8 @@ export class KafkaTool extends BaseTool {
     this.setConnectionState("checking");
     try {
       const result = await this.service.test(this.config());
-      this.setConnectionState("connected", `Test passed · ${this.config().brokers}`);
+      this.setConnectionState("connected");
       this.field("kafkaConnectionStatus").title = String(result || "Connected to Kafka");
-      this.setConnectionSettingsOpen(false);
     } catch (error) {
       this.setConnectionState("error", String(error));
     } finally {

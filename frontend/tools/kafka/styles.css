@@ -239,23 +239,73 @@
 }
 
 .kafka-connection-state p {
-  max-width: none;
+  max-width: clamp(150px, 32vw, 380px);
+  overflow: hidden;
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kafka-connection-actions {
-  gap: 4px;
+  gap: 8px;
 }
 
-#kafkaConnection #kafkaTest {
+#kafkaBrokerSelect {
+  min-width: 150px;
+  max-width: min(280px, 34vw);
   height: 30px;
+  padding: 0 28px 0 9px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 12px;
+}
+
+#kafkaBrokerSelect:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+#kafkaBrokerSelect[hidden],
+#kafkaConnection #kafkaTest[hidden],
+#kafkaConnection #kafkaSetupBrokers[hidden] {
+  display: none;
+}
+
+.kafka-tool .kafka-broker-select.ad-searchable-dropdown[hidden] {
+  display: none !important;
+}
+
+#kafkaConnection #kafkaTest,
+#kafkaConnection #kafkaSetupBrokers {
+  min-height: 30px;
   padding: 0 10px;
   font-size: 12px;
 }
 
-#kafkaConnection .kafka-settings summary {
-  padding: 5px 6px;
-  font-size: 11px;
+#kafkaBrokerSelect-trigger {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px !important;
+  font-size: 12px;
+}
+
+#kafkaBrokerSelect-menu .ad-searchable-dropdown-search-wrap {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+}
+
+#kafkaBrokerSelect-menu .ad-searchable-dropdown-search {
+  box-sizing: border-box;
+  height: 22px !important;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .kafka-connection-bar,

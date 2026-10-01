@@ -302,6 +302,20 @@
       ]
     },
     {
+      "id": "kafka",
+      "label": "Kafka Connections",
+      "initiallyExpanded": false,
+      "items": [
+        {
+          "key": "kafka.brokers",
+          "storageKey": "tool:kafka:brokers",
+          "label": "Plaintext Brokers",
+          "type": "kafka-brokers",
+          "description": "Save named broker connections for the Kafka tool. Connections use PLAINTEXT."
+        }
+      ]
+    },
+    {
       "id": "credentials",
       "requiresTauri": true,
       "label": "Credential Management",

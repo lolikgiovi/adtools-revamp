@@ -429,10 +429,10 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         </div>
 
         <div class="file-viewer-content">
-            <div id="originalContent" class="tab-content active">
+            <div id="originalContent" class="tab-content qq-tab-content active">
                 <!-- Content will be dynamically inserted -->
             </div>
-            <div id="processedContent" class="tab-content">
+            <div id="processedContent" class="tab-content qq-tab-content">
                 <!-- Content will be dynamically inserted -->
             </div>
         </div>

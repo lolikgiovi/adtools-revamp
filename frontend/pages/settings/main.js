@@ -6,6 +6,7 @@ import { openOtpOverlay } from "../../components/OtpOverlay.js";
 import { invoke } from "@tauri-apps/api/core";
 import { ensureUnifiedKeychain } from "../../core/KeychainMigration.js";
 import { OracleConnectionService } from "../../core/OracleConnectionService.js";
+import { readKafkaBrokerProfiles, saveKafkaBrokerProfiles } from "../../tools/kafka/service.js";
 
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 
@@ -124,7 +125,7 @@ class SettingsPage {
 
     setting.classList.add("settings-focus-highlight");
     setting.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    setting.querySelector(".setting-value.editable")?.focus();
+    setting.querySelector(".setting-value.editable, .kafka-broker-add")?.focus();
     window.setTimeout(() => setting.classList.remove("settings-focus-highlight"), 3000);
   }
 
@@ -423,7 +424,148 @@ class SettingsPage {
     return wrapper;
   }
 
+  renderKafkaBrokersItem(item) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "setting-item setting-item-kafka-brokers";
+    wrapper.dataset.setting = item.key;
+    wrapper.dataset.type = item.type;
+    wrapper.innerHTML = `
+      <div class="kafka-brokers-header">
+        <div>
+          <div class="setting-name">${item.label}</div>
+          <p class="setting-description">${item.description || ""}</p>
+        </div>
+        <button class="btn btn-secondary btn-sm kafka-broker-add" type="button">Add broker</button>
+      </div>
+      <div class="kafka-brokers-list"></div>
+      <form class="kafka-broker-form" hidden>
+        <label for="kafkaBrokerName">Connection name</label>
+        <input id="kafkaBrokerName" class="kafka-broker-input" type="text" maxlength="48" placeholder="e.g. UAT" autocomplete="off" />
+        <label for="kafkaBrokerAddresses">Bootstrap servers</label>
+        <input id="kafkaBrokerAddresses" class="kafka-broker-input" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
+        <div class="kafka-broker-form-footer">
+          <p class="kafka-broker-form-status" role="status" aria-live="polite"></p>
+          <div>
+            <button class="btn btn-secondary btn-sm kafka-broker-cancel" type="button">Cancel</button>
+            <button class="btn btn-primary btn-sm kafka-broker-save" type="submit">Save broker</button>
+          </div>
+        </div>
+      </form>
+    `;
+
+    const list = wrapper.querySelector(".kafka-brokers-list");
+    const form = wrapper.querySelector(".kafka-broker-form");
+    const nameInput = wrapper.querySelector("#kafkaBrokerName");
+    const addressesInput = wrapper.querySelector("#kafkaBrokerAddresses");
+    const formStatus = wrapper.querySelector(".kafka-broker-form-status");
+    let editingId = "";
+
+    const renderList = () => {
+      const profiles = readKafkaBrokerProfiles();
+      list.replaceChildren();
+      if (!profiles.length) {
+        const empty = document.createElement("p");
+        empty.className = "kafka-brokers-empty";
+        empty.textContent = "No broker connections saved.";
+        list.appendChild(empty);
+        return;
+      }
+      for (const profile of profiles) {
+        const row = document.createElement("div");
+        row.className = "kafka-broker-row";
+        const identity = document.createElement("div");
+        identity.className = "kafka-broker-identity";
+        const name = document.createElement("strong");
+        name.textContent = profile.name;
+        const addresses = document.createElement("span");
+        addresses.textContent = profile.brokers;
+        identity.append(name, addresses);
+
+        const actions = document.createElement("div");
+        actions.className = "kafka-broker-actions";
+        const edit = document.createElement("button");
+        edit.className = "btn btn-outline btn-sm kafka-broker-edit";
+        edit.type = "button";
+        edit.dataset.profileId = profile.id;
+        edit.textContent = "Edit";
+        const remove = document.createElement("button");
+        remove.className = "btn btn-outline btn-sm btn-danger kafka-broker-delete";
+        remove.type = "button";
+        remove.dataset.profileId = profile.id;
+        remove.textContent = "Delete";
+        actions.append(edit, remove);
+        row.append(identity, actions);
+        list.appendChild(row);
+      }
+    };
+
+    const showForm = (profile = null) => {
+      editingId = profile?.id || "";
+      nameInput.value = profile?.name || "";
+      addressesInput.value = profile?.brokers || "";
+      formStatus.textContent = "";
+      formStatus.dataset.state = "";
+      wrapper.querySelector(".kafka-broker-save").textContent = profile ? "Save changes" : "Save broker";
+      form.hidden = false;
+      nameInput.focus();
+    };
+
+    wrapper.querySelector(".kafka-broker-add").addEventListener("click", () => showForm());
+    wrapper.querySelector(".kafka-broker-cancel").addEventListener("click", () => { form.hidden = true; });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      const brokers = addressesInput.value.trim();
+      if (!name || !brokers) {
+        formStatus.textContent = "Enter a name and at least one bootstrap server.";
+        formStatus.dataset.state = "error";
+        return;
+      }
+      const profiles = readKafkaBrokerProfiles();
+      if (profiles.some((profile) => profile.id !== editingId && profile.name.toLowerCase() === name.toLowerCase())) {
+        formStatus.textContent = "That connection name is already in use.";
+        formStatus.dataset.state = "error";
+        return;
+      }
+      const id = editingId || globalThis.crypto?.randomUUID?.() || `kafka-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const next = editingId
+        ? profiles.map((profile) => profile.id === editingId ? { id, name, brokers } : profile)
+        : [...profiles, { id, name, brokers }];
+      saveKafkaBrokerProfiles(next);
+      form.hidden = true;
+      renderList();
+      this.eventBus?.emit?.("notification:success", { message: `Broker "${name}" saved` });
+    });
+
+    list.addEventListener("click", async (event) => {
+      const edit = event.target.closest(".kafka-broker-edit");
+      if (edit) {
+        const profile = readKafkaBrokerProfiles().find((entry) => entry.id === edit.dataset.profileId);
+        if (profile) showForm(profile);
+        return;
+      }
+      const remove = event.target.closest(".kafka-broker-delete");
+      if (!remove) return;
+      const profiles = readKafkaBrokerProfiles();
+      const profile = profiles.find((entry) => entry.id === remove.dataset.profileId);
+      if (!profile) return;
+      const confirmed = await confirmAction({
+        title: "Delete broker?",
+        description: `Delete the saved ${profile.name} broker connection?`,
+        confirmLabel: "Delete broker",
+      });
+      if (!confirmed) return;
+      saveKafkaBrokerProfiles(profiles.filter((entry) => entry.id !== profile.id));
+      renderList();
+      this.eventBus?.emit?.("notification:success", { message: `Broker "${profile.name}" deleted` });
+    });
+
+    renderList();
+    return wrapper;
+  }
+
   renderItem(item) {
+    if (item.type === "kafka-brokers") return this.renderKafkaBrokersItem(item);
     const storageKey = item.storageKey || item.key;
     const current = this.service.getValue(storageKey, item.type, item.default);
 

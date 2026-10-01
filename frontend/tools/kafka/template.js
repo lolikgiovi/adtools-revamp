@@ -24,19 +24,13 @@ export const KafkaTemplate = /*html*/ `
             <span class="kafka-status-dot" aria-hidden="true"></span>
             <div>
               <h2 id="kafkaConnectionHeading">Kafka</h2>
-              <p id="kafkaConnectionStatus" role="status" aria-live="polite">Add a bootstrap server to get started.</p>
+              <p id="kafkaConnectionStatus" role="status" aria-live="polite">No broker saved yet.</p>
             </div>
           </div>
           <div class="kafka-connection-actions">
-            <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled>Test connection</button>
-            <details id="kafkaConnectionSettings" class="kafka-settings">
-              <summary><span>Broker settings</span><svg class="kafka-picker-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></summary>
-              <div class="kafka-settings-popover app-popover-surface">
-                <label for="kafkaBrokers">Bootstrap server</label>
-                <input id="kafkaBrokers" type="text" placeholder="broker-1:9092,broker-2:9092" autocomplete="off" spellcheck="false" />
-                <p class="kafka-setting-note">PLAINTEXT connection</p>
-              </div>
-            </details>
+            <select id="kafkaBrokerSelect" class="kafka-broker-select" aria-label="Kafka broker" hidden></select>
+            <button id="kafkaTest" class="btn btn-secondary btn-sm" type="button" disabled hidden>Test connection</button>
+            <button id="kafkaSetupBrokers" class="btn btn-secondary btn-sm" type="button">Set up in Settings</button>
           </div>
         </div>
       </section>
