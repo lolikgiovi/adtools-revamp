@@ -77,6 +77,7 @@ class HTMLTemplateTool extends BaseTool {
     this._splitStorageKey = "tool:html-template:split-ratio";
     this._resizerCleanup = null;
     this.analyticsSessionId = this.createAnalyticsId();
+    this._documentModelSequence = 0;
     this.inputSource = "default";
     this.programmaticEditorChange = false;
     this.lastHtmlOperation = null;
@@ -210,11 +211,13 @@ class HTMLTemplateTool extends BaseTool {
   async onMount() {
     const sequence = ++this._mountSequence;
     configureMonacoWorkers(self, { editor: editorWorker, html: htmlWorker });
-    await this.initializeDocuments();
+    const initializedDocuments = await this.initializeDocuments(sequence);
     if (sequence !== this._mountSequence || !this.container) {
-      this.documents.forEach((document) => document.model?.dispose());
-      this.documents = [];
-      this.documentStore?.close();
+      this.disposeDocumentModels(initializedDocuments);
+      if (this.documents === initializedDocuments) {
+        this.documents = [];
+        this.activeDocumentId = null;
+      }
       return;
     }
     await this.initializeMonacoEditor();
@@ -264,7 +267,7 @@ class HTMLTemplateTool extends BaseTool {
       this.editor.dispose();
       this.editor = null;
     }
-    this.documents.forEach((document) => document.model?.dispose());
+    this.disposeDocumentModels(this.documents);
     this.documents = [];
     void Promise.allSettled([finalSave, this._documentWriteQueue]).then(() => store?.close());
     if (this.minifyWorker) {
@@ -291,8 +294,17 @@ class HTMLTemplateTool extends BaseTool {
   createDocumentModel(document) {
     document.html = typeof document.html === "string" ? document.html : "";
     document.vtlValues = document.vtlValues && typeof document.vtlValues === "object" ? document.vtlValues : {};
-    document.model = monaco.editor.createModel(document.html, "html", monaco.Uri.parse(`inmemory://html-template/${document.id}.html`));
+    const modelSequence = ++this._documentModelSequence;
+    const documentId = encodeURIComponent(String(document.id ?? "untitled"));
+    const modelUri = `inmemory://html-template/${this.analyticsSessionId}/${modelSequence}/${documentId}.html`;
+    document.model = monaco.editor.createModel(document.html, "html", monaco.Uri.parse(modelUri));
     return document;
+  }
+
+  disposeDocumentModels(documents = []) {
+    documents.forEach((document) => {
+      if (document.model && !document.model.isDisposed()) document.model.dispose();
+    });
   }
 
   documentRecord(document) {
@@ -306,17 +318,35 @@ class HTMLTemplateTool extends BaseTool {
     };
   }
 
-  async initializeDocuments() {
-    this.documentStore = new HtmlDocumentStore();
+  async initializeDocuments(sequence = this._mountSequence) {
+    const store = new HtmlDocumentStore();
+    this.documentStore = store;
+    const documents = [];
+    const isCurrentMount = () => sequence === this._mountSequence;
+    const abandonInitialization = () => {
+      this.disposeDocumentModels(documents);
+      documents.length = 0;
+      store.close();
+      if (this.documentStore === store) this.documentStore = null;
+      return [];
+    };
+
     try {
-      await this.documentStore.open();
-      const saved = await this.documentStore.load(DEFAULT_HTML, () => this.createAnalyticsId());
-      this.documents = saved.documents.map((document) => this.createDocumentModel(document));
+      await store.open();
+      if (!isCurrentMount()) return abandonInitialization();
+      const saved = await store.load(DEFAULT_HTML, () => this.createAnalyticsId());
+      if (!isCurrentMount()) return abandonInitialization();
+      saved.documents.forEach((document) => documents.push(this.createDocumentModel(document)));
+      if (!isCurrentMount()) return abandonInitialization();
+      this.documents = documents;
       this.activeDocumentId = saved.activeId;
     } catch (error) {
+      if (!isCurrentMount()) return abandonInitialization();
+      this.disposeDocumentModels(documents);
+      documents.length = 0;
       console.error("Could not open HTML document storage:", error);
-      this.documentStore?.close();
-      this.documentStore = null;
+      store.close();
+      if (this.documentStore === store) this.documentStore = null;
       let html = DEFAULT_HTML;
       let vtlValues = {};
       try {
@@ -324,12 +354,14 @@ class HTMLTemplateTool extends BaseTool {
         vtlValues = JSON.parse(localStorage.getItem(this._vtlValuesStorageKey) || "{}") || {};
       } catch (_) {}
       const document = { id: this.createAnalyticsId(), name: "Untitled 1", html, vtlValues, createdAt: Date.now() };
-      this.documents = [this.createDocumentModel(document)];
+      documents.push(this.createDocumentModel(document));
+      this.documents = documents;
       this.activeDocumentId = document.id;
       this.showError("HTML drafts could not be saved on this device. Check browser storage, then reload.");
     }
     this.vtlValues = this.activeDocument.vtlValues || {};
     this.renderDocumentTabs();
+    return documents;
   }
 
   writeDocumentStore(operation) {
