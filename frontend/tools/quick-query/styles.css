@@ -837,36 +837,12 @@
   font-size: 0.75rem;
 }
 
-.qq-row-actions-anchor {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-.qq-row-actions-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding-inline: 8px;
-}
-
 .btn .qq-action-icon {
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
-}
-
-.qq-row-actions-trigger > .qq-row-actions-chevron {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .qq-import-button svg {
@@ -878,54 +854,6 @@
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.qq-row-actions-trigger[aria-expanded="true"] .qq-row-actions-chevron {
-  transform: rotate(180deg);
-}
-
-.qq-row-actions-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 900;
-  min-width: 160px;
-  padding: 3px;
-  border: 1px solid hsl(var(--primary));
-  border-radius: var(--radius);
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-}
-
-.qq-row-actions-menu[hidden] {
-  display: none;
-}
-
-.qq-row-actions-menu button {
-  display: block;
-  width: 100%;
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-}
-
-.qq-row-actions-menu button:hover,
-.qq-row-actions-menu button:focus-visible {
-  background: hsl(var(--primary-hover));
-  color: hsl(var(--primary-foreground));
-}
-
-.qq-row-actions-menu button:focus-visible {
-  outline: 2px solid hsl(var(--primary-foreground));
-  outline-offset: -2px;
 }
 
 .qq-import-button {

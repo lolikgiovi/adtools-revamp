@@ -174,15 +174,6 @@ export class QuickQueryUI {
       }
     };
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
-    this._handleModifyRowsDocumentClick = (event) => {
-      if (!this.elements.modifyRowsAnchor?.contains(event.target)) this.closeModifyRowsMenu();
-    };
-    this._handleModifyRowsKeydown = (event) => {
-      if (event.key === "Escape" && !this.elements.modifyRowsMenu?.hidden) {
-        this.closeModifyRowsMenu();
-        this.elements.modifyRowsButton.focus();
-      }
-    };
     this._handleSystemModeDocumentClick = (event) => {
       if (!this.elements.systemModeControl?.contains(event.target)) this.closeSystemCustomPopover();
     };
@@ -413,9 +404,6 @@ export class QuickQueryUI {
       excelImportRowCount: document.getElementById("excelImportRowCount"),
       clearExcelImportButton: document.getElementById("clearExcelImport"),
       importOracleDataButton: document.getElementById("importOracleData"),
-      modifyRowsAnchor: document.getElementById("modifyRowsAnchor"),
-      modifyRowsButton: document.getElementById("modifyRowsButton"),
-      modifyRowsMenu: document.getElementById("modifyRowsMenu"),
       oracleDataOverlay: document.getElementById("oracleDataOverlay"),
       oracleDataModal: document.getElementById("oracleDataModal"),
       oracleDataConnection: document.getElementById("oracleDataConnection"),
@@ -656,25 +644,6 @@ export class QuickQueryUI {
       removeDataRow: {
         click: () => this.handleRemoveDataRow(),
       },
-      modifyRowsButton: {
-        click: () => this.toggleModifyRowsMenu(),
-        keydown: (event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            this.openModifyRowsMenu();
-            this.elements.modifyRowsMenu.querySelector("button")?.focus();
-          }
-        },
-      },
-      modifyRowsMenu: {
-        keydown: (event) => {
-          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-          event.preventDefault();
-          const buttons = [...this.elements.modifyRowsMenu.querySelectorAll("button")];
-          const direction = event.key === "ArrowDown" ? 1 : -1;
-          buttons[(buttons.indexOf(document.activeElement) + direction + buttons.length) % buttons.length]?.focus();
-        },
-      },
       clearData: {
         click: () => this.handleClearData(),
       },
@@ -850,10 +819,8 @@ export class QuickQueryUI {
     });
 
     document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
-    document.addEventListener("click", this._handleModifyRowsDocumentClick);
     document.addEventListener("click", this._handleSystemModeDocumentClick);
     document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
-    document.addEventListener("keydown", this._handleModifyRowsKeydown);
     document.addEventListener("keydown", this._handleDataMaximizeKeydown);
   }
 
@@ -2176,10 +2143,8 @@ export class QuickQueryUI {
     clearTimeout(this._tabUndoTimer);
     this._closedTabs = null;
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
-    document.removeEventListener("click", this._handleModifyRowsDocumentClick);
     document.removeEventListener("click", this._handleSystemModeDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
-    document.removeEventListener("keydown", this._handleModifyRowsKeydown);
     document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
     if (this._queryTypeDocumentClick) {
       document.removeEventListener("click", this._queryTypeDocumentClick);
@@ -3674,22 +3639,6 @@ export class QuickQueryUI {
     quickQueryUuidPopover.classList.add("hidden");
     quickQueryUuidPopover.setAttribute("aria-hidden", "true");
     quickQueryUuidButton?.setAttribute("aria-expanded", "false");
-  }
-
-  openModifyRowsMenu() {
-    this.elements.modifyRowsMenu.hidden = false;
-    this.elements.modifyRowsButton.setAttribute("aria-expanded", "true");
-  }
-
-  closeModifyRowsMenu() {
-    if (!this.elements.modifyRowsMenu) return;
-    this.elements.modifyRowsMenu.hidden = true;
-    this.elements.modifyRowsButton?.setAttribute("aria-expanded", "false");
-  }
-
-  toggleModifyRowsMenu() {
-    if (this.elements.modifyRowsMenu.hidden) this.openModifyRowsMenu();
-    else this.closeModifyRowsMenu();
   }
 
   isUuidGeneratorOpen() {

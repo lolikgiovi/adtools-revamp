@@ -207,22 +207,20 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         </div>
                     </div>
                 </div>
-                <div id="modifyRowsAnchor" class="qq-row-actions-anchor">
-                    <button id="modifyRowsButton" class="btn btn-primary btn-sm qq-row-actions-trigger" type="button"
-                        aria-haspopup="menu" aria-expanded="false" aria-controls="modifyRowsMenu">
-                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M4 5h16M4 12h8M4 19h8M17 9v6m-3-3h6" />
-                        </svg>
-                        <span>Modify Rows</span>
-                        <svg class="qq-row-actions-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-                    </button>
-                    <div id="modifyRowsMenu" class="qq-row-actions-menu app-popover-surface" role="menu"
-                        aria-label="Modify rows" hidden>
-                        <button id="addDataRow" type="button" role="menuitem">Add Row</button>
-                        <button id="removeDataRow" type="button" role="menuitem">Remove Last Row</button>
-                    </div>
-                </div>
+                <button id="addDataRow" class="btn btn-primary btn-sm" type="button">
+                    <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 5h16M4 12h8M4 19h8M17 9v6m-3-3h6" />
+                    </svg>
+                    <span>Add Row</span>
+                </button>
+                <button id="removeDataRow" class="btn btn-primary btn-sm" type="button">
+                    <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 5h16M4 12h8M4 19h8M17 12h6" />
+                    </svg>
+                    <span>Remove Row</span>
+                </button>
                 <button id="clearData" class="btn btn-primary btn-sm">
                     <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
