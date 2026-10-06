@@ -228,14 +228,22 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     </svg>
                     <span>Clear Data</span>
                 </button>
-                <button id="importExcel" class="btn btn-primary btn-sm qq-import-button" type="button">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5h7l3 3V14.5H3zM10 1.5v3h3M5 7h6M5 10h6M8 7v6" /></svg>
-                    Import Excel
-                </button>
-                <button id="importOracleData" class="btn btn-primary btn-sm qq-import-button" type="button" hidden>
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="3.5" rx="5.5" ry="2" /><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2" /></svg>
-                    Import Oracle
-                </button>
+                <div id="importActionsAnchor" class="qq-dropdown-anchor">
+                    <button id="importButton" class="btn btn-primary btn-sm qq-dropdown-trigger" type="button"
+                        aria-haspopup="menu" aria-expanded="false" aria-controls="importActionsMenu">
+                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3v10m0 0 4-4m-4 4-4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
+                        </svg>
+                        <span>Import</span>
+                        <svg class="qq-dropdown-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+                    </button>
+                    <div id="importActionsMenu" class="qq-dropdown-menu app-popover-surface" role="menu"
+                        aria-label="Import" hidden>
+                        <button id="importExcel" type="button" role="menuitem">From Excel</button>
+                        <button id="importOracleData" type="button" role="menuitem" hidden>From Oracle</button>
+                    </div>
+                </div>
                 <button id="toggleDataMaximize" class="btn btn-sm qq-data-maximize" type="button" aria-pressed="false"
                     title="Expand the data sheet to use the available workspace">
                     <svg class="qq-data-maximize-icon qq-data-maximize-icon-expand" viewBox="0 0 16 16" aria-hidden="true">
