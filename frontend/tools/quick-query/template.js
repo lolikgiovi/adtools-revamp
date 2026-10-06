@@ -127,19 +127,12 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                         </svg>
                         <span>Copy</span>
                     </button>
-                    <button id="downloadSQL" class="btn btn-primary btn-sm">
+                    <button id="downloadAs" class="btn btn-primary btn-sm">
                         <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M5 3h12l4 4v14H3V3h2zM7 3v6h10V3M7 21v-8h10v8" />
                         </svg>
                         <span>Save</span>
-                    </button>
-                    <button id="downloadAs" class="btn btn-primary btn-sm">
-                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M5 3h12l4 4v14H3V3h2zM7 3v6h10V3M7 21v-8h10v8M17 16h5m-2.5-2.5v5" />
-                        </svg>
-                        <span>Save As</span>
                     </button>
                     <button id="splitQuery" class="btn btn-primary btn-sm">
                         <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"

@@ -529,9 +529,6 @@ export class QuickQueryUI {
       clearAll: {
         click: () => this.handleClearAll(),
       },
-      downloadSQL: {
-        click: () => this.handleDownloadSql(),
-      },
       executeInJenkinsRunner: {
         click: () => this.handleExecuteInJenkinsRunner(),
       },
@@ -2986,46 +2983,6 @@ export class QuickQueryUI {
     // Clear imported Excel data
     this.handleClearExcelImport();
     this.scheduleActiveTabDraftSave();
-  }
-
-  handleDownloadSql() {
-    const sql = this.editor.getValue();
-    if (!sql) {
-      this.showError("No SQL to download. Please generate a query first.");
-      return;
-    }
-
-    let tableName = this.elements.tableNameInput.value.trim();
-    const sanitizedTableName = tableName.replace(/[^a-z0-9_.]/gi, "_").toUpperCase();
-    const filename = `${sanitizedTableName}.sql`;
-
-    const blob = new Blob([sql], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // Track download for output preference insights
-    this.trackQuickQueryEvent(
-      "download_sql",
-      {
-        ...this.getCurrentQuickQueryContext(),
-        file_size: blob.size,
-      },
-      { flush: true },
-    );
-
-    const displayName = tableName || sanitizedTableName;
-    if (this.eventBus) {
-      this.eventBus.emit("notification:success", {
-        message: `Query ${displayName} downloaded to Download Directory`,
-        duration: 2500,
-      });
-    }
   }
 
   _getDownloadAsDefaultName() {
