@@ -326,6 +326,53 @@ SELECT custody_order_id, updated_time FROM BULLION.CUSTODY_ACCOUNT WHERE updated
   })
 })
 
+describe('QueryGenerationService - reserved-word primary keys in SELECT projections', () => {
+  const svc = new QueryGenerationService()
+  // "date", "level", and "number" are Oracle reserved words (see oracleReservedWords in constants.js)
+  const reservedPkSchema = [
+    ['date', 'DATE', 'No', '', '', 'Yes'],
+    ['level', 'NUMBER', 'Yes', '', '', ''],
+    ['updated_time', 'DATE', 'Yes', '', '', ''],
+    ['updated_by', 'VARCHAR2(50)', 'Yes', '', '', ''],
+  ]
+  const reservedRunningPkSchema = [
+    ['number', 'NUMBER', 'No', '', '', 'Yes'],
+    ['level', 'NUMBER', 'Yes', '', '', ''],
+    ['updated_time', 'DATE', 'Yes', '', '', ''],
+    ['updated_by', 'VARCHAR2(50)', 'Yes', '', '', ''],
+  ]
+
+  it('quotes a reserved-word PK in the MERGE changed-recently SELECT', () => {
+    const sql = svc.generateQuery('my_table', 'merge', reservedPkSchema, [
+      ['date', 'level', 'updated_time', 'updated_by'],
+      ['2024-01-01', '7', '', ''],
+    ], [])
+
+    expect(sql).toContain('SELECT "date", updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL \'2\' MINUTE;')
+    expect(sql).not.toContain('SELECT date, updated_time FROM')
+  })
+
+  it('quotes every reserved-word field in the UPDATE projections', () => {
+    const sql = svc.generateQuery('my_table', 'update', reservedPkSchema, [
+      ['date', 'level', 'updated_time', 'updated_by'],
+      ['2024-01-01', '7', '', ''],
+    ], [])
+
+    expect(sql).toContain('SELECT "date", "level", updated_time, updated_by FROM my_table WHERE "date" IN (')
+    expect(sql).toContain('SELECT "date", updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL \'2\' MINUTE;')
+  })
+
+  it('quotes a reserved-word PK when the PK is a running number', () => {
+    const sql = svc.generateQuery('my_table', 'merge', reservedRunningPkSchema, [
+      ['number', 'level', 'updated_time', 'updated_by'],
+      ['max', '7', '', ''],
+    ], [])
+
+    expect(sql).toContain('SELECT * FROM my_table ORDER BY updated_time DESC FETCH FIRST 1 ROWS ONLY;')
+    expect(sql).toContain('SELECT "number", updated_time FROM my_table WHERE updated_time >= SYSDATE - INTERVAL \'2\' MINUTE;')
+  })
+})
+
 describe('QueryGenerationService - NULL and whitespace handling', () => {
   const svc = new QueryGenerationService()
   const schema = buildLowercaseSchema()

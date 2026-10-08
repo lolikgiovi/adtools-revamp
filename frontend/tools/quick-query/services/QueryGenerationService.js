@@ -632,7 +632,7 @@ export class QueryGenerationService {
       let selectStatement = `\nSELECT * FROM ${tableName} ORDER BY ${orderByField} DESC FETCH FIRST ${rowCount} ROWS ONLY;`;
       if (hasUpdatedTime) {
         selectStatement += `\nSELECT ${primaryKeys
-          .map((pk) => pk.toLowerCase())
+          .map((pk) => this.formatFieldName(pk))
           .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '${recentIntervalMinutes}' MINUTE;`;
       }
       return selectStatement;
@@ -649,7 +649,7 @@ export class QueryGenerationService {
     let selectStatement = `\nSELECT * FROM ${tableName} WHERE ${whereClause}${orderByClause};`;
     if (hasUpdatedTime) {
       selectStatement += `\nSELECT ${primaryKeys
-        .map((pk) => pk.toLowerCase())
+        .map((pk) => this.formatFieldName(pk))
         .join(", ")}, updated_time FROM ${tableName} WHERE updated_time >= SYSDATE - INTERVAL '${recentIntervalMinutes}' MINUTE;`;
     }
     return selectStatement;
