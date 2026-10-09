@@ -18,6 +18,7 @@ import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
 import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
+import { buildOracleRowQuery } from "./lib/row-query-builder.js";
 import { OracleConnectionService, SidecarStatus } from "../../core/OracleConnectionService.js";
 import {
   buildCompareConfigSuccessMeta,
@@ -516,6 +517,7 @@ class CompareConfigTool extends BaseTool {
     const exportExcelBtn = document.getElementById("btn-export-excel");
     const exportCsvBtn = document.getElementById("btn-export-csv");
     const newComparisonBtn = document.getElementById("btn-new-comparison");
+    const queryRowsBtn = document.getElementById("btn-query-differing-rows");
     // Export dropdown toggle
     if (exportBtn && exportDropdownMenu) {
       exportBtn.addEventListener("click", (e) => {
@@ -556,6 +558,18 @@ class CompareConfigTool extends BaseTool {
 
     if (newComparisonBtn) {
       newComparisonBtn.addEventListener("click", () => this.resetForm());
+    }
+
+    if (queryRowsBtn) {
+      queryRowsBtn.addEventListener("click", () => {
+        const panel = document.getElementById("results-row-queries");
+        if (!panel) return;
+
+        const isOpen = queryRowsBtn.getAttribute("aria-expanded") === "true";
+        queryRowsBtn.setAttribute("aria-expanded", String(!isOpen));
+        panel.hidden = isOpen;
+        if (!isOpen) this.renderRowQueryPanel(panel);
+      });
     }
 
     // View dropdown toggle
@@ -869,6 +883,10 @@ class CompareConfigTool extends BaseTool {
     const resultsSection = document.getElementById("results-section");
     if (!resultsSection) return;
 
+    if (this.queryMode === "unified") {
+      this.updateUnifiedWorkflowStep(3);
+    }
+
     // Update title with comparison info (without "Comparison Results:" prefix)
     const titleEl = document.getElementById("results-title");
     if (titleEl) {
@@ -894,6 +912,7 @@ class CompareConfigTool extends BaseTool {
     if (exportJsonBtn) exportJsonBtn.disabled = !hasResults;
     if (exportExcelBtn) exportExcelBtn.disabled = !hasResults;
     if (exportCsvBtn) exportCsvBtn.disabled = !hasResults;
+    this.resetRowQueryPanel();
 
     // Show results section
     resultsSection.style.display = "flex";
@@ -901,6 +920,115 @@ class CompareConfigTool extends BaseTool {
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
     this.saveToolState();
+  }
+
+  resetRowQueryPanel() {
+    const button = document.getElementById("btn-query-differing-rows");
+    const panel = document.getElementById("results-row-queries");
+    if (!button || !panel) return;
+
+    const sources = this.results[this.queryMode]?._metadata?.rowQuerySources || [];
+    button.hidden = sources.length === 0;
+    button.setAttribute("aria-expanded", "false");
+    panel.hidden = true;
+    panel.replaceChildren();
+  }
+
+  renderRowQueryPanel(panel) {
+    const result = this.results[this.queryMode];
+    const metadata = result?._metadata || {};
+    const sources = metadata.rowQuerySources || [];
+    const targets = metadata.rowQueryTargets || [];
+
+    panel.replaceChildren();
+
+    const heading = document.createElement("h4");
+    heading.className = "row-query-title";
+    heading.textContent = "Query differing rows";
+
+    const description = document.createElement("p");
+    description.className = "row-query-description";
+    description.textContent = "Queries include every differing record from this comparison, regardless of search or status filters.";
+    panel.append(heading, description);
+
+    const differingRows = (result?.rows || []).filter((row) => row.status !== "match");
+    if (differingRows.length === 0) {
+      this.appendRowQueryMessage(panel, "There are no differing rows to query.");
+      return;
+    }
+
+    if (metadata.rowMatching === "position") {
+      this.appendRowQueryMessage(panel, "Compare by primary key to generate a query for the differing table rows.");
+      return;
+    }
+
+    if (!metadata.keyColumns?.length) {
+      this.appendRowQueryMessage(panel, "Select primary key fields and compare by key to generate a row query.");
+      return;
+    }
+
+    if (targets.length === 0) {
+      this.appendRowQueryMessage(panel, "Switch an Oracle source to Table mode to generate a query. Raw SQL results may come from joins or derived rows.");
+      return;
+    }
+
+    if (sources.some((source) => source.queryMode !== "table")) {
+      this.appendRowQueryMessage(panel, "Queries are available for Oracle table sources. Raw SQL can return joined or derived rows.");
+    }
+
+    targets.forEach((target) => {
+      const queryResult = buildOracleRowQuery(result, target);
+      const section = document.createElement("section");
+      section.className = "row-query-section";
+
+      const sectionHeader = document.createElement("div");
+      sectionHeader.className = "row-query-section-header";
+      const title = document.createElement("h5");
+      title.textContent = `${target.sourceLabel} · ${target.schema}.${target.table}`;
+      sectionHeader.append(title);
+
+      if (queryResult.error) {
+        const message = document.createElement("p");
+        message.className = "row-query-message is-warning";
+        message.textContent = queryResult.error;
+        section.append(sectionHeader, message);
+      } else if (!queryResult.query) {
+        const message = document.createElement("p");
+        message.className = "row-query-message";
+        message.textContent = "No differing records from this comparison exist in this table.";
+        section.append(sectionHeader, message);
+      } else {
+        const count = document.createElement("p");
+        count.className = "row-query-message";
+        count.textContent = `Includes ${queryResult.rowCount} differing ${queryResult.rowCount === 1 ? "row" : "rows"} present in this table.`;
+
+        const actions = document.createElement("div");
+        actions.className = "row-query-actions";
+        const copyButton = document.createElement("button");
+        copyButton.type = "button";
+        copyButton.className = "btn btn-secondary btn-sm";
+        copyButton.textContent = `Copy ${target.sourceLabel} query`;
+        copyButton.addEventListener("click", () => this.copyToClipboard(queryResult.query, copyButton));
+        actions.append(copyButton);
+
+        const code = document.createElement("pre");
+        code.className = "row-query-code";
+        const codeContent = document.createElement("code");
+        codeContent.textContent = queryResult.query;
+        code.append(codeContent);
+
+        section.append(sectionHeader, count, code, actions);
+      }
+
+      panel.append(section);
+    });
+  }
+
+  appendRowQueryMessage(panel, messageText) {
+    const message = document.createElement("p");
+    message.className = "row-query-message";
+    message.textContent = messageText;
+    panel.append(message);
   }
 
   /**
@@ -947,7 +1075,9 @@ class CompareConfigTool extends BaseTool {
     const summaryContainer = document.getElementById("results-summary");
     if (!summaryContainer || !this.results[this.queryMode]) return;
 
-    const { summary } = this.results[this.queryMode];
+    const result = this.results[this.queryMode];
+    const { summary } = result;
+    this.renderRowCapNotice(result);
 
     // Check if primary key was selected (for warning)
     const cachedMetadata = this.results.unified?._metadata;
@@ -993,6 +1123,31 @@ class CompareConfigTool extends BaseTool {
         this.applyStatusFilter(filter);
       });
     });
+  }
+
+  renderRowCapNotice(result) {
+    const notice = document.getElementById("results-row-cap-note");
+    const message = document.getElementById("results-row-cap-message");
+    if (!notice || !message) return;
+
+    const cappedSources = (result?._metadata?.sourceLimits || []).filter((source) => {
+      const rowCount = Number(source.rowCount);
+      const maxRows = Number(source.maxRows);
+      return Number.isFinite(rowCount) && Number.isFinite(maxRows) && maxRows > 0 && rowCount >= maxRows;
+    });
+
+    if (cappedSources.length === 0) {
+      notice.style.display = "none";
+      message.textContent = "";
+      return;
+    }
+
+    const sources = cappedSources.map((source) => {
+      const name = this.gridView.formatEnvName(source.name || "Source");
+      return `${name} (${Number(source.rowCount).toLocaleString()} rows)`;
+    });
+    message.textContent = `Row limit reached for ${sources.join(" and ")}. Results may be incomplete.`;
+    notice.style.display = "flex";
   }
 
   /**
@@ -1944,7 +2099,7 @@ class CompareConfigTool extends BaseTool {
 
     // In Web mode, hide Oracle options and pre-select Excel
     if (!tauri) {
-      const oracleOptions = document.querySelectorAll('.source-type-option:has(input[value="oracle"])');
+      const oracleOptions = document.querySelectorAll('.source-type-btn:has(input[value="oracle"])');
       oracleOptions.forEach((opt) => (opt.style.display = "none"));
 
       // Pre-select Excel for both sources
@@ -1980,6 +2135,31 @@ class CompareConfigTool extends BaseTool {
     // Ensure status pills are initialized correctly
     this.updateUnifiedSourceConfigVisibility("A");
     this.updateUnifiedSourceConfigVisibility("B");
+    this.updateUnifiedWorkflowStep(this.unified.currentStep);
+  }
+
+  updateUnifiedWorkflowStep(step) {
+    const workflow = document.getElementById("unified-workflow-steps");
+    if (!workflow) return;
+
+    const currentStep = Math.max(1, Math.min(3, Number(step) || 1));
+    this.unified.currentStep = currentStep;
+
+    workflow.querySelectorAll("[data-workflow-step]").forEach((stepElement) => {
+      const stepNumber = Number(stepElement.dataset.workflowStep);
+      const label = stepElement.querySelector("span:last-child")?.textContent?.trim() || "Step";
+      const isCurrent = stepNumber === currentStep;
+      const isComplete = stepNumber < currentStep;
+
+      stepElement.classList.toggle("is-current", isCurrent);
+      stepElement.classList.toggle("is-complete", isComplete);
+      if (isCurrent) {
+        stepElement.setAttribute("aria-current", "step");
+      } else {
+        stepElement.removeAttribute("aria-current");
+      }
+      stepElement.setAttribute("aria-label", `${label}, ${isCurrent ? "current step" : isComplete ? "complete" : "upcoming"}`);
+    });
   }
 
   /**
@@ -3832,6 +4012,8 @@ class CompareConfigTool extends BaseTool {
    * Show the field reconciliation UI
    */
   showUnifiedFieldReconciliation() {
+    this.updateUnifiedWorkflowStep(2);
+
     const section = document.getElementById("unified-field-reconciliation");
     const loadActions = document.getElementById("unified-load-actions");
     const configChangedBanner = document.getElementById("unified-config-changed-banner");
@@ -3868,6 +4050,8 @@ class CompareConfigTool extends BaseTool {
    * - Oracle sources: reset all config
    */
   handleUnifiedNewComparison() {
+    this.updateUnifiedWorkflowStep(1);
+
     // 1. Always clear results
     this.masterDetailView.disposeTextDiff();
     this.gridView.columnFilters = {};
@@ -4281,11 +4465,44 @@ class CompareConfigTool extends BaseTool {
         keyColumns: pkFields,
       });
 
+      const rowQuerySources = [
+        { side: "A", source: sourceA },
+        { side: "B", source: sourceB },
+      ]
+        .filter(({ source }) => source.type === "oracle")
+        .map(({ side, source }) => ({
+          side,
+          sourceLabel: `Source ${side}`,
+          queryMode: source.queryMode,
+          schema: source.schema,
+          table: source.table,
+        }));
+      const duplicateKeyCount = (jsResult.duplicateKeys?.reference?.length || 0) + (jsResult.duplicateKeys?.comparator?.length || 0);
+
+      const rowQueryTargets = rowQuerySources
+        .filter((source) => source.queryMode === "table" && source.schema && source.table)
+        .map((source) => {
+          const sourceKey = source.side === "A" ? "sourceA" : "sourceB";
+          const keyColumns = selectedPkFields.map((field) => {
+            const mapping = commonMapped?.find((item) => item.sourceA === field || item.sourceB === field || item.normalized === field);
+            const column = mapping?.[sourceKey] || field;
+            const dataKeys = normalizeFields
+              ? [mapping?.normalized, column, field, mapping?.sourceA, mapping?.sourceB]
+              : [column, field, mapping?.sourceA, mapping?.sourceB, mapping?.normalized];
+
+            return { column, dataKeys: [...new Set(dataKeys.filter(Boolean))] };
+          });
+
+          return { ...source, keyColumns, duplicateKeyCount };
+        });
+
       // Store metadata about matching options for cache restoration
       viewResult._metadata = {
         keyColumns: pkFields,
         rowMatching: rowMatching,
         compareFields: compareFields,
+        rowQuerySources,
+        rowQueryTargets,
         sourceLimits: [
           sourceA.type === "oracle" && {
             name: sourceA.data.metadata.sourceName,
