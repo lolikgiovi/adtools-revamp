@@ -60,27 +60,6 @@ export const CompareConfigTemplate = /* html */ `
         <!-- Unified Compare Mode -->
         <div id="unified-compare-mode" class="unified-compare-mode">
 
-            <div class="compare-workflow-header">
-                <div class="compare-workflow-copy">
-                    <h2>Compare two sources</h2>
-                    <p>Choose a reference and comparison source, then load both to select fields and review differences.</p>
-                </div>
-                <ol class="compare-workflow-steps" id="unified-workflow-steps" aria-label="Comparison progress">
-                    <li class="is-current" data-workflow-step="1" aria-current="step" aria-label="Sources, current step">
-                        <span class="workflow-step-number" aria-hidden="true">1</span>
-                        <span>Sources</span>
-                    </li>
-                    <li data-workflow-step="2" aria-label="Fields, upcoming">
-                        <span class="workflow-step-number" aria-hidden="true">2</span>
-                        <span>Fields</span>
-                    </li>
-                    <li data-workflow-step="3" aria-label="Results, upcoming">
-                        <span class="workflow-step-number" aria-hidden="true">3</span>
-                        <span>Results</span>
-                    </li>
-                </ol>
-            </div>
-
             <!-- Source Panels -->
             <div class="source-panels">
                 <!-- Source A (Reference) -->
@@ -175,19 +154,15 @@ export const CompareConfigTemplate = /* html */ `
                         <!-- Raw SQL Mode Config -->
                         <div class="sql-mode-config" id="source-a-sql-config">
                             <div class="form-group">
-                                <label for="source-a-sql">SQL Query</label>
+                                <div class="sql-label-row">
+                                    <label for="source-a-sql">SQL Query</label>
+                                </div>
                                 <div id="source-a-sql-editor" class="compare-sql-editor" aria-label="Source A SQL Query"></div>
                                 <textarea id="source-a-sql" class="form-textarea sql-input"
                                           placeholder="SELECT * FROM schema.table WHERE ..."></textarea>
                             </div>
                         </div>
 
-                        <!-- Common Oracle Options -->
-                        <div class="form-group">
-                            <label>Max Rows</label>
-                            <input type="number" id="source-a-max-rows" class="form-input"
-                                   value="500" min="1" max="10000">
-                        </div>
                     </div>
 
                     <!-- Excel Config (shown when Excel selected) - Enhanced with multi-file support -->
@@ -356,9 +331,13 @@ export const CompareConfigTemplate = /* html */ `
                             <div class="form-group">
                                 <div class="sql-label-row">
                                     <label for="source-b-sql">SQL Query</label>
-                                    <label class="checkbox-label use-source-a-label" id="source-b-use-sql-a-wrapper">
+                                    <label class="compare-toggle" id="source-b-use-sql-a-wrapper"
+                                           title="Run Source B using Source A's query">
                                         <input type="checkbox" id="source-b-use-sql-a">
-                                        Use same query as Source A
+                                        <span class="compare-toggle-label">Use same query as Source A</span>
+                                        <span class="compare-toggle-track" aria-hidden="true">
+                                            <span class="compare-toggle-thumb"></span>
+                                        </span>
                                     </label>
                                 </div>
                                 <div id="source-b-sql-editor" class="compare-sql-editor" aria-label="Source B SQL Query"></div>
@@ -367,11 +346,6 @@ export const CompareConfigTemplate = /* html */ `
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Max Rows</label>
-                            <input type="number" id="source-b-max-rows" class="form-input"
-                                   value="500" min="1" max="10000">
-                        </div>
                     </div>
 
                     <!-- Excel Config - Enhanced with multi-file support -->
@@ -463,15 +437,19 @@ export const CompareConfigTemplate = /* html */ `
                 </button>
             </div>
 
-            <!-- Load Data Button -->
+            <!-- Shared fetch limit + Load action -->
             <div class="unified-load-actions" id="unified-load-actions">
+                <div class="unified-max-rows" id="unified-max-rows-row" style="display: none;">
+                    <input type="number" id="unified-max-rows" class="form-input" value="500" min="1" max="10000"
+                           placeholder="Max Rows to Fetch" aria-label="Max rows to fetch for both sources">
+                </div>
                 <button class="btn btn-primary" id="btn-unified-load-data" disabled>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Load Data from Both Sources
+                    Load from Both Sources
                 </button>
             </div>
 
@@ -569,40 +547,44 @@ export const CompareConfigTemplate = /* html */ `
 
                 <!-- Comparison Options -->
                 <div class="unified-comparison-options">
-                    <div class="comparison-option-groups">
-                        <fieldset class="comparison-option-group">
-                            <legend>Match rows by</legend>
-                            <div class="comparison-choice-list">
-                                <label class="comparison-choice" title="Match the same record even when row order differs">
-                                    <input type="radio" name="unified-row-matching" value="key" checked>
-                                    <span>Primary key</span>
-                                </label>
-                                <label class="comparison-choice" title="Compare rows in the same order on both sides">
-                                    <input type="radio" name="unified-row-matching" value="position">
-                                    <span>Row position</span>
-                                </label>
-                            </div>
-                        </fieldset>
-
-                        <fieldset class="comparison-option-group">
-                            <legend>Compare values as</legend>
-                            <div class="comparison-choice-list">
-                                <label class="comparison-choice" title="Show differences in formatting and values">
-                                    <input type="radio" name="unified-data-comparison" value="strict" checked>
-                                    <span>Exact text</span>
-                                </label>
-                                <label class="comparison-choice" title="Ignore equivalent date, number, and whitespace formats">
-                                    <input type="radio" name="unified-data-comparison" value="normalized">
-                                    <span>Equivalent values</span>
-                                </label>
-                            </div>
-                        </fieldset>
+                    <div class="comparison-option-group">
+                        <span class="comparison-option-label" id="label-unified-row-matching">Match rows by</span>
+                        <div class="comparison-choice-list" role="radiogroup" aria-labelledby="label-unified-row-matching">
+                            <label class="comparison-choice" title="Match the same record even when row order differs">
+                                <input type="radio" name="unified-row-matching" value="key" checked>
+                                <span>Primary key</span>
+                            </label>
+                            <label class="comparison-choice" title="Compare rows in the same order on both sides">
+                                <input type="radio" name="unified-row-matching" value="position">
+                                <span>Row position</span>
+                            </label>
+                        </div>
                     </div>
 
-                    <label class="comparison-field-toggle" title="Match names such as PARAMETER_KEY and parameter_key">
-                        <input type="checkbox" id="unified-normalize-fields">
-                        <span>Ignore column name case</span>
-                    </label>
+                    <div class="comparison-option-group">
+                        <span class="comparison-option-label" id="label-unified-data-comparison">Compare values as</span>
+                        <div class="comparison-choice-list" role="radiogroup" aria-labelledby="label-unified-data-comparison">
+                            <label class="comparison-choice" title="Show differences in formatting and values">
+                                <input type="radio" name="unified-data-comparison" value="strict" checked>
+                                <span>Exact text</span>
+                            </label>
+                            <label class="comparison-choice" title="Ignore equivalent date, number, and whitespace formats">
+                                <input type="radio" name="unified-data-comparison" value="normalized">
+                                <span>Equivalent values</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="comparison-option-group">
+                        <span class="comparison-option-label">Field matching</span>
+                        <label class="compare-toggle comparison-field-toggle" title="Match names such as PARAMETER_KEY and parameter_key">
+                            <input type="checkbox" id="unified-normalize-fields">
+                            <span class="compare-toggle-label">Ignore column name case</span>
+                            <span class="compare-toggle-track" aria-hidden="true">
+                                <span class="compare-toggle-thumb"></span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Compare Button -->

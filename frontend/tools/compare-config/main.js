@@ -48,6 +48,9 @@ class CompareConfigTool extends BaseTool {
     this._documentListenerCleanups = [];
     this._unifiedLoadRequestId = 0;
     this._unifiedParseControllers = new Map();
+    this._savedUnifiedOptions = null;
+    this._toolStateSaveTimer = null;
+    this._excelRestorePromise = null;
 
     this.statusFilter = "differ"; // Includes changed values and rows present in only one source
     this.currentView = "grid"; // Summary Grid or Detail View
@@ -122,9 +125,6 @@ class CompareConfigTool extends BaseTool {
         normalizeFields: false, // Case-insensitive field name matching
       },
 
-      // UI state
-      currentStep: 1, // 1=source-config, 2=field-selection, 3=results
-
       // Config snapshot for detecting changes (to show/hide Load Data button)
       _lastLoadedConfig: null, // { sourceA: {...}, sourceB: {...} }
     };
@@ -194,6 +194,8 @@ class CompareConfigTool extends BaseTool {
       // Initialize unified mode UI for web (pre-selects Excel mode)
       this.initUnifiedModeUI();
     }
+    // Restore the user's last source/comparison options over the defaults
+    await this.applyUnifiedUserOptions();
     if (isTauri() && this.oracleClientReady) await this.initializeSqlEditors();
   }
 
@@ -360,26 +362,240 @@ class CompareConfigTool extends BaseTool {
    * - Large results go to IndexedDB to avoid localStorage quota limits
    */
   saveToolState() {
+    // Save small settings (view, filters, user options) to localStorage (sync, fast)
+    this._persistSettings();
+
+    // Save large results to IndexedDB (async, no size limit)
+    if (IndexedDBManager.isIndexedDBAvailable()) {
+      IndexedDBManager.saveToolState({ results: this.results }).catch((error) => {
+        console.error("Failed to save results to IndexedDB:", error);
+      });
+    }
+  }
+
+  /**
+   * Persists the small settings (view preferences and the user's unified options)
+   * to localStorage. Kept separate from results so option changes stay cheap.
+   */
+  _persistSettings() {
     try {
-      // Save small settings to localStorage (sync, fast)
       const settings = {
         currentView: this.currentView,
         statusFilter: this.statusFilter,
         sourceAType: this.unified.sourceA.type,
         sourceBType: this.unified.sourceB.type,
         sourceBUseQueryA: this.unified.sourceB.useSourceAQuery || false,
+        unifiedOptions: this._getUnifiedUserOptions(),
       };
       localStorage.setItem("compare-config.settings", JSON.stringify(settings));
+    } catch (error) {
+      console.error("Failed to save compare-config settings:", error);
+    }
+  }
 
-      // Save large results to IndexedDB (async, no size limit)
-      if (IndexedDBManager.isIndexedDBAvailable()) {
-        IndexedDBManager.saveToolState({ results: this.results }).catch((error) => {
-          console.error("Failed to save results to IndexedDB:", error);
-        });
+  /**
+   * Debounced settings save used for interactive option changes.
+   */
+  scheduleToolStateSave() {
+    clearTimeout(this._toolStateSaveTimer);
+    this._toolStateSaveTimer = setTimeout(() => {
+      this._toolStateSaveTimer = null;
+      this._persistSettings();
+    }, 300);
+  }
+
+  /**
+   * Captures the user's source and comparison options for persistence/restore.
+   * @returns {Object} Serialized options
+   */
+  _getUnifiedUserOptions() {
+    const snapshot = this._getUnifiedConfigSnapshot();
+    return {
+      sourceA: snapshot.sourceA,
+      sourceB: snapshot.sourceB,
+      useSourceAQuery: Boolean(this.unified.sourceB.useSourceAQuery),
+      options: { ...this.unified.options },
+    };
+  }
+
+  /**
+   * Restores the user's last source and comparison options over the fresh defaults.
+   * Runs after initUnifiedModeUI so the DOM and saved connections are ready.
+   */
+  async applyUnifiedUserOptions() {
+    const saved = this._savedUnifiedOptions;
+    if (!saved) return;
+
+    const opts = saved.options || {};
+    if (opts.rowMatching === "key" || opts.rowMatching === "position") this.unified.options.rowMatching = opts.rowMatching;
+    if (opts.dataComparison === "strict" || opts.dataComparison === "normalized") this.unified.options.dataComparison = opts.dataComparison;
+    this.unified.options.normalizeFields = Boolean(opts.normalizeFields);
+    this._syncUnifiedComparisonOptionInputs();
+
+    const tauri = isTauri();
+    for (const side of ["A", "B"]) {
+      await this._applyUnifiedSourceOptions(side, saved[side === "A" ? "sourceA" : "sourceB"], tauri);
+    }
+
+    this.applySourceBUseSourceAQuery(
+      Boolean(saved.useSourceAQuery) && this.unified.sourceB.type === "oracle" && this.unified.sourceB.queryMode === "sql",
+    );
+
+    this.updateUnifiedSourceConfigVisibility("A");
+    this.updateUnifiedSourceConfigVisibility("B");
+    this.updateUnifiedMaxRowsVisibility({ syncValue: true });
+    this.updateSourceBFollowModeUI();
+    this.updateUnifiedLoadButtonState();
+  }
+
+  /**
+   * Applies saved options for one source, then syncs the visible inputs.
+   * @param {'A'|'B'} side - Source side
+   * @param {Object} savedSource - Saved source options snapshot
+   * @param {boolean} tauri - Whether Oracle connections are available (desktop)
+   */
+  async _applyUnifiedSourceOptions(side, savedSource, tauri) {
+    if (!savedSource) return;
+    const sourceKey = side === "A" ? "sourceA" : "sourceB";
+    const config = this.unified[sourceKey];
+
+    let type = savedSource.type;
+    if (type === "oracle" && !tauri) type = "excel"; // Oracle is desktop-only
+    if (type === "oracle" || type === "excel") {
+      config.type = type;
+      const radio = document.getElementById(`source-${side.toLowerCase()}-type-${type}`);
+      if (radio) radio.checked = true;
+    }
+
+    if (config.type === "oracle") {
+      if (savedSource.queryMode === "table" || savedSource.queryMode === "sql") {
+        config.queryMode = savedSource.queryMode;
+      }
+      if (savedSource.connection) {
+        const connection = this.savedConnections.find((c) => c.name === savedSource.connection);
+        if (connection) config.connection = connection;
+      }
+      config.schema = savedSource.schema || null;
+      config.table = savedSource.table || null;
+      config.sql = savedSource.sql || "";
+      config.whereClause = savedSource.whereClause || "";
+      const maxRows = Number(savedSource.maxRows);
+      if (Number.isFinite(maxRows) && maxRows > 0) config.maxRows = Math.min(maxRows, 10000);
+
+      this._syncUnifiedSourceInputs(side);
+      // Repopulate schema/table dropdowns in the background (non-blocking)
+      this._hydrateUnifiedSourceDropdowns(side);
+    } else if (config.type === "excel" && savedSource.selectedExcelFileId) {
+      if (this._excelRestorePromise) await this._excelRestorePromise;
+      this.selectUnifiedExcelFile(sourceKey, savedSource.selectedExcelFileId);
+    }
+  }
+
+  /**
+   * Syncs the visible Oracle inputs (query mode, connection, schema, table, SQL, WHERE)
+   * with the restored state so the values survive a reload.
+   * @param {'A'|'B'} side - Source side
+   */
+  _syncUnifiedSourceInputs(side) {
+    const sourceKey = side === "A" ? "sourceA" : "sourceB";
+    const prefix = `source-${side.toLowerCase()}`;
+    const config = this.unified[sourceKey];
+    if (config.type !== "oracle") return;
+
+    const modeLabel = document.getElementById(`${prefix}-query-mode-label`);
+    if (modeLabel) modeLabel.textContent = config.queryMode === "table" ? "By Table" : "By Raw SQL";
+    const modeDropdown = document.getElementById(`${prefix}-query-mode-dropdown`);
+    if (modeDropdown) {
+      modeDropdown.querySelectorAll(".config-dropdown-option").forEach((opt) => {
+        opt.classList.toggle("active", opt.dataset.value === config.queryMode);
+      });
+    }
+
+    const connectionLabel = document.getElementById(`${prefix}-connection-label`);
+    if (connectionLabel) {
+      connectionLabel.textContent = config.connection?.name || "Select connection...";
+    }
+
+    const schemaInput = document.getElementById(`${prefix}-schema-search`);
+    if (schemaInput && config.connection) {
+      schemaInput.disabled = false;
+      schemaInput.value = config.schema || "";
+      if (!schemaInput.value) schemaInput.placeholder = "Search or select schema...";
+    }
+    const tableInput = document.getElementById(`${prefix}-table-search`);
+    if (tableInput && config.schema) {
+      tableInput.disabled = false;
+      tableInput.value = config.table || "";
+      if (!tableInput.value) tableInput.placeholder = "Search or select table...";
+    }
+
+    const whereInput = document.getElementById(`${prefix}-where`);
+    if (whereInput) whereInput.value = config.whereClause || "";
+    const sqlInput = document.getElementById(`${prefix}-sql`);
+    if (sqlInput) sqlInput.value = config.sql || "";
+    this.setSqlEditorValue(side, config.sql || "");
+  }
+
+  /**
+   * Fetches schemas/tables so the restored schema/table dropdowns are usable.
+   * Failures are non-fatal: the restored text values remain in place.
+   * @param {'A'|'B'} side - Source side
+   */
+  async _hydrateUnifiedSourceDropdowns(side) {
+    const sourceKey = side === "A" ? "sourceA" : "sourceB";
+    const config = this.unified[sourceKey];
+    if (!isTauri() || config.type !== "oracle" || !config.connection) return;
+
+    try {
+      const schemas = await CompareConfigService.fetchSchemasViaSidecar(config.connection.name, config.connection);
+      this.setupUnifiedSchemaDropdown(side, schemas);
+      if (config.schema) {
+        const tables = await CompareConfigService.fetchTablesViaSidecar(config.connection.name, config.connection, config.schema);
+        this.setupUnifiedTableDropdown(side, tables);
       }
     } catch (error) {
-      console.error("Failed to save tool state:", error);
+      console.warn("Failed to restore schema/table dropdowns:", error);
     }
+  }
+
+  /**
+   * Syncs the comparison-option inputs (match mode, comparison mode, field case)
+   * with the restored state.
+   */
+  _syncUnifiedComparisonOptionInputs() {
+    const { rowMatching, dataComparison, normalizeFields } = this.unified.options;
+    document.querySelectorAll('input[name="unified-row-matching"]').forEach((radio) => {
+      radio.checked = radio.value === rowMatching;
+    });
+    document.querySelectorAll('input[name="unified-data-comparison"]').forEach((radio) => {
+      radio.checked = radio.value === dataComparison;
+    });
+    const normalize = document.getElementById("unified-normalize-fields");
+    if (normalize) normalize.checked = normalizeFields;
+  }
+
+  /**
+   * Applies the "Use same query as Source A" toggle state to Source B's SQL input.
+   * @param {boolean} enabled
+   */
+  applySourceBUseSourceAQuery(enabled) {
+    const useSourceAQuery = Boolean(enabled);
+    this.unified.sourceB.useSourceAQuery = useSourceAQuery;
+
+    const checkbox = document.getElementById("source-b-use-sql-a");
+    if (checkbox) checkbox.checked = useSourceAQuery;
+    const sqlB = document.getElementById("source-b-sql");
+    if (useSourceAQuery) {
+      this.unified.sourceB.sql = this.unified.sourceA.sql;
+      if (sqlB) sqlB.value = this.unified.sourceA.sql;
+      this.setSqlEditorValue("B", this.unified.sourceA.sql);
+      if (sqlB) sqlB.disabled = true;
+      this.sqlEditors.get("B")?.updateOptions({ readOnly: true });
+    } else {
+      if (sqlB) sqlB.disabled = false;
+      this.sqlEditors.get("B")?.updateOptions({ readOnly: false });
+    }
+    this.updateUnifiedLoadButtonState();
   }
 
   /**
@@ -402,6 +618,8 @@ class CompareConfigTool extends BaseTool {
         if (settings.sourceAType) this.unified.sourceA.type = settings.sourceAType;
         if (settings.sourceBType) this.unified.sourceB.type = settings.sourceBType;
         if (settings.sourceBUseQueryA) this.unified.sourceB.useSourceAQuery = true;
+        // Defer full option restoration until the unified UI is initialized
+        this._savedUnifiedOptions = settings.unifiedOptions || null;
       }
 
       // Migrate from old localStorage format if present
@@ -892,10 +1110,6 @@ class CompareConfigTool extends BaseTool {
       editButton.style.display = this.unified.sourceA.dataLoaded && this.unified.sourceB.dataLoaded ? "" : "none";
     }
 
-    if (this.queryMode === "unified") {
-      this.updateUnifiedWorkflowStep(3);
-    }
-
     // Update title with comparison info (without "Comparison Results:" prefix)
     const titleEl = document.getElementById("results-title");
     if (titleEl) {
@@ -936,7 +1150,6 @@ class CompareConfigTool extends BaseTool {
     document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
     const resultsSection = document.getElementById("results-section");
     if (resultsSection) resultsSection.style.display = "none";
-    this.updateUnifiedWorkflowStep(this.unified.sourceA.dataLoaded && this.unified.sourceB.dataLoaded ? 2 : 1);
     document.getElementById("unified-compare-mode")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1412,6 +1625,8 @@ class CompareConfigTool extends BaseTool {
   }
 
   onUnmount() {
+    clearTimeout(this._toolStateSaveTimer);
+    this._toolStateSaveTimer = null;
     this.masterDetailView?.disposeTextDiff();
     this.gridView?.cleanupObserver();
     for (const editor of this.sqlEditors?.values() || []) editor.dispose();
@@ -1676,6 +1891,14 @@ class CompareConfigTool extends BaseTool {
    * Bind event listeners for the Unified Compare mode
    */
   bindUnifiedModeEvents() {
+    // Persist user options whenever the workflow inputs change
+    const unifiedRoot = document.getElementById("unified-compare-mode");
+    if (unifiedRoot) {
+      const persist = () => this.scheduleToolStateSave();
+      unifiedRoot.addEventListener("input", persist);
+      unifiedRoot.addEventListener("change", persist);
+    }
+
     // Source A type selection
     const sourceATypeRadios = document.querySelectorAll('input[name="source-a-type"]');
     sourceATypeRadios.forEach((radio) => {
@@ -1691,6 +1914,18 @@ class CompareConfigTool extends BaseTool {
         this.onUnifiedSourceTypeChange("B", e.target.value);
       });
     });
+
+    // Shared Max Rows (applies to both Oracle sources)
+    const unifiedMaxRowsInput = document.getElementById("unified-max-rows");
+    if (unifiedMaxRowsInput) {
+      unifiedMaxRowsInput.addEventListener("input", (e) => {
+        const value = parseInt(e.target.value, 10);
+        const maxRows = Number.isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
+        this.unified.sourceA.maxRows = maxRows;
+        this.unified.sourceB.maxRows = maxRows;
+        this.updateUnifiedLoadDataButtonVisibility();
+      });
+    }
 
     // Source A Oracle config
     this.bindUnifiedOracleConfigEvents("A");
@@ -1793,33 +2028,9 @@ class CompareConfigTool extends BaseTool {
       const useQueryACheckbox = document.getElementById("source-b-use-sql-a");
       if (useQueryACheckbox) {
         useQueryACheckbox.addEventListener("change", () => {
-          this.unified.sourceB.useSourceAQuery = useQueryACheckbox.checked;
-          const sqlB = document.getElementById("source-b-sql");
-          if (useQueryACheckbox.checked) {
-            // Copy Source A's SQL to Source B and disable editing
-            this.unified.sourceB.sql = this.unified.sourceA.sql;
-            if (sqlB) sqlB.value = this.unified.sourceA.sql;
-            this.setSqlEditorValue("B", this.unified.sourceA.sql);
-            if (sqlB) sqlB.disabled = true;
-            this.sqlEditors.get("B")?.updateOptions({ readOnly: true });
-          } else {
-            if (sqlB) sqlB.disabled = false;
-            this.sqlEditors.get("B")?.updateOptions({ readOnly: false });
-          }
-          this.updateUnifiedLoadButtonState();
+          this.applySourceBUseSourceAQuery(useQueryACheckbox.checked);
         });
       }
-    }
-
-    // Max rows
-    const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
-    if (maxRowsInput) {
-      maxRowsInput.addEventListener("input", (e) => {
-        const sourceKey = source === "A" ? "sourceA" : "sourceB";
-        const value = parseInt(e.target.value, 10);
-        this.unified[sourceKey].maxRows = isNaN(value) || value < 1 ? 100 : Math.min(value, 10000);
-        this.updateUnifiedLoadDataButtonVisibility();
-      });
     }
   }
 
@@ -2153,8 +2364,8 @@ class CompareConfigTool extends BaseTool {
       this.unified.sourceB.type = typeB;
     }
 
-    // Restore cached unified Excel files from IndexedDB
-    this.restoreCachedUnifiedExcelFiles();
+    // Restore cached unified Excel files from IndexedDB (tracked so option restore can await it)
+    this._excelRestorePromise = this.restoreCachedUnifiedExcelFiles();
 
     // Update Load Data button state
     this.updateUnifiedLoadButtonState();
@@ -2162,31 +2373,7 @@ class CompareConfigTool extends BaseTool {
     // Ensure status pills are initialized correctly
     this.updateUnifiedSourceConfigVisibility("A");
     this.updateUnifiedSourceConfigVisibility("B");
-    this.updateUnifiedWorkflowStep(this.unified.currentStep);
-  }
-
-  updateUnifiedWorkflowStep(step) {
-    const workflow = document.getElementById("unified-workflow-steps");
-    if (!workflow) return;
-
-    const currentStep = Math.max(1, Math.min(3, Number(step) || 1));
-    this.unified.currentStep = currentStep;
-
-    workflow.querySelectorAll("[data-workflow-step]").forEach((stepElement) => {
-      const stepNumber = Number(stepElement.dataset.workflowStep);
-      const label = stepElement.querySelector("span:last-child")?.textContent?.trim() || "Step";
-      const isCurrent = stepNumber === currentStep;
-      const isComplete = stepNumber < currentStep;
-
-      stepElement.classList.toggle("is-current", isCurrent);
-      stepElement.classList.toggle("is-complete", isComplete);
-      if (isCurrent) {
-        stepElement.setAttribute("aria-current", "step");
-      } else {
-        stepElement.removeAttribute("aria-current");
-      }
-      stepElement.setAttribute("aria-label", `${label}, ${isCurrent ? "current step" : isComplete ? "complete" : "upcoming"}`);
-    });
+    this.updateUnifiedMaxRowsVisibility({ syncValue: true });
   }
 
   /**
@@ -2549,13 +2736,11 @@ class CompareConfigTool extends BaseTool {
     // Always show Source B config fields based on current query mode
     const tableModeConfig = document.getElementById("source-b-table-config");
     const sqlModeConfig = document.getElementById("source-b-sql-config");
-    const maxRowsGroup = document.getElementById("source-b-max-rows")?.closest(".form-group");
     const queryModeGroup = document.getElementById("source-b-query-mode-wrapper")?.closest(".form-group");
 
     const queryMode = this.unified.sourceB.queryMode;
     if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
     if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "block" : "none";
-    if (maxRowsGroup) maxRowsGroup.style.display = "flex";
     if (queryModeGroup) queryModeGroup.style.display = "flex";
   }
 
@@ -2615,6 +2800,26 @@ class CompareConfigTool extends BaseTool {
         status.style.display = "none";
         status.textContent = "Not loaded"; // Reset text but keep hidden
       }
+    }
+
+    this.updateUnifiedMaxRowsVisibility();
+  }
+
+  /**
+   * Show the shared max rows control when at least one source is Oracle.
+   * The value applies to both Oracle sources.
+   * @param {{ syncValue?: boolean }} [options] - When true, refresh the input from state
+   */
+  updateUnifiedMaxRowsVisibility({ syncValue = false } = {}) {
+    const row = document.getElementById("unified-max-rows-row");
+    if (!row) return;
+
+    const usesOracle = this.unified.sourceA.type === "oracle" || this.unified.sourceB.type === "oracle";
+    row.style.display = usesOracle ? "" : "none";
+
+    if (syncValue) {
+      const input = document.getElementById("unified-max-rows");
+      if (input) input.value = String(this.unified.sourceA.maxRows);
     }
   }
 
@@ -2678,6 +2883,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -2859,6 +3065,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -2889,6 +3096,7 @@ class CompareConfigTool extends BaseTool {
       }
       if (tableDropdown) tableDropdown.innerHTML = "";
       this.updateUnifiedLoadButtonState();
+      this.scheduleToolStateSave();
       return;
     }
 
@@ -2913,6 +3121,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -3072,6 +3281,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -3180,6 +3390,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedExcelUI(sourceKey);
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -3214,6 +3425,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedExcelUI(sourceKey);
     this.updateUnifiedLoadButtonState();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   /**
@@ -3511,6 +3723,7 @@ class CompareConfigTool extends BaseTool {
     this.updateUnifiedLoadButtonState();
     this.updateUnifiedLoadDataButtonVisibility();
     this.hideUnifiedFieldReconciliation();
+    this.scheduleToolStateSave();
   }
 
   // Legacy function for backward compatibility
@@ -4040,8 +4253,6 @@ class CompareConfigTool extends BaseTool {
    * Show the field reconciliation UI
    */
   showUnifiedFieldReconciliation() {
-    this.updateUnifiedWorkflowStep(2);
-
     const section = document.getElementById("unified-field-reconciliation");
     const loadActions = document.getElementById("unified-load-actions");
     const configChangedBanner = document.getElementById("unified-config-changed-banner");
@@ -4079,7 +4290,6 @@ class CompareConfigTool extends BaseTool {
    */
   handleUnifiedNewComparison() {
     document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
-    this.updateUnifiedWorkflowStep(1);
 
     // 1. Always clear results
     this.masterDetailView.disposeTextDiff();
@@ -4128,6 +4338,7 @@ class CompareConfigTool extends BaseTool {
     // 7. Update button states
     this.updateUnifiedLoadButtonState();
     this.updateSourceBFollowModeUI();
+    this.updateUnifiedMaxRowsVisibility({ syncValue: true });
 
     // 8. Scroll to top and save state
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4158,7 +4369,6 @@ class CompareConfigTool extends BaseTool {
       const tableInput = document.getElementById(`${prefix}-table-search`);
       const tableDropdown = document.getElementById(`${prefix}-table-dropdown`);
       const whereInput = document.getElementById(`${prefix}-where`);
-      const maxRowsInput = document.getElementById(`${prefix}-max-rows`);
       const sqlInput = document.getElementById(`${prefix}-sql`);
 
       // Reset connection dropdown
@@ -4181,7 +4391,6 @@ class CompareConfigTool extends BaseTool {
       }
       if (tableDropdown) tableDropdown.innerHTML = "";
       if (whereInput) whereInput.value = "";
-      if (maxRowsInput) maxRowsInput.value = "100";
       if (sqlInput) sqlInput.value = "";
       this.setSqlEditorValue(source, "");
       if (source === "B") {
@@ -4551,7 +4760,6 @@ class CompareConfigTool extends BaseTool {
       // Store results
       this.results["unified"] = viewResult;
       this.queryMode = "unified"; // Set queryMode so showResults() finds the results
-      this.unified.currentStep = 3;
 
       await new Promise((r) => setTimeout(r, 400));
       this.hideCompareProgress();

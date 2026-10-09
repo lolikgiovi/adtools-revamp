@@ -129,21 +129,6 @@ export function createSourceBConfigFromSourceA(sourceAConfig, sourceBConnection)
 }
 
 /**
- * Determines which Source B fields should be disabled/hidden in Oracle vs Oracle mode
- * @returns {string[]} List of field IDs that should be disabled
- */
-export function getSourceBDisabledFieldsForFollowMode() {
-  return [
-    'source-b-query-mode-wrapper',
-    'source-b-schema-search',
-    'source-b-table-search',
-    'source-b-where',
-    'source-b-max-rows',
-    'source-b-sql',
-  ];
-}
-
-/**
  * Checks if the new comparison fields are valid after PK selection change
  * @param {string[]} selectedPkFields - Currently selected primary key fields
  * @param {string[]} selectedCompareFields - Currently selected comparison fields
