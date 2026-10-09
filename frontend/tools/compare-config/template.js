@@ -687,6 +687,7 @@ export const CompareConfigTemplate = /* html */ `
         <div id="results-section" class="results-section" style="display: none;">
             <div class="results-title-row">
                 <h3 id="results-title">Comparison Results</h3>
+                <button class="btn btn-secondary btn-sm" id="btn-edit-comparison" type="button">Edit comparison</button>
                 <!-- Comparison Context (Excel Compare only) -->
                 <div id="comparison-context" class="comparison-context" style="display: none;">
                     <span class="context-label">Comparing:</span>
@@ -720,6 +721,8 @@ export const CompareConfigTemplate = /* html */ `
                         <input type="search" id="results-search-input" class="results-search-input" aria-label="Search compared records" placeholder="Search results…" />
                         <button type="button" id="results-search-clear" class="results-search-clear" aria-label="Clear search" title="Clear search" style="display: none;">×</button>
                     </div>
+                    <button class="btn btn-secondary btn-sm" id="btn-grid-fields" type="button" aria-pressed="true"
+                            title="Show fields with changed values across these results">Changed fields</button>
                     <div class="view-dropdown" id="view-dropdown">
                         <button class="btn btn-secondary btn-sm" id="btn-view">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">

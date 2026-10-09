@@ -667,6 +667,11 @@ class CompareConfigTool extends BaseTool {
     // the main binding lifecycle so source selectors, dropdowns, and actions
     // are interactive after the tool mounts.
     this.bindUnifiedModeEvents();
+    document.getElementById("btn-edit-comparison")?.addEventListener("click", () => this.editUnifiedComparison());
+    document.getElementById("btn-grid-fields")?.addEventListener("click", () => {
+      this.gridView.showAllFields = !this.gridView.showAllFields;
+      this.renderResults();
+    });
   }
 
   // Phase 6.4: switchTab() and onRawConnectionSelected() removed - unified mode only
@@ -882,6 +887,10 @@ class CompareConfigTool extends BaseTool {
   showResults() {
     const resultsSection = document.getElementById("results-section");
     if (!resultsSection) return;
+    const editButton = document.getElementById("btn-edit-comparison");
+    if (editButton) {
+      editButton.style.display = this.unified.sourceA.dataLoaded && this.unified.sourceB.dataLoaded ? "" : "none";
+    }
 
     if (this.queryMode === "unified") {
       this.updateUnifiedWorkflowStep(3);
@@ -915,11 +924,20 @@ class CompareConfigTool extends BaseTool {
     this.resetRowQueryPanel();
 
     // Show results section
+    document.getElementById("tab-content-compare")?.classList.add("is-reviewing");
     resultsSection.style.display = "flex";
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: "smooth" });
     this.saveToolState();
+  }
+
+  editUnifiedComparison() {
+    document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
+    const resultsSection = document.getElementById("results-section");
+    if (resultsSection) resultsSection.style.display = "none";
+    this.updateUnifiedWorkflowStep(this.unified.sourceA.dataLoaded && this.unified.sourceB.dataLoaded ? 2 : 1);
+    document.getElementById("unified-compare-mode")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   resetRowQueryPanel() {
@@ -1038,6 +1056,15 @@ class CompareConfigTool extends BaseTool {
     const resultsContent = document.getElementById("results-content");
     if (!resultsContent || !this.results[this.queryMode]) return;
     document.getElementById("results-section")?.classList.toggle("detail-results", this.currentView === "master-detail");
+    const fieldToggle = document.getElementById("btn-grid-fields");
+    if (fieldToggle) {
+      fieldToggle.style.display = this.currentView === "grid" ? "" : "none";
+      fieldToggle.textContent = this.gridView.showAllFields ? "All fields" : "Changed fields";
+      fieldToggle.setAttribute("aria-pressed", String(!this.gridView.showAllFields));
+      fieldToggle.title = this.gridView.showAllFields
+        ? "Show only fields with changed values across these results"
+        : "Show all selected comparison fields";
+    }
 
     const { env1_name, env2_name, _metadata } = this.results[this.queryMode];
     const comparisons = this.getFilteredComparisons();
@@ -2527,7 +2554,7 @@ class CompareConfigTool extends BaseTool {
 
     const queryMode = this.unified.sourceB.queryMode;
     if (tableModeConfig) tableModeConfig.style.display = queryMode === "table" ? "flex" : "none";
-    if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "flex" : "none";
+    if (sqlModeConfig) sqlModeConfig.style.display = queryMode === "sql" ? "block" : "none";
     if (maxRowsGroup) maxRowsGroup.style.display = "flex";
     if (queryModeGroup) queryModeGroup.style.display = "flex";
   }
@@ -3545,6 +3572,7 @@ class CompareConfigTool extends BaseTool {
    * Load data from both sources
    */
   async loadUnifiedData() {
+    document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
     this.invalidateUnifiedLoadRequests();
     const requestId = this._unifiedLoadRequestId;
     if (!this.canLoadUnifiedData()) {
@@ -4050,6 +4078,7 @@ class CompareConfigTool extends BaseTool {
    * - Oracle sources: reset all config
    */
   handleUnifiedNewComparison() {
+    document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
     this.updateUnifiedWorkflowStep(1);
 
     // 1. Always clear results

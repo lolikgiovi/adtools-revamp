@@ -29,6 +29,7 @@ export class GridView {
 
     // Search/filter state
     this.searchQuery = ""; // Lowercase search query for highlighting
+    this.showAllFields = false;
     this.onInspect = null;
     this.columnFilters = {};
     this.activeFilterColumn = null;
@@ -104,6 +105,10 @@ export class GridView {
     // Filter out primary key fields from fieldsToDisplay - they're already shown in the PK column
     if (pkFieldsSet.size > 0) {
       fieldsToDisplay = fieldsToDisplay.filter((f) => !pkFieldsSet.has(f.toLowerCase()));
+    }
+    if (!this.showAllFields && fieldsWithDiffs.size > 0) {
+      const changedFields = fieldsToDisplay.filter((field) => fieldsWithDiffs.has(field));
+      if (changedFields.length > 0) fieldsToDisplay = changedFields;
     }
 
     // Cache for lazy loading (after PK filtering)

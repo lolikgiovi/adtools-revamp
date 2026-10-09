@@ -14,6 +14,7 @@ export class MasterDetailView {
   constructor() {
     this.selectedIndex = 0;
     this.detailMode = "fields";
+    this.showUnchangedFields = false;
     this.comparisons = [];
     this.env1Name = "";
     this.env2Name = "";
@@ -128,19 +129,27 @@ export class MasterDetailView {
     return `
       <div class="detail-content">
         ${this.renderDetailHeader(comparison)}
-        ${comparison.status !== "match" ? this.renderDetailModeSwitch() : ""}
+        ${comparison.status !== "match" ? this.renderDetailModeSwitch(comparison) : ""}
         ${this.renderDetailBody(comparison)}
       </div>
     `;
   }
 
-  renderDetailModeSwitch() {
+  renderDetailModeSwitch(comparison) {
     const fieldsActive = this.detailMode === "fields";
     const textDiffActive = this.detailMode === "text-diff";
+    const comparedFields = this.compareFields?.length
+      ? this.compareFields
+      : [...new Set([...Object.keys(comparison.env1_data || {}), ...Object.keys(comparison.env2_data || {})])];
+    const changedCount = comparedFields.filter((field) => comparison.differences?.includes(field)).length;
+    const hasUnchangedFields = comparison.status === "differ" && changedCount < comparedFields.length;
     return `<div class="detail-mode-switch" role="group" aria-label="Record detail display">
       <button type="button" data-detail-mode="fields" aria-pressed="${fieldsActive}" class="${fieldsActive ? "active" : ""}">Fields</button>
       <button type="button" data-detail-mode="text-diff" aria-pressed="${textDiffActive}"
         class="${textDiffActive ? "active" : ""}">Text diff</button>
+      ${fieldsActive && comparison.status === "differ" ? `<span class="changed-fields-count">${changedCount} changed ${changedCount === 1 ? "field" : "fields"}</span>` : ""}
+      ${fieldsActive && hasUnchangedFields ? `<button type="button" class="detail-fields-toggle" aria-pressed="${this.showUnchangedFields}">
+        ${this.showUnchangedFields ? "Show changed only" : "Show all fields"}</button>` : ""}
     </div>`;
   }
 
@@ -233,6 +242,7 @@ export class MasterDetailView {
     } else {
       allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
     }
+    allFields = allFields.filter((field) => this.showUnchangedFields || diffFields.has(field));
 
     return `
       <div class="detail-body">
@@ -528,6 +538,11 @@ export class MasterDetailView {
    * Attaches event listeners (called after render)
    */
   attachEventListeners(container) {
+    container.querySelector(".detail-fields-toggle")?.addEventListener("click", () => {
+      this.showUnchangedFields = !this.showUnchangedFields;
+      this.selectItem(this.selectedIndex, container);
+      container.querySelector(".detail-fields-toggle")?.focus();
+    });
     container.querySelector("#detail-diff-field")?.addEventListener("change", (event) => {
       this.selectedDiffField = event.target.value;
       this.selectItem(this.selectedIndex, container);

@@ -745,6 +745,19 @@
   flex-shrink: 0;
 }
 
+.results-title-row #btn-edit-comparison {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+#tab-content-compare.is-reviewing #unified-compare-mode {
+  display: none;
+}
+
+#tab-content-compare.is-reviewing .results-section {
+  margin-top: 0;
+}
+
 .results-title-row h3 {
   margin: 0;
   color: hsl(var(--foreground));
@@ -1205,13 +1218,14 @@
 }
 
 .results-section.detail-results {
-  max-height: none;
-  overflow: visible;
+  height: calc(100vh - 145px);
+  max-height: calc(100vh - 145px);
+  overflow: hidden;
 }
 
 .results-section.detail-results .results-content {
-  flex: none;
-  overflow: visible;
+  flex: 1;
+  overflow: hidden;
   padding-right: 0;
 }
 
@@ -1698,8 +1712,12 @@
 .master-detail-view {
   display: grid;
   grid-template-columns: 300px 1fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .master-pane {
@@ -1709,7 +1727,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: min(70vh, 800px);
+  height: 100%;
+  min-height: 0;
 }
 
 .master-list {
@@ -1770,14 +1789,18 @@
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  height: 100%;
 }
 
 .detail-content {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .detail-header {
@@ -1815,14 +1838,27 @@
 
 .detail-body {
   padding: 1rem;
-  overflow: visible;
+  overflow: auto;
+  min-height: 0;
 }
 
 .detail-mode-switch {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.2rem;
   padding: 0.5rem 1rem;
   border-bottom: 1px solid hsl(var(--border));
+}
+
+.changed-fields-count {
+  margin-left: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.detail-mode-switch .detail-fields-toggle {
+  color: hsl(var(--primary));
 }
 
 .detail-mode-switch button {
@@ -2564,10 +2600,11 @@
 @media (max-width: 1100px) {
   .master-detail-view {
     grid-template-columns: 1fr;
+    grid-template-rows: 11rem minmax(0, 1fr);
   }
 
   .master-pane {
-    max-height: 200px;
+    max-height: none;
   }
 }
 
@@ -3884,8 +3921,16 @@
 }
 
 /* SQL query editor */
+.sql-mode-config,
+.sql-mode-config .form-group {
+  width: 100%;
+  min-width: 0;
+}
+
 .compare-sql-editor {
   display: none;
+  width: 100%;
+  min-width: 0;
   height: 150px;
   overflow: hidden;
   border: 1px solid hsl(var(--border));
