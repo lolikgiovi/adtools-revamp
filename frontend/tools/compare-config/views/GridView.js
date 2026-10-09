@@ -9,7 +9,25 @@
  * - Smart Filtering: Hides columns that are identical across all records.
  * - Character-level diff: When _diffDetails available, shows character-level changes.
  * - Lazy Loading: Renders rows in batches for better performance with large datasets.
+ * - Adaptive Columns: Column widths are measured after mount (content + header labels) and stretched to the
+ *   available width, so nothing is clipped or wrapped while dead space stays empty.
  */
+
+/** Column sizing rules, in px unless noted. Values are the single source of truth for both JS and CSS vars. */
+const COLUMN_LAYOUT = {
+  index: 50,
+  source: 150,
+  status: 130,
+  minValue: 200,
+  maxValue: 720,
+  minKey: 160,
+  maxKey: 320,
+  minKeyFloor: 140,
+  stickyBudget: 0.6, // Share of the viewport the frozen columns may occupy
+  sampleRows: 60,
+  shrinkPasses: 3,
+};
+
 export class GridView {
   constructor() {
     // Lazy loading configuration
@@ -34,6 +52,11 @@ export class GridView {
     this.columnFilters = {};
     this.activeFilterColumn = null;
     this.onColumnFilterChange = null;
+
+    // Adaptive column layout state
+    this.layoutObserver = null;
+    this.layoutSignature = null;
+    this.canvasContext = undefined;
   }
 
   /**
@@ -135,6 +158,15 @@ export class GridView {
       <div class="excel-table-container">
         <div class="table-scroll-area">
           <table class="excel-table">
+            <colgroup>
+              <col data-col="index" style="width: ${COLUMN_LAYOUT.index}px">
+              ${hasSourceFile ? `<col data-col="source" style="width: ${COLUMN_LAYOUT.source}px">` : ""}
+              ${pkFields.map((_, index) => `<col data-col="key" style="width: ${index === 0 ? 190 : 130}px">`).join("")}
+              ${showStatus ? `<col data-col="status" style="width: ${COLUMN_LAYOUT.status}px">` : ""}
+              ${fieldsToDisplay
+                .map(() => '<col data-col="value" style="width: 250px"><col data-col="value" style="width: 250px">')
+                .join("")}
+            </colgroup>
             <thead>
               <tr class="h-row-1">
                 <th rowspan="2" class="sticky-col index-header">#</th>
@@ -142,6 +174,7 @@ export class GridView {
                 ${pkFields.map((field, index) => `
                   <th rowspan="2" class="sticky-col pk-header ${index === 0 ? "sortable" : ""}"
                     ${index === 0 ? `id="pk-sort-header" title="Click to sort by ${this.escapeHtml(pkHeaderName)}"` : ""}
+                    data-key-index="${index}"
                     style="${this.getStickyOffsets(index, hasSourceFile)}">
                     <span class="pk-header-content">${this.renderFilterHeader(field, `key:${field}`)}
                       ${index === 0 ? `<span class="sort-indicator">${this.getSortIndicator()}</span>` : ""}
@@ -228,6 +261,9 @@ export class GridView {
   attachEventListeners(container) {
     // Clean up any existing observer
     this.cleanupObserver();
+
+    this.applyColumnLayout(container);
+    this.observeColumnLayout(container);
 
     container.querySelectorAll(".grid-filter-toggle").forEach((button) => {
       button.addEventListener("click", (event) => {
@@ -356,6 +392,324 @@ export class GridView {
       clearTimeout(this.fallbackLoadTimer);
       this.fallbackLoadTimer = null;
     }
+    this.cleanupColumnLayout();
+  }
+
+  /**
+   * Detaches the adaptive column layout observer. The rendered widths stay in place.
+   */
+  cleanupColumnLayout() {
+    this.layoutObserver?.disconnect();
+    this.layoutObserver = null;
+    this.layoutSignature = null;
+  }
+
+  /**
+   * Re-runs the adaptive column layout whenever the results area is resized.
+   */
+  observeColumnLayout(container) {
+    if (typeof ResizeObserver === "undefined") return;
+    const area = container.querySelector(".table-scroll-area");
+    if (!area) return;
+    this.layoutObserver = new ResizeObserver(() => this.applyColumnLayout(container));
+    this.layoutObserver.observe(area);
+  }
+
+  /**
+   * Sizes the grid columns against the space the results area actually has.
+   *
+   * Widths come from the widest sampled value, the widest header label (never clipped), and a floor that
+   * stretches narrow columns so the table fills the viewport instead of leaving dead space. Content that
+   * still does not fit keeps its natural width and scrolls horizontally.
+   */
+  applyColumnLayout(container) {
+    if (!container) return;
+    const table = container.querySelector(".excel-table");
+    const area = container.querySelector(".table-scroll-area");
+    const columns = table ? [...table.querySelectorAll("colgroup > col")] : [];
+    if (!area || !columns.length) return;
+    if (!area.clientWidth) return; // Hidden container or a non-layout environment such as jsdom
+
+    // Content and header measurements do not depend on the available width, so sample them once.
+    const needs = this.measureContentNeeds(table, columns);
+    const headerNeeds = this.measureHeaderNeeds(container, columns.map((column) => column.dataset.col));
+
+    // Re-read the available width after each pass: the table growing past the viewport adds a scrollbar,
+    // which narrows the content box again.
+    for (let pass = 0; pass <= COLUMN_LAYOUT.shrinkPasses; pass += 1) {
+      const available = area.clientWidth;
+      if (!available) return; // Hidden container or a non-layout environment such as jsdom
+
+      const plan = this.planColumns(columns, needs, headerNeeds, available);
+      const signature = `${available}|${plan.widths.join(",")}`;
+      if (signature === this.layoutSignature) return;
+      this.layoutSignature = signature;
+      this.writeColumnPlan(container, columns, plan);
+
+      if (table.scrollWidth <= area.clientWidth) return; // Fits as planned
+    }
+  }
+
+  /**
+   * Computes the width of every column for the given available width.
+   */
+  planColumns(columns, needs, headerNeeds, available) {
+    const roles = columns.map((column) => column.dataset.col);
+    const widths = new Array(columns.length).fill(0);
+
+    roles.forEach((role, index) => {
+      if (role === "index") widths[index] = COLUMN_LAYOUT.index;
+      else if (role === "source") widths[index] = COLUMN_LAYOUT.source;
+      else if (role === "status") widths[index] = COLUMN_LAYOUT.status;
+    });
+
+    // Frozen columns: fit the widest key and its header, but keep them from eating the viewport.
+    const keyIndexes = roles.map((role, index) => (role === "key" ? index : -1)).filter((index) => index >= 0);
+    const sourceWidth = roles.includes("source") ? COLUMN_LAYOUT.source : 0;
+    // Header labels never wrap, so their min-content is a hard floor: below it the browser widens the
+    // column anyway and the sticky offsets would drift out of sync.
+    const keyFloors = keyIndexes.map((index) => Math.ceil(Math.max(COLUMN_LAYOUT.minKeyFloor, headerNeeds[index])));
+    let keyWidths = keyIndexes.map((index, position) =>
+      Math.ceil(Math.max(keyFloors[position], COLUMN_LAYOUT.minKey, Math.min(needs[index], COLUMN_LAYOUT.maxKey))),
+    );
+    const stickyBudget = Math.max(320, available * COLUMN_LAYOUT.stickyBudget);
+    const statusWidth = roles.includes("status") ? COLUMN_LAYOUT.status : 0;
+    const frozenWidth = () => COLUMN_LAYOUT.index + sourceWidth + keyWidths.reduce((sum, width) => sum + width, 0) + statusWidth;
+    if (frozenWidth() > stickyBudget && keyWidths.length) {
+      const keyTotal = keyWidths.reduce((sum, width) => sum + width, 0);
+      const share = Math.max(0, stickyBudget - COLUMN_LAYOUT.index - sourceWidth - statusWidth) / keyTotal;
+      keyWidths = keyWidths.map((width, position) => Math.max(keyFloors[position], Math.round(width * share)));
+    }
+    keyIndexes.forEach((index, position) => {
+      widths[index] = keyWidths[position];
+    });
+
+    const frozenTotal = frozenWidth();
+
+    // Value columns: one shared width per environment pair so the two sides stay aligned.
+    const valueIndexes = roles.map((role, index) => (role === "value" ? index : -1)).filter((index) => index >= 0);
+    if (valueIndexes.length) {
+      const fillTarget = Math.floor(
+        this.clamp((available - frozenTotal) / valueIndexes.length, COLUMN_LAYOUT.minValue, COLUMN_LAYOUT.maxValue),
+      );
+      valueIndexes.forEach((index) => {
+        const wanted = Math.max(needs[index], headerNeeds[index]);
+        // Round up: a column a fraction of a pixel narrower than its text wraps a whole character.
+        widths[index] = Math.ceil(Math.min(COLUMN_LAYOUT.maxValue, Math.max(wanted, fillTarget)));
+      });
+      for (let position = 0; position + 1 < valueIndexes.length; position += 2) {
+        const pairWidth = Math.max(widths[valueIndexes[position]], widths[valueIndexes[position + 1]]);
+        widths[valueIndexes[position]] = pairWidth;
+        widths[valueIndexes[position + 1]] = pairWidth;
+      }
+      this.balanceValueWidths(widths, valueIndexes, fillTarget, available);
+    }
+
+    return { widths, keyWidths, sourceWidth };
+  }
+
+  /**
+   * Spends or trims the last pixels on the pairs that are still at their fill width, so the table lines up
+   * with the viewport instead of leaving a gap or a stray scrollbar. Pairs move in 2px steps to keep both
+   * environments the same width; content-wider columns are left alone.
+   */
+  balanceValueWidths(widths, valueIndexes, fillTarget, available) {
+    const pairs = [];
+    for (let position = 0; position + 1 < valueIndexes.length; position += 2) {
+      const [first, second] = [valueIndexes[position], valueIndexes[position + 1]];
+      if (widths[first] === fillTarget && widths[second] === fillTarget) pairs.push([first, second]);
+    }
+    if (!pairs.length) return;
+
+    const total = widths.reduce((sum, width) => sum + width, 0);
+    let slack = Math.floor(available - total);
+    const step = slack < 0 ? -2 : 2;
+
+    let moving = true;
+    while (Math.abs(slack) >= 2 && moving) {
+      moving = false;
+      for (const [first, second] of pairs) {
+        if (Math.abs(slack) < 2) break;
+        const next = widths[first] + step;
+        if (next < COLUMN_LAYOUT.minValue || next > COLUMN_LAYOUT.maxValue) continue;
+        widths[first] = next;
+        widths[second] = next;
+        slack -= step * 2;
+        moving = true;
+      }
+    }
+  }
+
+  /**
+   * Writes planned widths onto the colgroup and re-derives the sticky left offsets per key column.
+   */
+  writeColumnPlan(container, columns, plan) {
+    columns.forEach((column, index) => {
+      column.style.width = `${plan.widths[index]}px`;
+    });
+
+    const offsets = [];
+    let left = COLUMN_LAYOUT.index + plan.sourceWidth;
+    plan.keyWidths.forEach((width) => {
+      offsets.push(left);
+      left += width;
+    });
+    const statusLeft = left;
+
+    container.querySelectorAll(".pk-cell, .pk-header").forEach((cell) => {
+      const position = Number(cell.dataset.keyIndex || 0);
+      cell.style.setProperty("--sticky-left", `${offsets[position] ?? statusLeft}px`);
+    });
+    container.querySelectorAll(".status-cell, .status-header").forEach((cell) => {
+      cell.style.setProperty("--sticky-left", `${statusLeft}px`);
+    });
+  }
+
+  /**
+   * Widest rendered text per column, in px, sampled across the loaded rows.
+   */
+  measureContentNeeds(table, columns) {
+    const roles = columns.map((column) => column.dataset.col);
+    const needs = new Array(columns.length).fill(0);
+    const metrics = new Array(columns.length).fill(null);
+
+    this.sampleRows(table).forEach((row) => {
+      roles.forEach((role, index) => {
+        if (role !== "key" && role !== "value") return;
+        const cell = row.children[index];
+        const text = cell?.textContent.trim();
+        if (!text) return;
+        metrics[index] ||= this.cellTextMetrics(cell);
+        const width = this.measureTextWidth(text, metrics[index]) + metrics[index].padX;
+        if (width > needs[index]) needs[index] = width;
+      });
+    });
+
+    return needs;
+  }
+
+  /**
+   * Minimum width each column needs so its header label and filter control stay readable.
+   */
+  measureHeaderNeeds(container, roles) {
+    const needs = new Array(roles.length).fill(0);
+    const keyIndexes = roles.map((role, index) => (role === "key" ? index : -1)).filter((index) => index >= 0);
+    const valueIndexes = roles.map((role, index) => (role === "value" ? index : -1)).filter((index) => index >= 0);
+
+    container.querySelectorAll(".h-row-1 .pk-header").forEach((header, position) => {
+      const index = keyIndexes[position];
+      if (index === undefined) return;
+      needs[index] = Math.max(needs[index], this.measureHeaderNeed(header));
+    });
+
+    // A field header spans its environment pair, so each of the two columns carries half of it.
+    container.querySelectorAll(".h-row-1 .field-header-main").forEach((header, position) => {
+      if (valueIndexes[position * 2] === undefined) return;
+      const half = this.measureHeaderNeed(header) / 2;
+      needs[valueIndexes[position * 2]] = Math.max(needs[valueIndexes[position * 2]], half);
+      if (valueIndexes[position * 2 + 1] !== undefined) {
+        needs[valueIndexes[position * 2 + 1]] = Math.max(needs[valueIndexes[position * 2 + 1]], half);
+      }
+    });
+
+    container.querySelectorAll(".h-row-2 .env-header-sub").forEach((header, position) => {
+      if (valueIndexes[position] === undefined) return;
+      needs[valueIndexes[position]] = Math.max(needs[valueIndexes[position]], this.measureLabelNeed(header));
+    });
+
+    return needs;
+  }
+
+  /**
+   * Width a filtered header needs: its label, the controls and gaps beside it, and the cell padding.
+   */
+  measureHeaderNeed(header) {
+    const label = header.querySelector(".grid-filter-heading > span") || header.querySelector(".h-label-clip") || header;
+    const metrics = this.cellTextMetrics(header);
+    return this.measureTextWidth(this.labelText(header, label.textContent), metrics) + this.headerChromeWidth(header, label) + metrics.padX;
+  }
+
+  /** Width a plain header label needs, including the cell padding. */
+  measureLabelNeed(header) {
+    const label = header.querySelector(".h-label-clip") || header;
+    const metrics = this.cellTextMetrics(header);
+    return this.measureTextWidth(this.labelText(header, label.textContent), metrics) + this.headerChromeWidth(header, label) + metrics.padX;
+  }
+
+  /**
+   * Space the decorations around a header label take: filter toggles, sort indicators and the flex gaps
+   * that separate them. Read from the live header so the estimate matches what the browser will lay out.
+   */
+  headerChromeWidth(header, label) {
+    let width = 0;
+    let node = label;
+    while (node && node !== header) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      const style = getComputedStyle(parent);
+      if (style.display.includes("flex")) {
+        const gap = Number.parseFloat(style.columnGap) || 0;
+        [...parent.children].forEach((sibling) => {
+          if (sibling === node || sibling.classList.contains("grid-filter-control")) return;
+          width += gap + sibling.getBoundingClientRect().width;
+        });
+      }
+      node = parent;
+    }
+    return width;
+  }
+
+  /** Header labels are measured as rendered: uppercase transforms widen the text. */
+  labelText(element, text) {
+    const trimmed = text.trim();
+    return getComputedStyle(element).textTransform === "uppercase" ? trimmed.toUpperCase() : trimmed;
+  }
+
+  /** Rows sampled for measurement: spread across the loaded batch so wide values are not missed. */
+  sampleRows(table) {
+    const rows = table ? [...table.querySelectorAll("tbody tr.data-row")] : [];
+    const stride = Math.max(1, Math.ceil(rows.length / COLUMN_LAYOUT.sampleRows));
+    return rows.filter((_, index) => index % stride === 0).slice(0, COLUMN_LAYOUT.sampleRows);
+  }
+
+  cellTextMetrics(element) {
+    const style = getComputedStyle(element);
+    const padX =
+      Number.parseFloat(style.paddingLeft || 0) +
+      Number.parseFloat(style.paddingRight || 0) +
+      Number.parseFloat(style.borderLeftWidth || 0) +
+      Number.parseFloat(style.borderRightWidth || 0);
+    return {
+      font: `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+      fontSize: Number.parseFloat(style.fontSize) || 12,
+      letterSpacing: Number.parseFloat(style.letterSpacing) || 0,
+      padX,
+    };
+  }
+
+  measureTextWidth(text, metrics) {
+    if (!text) return 0;
+    const context = this.measureContext();
+    const spacing = text.length * metrics.letterSpacing;
+    if (!context) return text.length * metrics.fontSize * 0.6 + spacing; // No canvas (jsdom): rough estimate
+    context.font = metrics.font;
+    return context.measureText(text).width + spacing;
+  }
+
+  measureContext() {
+    if (this.canvasContext === undefined) {
+      try {
+        this.canvasContext = document.createElement("canvas").getContext("2d");
+      } catch {
+        this.canvasContext = null;
+      }
+    }
+    return this.canvasContext;
+  }
+
+  clamp(value, min, max) {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(max, Math.max(min, value));
   }
 
   scheduleFallbackLoad(container) {
@@ -393,7 +747,7 @@ export class GridView {
           const value = comparison.key?.[field];
           const display = this.formatValue(value);
           const valueHtml = this.searchQuery ? this.highlightSearchMatch(display) : this.escapeHtml(display);
-          return `<td class="sticky-col pk-cell" data-index="${rowIndex - 1}" title="${this.escapeHtml(display)}"
+          return `<td class="sticky-col pk-cell" data-index="${rowIndex - 1}" data-key-index="${index}" title="${this.escapeHtml(display)}"
             style="${this.getStickyOffsets(index, hasSourceFile)}">
             <button type="button" class="grid-inspect-button"
               aria-label="Inspect ${this.escapeHtml(field)}: ${this.escapeHtml(display)}">${valueHtml}</button>
@@ -425,19 +779,14 @@ export class GridView {
     `;
   }
 
+  /**
+   * Initial sticky offsets, matching the default <colgroup> widths emitted by render().
+   * applyColumnLayout() rewrites these once the real widths are known.
+   */
   getStickyOffsets(keyIndex, hasSourceFile) {
-    const sourceWide = hasSourceFile ? 150 : 0;
-    const sourceCompact = hasSourceFile ? 130 : 0;
-    const keyOffsetWide = keyIndex === 0 ? 0 : 190 + (keyIndex - 1) * 130;
-    const keyOffsetCompact = keyIndex === 0 ? 0 : 170 + (keyIndex - 1) * 110;
-    const keyWidthWide = keyIndex === 0 ? 190 : 130;
-    const keyWidthCompact = keyIndex === 0 ? 170 : 110;
-    return [
-      `--sticky-left: ${50 + sourceWide + keyOffsetWide}px`,
-      `--sticky-left-compact: ${40 + sourceCompact + keyOffsetCompact}px`,
-      `--pk-width: ${keyWidthWide}px`,
-      `--pk-width-compact: ${keyWidthCompact}px`,
-    ].join("; ");
+    const sourceWidth = hasSourceFile ? COLUMN_LAYOUT.source : 0;
+    const keyOffset = keyIndex === 0 ? 0 : 190 + (keyIndex - 1) * 130;
+    return `--sticky-left: ${COLUMN_LAYOUT.index + sourceWidth + keyOffset}px`;
   }
 
   /**

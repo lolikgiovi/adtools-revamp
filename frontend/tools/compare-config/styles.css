@@ -12,6 +12,10 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
+  /* Vertical space the app shell takes around the tool content: the fixed .main-header
+     (57px) + .main-content padding (1rem top, 1rem bottom) + this tool's
+     .main-interface padding-bottom (1rem). Keeps the results card flush with the viewport. */
+  --results-viewport-chrome: 105px;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
@@ -734,7 +738,7 @@
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 145px);
+  max-height: calc(100vh - var(--results-viewport-chrome));
   gap: 0.75rem;
   overflow: hidden; /* Prevent section itself from scrolling */
 }
@@ -756,8 +760,12 @@
   display: none;
 }
 
+/* Review mode shows the results card alone, so it owns the remaining viewport height
+   instead of hugging its content. */
 #tab-content-compare.is-reviewing .results-section {
   margin-top: 0;
+  height: calc(100vh - var(--results-viewport-chrome));
+  max-height: calc(100vh - var(--results-viewport-chrome));
 }
 
 .results-title-row h3 {
@@ -1219,9 +1227,25 @@
   padding-right: 0.25rem;
 }
 
+/* Grid view: the table absorbs the card's free space so the card fills the viewport and
+   only the rows scroll. Without this the table re-capped its own height, leaving the
+   card short of the bottom and clipping the last rows behind a second scrollbar. */
+.results-section:not(.detail-results) .results-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.results-section:not(.detail-results) .excel-table-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .results-section.detail-results {
-  height: calc(100vh - 145px);
-  max-height: calc(100vh - 145px);
+  height: calc(100vh - var(--results-viewport-chrome));
+  max-height: calc(100vh - var(--results-viewport-chrome));
   overflow: hidden;
 }
 
@@ -2005,7 +2029,10 @@
 .table-scroll-area {
   overflow: auto;
   max-width: 100%;
-  max-height: calc(100vh - 260px);
+  /* Sized by the flex chain in the results card; the viewport cap is a fallback only. */
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: calc(100vh - var(--results-viewport-chrome));
   scrollbar-width: thin;
 }
 
@@ -2113,9 +2140,7 @@
 .excel-table .pk-header,
 .excel-table .pk-cell {
   left: var(--sticky-left);
-  width: var(--pk-width);
-  min-width: var(--pk-width);
-  max-width: var(--pk-width);
+  overflow: hidden;
 }
 
 .excel-table .source-header,
@@ -2233,8 +2258,6 @@
 .val-cell {
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
-  width: 250px;
-  min-width: 250px;
 }
 
 .val-cell.is-match {
@@ -2283,39 +2306,7 @@
   color: hsl(var(--foreground));
 }
 
-@media (max-width: 850px) {
-  .excel-table .index-header,
-  .excel-table .index-cell {
-    width: 40px;
-    min-width: 40px;
-  }
-
-  .excel-table .pk-header,
-  .excel-table .pk-cell {
-    left: var(--sticky-left-compact);
-    width: var(--pk-width-compact);
-    min-width: var(--pk-width-compact);
-    max-width: var(--pk-width-compact);
-  }
-
-  .excel-table .source-header,
-  .excel-table .source-cell {
-    left: 40px;
-    width: 130px;
-    min-width: 130px;
-    max-width: 130px;
-  }
-
-  .excel-table .status-header,
-  .excel-table .status-cell {
-    left: var(--sticky-left-compact);
-  }
-
-  .excel-table .val-cell {
-    width: 220px;
-    min-width: 220px;
-  }
-}
+/* Column widths come from the JS layout plan (colgroup + --sticky-left), which already adapts to narrow viewports. */
 
 /* Cleanup old experiments */
 .excel-grid-container,
