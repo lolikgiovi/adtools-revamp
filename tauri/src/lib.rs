@@ -41,6 +41,7 @@ pub fn run() {
       open_url,
       get_arch,
       fetch_lockey_json,
+      measure_image_size,
       save_lockey_cache,
       load_lockey_cache,
       clear_lockey_cache,
@@ -612,6 +613,33 @@ fn open_url(url: String) -> Result<(), String> {
 #[tauri::command]
 fn get_arch() -> String {
   std::env::consts::ARCH.to_string()
+}
+
+// Download the image outside the WebView and count actual response bytes.
+// Streaming avoids buffering large images or estimating size from decoded pixels.
+#[tauri::command]
+async fn measure_image_size(url: String, timeout_ms: u64) -> Result<u64, String> {
+  let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid image URL".to_string())?;
+  if !matches!(parsed.scheme(), "http" | "https") {
+    return Err("Image URL must use HTTP or HTTPS".to_string());
+  }
+  let client = Client::builder()
+    .timeout(Duration::from_millis(timeout_ms.clamp(1, 30_000)))
+    .build()
+    .map_err(|e| format!("Failed to build image HTTP client: {}", e))?;
+  let mut response = client
+    .get(parsed)
+    .header(reqwest::header::CACHE_CONTROL, "no-cache")
+    .send()
+    .await
+    .map_err(|e| format!("Image download failed: {}", e))?
+    .error_for_status()
+    .map_err(|e| format!("Image HTTP error: {}", e))?;
+  let mut size_bytes = 0u64;
+  while let Some(chunk) = response.chunk().await.map_err(|e| format!("Image read failed: {}", e))? {
+    size_bytes += chunk.len() as u64;
+  }
+  Ok(size_bytes)
 }
 
 // Fetch JSON data from a URL (bypasses browser CORS restrictions)

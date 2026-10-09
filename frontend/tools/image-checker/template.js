@@ -42,7 +42,6 @@ export const imageCheckerTemplate = /*html*/ `
         <div class="check-image-run-actions">
           <div class="environment-control">
             <div class="environment-select-field">
-              <span id="environmentSelectLabel" class="environment-select-label">Environments</span>
               <button
                 id="envSelector"
                 class="env-selector"
@@ -59,7 +58,7 @@ export const imageCheckerTemplate = /*html*/ `
                 id="envSelectorMenu"
                 class="environment-select-menu app-popover-surface"
                 role="group"
-                aria-labelledby="environmentSelectLabel"
+                aria-label="CDN environments"
                 hidden
               ></div>
               <span id="environmentSelectionHint" class="environment-selection-hint">Choose one or more environments to compare.</span>
@@ -68,6 +67,20 @@ export const imageCheckerTemplate = /*html*/ `
             <button id="configureEnvironmentsButton" class="btn btn-secondary btn-sm" type="button" hidden>
               Set CDN Base URLs
             </button>
+          </div>
+          <div id="imageOracleControl" class="image-oracle-control">
+            <select
+              id="imageOracleConnection"
+              class="image-oracle-select"
+              aria-label="Oracle environment for CONTENT.IMAGE metadata"
+              aria-describedby="imageOracleHint"
+            >
+              <option value="">No Oracle environment</option>
+            </select>
+            <button id="configureOracleButton" class="btn btn-secondary btn-sm" type="button" hidden>Set Oracle connections</button>
+            <span id="imageOracleHint" class="environment-selection-hint"
+              >Optional. Look up CONTENT.IMAGE in a saved Oracle environment.</span
+            >
           </div>
           <button id="checkImageButton" class="btn btn-primary" type="button" disabled>Check images</button>
           <button id="cancelCheckButton" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>

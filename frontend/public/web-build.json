@@ -1,17 +1,86 @@
 {
-  "build": "20260930234714",
-  "timestamp": "2026-09-30T23:47:14.203Z",
-  "releaseId": "release-1.3.9",
-  "version": "1.3.9",
-  "title": "Work with Kafka requests in tabs",
-  "summary": "Kafka adds UUID generation and persistent request tabs, while Kafka history search and Run Query templates receive reliability fixes.",
+  "build": "20261008103610",
+  "timestamp": "2026-10-08T10:36:10.168Z",
+  "releaseId": "release-1.3.10",
+  "version": "1.3.10",
+  "title": "Keep Kafka broker connections in Settings",
+  "summary": "Kafka broker connections are now saved and managed in Settings, and Quick Query gets a simpler data toolbar and a Save that always asks for a filename.",
   "notes": [
-    "Kafka can generate and copy a UUID directly from the payload editor.",
-    "Keep multiple Kafka request tabs open; drafts and the active tab are restored when you reopen Kafka.",
-    "Kafka retained-history search handles partitions without matching records and offers search ranges up to 60 days.",
-    "Run Query's template editor now lays out correctly when its modal opens."
+    "Save named Kafka broker connections in Settings, then pick the active broker from the Kafka tool header.",
+    "Brokers you already configured are migrated into saved connections automatically.",
+    "Quick Query's separate Excel and Oracle import buttons are now one Import menu.",
+    "Add Row and Remove Row buttons replace the previous Quick Query Modify Rows menu.",
+    "Quick Query Save always opens the filename dialog and writes a .sql file."
   ],
-  "slides": [],
+  "slides": [
+    {
+      "title": "Save Kafka broker connections once",
+      "body": "Define each broker connection in Settings instead of retyping bootstrap servers, then switch between them from the Kafka tool header.",
+      "bullets": [
+        "Open Settings, expand Kafka Connections, and choose Add broker.",
+        "Name the connection and enter its bootstrap servers (PLAINTEXT).",
+        "The Kafka tool header lists your saved brokers; existing broker settings are migrated automatically."
+      ],
+      "action": {
+        "label": "Open Kafka Connections",
+        "route": "settings",
+        "focus": "kafka.brokers"
+      }
+    },
+    {
+      "title": "A cleaner Quick Query data toolbar",
+      "body": "Import actions now live in one menu and row editing has dedicated buttons, so the toolbar reads at a glance.",
+      "bullets": [
+        "Use Import to choose From Excel or From Oracle.",
+        "Add Row and Remove Row replace the previous Modify Rows menu.",
+        "Save always opens the filename dialog and writes a .sql file."
+      ],
+      "action": {
+        "label": "Open Quick Query",
+        "route": "quick-query"
+      }
+    }
+  ],
   "tour": [],
-  "tips": []
+  "tips": [
+    {
+      "id": "kafka-broker-connections",
+      "route": "settings",
+      "target": "[data-setting=\"kafka.brokers\"]",
+      "placement": "bottom",
+      "title": "Kafka broker connections",
+      "body": "Add, edit, or remove saved broker connections here; the Kafka tool picks the active one from its header.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": ".kafka-broker-add"
+      }
+    },
+    {
+      "id": "kafka-broker-switch",
+      "route": "kafka",
+      "target": "#kafkaBrokerSelect",
+      "placement": "bottom",
+      "title": "Switch Kafka brokers",
+      "body": "Choose a saved broker connection here; manage the list in Settings under Kafka Connections.",
+      "guided": false,
+      "completeOn": {
+        "event": "change",
+        "target": "#kafkaBrokerSelect"
+      }
+    },
+    {
+      "id": "quick-query-import",
+      "route": "quick-query",
+      "target": "#importButton",
+      "placement": "bottom",
+      "title": "One Import menu",
+      "body": "Import data from Excel or, on desktop, from Oracle using the single Import button.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "#importButton"
+      }
+    }
+  ]
 }

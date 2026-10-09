@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Image Checker metadata verification</title>
+    <style>
+      :root {
+        --border: 220 15% 80%;
+        --muted: 220 20% 95%;
+        --muted-foreground: 220 10% 40%;
+        --foreground: 220 20% 15%;
+        --background: 0 0% 100%;
+        --card: 0 0% 100%;
+        --primary: 220 80% 55%;
+        --destructive: 0 75% 45%;
+      }
+      body {
+        font: 14px system-ui;
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+      }
+      #report {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Image Checker metadata verification</h1>
+    <p>Real local PNG loads; Oracle responses are fixtures. No saved settings are changed.</p>
+    <button id="verify">Run verification</button>
+    <pre id="report" role="status">Ready</pre>
+    <div id="tool"></div>
+    <script type="module">
+      import { CheckImageTool } from "../main.js";
+      import { ImageOracleService } from "../service.js";
+      import { OracleConnectionService } from "../../../core/OracleConnectionService.js";
+      import { UsageTracker } from "../../../core/UsageTracker.js";
+      const id = "b87cd014-da27-48cb-9a2f-77d1f70fd4da";
+      const connection = { name: "Fixture UAT", connect_string: "fixture" };
+      const pngUrl = new URL("./fixtures/wide.png", location.href).href;
+      const pngBytes = (await (await fetch(pngUrl)).blob()).size;
+      const queries = [];
+      let failOracle = false;
+      ImageOracleService.loadConnections = () => [connection];
+      OracleConnectionService.queryViaSidecar = async (name, config, sql) => {
+        queries.push({ name, sql });
+        if (failOracle) throw new Error("Fixture Oracle unavailable");
+        return {
+          columns: ["IMAGE_ID", "CONTEXT", "SUB_CONTEXT", "CONTENT"],
+          rows: [[id, "Homepage hero", "Mobile campaign", "data:image/png;base64,YQ=="]],
+        };
+      };
+      UsageTracker.trackEvent = () => {};
+      const tool = new CheckImageTool();
+      tool.baseUrlService.getAllUrls = () => [{ name: "Local CDN", url: location.origin }];
+      tool.imageCheckerService.normalizeInput = () => new URL(pngUrl).pathname;
+      tool.saveValues = tool.loadSavedValues = tool.clearSavedValues = tool.recordReferenceHistory = () => {};
+      tool.loadReferenceData = () => {};
+      tool.mount(document.querySelector("#tool"));
+      document.querySelector("#verify").addEventListener("click", async () => {
+        const report = document.querySelector("#report");
+        queries.length = 0;
+        failOracle = false;
+        const passed = [];
+        const assert = (condition, label) => {
+          if (!condition) throw new Error(label);
+          passed.push(`PASS ${label}`);
+        };
+        report.textContent = "Running…";
+        try {
+          const input = tool.elements.batchImagePathsInput;
+          input.value = `/content/v1/image/${id}.png`;
+          input.dispatchEvent(new Event("input"));
+          tool.elements.imageOracleConnection.value = connection.name;
+          await tool.checkImages();
+          assert(
+            queries.length === 1 && queries[0].name === connection.name && queries[0].sql.includes(`'${id}'`),
+            "Selected connection receives cleaned UUID IN query",
+          );
+          assert(tool.root.querySelector(".image-size-info").textContent.includes("1600×900"), "Real PNG dimensions shown");
+          assert(
+            tool.root.querySelector(".image-size-info").textContent.includes(tool.formatBytes(pngBytes)),
+            `CDN size equals ${pngBytes} response bytes`,
+          );
+          assert(
+            tool.root.querySelector(".image-width-warning").textContent.trim() === "WARNING" &&
+              tool.root.querySelector(".image-width-warning").title.includes("1440 px"),
+            "Width warning and hover explanation shown",
+          );
+          assert(tool.root.querySelector("[data-oracle-context]").children.length === 2, "CONTEXT and SUB_CONTEXT shown on separate lines");
+          assert(tool.root.querySelector("[data-oracle-size]").textContent === "26 B", "Stored base64 text size shown");
+          tool.root.querySelector(".status-preview-button").click();
+          assert(document.querySelector(".image-details-modal")?.textContent.includes("CDN size"), "Details dialog includes CDN size");
+          document.querySelector(".close-modal-button").click();
+          failOracle = true;
+          await tool.checkImages();
+          assert(
+            tool.root.querySelector("[data-oracle-context]").textContent === "Lookup failed" &&
+              tool.root.querySelector(".status-cell.success"),
+            "Oracle failure preserves CDN success",
+          );
+          failOracle = false;
+          tool.elements.imageOracleConnection.value = "";
+          await tool.checkImages();
+          assert(
+            queries.length === 2 && tool.root.querySelector("[data-oracle-size]").textContent === "Not checked",
+            "No Oracle environment selected sends no query",
+          );
+          tool.elements.imageOracleConnection.value = connection.name;
+          await tool.checkImages();
+          report.textContent = `${passed.join("\n")}\nRESULT: ${passed.length} checks passed`;
+        } catch (error) {
+          report.textContent = `${passed.join("\n")}\nFAIL ${error.message}`;
+        }
+      });
+    </script>
+  </body>
+</html>

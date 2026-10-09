@@ -1,7 +1,8 @@
 import { imageCheckerTemplate } from "./template.js";
-import { ImageCheckerService, BaseUrlService } from "./service.js";
+import { ImageCheckerService, BaseUrlService, ImageOracleService } from "./service.js";
 import { BaseTool } from "../../core/BaseTool.js";
 import { UsageTracker } from "../../core/UsageTracker.js";
+import { isTauri } from "../../core/Runtime.js";
 import { getIconSvg } from "./icon.js";
 import { IMAGE_CHECK_CONCURRENCY, runWithConcurrency } from "./concurrency.js";
 import "./styles.css";
@@ -10,6 +11,8 @@ const SAVED_REFERENCES_STORAGE_KEY = "image_checker_saved_references";
 const IMAGE_CHECK_HISTORY_STORAGE_KEY = "image_checker_history";
 const SETTINGS_FOCUS_STORAGE_KEY = "settings.focus";
 const MAX_REFERENCE_HISTORY = 24;
+const ORACLE_CONNECTIONS_SETTING_KEY = "config.oracle.connections";
+const WIDE_IMAGE_WARNING_PX = 1440;
 
 class CheckImageTool extends BaseTool {
   constructor(eventBus) {
@@ -68,6 +71,10 @@ class CheckImageTool extends BaseTool {
 
   bindElements() {
     this.elements = {
+      imageOracleControl: this.root.querySelector("#imageOracleControl"),
+      imageOracleConnection: this.root.querySelector("#imageOracleConnection"),
+      imageOracleHint: this.root.querySelector("#imageOracleHint"),
+      configureOracleButton: this.root.querySelector("#configureOracleButton"),
       batchImagePathsInput: this.root.querySelector("#batchImagePathsInput"),
       pasteButton: this.root.querySelector("#pasteButton"),
       checkImageButton: this.root.querySelector("#checkImageButton"),
@@ -188,6 +195,10 @@ class CheckImageTool extends BaseTool {
       }
     });
 
+    this.populateOracleConnections();
+    this.updateOracleControl();
+    this.elements.imageOracleConnection?.addEventListener("change", () => this.saveValues());
+    this.elements.configureOracleButton?.addEventListener("click", () => this.openOracleSettings());
     this.populateEnvSelector();
     this.loadSavedValues();
     this.loadReferenceData();
@@ -360,6 +371,117 @@ class CheckImageTool extends BaseTool {
     return allUrls.filter((_, index) => this.selectedEnvironmentIndices.has(index));
   }
 
+  /**
+   * Fill the Oracle picker with the saved connections, keeping the current selection when it survives.
+   */
+  populateOracleConnections() {
+    const select = this.elements?.imageOracleConnection;
+    if (!select) return;
+
+    const previous = select.value;
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "No Oracle environment";
+    select.replaceChildren(placeholder);
+
+    for (const connection of ImageOracleService.loadConnections()) {
+      const option = document.createElement("option");
+      option.value = connection.name;
+      option.textContent = connection.name;
+      select.appendChild(option);
+    }
+    select.value = previous;
+  }
+
+  /**
+   * Keep the Oracle picker honest: desktop only, and only once a connection has been saved.
+   */
+  updateOracleControl() {
+    const control = this.elements?.imageOracleControl;
+    const select = this.elements?.imageOracleConnection;
+    if (!control || !select) return;
+
+    const hasConnections = ImageOracleService.loadConnections().length > 0;
+    control.hidden = !isTauri();
+    select.hidden = !hasConnections;
+    if (this.elements.configureOracleButton) this.elements.configureOracleButton.hidden = hasConnections;
+    if (this.elements.imageOracleHint) {
+      this.elements.imageOracleHint.textContent = hasConnections
+        ? "Optional. Look up CONTENT.IMAGE in the selected Oracle environment."
+        : "No Oracle connections saved yet. Add one in Settings to check CONTENT.IMAGE.";
+    }
+    select.disabled = Boolean(this.isChecking);
+  }
+
+  /**
+   * Format a byte count for display, or report that it could not be read.
+   */
+  formatBytes(bytes) {
+    if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return "Unavailable";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Number((bytes / 1024).toFixed(2))} KB`;
+    return `${Number((bytes / (1024 * 1024)).toFixed(2))} MB`;
+  }
+
+  /**
+   * Show the rendered dimensions and the CDN response size, flagging images that are too wide.
+   */
+  createImageMetrics(result) {
+    const metrics = document.createElement("div");
+    metrics.className = "image-size-info";
+    const dimensions = document.createElement("div");
+    dimensions.textContent = `${result.width}×${result.height}`;
+    const size = document.createElement("div");
+    size.textContent = `CDN: ${this.formatBytes(result.sizeBytes)}`;
+    if (result.sizeBytes == null) size.title = "Image download bytes could not be read. Browser requests may be blocked by CORS.";
+    if (result.width > WIDE_IMAGE_WARNING_PX) {
+      const warning = document.createElement("span");
+      warning.className = "image-width-warning";
+      warning.textContent = "WARNING";
+      warning.title = `This image is ${result.width} px wide, over the ${WIDE_IMAGE_WARNING_PX} px limit. It may be inefficient on mobile screens; consider a smaller image.`;
+      warning.setAttribute("aria-label", warning.title);
+      warning.tabIndex = 0;
+      size.appendChild(warning);
+    }
+    metrics.append(dimensions, size);
+    return metrics;
+  }
+
+  /**
+   * Fill the Context and Base64 size columns from CONTENT.IMAGE for the current run.
+   */
+  async fetchOracleMetadata(imagePaths, connection, runId) {
+    if (!connection || !this.isCheckRunCurrent(runId)) return;
+    let records;
+    let error;
+    try {
+      records = await ImageOracleService.fetch(connection, imagePaths, () => this.isCheckRunCurrent(runId));
+    } catch (failure) {
+      error = failure.message || "Oracle lookup failed";
+    }
+    if (!this.isCheckRunCurrent(runId)) return;
+    imagePaths.forEach((path, index) => {
+      const context = this.root.querySelector(`[data-oracle-context="${index}"]`);
+      const size = this.root.querySelector(`[data-oracle-size="${index}"]`);
+      if (!context || !size) return;
+      const id = ImageOracleService.cleanImageId(path);
+      const record = records?.get(id);
+      if (!record) {
+        context.textContent = size.textContent = !id ? "No UUID" : error ? "Lookup failed" : "Not found";
+        context.title = size.title = error || (!id ? "Oracle lookup requires an image UUID." : "No matching CONTENT.IMAGE row.");
+        return;
+      }
+      context.replaceChildren();
+      for (const value of [record.context, record.subContext]) {
+        const line = document.createElement("div");
+        line.textContent = value == null || value === "" ? "—" : String(value);
+        context.appendChild(line);
+      }
+      size.textContent = this.formatBytes(record.base64Bytes);
+      size.title = "Stored CONTENT text size in UTF-8 bytes, including the data URI prefix; not the decoded image size.";
+    });
+  }
+
   /* ──────────────── Core actions ──────────────── */
   async checkImages() {
     await this.checkBatchImages();
@@ -384,6 +506,14 @@ class CheckImageTool extends BaseTool {
       return;
     }
 
+    let oracleConnection = null;
+    if (this.elements.imageOracleConnection?.value) {
+      oracleConnection = ImageOracleService.loadConnections().find((c) => c.name === this.elements.imageOracleConnection.value);
+      if (!oracleConnection) {
+        this.showInputValidation("Choose a saved Oracle connection. Configure connections in Settings if needed.");
+        return;
+      }
+    }
     this.clearInputValidation();
     this.recordReferenceHistory(imagePaths);
 
@@ -404,7 +534,10 @@ class CheckImageTool extends BaseTool {
     this.renderProgressiveTable(imagePaths, baseUrls, runId);
 
     try {
-      await this.fetchAllCellsProgressively(imagePaths, baseUrls, runId);
+      await Promise.all([
+        this.fetchAllCellsProgressively(imagePaths, baseUrls, runId),
+        this.fetchOracleMetadata(imagePaths, oracleConnection, runId),
+      ]);
     } finally {
       if (this.isCheckRunCurrent(runId)) {
         this.setCheckingState(false);
@@ -565,9 +698,12 @@ class CheckImageTool extends BaseTool {
     if (this.elements?.configureEnvironmentsButton) this.elements.configureEnvironmentsButton.hidden = !isEmpty;
   }
 
-  openEnvironmentSettings() {
+  /**
+   * Open Settings with the given setting highlighted, so the user lands on the right control.
+   */
+  openSettings(focusKey, fallbackMessage) {
     try {
-      localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, "config.baseUrls");
+      localStorage.setItem(SETTINGS_FOCUS_STORAGE_KEY, focusKey);
     } catch (_) {
       // Settings navigation can still continue when storage is unavailable.
     }
@@ -580,7 +716,15 @@ class CheckImageTool extends BaseTool {
       this.eventBus.emit("route:change", { path: "settings" });
       return;
     }
-    this.showError("Open Settings to configure CDN Base URLs.");
+    this.showError(fallbackMessage);
+  }
+
+  openEnvironmentSettings() {
+    this.openSettings("config.baseUrls", "Open Settings to configure CDN Base URLs.");
+  }
+
+  openOracleSettings() {
+    this.openSettings(ORACLE_CONNECTIONS_SETTING_KEY, "Open Settings to configure Oracle connections.");
   }
 
   setCheckingState(isChecking) {
@@ -593,6 +737,9 @@ class CheckImageTool extends BaseTool {
     }
     if (cancelButton) cancelButton.hidden = !isChecking;
     if (this.elements?.checkProgress) this.elements.checkProgress.hidden = !isChecking;
+    if (this.elements?.imageOracleConnection) {
+      this.elements.imageOracleConnection.disabled = isChecking;
+    }
     this.updateCheckButtonState();
   }
 
@@ -675,6 +822,12 @@ class CheckImageTool extends BaseTool {
       headerRow.appendChild(th);
     });
 
+    ["Context", "Base64 size"].forEach((label) => {
+      const heading = document.createElement("th");
+      heading.textContent = label;
+      heading.scope = "col";
+      headerRow.appendChild(heading);
+    });
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
@@ -701,6 +854,13 @@ class CheckImageTool extends BaseTool {
         row.appendChild(td);
       });
 
+      ["context", "size"].forEach((field) => {
+        const td = document.createElement("td");
+        td.className = "image-oracle-cell";
+        td.setAttribute(`data-oracle-${field}`, String(rowIndex));
+        td.textContent = this.elements.imageOracleConnection?.value ? "Checking…" : "Not checked";
+        row.appendChild(td);
+      });
       tbody.appendChild(row);
     });
 
@@ -917,10 +1077,7 @@ class CheckImageTool extends BaseTool {
       previewButton.addEventListener("click", () => this.showImageDetails(result, originalPath));
       container.appendChild(previewButton);
 
-      const sizeInfo = document.createElement("div");
-      sizeInfo.className = "image-size-info";
-      sizeInfo.textContent = `${result.width}×${result.height}`;
-      container.appendChild(sizeInfo);
+      container.appendChild(this.createImageMetrics(result));
 
       cell.innerHTML = "";
       cell.appendChild(container);
@@ -1506,6 +1663,7 @@ class CheckImageTool extends BaseTool {
     const details = [
       ["Image ID", imagePath],
       ["Environment", result.name || "Unknown"],
+      ["CDN size", this.formatBytes(result.sizeBytes)],
       ["Dimensions", `${result.width}×${result.height} (${result.aspectRatio}:1)`],
     ];
     details.forEach(([label, value]) => {
@@ -1593,6 +1751,7 @@ class CheckImageTool extends BaseTool {
   saveValues() {
     const values = {
       batchImagePaths: this.elements.batchImagePathsInput.value,
+      oracleConnection: this.elements.imageOracleConnection?.value || "",
     };
     localStorage.setItem("image_checker_last_value", JSON.stringify(values));
   }
@@ -1603,6 +1762,9 @@ class CheckImageTool extends BaseTool {
       if (savedValues) {
         const values = JSON.parse(savedValues);
         this.elements.batchImagePathsInput.value = values.batchImagePaths || "";
+        if (this.elements.imageOracleConnection) {
+          this.elements.imageOracleConnection.value = values.oracleConnection || "";
+        }
       }
     } catch (error) {
       console.error("Error loading saved values:", error);

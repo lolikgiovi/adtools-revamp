@@ -1,11 +1,18 @@
-# AD Tools 1.3.9
+# AD Tools 1.3.10
+
+- **Kafka** — Save named broker connections in Settings, then pick the active broker from the Kafka tool header. Existing broker settings are migrated into saved connections.
+- **Quick Query** — Excel and Oracle imports are now a single Import menu.
+- **Quick Query** — Add Row and Remove Row buttons replace the previous Modify Rows menu.
+- **Quick Query** — Save always opens the filename dialog and writes a `.sql` file.
+
+## Earlier release notes
+
+### AD Tools 1.3.9
 
 - **Kafka** — Generate and copy a UUID directly from the payload editor.
 - **Kafka** — Keep multiple request tabs open; drafts and the active tab are restored when you reopen Kafka.
 - **Kafka** — Retained-history search handles partitions without matching records and offers search ranges up to 60 days.
 - **Run Query** — The template editor now lays out correctly when its modal opens.
-
-## Earlier release notes
 
 ### AD Tools 1.3.8
 

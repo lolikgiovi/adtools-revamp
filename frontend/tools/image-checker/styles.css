@@ -1521,6 +1521,15 @@
     flex: 1;
   }
 
+  .check-image-tool .image-oracle-control {
+    width: 100%;
+  }
+
+  .check-image-tool .image-oracle-select {
+    flex: 1;
+    max-width: none;
+  }
+
   .check-image-run-actions .btn-primary {
     flex: 1;
   }
@@ -1555,4 +1564,51 @@
   .progress-bar {
     transition: none;
   }
+}
+
+/* Oracle CONTENT.IMAGE lookup: desktop only, and only once a connection exists. */
+.check-image-tool .image-oracle-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.45rem;
+}
+
+.check-image-tool .image-oracle-select {
+  height: 2.45rem;
+  min-width: 11rem;
+  max-width: 16rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.45rem;
+  background: var(--checker-control);
+  color: var(--checker-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.check-image-tool .image-oracle-select:hover {
+  border-color: hsl(var(--primary));
+}
+
+.check-image-tool .image-oracle-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.check-image-tool .image-oracle-cell {
+  overflow-wrap: anywhere;
+}
+
+.check-image-tool .image-oracle-cell div + div {
+  margin-top: 0.25rem;
+  color: var(--checker-muted);
+}
+
+.check-image-tool .image-width-warning {
+  margin-left: 0.35em;
+  color: var(--error-color, hsl(var(--destructive)));
+  cursor: help;
+  font-weight: 700;
 }
