@@ -284,7 +284,7 @@ function AppShell() {
     <SidebarProvider className="bg-background text-foreground">
       <AppNavigation desktop={desktop} />
       <div className="min-w-0 flex-1">
-        <header className="flex h-12 items-center gap-3 border-b px-4 md:px-6">
+        <header className="flex h-12 items-center gap-3 border-b px-4 text-sm md:px-6">
           <SidebarTrigger />
           <NavLink to="/" className="font-medium">
             AD Tools
