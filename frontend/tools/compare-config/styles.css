@@ -16,6 +16,9 @@
      (57px) + .main-content padding (1rem top, 1rem bottom) + this tool's
      .main-interface padding-bottom (1rem). Keeps the results card flush with the viewport. */
   --results-viewport-chrome: 105px;
+  /* The tool's mono voice, in one place: every code, key, and numeral surface reads it, and the
+     diff editor resolves it too, so the comparison and its chrome share one mono face. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
@@ -1386,21 +1389,13 @@ input.results-search-input {
 }
 
 /* Shared table styles in detail views */
-.field-comparison-table,
 .data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
   margin-top: 0.5rem;
-  table-layout: fixed;
 }
 
-.field-comparison-table .field-name {
-  width: 32%;
-}
-
-.field-comparison-table th,
-.field-comparison-table td,
 .data-table th,
 .data-table td {
   padding: 0.625rem;
@@ -1408,7 +1403,6 @@ input.results-search-input {
   border-bottom: 1px solid hsl(var(--border));
 }
 
-.field-comparison-table th,
 .data-table th {
   background: hsl(var(--muted));
   font-weight: 600;
@@ -1418,69 +1412,12 @@ input.results-search-input {
   color: hsl(var(--muted-foreground));
 }
 
-.field-diff-row .field-name {
-  font-weight: 500;
-  color: hsl(var(--foreground));
-}
-
-.field-diff-row .field-value {
-  font-family: var(--font-mono, monospace);
-  font-size: 0.8rem;
-  color: hsl(var(--foreground));
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-
 .detail-json-value {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-width: 72ch;
   line-height: 1.55;
   color: hsl(var(--foreground));
-}
-
-.json-changes {
-  margin-top: 0.5rem;
-  font-family: var(--font-mono, monospace);
-  font-size: 0.72rem;
-  font-weight: 400;
-  line-height: 1.5;
-  color: hsl(var(--foreground));
-  overflow-wrap: anywhere;
-}
-
-.json-changes strong {
-  font-weight: 700;
-}
-
-.field-diff-row.is-different .field-name {
-  color: hsl(var(--foreground));
-  font-weight: 700;
-}
-
-.field-diff-row.is-different {
-  background: hsl(var(--muted) / 0.3);
-}
-
-/* Diff highlighting */
-.diff-same {
-  color: hsl(var(--foreground));
-}
-
-.diff-added {
-  background: hsl(var(--success) / 0.15);
-  color: hsl(var(--success));
-}
-
-.diff-removed {
-  background: hsl(var(--destructive) / 0.15);
-  color: hsl(var(--destructive));
-}
-
-.diff-modified {
-  background: hsl(var(--warning) / 0.15);
-  color: hsl(var(--warning));
 }
 
 .empty-value {
@@ -1505,10 +1442,14 @@ input.results-search-input {
   background: hsl(var(--muted) / 0.1);
 }
 
+/* A single record's value list: the field name column hugs its content so the value, which is
+   the thing being read, gets the rest of the width and starts at the top of its cell. */
 .data-table .data-key {
   font-weight: 500;
   color: hsl(var(--foreground));
-  width: 30%;
+  width: 1%;
+  white-space: nowrap;
+  vertical-align: top;
 }
 
 .data-table .data-value {
@@ -1690,11 +1631,15 @@ input.results-search-input {
 
 /* ============================================
    MASTER-DETAIL VIEW
+
+   The difference is the layout. The record list carries the changed field names, the detail
+   pane carries one tab per changed field over a single diff, and both panes absorb the card
+   height so only the list and the diff ever scroll.
    ============================================ */
 
 .master-detail-view {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 360px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
@@ -1718,17 +1663,18 @@ input.results-search-input {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 .master-header {
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.875rem;
   background: hsl(var(--muted));
   border-bottom: 1px solid hsl(var(--border));
 }
 
 .master-header h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: hsl(var(--foreground));
 }
@@ -1736,36 +1682,66 @@ input.results-search-input {
 .master-items {
   flex: 1;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
 
 .master-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
+  flex-direction: column;
+  gap: 0.3125rem;
+  padding: 0.5rem 0.875rem;
   border-bottom: 1px solid hsl(var(--border));
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background-color 150ms ease;
 }
 
 .master-item:hover {
-  background: hsl(var(--muted));
+  background: hsl(var(--muted) / 0.55);
 }
 
+/* Selection: a filled row inside an inset ring. A 3px left border would be decoration. */
 .master-item.selected {
   background: hsl(var(--primary) / 0.1);
-  border-left: 3px solid hsl(var(--primary));
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.35);
+}
+
+.master-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
 }
 
 .master-item-pk {
-  font-size: 0.85rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
   font-weight: 500;
+  line-height: 1.4;
   color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
+}
+
+.master-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.master-item-row .status-badge {
+  flex-shrink: 0;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+}
+
+/* The one line that makes the list triage-able: which fields differ in this record. */
+.master-item-meta {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  color: hsl(var(--muted-foreground));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  margin-right: 0.5rem;
 }
 
 .detail-pane {
@@ -1786,84 +1762,185 @@ input.results-search-input {
   min-height: 0;
 }
 
+/* Header: what the record is, then where it sits in the queue. The identity string gets the
+   room, so it wraps instead of truncating away the part that tells records apart; the nav drops
+   to its own row rather than squeezing the title into a column of single characters. */
 .detail-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.625rem;
+  padding: 0.625rem 0.875rem;
   background: hsl(var(--muted));
   border-bottom: 1px solid hsl(var(--border));
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .detail-header .status-badge {
-  margin-right: 0.5rem;
+  flex-shrink: 0;
 }
 
-.detail-header h3 {
+.detail-title {
+  flex: 1 1 12rem;
+  min-width: 0;
   margin: 0;
-  font-size: 1rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
   font-weight: 600;
+  line-height: 1.35;
   color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
 }
 
 .detail-nav {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  /* Keeps the steps at the row's end when the header wraps the title onto its own line. */
+  margin-left: auto;
+}
+
+/* Icon-only steps: the counter already says where you are, so the words only cost width. */
+.detail-nav .detail-nav-step {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  justify-content: center;
 }
 
 .detail-position {
-  font-size: 0.8rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   color: hsl(var(--muted-foreground));
+  white-space: nowrap;
 }
 
 .detail-body {
+  flex: 1;
   padding: 1rem;
   overflow: auto;
   min-height: 0;
 }
 
-.detail-mode-switch {
+/* Field tabs: the changed fields are the navigation, so the differing set is always on screen. */
+.detail-field-tabs {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.2rem;
-  padding: 0.5rem 1rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.4375rem 0.875rem;
   border-bottom: 1px solid hsl(var(--border));
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.changed-fields-count {
-  margin-left: auto;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
+.detail-field-tabs::-webkit-scrollbar {
+  display: none;
 }
 
-.detail-mode-switch .detail-fields-toggle {
-  color: hsl(var(--primary));
-}
-
-.detail-mode-switch button {
-  padding: 0.35rem 0.65rem;
+.detail-field-tabs .field-tab {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5625rem;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: calc(var(--radius) - 2px);
   background: transparent;
-  color: hsl(var(--foreground));
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  font: inherit;
-  font-size: 0.8rem;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }
 
-.detail-mode-switch button:hover,
-.detail-mode-switch button.active {
+.detail-field-tabs .field-tab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.6);
+}
+
+.detail-field-tabs .field-tab[aria-selected="true"] {
   background: hsl(var(--muted));
   border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(var(--shadow));
 }
 
-.detail-mode-switch button:focus-visible {
+.detail-field-tabs .field-tab:focus-visible {
   outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline-offset: 1px;
+}
+
+/* A strip that outgrows its row fades on whichever edge hides a tab. */
+.detail-field-tabs.is-overflowing.can-scroll-back {
+  mask-image: linear-gradient(to right, transparent 0, black 1.75rem);
+}
+
+.detail-field-tabs.is-overflowing.can-scroll-forward {
+  mask-image: linear-gradient(to left, transparent 0, black 1.75rem);
+}
+
+.detail-field-tabs.is-overflowing.can-scroll-back.can-scroll-forward {
+  mask-image: linear-gradient(to right, transparent 0, black 1.75rem, black calc(100% - 1.75rem), transparent 100%);
+}
+
+.detail-diff-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 0.875rem 0.875rem;
+  animation: detail-diff-reveal 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes detail-diff-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.detail-diff-pane ::selection {
+  background: hsl(var(--info) / 0.3);
+  color: hsl(var(--foreground));
+}
+
+/* One label per pane, centred on the half of the diff it names. */
+.detail-diff-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.5625rem 0 0.4375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  overflow-wrap: anywhere;
+}
+
+.detail-diff-columns .is-missing {
+  color: hsl(var(--muted-foreground) / 0.75);
+  font-weight: 500;
+}
+
+/* Monaco falls back to a single inline pane on a narrow host, so the two pane labels become one
+   legend naming both sources in change order. */
+.detail-diff-pane.is-inline-diff .detail-diff-columns {
+  display: flex;
+  justify-content: center;
+  gap: 0.375rem;
+}
+
+.detail-diff-pane.is-inline-diff .detail-diff-columns span + span::before {
+  content: "→ ";
+  color: hsl(var(--muted-foreground) / 0.6);
 }
 
 .detail-text-diff {
@@ -1880,11 +1957,40 @@ input.results-search-input {
   color: hsl(var(--foreground));
 }
 
-.detail-diff-toolbar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.75rem; }
-.detail-diff-toolbar select { min-width: 0; max-width: 100%; padding: 0.3rem 0.5rem; border: 1px solid hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--background)); color: hsl(var(--foreground)); }
-.compare-monaco-diff { display: none; width: 100%; height: clamp(300px, 48vh, 580px); border: 1px solid hsl(var(--border)); border-radius: var(--radius); overflow: hidden; }
-.compare-monaco-diff.is-ready { display: block; }
-.detail-diff-fallback.is-hidden { display: none; }
+/* diff2html renders the diff first and Monaco replaces it in place, so the pane is never empty
+   and a browser without the editor bundle still gets the comparison. */
+.compare-monaco-diff {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.compare-monaco-diff.is-ready {
+  display: block;
+}
+
+.detail-diff-fallback {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.detail-diff-fallback:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.detail-diff-fallback.is-hidden {
+  display: none;
+}
 
 .dark .detail-text-diff {
   --d2h-ins-bg-color: hsl(145 55% 25% / 0.35);
@@ -1895,28 +2001,12 @@ input.results-search-input {
   --d2h-del-label-color: hsl(0 80% 75%);
 }
 
-.detail-diff-legend {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.detail-text-diff-field h4 {
-  margin: 1rem 0 0.4rem;
-  font-size: 0.85rem;
-}
-
 .detail-text-diff .d2h-file-header {
   display: none;
 }
 
 .detail-text-diff .d2h-file-wrapper {
   margin-bottom: 0;
-  overflow-x: auto;
 }
 
 .detail-text-diff .d2h-diff-table {
@@ -1932,6 +2022,12 @@ input.results-search-input {
 @media (max-width: 760px) {
   .detail-text-diff .d2h-diff-table {
     min-width: 560px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-diff-pane {
+    animation: none;
   }
 }
 

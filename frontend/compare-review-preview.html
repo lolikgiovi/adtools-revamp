@@ -13,6 +13,9 @@
       import { CompareConfigTool } from "./tools/compare-config/main.js";
 
       if (new URLSearchParams(location.search).has("dark")) document.documentElement.classList.add("dark");
+      // The tool's custom properties (--font-mono, --results-viewport-chrome) live on its root
+      // container, so the harness has to carry that class to render the surface faithfully.
+      document.body.classList.add("compare-config-container");
       const shell = document.createElement("div");
       shell.innerHTML = CompareConfigTemplate;
       const section = shell.querySelector("#results-section");
@@ -49,6 +52,107 @@
         tool.results.unified.rows.forEach((row) => {
           row.key = { SERVICE_CODE: row.key.PARAMETER_KEY, ENVIRONMENT: "PROD" };
         });
+      }
+      if (new URLSearchParams(location.search).has("buyback")) {
+        const velocity = [
+          "#set($goldPriceResponse = $!velocityContext.rawResponseFromRespectiveService)",
+          "#set($listHelper = $fn.listHelper()) ## Livin Configurable",
+          '#set($partnerId = "6373020268312772")',
+          '#set($targetSeriesId = "7")',
+          '#set($colorHexCode = "#E69F00")',
+          "## Filter Processing",
+          '#set($matchedSeries = $listHelper.filterObjectList($goldPriceResponse.get("data"), "series_id", "eq", $targetSeriesId))',
+          "#set($selectedPrices = $listHelper.emptyList())",
+          "#if($matchedSeries && $matchedSeries.size() > 0)",
+          "  #set($selectedSeries = $matchedSeries.get(0))",
+          "  #set($selectedPrices = $listHelper.filterObjectList($selectedSeries.get(\"prices\"), \"weight_in_grams\", \"gt\", \"0\"))",
+          "#end",
+          "{",
+          '  "responseTemplate": {',
+          '    "partnerId": "$!partnerId",',
+          '    "colorHexCode": "$!colorHexCode",',
+          '    "buyBackPrices": [',
+          "      #foreach($price in $selectedPrices)",
+          "        #if($foreach.hasNext),#end",
+          "        {",
+          '          "weightInGrams": $price.get("gramasi"),',
+          '          "pricePerUnit": $price.get("buyback_price")',
+          "        }",
+          "      #end",
+          "    ]",
+          "  }",
+          "}",
+        ].join("\n");
+        const velocityChanged = velocity
+          .replace('"6373020268312772"', '"3490020274031638"')
+          .replace('"#E69F00"', '"#B38000"');
+        const changedFields = ["SQL_QUERY", "RESP_MAP_TEMPLATE", "COLOR_HEX_CODE"];
+        tool.results.unified.env1_name = "(UAT1 COMP) SQL Query";
+        tool.results.unified.env2_name = "(UAT2 COMP) SQL Query";
+        tool.results.unified._metadata.keyColumns = ["SERVICE_CODE", "ENVIRONMENT"];
+        tool.results.unified._metadata.compareFields = changedFields;
+        tool.results.unified.rows = [
+          {
+            key: { SERVICE_CODE: "3490020274031638-gold-portfolio-buyback-price", ENVIRONMENT: "BETA" },
+            env1_data: {
+              SQL_QUERY: velocity,
+              RESP_MAP_TEMPLATE: velocity,
+              COLOR_HEX_CODE: "#E69F00",
+              CACHE_TTL_SECONDS: "120",
+            },
+            env2_data: {
+              SQL_QUERY: velocityChanged,
+              RESP_MAP_TEMPLATE: velocityChanged,
+              COLOR_HEX_CODE: "#B38000",
+              CACHE_TTL_SECONDS: "120",
+            },
+            status: "differ",
+            differences: changedFields,
+          },
+          {
+            key: { SERVICE_CODE: "3490020274031638-gold-portfolio-sellback-price", ENVIRONMENT: "BETA" },
+            env1_data: { SQL_QUERY: velocity, RESP_MAP_TEMPLATE: velocity, COLOR_HEX_CODE: "#E69F00", CACHE_TTL_SECONDS: "60" },
+            env2_data: { SQL_QUERY: velocity, RESP_MAP_TEMPLATE: velocity, COLOR_HEX_CODE: "#B38000", CACHE_TTL_SECONDS: "120" },
+            status: "differ",
+            differences: ["COLOR_HEX_CODE", "CACHE_TTL_SECONDS"],
+          },
+          {
+            key: { SERVICE_CODE: "3490020274031638-gold-portfolio-buyback-fee", ENVIRONMENT: "PROD" },
+            env1_data: null,
+            env2_data: { SQL_QUERY: velocityChanged, RESP_MAP_TEMPLATE: velocityChanged, COLOR_HEX_CODE: "#B38000" },
+            status: "only_in_env2",
+            differences: [],
+          },
+          {
+            key: { SERVICE_CODE: "3490020274031638-gold-portfolio-buyback-limit", ENVIRONMENT: "BETA" },
+            env1_data: { SQL_QUERY: velocity, RESP_MAP_TEMPLATE: velocity, COLOR_HEX_CODE: "#E69F00", CACHE_TTL_SECONDS: "120" },
+            env2_data: { SQL_QUERY: velocity, RESP_MAP_TEMPLATE: velocity, COLOR_HEX_CODE: "#E69F00", CACHE_TTL_SECONDS: "120" },
+            status: "match",
+            differences: [],
+          },
+        ];
+        tool.results.unified.summary = { total: 4, matches: 1, differs: 2, only_in_env1: 0, only_in_env2: 1 };
+        if (new URLSearchParams(location.search).has("wide")) {
+          const manyFields = [
+            "SQL_QUERY",
+            "RESP_MAP_TEMPLATE",
+            "COLOR_HEX_CODE",
+            "CACHE_TTL_SECONDS",
+            "NOTIFICATION_TEMPLATE",
+            "RETRY_BACKOFF_POLICY",
+            "IDEMPOTENCY_KEY_HEADER",
+            "PARTNER_OVERRIDE_MAP",
+          ];
+          tool.results.unified._metadata.compareFields = manyFields;
+          tool.results.unified.rows.unshift({
+            key: { SERVICE_CODE: "3490020274031638-gold-portfolio-buyback-price", ENVIRONMENT: "BETA" },
+            env1_data: Object.fromEntries(manyFields.map((field, index) => [field, `value-${index}\nsecond-${index}`])),
+            env2_data: Object.fromEntries(manyFields.map((field, index) => [field, `value-${index}\nchanged-${index}`])),
+            status: "differ",
+            differences: manyFields,
+          });
+          tool.results.unified.summary = { total: 5, matches: 1, differs: 3, only_in_env1: 0, only_in_env2: 1 };
+        }
       }
       if (new URLSearchParams(location.search).has("long")) {
         const lines = Array.from({ length: 120 }, (_, index) => `#set($value${index} = ${index})`);

@@ -1239,7 +1239,7 @@ class CompareConfigTool extends BaseTool {
     // Get the selected compare fields from metadata (for unified mode) or use null for auto-detection
     const compareFields = _metadata?.compareFields || null;
 
-    this.masterDetailView.disposeTextDiff?.();
+    this.masterDetailView.dispose?.();
     if (this.currentView === "master-detail") {
       if (this.masterDetailView.selectedIndex >= comparisons.length) this.masterDetailView.selectedIndex = 0;
       resultsContent.innerHTML = this.masterDetailView.render(comparisons, env1_name, env2_name, { compareFields });
@@ -1594,7 +1594,7 @@ class CompareConfigTool extends BaseTool {
   onUnmount() {
     clearTimeout(this._toolStateSaveTimer);
     this._toolStateSaveTimer = null;
-    this.masterDetailView?.disposeTextDiff();
+    this.masterDetailView?.dispose();
     this.gridView?.cleanupObserver();
     for (const editor of this.sqlEditors?.values() || []) editor.dispose();
     this.sqlEditors?.clear();
@@ -4259,7 +4259,7 @@ class CompareConfigTool extends BaseTool {
     document.getElementById("tab-content-compare")?.classList.remove("is-reviewing");
 
     // 1. Always clear results
-    this.masterDetailView.disposeTextDiff();
+    this.masterDetailView.dispose();
     this.gridView.columnFilters = {};
     this.gridView.activeFilterColumn = null;
     this.searchFilter = "";

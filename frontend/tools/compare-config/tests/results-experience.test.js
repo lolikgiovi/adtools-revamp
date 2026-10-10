@@ -81,32 +81,39 @@ describe("comparison review results", () => {
     expect(root.querySelectorAll(".val-cell")[1].classList.contains("is-diff")).toBe(true);
   });
 
-  it("shows changed JSON properties and readable full values in detail view", () => {
+  it("opens a changed record on a text diff tabbed by its changed fields", () => {
     const view = new MasterDetailView();
     const root = document.createElement("div");
     root.innerHTML = view.render(
       [
         {
           status: "differ",
-          key: { id: "config" },
-          env1_data: { value: '{"enabled":"0","limits":{"max":10}}' },
-          env2_data: { value: '{"enabled":"1","limits":{"max":10}}' },
-          differences: ["value"],
+          key: { SERVICE_CODE: "gold-portfolio-buyback-price", ENVIRONMENT: "BETA" },
+          env1_data: { SQL_QUERY: "#set($a = 1)", RESP_MAP_TEMPLATE: "<first/>", COLOR_HEX_CODE: "#E69F00" },
+          env2_data: { SQL_QUERY: "#set($a = 2)", RESP_MAP_TEMPLATE: "<second/>", COLOR_HEX_CODE: "#E69F00" },
+          differences: ["SQL_QUERY", "RESP_MAP_TEMPLATE"],
         },
       ],
-      "UAT",
-      "Pre-production",
-      { compareFields: ["value"] },
+      "(UAT1 COMP) SQL Query",
+      "(UAT2 COMP) SQL Query",
+      { compareFields: ["SQL_QUERY", "RESP_MAP_TEMPLATE", "COLOR_HEX_CODE"] },
     );
 
-    expect(root.querySelector(".json-changes").textContent).toContain("enabled");
-    expect(root.querySelector(".json-changes").textContent).toContain('"0"');
-    expect(root.querySelector(".json-changes").textContent).toContain('"1"');
-    expect(root.querySelectorAll(".detail-json-value")).toHaveLength(2);
-    expect(root.querySelector(".detail-json-value").textContent).toContain("\n");
+    expect(root.querySelector(".detail-title").textContent).toBe("gold-portfolio-buyback-price|BETA");
+    expect([...root.querySelectorAll("[data-diff-field]")].map((tab) => tab.dataset.diffField)).toEqual([
+      "SQL_QUERY",
+      "RESP_MAP_TEMPLATE",
+    ]);
+    expect(root.querySelector('[data-diff-field="SQL_QUERY"]').getAttribute("aria-selected")).toBe("true");
+    expect([...root.querySelectorAll(".detail-diff-columns span")].map((span) => span.textContent)).toEqual([
+      "UAT1 COMP",
+      "UAT2 COMP",
+    ]);
+    expect(root.querySelector(".detail-mode-switch")).toBeNull();
+    expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
   });
 
-  it("switches a selected record between field and side-by-side text diffs", () => {
+  it("swaps the diff for the chosen field and keeps focus on its tab", () => {
     const view = new MasterDetailView();
     const root = document.createElement("div");
     root.innerHTML = view.render(
@@ -114,37 +121,147 @@ describe("comparison review results", () => {
         {
           status: "differ",
           key: { id: "config" },
-          env1_data: { value: '{"enabled":"0","note":"<script>"}' },
-          env2_data: { value: '{"enabled":"1","note":"<script>"}' },
-          differences: ["value"],
+          env1_data: { value: '{"enabled":"0","note":"<script>"}', other: "before" },
+          env2_data: { value: '{"enabled":"1","note":"<script>"}', other: "after" },
+          differences: ["value", "other"],
         },
-        { status: "only_in_env1", key: { id: "removed" }, env1_data: { value: "old" }, env2_data: null },
+        { status: "only_in_env1", key: { id: "removed" }, env1_data: { value: "old" }, env2_data: null, differences: [] },
       ],
       "UAT",
       "Pre-production",
-      { compareFields: ["value"] },
+      { compareFields: ["value", "other"] },
     );
     document.body.appendChild(root);
     view.attachEventListeners(root);
 
-    root.querySelector('[data-detail-mode="text-diff"]').click();
-    expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
-    expect(document.activeElement).toBe(root.querySelector('[data-detail-mode="text-diff"]'));
     expect(root.querySelector(".detail-text-diff").textContent).toContain("enabled");
-    expect(root.querySelector(".detail-text-diff").textContent).toContain("UAT");
-    expect(root.querySelector(".detail-text-diff").textContent).toContain("Pre-production");
     expect(root.querySelector(".detail-text-diff script")).toBeNull();
 
+    root.querySelector('[data-diff-field="other"]').click();
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("before");
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("after");
+    expect(document.activeElement).toBe(root.querySelector('[data-diff-field="other"]'));
+
     root.querySelector('[data-index="1"]').click();
-    expect(root.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
     expect(root.querySelector(".detail-text-diff").textContent).toContain("old");
-    root.querySelector('[data-detail-mode="fields"]').click();
-    expect(root.querySelector(".detail-text-diff")).toBeNull();
+  });
+
+  it("marks the pane with no record and offers no field tabs for a matching record", () => {
+    const view = new MasterDetailView();
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [
+        {
+          status: "only_in_env2",
+          key: { id: "added" },
+          env1_data: null,
+          env2_data: { value: "new" },
+          differences: [],
+        },
+        {
+          status: "match",
+          key: { id: "same" },
+          env1_data: { value: "on" },
+          env2_data: { value: "on" },
+          differences: [],
+        },
+      ],
+      "(UAT1 COMP) SQL Query",
+      "(UAT2 COMP) SQL Query",
+      { compareFields: ["value"] },
+    );
+
+    expect([...root.querySelectorAll(".detail-diff-columns span")].map((span) => span.textContent)).toEqual([
+      "UAT1 COMP · missing",
+      "UAT2 COMP",
+    ]);
+    expect(root.querySelector(".detail-text-diff").textContent).toContain("(missing)");
+
+    view.selectItem(1, root);
+    expect(root.querySelector("[data-diff-field]")).toBeNull();
+    expect(root.querySelector(".detail-diff-columns")).toBeNull();
+    expect(root.querySelector(".detail-message").textContent).toContain("identical");
+  });
+
+  it("keeps the record list in place while the detail pane changes", () => {
+    const view = new MasterDetailView();
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [
+        {
+          status: "differ",
+          key: { id: "first" },
+          env1_data: { value: "1", other: "a" },
+          env2_data: { value: "2", other: "a" },
+          differences: ["value"],
+        },
+        {
+          status: "differ",
+          key: { id: "second" },
+          env1_data: { value: "1", other: "a" },
+          env2_data: { value: "1", other: "b" },
+          differences: ["other"],
+        },
+      ],
+      "UAT",
+      "Pre-production",
+      { compareFields: ["value", "other"] },
+    );
+    document.body.appendChild(root);
+    view.attachEventListeners(root);
+
+    expect([...root.querySelectorAll(".master-item-meta")].map((meta) => meta.textContent.trim())).toEqual([
+      "value",
+      "other",
+    ]);
+
+    const list = root.querySelector(".master-items");
+    list.scrollTop = 140;
+    root.querySelector('[data-index="1"]').click();
+
+    expect(root.querySelector(".master-items")).toBe(list);
+    expect(root.querySelector(".master-items").scrollTop).toBe(140);
+    expect(root.querySelectorAll(".master-item")[1].classList.contains("selected")).toBe(true);
+    expect(root.querySelectorAll(".master-item")[0].classList.contains("selected")).toBe(false);
+  });
+
+  it("walks records with the arrow keys and fields with the tab strip keys", () => {
+    const view = new MasterDetailView();
+    const root = document.createElement("div");
+    root.innerHTML = view.render(
+      [
+        {
+          status: "differ",
+          key: { id: "first" },
+          env1_data: { value: "1", other: "a" },
+          env2_data: { value: "2", other: "b" },
+          differences: ["value", "other"],
+        },
+        { status: "differ", key: { id: "second" }, env1_data: { value: "1" }, env2_data: { value: "2" }, differences: ["value"] },
+      ],
+      "UAT",
+      "Pre-production",
+      { compareFields: ["value", "other"] },
+    );
+    document.body.appendChild(root);
+    view.attachEventListeners(root);
+
+    const tablist = root.querySelector(".detail-field-tabs");
+    expect(tablist.getAttribute("role")).toBe("tablist");
+    tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(view.selectedDiffField).toBe("other");
+    expect(document.activeElement.dataset.diffField).toBe("other");
+
+    const listbox = root.querySelector(".master-items");
+    listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(view.selectedIndex).toBe(1);
+    expect(document.activeElement.dataset.index).toBe("1");
+    listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(view.selectedIndex).toBe(0);
   });
 
   it("shows strict JSON text differences even when parsed values are equivalent", () => {
     const view = new MasterDetailView();
-    view.detailMode = "text-diff";
     const root = document.createElement("div");
     root.innerHTML = view.render(
       [{
@@ -179,7 +296,7 @@ describe("comparison review results", () => {
 
     tool.renderResults();
     document.querySelector(".grid-inspect-button").click();
-    document.querySelector('[data-detail-mode="text-diff"]').click();
+    expect(document.querySelector("[data-diff-field]").dataset.diffField).toBe("value");
     expect(document.querySelector(".detail-text-diff .d2h-wrapper")).not.toBeNull();
   });
 });

@@ -1,24 +1,62 @@
 /**
  * MasterDetailView - Renders comparison results with master-detail split layout
  *
- * Features:
- * - Left pane: Master list of all comparisons
- * - Right pane: Selected comparison details
- * - Click to select and view details
- * - Efficient for reviewing many comparisons one-by-one
+ * The question this surface answers is "what differs", so the difference is the layout:
+ * - Left pane: every compared record, annotated with the field names that differ in it.
+ * - Right pane: the changed fields as a tab strip over one side-by-side text diff.
+ * - The text diff is the only detail body. diff2html renders it; Monaco upgrades it in place.
+ * - Reviewing many records one-by-one stays cheap: selecting a record swaps only the detail
+ *   pane, so the list keeps its DOM, its scroll position, and arrow-key walking.
  */
 import { createTwoFilesPatch } from "diff";
 import { html as renderDiffHtml } from "diff2html";
+import { formatFieldList } from "../lib/unified-compare-utils.js";
+
+/** Differing field names listed under one record in the master list. */
+const MASTER_FIELD_LIMIT = 2;
+
+/** Below this host width the diff editor shows one inline pane instead of two. */
+const SIDE_BY_SIDE_MIN_WIDTH = 660;
+
+/** "(UAT1 COMP) SQL Query" reads as "UAT1 COMP" wherever a source labels one side of a diff. */
+function shortSourceName(name, fallback = "") {
+  if (!name) return fallback;
+  return name.match(/^\(([^)]+)\)/)?.[1] || name;
+}
+
+/** Monaco takes a font stack, not a CSS variable, so resolve the token the theme owns. */
+function monoFontFamily(element) {
+  const value = getComputedStyle(element).getPropertyValue("--font-mono").trim();
+  return value || "ui-monospace, Menlo, monospace";
+}
+
+/** The theme manager marks the active theme on the document root; the editor follows it. */
+function isDarkTheme() {
+  return document.documentElement.classList.contains("dark");
+}
+
+/**
+ * 1-based line where two texts first part ways, or 0 when they match.
+ * Opening a 120-line template at line 1 would hide the change the pane exists to show.
+ */
+function firstChangedLine(before, after) {
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  const shared = Math.min(beforeLines.length, afterLines.length);
+  for (let index = 0; index < shared; index += 1) {
+    if (beforeLines[index] !== afterLines[index]) return index + 1;
+  }
+  return beforeLines.length === afterLines.length ? 0 : shared + 1;
+}
 
 export class MasterDetailView {
   constructor() {
     this.selectedIndex = 0;
-    this.detailMode = "fields";
-    this.showUnchangedFields = false;
+    this.selectedDiffField = null;
     this.comparisons = [];
     this.env1Name = "";
     this.env2Name = "";
-    this.selectedDiffField = null;
+    this.compareFields = null;
     this.diffEditor = null;
     this.diffModels = [];
     this.diffMountId = 0;
@@ -59,16 +97,14 @@ export class MasterDetailView {
   }
 
   /**
-   * Formats a primary key HashMap into a display string
+   * Formats a primary key as one compact identity string: values only, joined by a pipe.
+   * `{ SERVICE_CODE: "gold-buyback", ENVIRONMENT: "BETA" }` → `gold-buyback|BETA`
    */
   formatPrimaryKey(keyMap) {
     if (!keyMap || typeof keyMap !== "object") return "";
     const entries = Object.entries(keyMap);
     if (entries.length === 0) return "";
-    if (entries.length === 1) {
-      return this.formatValue(entries[0][1]);
-    }
-    return entries.map(([k, v]) => `${k}=${this.formatValue(v)}`).join(", ");
+    return entries.map(([, value]) => this.formatValue(value)).join("|");
   }
 
   /**
@@ -91,7 +127,7 @@ export class MasterDetailView {
         <div class="master-header">
           <h3>Records (${this.comparisons.length})</h3>
         </div>
-        <div class="master-items">
+        <div class="master-items" role="listbox" aria-label="Compared records">
           ${itemsHtml}
         </div>
       </div>
@@ -99,19 +135,28 @@ export class MasterDetailView {
   }
 
   /**
-   * Renders a single master list item
+   * Renders a single master list item: the record identity, its status, and the fields that differ.
    */
   renderMasterItem(comparison, index) {
     const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
     const statusLabel = this.getStatusLabel(comparison.status);
     const isSelected = index === this.selectedIndex;
-    const pkDisplay = this.formatPrimaryKey(comparison.key);
+    const differFields = comparison.status === "differ" ? comparison.differences || [] : [];
 
     return `
       <div class="master-item ${isSelected ? "selected" : ""} status-${statusClass}"
-           data-index="${index}">
-        <div class="master-item-pk">${this.escapeHtml(pkDisplay)}</div>
-        <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
+           data-index="${index}" role="option" aria-selected="${isSelected}" tabindex="${isSelected ? 0 : -1}">
+        <div class="master-item-pk">${this.escapeHtml(this.formatPrimaryKey(comparison.key))}</div>
+        <div class="master-item-row">
+          <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
+          ${
+            differFields.length
+              ? `<span class="master-item-meta" title="${this.escapeHtml(formatFieldList(differFields, 99))}">${this.escapeHtml(
+                  formatFieldList(differFields, MASTER_FIELD_LIMIT),
+                )}</span>`
+              : ""
+          }
+        </div>
       </div>
     `;
   }
@@ -120,66 +165,45 @@ export class MasterDetailView {
    * Renders the detail panel (right pane)
    */
   renderDetailPanel() {
-    if (this.selectedIndex < 0 || this.selectedIndex >= this.comparisons.length) {
+    const comparison = this.comparisons[this.selectedIndex];
+    if (!comparison) {
       return '<div class="detail-empty"><p>Select a record to view details</p></div>';
     }
-
-    const comparison = this.comparisons[this.selectedIndex];
 
     return `
       <div class="detail-content">
         ${this.renderDetailHeader(comparison)}
-        ${comparison.status !== "match" ? this.renderDetailModeSwitch(comparison) : ""}
         ${this.renderDetailBody(comparison)}
       </div>
     `;
   }
 
-  renderDetailModeSwitch(comparison) {
-    const fieldsActive = this.detailMode === "fields";
-    const textDiffActive = this.detailMode === "text-diff";
-    const comparedFields = this.compareFields?.length
-      ? this.compareFields
-      : [...new Set([...Object.keys(comparison.env1_data || {}), ...Object.keys(comparison.env2_data || {})])];
-    const changedCount = comparedFields.filter((field) => comparison.differences?.includes(field)).length;
-    const hasUnchangedFields = comparison.status === "differ" && changedCount < comparedFields.length;
-    return `<div class="detail-mode-switch" role="group" aria-label="Record detail display">
-      <button type="button" data-detail-mode="fields" aria-pressed="${fieldsActive}" class="${fieldsActive ? "active" : ""}">Fields</button>
-      <button type="button" data-detail-mode="text-diff" aria-pressed="${textDiffActive}"
-        class="${textDiffActive ? "active" : ""}">Text diff</button>
-      ${fieldsActive && comparison.status === "differ" ? `<span class="changed-fields-count">${changedCount} changed ${changedCount === 1 ? "field" : "fields"}</span>` : ""}
-      ${fieldsActive && hasUnchangedFields ? `<button type="button" class="detail-fields-toggle" aria-pressed="${this.showUnchangedFields}">
-        ${this.showUnchangedFields ? "Show changed only" : "Show all fields"}</button>` : ""}
-    </div>`;
-  }
-
   /**
-   * Renders detail panel header
+   * Renders detail panel header: what the record is, and where it sits in the review queue.
    */
   renderDetailHeader(comparison) {
     const statusClass = comparison.status.toLowerCase().replaceAll("_", "-");
-    const statusLabel = this.getStatusLabel(comparison.status);
-    const pkDisplay = this.formatPrimaryKey(comparison.key);
+    const title = this.formatPrimaryKey(comparison.key);
+    const isFirst = this.selectedIndex === 0;
+    const isLast = this.selectedIndex === this.comparisons.length - 1;
 
     return `
       <div class="detail-header">
-        <div>
-          <h3>${this.escapeHtml(pkDisplay)}</h3>
-        </div>
+        <span class="status-badge status-${statusClass}">${this.escapeHtml(this.getStatusLabel(comparison.status))}</span>
+        <h3 class="detail-title" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</h3>
         <div class="detail-nav">
-          <span class="status-badge status-${statusClass}">${this.escapeHtml(statusLabel)}</span>
-          <button class="btn btn-outline btn-sm" id="btn-prev-detail" ${this.selectedIndex === 0 ? "disabled" : ""}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button type="button" class="btn btn-outline btn-sm detail-nav-step" id="btn-prev-detail"
+                  aria-label="Previous record" title="Previous record (↑)"
+                  ${isFirst ? "disabled" : ""}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
-            Previous
           </button>
-          <span class="detail-position">${this.selectedIndex + 1} / ${this.comparisons.length}</span>
-          <button class="btn btn-outline btn-sm" id="btn-next-detail" ${
-            this.selectedIndex === this.comparisons.length - 1 ? "disabled" : ""
-          }>
-            Next
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="detail-position">${this.selectedIndex + 1}/${this.comparisons.length}</span>
+          <button type="button" class="btn btn-outline btn-sm detail-nav-step" id="btn-next-detail"
+                  aria-label="Next record" title="Next record (↓)"
+                  ${isLast ? "disabled" : ""}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
           </button>
@@ -189,109 +213,61 @@ export class MasterDetailView {
   }
 
   /**
-   * Renders detail panel body
+   * Renders the detail body. Matching records carry no difference to navigate, so they get a
+   * plain value list instead of diff chrome.
    */
   renderDetailBody(comparison) {
-    if (this.detailMode === "text-diff" && comparison.status !== "match") {
-      return this.renderTextDiff(comparison);
-    }
-
-    if (comparison.status === "only_in_env1") {
+    if (comparison.status === "match") {
       return `
         <div class="detail-body">
-          <div class="detail-message">
-            <p>This record only exists in <strong>${this.escapeHtml(this.env1Name)}</strong></p>
-          </div>
+          <p class="detail-message">Every compared field is identical in both sources.</p>
           ${this.renderDetailData(comparison.env1_data, this.env1Name)}
         </div>
       `;
     }
 
-    if (comparison.status === "only_in_env2") {
+    const fields = this.visibleDiffFields(comparison);
+    if (fields.length === 0) {
       return `
         <div class="detail-body">
-          <div class="detail-message">
-            <p>This record only exists in <strong>${this.escapeHtml(this.env2Name)}</strong></p>
-          </div>
-          ${this.renderDetailData(comparison.env2_data, this.env2Name)}
+          <p class="detail-message">This record changes only in fields that are not selected for comparison.</p>
         </div>
       `;
     }
 
-    if (comparison.status === "match") {
-      return `
-        <div class="detail-body">
-          <div class="detail-message">
-            <p>✓ Records match perfectly</p>
-          </div>
-          ${this.renderDetailData(comparison.env1_data, "Data")}
-        </div>
-      `;
-    }
-
-    // Status is 'differ' - show selected fields, highlight differences
-    const diffFields = new Set(comparison.differences || []);
-    const diffDetails = comparison._diffDetails || {};
-    const env1Data = comparison.env1_data || {};
-    const env2Data = comparison.env2_data || {};
-
-    // Get fields to display: use compareFields if provided, otherwise derive from data
-    let allFields;
-    if (this.compareFields && this.compareFields.length > 0) {
-      allFields = this.compareFields;
-    } else {
-      allFields = Array.from(new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])).sort();
-    }
-    allFields = allFields.filter((field) => this.showUnchangedFields || diffFields.has(field));
-
-    return `
-      <div class="detail-body">
-        <div class="detail-diff-table">
-          <table class="field-comparison-table">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>${this.escapeHtml(this.env1Name)}</th>
-                <th>${this.escapeHtml(this.env2Name)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${allFields
-                .map((fieldName) =>
-                  this.renderDetailDiffRow(
-                    fieldName,
-                    env1Data[fieldName],
-                    env2Data[fieldName],
-                    diffFields.has(fieldName),
-                    diffDetails[fieldName],
-                  ),
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
+    return this.renderFieldDiff(comparison, fields);
   }
 
-  renderTextDiff(comparison) {
-    const before = comparison.env1_data || {};
-    const after = comparison.env2_data || {};
-    const fields = comparison.status === "differ"
-      ? comparison.differences || []
-      : [...new Set([...Object.keys(before), ...Object.keys(after)])];
-    const visibleFields = this.compareFields?.length
-      ? fields.filter((field) => this.compareFields.includes(field))
-      : fields;
+  /**
+   * Ordering is the comparison's own, so tabs read in the order fields were compared.
+   * Both sides of the pair are considered: a record present in one source still needs tabs
+   * for every comparable field it carries.
+   * @returns {Array<string>} Fields the detail pane can show, with `selectedDiffField` kept valid.
+   */
+  visibleDiffFields(comparison) {
+    const env1Data = comparison.env1_data || {};
+    const env2Data = comparison.env2_data || {};
+    const differFields = comparison.differences || [];
+    const candidates =
+      comparison.status === "differ" && differFields.length
+        ? differFields
+        : [...new Set([...Object.keys(env1Data), ...Object.keys(env2Data)])];
+    const fields = this.compareFields?.length
+      ? candidates.filter((field) => this.compareFields.includes(field))
+      : candidates;
 
-    if (visibleFields.length === 0) {
-      return '<div class="detail-body"><p class="detail-message">No changed fields to display.</p></div>';
-    }
+    if (!fields.includes(this.selectedDiffField)) this.selectedDiffField = fields[0] || null;
+    return fields;
+  }
 
-    if (!visibleFields.includes(this.selectedDiffField)) this.selectedDiffField = visibleFields[0];
+  /**
+   * Renders one side-by-side diff, tabbed by the fields that differ in this record.
+   */
+  renderFieldDiff(comparison, fields) {
     const field = this.selectedDiffField;
-    const [oldText, newText] = this.formatDiffPair(before, after, field);
-    const patch = createTwoFilesPatch("Before", "After", oldText, newText, "", "", { context: 3 });
+    const activeIndex = fields.indexOf(field);
+    const [before, after] = this.formatDiffPair(comparison.env1_data || {}, comparison.env2_data || {}, field);
+    const patch = createTwoFilesPatch("before", "after", before, after, "", "", { context: 3 });
     const fallback = renderDiffHtml(patch, {
       drawFileList: false,
       outputFormat: "side-by-side",
@@ -299,71 +275,47 @@ export class MasterDetailView {
       diffStyle: "char",
     });
 
-    return `<div class="detail-body detail-text-diff">
-      <div class="detail-diff-toolbar"><label for="detail-diff-field">Changed field</label>
-        <select id="detail-diff-field" aria-label="Changed field">${visibleFields.map((name) =>
-          `<option value="${this.escapeHtml(name)}" ${name === field ? "selected" : ""}>${this.escapeHtml(name)}</option>`).join("")}</select>
+    return `
+      <div class="detail-field-tabs" role="tablist" aria-label="Fields that differ">
+        ${fields.map((name, index) => this.renderFieldTab(name, index, index === activeIndex)).join("")}
       </div>
-      <div class="detail-diff-legend"><span>${this.escapeHtml(this.env1Name)}</span><span>${this.escapeHtml(this.env2Name)}</span></div>
-      <div class="compare-monaco-diff" aria-label="${this.escapeHtml(field)} text comparison"></div>
-      <section class="detail-text-diff-field detail-diff-fallback" aria-label="${this.escapeHtml(field)} difference">${fallback}</section>
-    </div>`;
+      <div class="detail-diff-pane" role="tabpanel" aria-labelledby="detail-field-tab-${activeIndex}">
+        ${this.renderDiffColumns(comparison)}
+        <div class="compare-monaco-diff" aria-hidden="true"></div>
+        <section class="detail-text-diff detail-diff-fallback" tabindex="0"
+                 aria-label="${this.escapeHtml(field)} comparison between ${this.escapeHtml(this.env1Name)} and ${this.escapeHtml(
+                   this.env2Name,
+                 )}">${fallback}</section>
+      </div>
+    `;
   }
 
-  disposeTextDiff() {
-    this.diffMountId += 1;
-    this.diffEditor?.dispose();
-    this.diffEditor = null;
-    this.diffModels.forEach((model) => model.dispose());
-    this.diffModels = [];
-    this.diffResizeObserver?.disconnect();
-    this.diffResizeObserver = null;
-    if (this.diffThemeListener) document.removeEventListener("themeChange", this.diffThemeListener);
-    this.diffThemeListener = null;
+  renderFieldTab(name, index, isActive) {
+    return `
+      <button type="button" class="field-tab" id="detail-field-tab-${index}" role="tab" data-diff-field="${this.escapeHtml(name)}"
+              aria-selected="${isActive}" tabindex="${isActive ? 0 : -1}">${this.escapeHtml(name)}</button>
+    `;
   }
 
-  async mountTextDiff(container) {
-    const host = container.querySelector(".compare-monaco-diff");
-    if (!host || import.meta.env.MODE === "test") return;
-    const mountId = ++this.diffMountId;
-    try {
-      const [editorWorkerModule, jsonWorkerModule, workers] = await Promise.all([
-        import("monaco-editor/esm/vs/editor/editor.worker?worker"),
-        import("monaco-editor/esm/vs/language/json/json.worker?worker"),
-        import("../../../core/MonacoWorkers.js"),
-      ]);
-      if (mountId !== this.diffMountId || !host.isConnected) return;
-      workers.configureMonacoWorkers(self, { editor: editorWorkerModule.default, json: jsonWorkerModule.default });
-      const monaco = await import("monaco-editor/esm/vs/editor/editor.main.js");
-      if (mountId !== this.diffMountId || !host.isConnected) return;
-      this.diffThemeListener = () => monaco.editor.setTheme("vs-dark");
-      this.diffThemeListener();
-      document.addEventListener("themeChange", this.diffThemeListener);
-      const comparison = this.comparisons[this.selectedIndex];
-      const [before, after] = this.formatDiffPair(comparison.env1_data || {}, comparison.env2_data || {}, this.selectedDiffField);
-      const jsonValues = [before, after].every((value) => { try { JSON.parse(value); return true; } catch { return false; } });
-      this.diffModels = [monaco.editor.createModel(before, jsonValues ? "json" : "plaintext"),
-        monaco.editor.createModel(after, jsonValues ? "json" : "plaintext")];
-      host.style.display = "block";
-      this.diffEditor = monaco.editor.createDiffEditor(host, {
-        readOnly: true, originalEditable: false, automaticLayout: true, minimap: { enabled: false },
-        scrollBeyondLastLine: false, wordWrap: "on", diffWordWrap: "on", renderSideBySide: host.clientWidth >= 660,
-        useInlineViewWhenSpaceIsLimited: false,
-        renderOverviewRuler: false, fontSize: 12, lineNumbersMinChars: 3,
-      });
-      this.diffEditor.setModel({ original: this.diffModels[0], modified: this.diffModels[1] });
-      if (typeof ResizeObserver !== "undefined") {
-        this.diffResizeObserver = new ResizeObserver(() =>
-          this.diffEditor?.updateOptions({ renderSideBySide: host.clientWidth >= 660 }));
-        this.diffResizeObserver.observe(host);
-      }
-      host.classList.add("is-ready");
-      container.querySelector(".detail-diff-fallback")?.classList.add("is-hidden");
-    } catch (error) {
-      console.warn("Monaco diff unavailable; showing text comparison", error);
-    }
+  /**
+   * Names the two diff panes with the concise source label, and says which side has no record.
+   */
+  renderDiffColumns(comparison) {
+    const missing = comparison.status === "only_in_env1" ? "env2" : comparison.status === "only_in_env2" ? "env1" : null;
+    const label = (name, isMissing) =>
+      `${this.escapeHtml(shortSourceName(name, "Source"))}${isMissing ? " &middot; missing" : ""}`;
+
+    return `
+      <div class="detail-diff-columns">
+        <span class="${missing === "env1" ? "is-missing" : ""}">${label(this.env1Name, missing === "env1")}</span>
+        <span class="${missing === "env2" ? "is-missing" : ""}">${label(this.env2Name, missing === "env2")}</span>
+      </div>
+    `;
   }
 
+  /**
+   * Prepares the two texts a diff will show for one field.
+   */
   formatDiffPair(before, after, field) {
     const oldValue = Object.hasOwn(before, field) ? before[field] : undefined;
     const newValue = Object.hasOwn(after, field) ? after[field] : undefined;
@@ -381,55 +333,6 @@ export class MasterDetailView {
     return [oldText, newText];
   }
 
-  /**
-   * Renders a detail diff row
-   * @param {string} fieldName - Field name
-   * @param {*} env1Value - Value from env1
-   * @param {*} env2Value - Value from env2
-   * @param {boolean} isDifferent - Whether values differ
-   * @param {Object} diffInfo - Character-level diff info from _diffDetails
-   */
-  renderDetailDiffRow(fieldName, env1Value, env2Value, isDifferent, diffInfo = null) {
-    const env1Display = this.formatValue(env1Value);
-    const env2Display = this.formatValue(env2Value);
-    const json1 = this.parseJsonValue(env1Value);
-    const json2 = this.parseJsonValue(env2Value);
-
-    const env1Class = "field-value";
-    const env2Class = "field-value";
-
-    if (json1 && json2) {
-      const changes = isDifferent ? this.renderJsonChanges(json1.value, json2.value) : "";
-      return `
-        <tr class="field-diff-row ${isDifferent ? "is-different" : ""}">
-          <td class="field-name">${this.escapeHtml(fieldName)}${changes}</td>
-          <td class="${env1Class}"><pre class="detail-json-value">${this.escapeHtml(json1.pretty)}</pre></td>
-          <td class="${env2Class}"><pre class="detail-json-value">${this.escapeHtml(json2.pretty)}</pre></td>
-        </tr>
-      `;
-    }
-
-    // Check if we have character-level diff details
-    if (isDifferent && diffInfo && diffInfo.type === "char-diff" && diffInfo.segments) {
-      const { env1Html, env2Html } = this.renderCharDiff(diffInfo.segments);
-      return `
-        <tr class="field-diff-row is-different">
-          <td class="field-name">${this.escapeHtml(fieldName)}</td>
-          <td class="${env1Class}">${env1Html}</td>
-          <td class="${env2Class}">${env2Html}</td>
-        </tr>
-      `;
-    }
-
-    return `
-      <tr class="field-diff-row ${isDifferent ? "is-different" : ""}">
-        <td class="field-name">${this.escapeHtml(fieldName)}</td>
-        <td class="${env1Class}">${this.escapeHtml(env1Display)}</td>
-        <td class="${env2Class}">${this.escapeHtml(env2Display)}</td>
-      </tr>
-    `;
-  }
-
   parseJsonValue(value) {
     if (typeof value !== "string" && (typeof value !== "object" || value === null)) return null;
     try {
@@ -443,62 +346,9 @@ export class MasterDetailView {
 
   renderReadableValue(value) {
     const json = this.parseJsonValue(value);
-    return json ? `<pre class="detail-json-value">${this.escapeHtml(json.pretty)}</pre>` : this.escapeHtml(this.formatValue(value));
-  }
-
-  renderJsonChanges(before, after) {
-    const first = this.flattenJson(before);
-    const second = this.flattenJson(after);
-    const paths = [...new Set([...first.keys(), ...second.keys()])];
-    const changes = paths.filter((path) => first.get(path) !== second.get(path));
-    if (changes.length === 0) return '<div class="json-changes">Text differs; JSON properties match.</div>';
-    const visible = changes.slice(0, 20);
-    return `<div class="json-changes" aria-label="Changed JSON properties">
-      ${visible.map((path) => `<div><strong>${this.escapeHtml(path)}</strong>: ${this.escapeHtml(first.get(path) ?? "Missing")} → ${this.escapeHtml(second.get(path) ?? "Missing")}</div>`).join("")}
-      ${changes.length > visible.length ? `<div>+${changes.length - visible.length} more changed properties</div>` : ""}
-    </div>`;
-  }
-
-  flattenJson(value, path = "", result = new Map()) {
-    if (value !== null && typeof value === "object" && Object.keys(value).length > 0) {
-      for (const [key, child] of Object.entries(value)) {
-        this.flattenJson(child, path ? `${path}.${key}` : key, result);
-      }
-    } else {
-      result.set(path || "value", JSON.stringify(value));
-    }
-    return result;
-  }
-
-  /**
-   * Renders character-level diff with highlighting
-   * @param {Array} segments - Diff segments [{type: 'equal'|'insert'|'delete', value: string}]
-   * @returns {Object} { env1Html, env2Html }
-   */
-  renderCharDiff(segments) {
-    let env1Html = "";
-    let env2Html = "";
-
-    for (const seg of segments) {
-      const escaped = this.escapeHtml(seg.value);
-
-      switch (seg.type) {
-        case "equal":
-          env1Html += escaped;
-          env2Html += escaped;
-          break;
-        case "delete":
-          // Deleted from env1 (shown in env1 only)
-          env1Html += `<span class="diff-delete">${escaped}</span>`;
-          break;
-        case "insert":
-          // Inserted in env2 (shown in env2 only)
-          env2Html += `<span class="diff-insert">${escaped}</span>`;
-          break;
-      }
-    }
-
-    return { env1Html, env2Html };
+    return json
+      ? `<pre class="detail-json-value">${this.escapeHtml(json.pretty)}</pre>`
+      : this.escapeHtml(this.formatValue(value));
   }
 
   /**
@@ -535,84 +385,280 @@ export class MasterDetailView {
   }
 
   /**
-   * Attaches event listeners (called after render)
+   * Drops the mounted diff and any pending mount so a re-render cannot be raced.
    */
-  attachEventListeners(container) {
-    container.querySelector(".detail-fields-toggle")?.addEventListener("click", () => {
-      this.showUnchangedFields = !this.showUnchangedFields;
-      this.selectItem(this.selectedIndex, container);
-      container.querySelector(".detail-fields-toggle")?.focus();
-    });
-    container.querySelector("#detail-diff-field")?.addEventListener("change", (event) => {
-      this.selectedDiffField = event.target.value;
-      this.selectItem(this.selectedIndex, container);
-    });
-    this.mountTextDiff(container);
-    container.querySelectorAll("[data-detail-mode]").forEach((button) => {
-      button.addEventListener("click", () => {
-        this.detailMode = button.dataset.detailMode;
-        this.selectItem(this.selectedIndex, container);
-        container.querySelector(`[data-detail-mode="${this.detailMode}"]`)?.focus();
-      });
-    });
-    // Master item click
-    container.querySelectorAll(".master-item").forEach((item) => {
-      item.addEventListener("click", (e) => {
-        const index = parseInt(e.currentTarget.dataset.index);
-        this.selectItem(index, container);
-      });
-    });
+  dispose() {
+    this.diffMountId += 1;
+    this.diffEditor?.dispose();
+    this.diffEditor = null;
+    this.diffModels.forEach((model) => model.dispose());
+    this.diffModels = [];
+    this.diffResizeObserver?.disconnect();
+    this.diffResizeObserver = null;
+    this.tabResizeObserver?.disconnect();
+    this.tabResizeObserver = null;
+    if (this.diffThemeListener) document.removeEventListener("themeChange", this.diffThemeListener);
+    this.diffThemeListener = null;
+  }
 
-    // Previous button
-    const btnPrev = container.querySelector("#btn-prev-detail");
-    if (btnPrev) {
-      btnPrev.addEventListener("click", () => {
-        if (this.selectedIndex > 0) {
-          this.selectItem(this.selectedIndex - 1, container);
+  /**
+   * Upgrades the rendered fallback to a Monaco diff editor when the bundle is available.
+   */
+  async mountTextDiff(container) {
+    const host = container.querySelector(".compare-monaco-diff");
+    if (!host || import.meta.env.MODE === "test") return;
+    const mountId = ++this.diffMountId;
+    try {
+      const [editorWorkerModule, jsonWorkerModule, workers] = await Promise.all([
+        import("monaco-editor/esm/vs/editor/editor.worker?worker"),
+        import("monaco-editor/esm/vs/language/json/json.worker?worker"),
+        import("../../../core/MonacoWorkers.js"),
+      ]);
+      if (mountId !== this.diffMountId || !host.isConnected) return;
+      workers.configureMonacoWorkers(self, { editor: editorWorkerModule.default, json: jsonWorkerModule.default });
+      const monaco = await import("monaco-editor/esm/vs/editor/editor.main.js");
+      if (mountId !== this.diffMountId || !host.isConnected) return;
+      this.diffThemeListener = () => monaco.editor.setTheme(isDarkTheme() ? "vs-dark" : "vs");
+      this.diffThemeListener();
+      document.addEventListener("themeChange", this.diffThemeListener);
+      const comparison = this.comparisons[this.selectedIndex];
+      const [before, after] = this.formatDiffPair(
+        comparison.env1_data || {},
+        comparison.env2_data || {},
+        this.selectedDiffField,
+      );
+      const jsonValues = [before, after].every((value) => {
+        try {
+          JSON.parse(value);
+          return true;
+        } catch {
+          return false;
         }
       });
-    }
-
-    // Next button
-    const btnNext = container.querySelector("#btn-next-detail");
-    if (btnNext) {
-      btnNext.addEventListener("click", () => {
-        if (this.selectedIndex < this.comparisons.length - 1) {
-          this.selectItem(this.selectedIndex + 1, container);
-        }
+      this.diffModels = [
+        monaco.editor.createModel(before, jsonValues ? "json" : "plaintext"),
+        monaco.editor.createModel(after, jsonValues ? "json" : "plaintext"),
+      ];
+      host.style.display = "block";
+      // Below this width Monaco drops to one inline pane, so the two pane labels collapse into
+      // a single legend naming both sources; the class is what the CSS reads.
+      const applyDiffLayout = () => {
+        const sideBySide = host.clientWidth >= SIDE_BY_SIDE_MIN_WIDTH;
+        host.closest(".detail-diff-pane")?.classList.toggle("is-inline-diff", !sideBySide);
+        return sideBySide;
+      };
+      this.diffEditor = monaco.editor.createDiffEditor(host, {
+        readOnly: true,
+        originalEditable: false,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        wordWrap: "on",
+        diffWordWrap: "on",
+        renderSideBySide: applyDiffLayout(),
+        useInlineViewWhenSpaceIsLimited: false,
+        renderOverviewRuler: false,
+        fontFamily: monoFontFamily(host),
+        fontSize: 12,
+        lineNumbersMinChars: 3,
       });
+      this.diffEditor.setModel({ original: this.diffModels[0], modified: this.diffModels[1] });
+      const changedLine = firstChangedLine(before, after);
+      if (changedLine > 1) {
+        this.diffEditor.getOriginalEditor().revealLineInCenter(changedLine);
+        this.diffEditor.getModifiedEditor().revealLineInCenter(changedLine);
+      }
+      if (typeof ResizeObserver !== "undefined") {
+        this.diffResizeObserver = new ResizeObserver(() =>
+          this.diffEditor?.updateOptions({ renderSideBySide: applyDiffLayout() }),
+        );
+        this.diffResizeObserver.observe(host);
+      }
+      host.classList.add("is-ready");
+      container.querySelector(".detail-diff-fallback")?.classList.add("is-hidden");
+    } catch (error) {
+      console.warn("Monaco diff unavailable; showing text comparison", error);
     }
   }
 
   /**
-   * Selects an item and updates the view
+   * Attaches event listeners (called after render)
    */
-  selectItem(index, container) {
-    this.disposeTextDiff();
+  attachEventListeners(container) {
+    this.bindListListeners(container);
+    this.bindDetailListeners(container);
+  }
+
+  bindListListeners(container) {
+    const list = container.querySelector(".master-items");
+    if (!list) return;
+    list.addEventListener("click", (event) => {
+      const item = event.target.closest(".master-item");
+      if (item) this.selectItem(Number(item.dataset.index), container);
+    });
+    list.addEventListener("keydown", (event) => this.onListKeydown(event, container));
+  }
+
+  bindDetailListeners(container) {
+    container.querySelector("#btn-prev-detail")?.addEventListener("click", () => {
+      if (this.selectedIndex > 0) this.selectItem(this.selectedIndex - 1, container);
+    });
+    container.querySelector("#btn-next-detail")?.addEventListener("click", () => {
+      if (this.selectedIndex < this.comparisons.length - 1) this.selectItem(this.selectedIndex + 1, container);
+    });
+
+    const tabs = container.querySelector(".detail-field-tabs");
+    if (tabs) {
+      tabs.addEventListener("click", (event) => {
+        const tab = event.target.closest("[data-diff-field]");
+        if (!tab || tab.dataset.diffField === this.selectedDiffField) return;
+        this.chooseDiffField(tab.dataset.diffField, container);
+      });
+      tabs.addEventListener("keydown", (event) => this.onTabKeydown(event, container));
+      this.watchTabOverflow(tabs);
+    }
+
+    this.mountTextDiff(container);
+  }
+
+  /**
+   * Walks the record queue. Reviewing dozens of records one-by-one is the stated use case,
+   * so the list is a keyboard surface rather than a pointer-only one.
+   */
+  onListKeydown(event, container) {
+    const total = this.comparisons.length;
+    if (total === 0) return;
+    const last = total - 1;
+    const moves = {
+      ArrowDown: () => Math.min(last, this.selectedIndex + 1),
+      ArrowUp: () => Math.max(0, this.selectedIndex - 1),
+      PageDown: () => Math.min(last, this.selectedIndex + 10),
+      PageUp: () => Math.max(0, this.selectedIndex - 10),
+      Home: () => 0,
+      End: () => last,
+    };
+    const move = moves[event.key];
+    if (!move) return;
+
+    event.preventDefault();
+    const next = move();
+    if (next !== this.selectedIndex) this.selectItem(next, container);
+  }
+
+  /**
+   * Arrow keys move through changed fields with automatic activation, the tabs pattern.
+   */
+  onTabKeydown(event, container) {
+    const fields = this.visibleDiffFields(this.comparisons[this.selectedIndex]) || [];
+    if (fields.length < 2) return;
+    const current = Math.max(0, fields.indexOf(this.selectedDiffField));
+    const last = fields.length - 1;
+    const moves = { ArrowRight: Math.min(last, current + 1), ArrowLeft: Math.max(0, current - 1), Home: 0, End: last };
+    if (!Object.hasOwn(moves, event.key)) return;
+
+    event.preventDefault();
+    const next = moves[event.key];
+    if (next !== current) this.chooseDiffField(fields[next], container);
+  }
+
+  chooseDiffField(field, container) {
+    this.selectedDiffField = field;
+    this.selectItem(this.selectedIndex, container, { focusRecord: false, focusField: true });
+  }
+
+  /**
+   * A field strip can outgrow its row. Edge masks mark the overflow, the wheel scrolls it, and
+   * the active tab is always brought back into view.
+   */
+  watchTabOverflow(strip) {
+    const update = () => {
+      const maxScroll = strip.scrollWidth - strip.clientWidth;
+      strip.classList.toggle("is-overflowing", maxScroll > 1);
+      strip.classList.toggle("can-scroll-back", maxScroll > 1 && strip.scrollLeft > 1);
+      strip.classList.toggle("can-scroll-forward", maxScroll > 1 && strip.scrollLeft < maxScroll - 1);
+    };
+
+    strip.addEventListener("scroll", update, { passive: true });
+    strip.addEventListener(
+      "wheel",
+      (event) => {
+        if (strip.scrollWidth <= strip.clientWidth || event.deltaY === 0) return;
+        event.preventDefault();
+        strip.scrollLeft += event.deltaY;
+      },
+      { passive: false },
+    );
+
+    if (typeof ResizeObserver !== "undefined") {
+      this.tabResizeObserver = new ResizeObserver(update);
+      this.tabResizeObserver.observe(strip);
+    }
+    update();
+    strip.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
+
+  /**
+   * Selects an item and updates the view. Only the detail pane is replaced, so the master list
+   * keeps its node, its scroll offset, and its observer bindings across selections.
+   */
+  selectItem(index, container, options = {}) {
+    const { focusRecord = true, focusField = false } = options;
+    const recordChanged = index !== this.selectedIndex;
+
+    this.dispose();
     this.selectedIndex = index;
+    if (recordChanged) this.selectedDiffField = null;
 
-    // Re-render the entire view (pass compareFields to preserve user selection)
-    const html = this.render(this.comparisons, this.env1Name, this.env2Name, { compareFields: this.compareFields });
-    container.innerHTML = html;
+    const list = container.querySelector(".master-items");
+    if (list) this.markSelectedItem(list, index, focusRecord);
 
-    // Re-attach event listeners
+    const pane = container.querySelector(".detail-pane");
+    if (pane) {
+      pane.innerHTML = this.renderDetailPanel();
+      this.bindDetailListeners(container);
+      if (focusField && this.selectedDiffField) {
+        const tab = [...container.querySelectorAll("[data-diff-field]")].find(
+          (element) => element.dataset.diffField === this.selectedDiffField,
+        );
+        tab?.focus();
+      }
+      return;
+    }
+
+    container.innerHTML = this.render(this.comparisons, this.env1Name, this.env2Name, {
+      compareFields: this.compareFields,
+    });
     this.attachEventListeners(container);
+  }
+
+  markSelectedItem(list, index, focusRecord) {
+    const items = list.querySelectorAll(".master-item");
+    items.forEach((item, itemIndex) => {
+      const selected = itemIndex === index;
+      item.classList.toggle("selected", selected);
+      item.setAttribute("aria-selected", String(selected));
+      item.tabIndex = selected ? 0 : -1;
+    });
+
+    const active = items[index];
+    if (!active) return;
+    if (typeof active.scrollIntoView === "function") active.scrollIntoView({ block: "nearest" });
+    if (focusRecord) active.focus({ preventScroll: true });
   }
 
   /**
    * Gets a human-readable status label
    */
   getStatusLabel(status) {
-    const sourceLabel = (name, fallback) => name?.match(/^\(([^)]+)\)/)?.[1] || name || fallback;
     switch (status) {
       case "match":
         return "Match";
       case "differ":
         return "Differ";
       case "only_in_env1":
-        return `Only in ${sourceLabel(this.env1Name, "Source A")}`;
+        return `Only in ${shortSourceName(this.env1Name, "Source A")}`;
       case "only_in_env2":
-        return `Only in ${sourceLabel(this.env2Name, "Source B")}`;
+        return `Only in ${shortSourceName(this.env2Name, "Source B")}`;
       default:
         return status;
     }
