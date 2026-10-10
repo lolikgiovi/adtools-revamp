@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## React migration
+
+Before designing the React foundation or migrating frontend tools, read `docs/REACT-MIGRATION.md` for user requirements, architecture,
+compatibility contracts, and completion criteria. The vanilla architecture and file conventions below describe the existing baseline;
+the migration document defines the React target and records the user's migration-specific dependency installation authorization.
+
 ## Development autonomy
 
 Work autonomously on development tasks. Complete as much of the task as possible without asking for confirmation.

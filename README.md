@@ -93,6 +93,7 @@ Tauri WebView → Same frontend code → API calls to CF Workers
 
 ## Documentation
 
+- [React migration requirements and foundation](docs/REACT-MIGRATION.md) — Read before designing or migrating the frontend.
 - [AD Tools architecture](docs/AD_TOOLS_ARCHITECTURE.md)
 - [Performance baseline](docs/PERFORMANCE.md)
 - [Jira 9.17 REST integration notes](docs/JIRA-INTEGRATION.md)
