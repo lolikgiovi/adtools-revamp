@@ -1,7 +1,8 @@
 # React migration: requirements and foundation
 
-Status: agreed migration direction and recommended implementation contract. This document describes the target; it does not claim that
-the React foundation is implemented or verified. Recorded on 2026-10-10 for the `ad-tools-revamp-react` worktree and branch.
+Status: agreed migration direction and recommended implementation contract, recorded on 2026-10-10 for the
+`ad-tools-revamp-react` worktree and branch. The implementation and dated verification evidence for the partial foundation
+and UUID Generator port are in [REACT-FOUNDATION.md](REACT-FOUNDATION.md). This document continues to describe the target.
 
 Read this document before designing the foundation or migrating a frontend tool. The existing architecture document describes the
 vanilla implementation; this document owns the React migration direction. Keep implementation status and dated verification evidence

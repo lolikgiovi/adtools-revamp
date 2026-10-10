@@ -1,9 +1,13 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath, URL } from "node:url";
 
 // Production backend URL for Tauri builds
 const WORKER_BASE = "https://adtools.lolik.workers.dev";
 
 export default defineConfig(({ mode }) => ({
+  plugins: [react({ babel: { plugins: ["babel-plugin-react-compiler"] } }), tailwindcss()],
   root: "./frontend",
   publicDir: "public",
   base: "./",
@@ -33,7 +37,7 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     alias: {
-      "@": "/",
+      "@": fileURLToPath(new URL("./frontend/src", import.meta.url)),
     },
   },
 }));

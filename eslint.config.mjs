@@ -1,5 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 
 const recommendedRulesAsWarnings = Object.fromEntries(Object.keys(js.configs.recommended.rules).map((rule) => [rule, "warn"]));
 
@@ -69,5 +71,11 @@ export default [
         ...globals.vitest,
       },
     },
+  },
+  ...tseslint.configs.recommended.map((config) => ({ ...config, files: ["frontend/src/**/*.{ts,tsx}"] })),
+  {
+    files: ["frontend/src/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: reactHooks.configs.flat["recommended-latest"].rules,
   },
 ];
