@@ -1,8 +1,31 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon, Home01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  BinaryCodeIcon,
+  BracketsIcon,
+  CodeXmlIcon,
+  Database01Icon,
+  DatabaseSearchIcon,
+  FileCodeIcon,
+  FileSpreadsheetIcon,
+  FingerPrintIcon,
+  GitCompareIcon,
+  GitMergeIcon,
+  GlobalSearchIcon,
+  Home01Icon,
+  ImageDoneIcon,
+  ListViewIcon,
+  NetworkIcon,
+  ParenthesesIcon,
+  PlayCircleIcon,
+  QrCodeIcon,
+  Queue01Icon,
+  TextNumberSignIcon,
+  ToolboxIcon,
+} from "@hugeicons/core-free-icons";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
@@ -26,6 +49,27 @@ import { hasRegistration } from "@/platform/registration";
 
 const UUIDGeneratorPage = lazy(() => import("@/tools/uuid-generator/UUIDGeneratorPage"));
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
+const TOOL_ICONS = {
+  uuid: FingerPrintIcon,
+  json: BracketsIcon,
+  base64: BinaryCodeIcon,
+  "char-counter": TextNumberSignIcon,
+  tlv: ListViewIcon,
+  qr: QrCodeIcon,
+  database: Database01Icon,
+  querify: FileSpreadsheetIcon,
+  "database-compare": GitCompareIcon,
+  "jenkins-query": PlayCircleIcon,
+  "jenkins-batch": Queue01Icon,
+  "redis-cache": DatabaseSearchIcon,
+  kafka: NetworkIcon,
+  html: CodeXmlIcon,
+  "splunk-template": FileCodeIcon,
+  "sql-in": ParenthesesIcon,
+  "merge-sql": GitMergeIcon,
+  "image-check": ImageDoneIcon,
+  language: GlobalSearchIcon,
+} as const;
 
 function HomePage() {
   return (
@@ -51,17 +95,19 @@ function PendingPage() {
 }
 
 function AppNavigation({ desktop }: { desktop: boolean }) {
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, state } = useSidebar();
   const { pathname } = useLocation();
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   return (
-    <Sidebar collapsible="offcanvas" aria-label="Main navigation">
+    <Sidebar collapsible="icon" aria-label="Main navigation">
       <SidebarHeader className="flex-row items-center justify-between">
         <SidebarMenu className="min-w-0 flex-1">
           <SidebarMenuItem>
             <SidebarMenuButton
               render={<NavLink to="/" onClick={() => setOpenMobile(false)} />}
               isActive={pathname === "/" || pathname === "/home"}
+              tooltip="AD Tools"
             >
               <HugeiconsIcon icon={Home01Icon} strokeWidth={2} aria-hidden="true" />
               <span className="font-semibold">AD Tools</span>
@@ -78,9 +124,17 @@ function AppNavigation({ desktop }: { desktop: boolean }) {
             if (categoryTools.length === 0) return null;
 
             return (
-              <Collapsible key={category.id} defaultOpen className="group/collapsible">
+              <Collapsible
+                key={category.id}
+                open={state === "collapsed" || openCategories[category.id] !== false}
+                onOpenChange={(open) => setOpenCategories((current) => ({ ...current, [category.id]: open }))}
+                className="group/collapsible"
+              >
                 <SidebarGroup>
-                  <SidebarGroupLabel render={<CollapsibleTrigger />} className="w-full cursor-pointer hover:bg-sidebar-accent">
+                  <SidebarGroupLabel
+                    render={<CollapsibleTrigger />}
+                    className="w-full cursor-pointer hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
+                  >
                     {category.name}
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
@@ -97,7 +151,13 @@ function AppNavigation({ desktop }: { desktop: boolean }) {
                             <SidebarMenuButton
                               render={<NavLink to={`/${tool.id}`} onClick={() => setOpenMobile(false)} />}
                               isActive={pathname === `/${tool.id}`}
+                              tooltip={tool.name}
                             >
+                              <HugeiconsIcon
+                                icon={TOOL_ICONS[tool.icon as keyof typeof TOOL_ICONS] ?? ToolboxIcon}
+                                strokeWidth={2}
+                                aria-hidden="true"
+                              />
                               <span>{tool.name}</span>
                             </SidebarMenuButton>
                           </SidebarMenuItem>

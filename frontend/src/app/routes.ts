@@ -1,6 +1,6 @@
 import toolsConfig from "../../config/tools.json";
 
-type ToolConfig = { id: string; name: string; category: string; order: number; requiresTauri?: boolean };
+type ToolConfig = { id: string; name: string; category: string; icon?: string; order: number; requiresTauri?: boolean };
 type CategoryConfig = { id: string; name: string; order: number; requiresTauri?: boolean };
 
 const registry = toolsConfig as { tools: ToolConfig[]; categories: CategoryConfig[] };
