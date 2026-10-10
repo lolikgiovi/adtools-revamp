@@ -20,6 +20,7 @@ distinct from requirements.
   and blue chart palette. These values were confirmed through the shadcn CLI. Hugeicons is the chosen icon library.
 - Reuse existing shadcn components and their composition patterns. Create custom UI only for a concrete capability they do not provide.
 - Work in this isolated worktree. Intermediate app usability is not required; the branch may remain incomplete while tools migrate.
+- AD Tools is used in desktop windows, including a window occupying roughly half the desktop screen. Keep navigation and tool workflows usable at both widths. Mobile interaction is outside the product scope and is not a migration acceptance criterion.
 - Proceed autonomously with routine implementation choices. Raise material product or architecture decisions when necessary.
 - The user explicitly authorized installing dependencies needed for this migration. This is a migration-specific exception to the
   existing repository installation restriction; it does not authorize unrelated downloads, production publishing, or deployment.
@@ -165,8 +166,9 @@ Retain the `dist` output contract, relative asset base, API proxy/environment co
 frontend toolchain changes compatible with existing Worker and CommonJS scripts. Enable `.ts`/`.tsx` lint and test discovery and an explicit
 typecheck; Vite transpilation alone is not type verification. Temporary JavaScript reuse must be bounded to unconverted modules.
 
-**Done when:** the shell renders with the preset, a lazy route works, typecheck/lint/build cover the new sources, and browser plus Tauri
-smoke evidence records the actual environment and result. Record unavailable verification as incomplete.
+**Done when:** the shell renders with the preset, a lazy route works, typecheck/lint/build cover the new sources, and browser checks at
+normal and half-width desktop sizes plus Tauri smoke evidence record the actual environment and result. Record unavailable verification
+as incomplete.
 
 ### C. Prove the patterns with representative tools
 
@@ -203,6 +205,7 @@ smallest relevant non-watch scope and serialize Vitest runs.
 
 Cover normal and failure/cancellation paths, rapid navigation, reload persistence, clipboard/export, supported platform behavior, and
 large datasets. Check widget/listener/worker cleanup and that navigation cannot commit stale asynchronous results or duplicate jobs.
+For layout checks, use a normal desktop window and a roughly half-width desktop window. Mobile interaction does not need E2E coverage.
 
 Save repeatable evidence under `docs/`: environment, source revision, commands/steps, fixtures, assertions, result, and relevant artifacts.
 Distinguish source assessment, typecheck/build, automated tests, browser E2E, live integrations, and packaged Desktop verification.

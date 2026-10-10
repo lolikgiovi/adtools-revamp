@@ -2,9 +2,24 @@ import { Suspense, lazy } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Home01Icon } from "@hugeicons/core-free-icons";
-import { buttonVariants } from "@/components/ui/button";
+import { ArrowDown01Icon, Home01Icon } from "@hugeicons/core-free-icons";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { categories, toolById, tools } from "./routes";
 import { isDesktop } from "@/platform/runtime";
 import { hasRegistration } from "@/platform/registration";
@@ -35,6 +50,70 @@ function PendingPage() {
   );
 }
 
+function AppNavigation({ desktop }: { desktop: boolean }) {
+  const { setOpenMobile } = useSidebar();
+  const { pathname } = useLocation();
+
+  return (
+    <Sidebar collapsible="offcanvas" aria-label="Main navigation">
+      <SidebarHeader className="flex-row items-center justify-between">
+        <SidebarMenu className="min-w-0 flex-1">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<NavLink to="/" onClick={() => setOpenMobile(false)} />}
+              isActive={pathname === "/" || pathname === "/home"}
+            >
+              <HugeiconsIcon icon={Home01Icon} strokeWidth={2} aria-hidden="true" />
+              <span className="font-semibold">AD Tools</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarTrigger className="md:hidden" />
+      </SidebarHeader>
+      <SidebarContent>
+        {categories
+          .filter((category) => !category.requiresTauri || desktop)
+          .map((category) => {
+            const categoryTools = tools.filter((tool) => tool.category === category.id && (!tool.requiresTauri || desktop));
+            if (categoryTools.length === 0) return null;
+
+            return (
+              <Collapsible key={category.id} defaultOpen className="group/collapsible">
+                <SidebarGroup>
+                  <SidebarGroupLabel render={<CollapsibleTrigger />} className="w-full cursor-pointer hover:bg-sidebar-accent">
+                    {category.name}
+                    <HugeiconsIcon
+                      icon={ArrowDown01Icon}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                      className="ml-auto transition-transform group-data-closed/collapsible:-rotate-90"
+                    />
+                  </SidebarGroupLabel>
+                  <CollapsibleContent>
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        {categoryTools.map((tool) => (
+                          <SidebarMenuItem key={tool.id}>
+                            <SidebarMenuButton
+                              render={<NavLink to={`/${tool.id}`} onClick={() => setOpenMobile(false)} />}
+                              isActive={pathname === `/${tool.id}`}
+                            >
+                              <span>{tool.name}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                </SidebarGroup>
+              </Collapsible>
+            );
+          })}
+      </SidebarContent>
+    </Sidebar>
+  );
+}
+
 function AppShell() {
   const { pathname } = useLocation();
   const active = toolById.get(pathname.slice(1));
@@ -42,44 +121,16 @@ function AppShell() {
   const registered = hasRegistration();
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="hidden w-60 shrink-0 border-r bg-sidebar p-4 md:block" aria-label="Main navigation">
-        <NavLink to="/" className="mb-6 flex items-center gap-2 font-semibold text-sidebar-foreground">
-          <HugeiconsIcon icon={Home01Icon} strokeWidth={2} aria-hidden="true" /> AD Tools
-        </NavLink>
-        <nav className="flex flex-col gap-4" aria-label="Tools">
-          {categories
-            .filter((category) => !category.requiresTauri || desktop)
-            .map((category) => (
-              <div key={category.id} className="flex flex-col gap-1">
-                <h2 className="px-2 text-xs font-medium uppercase text-muted-foreground">{category.name}</h2>
-                {tools
-                  .filter((tool) => tool.category === category.id && (!tool.requiresTauri || desktop))
-                  .map((tool) => (
-                    <NavLink
-                      key={tool.id}
-                      to={`/${tool.id}`}
-                      className={({ isActive }) =>
-                        `rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent ${isActive ? "bg-sidebar-accent font-medium" : "text-sidebar-foreground"}`
-                      }
-                    >
-                      {tool.name}
-                    </NavLink>
-                  ))}
-              </div>
-            ))}
-        </nav>
-      </aside>
+    <SidebarProvider className="bg-background text-foreground">
+      <AppNavigation desktop={desktop} />
       <div className="min-w-0 flex-1">
         <header className="flex h-14 items-center gap-3 border-b px-4 md:px-6">
+          <SidebarTrigger />
           <NavLink to="/" className="font-medium">
             AD Tools
           </NavLink>
           <span className="text-muted-foreground">/</span>
           <span className="font-medium">{active?.name ?? "Home"}</span>
-          <NavLink to="/uuid-generator" className={`${buttonVariants({ variant: "outline", size: "sm" })} ml-auto md:hidden`}>
-            UUID Generator
-          </NavLink>
         </header>
         <main className="p-4 md:p-6">
           {registered ? (
@@ -99,7 +150,7 @@ function AppShell() {
         </main>
       </div>
       <Toaster />
-    </div>
+    </SidebarProvider>
   );
 }
 
@@ -107,7 +158,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        <AppShell />
+        <TooltipProvider>
+          <AppShell />
+        </TooltipProvider>
       </HashRouter>
     </QueryClientProvider>
   );
