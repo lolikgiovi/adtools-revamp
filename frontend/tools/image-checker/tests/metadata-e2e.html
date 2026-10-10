@@ -72,7 +72,7 @@
           const input = tool.elements.batchImagePathsInput;
           input.value = `/content/v1/image/${id}.png`;
           input.dispatchEvent(new Event("input"));
-          tool.elements.imageOracleConnection.value = connection.name;
+          tool.setOracleSelection([connection.name]);
           await tool.checkImages();
           assert(
             queries.length === 1 && queries[0].name === connection.name && queries[0].sql.includes(`'${id}'`),
@@ -101,19 +101,20 @@
             "Oracle failure preserves CDN success",
           );
           failOracle = false;
-          tool.elements.imageOracleConnection.value = "";
+          tool.setOracleSelection([]);
           await tool.checkImages();
           assert(
-            queries.length === 2 && tool.root.querySelector("[data-oracle-size]").textContent === "Not checked",
-            "No Oracle environment selected sends no query",
+            queries.length === 2 && tool.root.querySelector("[data-oracle-size]") === null,
+            "No Oracle environment selected sends no query and renders no Oracle columns",
           );
-          tool.elements.imageOracleConnection.value = connection.name;
+          tool.setOracleSelection([connection.name]);
           await tool.checkImages();
           report.textContent = `${passed.join("\n")}\nRESULT: ${passed.length} checks passed`;
         } catch (error) {
           report.textContent = `${passed.join("\n")}\nFAIL ${error.message}`;
         }
       });
+      if (new URLSearchParams(location.search).has("autorun")) document.querySelector("#verify").click();
     </script>
   </body>
 </html>

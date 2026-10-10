@@ -752,10 +752,51 @@
 }
 
 .environment-option input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
   width: 1rem;
   height: 1rem;
   margin: 0;
-  accent-color: hsl(var(--primary));
+  border: 1.5px solid hsl(var(--muted-foreground) / 0.55);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--checker-text);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.environment-option input::before {
+  content: "";
+  width: 0.52rem;
+  height: 0.3rem;
+  margin-top: -0.12rem;
+  border-left: 2px solid hsl(var(--info-foreground));
+  border-bottom: 2px solid hsl(var(--info-foreground));
+  transform: rotate(-45deg) scale(0);
+  transition: transform 120ms ease-out;
+}
+
+.environment-option input:hover {
+  border-color: hsl(var(--info));
+}
+
+.environment-option input:checked {
+  border-color: hsl(var(--info));
+  background: hsl(var(--info));
+}
+
+.environment-option input:checked::before {
+  transform: rotate(-45deg) scale(1);
+}
+
+.environment-option input:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.8);
+  outline-offset: 2px;
 }
 
 .environment-option-all {
@@ -1525,9 +1566,8 @@
     width: 100%;
   }
 
-  .check-image-tool .image-oracle-select {
+  .check-image-tool .image-oracle-control .env-selector {
     flex: 1;
-    max-width: none;
   }
 
   .check-image-run-actions .btn-primary {
@@ -1564,6 +1604,11 @@
   .progress-bar {
     transition: none;
   }
+
+  .environment-option input,
+  .environment-option input::before {
+    transition: none;
+  }
 }
 
 /* Oracle CONTENT.IMAGE lookup: desktop only, and only once a connection exists. */
@@ -1575,26 +1620,8 @@
   min-height: 2.45rem;
 }
 
-.check-image-tool .image-oracle-select {
-  height: 2.45rem;
-  min-width: 11rem;
-  max-width: 16rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.45rem;
-  background: var(--checker-control);
-  color: var(--checker-text);
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.check-image-tool .image-oracle-select:hover {
-  border-color: hsl(var(--primary));
-}
-
-.check-image-tool .image-oracle-select:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.check-image-tool .image-oracle-control .env-selector {
+  min-width: 9.5rem;
 }
 
 .check-image-tool .image-oracle-cell {

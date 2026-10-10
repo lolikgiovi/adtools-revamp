@@ -32,7 +32,9 @@ class CheckImageTool extends BaseTool {
     this.statusFilter = "all";
     this.runProgress = null;
     this.selectedEnvironmentIndices = null;
+    this.selectedOracleNames = new Set();
     this.environmentDocumentClick = null;
+    this.oracleDocumentClick = null;
   }
 
   getIconSvg() {
@@ -60,6 +62,10 @@ class CheckImageTool extends BaseTool {
       document.removeEventListener("click", this.environmentDocumentClick);
       this.environmentDocumentClick = null;
     }
+    if (this.oracleDocumentClick) {
+      document.removeEventListener("click", this.oracleDocumentClick);
+      this.oracleDocumentClick = null;
+    }
     this.root = null;
     this.elements = null;
   }
@@ -72,7 +78,9 @@ class CheckImageTool extends BaseTool {
   bindElements() {
     this.elements = {
       imageOracleControl: this.root.querySelector("#imageOracleControl"),
-      imageOracleConnection: this.root.querySelector("#imageOracleConnection"),
+      oracleSelector: this.root.querySelector("#oracleSelector"),
+      oracleSelectorValue: this.root.querySelector("#oracleSelectorValue"),
+      oracleSelectorMenu: this.root.querySelector("#oracleSelectorMenu"),
       imageOracleHint: this.root.querySelector("#imageOracleHint"),
       configureOracleButton: this.root.querySelector("#configureOracleButton"),
       batchImagePathsInput: this.root.querySelector("#batchImagePathsInput"),
@@ -195,9 +203,9 @@ class CheckImageTool extends BaseTool {
       }
     });
 
-    this.populateOracleConnections();
+    this.populateOracleSelector();
     this.updateOracleControl();
-    this.elements.imageOracleConnection?.addEventListener("change", () => this.saveValues());
+    this.setupOracleSelector();
     this.elements.configureOracleButton?.addEventListener("click", () => this.openOracleSettings());
     this.populateEnvSelector();
     this.loadSavedValues();
@@ -206,39 +214,77 @@ class CheckImageTool extends BaseTool {
     this.updateCheckButtonState();
   }
 
-  setupEnvironmentSelector() {
-    const trigger = this.elements?.envSelector;
-    const menu = this.elements?.envSelectorMenu;
-    if (!trigger || !menu) return;
+  /**
+   * Wire one trigger+menu pair as a multi-select combobox: click or Enter/Space/ArrowDown
+   * opens, Escape closes and refocuses, Tab closes, clicks outside close, and checkbox
+   * changes route to the caller's handler. Returns the outside-click handler for cleanup.
+   */
+  setupSelectorMenu({ control, trigger, menu, onChange }) {
+    if (!trigger || !menu) return null;
 
     trigger.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.toggleEnvironmentMenu();
+      this.toggleSelectorMenu(trigger, menu);
     });
     trigger.addEventListener("keydown", (event) => {
       if (["Enter", " ", "ArrowDown"].includes(event.key)) {
         event.preventDefault();
-        this.toggleEnvironmentMenu(true);
+        this.toggleSelectorMenu(trigger, menu, true);
       } else if (event.key === "Escape") {
         event.preventDefault();
-        this.closeEnvironmentMenu(true);
+        this.closeSelectorMenu(trigger, menu, true);
       }
     });
     menu.addEventListener("click", (event) => event.stopPropagation());
     menu.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        this.closeEnvironmentMenu(true);
+        this.closeSelectorMenu(trigger, menu, true);
       } else if (event.key === "Tab") {
-        this.closeEnvironmentMenu();
+        this.closeSelectorMenu(trigger, menu);
       }
     });
-    menu.addEventListener("change", (event) => this.handleEnvironmentSelectionChange(event));
+    menu.addEventListener("change", onChange);
 
-    this.environmentDocumentClick = (event) => {
-      if (!this.elements?.environmentControl?.contains(event.target)) this.closeEnvironmentMenu();
+    const onDocumentClick = (event) => {
+      if (!control?.contains(event.target)) this.closeSelectorMenu(trigger, menu);
     };
-    document.addEventListener("click", this.environmentDocumentClick);
+    document.addEventListener("click", onDocumentClick);
+    return onDocumentClick;
+  }
+
+  setupEnvironmentSelector() {
+    this.environmentDocumentClick = this.setupSelectorMenu({
+      control: this.elements?.environmentControl,
+      trigger: this.elements?.envSelector,
+      menu: this.elements?.envSelectorMenu,
+      onChange: (event) => this.handleEnvironmentSelectionChange(event),
+    });
+  }
+
+  setupOracleSelector() {
+    this.oracleDocumentClick = this.setupSelectorMenu({
+      control: this.elements?.imageOracleControl,
+      trigger: this.elements?.oracleSelector,
+      menu: this.elements?.oracleSelectorMenu,
+      onChange: (event) => this.handleOracleSelectionChange(event),
+    });
+  }
+
+  toggleSelectorMenu(trigger, menu, forceOpen) {
+    if (!menu || !trigger || trigger.disabled) return;
+
+    const open = typeof forceOpen === "boolean" ? forceOpen : menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute("aria-expanded", String(open));
+    if (open) menu.querySelector("input")?.focus();
+  }
+
+  closeSelectorMenu(trigger, menu, returnFocus = false) {
+    if (!menu || !trigger) return;
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    if (returnFocus) trigger.focus();
   }
 
   /**
@@ -331,7 +377,7 @@ class CheckImageTool extends BaseTool {
 
     if (value) value.textContent = selectionLabel;
     if (this.elements?.envSelector) {
-      this.elements.envSelector.setAttribute("aria-label", `${selectionLabel}. Choose environments`);
+      this.elements.envSelector.setAttribute("aria-label", `CDN Environment: ${selectionLabel}. Choose environments`);
     }
     if (hint) {
       hint.textContent =
@@ -339,26 +385,6 @@ class CheckImageTool extends BaseTool {
           ? "Configure at least one CDN base URL in Settings."
           : `${selectedCount} of ${baseUrls.length} environments selected.`;
     }
-  }
-
-  toggleEnvironmentMenu(forceOpen) {
-    const menu = this.elements?.envSelectorMenu;
-    const trigger = this.elements?.envSelector;
-    if (!menu || !trigger || trigger.disabled) return;
-
-    const open = typeof forceOpen === "boolean" ? forceOpen : menu.hidden;
-    menu.hidden = !open;
-    trigger.setAttribute("aria-expanded", String(open));
-    if (open) menu.querySelector("input")?.focus();
-  }
-
-  closeEnvironmentMenu(returnFocus = false) {
-    const menu = this.elements?.envSelectorMenu;
-    const trigger = this.elements?.envSelector;
-    if (!menu || !trigger) return;
-    menu.hidden = true;
-    trigger.setAttribute("aria-expanded", "false");
-    if (returnFocus) trigger.focus();
   }
 
   /**
@@ -372,45 +398,102 @@ class CheckImageTool extends BaseTool {
   }
 
   /**
-   * Fill the Oracle picker with the saved connections, keeping the current selection when it survives.
+   * Fill the Oracle combobox with the saved connections, keeping the selections that survive.
    */
-  populateOracleConnections() {
-    const select = this.elements?.imageOracleConnection;
-    if (!select) return;
+  populateOracleSelector() {
+    const menu = this.elements?.oracleSelectorMenu;
+    if (!menu) return;
 
-    const previous = select.value;
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "No Oracle environment";
-    select.replaceChildren(placeholder);
+    const connections = ImageOracleService.loadConnections();
+    const validNames = new Set(connections.map((connection) => connection.name));
+    this.selectedOracleNames = new Set([...this.selectedOracleNames].filter((name) => validNames.has(name)));
 
-    for (const connection of ImageOracleService.loadConnections()) {
-      const option = document.createElement("option");
-      option.value = connection.name;
-      option.textContent = connection.name;
-      select.appendChild(option);
-    }
-    select.value = previous;
+    menu.replaceChildren();
+    connections.forEach((connection) => {
+      menu.appendChild(this.createOracleOption(connection.name, connection.name, this.selectedOracleNames.has(connection.name)));
+    });
+    this.updateOracleSelectionUi();
+  }
+
+  createOracleOption(value, label, checked) {
+    const option = document.createElement("label");
+    option.className = "environment-option";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = value;
+    input.checked = checked;
+    input.dataset.oracleOption = value;
+    input.setAttribute("aria-label", label);
+
+    const text = document.createElement("span");
+    text.textContent = label;
+    option.append(input, text);
+    return option;
   }
 
   /**
-   * Keep the Oracle picker honest: desktop only, and only once a connection has been saved.
+   * Apply a selection by name, ignoring anything that is not a saved connection.
+   */
+  setOracleSelection(names) {
+    const validNames = new Set(ImageOracleService.loadConnections().map((connection) => connection.name));
+    this.selectedOracleNames = new Set((names || []).filter((name) => validNames.has(name)));
+    this.syncOracleOptionStates();
+    this.updateOracleSelectionUi();
+  }
+
+  syncOracleOptionStates() {
+    const menu = this.elements?.oracleSelectorMenu;
+    if (!menu) return;
+    menu.querySelectorAll("input[data-oracle-option]").forEach((input) => {
+      input.checked = this.selectedOracleNames.has(input.value);
+    });
+  }
+
+  handleOracleSelectionChange(event) {
+    const input = event.target.closest?.("input[data-oracle-option]");
+    if (!input) return;
+
+    if (input.checked) this.selectedOracleNames.add(input.value);
+    else this.selectedOracleNames.delete(input.value);
+    this.updateOracleSelectionUi();
+    this.saveValues();
+  }
+
+  updateOracleSelectionUi() {
+    const count = this.selectedOracleNames.size;
+    const label = count === 0 ? "No Oracle DB" : count === 1 ? [...this.selectedOracleNames][0] : `${count} Oracle DBs`;
+
+    if (this.elements?.oracleSelectorValue) this.elements.oracleSelectorValue.textContent = label;
+    this.elements.oracleSelector?.setAttribute("aria-label", `Oracle DB: ${label}. Choose connections`);
+  }
+
+  /**
+   * Get the selected Oracle connections.
+   * @returns {Array} Array of saved connection objects
+   */
+  getSelectedOracleConnections() {
+    return ImageOracleService.loadConnections().filter((connection) => this.selectedOracleNames.has(connection.name));
+  }
+
+  /**
+   * Keep the Oracle combobox honest: desktop only, and only once a connection has been saved.
    */
   updateOracleControl() {
     const control = this.elements?.imageOracleControl;
-    const select = this.elements?.imageOracleConnection;
-    if (!control || !select) return;
+    const trigger = this.elements?.oracleSelector;
+    if (!control || !trigger) return;
 
     const hasConnections = ImageOracleService.loadConnections().length > 0;
     control.hidden = !isTauri();
-    select.hidden = !hasConnections;
+    trigger.hidden = !hasConnections;
     if (this.elements.configureOracleButton) this.elements.configureOracleButton.hidden = hasConnections;
     if (this.elements.imageOracleHint) {
       this.elements.imageOracleHint.textContent = hasConnections
-        ? "Optional. Look up CONTENT.IMAGE in the selected Oracle environment."
+        ? "Optional. Look up CONTENT.IMAGE in the selected Oracle environments."
         : "No Oracle connections saved yet. Add one in Settings to check CONTENT.IMAGE.";
     }
-    select.disabled = Boolean(this.isChecking);
+    trigger.disabled = Boolean(this.isChecking);
   }
 
   /**
@@ -448,9 +531,15 @@ class CheckImageTool extends BaseTool {
   }
 
   /**
-   * Fill the Context and Base64 size columns from CONTENT.IMAGE for the current run.
+   * Fill the Context and Base64 size columns from CONTENT.IMAGE, one pair per selected connection.
    */
-  async fetchOracleMetadata(imagePaths, connection, runId) {
+  async fetchOracleMetadata(imagePaths, connections, runId) {
+    await Promise.all(
+      (connections || []).map((connection, connectionIndex) => this.fetchOracleMetadataForConnection(imagePaths, connection, connectionIndex, runId)),
+    );
+  }
+
+  async fetchOracleMetadataForConnection(imagePaths, connection, connectionIndex, runId) {
     if (!connection || !this.isCheckRunCurrent(runId)) return;
     let records;
     let error;
@@ -461,8 +550,8 @@ class CheckImageTool extends BaseTool {
     }
     if (!this.isCheckRunCurrent(runId)) return;
     imagePaths.forEach((path, index) => {
-      const context = this.root.querySelector(`[data-oracle-context="${index}"]`);
-      const size = this.root.querySelector(`[data-oracle-size="${index}"]`);
+      const context = this.root.querySelector(`[data-oracle-context="${index}-${connectionIndex}"]`);
+      const size = this.root.querySelector(`[data-oracle-size="${index}-${connectionIndex}"]`);
       if (!context || !size) return;
       const id = ImageOracleService.cleanImageId(path);
       const record = records?.get(id);
@@ -506,19 +595,16 @@ class CheckImageTool extends BaseTool {
       return;
     }
 
-    let oracleConnection = null;
-    if (this.elements.imageOracleConnection?.value) {
-      oracleConnection = ImageOracleService.loadConnections().find((c) => c.name === this.elements.imageOracleConnection.value);
-      if (!oracleConnection) {
-        this.showInputValidation("Choose a saved Oracle connection. Configure connections in Settings if needed.");
-        return;
-      }
-    }
+    const oracleConnections = this.getSelectedOracleConnections();
     this.clearInputValidation();
     this.recordReferenceHistory(imagePaths);
 
     try {
-      UsageTracker.trackEvent("check-image", "check_start", { images: imagePaths.length, envs: baseUrls.length });
+      UsageTracker.trackEvent("check-image", "check_start", {
+        images: imagePaths.length,
+        envs: baseUrls.length,
+        oracles: oracleConnections.length,
+      });
     } catch (_) {
       // Analytics should never block an image check.
     }
@@ -531,12 +617,12 @@ class CheckImageTool extends BaseTool {
       runId,
     };
     this.setCheckingState(true);
-    this.renderProgressiveTable(imagePaths, baseUrls, runId);
+    this.renderProgressiveTable(imagePaths, baseUrls, runId, oracleConnections);
 
     try {
       await Promise.all([
         this.fetchAllCellsProgressively(imagePaths, baseUrls, runId),
-        this.fetchOracleMetadata(imagePaths, oracleConnection, runId),
+        this.fetchOracleMetadata(imagePaths, oracleConnections, runId),
       ]);
     } finally {
       if (this.isCheckRunCurrent(runId)) {
@@ -737,8 +823,8 @@ class CheckImageTool extends BaseTool {
     }
     if (cancelButton) cancelButton.hidden = !isChecking;
     if (this.elements?.checkProgress) this.elements.checkProgress.hidden = !isChecking;
-    if (this.elements?.imageOracleConnection) {
-      this.elements.imageOracleConnection.disabled = isChecking;
+    if (this.elements?.oracleSelector) {
+      this.elements.oracleSelector.disabled = isChecking;
     }
     this.updateCheckButtonState();
   }
@@ -772,7 +858,7 @@ class CheckImageTool extends BaseTool {
   /**
    * Render the table structure with loading spinners in each cell
    */
-  renderProgressiveTable(imagePaths, baseUrls, runId = null) {
+  renderProgressiveTable(imagePaths, baseUrls, runId = null, oracleConnections = []) {
     if (runId === null) runId = this.beginCheckRun();
     if (!this.isCheckRunCurrent(runId)) return;
     this.clearResults({ invalidate: false });
@@ -822,11 +908,13 @@ class CheckImageTool extends BaseTool {
       headerRow.appendChild(th);
     });
 
-    ["Context", "Base64 size"].forEach((label) => {
-      const heading = document.createElement("th");
-      heading.textContent = label;
-      heading.scope = "col";
-      headerRow.appendChild(heading);
+    oracleConnections.forEach((connection) => {
+      ["Context", "Base64 size"].forEach((label) => {
+        const heading = document.createElement("th");
+        heading.textContent = `${label} (${connection.name})`;
+        heading.scope = "col";
+        headerRow.appendChild(heading);
+      });
     });
     thead.appendChild(headerRow);
     table.appendChild(thead);
@@ -854,12 +942,14 @@ class CheckImageTool extends BaseTool {
         row.appendChild(td);
       });
 
-      ["context", "size"].forEach((field) => {
-        const td = document.createElement("td");
-        td.className = "image-oracle-cell";
-        td.setAttribute(`data-oracle-${field}`, String(rowIndex));
-        td.textContent = this.elements.imageOracleConnection?.value ? "Checking…" : "Not checked";
-        row.appendChild(td);
+      oracleConnections.forEach((connection, connectionIndex) => {
+        ["context", "size"].forEach((field) => {
+          const td = document.createElement("td");
+          td.className = "image-oracle-cell";
+          td.setAttribute(`data-oracle-${field}`, `${rowIndex}-${connectionIndex}`);
+          td.textContent = "Checking…";
+          row.appendChild(td);
+        });
       });
       tbody.appendChild(row);
     });
@@ -1751,7 +1841,7 @@ class CheckImageTool extends BaseTool {
   saveValues() {
     const values = {
       batchImagePaths: this.elements.batchImagePathsInput.value,
-      oracleConnection: this.elements.imageOracleConnection?.value || "",
+      oracleConnections: [...(this.selectedOracleNames || [])],
     };
     localStorage.setItem("image_checker_last_value", JSON.stringify(values));
   }
@@ -1762,8 +1852,13 @@ class CheckImageTool extends BaseTool {
       if (savedValues) {
         const values = JSON.parse(savedValues);
         this.elements.batchImagePathsInput.value = values.batchImagePaths || "";
-        if (this.elements.imageOracleConnection) {
-          this.elements.imageOracleConnection.value = values.oracleConnection || "";
+        if (Array.isArray(values.oracleConnections) || typeof values.oracleConnection === "string") {
+          const names = Array.isArray(values.oracleConnections)
+            ? values.oracleConnections
+            : values.oracleConnection
+              ? [values.oracleConnection]
+              : [];
+          this.setOracleSelection(names);
         }
       }
     } catch (error) {

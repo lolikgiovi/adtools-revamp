@@ -66,68 +66,102 @@ function findValue(rowData, dataKeys) {
 }
 
 /**
- * Build a read-only Oracle query for differing records present in one table source.
- * @param {Object} result - Compare Config result
- * @param {Object} target - Source metadata with side, table identifiers, and key columns
- * @returns {{query: string|null, rowCount: number, error?: string}}
+ * Differing records grouped the way the panel labels them. Order matches the
+ * reading order users get in the pasted predicate list.
  */
-export function buildOracleRowQuery(result, target) {
+const DIFF_GROUPS = [
+  { status: "only_in_env1", label: "Only in Source A" },
+  { status: "only_in_env2", label: "Only in Source B" },
+  { status: "differ", label: "Value differs" },
+];
+
+function rowDataForStatus(row) {
+  const primary = row.status === "only_in_env2" ? row.env2_data : row.env1_data;
+  return primary ?? row.env1_data ?? row.env2_data ?? null;
+}
+
+/** Key tuples for one group, deduplicated and in first-seen order. */
+function collectTuples(rows, keyColumns) {
+  const tupleMap = new Map();
+
+  for (const row of rows) {
+    const rowData = rowDataForStatus(row);
+    if (!rowData) continue;
+
+    const values = keyColumns.map((keyColumn) => {
+      const found = findValue(rowData, keyColumn.dataKeys || [keyColumn.column]);
+      if (!found.found || found.value === undefined) {
+        throw new Error(`Could not find key field "${keyColumn.column}" in a differing row. Check the selected key fields.`);
+      }
+      return { column: quoteIdentifier(keyColumn.column), ...formatValue(found.value) };
+    });
+
+    const signature = values.map((value) => value.signature).join("\u0000");
+    tupleMap.set(signature, values);
+  }
+
+  return [...tupleMap.values()];
+}
+
+/** One group's predicates: an IN list for a single key, OR'd tuples for a composite key. */
+function renderTuplePredicates(tuples, keyColumnCount) {
+  if (keyColumnCount === 1) {
+    const column = tuples[0][0].column;
+    const valueList = tuples.map(([value]) => value.sql);
+    const chunks = [];
+    for (let index = 0; index < valueList.length; index += ORACLE_IN_LIST_LIMIT) {
+      chunks.push(`${column} IN (${valueList.slice(index, index + ORACLE_IN_LIST_LIMIT).join(", ")})`);
+    }
+    return chunks.length === 1 ? chunks[0] : `(${chunks.join("\n    OR ")})`;
+  }
+
+  return tuples.map((values) => `(${values.map((value) => `${value.column} = ${value.sql}`).join(" AND ")})`).join("\n  OR ");
+}
+
+/**
+ * Build the WHERE predicate list for every differing record of a comparison, grouped and
+ * commented by how the record differs. The list carries no SELECT or FROM clause: it is
+ * meant to be pasted into the user's own query against either source.
+ * @param {Object} result - Compare Config result
+ * @param {Object} spec - Key columns ({column, dataKeys}) mapped from the compared key fields
+ * @returns {{predicate: string|null, rowCount: number, groups: Array<{label: string, count: number}>, error?: string}}
+ */
+export function buildDiffPredicate(result, spec) {
   try {
-    if (!target?.schema || !target?.table || !Array.isArray(target.keyColumns) || target.keyColumns.length === 0) {
+    const keyColumns = spec?.keyColumns;
+    if (!Array.isArray(keyColumns) || keyColumns.length === 0) {
       throw new Error("Select primary key fields and compare by key to generate a row query.");
     }
-    if (target.duplicateKeyCount > 0) {
-      throw new Error("The selected key fields are not unique in this source. Choose unique primary key fields and compare again.");
+    if (spec.duplicateKeyCount > 0) {
+      throw new Error("The selected key fields are not unique. Choose unique primary key fields and compare again.");
     }
 
-    const schema = quoteIdentifier(target.schema);
-    const table = quoteIdentifier(target.table);
-    const dataField = target.side === "A" ? "env1_data" : "env2_data";
     const differingRows = (result?.rows || []).filter((row) => row.status !== "match");
-    const tupleMap = new Map();
+    const groups = [];
 
-    for (const row of differingRows) {
-      const rowData = row[dataField];
-      if (!rowData) continue;
-
-      const values = target.keyColumns.map((keyColumn) => {
-        const found = findValue(rowData, keyColumn.dataKeys || [keyColumn.column]);
-        if (!found.found || found.value === undefined) {
-          throw new Error(`Could not find key field "${keyColumn.column}" in a differing row. Check the selected key fields.`);
-        }
-        return { column: quoteIdentifier(keyColumn.column), ...formatValue(found.value) };
-      });
-
-      const signature = values.map((value) => value.signature).join("\u0000");
-      tupleMap.set(signature, values);
+    for (const group of DIFF_GROUPS) {
+      const tuples = collectTuples(
+        differingRows.filter((row) => row.status === group.status),
+        keyColumns,
+      );
+      if (tuples.length === 0) continue;
+      groups.push({ label: group.label, count: tuples.length, body: renderTuplePredicates(tuples, keyColumns.length) });
     }
 
-    if (tupleMap.size === 0) return { query: null, rowCount: 0 };
+    if (groups.length === 0) return { predicate: null, rowCount: 0, groups: [] };
 
-    const tuples = [...tupleMap.values()];
-    let predicate;
-    if (target.keyColumns.length === 1) {
-      const column = quoteIdentifier(target.keyColumns[0].column);
-      const nonNullValues = tuples.map(([value]) => value.sql);
-      const predicates = [];
-      for (let index = 0; index < nonNullValues.length; index += ORACLE_IN_LIST_LIMIT) {
-        const values = nonNullValues.slice(index, index + ORACLE_IN_LIST_LIMIT);
-        predicates.push(`${column} IN (${values.join(", ")})`);
-      }
-      predicate = predicates.length === 1 ? predicates[0] : `(${predicates.join("\n  OR ")})`;
-    } else {
-      predicate = tuples
-        .map((values) => {
-          return `(${values.map((value) => `${value.column} = ${value.sql}`).join(" AND ")})`;
-        })
-        .join("\n  OR ");
-    }
+    const lines = [];
+    groups.forEach((group, index) => {
+      lines.push(`  -- ${group.label} (${group.count} ${group.count === 1 ? "row" : "rows"})`);
+      lines.push(index === 0 ? `  ${group.body}` : `  OR ${group.body}`);
+    });
 
     return {
-      query: `SELECT *\nFROM ${schema}.${table}\nWHERE ${predicate};`,
-      rowCount: tuples.length,
+      predicate: `WHERE\n${lines.join("\n")};`,
+      rowCount: groups.reduce((total, group) => total + group.count, 0),
+      groups: groups.map(({ label, count }) => ({ label, count })),
     };
   } catch (error) {
-    return { query: null, rowCount: 0, error: error.message };
+    return { predicate: null, rowCount: 0, groups: [], error: error.message };
   }
 }

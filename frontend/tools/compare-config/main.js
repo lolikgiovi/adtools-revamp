@@ -18,7 +18,7 @@ import * as IndexedDBManager from "./lib/indexed-db-manager.js";
 import { UnifiedDataService, SourceType } from "./lib/unified-data-service.js";
 import { reconcileColumns, normalizeRowFields } from "./lib/diff-engine.js";
 import { getDiffWorkerManager } from "./lib/diff-worker-manager.js";
-import { buildOracleRowQuery } from "./lib/row-query-builder.js";
+import { buildDiffPredicate } from "./lib/row-query-builder.js";
 import { OracleConnectionService, SidecarStatus } from "../../core/OracleConnectionService.js";
 import {
   buildCompareConfigSuccessMeta,
@@ -150,11 +150,6 @@ class CompareConfigTool extends BaseTool {
       const selectedRow = this.gridView.comparisons[index];
       this.masterDetailView.selectedIndex = Math.max(0, this.getFilteredComparisons().indexOf(selectedRow));
       this.changeView("master-detail");
-      const label = document.getElementById("view-type-label");
-      if (label) label.textContent = "Detail View";
-      document.querySelectorAll(".view-option").forEach((option) => {
-        option.classList.toggle("active", option.dataset.value === "master-detail");
-      });
     };
     this.sqlEditors = new Map();
   }
@@ -609,7 +604,7 @@ class CompareConfigTool extends BaseTool {
       const savedSettings = localStorage.getItem("compare-config.settings");
       if (savedSettings) {
         const settings = JSON.parse(savedSettings);
-        // Migrate old "expandable" view to "grid" (expandable removed from dropdown)
+        // Migrate old "expandable" view to "grid" (expandable view removed)
         const savedView = settings.currentView || "grid";
         this.currentView = ["grid", "master-detail"].includes(savedView) ? savedView : "grid";
         // Older saved filters are grouped into the two review states.
@@ -664,12 +659,7 @@ class CompareConfigTool extends BaseTool {
       this.queryMode = "unified"; // Ensure queryMode is set for showResults
       this.showResults();
       // Set view type selector
-      const viewTypeSelect = document.getElementById("view-type");
-      if (viewTypeSelect) viewTypeSelect.value = this.currentView;
-      const viewLabel = document.getElementById("view-type-label");
-      if (viewLabel) viewLabel.textContent = this.currentView === "master-detail" ? "Detail View" : "Summary Grid";
-      document.querySelectorAll(".view-option").forEach((option) =>
-        option.classList.toggle("active", option.dataset.value === this.currentView));
+      this.syncViewTabs();
     } else {
       // Clear invalid/stale results
       this.results.unified = null;
@@ -740,8 +730,6 @@ class CompareConfigTool extends BaseTool {
     if (exportBtn && exportDropdownMenu) {
       exportBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        // Close view dropdown if open
-        document.getElementById("view-dropdown-menu")?.classList.remove("show");
         exportDropdownMenu.classList.toggle("show");
       });
 
@@ -790,49 +778,12 @@ class CompareConfigTool extends BaseTool {
       });
     }
 
-    // View dropdown toggle
-    const viewBtn = document.getElementById("btn-view");
-    const viewDropdownMenu = document.getElementById("view-dropdown-menu");
-    const viewOptions = document.querySelectorAll(".view-option");
-
-    if (viewBtn && viewDropdownMenu) {
-      viewBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        // Close export dropdown if open
-        exportDropdownMenu?.classList.remove("show");
-        viewDropdownMenu.classList.toggle("show");
-      });
-
-      // Close dropdown when clicking outside
-      this.addDocumentListener("click", (e) => {
-        if (!e.target.closest(".view-dropdown")) {
-          viewDropdownMenu.classList.remove("show");
-        }
-      });
-    }
-
-    viewOptions.forEach((option) => {
-      option.addEventListener("click", () => {
-        const value = option.dataset.value;
-        const label = option.textContent.trim();
-
-        // Update button label
-        const labelEl = document.getElementById("view-type-label");
-        if (labelEl) labelEl.textContent = label;
-
-        // Update active state
-        viewOptions.forEach((o) => o.classList.remove("active"));
-        option.classList.add("active");
-
-        // Close dropdown
-        viewDropdownMenu?.classList.remove("show");
-
-        // Change view
-        this.changeView(value);
-      });
+    // Results view tabs
+    document.querySelectorAll("#results-view-tabs .view-option").forEach((option) => {
+      option.addEventListener("click", () => this.changeView(option.dataset.value));
     });
 
-    // Compact results search
+    // Results search: expanded by default, collapsed only on request.
     const searchInput = document.getElementById("results-search-input");
     const searchClearBtn = document.getElementById("results-search-clear");
     const searchBox = document.getElementById("results-search-box");
@@ -842,15 +793,13 @@ class CompareConfigTool extends BaseTool {
       searchToggle?.setAttribute("aria-expanded", String(open));
       if (open) searchInput?.focus();
     };
+    if (!searchBox?.classList.contains("is-open")) setSearchOpen(false);
     searchToggle?.addEventListener("click", () => setSearchOpen(!searchBox?.classList.contains("is-open")));
     searchInput?.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         setSearchOpen(false);
         searchToggle?.focus();
       }
-    });
-    this.addDocumentListener("click", (event) => {
-      if (!searchBox?.contains(event.target)) setSearchOpen(false);
     });
 
     if (searchInput) {
@@ -875,8 +824,7 @@ class CompareConfigTool extends BaseTool {
           searchInput.value = "";
           searchClearBtn.style.display = "none";
           this.applySearchFilter("");
-          setSearchOpen(false);
-          searchToggle?.focus();
+          searchInput.focus();
         }
       });
     }
@@ -1115,9 +1063,15 @@ class CompareConfigTool extends BaseTool {
     if (titleEl) {
       if (this.queryMode === "unified" && this.results.unified) {
         const result = this.results.unified;
-        titleEl.textContent = `${result.env1_name || "Source A"} vs ${result.env2_name || "Source B"}`;
+        // Source labels carry the query or table ("(UAT1 COMP) SQL Query"); the header keeps the
+        // environment on its own and leaves the full label to the tooltip.
+        const env1Full = result.env1_name || "Source A";
+        const env2Full = result.env2_name || "Source B";
+        titleEl.textContent = `${this.gridView.formatEnvName(env1Full)} vs ${this.gridView.formatEnvName(env2Full)}`;
+        titleEl.title = `${env1Full} vs ${env2Full}`;
       } else {
         titleEl.textContent = "Comparison Results";
+        titleEl.title = "";
       }
     }
 
@@ -1125,6 +1079,7 @@ class CompareConfigTool extends BaseTool {
     this.renderSummary();
 
     // Render results content based on current view
+    this.syncViewTabs();
     this.renderResults();
 
     // Enable/disable export buttons based on results
@@ -1158,18 +1113,28 @@ class CompareConfigTool extends BaseTool {
     const panel = document.getElementById("results-row-queries");
     if (!button || !panel) return;
 
-    const sources = this.results[this.queryMode]?._metadata?.rowQuerySources || [];
-    button.hidden = sources.length === 0;
+    button.hidden = !this.canBuildRowQuery();
     button.setAttribute("aria-expanded", "false");
     panel.hidden = true;
     panel.replaceChildren();
   }
 
+  /**
+   * Whether this comparison can produce a differing-row predicate list.
+   * Comparisons cached before the row-query metadata existed carry no source list, so they
+   * fall back to what the result itself proves: key-matched rows.
+   * @param {Object} [metadata] - Result metadata, defaults to the displayed result
+   * @returns {boolean}
+   */
+  canBuildRowQuery(metadata = this.results[this.queryMode]?._metadata || {}) {
+    if (!metadata.keyColumns?.length || metadata.rowMatching === "position") return false;
+    if (Array.isArray(metadata.rowQuerySources)) return metadata.rowQuerySources.length > 0;
+    return true;
+  }
+
   renderRowQueryPanel(panel) {
     const result = this.results[this.queryMode];
     const metadata = result?._metadata || {};
-    const sources = metadata.rowQuerySources || [];
-    const targets = metadata.rowQueryTargets || [];
 
     panel.replaceChildren();
 
@@ -1179,7 +1144,8 @@ class CompareConfigTool extends BaseTool {
 
     const description = document.createElement("p");
     description.className = "row-query-description";
-    description.textContent = "Queries include every differing record from this comparison, regardless of search or status filters.";
+    description.textContent =
+      "Predicate list for every differing record in this comparison, regardless of search or status filters. Paste it into your own query against either source.";
     panel.append(heading, description);
 
     const differingRows = (result?.rows || []).filter((row) => row.status !== "match");
@@ -1189,7 +1155,7 @@ class CompareConfigTool extends BaseTool {
     }
 
     if (metadata.rowMatching === "position") {
-      this.appendRowQueryMessage(panel, "Compare by primary key to generate a query for the differing table rows.");
+      this.appendRowQueryMessage(panel, "Compare by primary key to generate a query for the differing rows.");
       return;
     }
 
@@ -1198,66 +1164,48 @@ class CompareConfigTool extends BaseTool {
       return;
     }
 
-    if (targets.length === 0) {
-      this.appendRowQueryMessage(panel, "Switch an Oracle source to Table mode to generate a query. Raw SQL results may come from joins or derived rows.");
+    // Comparisons cached before the row-query metadata existed still carry the compared key
+    // fields, so build the spec from those instead of dropping the list.
+    const spec = metadata.rowQuery?.keyColumns?.length
+      ? metadata.rowQuery
+      : { keyColumns: metadata.keyColumns.map((field) => ({ column: field, dataKeys: [field] })), duplicateKeyCount: 0 };
+
+    const queryResult = buildDiffPredicate(result, spec);
+    if (queryResult.error) {
+      this.appendRowQueryMessage(panel, queryResult.error, "is-warning");
+      return;
+    }
+    if (!queryResult.predicate) {
+      this.appendRowQueryMessage(panel, "There are no differing rows to query.");
       return;
     }
 
-    if (sources.some((source) => source.queryMode !== "table")) {
-      this.appendRowQueryMessage(panel, "Queries are available for Oracle table sources. Raw SQL can return joined or derived rows.");
-    }
+    const section = document.createElement("section");
+    section.className = "row-query-section";
 
-    targets.forEach((target) => {
-      const queryResult = buildOracleRowQuery(result, target);
-      const section = document.createElement("section");
-      section.className = "row-query-section";
+    const code = document.createElement("pre");
+    code.className = "row-query-code";
+    const codeContent = document.createElement("code");
+    codeContent.textContent = queryResult.predicate;
+    code.append(codeContent);
 
-      const sectionHeader = document.createElement("div");
-      sectionHeader.className = "row-query-section-header";
-      const title = document.createElement("h5");
-      title.textContent = `${target.sourceLabel} · ${target.schema}.${target.table}`;
-      sectionHeader.append(title);
+    const actions = document.createElement("div");
+    actions.className = "row-query-actions";
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "btn btn-secondary btn-sm";
+    copyButton.dataset.rowQueryText = queryResult.predicate;
+    copyButton.textContent = "Copy diff predicate";
+    copyButton.addEventListener("click", () => this.copyToClipboard(queryResult.predicate, copyButton));
+    actions.append(copyButton);
 
-      if (queryResult.error) {
-        const message = document.createElement("p");
-        message.className = "row-query-message is-warning";
-        message.textContent = queryResult.error;
-        section.append(sectionHeader, message);
-      } else if (!queryResult.query) {
-        const message = document.createElement("p");
-        message.className = "row-query-message";
-        message.textContent = "No differing records from this comparison exist in this table.";
-        section.append(sectionHeader, message);
-      } else {
-        const count = document.createElement("p");
-        count.className = "row-query-message";
-        count.textContent = `Includes ${queryResult.rowCount} differing ${queryResult.rowCount === 1 ? "row" : "rows"} present in this table.`;
-
-        const actions = document.createElement("div");
-        actions.className = "row-query-actions";
-        const copyButton = document.createElement("button");
-        copyButton.type = "button";
-        copyButton.className = "btn btn-secondary btn-sm";
-        copyButton.textContent = `Copy ${target.sourceLabel} query`;
-        copyButton.addEventListener("click", () => this.copyToClipboard(queryResult.query, copyButton));
-        actions.append(copyButton);
-
-        const code = document.createElement("pre");
-        code.className = "row-query-code";
-        const codeContent = document.createElement("code");
-        codeContent.textContent = queryResult.query;
-        code.append(codeContent);
-
-        section.append(sectionHeader, count, code, actions);
-      }
-
-      panel.append(section);
-    });
+    section.append(code, actions);
+    panel.append(section);
   }
 
-  appendRowQueryMessage(panel, messageText) {
+  appendRowQueryMessage(panel, messageText, extraClass = "") {
     const message = document.createElement("p");
-    message.className = "row-query-message";
+    message.className = `row-query-message ${extraClass}`.trim();
     message.textContent = messageText;
     panel.append(message);
   }
@@ -1335,29 +1283,38 @@ class CompareConfigTool extends BaseTool {
     `
       : "";
 
-    const env1Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env1_name || "Source A"));
-    const env2Name = this.gridView.escapeHtml(this.gridView.formatEnvName(this.results[this.queryMode].env2_name || "Source B"));
+    const env1Name = this.gridView.formatEnvName(this.results[this.queryMode].env1_name || "Source A");
+    const env2Name = this.gridView.formatEnvName(this.results[this.queryMode].env2_name || "Source B");
     const differingTotal = summary.differs + summary.only_in_env1 + summary.only_in_env2;
+
+    // The counts the review bar used to spell out stay one hover away instead of costing a row.
+    const recordCount = (count) => `${count} ${count === 1 ? "record" : "records"}`;
+    const comparedTitle = `${recordCount(summary.total)} compared`;
+    const differTitle = [
+      comparedTitle,
+      `${recordCount(summary.differs)} with changed values`,
+      `${recordCount(summary.only_in_env1)} only in ${env1Name}`,
+      `${recordCount(summary.only_in_env2)} only in ${env2Name}`,
+    ].join(" · ");
+    const matchTitle = `${comparedTitle} · ${recordCount(summary.matches)} identical in both sources`;
 
     // Keep missing record counts visible while grouping them in the Differing review queue.
     summaryContainer.innerHTML = `
       ${noPkWarning}
-      <div class="summary-breakdown">${summary.total} records compared · ${summary.differs} records with changed values · ${summary.only_in_env1} Only in ${env1Name} · ${summary.only_in_env2} Only in ${env2Name}</div>
-      <div class="summary-review">
-        <div class="summary-cards" role="group" aria-label="Filter comparison results">
-          <button class="summary-stat differing ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ" aria-pressed="${this.statusFilter === "differ"}">
-            <span class="stat-value">${differingTotal}</span><span class="stat-label">Differing</span>
-          </button>
-          <button class="summary-stat matching ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match" aria-pressed="${this.statusFilter === "match"}">
-            <span class="stat-value">${summary.matches}</span><span class="stat-label">Matching</span>
-          </button>
-        </div>
+      <div class="summary-cards" role="group" aria-label="Filter comparison results">
+        <button class="summary-stat ${this.statusFilter === "differ" ? "selected" : ""}" data-filter="differ" aria-pressed="${this.statusFilter === "differ"}">
+          <span class="stat-value">${differingTotal}</span><span class="stat-label">Differing</span>
+        </button>
+        <button class="summary-stat ${this.statusFilter === "match" ? "selected" : ""}" data-filter="match" aria-pressed="${this.statusFilter === "match"}">
+          <span class="stat-value">${summary.matches}</span><span class="stat-label">Matching</span>
+        </button>
       </div>
     `;
 
     // Add click event listeners to filter buttons
     const filterButtons = summaryContainer.querySelectorAll(".summary-stat");
     filterButtons.forEach((btn) => {
+      btn.title = btn.dataset.filter === "differ" ? differTitle : matchTitle;
       btn.addEventListener("click", () => {
         const filter = btn.dataset.filter;
         this.applyStatusFilter(filter);
@@ -1504,8 +1461,18 @@ class CompareConfigTool extends BaseTool {
    */
   changeView(viewType) {
     this.currentView = viewType === "master-detail" ? "master-detail" : "grid";
+    this.syncViewTabs();
     this.renderResults();
     this.saveToolState();
+  }
+
+  /** Marks the results view tab that matches the current view. */
+  syncViewTabs() {
+    document.querySelectorAll("#results-view-tabs .view-option").forEach((option) => {
+      const active = option.dataset.value === this.currentView;
+      option.classList.toggle("active", active);
+      option.setAttribute("aria-pressed", String(active));
+    });
   }
 
   /**
@@ -4299,9 +4266,9 @@ class CompareConfigTool extends BaseTool {
     this.gridView.searchQuery = "";
     const searchInput = document.getElementById("results-search-input");
     if (searchInput) searchInput.value = "";
-    document.getElementById("results-search-box")?.classList.remove("is-open");
+    document.getElementById("results-search-box")?.classList.add("is-open");
     document.getElementById("results-search-box")?.classList.remove("has-query");
-    document.getElementById("results-search-toggle")?.setAttribute("aria-expanded", "false");
+    document.getElementById("results-search-toggle")?.setAttribute("aria-expanded", "true");
     this.results.unified = null;
     const resultsSection = document.getElementById("results-section");
     if (resultsSection) resultsSection.style.display = "none";
@@ -4717,22 +4684,15 @@ class CompareConfigTool extends BaseTool {
         }));
       const duplicateKeyCount = (jsResult.duplicateKeys?.reference?.length || 0) + (jsResult.duplicateKeys?.comparator?.length || 0);
 
-      const rowQueryTargets = rowQuerySources
-        .filter((source) => source.queryMode === "table" && source.schema && source.table)
-        .map((source) => {
-          const sourceKey = source.side === "A" ? "sourceA" : "sourceB";
-          const keyColumns = selectedPkFields.map((field) => {
-            const mapping = commonMapped?.find((item) => item.sourceA === field || item.sourceB === field || item.normalized === field);
-            const column = mapping?.[sourceKey] || field;
-            const dataKeys = normalizeFields
-              ? [mapping?.normalized, column, field, mapping?.sourceA, mapping?.sourceB]
-              : [column, field, mapping?.sourceA, mapping?.sourceB, mapping?.normalized];
+      // One key-column mapping serves the whole comparison: the predicate list labels each
+      // key with its real column name and looks values up through every source mapping.
+      const rowQueryKeyColumns = selectedPkFields.map((field) => {
+        const mapping = commonMapped?.find((item) => item.sourceA === field || item.sourceB === field || item.normalized === field);
+        const column = mapping?.sourceA || mapping?.sourceB || field;
+        const dataKeys = [column, field, mapping?.sourceA, mapping?.sourceB, mapping?.normalized];
 
-            return { column, dataKeys: [...new Set(dataKeys.filter(Boolean))] };
-          });
-
-          return { ...source, keyColumns, duplicateKeyCount };
-        });
+        return { column, dataKeys: [...new Set(dataKeys.filter(Boolean))] };
+      });
 
       // Store metadata about matching options for cache restoration
       viewResult._metadata = {
@@ -4740,7 +4700,7 @@ class CompareConfigTool extends BaseTool {
         rowMatching: rowMatching,
         compareFields: compareFields,
         rowQuerySources,
-        rowQueryTargets,
+        rowQuery: { keyColumns: rowQueryKeyColumns, duplicateKeyCount },
         sourceLimits: [
           sourceA.type === "oracle" && {
             name: sourceA.data.metadata.sourceName,

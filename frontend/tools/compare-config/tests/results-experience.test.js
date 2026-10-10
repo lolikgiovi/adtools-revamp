@@ -31,8 +31,10 @@ describe("comparison review results", () => {
     tool.renderSummary();
     expect([...document.querySelectorAll(".summary-stat")].map((button) => button.dataset.filter)).toEqual(["differ", "match"]);
     expect(document.querySelector('[data-filter="differ"] .stat-value').textContent).toBe("3");
-    expect(document.getElementById("results-summary").textContent).toContain("Only in UAT");
-    expect(document.querySelector(".summary-breakdown").textContent).toContain("4 records compared");
+    expect(document.querySelector('[data-filter="differ"] .stat-label').textContent).toBe("Differing");
+    expect(document.querySelector('[data-filter="differ"]').title).toBe(
+      "4 records compared · 1 record with changed values · 1 record only in UAT · 1 record only in Pre-production",
+    );
     expect(document.querySelector(".row-limit-warning")).toBeNull();
     expect(tool.getFilteredComparisons().map((row) => row.key.id)).toEqual(["b", "c", "d"]);
     document.querySelector('[data-filter="match"]').click();

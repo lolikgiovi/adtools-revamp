@@ -91,7 +91,8 @@ describe("image metadata", () => {
     tool.root = document.createElement("div");
     tool.elements = { resultsContainer: tool.root, retryAllTimeoutsBtn: document.createElement("button") };
     const runId = tool.beginCheckRun();
-    tool.renderProgressiveTable([id], [], runId);
+    const connections = [{ name: "UAT" }];
+    tool.renderProgressiveTable([id], [], runId, connections);
     vi.spyOn(ImageOracleService, "fetch").mockResolvedValue(
       new Map([
         [
@@ -104,12 +105,12 @@ describe("image metadata", () => {
         ],
       ]),
     );
-    await tool.fetchOracleMetadata([id], { name: "UAT" }, runId);
+    await tool.fetchOracleMetadata([id], connections, runId);
     expect(tool.root.querySelector("[data-oracle-context]").textContent).toBe("<script>bad</script>Mobile");
     expect(tool.root.querySelector("script")).toBeNull();
     expect(tool.root.querySelector("[data-oracle-size]").textContent).toBe("2 KB");
     tool.checkRunId++;
-    await tool.fetchOracleMetadata([id], { name: "UAT" }, runId);
+    await tool.fetchOracleMetadata([id], connections, runId);
     expect(ImageOracleService.fetch).toHaveBeenCalledTimes(1);
   });
 });

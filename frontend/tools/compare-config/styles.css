@@ -743,7 +743,7 @@
   overflow: hidden; /* Prevent section itself from scrolling */
 }
 
-/* Results Title Row */
+/* Results Title Row: the title owns the free width, the controls share one cluster. */
 .results-title-row {
   display: flex;
   align-items: center;
@@ -751,9 +751,40 @@
   flex-shrink: 0;
 }
 
-.results-title-row #btn-edit-comparison {
-  margin-left: auto;
+.results-title-row #results-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.results-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+/* One control height across the results card: the header buttons, the view tab list, the
+   review filter and the search field all sit on the same 30px line. */
+.results-title-row .btn-sm {
+  height: 30px;
+  line-height: 1.2;
+}
+
+/* Review bar: the Differing / Matching filter and the results search share one row.
+   The filter column takes the slack so a no-primary-key warning still spans the row. */
+.results-review-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   flex-shrink: 0;
+}
+
+.results-review-bar .results-summary {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 #tab-content-compare.is-reviewing #unified-compare-mode {
@@ -772,8 +803,10 @@
   margin: 0;
   color: hsl(var(--foreground));
   font-weight: 600;
-  overflow-wrap: anywhere;
   font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .results-row-cap-note {
@@ -794,49 +827,6 @@
   color: hsl(var(--warning));
 }
 
-/* The comparison totals span the toolbar; filters and controls share the next row. */
-.results-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: start;
-  column-gap: 1.5rem;
-  row-gap: 0.75rem;
-  flex-shrink: 0;
-}
-
-.results-toolbar .results-summary {
-  display: contents;
-}
-
-.results-toolbar .no-pk-warning,
-.results-toolbar .summary-breakdown {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-.results-toolbar .summary-review {
-  grid-column: 1;
-  min-width: 0;
-}
-
-.results-actions {
-  grid-column: 2;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 0.25rem;
-  flex-shrink: 0;
-  min-width: 0;
-}
-
-.results-actions-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .btn-query-differing-rows[hidden],
 .results-row-queries[hidden] {
   display: none;
@@ -852,10 +842,17 @@
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--muted) / 0.24);
+  /* The results card has a fixed height and clips its children, so the panel owns
+     the scroll for long queries and additional sources instead of being cut off. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(40vh, 30rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
-.row-query-title,
-.row-query-section-header h5 {
+.row-query-title {
   margin: 0;
   color: hsl(var(--foreground));
   font-size: 0.95rem;
@@ -876,7 +873,6 @@
   border-top: 1px solid hsl(var(--border));
 }
 
-.row-query-section-header,
 .row-query-actions {
   display: flex;
   align-items: center;
@@ -884,16 +880,10 @@
   gap: 0.75rem;
 }
 
-.row-query-section-header h5 {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .row-query-code {
-  max-height: 18rem;
-  margin: 0.65rem 0;
+  margin: 0 0 0.65rem;
   padding: 0.8rem;
-  overflow: auto;
+  overflow-x: auto;
   border: 1px solid hsl(var(--border));
   border-radius: calc(var(--radius) - 2px);
   background: hsl(var(--background));
@@ -910,31 +900,22 @@
 @media (max-width: 520px) {
   .results-row-queries {
     padding: 0.75rem;
+    max-height: min(48vh, 20rem);
   }
 
   .row-query-code {
-    max-height: 14rem;
     padding: 0.65rem;
     font-size: 0.72rem;
   }
 }
 
 @media (max-width: 1200px) {
-  .results-toolbar {
-    grid-template-columns: minmax(0, 1fr);
+  /* Below the title row's natural width the controls take their own line and start at the left. */
+  .results-title-row {
+    flex-wrap: wrap;
   }
 
-  .results-toolbar .summary-review,
-  .results-actions {
-    grid-column: 1;
-  }
-
-  .results-actions {
-    align-items: stretch;
-    width: 100%;
-  }
-
-  .results-actions-row {
+  .results-title-actions {
     justify-content: flex-start;
   }
 }
@@ -950,11 +931,7 @@
   background: hsl(var(--primary) / 0.1);
 }
 
-/* Search box on second row, matching buttons row width */
-.results-actions .results-search-box { width: auto; }
-
-.results-count,
-.summary-breakdown {
+.results-count {
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
   line-height: 1.4;
@@ -964,67 +941,83 @@
   display: none;
 }
 
-.summary-review {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.summary-breakdown {
-  padding: 0.55rem 0.75rem;
-  background: hsl(var(--muted) / 0.25);
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
+/* Results search: one bordered field holds the icon, the input and the clear control, so the
+   focus ring belongs to the field instead of to one of its fragments. */
 .results-search-box {
-  position: relative;
   display: flex;
   align-items: center;
-}
-
-.results-search-toggle {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  color: hsl(var(--muted-foreground));
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
-.results-search-toggle:hover,
-.results-search-box.is-open .results-search-toggle,
-.results-search-box.has-query .results-search-toggle { color: hsl(var(--primary)); border-color: hsl(var(--primary)); }
-
-.results-search-box:not(.is-open) .results-search-input,
-.results-search-box:not(.is-open) .results-search-clear { display: none !important; }
-
-.results-search-box.is-open .results-search-toggle { border-radius: var(--radius) 0 0 var(--radius); }
-.results-search-box.is-open .results-search-input { width: clamp(150px, 17vw, 240px); border-radius: 0 var(--radius) var(--radius) 0; padding: 6px 26px 6px 8px; }
-
-.results-search-box .search-icon {
-  position: absolute;
-  left: 10px;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-}
-
-.results-search-input {
-  width: 100%;
-  padding: 6px 32px 6px 36px;
-  font-size: 0.8125rem;
+  gap: 0.25rem;
+  height: 30px;
+  padding: 0 0.25rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  flex: 0 0 auto;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+.results-search-box.is-open {
+  width: clamp(190px, 24vw, 320px);
+}
+
+.results-search-box:focus-within {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15);
+}
+
+.results-search-toggle {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.results-search-toggle:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.results-search-box.has-query .results-search-toggle {
+  color: hsl(var(--primary));
+}
+
+.results-search-toggle:focus-visible,
+.results-search-clear:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -1px;
+}
+
+.results-search-box:not(.is-open) .results-search-input,
+.results-search-box:not(.is-open) .results-search-clear {
+  display: none !important;
+}
+
+/* `reset.css` styles `input[type="search"]` with an attribute selector, which outranks a
+   plain class; the element selector keeps this rule winning. The field shell draws the
+   border and background, so the input must not paint its own. */
+input.results-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .results-search-input::placeholder {
@@ -1037,24 +1030,21 @@
 
 .results-search-input:focus {
   outline: none;
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15);
 }
 
 .results-search-clear {
-  position: absolute;
-  right: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   background: hsl(var(--muted));
   border-radius: 50%;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
+  flex-shrink: 0;
   transition:
     background 0.15s ease,
     color 0.15s ease;
@@ -1065,62 +1055,58 @@
   color: hsl(var(--foreground));
 }
 
-/* View Dropdown */
-.view-dropdown {
-  position: relative;
-}
-
-.view-dropdown #btn-view {
+/* Results view tabs: a tab list of icon + label triggers, sharing the tool's segmented
+   well so both views stay visible without spending row width. */
+.results-view-tabs {
   display: flex;
-  align-items: center;
-}
-
-.view-dropdown-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.25rem;
-  background: hsl(var(--card));
+  align-items: stretch;
+  gap: 0.25rem;
+  height: 30px;
+  padding: 0.1875rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 160px;
-  z-index: 200;
-  display: none;
-  overflow: hidden;
+  background: hsl(var(--muted) / 0.45);
 }
 
-.view-dropdown-menu.show {
-  display: block;
-}
-
-.view-dropdown-menu .view-option {
+.results-view-tabs .view-option {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.625rem 0.875rem;
+  gap: 0.375rem;
+  padding: 0 0.625rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
   background: transparent;
-  border: none;
-  color: hsl(var(--foreground));
-  font-size: 0.875rem;
-  text-align: left;
+  color: hsl(var(--muted-foreground));
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.view-dropdown-menu .view-option:hover {
-  background: hsl(var(--muted));
-}
-
-.view-dropdown-menu .view-option.active {
-  background: hsl(var(--primary) / 0.15);
-  color: hsl(var(--primary));
-}
-
-.view-dropdown-menu .view-option svg {
+.results-view-tabs .view-option svg {
   flex-shrink: 0;
-  opacity: 0.7;
+}
+
+.results-view-tabs .view-option:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.6);
+}
+
+.results-view-tabs .view-option.active {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px hsl(var(--shadow));
+}
+
+.results-view-tabs .view-option:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
 }
 
 /* Export Dropdown */
@@ -1176,46 +1162,12 @@
   opacity: 0.7;
 }
 
-/* Comparison Context (Excel Compare) - inline with title */
-.comparison-context {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  background: hsl(var(--muted) / 0.4);
-  border-radius: var(--radius);
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.comparison-context .context-label {
-  color: hsl(var(--muted-foreground));
-}
-
-.comparison-context .context-file {
-  font-weight: 500;
-  color: hsl(var(--foreground));
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.comparison-context .context-file.ref {
-  color: hsl(var(--primary));
-}
-
-.comparison-context .context-file.comp {
-  color: hsl(var(--chart-2, 160 60% 45%));
-}
-
-.comparison-context .context-vs {
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
-}
-
-/* Summary Stats */
+/* Summary Stats: the review filter lives in the tool's own segmented-control well so it reads
+   as chrome instead of a status banner. */
 .results-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -1261,7 +1213,6 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  margin-bottom: 1rem;
   background: hsl(45 100% 50% / 0.1);
   border: 1px solid hsl(45 100% 50% / 0.3);
   border-left: 4px solid hsl(45 100% 50%);
@@ -1278,68 +1229,74 @@
   color: hsl(var(--foreground));
 }
 
-/* Summary Cards Container - Compact horizontal layout */
+/* Differing / Matching filter: a segmented control over the review queue, matching the
+   Match rows by / Field matching control the tool already uses. */
 .summary-cards {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: stretch;
+  gap: 0.25rem;
+  width: fit-content;
+  height: 30px;
+  padding: 0.1875rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.45);
 }
 
 .summary-stat {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: var(--radius);
-  background: hsl(var(--muted) / 0.3);
-  border: 1px solid hsl(var(--border));
+  align-items: baseline;
+  gap: 0.375rem;
+  padding: 0 0.6875rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  flex: 0 0 auto;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 
 .summary-stat:hover {
-  background: hsl(var(--primary-hover) / 0.15);
-  border-color: hsl(var(--ring));
+  background: hsl(var(--muted) / 0.6);
 }
 
-.summary-stat.selected {
-  background: hsl(var(--primary) / 0.12);
-  border-color: hsl(var(--primary));
-  box-shadow: 0 2px 8px hsl(var(--primary) / 0.12);
-}
-
-.summary-stat.selected::after {
-  content: "✓";
-  margin-left: 0.25rem;
-  font-size: 0.75rem;
-  color: hsl(var(--primary));
-  font-weight: bold;
-}
-
-.summary-stat.matching {
-  border-left: 3px solid hsl(var(--success));
-}
-
-.summary-stat.differing {
-  border-left: 3px solid hsl(var(--warning));
-}
-
-.summary-stat.only-env1,
-.summary-stat.only-env2 {
-  border-left: 3px solid hsl(var(--info));
-}
-
-.summary-stat .stat-value {
-  font-size: 0.95rem;
-  font-weight: 700;
+.summary-stat:hover .stat-value,
+.summary-stat:hover .stat-label {
   color: hsl(var(--foreground));
 }
 
-.summary-stat .stat-label {
-  font-size: 0.7rem;
+.summary-stat.selected {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 2px hsl(var(--shadow));
+}
+
+.summary-stat:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.summary-stat .stat-value {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: hsl(var(--muted-foreground));
+}
+
+.summary-stat .stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.summary-stat.selected .stat-value {
+  color: hsl(var(--foreground));
+}
+
+.summary-stat.selected .stat-label {
+  color: hsl(var(--foreground) / 0.75);
 }
 
 /* View Selector */
@@ -4322,7 +4279,7 @@ label.compare-toggle.comparison-field-toggle {
 
 /* ============================================
    CONFIG DROPDOWN (Connection & Query Mode)
-   Styled to match view-dropdown and export-dropdown
+   Styled to match export-dropdown
    ============================================ */
 
 .config-dropdown {

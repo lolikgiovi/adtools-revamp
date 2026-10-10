@@ -669,75 +669,29 @@ export const CompareConfigTemplate = /* html */ `
         <div id="results-section" class="results-section" style="display: none;">
             <div class="results-title-row">
                 <h3 id="results-title">Comparison Results</h3>
-                <button class="btn btn-secondary btn-sm" id="btn-edit-comparison" type="button">Edit comparison</button>
-                <!-- Comparison Context (Excel Compare only) -->
-                <div id="comparison-context" class="comparison-context" style="display: none;">
-                    <span class="context-label">Comparing:</span>
-                    <span class="context-file ref" id="context-ref-file"></span>
-                    <span class="context-vs">vs</span>
-                    <span class="context-file comp" id="context-comp-file"></span>
-                </div>
-            </div>
-
-            <div class="results-row-cap-note" id="results-row-cap-note" role="status"
-                 aria-live="polite" aria-atomic="true" style="display: none;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
-                <span id="results-row-cap-message"></span>
-            </div>
-
-            <!-- Summary + Actions Row -->
-            <div class="results-toolbar">
-                <div id="results-summary" class="results-summary">
-                    <!-- Summary will be populated here -->
-                </div>
-                <div class="results-actions">
-                    <div class="results-actions-row">
-                    <div class="results-search-box" id="results-search-box">
-                        <button type="button" id="results-search-toggle" class="results-search-toggle" aria-label="Search results" aria-controls="results-search-input" aria-expanded="false" title="Search results">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-                        </button>
-                        <input type="search" id="results-search-input" class="results-search-input" aria-label="Search compared records" placeholder="Search results…" />
-                        <button type="button" id="results-search-clear" class="results-search-clear" aria-label="Clear search" title="Clear search" style="display: none;">×</button>
-                    </div>
+                <div class="results-title-actions">
+                    <button class="btn btn-secondary btn-sm" id="btn-edit-comparison" type="button">Edit comparison</button>
                     <button class="btn btn-secondary btn-sm" id="btn-grid-fields" type="button" aria-pressed="true"
                             title="Show fields with changed values across these results">Changed fields</button>
-                    <div class="view-dropdown" id="view-dropdown">
-                        <button class="btn btn-secondary btn-sm" id="btn-view">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                    <div class="results-view-tabs" id="results-view-tabs" role="group" aria-label="Results view">
+                        <button class="view-option active" data-value="grid" type="button" aria-pressed="true">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <rect x="3" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="14" width="7" height="7"></rect>
                                 <rect x="3" y="14" width="7" height="7"></rect>
                             </svg>
-                            <span id="view-type-label">Summary Grid</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                            Summary Grid
                         </button>
-                        <div class="view-dropdown-menu app-popover-surface" id="view-dropdown-menu">
-                            <button class="view-option active" data-value="grid">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="7" height="7"></rect>
-                                    <rect x="14" y="3" width="7" height="7"></rect>
-                                    <rect x="14" y="14" width="7" height="7"></rect>
-                                    <rect x="3" y="14" width="7" height="7"></rect>
-                                </svg>
-                                Summary Grid
-                            </button>
-                            <button class="view-option" data-value="master-detail">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14 2 14 8 20 8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                </svg>
-                                Detail View
-                            </button>
-                        </div>
+                        <button class="view-option" data-value="master-detail" type="button" aria-pressed="false">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            Detail View
+                        </button>
                     </div>
                     <div class="export-dropdown" id="export-dropdown">
                         <button class="btn btn-secondary btn-sm" id="btn-export">
@@ -787,7 +741,32 @@ export const CompareConfigTemplate = /* html */ `
                         Get row query
                     </button>
                     <button class="btn btn-primary btn-sm" id="btn-new-comparison">New Comparison</button>
-                    </div>
+                </div>
+            </div>
+
+            <div class="results-row-cap-note" id="results-row-cap-note" role="status"
+                 aria-live="polite" aria-atomic="true" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span id="results-row-cap-message"></span>
+            </div>
+
+            <!-- Differing / Matching review filters + search -->
+            <div class="results-review-bar">
+                <div id="results-summary" class="results-summary">
+                    <!-- Warning + filters render here -->
+                </div>
+                <div class="results-search-box is-open" id="results-search-box">
+                    <button type="button" id="results-search-toggle" class="results-search-toggle" aria-label="Search results" aria-controls="results-search-input" aria-expanded="true" title="Search results">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                    </button>
+                    <input type="search" id="results-search-input" class="results-search-input" aria-label="Search compared records" placeholder="Search results…" />
+                    <button type="button" id="results-search-clear" class="results-search-clear" aria-label="Clear search" title="Clear search" style="display: none;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                    </button>
                 </div>
             </div>
 

@@ -42,6 +42,7 @@ export const imageCheckerTemplate = /*html*/ `
         <div class="check-image-run-actions">
           <div class="environment-control">
             <div class="environment-select-field">
+              <span class="environment-select-label" id="envSelectorLabel">CDN Environment</span>
               <button
                 id="envSelector"
                 class="env-selector"
@@ -68,18 +69,31 @@ export const imageCheckerTemplate = /*html*/ `
               Set CDN Base URLs
             </button>
           </div>
-          <div id="imageOracleControl" class="image-oracle-control">
-            <select
-              id="imageOracleConnection"
-              class="image-oracle-select"
-              aria-label="Oracle environment for CONTENT.IMAGE metadata"
+          <div id="imageOracleControl" class="image-oracle-control environment-select-field">
+            <span class="environment-select-label" id="oracleSelectorLabel">Oracle DB</span>
+            <button
+              id="oracleSelector"
+              class="env-selector"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="oracleSelectorMenu"
               aria-describedby="imageOracleHint"
+              hidden
             >
-              <option value="">No Oracle environment</option>
-            </select>
+              <span id="oracleSelectorValue" class="env-selector-value">No Oracle DB</span>
+              <span class="env-selector-chevron" aria-hidden="true"></span>
+            </button>
+            <div
+              id="oracleSelectorMenu"
+              class="environment-select-menu app-popover-surface"
+              role="group"
+              aria-label="Oracle connections"
+              hidden
+            ></div>
             <button id="configureOracleButton" class="btn btn-secondary btn-sm" type="button" hidden>Set Oracle connections</button>
             <span id="imageOracleHint" class="environment-selection-hint"
-              >Optional. Look up CONTENT.IMAGE in a saved Oracle environment.</span
+              >Optional. Look up CONTENT.IMAGE in saved Oracle environments.</span
             >
           </div>
           <button id="checkImageButton" class="btn btn-primary" type="button" disabled>Check images</button>

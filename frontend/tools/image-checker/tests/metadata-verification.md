@@ -34,18 +34,21 @@ Rows are matched by `IMAGE_ID` or by the UUID inside `IMAGE_LINK`, and lookups a
 chunked so each statement stays small. `metadata.test.js` covers the link-only match,
 rows that match no requested UUID, and the statement size bound.
 
-`oracle-control.test.js` covers the picker states: hidden in the web app, hidden
-with a Settings shortcut on desktop until a connection is saved, selection kept
-across rebuilds, the `config.oracle.connections` deep link, and the disabled state
-during a run. The browser E2E above was verified before that picker polish and has
-not been re-run since.
+`oracle-control.test.js` covers the multi-select Oracle combobox: hidden in the web
+app, hidden with a Settings shortcut on desktop until a connection is saved, selecting
+several connections at once, selection kept across rebuilds and stale names dropped,
+selection persistence (including the legacy single-connection value), the
+`config.oracle.connections` deep link, and the disabled state during a run.
 
 ## Live desktop check
 
 In Desktop, configure CDN Base URLs and Oracle Connections in Settings. The Check
-Image toolbar shows an Oracle picker only on desktop, and only once a connection is
-saved; until then it offers **Set Oracle connections**, which opens Settings on that
-section. Choose an Oracle environment (or leave **No Oracle environment** to skip the lookup), paste image UUIDs or
+Image toolbar labels its two comboboxes **CDN Environment** and **Oracle DB**; the
+Oracle combobox appears only on desktop, and only once a connection is saved; until
+then it offers **Set Oracle connections**, which opens Settings on that section.
+Choose one or more Oracle DBs (or leave **No Oracle DB** to skip the lookup and hide
+the Oracle columns); each selected DB adds its own Context and Base64 size column
+pair, headed with the connection name. Paste image UUIDs or
 paths, and click **Check images**. Verify the table against matching CONTENT.IMAGE
 rows. CONTEXT is line 1; SUB_CONTEXT is line 2. Base64 size is the UTF-8 byte size
 of stored CONTENT, including its data URI prefix. CDN size is image response bytes;
