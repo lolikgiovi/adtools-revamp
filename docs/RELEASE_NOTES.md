@@ -1,9 +1,13 @@
 # AD Tools 1.3.10
 
+- **Compare Config** — Your sources, query mode, fetch limit, and comparison options are remembered and restored the next time you open the tool.
+- **Compare Config** — Results are now Summary Grid and Detail View tabs; Detail View puts each record's changed fields over one side-by-side text diff.
+- **Compare Config** — Get row query turns every differing record into a paste-ready WHERE predicate, grouped as Only in Source A, Only in Source B, and Value differs.
 - **Kafka** — Save named broker connections in Settings, then pick the active broker from the Kafka tool header. Existing broker settings are migrated into saved connections.
 - **Quick Query** — Excel and Oracle imports are now a single Import menu.
 - **Quick Query** — Add Row and Remove Row buttons replace the previous Modify Rows menu.
 - **Quick Query** — Save always opens the filename dialog and writes a `.sql` file.
+- **Check Image** — Choose one or more saved Oracle connections; each selected connection adds its own Context and Base64 size columns for CONTENT.IMAGE.
 
 ## Earlier release notes
 

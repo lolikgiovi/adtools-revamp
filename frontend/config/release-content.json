@@ -2,16 +2,30 @@
   "$schema": "./release-content.schema.json",
   "releaseId": "release-1.3.10",
   "version": "1.3.10",
-  "title": "Keep Kafka broker connections in Settings",
-  "summary": "Kafka broker connections are now saved and managed in Settings, and Quick Query gets a simpler data toolbar and a Save that always asks for a filename.",
+  "title": "Compare configurations without redoing setup",
+  "summary": "Compare Config restores your last sources and comparison options and rebuilds results around the difference, Kafka brokers are saved in Settings, Image Checker checks CONTENT.IMAGE across several Oracle connections, and Quick Query gets a simpler toolbar.",
   "notes": [
-    "Save named Kafka broker connections in Settings, then pick the active broker from the Kafka tool header.",
-    "Brokers you already configured are migrated into saved connections automatically.",
-    "Quick Query's separate Excel and Oracle import buttons are now one Import menu.",
-    "Add Row and Remove Row buttons replace the previous Quick Query Modify Rows menu.",
-    "Quick Query Save always opens the filename dialog and writes a .sql file."
+    "Compare Config restores your last sources, query mode, fetch limit, and comparison options the next time you open it.",
+    "Results are now Summary Grid and Detail View tabs; Detail View tabs each record's changed fields over one side-by-side text diff.",
+    "Get row query builds a paste-ready WHERE predicate for every differing record, grouped as Only in Source A, Only in Source B, and Value differs.",
+    "Save named Kafka broker connections in Settings, then pick the active broker from the Kafka tool header; existing broker settings are migrated automatically.",
+    "Quick Query's Excel and Oracle imports are now one Import menu, and Add Row and Remove Row replace the previous Modify Rows menu.",
+    "Image Checker can check CONTENT.IMAGE across several saved Oracle connections at once, adding a Context and Base64 size column pair per connection."
   ],
   "slides": [
+    {
+      "title": "Review differences and pick up where you left off",
+      "body": "Compare Config now restores the sources and options you used last time, and its results are built around the difference itself.",
+      "bullets": [
+        "Choose a reference and comparison source once; your sources, query mode, fetch limit, and comparison options come back next time.",
+        "Summary Grid lists every compared record; Detail View tabs the changed fields of the selected record over a single side-by-side diff.",
+        "Get row query turns every differing record into a paste-ready WHERE list, grouped by Only in Source A, Only in Source B, and Value differs."
+      ],
+      "action": {
+        "label": "Open Compare Config",
+        "route": "compare-config"
+      }
+    },
     {
       "title": "Save Kafka broker connections once",
       "body": "Define each broker connection in Settings instead of retyping bootstrap servers, then switch between them from the Kafka tool header.",
@@ -42,6 +56,32 @@
   ],
   "tour": [],
   "tips": [
+    {
+      "id": "compare-config-options",
+      "route": "compare-config",
+      "target": "#unified-compare-mode .source-panels",
+      "placement": "bottom",
+      "title": "Your comparison setup is remembered",
+      "body": "Reopen Compare Config and your last sources, query mode, fetch limit, and comparison options are restored; choose Load from Both Sources to carry on.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "#btn-unified-load-data"
+      }
+    },
+    {
+      "id": "compare-config-row-query",
+      "route": "compare-config",
+      "target": "#btn-query-differing-rows",
+      "placement": "bottom",
+      "title": "Get a row query for the differences",
+      "body": "After comparing, use Get row query to copy a WHERE predicate for every differing record, grouped by how it differs.",
+      "guided": false,
+      "completeOn": {
+        "event": "click",
+        "target": "#btn-query-differing-rows"
+      }
+    },
     {
       "id": "kafka-broker-connections",
       "route": "settings",
@@ -79,6 +119,20 @@
       "completeOn": {
         "event": "click",
         "target": "#importButton"
+      }
+    },
+    {
+      "id": "check-image-oracle-connections",
+      "route": "check-image",
+      "target": "#oracleSelector",
+      "placement": "bottom",
+      "title": "Check several Oracle connections at once",
+      "body": "Pick one or more saved Oracle connections; each selected connection adds its own Context and Base64 size columns for CONTENT.IMAGE.",
+      "guided": false,
+      "surfaces": ["desktop"],
+      "completeOn": {
+        "event": "click",
+        "target": "#oracleSelector"
       }
     }
   ]
