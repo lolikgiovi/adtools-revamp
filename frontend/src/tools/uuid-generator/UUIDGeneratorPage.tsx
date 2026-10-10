@@ -111,7 +111,7 @@ export default function UUIDGeneratorPage() {
                 value={multiple}
                 readOnly
                 placeholder="Generated UUIDs will appear here"
-                className="min-h-32 font-mono"
+                className="field-sizing-fixed min-h-[120px] resize-y font-mono"
               />
             </Field>
           </FieldGroup>

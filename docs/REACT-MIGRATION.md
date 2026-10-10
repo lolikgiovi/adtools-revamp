@@ -131,10 +131,14 @@ Before converting each route, record its existing behavior and the new owner of:
 4. localStorage/sessionStorage keys, IndexedDB names/versions/stores, legacy migrations, and credential handling.
 5. Worker endpoints, Tauri commands/events, sidecar operations, timeouts, request identity, and cancellation.
 6. Clipboard/download/file behavior, keyboard shortcuts, focus, notifications, analytics names, and usage boundaries.
+7. Layout and interaction behavior, including control sizing, content-driven growth, resize affordances, wrapping, overflow, and the element
+   that owns scrolling for empty, typical, and maximum or large results.
 
 Preserve existing persisted data formats unless an explicit, verified migration is needed. Preserve HTML preview sandboxing, credential
 boundaries, SQL quoting/encoding, NULL handling, and other processing semantics. UI layouts may improve while maintaining the workflow.
-Compare actual call paths rather than assuming every `service.js` is pure or framework-independent.
+Treat the running vanilla implementation as the behavior reference for each port. Preserve its defaults, user-visible steps, outputs, state
+lifecycle, and layout behavior. Record any intentional change to an existing behavior with its reason and verify that it does not remove a
+useful capability. Compare actual call paths rather than assuming every `service.js` is pure or framework-independent.
 
 Specific high-risk examples:
 
@@ -155,6 +159,8 @@ The existing JSX preview is scaffolding, not proof of a complete shell or verifi
 
 **Done when:** every tool and shell workflow has an owner, dependencies, a compatibility checklist, and identified verification paths.
 Capture representative old behavior before removing its implementation.
+For each tool, record empty, typical, and maximum or large-data states at normal and roughly half desktop width. Include which element grows,
+which element scrolls, whether users can resize it, and whether the surrounding controls stay reachable.
 
 ### B. Build the foundation
 
@@ -204,8 +210,10 @@ E2E gaps. Follow repository rules: isolation tests are designed before implement
 smallest relevant non-watch scope and serialize Vitest runs.
 
 Cover normal and failure/cancellation paths, rapid navigation, reload persistence, clipboard/export, supported platform behavior, and
-large datasets. Check widget/listener/worker cleanup and that navigation cannot commit stale asynchronous results or duplicate jobs.
-For layout checks, use a normal desktop window and a roughly half-width desktop window. Mobile interaction does not need E2E coverage.
+large datasets. For each port, compare the same representative actions and data against the old tool, including empty and maximum-output cases.
+Check that large results stay within their intended container, the intended element scrolls, and surrounding controls remain reachable.
+Check widget/listener/worker cleanup and that navigation cannot commit stale asynchronous results or duplicate jobs. For layout checks, use a
+normal desktop window and a roughly half-width desktop window. Mobile interaction does not need E2E coverage.
 
 Save repeatable evidence under `docs/`: environment, source revision, commands/steps, fixtures, assertions, result, and relevant artifacts.
 Distinguish source assessment, typecheck/build, automated tests, browser E2E, live integrations, and packaged Desktop verification.
