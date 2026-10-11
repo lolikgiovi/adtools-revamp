@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -164,78 +165,87 @@ export default function QRToolsPage() {
 
   return (
     <div className="qr-tools-react qr-tools-layout">
-      <section className="qr-tools-left">
-        <FieldGroup className="qr-form-fields">
-          <Field>
-            <FieldLabel htmlFor="qr-mode">Content Type</FieldLabel>
-            <Select items={contentTypeOptions} value={mode} onValueChange={(value) => value && setMode(value as "text" | "url")}>
-              <SelectTrigger id="qr-mode" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">Text</SelectItem>
-                <SelectItem value="url">URL</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field data-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}>
-            <FieldLabel htmlFor="qr-content">Content</FieldLabel>
-            <Textarea
-              id="qr-content"
-              rows={4}
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="Enter URL or text"
-              className="resize-y"
-              aria-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}
-              aria-describedby={mode === "url" && trimmedContent && !urlValid ? "qr-content-error" : undefined}
-            />
-            {mode === "url" && trimmedContent && !urlValid && (
-              <FieldError id="qr-content-error" className="text-sm">
-                {URL_WARNING}
-              </FieldError>
-            )}
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
+      <Card className="qr-tools-left">
+        <CardHeader className="sr-only">
+          <CardTitle>QR content</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup className="qr-form-fields">
             <Field>
-              <FieldLabel htmlFor="qr-foreground">Foreground</FieldLabel>
-              <Input
-                id="qr-foreground"
-                type="color"
-                value={foreground}
-                onChange={(event) => setForeground(event.target.value.toUpperCase())}
-                className="h-8 w-full cursor-pointer p-1"
-              />
+              <FieldLabel htmlFor="qr-mode">Content Type</FieldLabel>
+              <Select items={contentTypeOptions} value={mode} onValueChange={(value) => value && setMode(value as "text" | "url")}>
+                <SelectTrigger id="qr-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="url">URL</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="qr-background">Background</FieldLabel>
-              <Input
-                id="qr-background"
-                type="color"
-                value={background}
-                onChange={(event) => setBackground(event.target.value.toUpperCase())}
-                className="h-8 w-full cursor-pointer p-1"
+            <Field data-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}>
+              <FieldLabel htmlFor="qr-content">Content</FieldLabel>
+              <Textarea
+                id="qr-content"
+                rows={4}
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                placeholder="Enter URL or text"
+                className="resize-y"
+                aria-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}
+                aria-describedby={mode === "url" && trimmedContent && !urlValid ? "qr-content-error" : undefined}
               />
+              {mode === "url" && trimmedContent && !urlValid && (
+                <FieldError id="qr-content-error" className="text-sm">
+                  {URL_WARNING}
+                </FieldError>
+              )}
             </Field>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button disabled={!canDownload} onClick={() => void downloadPng()}>
-              Download PNG
-            </Button>
-            <Button variant="outline" disabled={!canDownload} onClick={() => void downloadSvg()}>
-              Download SVG
-            </Button>
-            <Button variant="ghost" onClick={reset}>
-              Reset
-            </Button>
-          </div>
-        </FieldGroup>
-      </section>
-      <section className="qr-tools-right">
-        <header className="qr-preview-header">
-          <h2 className="qr-preview-title">Preview</h2>
-        </header>
-        <div className="qr-preview-area" aria-busy={isRendering}>
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="qr-foreground">Foreground</FieldLabel>
+                <div className="qr-color-control">
+                  <Input
+                    id="qr-foreground"
+                    type="color"
+                    value={foreground}
+                    onChange={(event) => setForeground(event.target.value.toUpperCase())}
+                  />
+                  <output htmlFor="qr-foreground">{foreground}</output>
+                </div>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="qr-background">Background</FieldLabel>
+                <div className="qr-color-control">
+                  <Input
+                    id="qr-background"
+                    type="color"
+                    value={background}
+                    onChange={(event) => setBackground(event.target.value.toUpperCase())}
+                  />
+                  <output htmlFor="qr-background">{background}</output>
+                </div>
+              </Field>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button disabled={!canDownload} onClick={() => void downloadPng()}>
+                Download PNG
+              </Button>
+              <Button variant="outline" disabled={!canDownload} onClick={() => void downloadSvg()}>
+                Download SVG
+              </Button>
+              <Button variant="ghost" onClick={reset}>
+                Reset
+              </Button>
+            </div>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+      <Card className="qr-tools-right">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent className="qr-preview-area" aria-busy={isRendering}>
           <canvas
             ref={canvasRef}
             role="img"
@@ -260,7 +270,7 @@ export default function QRToolsPage() {
               </EmptyHeader>
             </Empty>
           )}
-        </div>
+        </CardContent>
         {contrastRatio < 3 && (
           <Alert variant="destructive" className="qr-low-contrast" role="status">
             <AlertDescription className="text-sm font-medium">
@@ -268,7 +278,7 @@ export default function QRToolsPage() {
             </AlertDescription>
           </Alert>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

@@ -1,109 +1,60 @@
 .qr-tools-react {
-  box-sizing: border-box;
   width: 100%;
-  max-width: 1120px;
-  margin: 0;
+  max-width: none;
 }
-
 .qr-tools-react.qr-tools-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 1rem;
+  gap: var(--tool-section-gap);
+  align-items: start;
 }
-
 .qr-tools-react .qr-tools-left,
 .qr-tools-react .qr-tools-right {
   min-width: 0;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
 }
-
-.qr-tools-react .qr-tools-left {
-  display: flex;
-  flex-direction: column;
-}
-
 .qr-tools-react .qr-form-fields {
-  gap: 0.75rem;
+  gap: 1rem;
 }
-
-.qr-tools-react .qr-form-fields [data-slot="field"] {
-  gap: 0.375rem;
-}
-
-.qr-tools-react .qr-form-fields [data-slot="field-label"] {
-  color: var(--foreground);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.qr-tools-react .qr-form-fields select {
-  min-height: 2.25rem;
-  padding-block: 0.4rem;
-}
-
 .qr-tools-react .qr-form-fields textarea {
-  box-sizing: border-box;
-  min-height: 110px;
+  min-height: 6rem;
   field-sizing: fixed;
 }
-
-.qr-tools-react .qr-tools-right {
-  display: flex;
-  flex-direction: column;
-}
-
-.qr-tools-react .qr-preview-header {
-  margin-bottom: 0.5rem;
-}
-
-.qr-tools-react .qr-preview-title {
-  margin: 0;
-  color: var(--foreground);
-  font-size: 1rem;
-  font-weight: 600;
-}
-
 .qr-tools-react .qr-preview-area {
   position: relative;
   display: flex;
-  min-height: 288px;
-  flex: 1;
+  min-height: 18rem;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
-  background: var(--background);
 }
-
 .qr-tools-react .qr-preview-area canvas {
   max-width: 288px;
   image-rendering: pixelated;
 }
-
 .qr-tools-react .qr-low-contrast {
-  margin: 0.5rem 0 0;
+  margin: 0.75rem;
 }
-
-.qr-tools-react .qr-form-fields > .grid {
-  gap: 0.75rem;
+.qr-tools-react .qr-color-control {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
-
-.qr-tools-react .qr-form-fields button {
-  justify-content: center;
+.qr-tools-react .qr-color-control input {
+  width: 2.5rem;
+  flex: none;
+  cursor: pointer;
 }
-
+.qr-tools-react .qr-color-control output {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
 @container (max-width: 720px) {
   .qr-tools-react.qr-tools-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-@container (max-width: 400px) {
-  .qr-tools-react .qr-form-fields > .grid {
-    grid-template-columns: minmax(0, 1fr);
+  .qr-tools-react .qr-preview-area {
+    min-height: 16rem;
+  }
+  .qr-tools-react .qr-preview-area canvas {
+    max-width: 224px;
   }
 }

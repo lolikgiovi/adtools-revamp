@@ -87,6 +87,12 @@
 }
 
 :root {
+  --tool-editor-font-size: 0.8125rem;
+  --tool-section-gap: 1rem;
+  --tool-panel-padding: calc(var(--spacing) * 4);
+  --tool-header-padding: calc(var(--spacing) * 3) var(--tool-panel-padding);
+  --tool-toolbar: color-mix(in oklab, var(--muted) 38%, var(--background));
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -168,5 +174,35 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+.tool-workspace {
+  scrollbar-color: var(--border) var(--background);
+}
+.tool-workspace ::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.tool-workspace textarea::placeholder {
+  color: var(--muted-foreground);
+}
+.tool-workspace [role="tablist"] {
+  max-width: 100%;
+}
+.tool-workspace [data-slot="tabs-trigger"] {
+  transition-property: color, background-color, border-color;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-workspace *,
+  .tool-workspace *::before,
+  .tool-workspace *::after {
+    transition-duration: 0s;
   }
 }

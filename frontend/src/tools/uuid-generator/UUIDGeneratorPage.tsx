@@ -5,6 +5,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
+import "./UUIDGeneratorPage.css";
 import { UsageTracker } from "../../../core/UsageTracker.js";
 import { cleanAnalyticsMeta } from "../../../core/AnalyticsMeta.js";
 
@@ -66,16 +67,18 @@ export default function UUIDGeneratorPage() {
   }
 
   return (
-    <div className="grid w-full max-w-6xl grid-cols-1 items-start gap-4 @min-[850px]:grid-cols-2">
-      <Card>
+    <div className="uuid-workspace">
+      <Card className="uuid-section">
         <CardHeader>
           <CardTitle>Single UUID</CardTitle>
-          <CardDescription>Generate and copy a version 4 UUID.</CardDescription>
+          <CardDescription className="sr-only">Generate and copy a version 4 UUID.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="singleUuidResult">UUID</FieldLabel>
+              <FieldLabel className="sr-only" htmlFor="singleUuidResult">
+                UUID
+              </FieldLabel>
               <Input id="singleUuidResult" value={single} readOnly placeholder="Generated UUID will appear here" className="font-mono" />
             </Field>
           </FieldGroup>
@@ -87,62 +90,69 @@ export default function UUIDGeneratorPage() {
           </div>
         </CardContent>
       </Card>
-      <Card>
+      <Card className="uuid-section">
         <CardHeader>
           <CardTitle>Multiple UUIDs</CardTitle>
-          <CardDescription>Generate up to 10,000 UUIDs and copy them automatically.</CardDescription>
+          <CardDescription className="sr-only">Generate up to 10,000 UUIDs and copy them automatically.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <FieldGroup>
-            <Field data-invalid={!quantityValid}>
-              <FieldLabel htmlFor="uuidQuantity">Quantity</FieldLabel>
-              <Input
-                id="uuidQuantity"
-                type="number"
-                min="1"
-                max="10000"
-                placeholder="1 by default, up to 10,000"
-                value={quantity}
-                step="1"
-                aria-invalid={!quantityValid}
-                aria-describedby={!quantityValid ? "uuid-quantity-error" : undefined}
-                onChange={(event) => setQuantity(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void generateMultiple();
-                }}
-              />
-              {!quantityValid && <FieldError id="uuid-quantity-error">Enter a whole number from 1 to 10,000.</FieldError>}
-            </Field>
+            <div className="uuid-bulk-toolbar">
+              {" "}
+              <Field data-invalid={!quantityValid}>
+                <FieldLabel className="sr-only" htmlFor="uuidQuantity">
+                  Quantity
+                </FieldLabel>
+                <Input
+                  id="uuidQuantity"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  placeholder="1 by default, up to 10,000"
+                  value={quantity}
+                  step="1"
+                  aria-invalid={!quantityValid}
+                  aria-describedby={!quantityValid ? "uuid-quantity-error" : undefined}
+                  onChange={(event) => setQuantity(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void generateMultiple();
+                  }}
+                />
+                {!quantityValid && <FieldError id="uuid-quantity-error">Enter a whole number from 1 to 10,000.</FieldError>}
+              </Field>{" "}
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={!quantityValid} onClick={() => void generateMultiple()}>
+                  Generate
+                </Button>
+                <Button variant="outline" disabled={!multiple} onClick={() => void copy(multiple, "multiple")}>
+                  Copy
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!multiple && !quantity}
+                  onClick={() => {
+                    setMultiple("");
+                    setQuantity("");
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
             <Field>
-              <FieldLabel htmlFor="multipleUuidResult">Generated UUIDs</FieldLabel>
+              <FieldLabel className="sr-only" htmlFor="multipleUuidResult">
+                Generated UUIDs
+              </FieldLabel>
               <Textarea
                 id="multipleUuidResult"
                 value={multiple}
                 readOnly
                 placeholder="Generated UUIDs will appear here"
-                rows={10}
-                className="field-sizing-fixed min-h-[12rem] resize-y font-mono"
+                rows={6}
+                className="field-sizing-fixed resize-y font-mono"
               />
             </Field>
           </FieldGroup>
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={!quantityValid} onClick={() => void generateMultiple()}>
-              Generate
-            </Button>
-            <Button variant="outline" disabled={!multiple} onClick={() => void copy(multiple, "multiple")}>
-              Copy
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!multiple && !quantity}
-              onClick={() => {
-                setMultiple("");
-                setQuantity("");
-              }}
-            >
-              Clear
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

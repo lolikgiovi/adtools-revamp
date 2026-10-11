@@ -108,6 +108,10 @@ function MonacoEditor({ input, onChange, markers, label }: MonacoEditorProps) {
       ariaLabel: label,
       theme: document.documentElement.classList.contains("dark") ? "vs-dark" : "vs",
       automaticLayout: true,
+      fontSize: 13,
+      lineHeight: 22,
+      padding: { top: 12, bottom: 12 },
+      renderLineHighlightOnlyWhenFocus: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       scrollbar: { alwaysConsumeMouseWheel: false },
@@ -671,12 +675,9 @@ export default function JSONToolsPage() {
       onValueChange={(value) => switchTab(value as Tab)}
       className={`json-tools-react w-full ${isExpanded ? "is-expanded" : ""}`}
     >
-      <TabsList
-        aria-label="JSON operation"
-        className="json-operation-tabs mb-2 h-auto w-fit max-w-full flex-none flex-wrap justify-start gap-1 border bg-muted p-1"
-      >
+      <TabsList variant="line" aria-label="JSON operation" className="json-operation-tabs">
         {tabs.map((item) => (
-          <TabsTrigger key={item.id} value={item.id} className="h-8 flex-none px-3 text-sm">
+          <TabsTrigger key={item.id} value={item.id} className="flex-none">
             {item.label}
           </TabsTrigger>
         ))}
@@ -738,7 +739,6 @@ export default function JSONToolsPage() {
                 <div className="flex flex-wrap gap-1">
                   <Button
                     variant="ghost"
-                    size="sm"
                     title="Clear Editor"
                     onClick={() => {
                       setInput("");
@@ -754,13 +754,13 @@ export default function JSONToolsPage() {
                   >
                     Clear
                   </Button>
-                  <Button variant="ghost" size="sm" title="Copy Input" disabled={!input} onClick={() => void copyText(input, "copy_input")}>
+                  <Button variant="ghost" title="Copy Input" disabled={!input} onClick={() => void copyText(input, "copy_input")}>
                     Copy
                   </Button>
-                  <Button variant="ghost" size="sm" title="Paste from Clipboard" onClick={() => void pasteInput()}>
+                  <Button variant="ghost" title="Paste from Clipboard" onClick={() => void pasteInput()}>
                     Paste
                   </Button>
-                  <Button size="sm" disabled={!input.trim()} onClick={() => processCurrent()}>
+                  <Button disabled={!input.trim()} onClick={() => processCurrent()}>
                     {tabs.find((item) => item.id === tab)?.label === "To Table"
                       ? "Convert to Table"
                       : tabs.find((item) => item.id === tab)?.label}
@@ -790,7 +790,6 @@ export default function JSONToolsPage() {
                     <>
                       <Button
                         variant="outline"
-                        size="sm"
                         disabled={!hasTableData}
                         aria-expanded={isSearchOpen}
                         ref={searchButton}
@@ -801,12 +800,11 @@ export default function JSONToolsPage() {
                       >
                         Search
                       </Button>
-                      <Button variant="outline" size="sm" disabled={!hasTableData} onClick={() => void exportExcel()}>
+                      <Button variant="outline" disabled={!hasTableData} onClick={() => void exportExcel()}>
                         Export Excel
                       </Button>
                       <Button
                         variant="outline"
-                        size="sm"
                         disabled={!hasTableData}
                         aria-pressed={isTransposed}
                         onClick={() => {
@@ -822,7 +820,6 @@ export default function JSONToolsPage() {
                       </Button>
                       <Button
                         variant="outline"
-                        size="sm"
                         disabled={!hasTableData}
                         aria-expanded={isExpanded}
                         onClick={() => setIsExpanded((current) => !current)}
@@ -833,7 +830,6 @@ export default function JSONToolsPage() {
                   )}
                   <Button
                     variant="outline"
-                    size="sm"
                     disabled={isTableMode ? !hasTableData : !output}
                     onClick={() => (isTableMode ? void copyTable() : void copyText(output, "copy_output"))}
                   >
@@ -866,7 +862,6 @@ export default function JSONToolsPage() {
                   </span>
                   <Button
                     variant="ghost"
-                    size="sm"
                     disabled={!searchCount || searchCount === "0 matches"}
                     aria-label="Previous match"
                     onClick={() => navigateSearch(-1)}
@@ -875,7 +870,6 @@ export default function JSONToolsPage() {
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
                     disabled={!searchCount || searchCount === "0 matches"}
                     aria-label="Next match"
                     onClick={() => navigateSearch(1)}

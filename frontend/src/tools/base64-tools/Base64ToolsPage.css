@@ -1,103 +1,46 @@
 .base64-tools-react {
   display: flex;
   width: 100%;
-  max-width: none;
   flex-direction: column;
-  gap: 0;
-}
-
-.base64-tools-react .base64-mode-panel {
-  min-height: 0;
-  flex: 1;
   gap: 1rem;
-  padding-top: 1rem;
 }
-
+.base64-tools-react .base64-mode-tabs {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+.base64-tools-react .base64-mode-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
 .base64-tools-react .base64-input-group,
 .base64-tools-react .base64-output-group {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 0.75rem;
-  flex-wrap: wrap;
 }
-
 .base64-tools-react .base64-input-header,
 .base64-tools-react .base64-output-header {
   display: flex;
-  min-height: 2.2rem;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
-
-.base64-tools-react .base64-input-header label,
-.base64-tools-react .base64-output-header label {
-  margin: 0;
-  color: var(--foreground);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.base64-tools-react .base64-textarea {
-  box-sizing: border-box;
-  width: 100%;
-  height: clamp(12rem, 24vh, 18rem);
-  min-height: 12rem;
-  field-sizing: fixed;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--background);
-  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.base64-tools-react .base64-output-textarea {
-  background: var(--muted);
-}
-
 .base64-tools-react .base64-action-row {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
 }
-
-.base64-tools-react .base64-output-group > div:last-child {
-  min-width: 0;
+.base64-tools-react .base64-textarea {
+  width: 100%;
+  min-height: 10rem;
+  height: clamp(10rem, 22vh, 18rem);
+  field-sizing: fixed;
 }
-
-@container (min-width: 850px) {
-  .base64-tools-react .base64-mode-panel {
-    display: grid;
-    align-content: start;
-    gap: 1rem;
-    grid-template-areas:
-      "input output"
-      "action output";
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: max-content max-content;
-    align-items: start;
-  }
-
-  .base64-tools-react .base64-input-group {
-    grid-area: input;
-  }
-
-  .base64-tools-react .base64-action-row {
-    grid-area: action;
-    justify-content: flex-start;
-  }
-
-  .base64-tools-react .base64-output-group {
-    grid-area: output;
-  }
-}
-
-@container (max-width: 520px) {
-  .base64-tools-react .base64-input-header,
-  .base64-tools-react .base64-output-header {
-    align-items: flex-start;
-    flex-direction: column;
+@container (min-width: 1000px) {
+  .base64-tools-react .base64-textarea {
+    min-height: 14rem;
   }
 }

@@ -325,7 +325,7 @@ export default function TLVViewerPage() {
                 <SelectItem value="ber-base64">BER-TLV (Base64)</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" disabled={!input.trim()} onClick={() => parseInput(input, format)}>
+            <Button disabled={!input.trim()} onClick={() => parseInput(input, format)}>
               Parse
             </Button>
           </div>
@@ -351,18 +351,17 @@ export default function TLVViewerPage() {
             className="min-h-[220px] flex-1 resize-y font-mono text-xs"
           />
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => void pasteInput()}>
+            <Button variant="outline" onClick={() => void pasteInput()}>
               Paste
             </Button>
-            <Button variant="outline" size="sm" onClick={() => loadSample("qris")}>
+            <Button variant="outline" onClick={() => loadSample("qris")}>
               QRIS Sample
             </Button>
-            <Button variant="outline" size="sm" onClick={() => loadSample("ber")}>
+            <Button variant="outline" onClick={() => loadSample("ber")}>
               BER-TLV Sample
             </Button>
             <Button
               variant="ghost"
-              size="sm"
               disabled={!input && !result && !error}
               onClick={() => {
                 setInput("");
@@ -399,13 +398,9 @@ export default function TLVViewerPage() {
         <section className="tlv-panel tlv-output-panel">
           <header className="tlv-panel-header tlv-output-header">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <TabsList
-                aria-label="TLV result view"
-                variant="line"
-                className="tlv-result-tabs h-10 rounded-none border-b-0 bg-transparent p-0"
-              >
+              <TabsList aria-label="TLV result view" variant="line" className="tlv-result-tabs">
                 {(Object.keys(TABLE_VIEW_LABELS) as View[]).map((item) => (
-                  <TabsTrigger key={item} value={item} className="h-8 px-3 text-sm">
+                  <TabsTrigger key={item} value={item} className="flex-none">
                     {TABLE_VIEW_LABELS[item]}
                   </TabsTrigger>
                 ))}
@@ -418,7 +413,7 @@ export default function TLVViewerPage() {
                     : ""}
               </p>
             </div>
-            <Button variant="outline" size="sm" disabled={!result} onClick={() => void copyOutput()}>
+            <Button variant="outline" disabled={!result} onClick={() => void copyOutput()}>
               Copy
             </Button>
           </header>

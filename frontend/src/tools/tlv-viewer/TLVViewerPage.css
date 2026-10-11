@@ -7,7 +7,7 @@
   height: max(36rem, var(--tool-workspace-height));
   min-height: 0;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr);
-  gap: 0.75rem;
+  gap: var(--tool-section-gap);
 }
 
 .tlv-viewer-react .tlv-panel {
@@ -16,9 +16,9 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--tlv-border);
-  border-radius: calc(var(--radius) + 2px);
-  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
 }
 
 .tlv-viewer-react .tlv-panel-header {
@@ -28,13 +28,13 @@
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
-  padding: 0.75rem 1rem;
+  padding: var(--tool-header-padding);
   border-bottom: 1px solid var(--tlv-border);
 }
 
 .tlv-viewer-react .tlv-panel-header h2 {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -62,7 +62,7 @@
   border-radius: calc(var(--radius) - 3px);
   background: color-mix(in oklab, var(--background) 60%, transparent);
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-  font-size: 0.78rem;
+  font-size: var(--tool-editor-font-size);
   line-height: 1.45;
   field-sizing: fixed;
 }
@@ -70,7 +70,7 @@
 .tlv-viewer-react .tlv-input-content > p:last-child {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
 }
 
 .tlv-viewer-react .tlv-output-tabs {
@@ -87,21 +87,11 @@
 
 .tlv-viewer-react .tlv-output-header {
   min-height: 3rem;
-  padding: 0.35rem 0.75rem;
+  padding: var(--tool-header-padding);
 }
 
 .tlv-viewer-react .tlv-result-tabs {
   flex: none;
-  gap: 0.5rem;
-}
-
-.tlv-viewer-react .tlv-result-tabs [data-slot="tabs-trigger"] {
-  flex: none;
-  font-size: 0.78rem;
-}
-
-.tlv-viewer-react .tlv-result-tabs [data-slot="tabs-trigger"]::after {
-  bottom: -0.45rem;
 }
 
 .tlv-viewer-react .tlv-output-content {
@@ -144,5 +134,30 @@
   .tlv-viewer-react .tlv-panel-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+.tlv-viewer-react .tlv-panel-header {
+  background: var(--tool-toolbar);
+  padding: var(--tool-header-padding);
+}
+.tlv-viewer-react .tlv-input-content {
+  padding: 0;
+  gap: 0;
+}
+.tlv-viewer-react .tlv-input-content > textarea {
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+  padding: var(--tool-panel-padding);
+  line-height: 1.7;
+}
+.tlv-viewer-react .tlv-input-content > div,
+.tlv-viewer-react .tlv-input-content > p {
+  padding: var(--tool-header-padding);
+}
+@container (max-width: 850px) {
+  .tlv-viewer-react .tlv-output-tabs {
+    border-left: 0;
   }
 }

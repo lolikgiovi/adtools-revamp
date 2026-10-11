@@ -212,10 +212,45 @@ for (const route of ["uuid-generator", "char-counter", "base64-tools", "json-too
       await expect(page.getByRole("button", { name: "Download PNG", exact: true })).toBeEnabled();
     }
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-    if (["char-counter", "json-tools", "tlv-viewer"].includes(route)) {
+    if (["char-counter", "json-tools", "tlv-viewer", "qr-tools"].includes(route)) {
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
+    }
+    // Regression: percentage-height tab triggers overflowed a wrapped list at half width.
+    for (const list of await page.getByRole("tablist").all()) {
+      const bounds = await list.boundingBox();
+      expect(bounds).not.toBeNull();
+      for (const tab of await list.getByRole("tab").all()) {
+        const child = await tab.boundingBox();
+        expect(child).not.toBeNull();
+        expect(child!.y).toBeGreaterThanOrEqual(bounds!.y - 1);
+        expect(child!.y + child!.height).toBeLessThanOrEqual(bounds!.y + bounds!.height + 1);
+      }
     }
     const screenshot = await page.screenshot({ path: testInfo.outputPath(`${route}.png`), fullPage: true });
     await testInfo.attach(route, { body: screenshot, contentType: "image/png" });
   });
 }
+
+// Protects cross-tool sizing: a local size/font override must not drift from the shared control scale.
+test("tools use one control and tab sizing scale", async ({ page }) => {
+  for (const route of ["uuid-generator", "base64-tools", "json-tools", "char-counter", "tlv-viewer", "qr-tools"]) {
+    await openTool(page, route);
+    const metrics = await page.locator("main").evaluate((main) => {
+      const measure = (selector: string) =>
+        Array.from(main.querySelectorAll<HTMLElement>(selector))
+          .filter((node) => node.getBoundingClientRect().height > 0)
+          .map((node) => ({ font: parseFloat(getComputedStyle(node).fontSize), height: node.getBoundingClientRect().height }));
+      return {
+        padding: [getComputedStyle(main).paddingLeft, getComputedStyle(main).paddingRight],
+        controls: measure('[data-slot="button"], [data-slot="input"], [data-slot="select-trigger"], [data-slot="toggle-group-item"]'),
+        tabs: measure('[data-slot="tabs-trigger"]'),
+      };
+    });
+    expect(metrics.padding).toEqual(["21.6px", "21.6px"]);
+    expect(metrics.controls.length).toBeGreaterThan(0);
+    for (const item of [...metrics.controls, ...metrics.tabs]) {
+      expect(item.font, `${route}: control font`).toBeCloseTo(12.6, 1);
+      expect(item.height, `${route}: control height`).toBeCloseTo(28.8, 1);
+    }
+  }
+});

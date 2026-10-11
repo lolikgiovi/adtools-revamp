@@ -175,7 +175,7 @@ function OutputPreview({ file, onClose }: { file: OutputFile; onClose: () => voi
               {Base64ToolsService.formatFileSize(file.size)} · {Base64ToolsConstants.getFileTypeLabel(file.type)}
             </DialogDescription>
           </div>
-          <DialogClose render={<Button variant="outline" size="sm" />}>Close</DialogClose>
+          <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-auto p-4">
           {file.kind === "image" && file.bytes ? (
@@ -696,14 +696,11 @@ export default function Base64ToolsPage() {
       }}
       className="base64-tools-react w-full"
     >
-      <TabsList
-        aria-label="Base64 mode"
-        className="base64-mode-tabs mb-2 h-auto w-fit max-w-full flex-none flex-wrap justify-start gap-1 border bg-muted p-1"
-      >
-        <TabsTrigger disabled={busy} value="encode" className="h-9 flex-none px-3 text-sm">
+      <TabsList variant="line" aria-label="Base64 mode" className="base64-mode-tabs">
+        <TabsTrigger disabled={busy} value="encode" className="flex-none">
           Encode to Base64
         </TabsTrigger>
-        <TabsTrigger disabled={busy} value="decode" className="h-9 flex-none px-3 text-sm">
+        <TabsTrigger disabled={busy} value="decode" className="flex-none">
           Decode from Base64
         </TabsTrigger>
       </TabsList>
@@ -725,13 +722,13 @@ export default function Base64ToolsPage() {
                   event.target.value = "";
                 }}
               />
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFiles(mode)}>
+              <Button variant="outline" disabled={busy} onClick={() => void chooseFiles(mode)}>
                 {mode === "encode" ? "Upload Any File(s)" : "Upload Base64 File"}
               </Button>
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => void pasteInput(mode)}>
+              <Button variant="outline" disabled={busy} onClick={() => void pasteInput(mode)}>
                 Paste
               </Button>
-              <Button variant="ghost" size="sm" disabled={busy || (!currentInput && !modeFiles.length)} onClick={() => clearInput(mode)}>
+              <Button variant="ghost" disabled={busy || (!currentInput && !modeFiles.length)} onClick={() => clearInput(mode)}>
                 Clear
               </Button>
             </div>
@@ -764,13 +761,7 @@ export default function Base64ToolsPage() {
                         {Base64ToolsService.formatFileSize(file.size)} · {file.type || "Unknown type"}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      aria-label={`Remove ${file.name}`}
-                      onClick={() => removeSelectedFile(id)}
-                    >
+                    <Button variant="ghost" disabled={busy} aria-label={`Remove ${file.name}`} onClick={() => removeSelectedFile(id)}>
                       Remove
                     </Button>
                   </li>
@@ -779,30 +770,25 @@ export default function Base64ToolsPage() {
             </section>
           )}
         </Field>
+
         <div className="base64-action-row">
           <Button disabled={busy || (!currentInput && !modeFiles.length)} onClick={() => void processInput()}>
             {busy ? "Processing…" : mode === "encode" ? "Encode to Base64" : "Decode from Base64"}
           </Button>
         </div>
-
         <Field className="base64-output-group">
           <div className="base64-output-header">
             <FieldLabel htmlFor={showFiles ? undefined : `${mode}-output`}>
               {mode === "encode" ? "Base64 Output" : "Decoded Output"}
             </FieldLabel>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={!canCopy} onClick={() => void copyOutput(mode)}>
+              <Button variant="outline" disabled={!canCopy} onClick={() => void copyOutput(mode)}>
                 Copy
               </Button>
-              <Button variant="outline" size="sm" disabled={!canDownload || busy} onClick={() => void downloadResult(mode)}>
+              <Button variant="outline" disabled={!canDownload || busy} onClick={() => void downloadResult(mode)}>
                 {isMultiOutput ? "Download All" : "Download"}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy || (!currentOutput && !currentFiles.length)}
-                onClick={() => clearOutput(mode)}
-              >
+              <Button variant="ghost" disabled={busy || (!currentOutput && !currentFiles.length)} onClick={() => clearOutput(mode)}>
                 Clear
               </Button>
             </div>
@@ -835,17 +821,17 @@ export default function Base64ToolsPage() {
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {file.text !== undefined && (
-                            <Button variant="ghost" size="sm" onClick={() => void copyText(file.text || "")}>
+                            <Button variant="ghost" onClick={() => void copyText(file.text || "")}>
                               Copy
                             </Button>
                           )}
                           {mode === "decode" &&
                             (file.kind === "text" || file.type.startsWith("image/") || file.type === "application/pdf") && (
-                              <Button variant="ghost" size="sm" onClick={() => setPreview(file)}>
+                              <Button variant="ghost" onClick={() => setPreview(file)}>
                                 Preview
                               </Button>
                             )}
-                          <Button variant="outline" size="sm" onClick={() => downloadOneFile(file)}>
+                          <Button variant="outline" onClick={() => downloadOneFile(file)}>
                             Download
                           </Button>
                         </div>

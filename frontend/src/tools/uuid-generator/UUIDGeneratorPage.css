@@ -1,0 +1,26 @@
+.uuid-workspace {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  flex-direction: column;
+  gap: var(--tool-section-gap);
+}
+.uuid-workspace .uuid-bulk-toolbar {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.uuid-workspace .uuid-bulk-toolbar > [data-slot="field"] {
+  flex: 1;
+  min-width: 12rem;
+}
+.uuid-workspace .uuid-bulk-toolbar > div:last-child {
+  flex: none;
+}
+.uuid-workspace #singleUuidResult {
+  width: 100%;
+}
+.uuid-workspace textarea {
+  min-height: 8rem;
+}

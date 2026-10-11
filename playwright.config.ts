@@ -16,6 +16,8 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop-dark", use: { viewport: { width: 1280, height: 900 }, colorScheme: "dark" } },
+    { name: "desktop-light", use: { viewport: { width: 1280, height: 900 }, colorScheme: "light" } },
+    { name: "half-desktop-dark", use: { viewport: { width: 820, height: 900 }, colorScheme: "dark" } },
     { name: "half-desktop-light", use: { viewport: { width: 820, height: 900 }, colorScheme: "light", reducedMotion: "reduce" } },
   ],
   webServer: {

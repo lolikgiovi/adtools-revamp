@@ -18,6 +18,9 @@ distinct from requirements.
   Initial display-table targets include Compare Config, Master Lockey, and Image Checker.
 - Apply shadcn preset `b1Zzq9tHk`: Mira, neutral base/theme, Inter, Hugeicons, medium radius, subtle menu accents, default menu color,
   and blue chart palette. These values were confirmed through the shadcn CLI. Hugeicons is the chosen icon library.
+- The existing deployed [AD Tools UI](https://adtools.lolik.workers.dev/#home) is the primary visual and workflow reference
+  (user clarification, 2026-10-11). Preserve recognizable tool layouts, section grouping, action placement, and navigation while
+  implementing them with shadcn components. Do not introduce a replacement visual concept as part of the migration.
 - Reuse existing shadcn components and their composition patterns. Create custom UI only for a concrete capability they do not provide.
 - Work in this isolated worktree. Intermediate app usability is not required; the branch may remain incomplete while tools migrate.
 - AD Tools is used in desktop windows, including a window occupying roughly half the desktop screen. Keep navigation and tool workflows usable at both widths. Mobile interaction is outside the product scope and is not a migration acceptance criterion.

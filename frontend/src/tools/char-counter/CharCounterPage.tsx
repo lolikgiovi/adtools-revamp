@@ -163,27 +163,25 @@ export default function CharCounterPage() {
                 if (nextMode === "summary" || nextMode === "rows") changeMode(nextMode);
               }}
               aria-label="Counting mode"
-              size="sm"
               spacing={0}
               className="char-counter-modes h-auto rounded-md border bg-background p-0.5"
             >
-              <ToggleGroupItem value="summary" className="h-8 px-3 text-sm">
+              <ToggleGroupItem value="summary" className="flex-none">
                 Summary
               </ToggleGroupItem>
-              <ToggleGroupItem value="rows" className="h-8 px-3 text-sm">
+              <ToggleGroupItem value="rows" className="flex-none">
                 Per row
               </ToggleGroupItem>
             </ToggleGroup>
             <div className="char-counter-actions">
-              <Button variant="outline" size="sm" onClick={() => void pasteText()}>
+              <Button variant="outline" onClick={() => void pasteText()}>
                 Paste
               </Button>
-              <Button variant="outline" size="sm" disabled={!hasText} onClick={() => void copyText()}>
+              <Button variant="outline" disabled={!hasText} onClick={() => void copyText()}>
                 Copy
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
                 disabled={!hasText}
                 onClick={() => {
                   setText("");
