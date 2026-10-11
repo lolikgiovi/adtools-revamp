@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
@@ -145,20 +147,15 @@ function FileThumbnail({ file }: { file: File }) {
 }
 
 function OutputPreview({ file, onClose }: { file: OutputFile; onClose: () => void }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
     const image = imageRef.current;
     const frame = frameRef.current;
     const objectUrl = file.bytes ? URL.createObjectURL(new Blob([toByteArray(file.bytes)], { type: file.type })) : null;
     if (objectUrl && image) image.src = objectUrl;
     if (objectUrl && frame) frame.src = objectUrl;
-    if (!dialog.open) dialog.showModal();
     return () => {
-      if (dialog.open) dialog.close();
       image?.removeAttribute("src");
       frame?.removeAttribute("src");
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -166,44 +163,34 @@ function OutputPreview({ file, onClose }: { file: OutputFile; onClose: () => voi
   }, [file]);
 
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="base64-preview-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      className="m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-4xl flex-col overflow-hidden rounded-lg border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/60 open:flex"
-    >
-      <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="min-w-0">
-          <h2 id="base64-preview-title" className="truncate font-medium">
-            {file.name}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {Base64ToolsService.formatFileSize(file.size)} · {Base64ToolsConstants.getFileTypeLabel(file.type)}
-          </p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-h-[90vh] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-lg border bg-background p-0 text-foreground shadow-xl sm:max-w-4xl"
+        showCloseButton={false}
+      >
+        <DialogHeader className="flex-row items-center justify-between gap-3 border-b px-4 py-3 text-left">
+          <div className="min-w-0">
+            <DialogTitle className="truncate font-medium">{file.name}</DialogTitle>
+            <DialogDescription className="text-sm">
+              {Base64ToolsService.formatFileSize(file.size)} · {Base64ToolsConstants.getFileTypeLabel(file.type)}
+            </DialogDescription>
+          </div>
+          <DialogClose render={<Button variant="outline" size="sm" />}>Close</DialogClose>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          {file.kind === "image" && file.bytes ? (
+            <img ref={imageRef} alt={file.name} className="mx-auto max-h-[70vh] max-w-full object-contain" />
+          ) : null}
+          {file.type === "application/pdf" && file.bytes ? (
+            <iframe ref={frameRef} title={file.name} className="h-[70vh] w-full rounded border" />
+          ) : null}
+          {file.kind === "text" ? <pre className="whitespace-pre-wrap break-words font-mono text-sm">{file.text}</pre> : null}
+          {file.kind === "binary" && file.type !== "application/pdf" && (
+            <p className="text-sm text-muted-foreground">Preview is not available for this file type.</p>
+          )}
         </div>
-        <Button variant="outline" size="sm" onClick={onClose}>
-          Close
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        {file.kind === "image" && file.bytes ? (
-          <img ref={imageRef} alt={file.name} className="mx-auto max-h-[70vh] max-w-full object-contain" />
-        ) : null}
-        {file.type === "application/pdf" && file.bytes ? (
-          <iframe ref={frameRef} title={file.name} className="h-[70vh] w-full rounded border" />
-        ) : null}
-        {file.kind === "text" ? <pre className="whitespace-pre-wrap break-words font-mono text-sm">{file.text}</pre> : null}
-        {file.kind === "binary" && file.type !== "application/pdf" && (
-          <p className="text-sm text-muted-foreground">Preview is not available for this file type.</p>
-        )}
-      </div>
-    </dialog>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -754,9 +741,9 @@ export default function Base64ToolsPage() {
         </TabsTrigger>
       </TabsList>
       <TabsContent value={mode} className="base64-mode-panel flex w-full flex-col">
-        <section className="base64-input-group">
+        <Field className="base64-input-group">
           <div className="base64-input-header">
-            <label htmlFor={`${mode}-input`}>{mode === "encode" ? "Input" : "Base64 Input"}</label>
+            <FieldLabel htmlFor={`${mode}-input`}>{mode === "encode" ? "Input" : "Base64 Input"}</FieldLabel>
             <div className="flex flex-wrap gap-2">
               <input
                 ref={mode === "encode" ? encodeFileInput : decodeFileInput}
@@ -815,16 +802,18 @@ export default function Base64ToolsPage() {
               </ul>
             </section>
           )}
-        </section>
+        </Field>
         <div className="base64-action-row">
           <Button disabled={busy} onClick={() => void (mode === "encode" ? runEncode() : runDecode())}>
             {busy ? "Processing…" : mode === "encode" ? "Encode to Base64" : "Decode from Base64"}
           </Button>
         </div>
 
-        <section className="base64-output-group">
+        <Field className="base64-output-group">
           <div className="base64-output-header">
-            <h2>{mode === "encode" ? "Base64 Output" : "Decoded Output"}</h2>
+            <FieldLabel htmlFor={showFiles ? undefined : `${mode}-output`}>
+              {mode === "encode" ? "Base64 Output" : "Decoded Output"}
+            </FieldLabel>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" disabled={!canCopy} onClick={() => void copyOutput(mode)}>
                 Copy
@@ -889,7 +878,7 @@ export default function Base64ToolsPage() {
             ) : null}
             {!showFiles && (
               <Textarea
-                aria-label={mode === "encode" ? "Base64 Output" : "Decoded Output"}
+                id={`${mode}-output`}
                 readOnly
                 value={currentOutput}
                 placeholder={mode === "encode" ? "Base64 encoded result will appear here…" : "Decoded result will appear here…"}
@@ -898,7 +887,7 @@ export default function Base64ToolsPage() {
               />
             )}
           </div>
-        </section>
+        </Field>
 
         {preview && <OutputPreview file={preview} onClose={() => setPreview(null)} />}
       </TabsContent>

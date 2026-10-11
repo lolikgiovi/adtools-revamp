@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/toast";
@@ -11,6 +15,12 @@ import "./TLVViewerPage.css";
 
 type View = "tree" | "table" | "json";
 type Format = "auto" | "qris" | "ber-hex" | "ber-base64";
+const formatOptions = [
+  { label: "Auto-detect", value: "auto" },
+  { label: "QRIS / EMV QR", value: "qris" },
+  { label: "BER-TLV (Hex)", value: "ber-hex" },
+  { label: "BER-TLV (Base64)", value: "ber-base64" },
+] as const;
 type TlvNode = {
   tag: string;
   constructed?: boolean;
@@ -298,29 +308,29 @@ export default function TLVViewerPage() {
         <header className="tlv-panel-header">
           <h2>TLV Input</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="tlv-format">
+            <Label className="sr-only" htmlFor="tlv-format">
               Input format
-            </label>
-            <NativeSelect
-              id="tlv-format"
-              value={format}
-              onChange={(event) => changeFormat(event.target.value as Format)}
-              className="max-w-full"
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="qris">QRIS / EMV QR</option>
-              <option value="ber-hex">BER-TLV (Hex)</option>
-              <option value="ber-base64">BER-TLV (Base64)</option>
-            </NativeSelect>
+            </Label>
+            <Select items={formatOptions} value={format} onValueChange={(value) => value && changeFormat(value as Format)}>
+              <SelectTrigger id="tlv-format" className="max-w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto-detect</SelectItem>
+                <SelectItem value="qris">QRIS / EMV QR</SelectItem>
+                <SelectItem value="ber-hex">BER-TLV (Hex)</SelectItem>
+                <SelectItem value="ber-base64">BER-TLV (Base64)</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => parseInput(input, format)}>
               Parse
             </Button>
           </div>
         </header>
         <div className="tlv-input-content">
-          <label className="sr-only" htmlFor="tlv-input">
+          <Label className="sr-only" htmlFor="tlv-input">
             Paste QRIS string, hex TLV, or base64 payload
-          </label>
+          </Label>
           <Textarea
             id="tlv-input"
             value={input}
@@ -359,9 +369,9 @@ export default function TLVViewerPage() {
             <span className="ml-auto self-center text-xs text-muted-foreground">Ctrl/Cmd + Enter to parse</span>
           </div>
           {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
           <p className="text-xs text-muted-foreground">
             QRIS tags per{" "}
@@ -408,15 +418,7 @@ export default function TLVViewerPage() {
           {result?.format === "qris" && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 border-y px-4 py-2 text-xs">
               {result.crc && (
-                <span
-                  className={
-                    result.crc.present
-                      ? result.crc.valid
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-destructive"
-                      : "text-amber-600 dark:text-amber-400"
-                  }
-                >
+                <span className={result.crc.present ? (result.crc.valid ? "text-primary" : "text-destructive") : "text-muted-foreground"}>
                   {!result.crc.present
                     ? "CRC tag (63) not found"
                     : result.crc.valid
@@ -424,12 +426,9 @@ export default function TLVViewerPage() {
                       : `✗ CRC invalid — expected ${result.crc.expected}; tag 63 contains ${result.crc.actual}`}
                 </span>
               )}
-              {result.validation?.length === 0 && <span className="text-green-600 dark:text-green-400">✓ All mandatory tags present</span>}
+              {result.validation?.length === 0 && <span className="text-primary">✓ All mandatory tags present</span>}
               {result.validation?.map((item, index) => (
-                <span
-                  key={`${item.level}-${index}`}
-                  className={item.level === "error" ? "text-destructive" : "text-amber-600 dark:text-amber-400"}
-                >
+                <span key={`${item.level}-${index}`} className={item.level === "error" ? "text-destructive" : "text-muted-foreground"}>
                   {item.level === "error" ? "✗" : "⚠"} {item.message}
                 </span>
               ))}
@@ -438,9 +437,11 @@ export default function TLVViewerPage() {
           <div className="tlv-output-content">
             <TabsContent value={view} className="tlv-view-content m-0 min-w-0 overflow-auto bg-background p-3 text-xs">
               {!result ? (
-                <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-                  Paste a QRIS string or TLV payload and press Parse.
-                </div>
+                <Empty className="h-full min-h-0 gap-2 border-0 p-0">
+                  <EmptyHeader>
+                    <EmptyDescription className="text-sm">Paste a QRIS string or TLV payload and press Parse.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : view === "tree" ? (
                 result.nodes.length ? (
                   <TreeNodes nodes={result.nodes} format={result.format} />
@@ -450,37 +451,30 @@ export default function TLVViewerPage() {
               ) : view === "json" ? (
                 <pre className="whitespace-pre-wrap break-all font-mono text-xs">{jsonText}</pre>
               ) : (
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead className="sticky top-0 bg-muted text-muted-foreground">
-                    {result.format === "qris" ? (
-                      <tr>
-                        {["#", "Tag", "Name", "Len", "Value"].map((heading) => (
-                          <th key={heading} className="whitespace-nowrap border-b px-2 py-2">
-                            {heading}
-                          </th>
-                        ))}
-                      </tr>
-                    ) : (
-                      <tr>
-                        {["#", "Depth", "Offset", "Class", "Tag", "C", "Len", "Preview", "Value (Hex)"].map((heading) => (
-                          <th key={heading} className="whitespace-nowrap border-b px-2 py-2">
-                            {heading}
-                          </th>
-                        ))}
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody>
+                <Table className="w-full border-collapse text-left text-xs">
+                  <TableHeader className="sticky top-0 bg-muted text-muted-foreground">
+                    <TableRow className="hover:bg-transparent">
+                      {(result.format === "qris"
+                        ? ["#", "Tag", "Name", "Len", "Value"]
+                        : ["#", "Depth", "Offset", "Class", "Tag", "C", "Len", "Preview", "Value (Hex)"]
+                      ).map((heading) => (
+                        <TableHead key={heading} scope="col" className="h-8 whitespace-nowrap border-b px-2 py-2">
+                          {heading}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {result.rows.map((row) =>
                       result.format === "qris" ? (
-                        <tr key={row.rowIndex} className="border-b last:border-0">
-                          <td className="px-2 py-2 tabular-nums">{row.rowIndex}</td>
-                          <td className="px-2 py-2 font-mono" style={{ paddingLeft: `${8 + row.depth * 12}px` }}>
+                        <TableRow key={row.rowIndex} className="border-b last:border-0 hover:bg-transparent">
+                          <TableCell className="px-2 py-2 tabular-nums">{row.rowIndex}</TableCell>
+                          <TableCell className="px-2 py-2 font-mono" style={{ paddingLeft: `${8 + row.depth * 12}px` }}>
                             {row.tag}
-                          </td>
-                          <td className="px-2 py-2">{row.tagName}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.length}</td>
-                          <td className="max-w-64 px-2 py-2">
+                          </TableCell>
+                          <TableCell className="px-2 py-2">{row.tagName}</TableCell>
+                          <TableCell className="px-2 py-2 tabular-nums">{row.length}</TableCell>
+                          <TableCell className="max-w-64 whitespace-normal px-2 py-2">
                             {row.constructed ? "(template)" : (row.value || "").length > 100 ? `${row.value?.slice(0, 100)}...` : row.value}
                             {row.annotation && (
                               <>
@@ -488,33 +482,33 @@ export default function TLVViewerPage() {
                                 <Annotation tag={row.tag} value={row.annotation} />
                               </>
                             )}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ) : (
-                        <tr key={row.rowIndex} className="border-b last:border-0">
-                          <td className="px-2 py-2 tabular-nums">{row.rowIndex}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.depth}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.offset}</td>
-                          <td className="px-2 py-2">{row.tagClass}</td>
-                          <td className="px-2 py-2 font-mono" style={{ paddingLeft: `${8 + row.depth * 12}px` }}>
+                        <TableRow key={row.rowIndex} className="border-b last:border-0 hover:bg-transparent">
+                          <TableCell className="px-2 py-2 tabular-nums">{row.rowIndex}</TableCell>
+                          <TableCell className="px-2 py-2 tabular-nums">{row.depth}</TableCell>
+                          <TableCell className="px-2 py-2 tabular-nums">{row.offset}</TableCell>
+                          <TableCell className="px-2 py-2">{row.tagClass}</TableCell>
+                          <TableCell className="px-2 py-2 font-mono" style={{ paddingLeft: `${8 + row.depth * 12}px` }}>
                             {row.tag}
-                          </td>
-                          <td className="px-2 py-2">{row.constructed ? "Y" : "N"}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.length}</td>
-                          <td className="px-2 py-2">{row.valuePreview}</td>
-                          <td className="px-2 py-2 font-mono">{trimHex(row.valueHex)}</td>
-                        </tr>
+                          </TableCell>
+                          <TableCell className="px-2 py-2">{row.constructed ? "Y" : "N"}</TableCell>
+                          <TableCell className="px-2 py-2 tabular-nums">{row.length}</TableCell>
+                          <TableCell className="px-2 py-2 whitespace-normal">{row.valuePreview}</TableCell>
+                          <TableCell className="px-2 py-2 font-mono">{trimHex(row.valueHex)}</TableCell>
+                        </TableRow>
                       ),
                     )}
                     {result.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={result.format === "qris" ? 5 : 9} className="px-3 py-8 text-center text-muted-foreground">
                           No rows.
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
             </TabsContent>
           </div>

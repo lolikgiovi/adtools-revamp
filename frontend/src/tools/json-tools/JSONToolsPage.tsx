@@ -4,10 +4,12 @@ import type * as Monaco from "monaco-editor";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/toast";
 import { bucketSize, cleanAnalyticsMeta, getJsonComplexityMeta, getObjectShapeMeta, summarizeText } from "../../../core/AnalyticsMeta.js";
@@ -37,6 +39,16 @@ const tabs: Array<{ id: Tab; label: string; outputTitle: string }> = [
   { id: "extract-keys", label: "Extract Keys", outputTitle: "Extracted Keys" },
   { id: "json-to-table", label: "To Table", outputTitle: "Table View" },
 ];
+
+const extractTypeOptions = [
+  { label: "Simple Keys", value: "simple" },
+  { label: "Key Paths", value: "paths" },
+] as const;
+const sortOrderOptions = [
+  { label: "Natural", value: "natural" },
+  { label: "A-Z", value: "asc" },
+  { label: "Z-A", value: "desc" },
+] as const;
 const EMPTY_MARKERS: Monaco.editor.IMarkerData[] = [];
 
 function readTab(): Tab {
@@ -638,34 +650,44 @@ export default function JSONToolsPage() {
           <div className="json-options-row flex flex-wrap items-end gap-3 border-b bg-card px-3 py-2">
             <Field className="w-auto min-w-36">
               <FieldLabel htmlFor="json-extract-type">Key type</FieldLabel>
-              <NativeSelect
-                id="json-extract-type"
+              <Select
+                items={extractTypeOptions}
                 value={extractType}
-                onChange={(event) => {
-                  setExtractType(event.target.value as ExtractType);
+                onValueChange={(value) => {
+                  if (value !== "simple" && value !== "paths") return;
+                  setExtractType(value);
                   if (tab === "extract-keys") window.setTimeout(() => processCurrent("extract-keys"), 0);
                 }}
-                className="w-full"
               >
-                <option value="simple">Simple Keys</option>
-                <option value="paths">Key Paths</option>
-              </NativeSelect>
+                <SelectTrigger id="json-extract-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simple">Simple Keys</SelectItem>
+                  <SelectItem value="paths">Key Paths</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
             <Field className="w-auto min-w-36">
               <FieldLabel htmlFor="json-sort-order">Sort</FieldLabel>
-              <NativeSelect
-                id="json-sort-order"
+              <Select
+                items={sortOrderOptions}
                 value={sortOrder}
-                onChange={(event) => {
-                  setSortOrder(event.target.value as SortOrder);
+                onValueChange={(value) => {
+                  if (value !== "natural" && value !== "asc" && value !== "desc") return;
+                  setSortOrder(value);
                   if (tab === "extract-keys") window.setTimeout(() => processCurrent("extract-keys"), 0);
                 }}
-                className="w-full"
               >
-                <option value="natural">Natural</option>
-                <option value="asc">A-Z</option>
-                <option value="desc">Z-A</option>
-              </NativeSelect>
+                <SelectTrigger id="json-sort-order" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="natural">Natural</SelectItem>
+                  <SelectItem value="asc">A-Z</SelectItem>
+                  <SelectItem value="desc">Z-A</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
             <p className="pb-2 text-xs text-muted-foreground">Changing an option updates the current result.</p>
           </div>
@@ -794,14 +816,16 @@ export default function JSONToolsPage() {
               {isTableMode ? (
                 <div className="json-table-scroll" onClick={onTableClick}>
                   {tableError ? (
-                    <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
-                      {tableError}
-                    </p>
+                    <Alert variant="destructive" className="mx-3 my-2">
+                      <AlertDescription>{tableError}</AlertDescription>
+                    </Alert>
                   ) : null}
                   {tableHtml ? (
                     <div ref={tableRoot} className="json-table-content" dangerouslySetInnerHTML={{ __html: tableDisplay }} />
                   ) : !tableError ? (
-                    <div className="json-table-empty">Paste JSON and choose Convert to Table.</div>
+                    <Empty className="json-table-empty flex-1 p-0">
+                      <EmptyDescription className="text-sm">Paste JSON and choose Convert to Table.</EmptyDescription>
+                    </Empty>
                   ) : null}
                 </div>
               ) : (

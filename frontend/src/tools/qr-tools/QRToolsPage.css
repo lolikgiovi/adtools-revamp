@@ -84,7 +84,7 @@
   image-rendering: pixelated;
 }
 
-.qr-tools-react .qr-tools-right > p {
+.qr-tools-react .qr-low-contrast {
   margin: 0.5rem 0 0;
 }
 

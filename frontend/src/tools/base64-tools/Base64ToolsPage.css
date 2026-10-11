@@ -36,7 +36,7 @@
 }
 
 .base64-tools-react .base64-input-header label,
-.base64-tools-react .base64-output-header h2 {
+.base64-tools-react .base64-output-header label {
   margin: 0;
   color: hsl(var(--foreground));
   font-size: 0.9rem;

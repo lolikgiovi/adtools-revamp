@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/components/ui/toast";
 import { cleanAnalyticsMeta } from "../../../core/AnalyticsMeta.js";
 import { UsageTracker } from "../../../core/UsageTracker.js";
@@ -142,7 +144,7 @@ export default function CharCounterPage() {
   const hasText = text.length > 0;
 
   return (
-    <Tabs value={mode} onValueChange={(value) => changeMode(value as "summary" | "rows")} className="char-counter-react w-full">
+    <div className="char-counter-react w-full">
       <section
         className={`char-counter-workspace ${mode === "rows" ? "is-row-mode" : ""} ${hasText ? "has-text" : ""}`}
         aria-labelledby="char-counter-heading"
@@ -153,14 +155,24 @@ export default function CharCounterPage() {
             <p>Type or paste text to see its counts instantly.</p>
           </div>
           <div className="char-counter-toolbar-controls">
-            <TabsList aria-label="Counting mode" className="char-counter-modes h-auto rounded-md border bg-background p-0.5">
-              <TabsTrigger value="summary" className="h-8 px-3 text-sm">
+            <ToggleGroup
+              value={[mode]}
+              onValueChange={(values) => {
+                const nextMode = values[0];
+                if (nextMode === "summary" || nextMode === "rows") changeMode(nextMode);
+              }}
+              aria-label="Counting mode"
+              size="lg"
+              spacing={0}
+              className="char-counter-modes h-auto rounded-md border bg-background p-0.5"
+            >
+              <ToggleGroupItem value="summary" className="h-8 px-3 text-sm">
                 Summary
-              </TabsTrigger>
-              <TabsTrigger value="rows" className="h-8 px-3 text-sm">
+              </ToggleGroupItem>
+              <ToggleGroupItem value="rows" className="h-8 px-3 text-sm">
                 Per row
-              </TabsTrigger>
-            </TabsList>
+              </ToggleGroupItem>
+            </ToggleGroup>
             <div className="char-counter-actions">
               <Button variant="outline" size="sm" onClick={() => void pasteText()}>
                 Paste
@@ -185,17 +197,19 @@ export default function CharCounterPage() {
         </header>
 
         <div className="char-counter-editor-layout">
-          <label className="sr-only" htmlFor="char-counter-input">
-            Text to count
-          </label>
-          <Textarea
-            id="char-counter-input"
-            ref={inputRef}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={"config-integration-service-code-01\nconfig-integration-service-code-0124234234"}
-            className="char-counter-input font-mono text-sm"
-          />
+          <Field className="char-counter-input-field min-h-0 min-w-0 gap-0">
+            <FieldLabel className="sr-only" htmlFor="char-counter-input">
+              Text to count
+            </FieldLabel>
+            <Textarea
+              id="char-counter-input"
+              ref={inputRef}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder={"config-integration-service-code-01\nconfig-integration-service-code-0124234234"}
+              className="char-counter-input font-mono text-sm"
+            />
+          </Field>
           {mode === "rows" && (
             <aside className="char-counter-row-panel" aria-labelledby="char-counter-rows-title">
               <div className="char-counter-row-header">
@@ -209,11 +223,15 @@ export default function CharCounterPage() {
               </div>
               <div className="char-counter-rows">
                 {rows.length === 0 ? (
-                  <div className="char-counter-empty-rows">
-                    <p>Enter one value per row to compare their lengths.</p>
-                    <code>config-integration-service-code-01</code>
-                    <code>config-integration-service-code-0124234234</code>
-                  </div>
+                  <Empty className="char-counter-empty-rows text-left">
+                    <EmptyHeader className="items-start">
+                      <EmptyDescription className="text-left">Enter one value per row to compare their lengths.</EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent className="items-start gap-1">
+                      <code>config-integration-service-code-01</code>
+                      <code>config-integration-service-code-0124234234</code>
+                    </EmptyContent>
+                  </Empty>
                 ) : (
                   <ol>
                     {rows.map((row) => (
@@ -231,6 +249,6 @@ export default function CharCounterPage() {
         </div>
         <CountSummary counts={counts} />
       </section>
-    </Tabs>
+    </div>
   );
 }

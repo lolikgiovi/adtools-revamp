@@ -95,3 +95,20 @@ The browser checks did not exercise native Tauri file picking, actual file/ZIP d
 clipboard read. No Worker, Oracle, production, or packaged Desktop integration was involved. Existing vanilla sources remain available;
 the browser checks validate the React interaction paths but are not a pixel-for-pixel comparison against the old running vanilla UI. The
 large JSON result was checked at half width, not at a larger maximum-size fixture.
+
+## shadcn component follow-up
+
+On 2026-10-11, the React tool pages were adapted to the existing shadcn/Base UI component set while keeping the tool-specific layouts and
+spacing established in the visual parity pass. The Char Counter uses the shared segmented toggle, field, and empty-state components;
+Base64 Tools uses shared fields and a Dialog for image preview; TLV Viewer uses shared alerts, empty states, and table components; QR Tools
+uses shared inputs, field errors, and alerts; JSON Tools uses shared alerts and empty states. The JSON To Table service's
+sortable/searchable result markup remains intact to preserve its current behavior.
+
+A follow-up on the same date confirmed JSON Tools and Base64 Tools use shadcn Tabs with the `line` variant; their line-style tabs remain in
+place. Base64 input and output use the shared Field and Textarea components. Native dropdowns in JSON Tools, QR Tools, and TLV Viewer were
+replaced with the shared Select component. Browser checks opened and changed each Select, confirmed the selected labels and callbacks, and
+restored the default selections.
+
+The empty and representative states were reviewed in the browser for all five React routes after these changes. `npm run typecheck`,
+`npm run lint:react`, `./node_modules/.bin/vite build`, and `git diff --check` passed. The build still reports the existing large lazy JSON
+Tools chunk warning. No package or lockfile changes were needed, and no tests were run for this component adaptation.

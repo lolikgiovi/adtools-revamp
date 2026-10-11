@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { UsageTracker } from "../../../core/UsageTracker.js";
@@ -10,6 +12,10 @@ import "./QRToolsPage.css";
 
 const service = new QRToolsService();
 const URL_WARNING = "Warning: This URL may be invalid. Ensure it includes a protocol or a valid domain.";
+const contentTypeOptions = [
+  { label: "Text", value: "text" },
+  { label: "URL", value: "url" },
+] as const;
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -162,10 +168,15 @@ export default function QRToolsPage() {
         <FieldGroup className="qr-form-fields">
           <Field>
             <FieldLabel htmlFor="qr-mode">Content Type</FieldLabel>
-            <NativeSelect id="qr-mode" value={mode} onChange={(event) => setMode(event.target.value as "text" | "url")} className="w-full">
-              <option value="text">Text</option>
-              <option value="url">URL</option>
-            </NativeSelect>
+            <Select items={contentTypeOptions} value={mode} onValueChange={(value) => value && setMode(value as "text" | "url")}>
+              <SelectTrigger id="qr-mode" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">Text</SelectItem>
+                <SelectItem value="url">URL</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
           <Field data-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}>
             <FieldLabel htmlFor="qr-content">Content</FieldLabel>
@@ -178,27 +189,27 @@ export default function QRToolsPage() {
               className="resize-y"
               aria-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}
             />
-            {mode === "url" && trimmedContent && !urlValid && <p className="text-sm text-destructive">{URL_WARNING}</p>}
+            {mode === "url" && trimmedContent && !urlValid && <FieldError className="text-sm">{URL_WARNING}</FieldError>}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field>
               <FieldLabel htmlFor="qr-foreground">Foreground</FieldLabel>
-              <input
+              <Input
                 id="qr-foreground"
                 type="color"
                 value={foreground}
                 onChange={(event) => setForeground(event.target.value.toUpperCase())}
-                className="h-8 w-full cursor-pointer rounded-md border border-input bg-background p-1"
+                className="h-8 w-full cursor-pointer p-1"
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="qr-background">Background</FieldLabel>
-              <input
+              <Input
                 id="qr-background"
                 type="color"
                 value={background}
                 onChange={(event) => setBackground(event.target.value.toUpperCase())}
-                className="h-8 w-full cursor-pointer rounded-md border border-input bg-background p-1"
+                className="h-8 w-full cursor-pointer p-1"
               />
             </Field>
           </div>
@@ -227,9 +238,11 @@ export default function QRToolsPage() {
           />
         </div>
         {contrastRatio < 3 && (
-          <p className="text-sm font-medium text-destructive" role="status">
-            Low contrast detected (~{contrastRatio.toFixed(2)}:1). Darken foreground or lighten background for better scanability.
-          </p>
+          <Alert variant="destructive" className="qr-low-contrast" role="status">
+            <AlertDescription className="text-sm font-medium">
+              Low contrast detected (~{contrastRatio.toFixed(2)}:1). Darken foreground or lighten background for better scanability.
+            </AlertDescription>
+          </Alert>
         )}
       </section>
     </div>
