@@ -52,6 +52,11 @@ import { hasRegistration } from "@/platform/registration";
 import { UsageTracker } from "../../core/UsageTracker.js";
 
 const UUIDGeneratorPage = lazy(() => import("@/tools/uuid-generator/UUIDGeneratorPage"));
+const JSONToolsPage = lazy(() => import("@/tools/json-tools/JSONToolsPage"));
+const Base64ToolsPage = lazy(() => import("@/tools/base64-tools/Base64ToolsPage"));
+const CharCounterPage = lazy(() => import("@/tools/char-counter/CharCounterPage"));
+const TLVViewerPage = lazy(() => import("@/tools/tlv-viewer/TLVViewerPage"));
+const QRToolsPage = lazy(() => import("@/tools/qr-tools/QRToolsPage"));
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 const PINNED_TOOLS_STORAGE_KEY = "sidebar.pinnedTools.v1";
 const PIN_EDUCATION_STORAGE_KEY = "sidebar.pinEducationShown.v1";
@@ -98,7 +103,7 @@ function HomePage() {
   return (
     <div className="flex max-w-3xl flex-col gap-3">
       <h1 className="text-2xl font-semibold">AD Tools</h1>
-      <p className="text-muted-foreground">Choose a tool from the navigation. UUID Generator is available in the React foundation.</p>
+      <p className="text-muted-foreground">Choose a tool from the navigation.</p>
     </div>
   );
 }
@@ -177,11 +182,7 @@ function AppNavigation({ desktop }: { desktop: boolean }) {
             isActive={pathname === `/${tool.id}`}
             tooltip={tool.name}
           >
-            <HugeiconsIcon
-              icon={TOOL_ICONS[tool.icon as keyof typeof TOOL_ICONS] ?? ToolboxIcon}
-              strokeWidth={2}
-              aria-hidden="true"
-            />
+            <HugeiconsIcon icon={TOOL_ICONS[tool.icon as keyof typeof TOOL_ICONS] ?? ToolboxIcon} strokeWidth={2} aria-hidden="true" />
             <span className={SIDEBAR_LABEL_CLASS_NAME}>{tool.name}</span>
             {isPinned && (
               <span
@@ -198,7 +199,9 @@ function AppNavigation({ desktop }: { desktop: boolean }) {
         <ContextMenuContent>
           <ContextMenuItem onClick={() => togglePinnedTool(tool.id)}>
             <HugeiconsIcon icon={isPinned ? PinOffIcon : PinIcon} strokeWidth={2} aria-hidden="true" />
-            <span>{isPinned ? "Unpin" : "Pin"} {tool.name}</span>
+            <span>
+              {isPinned ? "Unpin" : "Pin"} {tool.name}
+            </span>
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -260,9 +263,7 @@ function AppNavigation({ desktop }: { desktop: boolean }) {
                   </SidebarGroupLabel>
                   <CollapsibleContent>
                     <SidebarGroupContent>
-                      <SidebarMenu>
-                        {categoryTools.map((tool) => renderToolItem(tool, false))}
-                      </SidebarMenu>
+                      <SidebarMenu>{categoryTools.map((tool) => renderToolItem(tool, false))}</SidebarMenu>
                     </SidebarGroupContent>
                   </CollapsibleContent>
                 </SidebarGroup>
@@ -299,6 +300,11 @@ function AppShell() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/home" element={<HomePage />} />
                 <Route path="/uuid-generator" element={<UUIDGeneratorPage />} />
+                <Route path="/json-tools" element={<JSONToolsPage />} />
+                <Route path="/base64-tools" element={<Base64ToolsPage />} />
+                <Route path="/char-counter" element={<CharCounterPage />} />
+                <Route path="/tlv-viewer" element={<TLVViewerPage />} />
+                <Route path="/qr-tools" element={<QRToolsPage />} />
                 <Route path="*" element={<PendingPage />} />
               </Routes>
             </Suspense>

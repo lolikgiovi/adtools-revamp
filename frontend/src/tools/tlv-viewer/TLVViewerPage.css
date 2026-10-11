@@ -1,0 +1,146 @@
+.tlv-viewer-react {
+  --tlv-border: hsl(var(--border));
+  display: grid;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  height: calc(100vh - 90px);
+  max-height: calc(100vh - 90px);
+  min-height: 0;
+  grid-template-columns: minmax(320px, 0.75fr) minmax(480px, 1.5fr);
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.tlv-viewer-react .tlv-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--tlv-border);
+  border-radius: calc(var(--radius) + 2px);
+  background: hsl(var(--card));
+}
+
+.tlv-viewer-react .tlv-panel-header {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--tlv-border);
+}
+
+.tlv-viewer-react .tlv-panel-header h2 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tlv-viewer-react .tlv-input-panel {
+  overflow: hidden;
+}
+
+.tlv-viewer-react .tlv-input-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem 0.5rem;
+}
+
+.tlv-viewer-react .tlv-input-content > textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 180px;
+  flex: 1;
+  resize: vertical;
+  border: 1px solid var(--tlv-border);
+  border-radius: calc(var(--radius) - 3px);
+  background: hsl(var(--background) / 0.6);
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  field-sizing: fixed;
+}
+
+.tlv-viewer-react .tlv-input-content > p:last-child {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+}
+
+.tlv-viewer-react .tlv-output-tabs {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.tlv-viewer-react .tlv-output-panel {
+  min-height: 0;
+  flex: 1;
+}
+
+.tlv-viewer-react .tlv-output-header {
+  min-height: 3rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.tlv-viewer-react .tlv-result-tabs {
+  flex: none;
+  gap: 0.5rem;
+}
+
+.tlv-viewer-react .tlv-result-tabs [data-slot="tab"] {
+  flex: none;
+  font-size: 0.78rem;
+}
+
+.tlv-viewer-react .tlv-result-tabs [data-slot="tab"]::after {
+  bottom: -0.45rem;
+}
+
+.tlv-viewer-react .tlv-output-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 0.5rem;
+}
+
+.tlv-viewer-react .tlv-view-content {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  border: 1px solid var(--tlv-border);
+  border-radius: calc(var(--radius) - 3px);
+}
+
+@media (max-width: 1100px) {
+  .tlv-viewer-react {
+    height: auto;
+    max-height: none;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tlv-viewer-react .tlv-panel {
+    height: 50vh;
+    max-height: 50vh;
+  }
+
+  .tlv-viewer-react .tlv-input-content > textarea {
+    min-height: 140px;
+  }
+}
+
+@media (max-width: 560px) {
+  .tlv-viewer-react .tlv-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

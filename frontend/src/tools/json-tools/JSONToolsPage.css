@@ -1,0 +1,189 @@
+.json-tools-react {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: calc(100vh - 90px);
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.json-tools-react .json-operation-tabs {
+  padding-inline: 0.5rem;
+}
+
+.json-tools-react .json-tab-panel {
+  min-height: 0;
+  flex: 1;
+  gap: 0;
+}
+
+.json-tools-react .json-options-row {
+  flex: none;
+}
+
+.json-tools-react .json-workspace {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.json-tools-react .json-workspace.is-expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.json-tools-react .json-editor-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.json-tools-react .json-editor-panel + .json-editor-panel {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.json-tools-react .json-panel-header {
+  display: flex;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  font-size: 0.85rem;
+}
+
+.json-tools-react .json-panel-header h2 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.json-tools-react .json-panel-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.json-tools-react .json-editor-host {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+  flex-direction: column;
+  gap: 0;
+}
+
+.json-tools-react .json-monaco-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
+.json-tools-react .json-output-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.json-tools-react .json-table-scroll {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  background: hsl(var(--background));
+}
+
+.json-tools-react .json-table-empty {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+.json-tools-react .json-table-content {
+  width: max-content;
+  min-width: 100%;
+  padding: 0.5rem;
+}
+
+.json-tools-react .json-table-content .json-table {
+  border-collapse: collapse;
+  width: 100%;
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+}
+
+.json-tools-react .json-table-content .json-table th,
+.json-tools-react .json-table-content .json-table td {
+  max-width: 28rem;
+  border: 1px solid hsl(var(--border));
+  padding: 0.4rem 0.55rem;
+  vertical-align: top;
+}
+
+.json-tools-react .json-table-content .json-table th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.json-tools-react .json-table-content .key-header-sortable {
+  cursor: pointer;
+}
+
+.json-tools-react .json-table-content .nested-table {
+  font-size: 0.74rem;
+}
+
+.json-tools-react .json-table-content .row-index,
+.json-tools-react .json-table-content .key-index {
+  color: hsl(var(--muted-foreground));
+  text-align: right;
+}
+
+.json-tools-react .json-table-content .null-value,
+.json-tools-react .json-table-content .undefined-value,
+.json-tools-react .json-table-content .empty-array,
+.json-tools-react .json-table-content .empty-object {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.json-tools-react .json-table-content .search-match {
+  background: hsl(var(--primary) / 0.13);
+}
+
+.json-tools-react .json-table-content .search-current {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+  .json-tools-react .json-workspace:not(.is-expanded) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(200px, 1fr) minmax(200px, 1fr);
+    overflow: auto;
+  }
+
+  .json-tools-react .json-editor-panel + .json-editor-panel {
+    border-top: 1px solid hsl(var(--border));
+    border-left: 0;
+  }
+}
