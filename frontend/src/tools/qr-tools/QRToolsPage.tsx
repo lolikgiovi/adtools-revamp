@@ -33,7 +33,7 @@ export default function QRToolsPage() {
   const [margin, setMargin] = useState(2);
   const [foreground, setForeground] = useState("#000000");
   const [background, setBackground] = useState("#FFFFFF");
-  const [isRendering, setIsRendering] = useState(false);
+  const [renderResult, setRenderResult] = useState<{ key: string; error?: string } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef(0);
 
@@ -41,6 +41,10 @@ export default function QRToolsPage() {
   const urlValid = mode !== "url" || service.isValidUrl(trimmedContent);
   const isValid = trimmedContent.length > 0 && urlValid;
   const contrastRatio = service.getContrastRatio(foreground, background);
+  const renderKey = JSON.stringify([mode, trimmedContent, margin, foreground, background]);
+  const isRendering = isValid && renderResult?.key !== renderKey;
+  const renderError = renderResult?.key === renderKey ? renderResult.error : undefined;
+  const canDownload = isValid && !isRendering && !renderError;
 
   useEffect(() => {
     try {
@@ -55,16 +59,10 @@ export default function QRToolsPage() {
     const timer = window.setTimeout(async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      canvas.width = 256;
-      canvas.height = 256;
-      const context = canvas.getContext("2d");
-      context?.clearRect(0, 0, canvas.width, canvas.height);
       if (!isValid) {
-        setIsRendering(false);
         return;
       }
 
-      setIsRendering(true);
       try {
         UsageTracker.trackEvent(
           "qr-tools",
@@ -87,13 +85,13 @@ export default function QRToolsPage() {
         canvas.width = nextCanvas.width;
         canvas.height = nextCanvas.height;
         canvas.getContext("2d")?.drawImage(nextCanvas, 0, 0);
+        setRenderResult({ key: renderKey });
       } catch (error) {
         if (requestRef.current === requestId) {
           console.error("QR render error:", error);
+          setRenderResult({ key: renderKey, error: "Unable to generate this code. Try shorter content." });
           toast.add({ title: "Failed to render QR code.", type: "error" });
         }
-      } finally {
-        if (requestRef.current === requestId) setIsRendering(false);
       }
     }, 200);
 
@@ -101,7 +99,7 @@ export default function QRToolsPage() {
       window.clearTimeout(timer);
       if (requestRef.current === requestId) requestRef.current += 1;
     };
-  }, [background, foreground, isValid, margin, mode, trimmedContent]);
+  }, [background, foreground, isValid, margin, mode, renderKey, trimmedContent]);
 
   useEffect(() => {
     if (contrastRatio >= 3) return;
@@ -122,7 +120,7 @@ export default function QRToolsPage() {
   }, [background, contrastRatio, foreground]);
 
   async function downloadPng() {
-    if (!canvasRef.current || !isValid || isRendering) return;
+    if (!canvasRef.current || !canDownload) return;
     try {
       UsageTracker.trackEvent("qr-tools", "download_png", { size: 256, margin, mode });
       const canvas = canvasRef.current;
@@ -142,7 +140,7 @@ export default function QRToolsPage() {
   }
 
   async function downloadSvg() {
-    if (!isValid || isRendering) return;
+    if (!canDownload) return;
     try {
       UsageTracker.trackEvent("qr-tools", "download_svg", { size: 256, margin, mode });
       const svg = await service.generateSvgString(trimmedContent, { size: 256, margin, foreground, background });
@@ -156,9 +154,10 @@ export default function QRToolsPage() {
   }
 
   function reset() {
+    setRenderResult(null);
     setMode("text");
     setContent("");
-    setMargin(16);
+    setMargin(2);
     setForeground("#000000");
     setBackground("#FFFFFF");
   }
@@ -189,8 +188,13 @@ export default function QRToolsPage() {
               placeholder="Enter URL or text"
               className="resize-y"
               aria-invalid={mode === "url" && Boolean(trimmedContent) && !urlValid}
+              aria-describedby={mode === "url" && trimmedContent && !urlValid ? "qr-content-error" : undefined}
             />
-            {mode === "url" && trimmedContent && !urlValid && <FieldError className="text-sm">{URL_WARNING}</FieldError>}
+            {mode === "url" && trimmedContent && !urlValid && (
+              <FieldError id="qr-content-error" className="text-sm">
+                {URL_WARNING}
+              </FieldError>
+            )}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field>
@@ -215,10 +219,10 @@ export default function QRToolsPage() {
             </Field>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button disabled={!isValid || isRendering} onClick={() => void downloadPng()}>
+            <Button disabled={!canDownload} onClick={() => void downloadPng()}>
               Download PNG
             </Button>
-            <Button variant="outline" disabled={!isValid || isRendering} onClick={() => void downloadSvg()}>
+            <Button variant="outline" disabled={!canDownload} onClick={() => void downloadSvg()}>
               Download SVG
             </Button>
             <Button variant="ghost" onClick={reset}>
@@ -231,12 +235,23 @@ export default function QRToolsPage() {
         <header className="qr-preview-header">
           <h2 className="qr-preview-title">Preview</h2>
         </header>
-        <div className="qr-preview-area">
+        <div className="qr-preview-area" aria-busy={isRendering}>
           <canvas
             ref={canvasRef}
-            aria-label={isValid ? "Generated QR code preview" : "QR code preview is empty"}
-            className={`${isValid ? "block" : "hidden"} aspect-square w-full max-w-[288px] image-rendering-pixelated`}
+            role="img"
+            aria-label="Generated QR code preview"
+            className={`${isValid && renderResult && !renderError ? "block" : "hidden"} aspect-square w-full max-w-[288px] image-rendering-pixelated`}
           />
+          {isRendering && (
+            <p role="status" className="absolute bottom-2 rounded-md bg-background px-2 py-1 text-sm text-muted-foreground">
+              Generating QR code…
+            </p>
+          )}
+          {renderError && (
+            <Alert variant="destructive">
+              <AlertDescription>{renderError}</AlertDescription>
+            </Alert>
+          )}
           {!isValid && (
             <Empty className="min-h-[14rem] border-0 p-4">
               <EmptyHeader>

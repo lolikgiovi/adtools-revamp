@@ -2,14 +2,13 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 1120px;
-  margin-inline: auto;
-  padding: 12px;
+  margin: 0;
 }
 
 .qr-tools-react.qr-tools-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .qr-tools-react .qr-tools-left,
@@ -68,6 +67,7 @@
 }
 
 .qr-tools-react .qr-preview-area {
+  position: relative;
   display: flex;
   min-height: 288px;
   flex: 1;
@@ -96,17 +96,13 @@
   justify-content: center;
 }
 
-@media (max-width: 1100px) {
+@container (max-width: 720px) {
   .qr-tools-react.qr-tools-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 560px) {
-  .qr-tools-react {
-    padding-inline: 0;
-  }
-
+@container (max-width: 400px) {
   .qr-tools-react .qr-form-fields > .grid {
     grid-template-columns: minmax(0, 1fr);
   }

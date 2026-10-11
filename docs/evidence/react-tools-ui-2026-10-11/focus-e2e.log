@@ -1,0 +1,15 @@
+
+> ad-tools@1.3.10 e2e
+> playwright test --grep JSON table sorting
+
+
+Running 2 tests using 1 worker
+
+(node:34237) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-dark] › e2e/tools.spec.ts:133:5 › JSON table sorting and search are keyboard accessible (2.3s)
+(node:34282) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [half-desktop-light] › e2e/tools.spec.ts:133:5 › JSON table sorting and search are keyboard accessible (1.9s)
+
+  2 passed (8.2s)

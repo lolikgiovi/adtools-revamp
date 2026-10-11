@@ -293,7 +293,7 @@ function AppShell() {
           <span className="text-muted-foreground">/</span>
           <span className="font-medium">{active?.name ?? "Home"}</span>
         </header>
-        <main className="p-4 md:p-6">
+        <main className="tool-workspace p-4 md:p-6">
           {registered ? (
             <Suspense fallback={<p role="status">Loading tool…</p>}>
               <Routes>

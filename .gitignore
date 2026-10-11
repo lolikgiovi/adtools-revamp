@@ -80,3 +80,7 @@ venv-x64/
 venv/
 tauri/gen/schemas/capabilities.json
 .DS_Store
+
+# Playwright artifacts
+playwright-report/
+test-results/

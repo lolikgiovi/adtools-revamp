@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -240,6 +240,9 @@ export default function TLVViewerPage() {
     };
   }, [input]);
 
+  const flushDraft = useEffectEvent(() => store(STORAGE.input, input));
+  useEffect(() => () => flushDraft(), []);
+
   function changeView(nextView: View) {
     setView(nextView);
     store(STORAGE.view, nextView);
@@ -322,7 +325,7 @@ export default function TLVViewerPage() {
                 <SelectItem value="ber-base64">BER-TLV (Base64)</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={() => parseInput(input, format)}>
+            <Button size="sm" disabled={!input.trim()} onClick={() => parseInput(input, format)}>
               Parse
             </Button>
           </div>
@@ -334,6 +337,9 @@ export default function TLVViewerPage() {
           <Textarea
             id="tlv-input"
             value={input}
+            spellCheck={false}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "tlv-input-error" : undefined}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -357,6 +363,7 @@ export default function TLVViewerPage() {
             <Button
               variant="ghost"
               size="sm"
+              disabled={!input && !result && !error}
               onClick={() => {
                 setInput("");
                 setResult(null);
@@ -369,7 +376,7 @@ export default function TLVViewerPage() {
             <span className="ml-auto self-center text-xs text-muted-foreground">Ctrl/Cmd + Enter to parse</span>
           </div>
           {error && (
-            <Alert variant="destructive">
+            <Alert id="tlv-input-error" variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

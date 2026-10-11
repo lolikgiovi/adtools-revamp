@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import type * as Monaco from "monaco-editor";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
@@ -24,6 +24,7 @@ type Tab = "prettify" | "minify" | "stringify" | "unstringify" | "escape" | "une
 type ExtractType = "simple" | "paths";
 type SortOrder = "natural" | "asc" | "desc";
 type MonacoEditorProps = {
+  label: string;
   input: string;
   onChange: (value: string) => void;
   markers: Monaco.editor.IMarkerData[];
@@ -81,7 +82,7 @@ function createAnalyticsId() {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function MonacoEditor({ input, onChange, markers }: MonacoEditorProps) {
+function MonacoEditor({ input, onChange, markers, label }: MonacoEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const inputRef = useRef(input);
@@ -104,6 +105,7 @@ function MonacoEditor({ input, onChange, markers }: MonacoEditorProps) {
     configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
     const options: Monaco.editor.IStandaloneEditorConstructionOptions = {
       language: "json",
+      ariaLabel: label,
       theme: document.documentElement.classList.contains("dark") ? "vs-dark" : "vs",
       automaticLayout: true,
       minimap: { enabled: false },
@@ -122,22 +124,29 @@ function MonacoEditor({ input, onChange, markers }: MonacoEditorProps) {
     editorRef.current = editor;
     const disposeCompletions = registerJsonToolsCompletions(monaco, [editor.getModel()]);
     const listener = editor.onDidChangeModelContent(() => onChangeRef.current(editor.getValue()));
+    const model = editor.getModel();
+    const themeObserver = new MutationObserver(() => {
+      monaco.editor.setTheme(document.documentElement.classList.contains("dark") ? "vs-dark" : "vs");
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     if (editor.getModel()) monaco.editor.setModelMarkers(editor.getModel()!, "json-tools", markersRef.current);
 
     return () => {
       listener.dispose();
+      themeObserver.disconnect();
       disposeCompletions();
       editorRef.current = null;
       editor.dispose();
+      model?.dispose();
     };
-  }, []);
+  }, [label]);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (editor && editor.getValue() !== input) editor.setValue(input);
   }, [input]);
 
-  return <div ref={host} className="json-monaco-host" aria-label="JSON code editor" />;
+  return <div ref={host} className="json-monaco-host" aria-label={label} />;
 }
 
 function flattenJson(value: unknown, prefix = "", output: Array<{ key: string; value: string }> = []) {
@@ -202,12 +211,14 @@ export default function JSONToolsPage() {
   const [searchCount, setSearchCount] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const tableRoot = useRef<HTMLDivElement>(null);
+  const searchButton = useRef<HTMLButtonElement>(null);
   const searchMatches = useRef<HTMLElement[]>([]);
   const analyticsSessionId = useRef(createAnalyticsId());
   const inputSource = useRef(initialInput.source);
   const activeProcess = useRef<{ action: string; attemptId: string; startedAt: number } | null>(null);
   const lastProcess = useRef<Record<string, string | number | null> | null>(null);
   const searchTimer = useRef<number | null>(null);
+  const restoreSortFocus = useRef(false);
 
   const currentTitle = tabs.find((item) => item.id === tab)?.outputTitle || "Output";
   const isTableMode = tab === "json-to-table";
@@ -313,7 +324,8 @@ export default function JSONToolsPage() {
     return () => window.clearTimeout(timer);
   }, [input]);
 
-  useEffect(() => () => save("tool:json-tools:editor", input), [input]);
+  const flushDraft = useEffectEvent(() => save("tool:json-tools:editor", input));
+  useEffect(() => () => flushDraft(), []);
 
   useEffect(() => {
     save("json-tools-tab", tab);
@@ -328,8 +340,19 @@ export default function JSONToolsPage() {
   const tableDisplay = useMemo(() => {
     if (!hasTableData) return "";
     const response = JSONToolsService.jsonToTable(JSON.stringify(validatedJson), isTransposed, keySortOrder);
-    return response.error ? "" : response.result || "";
+    if (response.error) return "";
+    const ariaSort = keySortOrder === "asc" ? "ascending" : keySortOrder === "desc" ? "descending" : "none";
+    return (response.result || "").replace(
+      /<th class="key-header key-header-sortable"[^>]*>([^<]*)<\/th>/,
+      `<th class="key-header key-header-sortable" aria-sort="${ariaSort}"><button type="button" aria-label="Sort keys">$1</button></th>`,
+    );
   }, [hasTableData, isTransposed, keySortOrder, validatedJson]);
+
+  useEffect(() => {
+    if (!restoreSortFocus.current) return;
+    tableRoot.current?.querySelector<HTMLButtonElement>(".key-header-sortable button")?.focus();
+    restoreSortFocus.current = false;
+  }, [tableDisplay]);
 
   useEffect(() => {
     const root = tableRoot.current;
@@ -355,7 +378,7 @@ export default function JSONToolsPage() {
     searchMatches.current = matches;
     if (query && matches.length) {
       matches[0].classList.add("search-match", "search-current");
-      matches[0].scrollIntoView?.({ behavior: "smooth", block: "center" });
+      matches[0].scrollIntoView?.({ behavior: "instant", block: "nearest" });
     }
     if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
     searchTimer.current = window.setTimeout(() => {
@@ -378,8 +401,10 @@ export default function JSONToolsPage() {
   const clearMarkers = useCallback(() => setEditorMarkers([]), []);
 
   const processCurrent = useCallback(
-    (tabOverride?: Tab) => {
+    (tabOverride?: Tab, options?: { extractType?: ExtractType; sortOrder?: SortOrder }) => {
       const activeTab = tabOverride || tab;
+      const nextExtractType = options?.extractType ?? extractType;
+      const nextSortOrder = options?.sortOrder ?? sortOrder;
       const content = input.trim();
       const action = activeTab === "extract-keys" ? "extract_keys" : activeTab === "json-to-table" ? "json_to_table" : activeTab;
       clearMarkers();
@@ -447,7 +472,7 @@ export default function JSONToolsPage() {
 
         const response =
           activeTab === "extract-keys"
-            ? JSONToolsService.extractKeys(content, extractType === "paths", sortOrder)
+            ? JSONToolsService.extractKeys(content, nextExtractType === "paths", nextSortOrder)
             : JSONToolsService[activeTab](content);
         if (response.error) {
           const errorType =
@@ -476,7 +501,7 @@ export default function JSONToolsPage() {
         setTableError("");
         setHasTableData(false);
         const actionName = activeTab === "extract-keys" ? "extract_keys" : activeTab;
-        const meta = activeTab === "extract-keys" ? { extract_type: extractType, sort_order: sortOrder } : {};
+        const meta = activeTab === "extract-keys" ? { extract_type: nextExtractType, sort_order: nextSortOrder } : {};
         if (activeTab === "prettify") toast.add({ title: "JSON is valid ✅", type: "success" });
         trackSuccess(actionName, content, result, meta);
       } catch (error) {
@@ -492,6 +517,8 @@ export default function JSONToolsPage() {
     if (nextTab === tab) return;
     trackAnalytics("tab_switch", { from_tab: tab, to_tab: nextTab, session_id: analyticsSessionId.current });
     setTab(nextTab);
+    setOutput("");
+    clearMarkers();
     if (isExpanded) setIsExpanded(false);
     if (nextTab !== "json-to-table") {
       setIsSearchOpen(false);
@@ -513,11 +540,21 @@ export default function JSONToolsPage() {
     }
   }
 
+  function updateInput(value: string) {
+    setInput(value);
+    setOutput("");
+    setTableHtml("");
+    setTableError("");
+    setValidatedJson(null);
+    setHasTableData(false);
+    clearMarkers();
+  }
+
   async function pasteInput() {
     try {
       const pasted = await navigator.clipboard.readText();
       inputSource.current = "manual";
-      setInput(pasted);
+      updateInput(pasted);
       clearMarkers();
       setOutput("");
       setTableError("");
@@ -574,7 +611,7 @@ export default function JSONToolsPage() {
   }
 
   async function exportExcel() {
-    if (validatedJson === null) {
+    if (!hasTableData) {
       trackAnalytics("output_error", { target: "export_excel", error_type: "no_table" });
       toast.add({ title: "No data to export", type: "error" });
       return;
@@ -613,12 +650,13 @@ export default function JSONToolsPage() {
     const nextIndex = (searchIndex + direction + matches.length) % matches.length;
     setSearchIndex(nextIndex);
     matches[nextIndex].classList.add("search-current");
-    matches[nextIndex].scrollIntoView?.({ behavior: "smooth", block: "center" });
+    matches[nextIndex].scrollIntoView?.({ behavior: "instant", block: "nearest" });
     setSearchCount(`${nextIndex + 1}/${matches.length}`);
   }
 
   function onTableClick(event: React.MouseEvent<HTMLDivElement>) {
     if (!(event.target instanceof HTMLElement) || !event.target.closest(".key-header-sortable")) return;
+    restoreSortFocus.current = event.target.matches("button");
     setKeySortOrder((current) => (current === "natural" ? "asc" : current === "asc" ? "desc" : "natural"));
     trackAnalytics("table_sort", {
       sort_order: keySortOrder === "natural" ? "asc" : keySortOrder === "asc" ? "desc" : "natural",
@@ -655,7 +693,7 @@ export default function JSONToolsPage() {
                 onValueChange={(value) => {
                   if (value !== "simple" && value !== "paths") return;
                   setExtractType(value);
-                  if (tab === "extract-keys") window.setTimeout(() => processCurrent("extract-keys"), 0);
+                  processCurrent("extract-keys", { extractType: value });
                 }}
               >
                 <SelectTrigger id="json-extract-type" className="w-full">
@@ -675,7 +713,7 @@ export default function JSONToolsPage() {
                 onValueChange={(value) => {
                   if (value !== "natural" && value !== "asc" && value !== "desc") return;
                   setSortOrder(value);
-                  if (tab === "extract-keys") window.setTimeout(() => processCurrent("extract-keys"), 0);
+                  processCurrent("extract-keys", { sortOrder: value });
                 }}
               >
                 <SelectTrigger id="json-sort-order" className="w-full">
@@ -716,13 +754,13 @@ export default function JSONToolsPage() {
                   >
                     Clear
                   </Button>
-                  <Button variant="ghost" size="sm" title="Copy Input" onClick={() => void copyText(input, "copy_input")}>
+                  <Button variant="ghost" size="sm" title="Copy Input" disabled={!input} onClick={() => void copyText(input, "copy_input")}>
                     Copy
                   </Button>
                   <Button variant="ghost" size="sm" title="Paste from Clipboard" onClick={() => void pasteInput()}>
                     Paste
                   </Button>
-                  <Button size="sm" onClick={() => processCurrent()}>
+                  <Button size="sm" disabled={!input.trim()} onClick={() => processCurrent()}>
                     {tabs.find((item) => item.id === tab)?.label === "To Table"
                       ? "Convert to Table"
                       : tabs.find((item) => item.id === tab)?.label}
@@ -731,10 +769,11 @@ export default function JSONToolsPage() {
               </header>
               <div className="json-panel-content">
                 <MonacoEditor
+                  label="JSON input"
                   input={input}
                   onChange={(value) => {
                     inputSource.current = "manual";
-                    setInput(value);
+                    updateInput(value);
                   }}
                   markers={editorMarkers}
                 />
@@ -743,7 +782,7 @@ export default function JSONToolsPage() {
           )}
 
           <section className="json-editor-panel json-output-panel">
-            <header className="json-panel-header flex-col items-stretch gap-2">
+            <header className="json-panel-header flex-col !items-stretch gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2>{currentTitle}</h2>
                 <div className="flex flex-wrap items-center gap-1">
@@ -752,6 +791,9 @@ export default function JSONToolsPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={!hasTableData}
+                        aria-expanded={isSearchOpen}
+                        ref={searchButton}
                         onClick={() => {
                           setIsSearchOpen((open) => !open);
                           if (isSearchOpen) setSearchQuery("");
@@ -759,12 +801,14 @@ export default function JSONToolsPage() {
                       >
                         Search
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => void exportExcel()}>
+                      <Button variant="outline" size="sm" disabled={!hasTableData} onClick={() => void exportExcel()}>
                         Export Excel
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={!hasTableData}
+                        aria-pressed={isTransposed}
                         onClick={() => {
                           setIsTransposed((current) => !current);
                           trackAnalytics("table_transpose", {
@@ -776,7 +820,13 @@ export default function JSONToolsPage() {
                       >
                         Transpose
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setIsExpanded((current) => !current)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasTableData}
+                        aria-expanded={isExpanded}
+                        onClick={() => setIsExpanded((current) => !current)}
+                      >
                         {isExpanded ? "Collapse" : "Expand"}
                       </Button>
                     </>
@@ -784,6 +834,7 @@ export default function JSONToolsPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={isTableMode ? !hasTableData : !output}
                     onClick={() => (isTableMode ? void copyTable() : void copyText(output, "copy_output"))}
                   >
                     Copy
@@ -798,15 +849,38 @@ export default function JSONToolsPage() {
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search table…"
                     className="h-8 max-w-xs"
+                    autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setIsSearchOpen(false);
+                        setSearchQuery("");
+                        searchButton.current?.focus();
+                      } else if (event.key === "Enter") {
+                        event.preventDefault();
+                        navigateSearch(event.shiftKey ? -1 : 1);
+                      }
+                    }}
                   />
                   <span className="min-w-16 text-xs text-muted-foreground" aria-live="polite">
                     {searchCount}
                   </span>
-                  <Button variant="ghost" size="sm" disabled={!searchCount} aria-label="Previous match" onClick={() => navigateSearch(-1)}>
-                    ▲
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!searchCount || searchCount === "0 matches"}
+                    aria-label="Previous match"
+                    onClick={() => navigateSearch(-1)}
+                  >
+                    Previous
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={!searchCount} aria-label="Next match" onClick={() => navigateSearch(1)}>
-                    ▼
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!searchCount || searchCount === "0 matches"}
+                    aria-label="Next match"
+                    onClick={() => navigateSearch(1)}
+                  >
+                    Next
                   </Button>
                 </div>
               )}
@@ -828,7 +902,7 @@ export default function JSONToolsPage() {
                   ) : null}
                 </div>
               ) : (
-                <MonacoEditor input={output} onChange={setOutput} markers={EMPTY_MARKERS} />
+                <MonacoEditor label="JSON output" input={output} onChange={setOutput} markers={EMPTY_MARKERS} />
               )}
             </div>
           </section>

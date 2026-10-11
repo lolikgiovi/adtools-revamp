@@ -5,6 +5,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.tool-workspace {
+  container-type: inline-size;
+  --tool-workspace-height: calc(100dvh - 4.5rem);
+}
+
+@media (min-width: 768px) {
+  .tool-workspace {
+    --tool-workspace-height: calc(100dvh - 5.4rem);
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;

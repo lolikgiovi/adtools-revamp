@@ -4,12 +4,10 @@
   width: 100%;
   max-width: none;
   box-sizing: border-box;
-  height: calc(100vh - 90px);
-  max-height: calc(100vh - 90px);
+  height: max(36rem, var(--tool-workspace-height));
   min-height: 0;
-  grid-template-columns: minmax(320px, 0.75fr) minmax(480px, 1.5fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr);
   gap: 0.75rem;
-  padding: 0.75rem;
 }
 
 .tlv-viewer-react .tlv-panel {
@@ -29,6 +27,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  flex-wrap: wrap;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--tlv-border);
 }
@@ -58,7 +57,7 @@
   width: 100%;
   min-height: 180px;
   flex: 1;
-  resize: vertical;
+  resize: none;
   border: 1px solid var(--tlv-border);
   border-radius: calc(var(--radius) - 3px);
   background: color-mix(in oklab, var(--background) 60%, transparent);
@@ -96,12 +95,12 @@
   gap: 0.5rem;
 }
 
-.tlv-viewer-react .tlv-result-tabs [data-slot="tab"] {
+.tlv-viewer-react .tlv-result-tabs [data-slot="tabs-trigger"] {
   flex: none;
   font-size: 0.78rem;
 }
 
-.tlv-viewer-react .tlv-result-tabs [data-slot="tab"]::after {
+.tlv-viewer-react .tlv-result-tabs [data-slot="tabs-trigger"]::after {
   bottom: -0.45rem;
 }
 
@@ -121,22 +120,19 @@
   border-radius: calc(var(--radius) - 3px);
 }
 
-@media (max-width: 1100px) {
+@container (max-width: 850px) {
   .tlv-viewer-react {
-    height: auto;
-    max-height: none;
+    height: max(40rem, var(--tool-workspace-height));
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: minmax(18rem, 0.85fr) minmax(20rem, 1.15fr);
   }
 
   .tlv-viewer-react .tlv-panel {
-    min-height: 20rem;
-    height: auto;
-    max-height: none;
+    min-height: 0;
   }
 
   .tlv-viewer-react .tlv-output-panel {
-    min-height: 24rem;
+    min-height: 0;
   }
 
   .tlv-viewer-react .tlv-input-content > textarea {
@@ -144,7 +140,7 @@
   }
 }
 
-@media (max-width: 560px) {
+@container (max-width: 520px) {
   .tlv-viewer-react .tlv-panel-header {
     align-items: flex-start;
     flex-direction: column;

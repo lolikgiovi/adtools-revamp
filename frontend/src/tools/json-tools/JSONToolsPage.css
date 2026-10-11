@@ -2,7 +2,7 @@
   display: flex;
   width: 100%;
   max-width: none;
-  height: calc(100vh - 90px);
+  height: max(36rem, var(--tool-workspace-height));
   min-height: 0;
   flex-direction: column;
   gap: 0;
@@ -56,6 +56,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  flex-wrap: wrap;
   padding: 0.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--muted);
@@ -150,6 +151,15 @@
   cursor: pointer;
 }
 
+.json-tools-react .json-table-content .key-header-sortable button {
+  cursor: pointer;
+}
+
+.json-tools-react .json-table-content .key-header-sortable button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 .json-tools-react .json-table-content .nested-table {
   font-size: 0.74rem;
 }
@@ -177,7 +187,7 @@
   outline-offset: -2px;
 }
 
-@media (max-width: 1100px) {
+@container (max-width: 850px) {
   .json-tools-react .json-workspace:not(.is-expanded) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(200px, 1fr) minmax(200px, 1fr);

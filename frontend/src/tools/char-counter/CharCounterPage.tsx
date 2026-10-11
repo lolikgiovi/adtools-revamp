@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -31,7 +31,7 @@ function writeStoredValue(key: string, value: string) {
 
 function CountSummary({ counts }: { counts: ReturnType<typeof getTextCounts> }) {
   return (
-    <div className="char-count-summary" aria-label="Text counts">
+    <div className="char-counter-summary" role="status" aria-label="Text counts" aria-atomic="true">
       <div className="char-count-primary">
         <output className="tabular-nums">{counts.characters.toLocaleString()}</output>
         <span>characters</span>
@@ -80,7 +80,8 @@ export default function CharCounterPage() {
     return () => window.clearTimeout(timer);
   }, [text]);
 
-  useEffect(() => () => writeStoredValue(TEXT_KEY, text), [text]);
+  const flushDraft = useEffectEvent(() => writeStoredValue(TEXT_KEY, text));
+  useEffect(() => () => flushDraft(), []);
 
   useEffect(() => {
     if (!text || trackedCount.current) return;
@@ -162,7 +163,7 @@ export default function CharCounterPage() {
                 if (nextMode === "summary" || nextMode === "rows") changeMode(nextMode);
               }}
               aria-label="Counting mode"
-              size="lg"
+              size="sm"
               spacing={0}
               className="char-counter-modes h-auto rounded-md border bg-background p-0.5"
             >

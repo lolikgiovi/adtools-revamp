@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
@@ -22,6 +22,7 @@ export default function UUIDGeneratorPage() {
   const [single, setSingle] = useState("");
   const [quantity, setQuantity] = useState("");
   const [multiple, setMultiple] = useState("");
+  const quantityValid = quantity === "" || (Number.isInteger(Number(quantity)) && Number(quantity) >= 1 && Number(quantity) <= 10000);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -56,7 +57,8 @@ export default function UUIDGeneratorPage() {
   }
 
   async function generateMultiple() {
-    const count = Math.min(parseInt(quantity, 10) || 1, 10000);
+    if (!quantityValid) return;
+    const count = Number(quantity || 1);
     const values = Array.from({ length: Math.max(0, count) }, () => crypto.randomUUID()).join("\n");
     setMultiple(values);
     track("bulk_generate", { quantity: count });
@@ -64,7 +66,7 @@ export default function UUIDGeneratorPage() {
   }
 
   return (
-    <div className="grid w-full max-w-6xl grid-cols-1 gap-4 xl:grid-cols-2">
+    <div className="grid w-full max-w-6xl grid-cols-1 items-start gap-4 @min-[850px]:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Single UUID</CardTitle>
@@ -77,7 +79,7 @@ export default function UUIDGeneratorPage() {
               <Input id="singleUuidResult" value={single} readOnly placeholder="Generated UUID will appear here" className="font-mono" />
             </Field>
           </FieldGroup>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={generateSingle}>Generate</Button>
             <Button variant="outline" disabled={!single} onClick={() => void copy(single, "single")}>
               Copy
@@ -92,17 +94,24 @@ export default function UUIDGeneratorPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <FieldGroup>
-            <Field>
+            <Field data-invalid={!quantityValid}>
               <FieldLabel htmlFor="uuidQuantity">Quantity</FieldLabel>
               <Input
                 id="uuidQuantity"
                 type="number"
                 min="1"
                 max="10000"
-                placeholder="How many? Max 10,000"
+                placeholder="1 by default, up to 10,000"
                 value={quantity}
+                step="1"
+                aria-invalid={!quantityValid}
+                aria-describedby={!quantityValid ? "uuid-quantity-error" : undefined}
                 onChange={(event) => setQuantity(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void generateMultiple();
+                }}
               />
+              {!quantityValid && <FieldError id="uuid-quantity-error">Enter a whole number from 1 to 10,000.</FieldError>}
             </Field>
             <Field>
               <FieldLabel htmlFor="multipleUuidResult">Generated UUIDs</FieldLabel>
@@ -111,17 +120,21 @@ export default function UUIDGeneratorPage() {
                 value={multiple}
                 readOnly
                 placeholder="Generated UUIDs will appear here"
-                className="field-sizing-fixed min-h-[120px] resize-y font-mono"
+                rows={10}
+                className="field-sizing-fixed min-h-[12rem] resize-y font-mono"
               />
             </Field>
           </FieldGroup>
-          <div className="flex gap-2">
-            <Button onClick={() => void generateMultiple()}>Generate</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={!quantityValid} onClick={() => void generateMultiple()}>
+              Generate
+            </Button>
             <Button variant="outline" disabled={!multiple} onClick={() => void copy(multiple, "multiple")}>
               Copy
             </Button>
             <Button
               variant="outline"
+              disabled={!multiple && !quantity}
               onClick={() => {
                 setMultiple("");
                 setQuantity("");

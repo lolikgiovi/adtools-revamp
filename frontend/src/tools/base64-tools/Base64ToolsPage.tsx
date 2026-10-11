@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -218,13 +218,7 @@ export default function Base64ToolsPage() {
   const currentFiles = outputFiles[mode];
   const currentOutput = outputs[mode];
   const showFiles = visibleOutputFiles[mode];
-  const isBinarySingleOutput =
-    mode === "decode" &&
-    showDecodeFiles &&
-    selectedFiles.filter((entry) => entry.mode === "decode").length === 0 &&
-    decodeFiles.length === 1 &&
-    decodeFiles[0].kind !== "text";
-  const isMultiOutput = showFiles && !isBinarySingleOutput;
+  const isMultiOutput = showFiles && currentFiles.length > 1;
 
   useEffect(() => {
     inputModeSession.current = mode;
@@ -270,6 +264,12 @@ export default function Base64ToolsPage() {
       }, 0);
     };
   }, []);
+
+  const flushDrafts = useEffectEvent(() => {
+    save(ENCODE_KEY, encodeInput);
+    save(DECODE_KEY, decodeInput);
+  });
+  useEffect(() => () => flushDrafts(), []);
 
   function trackAnalytics(event: string, meta: Record<string, unknown> = {}) {
     try {
@@ -615,54 +615,16 @@ export default function Base64ToolsPage() {
   }
 
   async function processZip(modeToDownload: Mode) {
-    if (modeToDownload === "encode") {
-      const inputs = selectedFiles.filter((entry) => entry.mode === "encode");
-      if (!inputs.length) throw new Error("No files to download");
-      const JSZip = await loadZip();
-      const zip = new JSZip();
-      for (const entry of inputs) {
-        const encoded = await encodeFile(entry.file);
-        zip.file(`${baseName(entry.file.name)}.txt`, encoded);
-      }
-      const blob = (await zip.generateAsync({ type: "blob" })) as Blob;
-      downloadBlob(blob, `encoded_b64_${getDateLabel()}.zip`);
-      UsageTracker.trackEvent("base64-tools", "download_result", {
-        mode: "encode",
-        format: "zip",
-        file_count: inputs.length,
-        output_size: blob.size,
-      });
-      toast.add({ title: "Downloaded all files as ZIP", type: "success" });
-      return;
-    }
-    const inputs = selectedFiles.filter((entry) => entry.mode === "decode");
-    if (!inputs.length && decodeFiles.length === 1) {
-      const file = decodeFiles[0];
-      downloadBlob(new Blob([file.bytes ? toByteArray(file.bytes) : file.text || ""], { type: file.type }), file.name);
-      toast.add({ title: `Downloaded: ${file.name}`, type: "success" });
-      return;
-    }
-    if (!inputs.length) throw new Error("No files to download");
+    const files = modeToDownload === "encode" ? encodeFiles : decodeFiles;
+    if (!files.length) throw new Error("No processed files to download");
     const JSZip = await loadZip();
     const zip = new JSZip();
-    for (const entry of inputs) {
-      const text = (await entry.file.text()).trim();
-      if (!Base64ToolsService.isValidBase64(text)) continue;
-      const { base64 } = Base64ToolsService.normalizeDataUri(text);
-      const binary = Base64ToolsService.decodeToBinaryString(base64);
-      const bytes = toBytes(binary);
-      const mime = Base64ToolsService.detectContentType(bytes);
-      if (Base64ToolsService.isTextContent(binary)) zip.file(`${baseName(entry.file.name)}.txt`, binary);
-      else zip.file(`${baseName(entry.file.name)}.${mime.split("/")[1] || "bin"}`, bytes);
+    for (const file of files) {
+      zip.file(file.name, file.bytes ? toByteArray(file.bytes) : file.text || "");
     }
     const blob = (await zip.generateAsync({ type: "blob" })) as Blob;
-    downloadBlob(blob, `decoded_b64_${getDateLabel()}.zip`);
-    UsageTracker.trackEvent("base64-tools", "download_result", {
-      mode: "decode",
-      format: "zip",
-      file_count: inputs.length,
-      output_size: blob.size,
-    });
+    downloadBlob(blob, `${modeToDownload === "encode" ? "encoded" : "decoded"}_b64_${getDateLabel()}.zip`);
+    trackAnalytics("download_result", { mode: modeToDownload, format: "zip", file_count: files.length, output_size: blob.size });
     toast.add({ title: "Downloaded all files as ZIP", type: "success" });
   }
 
@@ -670,28 +632,23 @@ export default function Base64ToolsPage() {
     const active = activeDownloads.get(target);
     if (active) return active;
     const task = (async () => {
-      const fileCount = selectedFiles.filter((entry) => entry.mode === target).length;
       const filesVisible = target === "encode" ? showEncodeFiles : showDecodeFiles;
+      const files = target === "encode" ? encodeFiles : decodeFiles;
       const output = target === "encode" ? encodeOutput : decodeOutput;
-      const binary = target === "decode" && filesVisible && decodeFiles.length === 1 && fileCount === 0;
-      const zip = filesVisible && (fileCount > 1 || (target === "decode" && fileCount > 0));
-      if (zip) {
-        await processZip(target);
-        return;
-      }
-      if (binary) {
-        await processZip(target);
+      if (filesVisible) {
+        if (files.length === 1) downloadOneFile(files[0]);
+        else await processZip(target);
         return;
       }
       if (target === "encode") {
-        if (!output.trim()) throw new Error("No encoded content to download");
+        if (!output) throw new Error("No encoded content to download");
         const blob = new Blob([output], { type: "text/plain" });
         downloadBlob(blob, "encoded.txt");
         trackAnalytics("download_result", { mode: target, format: "txt", output_size: blob.size });
         toast.add({ title: "Downloaded: encoded.txt", type: "success" });
         return;
       }
-      if (!output.trim()) throw new Error("No decoded content to download");
+      if (!output) throw new Error("No decoded content to download");
       const blob = new Blob([output], { type: "text/plain" });
       downloadBlob(blob, "decoded.txt");
       trackAnalytics("download_result", { mode: target, format: "txt", output_size: blob.size });
@@ -716,7 +673,17 @@ export default function Base64ToolsPage() {
 
   const currentInput = inputs[mode];
   const canCopy = Boolean(currentOutput) && !(mode === "decode" && showFiles);
-  const canDownload = Boolean(currentOutput.trim() || showFiles);
+  const canDownload = Boolean(currentOutput || (showFiles && currentFiles.length));
+
+  async function processInput() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await (mode === "encode" ? runEncode() : runDecode());
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Tabs
@@ -725,6 +692,7 @@ export default function Base64ToolsPage() {
         const nextMode = value as Mode;
         if (mode !== nextMode) trackAnalytics("mode_switch", { from_mode: mode, to_mode: nextMode });
         setMode(nextMode);
+        setPreview(null);
       }}
       className="base64-tools-react w-full"
     >
@@ -732,20 +700,21 @@ export default function Base64ToolsPage() {
         aria-label="Base64 mode"
         className="base64-mode-tabs mb-2 h-auto w-fit max-w-full flex-none flex-wrap justify-start gap-1 border bg-muted p-1"
       >
-        <TabsTrigger value="encode" className="h-9 flex-none px-3 text-sm">
+        <TabsTrigger disabled={busy} value="encode" className="h-9 flex-none px-3 text-sm">
           Encode to Base64
         </TabsTrigger>
-        <TabsTrigger value="decode" className="h-9 flex-none px-3 text-sm">
+        <TabsTrigger disabled={busy} value="decode" className="h-9 flex-none px-3 text-sm">
           Decode from Base64
         </TabsTrigger>
       </TabsList>
-      <TabsContent value={mode} className="base64-mode-panel flex w-full flex-col">
+      <TabsContent value={mode} className="base64-mode-panel flex w-full flex-col" aria-busy={busy}>
         <Field className="base64-input-group">
           <div className="base64-input-header">
             <FieldLabel htmlFor={`${mode}-input`}>{mode === "encode" ? "Input" : "Base64 Input"}</FieldLabel>
             <div className="flex flex-wrap gap-2">
               <input
                 ref={mode === "encode" ? encodeFileInput : decodeFileInput}
+                aria-label={mode === "encode" ? "Files to encode" : "Base64 files to decode"}
                 type="file"
                 multiple
                 accept={mode === "decode" ? ".txt,.base64" : undefined}
@@ -756,13 +725,13 @@ export default function Base64ToolsPage() {
                   event.target.value = "";
                 }}
               />
-              <Button variant="outline" size="sm" onClick={() => void chooseFiles(mode)}>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFiles(mode)}>
                 {mode === "encode" ? "Upload Any File(s)" : "Upload Base64 File"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void pasteInput(mode)}>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void pasteInput(mode)}>
                 Paste
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => clearInput(mode)}>
+              <Button variant="ghost" size="sm" disabled={busy || (!currentInput && !modeFiles.length)} onClick={() => clearInput(mode)}>
                 Clear
               </Button>
             </div>
@@ -771,6 +740,8 @@ export default function Base64ToolsPage() {
             id={`${mode}-input`}
             rows={4}
             value={currentInput}
+            disabled={busy}
+            spellCheck={false}
             onChange={(event) => setInputForMode(mode, event.target.value)}
             placeholder={mode === "encode" ? "Enter text to encode to Base64…" : "Enter Base64 encoded data to decode…"}
             className="base64-textarea resize-y font-mono text-sm"
@@ -793,7 +764,13 @@ export default function Base64ToolsPage() {
                         {Base64ToolsService.formatFileSize(file.size)} · {file.type || "Unknown type"}
                       </p>
                     </div>
-                    <Button variant="ghost" size="sm" aria-label={`Remove ${file.name}`} onClick={() => removeSelectedFile(id)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      aria-label={`Remove ${file.name}`}
+                      onClick={() => removeSelectedFile(id)}
+                    >
                       Remove
                     </Button>
                   </li>
@@ -803,7 +780,7 @@ export default function Base64ToolsPage() {
           )}
         </Field>
         <div className="base64-action-row">
-          <Button disabled={busy} onClick={() => void (mode === "encode" ? runEncode() : runDecode())}>
+          <Button disabled={busy || (!currentInput && !modeFiles.length)} onClick={() => void processInput()}>
             {busy ? "Processing…" : mode === "encode" ? "Encode to Base64" : "Decode from Base64"}
           </Button>
         </div>
@@ -820,7 +797,12 @@ export default function Base64ToolsPage() {
               <Button variant="outline" size="sm" disabled={!canDownload || busy} onClick={() => void downloadResult(mode)}>
                 {isMultiOutput ? "Download All" : "Download"}
               </Button>
-              <Button variant="ghost" size="sm" disabled={!currentOutput && !currentFiles.length} onClick={() => clearOutput(mode)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy || (!currentOutput && !currentFiles.length)}
+                onClick={() => clearOutput(mode)}
+              >
                 Clear
               </Button>
             </div>
@@ -852,7 +834,7 @@ export default function Base64ToolsPage() {
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-1">
-                          {mode === "encode" && file.text !== undefined && (
+                          {file.text !== undefined && (
                             <Button variant="ghost" size="sm" onClick={() => void copyText(file.text || "")}>
                               Copy
                             </Button>

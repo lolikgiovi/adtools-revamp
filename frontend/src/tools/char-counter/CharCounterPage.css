@@ -7,8 +7,7 @@
 .char-counter-react .char-counter-workspace {
   display: grid;
   width: 100%;
-  height: calc(100vh - 90px);
-  min-height: 420px;
+  height: max(32rem, var(--tool-workspace-height));
   grid-template-rows: auto minmax(280px, 1fr) auto;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -46,6 +45,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .char-counter-react .char-counter-modes {
@@ -99,6 +99,12 @@
   font-size: clamp(0.94rem, 1vw, 1rem);
   line-height: 1.6;
   field-sizing: fixed;
+}
+
+.char-counter-react .char-counter-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 .char-counter-react .char-counter-row-panel {
@@ -269,7 +275,7 @@
   font-weight: 600;
 }
 
-@media (max-width: 960px) {
+@container (max-width: 720px) {
   .char-counter-react .char-counter-workspace {
     grid-template-rows: auto minmax(240px, 1fr) auto;
   }

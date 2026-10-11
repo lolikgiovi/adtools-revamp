@@ -2,7 +2,6 @@
   display: flex;
   width: 100%;
   max-width: none;
-  min-height: calc(100vh - 90px);
   flex-direction: column;
   gap: 0;
 }
@@ -10,7 +9,7 @@
 .base64-tools-react .base64-mode-panel {
   min-height: 0;
   flex: 1;
-  gap: 1.5rem;
+  gap: 1rem;
   padding-top: 1rem;
 }
 
@@ -20,6 +19,7 @@
   min-width: 0;
   flex-direction: column;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .base64-tools-react .base64-input-header,
@@ -60,14 +60,14 @@
 
 .base64-tools-react .base64-action-row {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .base64-tools-react .base64-output-group > div:last-child {
   min-width: 0;
 }
 
-@media (min-width: 1101px) {
+@container (min-width: 850px) {
   .base64-tools-react .base64-mode-panel {
     display: grid;
     align-content: start;
@@ -94,7 +94,7 @@
   }
 }
 
-@media (max-width: 700px) {
+@container (max-width: 520px) {
   .base64-tools-react .base64-input-header,
   .base64-tools-react .base64-output-header {
     align-items: flex-start;
