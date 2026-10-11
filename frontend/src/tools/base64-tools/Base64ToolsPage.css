@@ -7,10 +7,6 @@
   gap: 0;
 }
 
-.base64-tools-react .base64-mode-tabs {
-  padding-inline: 0.5rem;
-}
-
 .base64-tools-react .base64-mode-panel {
   min-height: 0;
   flex: 1;
@@ -38,7 +34,7 @@
 .base64-tools-react .base64-input-header label,
 .base64-tools-react .base64-output-header label {
   margin: 0;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -46,20 +42,20 @@
 .base64-tools-react .base64-textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 110px;
-  min-height: 110px;
+  height: clamp(12rem, 24vh, 18rem);
+  min-height: 12rem;
   field-sizing: fixed;
   padding: 0.75rem;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: hsl(var(--background));
+  background: var(--background);
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
   font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .base64-tools-react .base64-output-textarea {
-  background: hsl(var(--muted));
+  background: var(--muted);
 }
 
 .base64-tools-react .base64-action-row {
@@ -69,6 +65,33 @@
 
 .base64-tools-react .base64-output-group > div:last-child {
   min-width: 0;
+}
+
+@media (min-width: 1101px) {
+  .base64-tools-react .base64-mode-panel {
+    display: grid;
+    align-content: start;
+    gap: 1rem;
+    grid-template-areas:
+      "input output"
+      "action output";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: max-content max-content;
+    align-items: start;
+  }
+
+  .base64-tools-react .base64-input-group {
+    grid-area: input;
+  }
+
+  .base64-tools-react .base64-action-row {
+    grid-area: action;
+    justify-content: flex-start;
+  }
+
+  .base64-tools-react .base64-output-group {
+    grid-area: output;
+  }
 }
 
 @media (max-width: 700px) {

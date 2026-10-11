@@ -11,10 +11,10 @@
   min-height: 420px;
   grid-template-rows: auto minmax(280px, 1fr) auto;
   overflow: hidden;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .char-counter-react .char-counter-toolbar {
@@ -23,7 +23,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .char-counter-react .char-counter-toolbar-copy {
@@ -38,7 +38,7 @@
 
 .char-counter-react .char-counter-toolbar p {
   margin: 0.15rem 0 0;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.75rem;
 }
 
@@ -51,7 +51,7 @@
 .char-counter-react .char-counter-modes {
   display: inline-flex;
   gap: 0;
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 .char-counter-react .char-counter-modes [data-slot="toggle-group-item"] {
@@ -61,8 +61,8 @@
 }
 
 .char-counter-react .char-counter-modes [data-slot="toggle-group-item"][aria-pressed="true"] {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 .char-counter-react .char-counter-actions {
@@ -76,7 +76,7 @@
   min-height: 0;
   grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 .char-counter-react .char-counter-workspace.is-row-mode .char-counter-editor-layout {
@@ -93,8 +93,8 @@
   border: 0;
   border-radius: 0;
   outline: 0;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--background);
+  color: var(--foreground);
   font: inherit;
   font-size: clamp(0.94rem, 1vw, 1rem);
   line-height: 1.6;
@@ -107,8 +107,8 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
+  border-left: 1px solid var(--border);
+  background: var(--background);
 }
 
 .char-counter-react .char-counter-row-header {
@@ -117,7 +117,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid hsl(var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 .char-counter-react .char-counter-row-header h2,
@@ -132,7 +132,7 @@
 
 .char-counter-react .char-counter-row-header p,
 .char-counter-react .char-counter-row-header > span {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.68rem;
 }
 
@@ -153,7 +153,7 @@
   min-height: 2.4rem;
   grid-template-columns: 2rem minmax(0, 1fr) 3.75rem;
   align-items: start;
-  border-bottom: 1px solid hsl(var(--border) / 0.55);
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
 }
 
 .char-counter-react .char-counter-rows li > * {
@@ -161,7 +161,7 @@
 }
 
 .char-counter-react .char-counter-row-number {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.68rem;
   text-align: right;
 }
@@ -174,12 +174,12 @@
 }
 
 .char-counter-react .char-counter-rows code.is-empty {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-style: italic;
 }
 
 .char-counter-react .char-counter-rows strong {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 0.8rem;
   text-align: right;
 }
@@ -189,7 +189,7 @@
   flex-direction: column;
   gap: 0.45rem;
   padding: 1rem 0.85rem;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .char-counter-react .char-counter-empty-rows [data-slot="empty-description"] {
@@ -206,7 +206,7 @@
   display: grid;
   grid-template-columns: minmax(160px, 0.8fr) minmax(0, 3.2fr);
   align-items: stretch;
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid var(--border);
 }
 
 .char-counter-react .char-count-primary {
@@ -214,11 +214,11 @@
   flex-direction: column;
   justify-content: center;
   padding: 0.8rem 1rem;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid var(--border);
 }
 
 .char-counter-react .char-count-primary output {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: clamp(1.15rem, 1.6vw, 1.35rem);
   font-weight: 650;
   letter-spacing: -0.03em;
@@ -226,12 +226,12 @@
 }
 
 .char-counter-react .char-counter-workspace.has-text .char-count-primary output {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 
 .char-counter-react .char-count-primary span {
   margin-top: 0.25rem;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.7rem;
 }
 
@@ -251,12 +251,12 @@
 }
 
 .char-counter-react .char-count-detail + .char-count-detail {
-  border-left: 1px solid hsl(var(--border));
+  border-left: 1px solid var(--border);
 }
 
 .char-counter-react .char-count-detail dt {
   overflow: hidden;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -264,12 +264,12 @@
 
 .char-counter-react .char-count-detail dd {
   margin: 0;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 1rem;
   font-weight: 600;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px) {
   .char-counter-react .char-counter-workspace {
     grid-template-rows: auto minmax(240px, 1fr) auto;
   }
@@ -291,7 +291,7 @@
   }
 
   .char-counter-react .char-counter-row-panel {
-    border-top: 1px solid hsl(var(--border));
+    border-top: 1px solid var(--border);
     border-left: 0;
   }
 
@@ -301,7 +301,7 @@
 
   .char-counter-react .char-count-primary {
     border-right: 0;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
     padding: 0.7rem 0.9rem;
   }
 

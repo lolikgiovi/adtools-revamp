@@ -1,5 +1,5 @@
 .tlv-viewer-react {
-  --tlv-border: hsl(var(--border));
+  --tlv-border: var(--border);
   display: grid;
   width: 100%;
   max-width: none;
@@ -20,7 +20,7 @@
   overflow: hidden;
   border: 1px solid var(--tlv-border);
   border-radius: calc(var(--radius) + 2px);
-  background: hsl(var(--card));
+  background: var(--card);
 }
 
 .tlv-viewer-react .tlv-panel-header {
@@ -61,7 +61,7 @@
   resize: vertical;
   border: 1px solid var(--tlv-border);
   border-radius: calc(var(--radius) - 3px);
-  background: hsl(var(--background) / 0.6);
+  background: color-mix(in oklab, var(--background) 60%, transparent);
   font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
   font-size: 0.78rem;
   line-height: 1.45;
@@ -70,7 +70,7 @@
 
 .tlv-viewer-react .tlv-input-content > p:last-child {
   margin: 0;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.72rem;
 }
 
@@ -126,11 +126,17 @@
     height: auto;
     max-height: none;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
   }
 
   .tlv-viewer-react .tlv-panel {
-    height: 50vh;
-    max-height: 50vh;
+    min-height: 20rem;
+    height: auto;
+    max-height: none;
+  }
+
+  .tlv-viewer-react .tlv-output-panel {
+    min-height: 24rem;
   }
 
   .tlv-viewer-react .tlv-input-content > textarea {

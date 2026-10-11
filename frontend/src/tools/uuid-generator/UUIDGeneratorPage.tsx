@@ -64,7 +64,7 @@ export default function UUIDGeneratorPage() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
+    <div className="grid w-full max-w-6xl grid-cols-1 gap-4 xl:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Single UUID</CardTitle>

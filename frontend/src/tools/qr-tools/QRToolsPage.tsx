@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -234,8 +235,16 @@ export default function QRToolsPage() {
           <canvas
             ref={canvasRef}
             aria-label={isValid ? "Generated QR code preview" : "QR code preview is empty"}
-            className="block aspect-square w-full max-w-[288px] image-rendering-pixelated"
+            className={`${isValid ? "block" : "hidden"} aspect-square w-full max-w-[288px] image-rendering-pixelated`}
           />
+          {!isValid && (
+            <Empty className="min-h-[14rem] border-0 p-4">
+              <EmptyHeader>
+                <EmptyTitle>QR preview</EmptyTitle>
+                <EmptyDescription>Enter text or a URL to generate a code.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
         </div>
         {contrastRatio < 3 && (
           <Alert variant="destructive" className="qr-low-contrast" role="status">

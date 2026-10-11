@@ -1,9 +1,9 @@
 .qr-tools-react {
   box-sizing: border-box;
   width: 100%;
-  max-width: 800px;
+  max-width: 1120px;
   margin-inline: auto;
-  padding: 24px;
+  padding: 12px;
 }
 
 .qr-tools-react.qr-tools-layout {
@@ -16,9 +16,9 @@
 .qr-tools-react .qr-tools-right {
   min-width: 0;
   padding: 0.75rem;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: hsl(var(--card));
+  background: var(--card);
 }
 
 .qr-tools-react .qr-tools-left {
@@ -35,7 +35,7 @@
 }
 
 .qr-tools-react .qr-form-fields [data-slot="field-label"] {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -62,7 +62,7 @@
 
 .qr-tools-react .qr-preview-title {
   margin: 0;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 1rem;
   font-weight: 600;
 }
@@ -74,9 +74,9 @@
   align-items: center;
   justify-content: center;
   padding: 0.25rem;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 .qr-tools-react .qr-preview-area canvas {
@@ -96,7 +96,7 @@
   justify-content: center;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .qr-tools-react.qr-tools-layout {
     grid-template-columns: minmax(0, 1fr);
   }

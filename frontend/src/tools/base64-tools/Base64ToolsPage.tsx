@@ -730,8 +730,7 @@ export default function Base64ToolsPage() {
     >
       <TabsList
         aria-label="Base64 mode"
-        variant="line"
-        className="base64-mode-tabs h-11 w-full flex-none justify-start rounded-none border-b bg-card p-0"
+        className="base64-mode-tabs mb-2 h-auto w-fit max-w-full flex-none flex-wrap justify-start gap-1 border bg-muted p-1"
       >
         <TabsTrigger value="encode" className="h-9 flex-none px-3 text-sm">
           Encode to Base64

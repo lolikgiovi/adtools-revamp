@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -206,7 +206,7 @@ export default function CharCounterPage() {
               ref={inputRef}
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder={"config-integration-service-code-01\nconfig-integration-service-code-0124234234"}
+              placeholder="Paste or type text here to see live counts."
               className="char-counter-input font-mono text-sm"
             />
           </Field>
@@ -225,12 +225,8 @@ export default function CharCounterPage() {
                 {rows.length === 0 ? (
                   <Empty className="char-counter-empty-rows text-left">
                     <EmptyHeader className="items-start">
-                      <EmptyDescription className="text-left">Enter one value per row to compare their lengths.</EmptyDescription>
+                      <EmptyDescription className="text-left">Enter one value per row to compare character lengths.</EmptyDescription>
                     </EmptyHeader>
-                    <EmptyContent className="items-start gap-1">
-                      <code>config-integration-service-code-01</code>
-                      <code>config-integration-service-code-0124234234</code>
-                    </EmptyContent>
                   </Empty>
                 ) : (
                   <ol>

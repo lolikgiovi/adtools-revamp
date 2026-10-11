@@ -7,12 +7,14 @@
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .json-tools-react .json-operation-tabs {
-  padding-inline: 0.5rem;
+  height: auto;
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .json-tools-react .json-tab-panel {
@@ -45,7 +47,7 @@
 }
 
 .json-tools-react .json-editor-panel + .json-editor-panel {
-  border-left: 1px solid hsl(var(--border));
+  border-left: 1px solid var(--border);
 }
 
 .json-tools-react .json-panel-header {
@@ -55,8 +57,8 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--muted));
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
   font-size: 0.85rem;
 }
 
@@ -106,14 +108,14 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 .json-tools-react .json-table-empty {
   display: grid;
   min-height: 12rem;
   place-items: center;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-size: 0.875rem;
 }
 
@@ -126,20 +128,20 @@
 .json-tools-react .json-table-content .json-table {
   border-collapse: collapse;
   width: 100%;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   font-size: 0.8rem;
 }
 
 .json-tools-react .json-table-content .json-table th,
 .json-tools-react .json-table-content .json-table td {
   max-width: 28rem;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border);
   padding: 0.4rem 0.55rem;
   vertical-align: top;
 }
 
 .json-tools-react .json-table-content .json-table th {
-  background: hsl(var(--muted));
+  background: var(--muted);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -154,7 +156,7 @@
 
 .json-tools-react .json-table-content .row-index,
 .json-tools-react .json-table-content .key-index {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   text-align: right;
 }
 
@@ -162,20 +164,20 @@
 .json-tools-react .json-table-content .undefined-value,
 .json-tools-react .json-table-content .empty-array,
 .json-tools-react .json-table-content .empty-object {
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   font-style: italic;
 }
 
 .json-tools-react .json-table-content .search-match {
-  background: hsl(var(--primary) / 0.13);
+  background: color-mix(in oklab, var(--primary) 13%, transparent);
 }
 
 .json-tools-react .json-table-content .search-current {
-  outline: 2px solid hsl(var(--ring));
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .json-tools-react .json-workspace:not(.is-expanded) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(200px, 1fr) minmax(200px, 1fr);
@@ -183,7 +185,7 @@
   }
 
   .json-tools-react .json-editor-panel + .json-editor-panel {
-    border-top: 1px solid hsl(var(--border));
+    border-top: 1px solid var(--border);
     border-left: 0;
   }
 }

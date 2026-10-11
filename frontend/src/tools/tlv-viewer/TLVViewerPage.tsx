@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -439,7 +439,8 @@ export default function TLVViewerPage() {
               {!result ? (
                 <Empty className="h-full min-h-0 gap-2 border-0 p-0">
                   <EmptyHeader>
-                    <EmptyDescription className="text-sm">Paste a QRIS string or TLV payload and press Parse.</EmptyDescription>
+                    <EmptyTitle>Ready to parse</EmptyTitle>
+                    <EmptyDescription className="text-sm">Paste a QRIS string or TLV payload, then choose Parse.</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               ) : view === "tree" ? (

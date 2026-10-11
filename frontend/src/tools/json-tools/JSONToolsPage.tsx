@@ -104,7 +104,7 @@ function MonacoEditor({ input, onChange, markers }: MonacoEditorProps) {
     configureMonacoWorkers(self, { editor: editorWorker, json: jsonWorker });
     const options: Monaco.editor.IStandaloneEditorConstructionOptions = {
       language: "json",
-      theme: "vs-dark",
+      theme: document.documentElement.classList.contains("dark") ? "vs-dark" : "vs",
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -635,8 +635,7 @@ export default function JSONToolsPage() {
     >
       <TabsList
         aria-label="JSON operation"
-        variant="line"
-        className="json-operation-tabs h-11 w-full flex-none justify-start overflow-x-auto rounded-none border-b bg-card p-0"
+        className="json-operation-tabs mb-2 h-auto w-fit max-w-full flex-none flex-wrap justify-start gap-1 border bg-muted p-1"
       >
         {tabs.map((item) => (
           <TabsTrigger key={item.id} value={item.id} className="h-8 flex-none px-3 text-sm">
