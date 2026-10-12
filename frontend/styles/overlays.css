@@ -99,6 +99,12 @@ body .app-confirm-dialog {
   overflow: auto;
 }
 
+/* The dialog takes initial focus so no button is pre-selected; don't ring the container. */
+body .app-confirm-dialog:focus,
+body .app-confirm-dialog:focus-visible {
+  outline: none;
+}
+
 .app-confirm-dialog::backdrop {
   background: var(--app-overlay-scrim);
   -webkit-backdrop-filter: blur(var(--app-overlay-blur));
