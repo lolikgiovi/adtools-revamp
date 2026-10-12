@@ -89,11 +89,20 @@ body button.app-overlay-close:focus-visible {
 }
 
 body .app-confirm-dialog {
+  inset: 0;
   width: min(28rem, calc(100vw - 2rem));
   max-width: none;
   max-height: min(85vh, 38rem);
+  /* The global `* { margin: 0 }` reset removes the native dialog's centering. */
+  margin: auto;
   padding: 0;
   overflow: auto;
+}
+
+.app-confirm-dialog::backdrop {
+  background: var(--app-overlay-scrim);
+  -webkit-backdrop-filter: blur(var(--app-overlay-blur));
+  backdrop-filter: blur(var(--app-overlay-blur));
 }
 
 .app-confirm-dialog-content {
