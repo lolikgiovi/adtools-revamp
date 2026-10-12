@@ -118,8 +118,8 @@ export const RunBatchTemplate = /*html*/ `
         </div>
       </div>
       <div class="rb-modal-footer app-modal-actions">
-        <button id="rb-save-modal-cancel" class="btn btn-secondary">Cancel</button>
         <button id="rb-save-modal-confirm" class="btn btn-primary">Save</button>
+        <button id="rb-save-modal-cancel" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </div>
@@ -169,8 +169,8 @@ export const RunBatchTemplate = /*html*/ `
         </div>
       </div>
       <div class="rb-modal-footer app-modal-actions">
-        <button id="rb-edit-modal-cancel" class="btn btn-secondary">Cancel</button>
         <button id="rb-edit-modal-confirm" class="btn btn-primary">Save Changes</button>
+        <button id="rb-edit-modal-cancel" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </div>
@@ -198,8 +198,8 @@ export const RunBatchTemplate = /*html*/ `
         <p id="rb-confirm-message">Are you sure you want to delete this configuration?</p>
       </div>
       <div class="rb-modal-footer app-modal-actions">
-        <button id="rb-confirm-cancel-btn" class="btn btn-secondary">Cancel</button>
         <button id="rb-confirm-delete-btn" class="btn btn-danger">Delete</button>
+        <button id="rb-confirm-cancel-btn" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
   </div>

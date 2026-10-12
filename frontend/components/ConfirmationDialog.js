@@ -64,7 +64,7 @@ export function confirmAction({
   confirmButton.type = "button";
   confirmButton.textContent = confirmLabel;
 
-  actions.append(cancelButton, confirmButton);
+  actions.append(confirmButton, cancelButton);
   content.append(header, descriptionElement, actions);
   dialog.appendChild(content);
   document.body.appendChild(dialog);

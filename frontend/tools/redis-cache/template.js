@@ -41,8 +41,8 @@ export const RedisCacheTemplate = /*html*/ `
               </div>
             </div>
             <div class="redis-delete-actions app-modal-actions">
-              <button id="redisCancelDelete" class="btn btn-secondary btn-sm" type="button">Cancel</button>
               <button id="redisConfirmDelete" class="btn btn-danger btn-sm" type="button">Clear keys</button>
+              <button id="redisCancelDelete" class="btn btn-secondary btn-sm" type="button">Cancel</button>
             </div>
           </div>
         </div>

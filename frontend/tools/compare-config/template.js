@@ -799,8 +799,8 @@ export const CompareConfigTemplate = /* html */ `
                 <!-- Content injected via JS -->
             </div>
             <div class="modal-footer app-modal-actions">
-                <button class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
                 <button class="btn btn-primary" id="btn-modal-save">Save</button>
+                <button class="btn btn-secondary" id="btn-modal-cancel">Cancel</button>
             </div>
         </div>
     </div>
