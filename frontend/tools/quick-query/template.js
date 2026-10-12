@@ -224,7 +224,8 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <button id="importExcel" class="btn btn-primary btn-sm" type="button">
                     <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 3v10m0 0 4-4m-4 4-4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
+                        <rect x="4" y="3" width="16" height="18" rx="2" />
+                        <path d="M4 9h16M4 15h16M10 3v18" />
                     </svg>
                     <span>Import Excel</span>
                 </button>

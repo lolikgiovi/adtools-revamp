@@ -643,7 +643,7 @@ export class QuickQueryUI {
         click: () => this.handleRemoveDataRow(),
       },
       clearData: {
-        click: () => this.handleClearData(),
+        click: () => this.handleClearDataClick(),
       },
 
       importExcelButton: {
@@ -3752,6 +3752,17 @@ export class QuickQueryUI {
     const newData = currentData.slice(0, -1);
     this.dataTable.loadData(newData);
     this.scheduleActiveTabDraftSave();
+  }
+
+  async handleClearDataClick() {
+    const confirmed = await confirmAction({
+      title: "Clear data?",
+      description: "Remove every row from the current table? The schema and column headers are kept. This cannot be undone.",
+      confirmLabel: "Clear data",
+    });
+    if (confirmed) {
+      this.handleClearData();
+    }
   }
 
   handleClearData() {
