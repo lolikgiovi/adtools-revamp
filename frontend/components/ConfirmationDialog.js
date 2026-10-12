@@ -18,6 +18,7 @@ export function confirmAction({
   const previousFocus = document.activeElement;
   const dialog = document.createElement("dialog");
   dialog.className = "app-confirm-dialog app-overlay-surface";
+  dialog.tabIndex = -1;
   dialog.setAttribute("aria-labelledby", titleId);
   dialog.setAttribute("aria-describedby", descriptionId);
 
@@ -60,7 +61,7 @@ export function confirmAction({
   cancelButton.textContent = cancelLabel;
 
   const confirmButton = document.createElement("button");
-  confirmButton.className = `btn ${destructive ? "btn-danger" : "btn-primary"} btn-sm`;
+  confirmButton.className = "btn btn-primary btn-sm";
   confirmButton.type = "button";
   confirmButton.textContent = confirmLabel;
 
@@ -94,6 +95,6 @@ export function confirmAction({
     dialog.addEventListener("close", () => finish(false), { once: true });
 
     dialog.showModal();
-    cancelButton.focus({ preventScroll: true });
+    dialog.focus({ preventScroll: true });
   });
 }
