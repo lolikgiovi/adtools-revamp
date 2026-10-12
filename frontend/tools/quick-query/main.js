@@ -5,6 +5,7 @@ import { initialSchemaTableSpecification, initialDataTableSpecification } from "
 import { AttachmentProcessorService } from "./services/AttachmentProcessorService.js";
 import { ExcelImportWorkerService } from "./services/ExcelImportWorkerService.js";
 import { OracleDataImportService, ORACLE_IMPORT_MAX_ROWS } from "./services/OracleDataImportService.js";
+import { describeOracleImportError } from "./services/OracleImportErrorService.js";
 import { hasMalformedQuotedField, recoverMalformedDatabaseClipboard } from "./services/DatabaseClipboardService.js";
 import { MAIN_TEMPLATE, FILE_BUTTON_TEMPLATE } from "./template.js";
 import { BaseTool } from "../../core/BaseTool.js";
@@ -3907,9 +3908,8 @@ export class QuickQueryUI {
     this.elements.importButton?.focus();
   }
 
-  showOracleDataError(message, tableName = null) {
-    this.elements.oracleDataError.textContent = message;
-    this.elements.oracleDataError.classList.remove("hidden");
+  showOracleDataError(error, tableName = null) {
+    this.renderOracleImportError(this.elements.oracleDataError, error);
     this._oracleDataOtherTable = tableName;
     this.elements.oracleDataSwitchTable.classList.toggle("hidden", !tableName);
     if (tableName) this.elements.oracleDataSwitchTable.textContent = `Use ${tableName} instead`;
@@ -3932,7 +3932,7 @@ export class QuickQueryUI {
       this.elements.oracleDataSwitchTable.classList.add("hidden");
       this._oracleDataOtherTable = null;
     } catch (error) {
-      this.showOracleDataError(error.message);
+      this.showOracleDataError(error);
     } finally {
       this._oracleDataBusy = false;
     }
@@ -3955,7 +3955,7 @@ export class QuickQueryUI {
       }
       query = OracleDataImportService.parseQuery(this._oracleDataEditor.getValue(), fields);
     } catch (error) {
-      this.showOracleDataError(error.message);
+      this.showOracleDataError(error);
       return;
     }
     const connection = this._oracleDataConnections.find((item) => item.name === this.elements.oracleDataConnection.value);
@@ -3986,7 +3986,7 @@ export class QuickQueryUI {
       this._oracleDataBusy = false;
       this.closeOracleDataImport();
     } catch (error) {
-      this.showOracleDataError(error.message);
+      this.showOracleDataError(error);
     } finally {
       this._oracleDataBusy = false;
       this.elements.fetchOracleDataButton.disabled = false;
@@ -4674,7 +4674,7 @@ export class QuickQueryUI {
         this.elements.oracleEnvNext.disabled = false;
       } catch (err) {
         this.hideOracleEnvProgress();
-        this.showOracleEnvError(err.message || String(err));
+        this.showOracleEnvError(err);
         this.elements.oracleEnvNext.disabled = false;
       }
     } else if (this._oracleEnvStep === 2) {
@@ -4709,7 +4709,7 @@ export class QuickQueryUI {
         this.elements.oracleEnvNext.disabled = false;
       } catch (err) {
         this.hideOracleEnvProgress();
-        this.showOracleEnvError(err.message || String(err), 2);
+        this.showOracleEnvError(err, 2);
         this.elements.oracleEnvNext.disabled = false;
       }
     } else if (this._oracleEnvStep === 3) {
@@ -4784,7 +4784,7 @@ export class QuickQueryUI {
         setTimeout(() => this.clearError(), 4000);
       } catch (err) {
         this.hideOracleEnvProgress();
-        this.showOracleEnvError(`Import failed: ${err.message || String(err)}`, 3);
+        this.showOracleEnvError(err, 3, { prefix: "Import failed: " });
         this.elements.oracleEnvNext.disabled = false;
         this.elements.oracleEnvBack.disabled = false;
       }
@@ -4908,12 +4908,44 @@ export class QuickQueryUI {
    * @param {string} msg
    * @param {1|2|3} [step=1] - Which step's error element to use
    */
-  showOracleEnvError(msg, step = 1) {
+  showOracleEnvError(error, step = 1, { prefix = "" } = {}) {
     const el = step === 3 ? this.elements.oracleEnvError3 : step === 2 ? this.elements.oracleEnvError2 : this.elements.oracleEnvError;
-    if (el) {
-      el.textContent = msg;
-      el.classList.remove("hidden");
+    this.renderOracleImportError(el, error, { prefix });
+  }
+
+  /**
+   * Render an Oracle import failure with the readable message, the actionable
+   * hint, and the original Oracle error detail (e.g. `ORA-12154: ...`).
+   * @param {HTMLElement|null} container
+   * @param {unknown} error - Thrown error, Tauri JSON payload, or plain message
+   * @param {{ prefix?: string }} [options]
+   */
+  renderOracleImportError(container, error, { prefix = "" } = {}) {
+    if (!container) return;
+    const info = describeOracleImportError(error);
+
+    const nodes = [];
+    const title = document.createElement("span");
+    title.className = "qq-oracle-import-error-title";
+    title.textContent = `${prefix}${info.title}`;
+    nodes.push(title);
+
+    if (info.hint) {
+      const hint = document.createElement("span");
+      hint.className = "qq-oracle-import-error-hint";
+      hint.textContent = info.hint;
+      nodes.push(hint);
     }
+
+    if (info.isOracle && info.detail) {
+      const detail = document.createElement("span");
+      detail.className = "qq-oracle-import-error-detail";
+      detail.textContent = `Oracle detail: ${info.detail}`;
+      nodes.push(detail);
+    }
+
+    container.replaceChildren(...nodes);
+    container.classList.remove("hidden");
   }
 
   hideOracleEnvError() {

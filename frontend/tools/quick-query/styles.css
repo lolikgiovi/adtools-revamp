@@ -2496,6 +2496,30 @@
   display: none;
 }
 
+/* Enriched "Import From Oracle" error detail */
+.qq-oracle-import-error-title,
+.qq-oracle-import-error-hint,
+.qq-oracle-import-error-detail {
+  display: block;
+}
+
+.qq-oracle-import-error-title {
+  font-weight: 600;
+}
+
+.qq-oracle-import-error-hint {
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+.qq-oracle-import-error-detail {
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  opacity: 0.7;
+  word-break: break-word;
+}
+
 .qq-excel-import-instructions {
   display: flex;
   flex-direction: column;
