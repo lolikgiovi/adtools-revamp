@@ -175,15 +175,6 @@ export class QuickQueryUI {
       }
     };
     this._handleUuidGeneratorDocumentClick = (event) => this.handleUuidGeneratorDocumentClick(event);
-    this._handleImportMenuDocumentClick = (event) => {
-      if (!this.elements.importActionsAnchor?.contains(event.target)) this.closeImportMenu();
-    };
-    this._handleImportMenuKeydown = (event) => {
-      if (event.key === "Escape" && !this.elements.importActionsMenu?.hidden) {
-        this.closeImportMenu();
-        this.elements.importButton.focus();
-      }
-    };
     this._handleSystemModeDocumentClick = (event) => {
       if (!this.elements.systemModeControl?.contains(event.target)) this.closeSystemCustomPopover();
     };
@@ -408,9 +399,6 @@ export class QuickQueryUI {
       cancelGenerationButton: document.getElementById("cancelGeneration"),
 
       // Excel import elements
-      importActionsAnchor: document.getElementById("importActionsAnchor"),
-      importButton: document.getElementById("importButton"),
-      importActionsMenu: document.getElementById("importActionsMenu"),
       importExcelButton: document.getElementById("importExcel"),
       excelFileInput: document.getElementById("excelFileInput"),
       excelImportInfo: document.getElementById("excelImportInfo"),
@@ -658,37 +646,11 @@ export class QuickQueryUI {
         click: () => this.handleClearData(),
       },
 
-      // Import dropdown
-      importButton: {
-        click: () => this.toggleImportMenu(),
-        keydown: (event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            this.openImportMenu();
-            this.elements.importActionsMenu.querySelector("button:not([hidden])")?.focus();
-          }
-        },
-      },
-      importActionsMenu: {
-        keydown: (event) => {
-          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-          event.preventDefault();
-          const buttons = [...this.elements.importActionsMenu.querySelectorAll("button:not([hidden])")];
-          const direction = event.key === "ArrowDown" ? 1 : -1;
-          buttons[(buttons.indexOf(document.activeElement) + direction + buttons.length) % buttons.length]?.focus();
-        },
-      },
       importExcelButton: {
-        click: () => {
-          this.closeImportMenu();
-          this._showExcelImportModal();
-        },
+        click: () => this._showExcelImportModal(),
       },
       importOracleDataButton: {
-        click: () => {
-          this.closeImportMenu();
-          this.openOracleDataImport();
-        },
+        click: () => this.openOracleDataImport(),
       },
       oracleDataConnection: {
         change: () => this.saveOracleDataImportDraft(),
@@ -854,10 +816,8 @@ export class QuickQueryUI {
     });
 
     document.addEventListener("click", this._handleUuidGeneratorDocumentClick);
-    document.addEventListener("click", this._handleImportMenuDocumentClick);
     document.addEventListener("click", this._handleSystemModeDocumentClick);
     document.addEventListener("keydown", this._handleUuidGeneratorKeydown);
-    document.addEventListener("keydown", this._handleImportMenuKeydown);
     document.addEventListener("keydown", this._handleDataMaximizeKeydown);
   }
 
@@ -2180,10 +2140,8 @@ export class QuickQueryUI {
     clearTimeout(this._tabUndoTimer);
     this._closedTabs = null;
     document.removeEventListener("click", this._handleUuidGeneratorDocumentClick);
-    document.removeEventListener("click", this._handleImportMenuDocumentClick);
     document.removeEventListener("click", this._handleSystemModeDocumentClick);
     document.removeEventListener("keydown", this._handleUuidGeneratorKeydown);
-    document.removeEventListener("keydown", this._handleImportMenuKeydown);
     document.removeEventListener("keydown", this._handleDataMaximizeKeydown);
     if (this._queryTypeDocumentClick) {
       document.removeEventListener("click", this._queryTypeDocumentClick);
@@ -3640,22 +3598,6 @@ export class QuickQueryUI {
     quickQueryUuidButton?.setAttribute("aria-expanded", "false");
   }
 
-  openImportMenu() {
-    this.elements.importActionsMenu.hidden = false;
-    this.elements.importButton.setAttribute("aria-expanded", "true");
-  }
-
-  closeImportMenu() {
-    if (!this.elements.importActionsMenu) return;
-    this.elements.importActionsMenu.hidden = true;
-    this.elements.importButton?.setAttribute("aria-expanded", "false");
-  }
-
-  toggleImportMenu() {
-    if (this.elements.importActionsMenu.hidden) this.openImportMenu();
-    else this.closeImportMenu();
-  }
-
   isUuidGeneratorOpen() {
     return !!this.elements.quickQueryUuidPopover && !this.elements.quickQueryUuidPopover.classList.contains("hidden");
   }
@@ -3905,7 +3847,7 @@ export class QuickQueryUI {
     this.elements.oracleDataOverlay.classList.add("hidden");
     this.elements.oracleDataOverlay.setAttribute("aria-hidden", "true");
     this.elements.oracleDataModal.classList.add("hidden");
-    this.elements.importButton?.focus();
+    this.elements.importOracleDataButton?.focus();
   }
 
   showOracleDataError(error, tableName = null) {

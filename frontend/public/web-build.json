@@ -112,14 +112,14 @@
     {
       "id": "quick-query-import",
       "route": "quick-query",
-      "target": "#importButton",
+      "target": "#importExcel",
       "placement": "bottom",
-      "title": "One Import menu",
-      "body": "Import data from Excel or, on desktop, from Oracle using the single Import button.",
+      "title": "Import your data",
+      "body": "Bring data in from Excel here, or on desktop use the Import from Oracle button to pull rows straight from a database.",
       "guided": false,
       "completeOn": {
         "event": "click",
-        "target": "#importButton"
+        "target": "#importExcel"
       }
     },
     {

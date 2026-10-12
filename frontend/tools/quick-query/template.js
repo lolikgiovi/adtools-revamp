@@ -221,22 +221,22 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                     </svg>
                     <span>Clear Data</span>
                 </button>
-                <div id="importActionsAnchor" class="qq-dropdown-anchor">
-                    <button id="importButton" class="btn btn-primary btn-sm qq-dropdown-trigger" type="button"
-                        aria-haspopup="menu" aria-expanded="false" aria-controls="importActionsMenu">
-                        <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 3v10m0 0 4-4m-4 4-4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
-                        </svg>
-                        <span>Import</span>
-                        <svg class="qq-dropdown-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-                    </button>
-                    <div id="importActionsMenu" class="qq-dropdown-menu app-popover-surface" role="menu"
-                        aria-label="Import" hidden>
-                        <button id="importExcel" type="button" role="menuitem">From Excel</button>
-                        <button id="importOracleData" type="button" role="menuitem" hidden>From Oracle</button>
-                    </div>
-                </div>
+                <button id="importExcel" class="btn btn-primary btn-sm" type="button">
+                    <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 3v10m0 0 4-4m-4 4-4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" />
+                    </svg>
+                    <span>Import Excel</span>
+                </button>
+                <button id="importOracleData" class="btn btn-primary btn-sm" type="button" hidden>
+                    <svg class="qq-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3Z" />
+                        <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+                        <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+                    </svg>
+                    <span>Import from Oracle</span>
+                </button>
                 <button id="toggleDataMaximize" class="btn btn-sm qq-data-maximize" type="button" aria-pressed="false"
                     title="Expand the data sheet to use the available workspace">
                     <svg class="qq-data-maximize-icon qq-data-maximize-icon-expand" viewBox="0 0 16 16" aria-hidden="true">
