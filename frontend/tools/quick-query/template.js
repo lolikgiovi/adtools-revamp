@@ -567,7 +567,6 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
         <div class="qq-modal-body">
             <label for="oracleDataConnection">Oracle connection</label>
             <select id="oracleDataConnection" class="qq-oracle-data-connection"></select>
-            <p class="qq-oracle-data-hint">Select fields matching the current schema. JOINs are supported; use an alias.* to select one joined table. Up to 1,000 rows are fetched into the editable data sheet.</p>
             <div id="oracleDataEditor" class="qq-oracle-data-editor" aria-label="Oracle SELECT query"></div>
             <p id="oracleDataError" class="qq-oracle-data-error hidden" role="alert"></p>
             <button id="oracleDataSwitchTable" class="btn btn-outline hidden" type="button">Use queried table</button>

@@ -2471,12 +2471,6 @@
   color: hsl(var(--foreground));
 }
 
-.qq-oracle-data-hint {
-  margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 13px;
-}
-
 .qq-oracle-data-editor {
   height: min(40vh, 320px);
   min-height: 190px;
