@@ -533,7 +533,9 @@ export const MAIN_TEMPLATE = /* html */ `<div class="quick-query-tool-container"
                 <p class="qq-instruction-main">Please prepare your Excel file with the following format:</p>
                 <ul class="qq-instruction-list">
                     <li><strong>Sheet 1</strong> will be used for data import</li>
-                    <li><strong>First row</strong> must contain column headers (field names)</li>
+                    <li><strong>First row</strong> must contain schema field names; columns match by name, case-insensitively</li>
+                    <li>Columns can be in any order; omitted columns are treated as empty data-sheet cells</li>
+                    <li>The same required-field, NULL, and audit-field rules apply as in the data sheet</li>
                     <li>Data rows should start from row 2</li>
                 </ul>
                 <div class="qq-instruction-example">

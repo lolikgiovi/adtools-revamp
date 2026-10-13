@@ -1,7 +1,15 @@
+import { schemaFieldKey, validateFieldNames } from "./SchemaValidationService.js";
+
 // Schema import helpers for DBeaver clipboard rows and canonical AD Tools schema JSON.
 // JSON shape: { schemaName: { tables: { tableName: { columns, pk?, unique? } } } }
 export function isDbeaverSchemaRows(rows) {
-  return Array.isArray(rows) && rows.length > 0 && String(rows[0]?.[0] || "").trim().toLowerCase() === "column name";
+  return (
+    Array.isArray(rows) &&
+    rows.length > 0 &&
+    String(rows[0]?.[0] || "")
+      .trim()
+      .toLowerCase() === "column name"
+  );
 }
 
 export function parseClipboardRows(text) {
@@ -87,14 +95,33 @@ export async function importSchemasPayload(payload, storageService, { resolveFul
   return importCount;
 }
 
+export function validateExcelHeaders(header, schemaRows) {
+  const schemaFields = validateFieldNames(
+    schemaRows.map((row) => row[0]),
+    "schema",
+  );
+  validateFieldNames(header);
+  const unknownFields = header.filter((field) => !schemaFields.has(schemaFieldKey(field)));
+  if (unknownFields.length) {
+    throw new Error(`Field Mismatch Error:<br>Fields in data but not in schema: ${unknownFields.join(", ")}`);
+  }
+}
+
+export function prepareExcelDataForSchema(data, schemaRows) {
+  validateExcelHeaders(data[0] || [], schemaRows);
+  // Missing Excel columns become empty data-sheet cells. The existing query
+  // pipeline remains responsible for required values, audit fields and NULLs.
+  return alignDataToImportedSchema(data, schemaRows);
+}
+
 export function alignDataToImportedSchema(data, schemaRows) {
   const fields = schemaRows.map((row) => row[0]);
   const rows = Array.isArray(data) ? data : [];
   const oldFields = Array.isArray(rows[0]) ? rows[0] : [];
-  const oldIndexes = new Map(oldFields.map((field, index) => [String(field || "").toUpperCase(), index]));
+  const oldIndexes = new Map(oldFields.map((field, index) => [schemaFieldKey(field), index]));
   const values = rows.slice(1).map((row) =>
     fields.map((field) => {
-      const index = oldIndexes.get(String(field).toUpperCase());
+      const index = oldIndexes.get(schemaFieldKey(field));
       return index === undefined ? null : (row?.[index] ?? null);
     }),
   );

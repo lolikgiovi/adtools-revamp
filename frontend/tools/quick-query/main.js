@@ -24,6 +24,8 @@ import {
   convertDbeaverSchemaRows,
   importSchemasPayload,
   parseDbeaverSchemaClipboard,
+  prepareExcelDataForSchema,
+  validateExcelHeaders,
 } from "./services/SchemaImportService.js";
 import { splitSqlStatementsSafely, calcUtf8Bytes, groupBySize, groupByQueryCount, deriveBaseName } from "./services/SplitService.js";
 import { QueryExecutionService } from "./services/QueryExecutionService.js";
@@ -2458,7 +2460,6 @@ export class QuickQueryUI {
       // Use imported Excel data if available, otherwise use Handsontable data
       const hasExcelData = this.excelImportService.hasData();
       const dataSource = hasExcelData ? "excel" : "manual";
-      const inputData = hasExcelData ? this.excelImportService.getDataForQuery() : this.dataTable.getData();
 
       if (!tableName) {
         throw new Error("Please fill in schema_name.table_name.");
@@ -2484,6 +2485,10 @@ export class QuickQueryUI {
 
         throw new Error("Schema data adjusted from DBeaver to SQL Developer format. Please refill the data sheet.");
       }
+
+      const inputData = hasExcelData
+        ? prepareExcelDataForSchema(this.excelImportService.getDataForQuery(), schemaData)
+        : this.dataTable.getData();
 
       // Save schema before processing (only save if not using Excel data to avoid memory issues)
       if (!hasExcelData) {
@@ -4070,32 +4075,12 @@ export class QuickQueryUI {
   _onExcelImportSuccess(result) {
     const { header, rowCount } = result;
 
-    // Validate header matches schema if schema exists
     const schemaData = this.schemaTable.getData().filter((row) => row[0]);
     if (schemaData.length > 0) {
-      const schemaFieldNames = schemaData.map((row) => row[0]);
-      const headerLower = header.map((h) => (h || "").toLowerCase());
-      const schemaLower = schemaFieldNames.map((f) => (f || "").toLowerCase());
-
-      // Check if headers match schema field names
-      const mismatches = [];
-      for (let i = 0; i < Math.max(headerLower.length, schemaLower.length); i++) {
-        if (headerLower[i] !== schemaLower[i]) {
-          mismatches.push({
-            index: i,
-            excel: header[i] || "(empty)",
-            schema: schemaFieldNames[i] || "(missing)",
-          });
-        }
-      }
-
-      if (mismatches.length > 0) {
-        const mismatchDetails = mismatches
-          .slice(0, 5)
-          .map((m) => `Column ${m.index + 1}: Excel="${m.excel}" vs Schema="${m.schema}"`)
-          .join(", ");
-        const suffix = mismatches.length > 5 ? ` and ${mismatches.length - 5} more...` : "";
-        this.showWarning(`Header mismatch detected: ${mismatchDetails}${suffix}. Data will be used as-is.`);
+      try {
+        validateExcelHeaders(header, schemaData);
+      } catch (error) {
+        this.showWarning(error.message);
       }
     }
 
