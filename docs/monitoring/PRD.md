@@ -1,9 +1,9 @@
 # Monitoring Query — Product requirements
 
-**Status:** revised requirements, ready for review; implementation has not started.  
-**Date:** 2026-10-12. **Product:** AD Tools. **Route:** `#monitoring-query`. **Category:** Config.  
-**Decision accepted (revised):** existing-row updates execute directly in AD Tools: fetch latest Oracle data → show conflicts → update if unchanged.
-Creation/cloning retains generated INSERT scripts and optional Run Query handoff until direct INSERT scope is agreed.  
+**Status:** revised requirements, ready for review; implementation has not started.
+**Date:** 2026-10-13. **Product:** AD Tools. **Route:** `#monitoring-query`. **Category:** Config.
+**Decision accepted (revised):** use guarded MERGE for existing edits and new/cloned rows in one reviewed transaction.
+Fetch latest Oracle data → show conflicts → apply if unchanged. Disable editing while applying; standardize typed reads and comparisons.
 **Initial target:** MONITORING schema on UAT-MONITORING / EVTUAT4_COM. Other environments require explicit profiles and schema validation.
 
 This document owns the feature requirements. [Schema discovery](README.md) owns dated evidence and the complete table/column inventory.
@@ -16,8 +16,8 @@ A single dashboard menu can contain multiple summary queries, summary fields, de
 Editing those tables individually makes it difficult to understand the complete menu, clone configurations correctly,
 preserve long SQL, and review the exact effect of a change.
 
-Monitoring Query presents the configuration as one navigable hierarchy. Existing-row updates execute directly through AD Tools
-after latest-data conflict checks. Jenkins is not required for updates. Creating/cloning still produces reviewable INSERT scripts
+Monitoring Query presents the configuration as one navigable hierarchy. Existing edits and new/cloned rows execute directly through AD Tools
+as guarded MERGE operations after latest-data conflict checks. Jenkins is optional; the same reviewed plan can produce a standalone MERGE package
 for the existing Run Query workflow. Saving a local draft never modifies Oracle; **Update Oracle** explicitly does.
 Distinguish draft saved, update committed, outcome unknown, database state verified, script generated and script handed off.
 
@@ -28,7 +28,7 @@ Distinguish draft saved, update committed, outcome unknown, database state verif
 - Generated SQL modifies only the reviewed configuration rows and rejects stale originals before committing.
 - Full SQL/CLOB content survives Oracle import, editing, persistence, generation and verification.
 - Existing data defects remain visible; the tool does not silently repair or normalize unrelated configuration.
-- A repeatable end-to-end artifact proves direct updates, conflict rejection, rollback and readback independently of script handoff.
+- A repeatable end-to-end artifact proves direct apply, conflict rejection, rollback and readback independently of script handoff.
 
 ## 2. Users and primary jobs
 
@@ -41,7 +41,7 @@ Distinguish draft saved, update committed, outcome unknown, database state verif
 | Enable or disable a dashboard              | Stage DSH_MENU.IS_ACTIVE, review and generate the change                               |
 | Find broken configuration                  | Inspect missing parents, duplicate ordering and incomplete chart/mapping configuration |
 | Apply a reviewed update                    | Fetch latest Oracle values, resolve any conflicts, then update directly in AD Tools    |
-| Apply new/cloned configuration             | Export/copy the INSERT script or open Run Query; select the execution target there     |
+| Apply new/cloned configuration             | Apply with existing edits through MERGE; optionally export a guarded MERGE package     |
 | Check the result                           | Reload affected rows and compare them with the generated expected state                |
 
 ## 3. Release scope
@@ -61,13 +61,15 @@ Distinguish draft saved, update committed, outcome unknown, database state verif
 | Local drafts         | Autosave, restore, discard, refresh/rebase and explicit conflict resolution       |
 | Change package       | Diff, guarded apply script, verification SQL, copy/download and Run Query handoff |
 
-Five configuration tables support direct UPDATE plus generated INSERT scripts. Datasources and the single-summary-query table are read-only in V1.
-An update batch cannot contain pending INSERTs or references to uncreated draft parents; complete creation and reload first.
+Five configuration tables support guarded MERGE for existing edits and new rows. Datasources and the single-summary-query table are read-only in V1.
+One reviewed batch can mix existing edits and new parents/children. Apply new parents before their children in the same transaction; no intermediate reload is required.
+Review labels each row as Update existing or Create new. MERGE must never switch that reviewed intent because the database changed.
 Discarding a newly added unsaved block is supported. Removing an existing database row is outside V1.
 
 ### Excluded from V1
 
-- Direct INSERT/DELETE, background/autosave DML, automatic Jenkins triggering or automatic dashboard query execution.
+- Standalone direct INSERT/DELETE endpoints, background/autosave DML, automatic Jenkins triggering or automatic dashboard query execution.
+  Creating reviewed rows through the guarded MERGE operation is included in V1.
 - Hard deletion, primary-key renaming, moving existing children to different parents, or automatic orphan cleanup.
 - Datasource creation/editing, JDBC URL/credential display, and credential migration from DBeaver.
 - USERS, TOKEN, Flyway history, or general-purpose table CRUD.
@@ -104,12 +106,12 @@ flowchart LR
   C --> D[Update Oracle]
   D --> E[Fetch latest and compare]
   E --> F[No conflict: lock and recheck in transaction]
-  F --> G[Execute bound UPDATEs and commit]
+  F --> G[Execute bound MERGEs in dependency order and commit]
   G --> H[Read back and verify]
   E --> I[Conflict: baseline / latest / draft]
   F --> I
   I --> B
-  C --> J[New rows: generate INSERT package]
+  C --> J[Optional: generate guarded MERGE package]
   J --> K[Copy / download / Run Query]
 ```
 
@@ -121,11 +123,11 @@ V1 does not add a separate browser Oracle proxy or offline package-import produc
 
 **MQ-02.** Select an existing AD Tools connection profile; DBeaver's connection is discovery evidence, not an imported credential profile.
 Capture actual service/database identity, current schema and connection profile ID. Require MONITORING and compatible table metadata.
-Do not identify an environment using a display name alone. Direct updates use the selected Oracle connection and reassert its identity inside the transaction.
-For INSERT-script handoff, allow explicitly mapped execution identities when the Jenkins user differs.
+Do not identify an environment using a display name alone. Direct apply use the selected Oracle connection and reassert its identity inside the transaction.
+For MERGE-script handoff, allow explicitly mapped execution identities when the Jenkins user differs.
 
 **MQ-03.** Validate required tables, PKs, types, length semantics, nullability and relevant constraints against the discovery contract.
-Refuse direct updates and generation on incompatible drift and explain the specific mismatch. Fetch CHAR_USED/CHAR_LENGTH/DATA_LENGTH and database character set
+Refuse direct apply and generation on incompatible drift and explain the specific mismatch. Fetch CHAR_USED/CHAR_LENGTH/DATA_LENGTH and database character set
 where required to validate VARCHAR2 byte versus character limits. Never guess a primary key from the first column.
 Unknown constraints or new required columns require a compatibility decision, not optimistic DML.
 
@@ -155,8 +157,8 @@ Existing duplicate values display a warning and use ID as a stable UI tie-breake
 An explicit reorder can assign consecutive values if they fit the database precision. Untouched duplicates remain untouched.
 
 **MQ-09.** Defaults are visible for new entities and are derived from validated metadata. Existing values are never replaced with defaults on load.
-Preserve CREATED\_\* on UPDATE. For new menus set CREATED_BY from the package's declared actor and use SYSTIMESTAMP for CREATED_AT;
-for updated menus set UPDATED_BY and UPDATED_AT. For direct updates use an explicitly configured editor name or the connected Oracle
+Preserve CREATED\_\* on UPDATE. For new menus set CREATED_BY from the declared actor and use SYSTIMESTAMP for CREATED_AT;
+for updated menus set UPDATED_BY and UPDATED_AT. For direct apply use an explicitly configured editor name or the connected Oracle
 username resolved by the backend; display its source. A configured editor name is declared attribution, not independently authenticated identity.
 Other managed tables have no audit columns; do not invent them. Timestamp fields affected by script execution are verified according to their
 expression semantics rather than compared with a precomputed browser timestamp.
@@ -206,96 +208,133 @@ For optional CLOBs, provide explicit Clear → NULL; preserve a baseline zero-le
 and compares all columns with the originally loaded baseline, including full CLOB content and null/empty distinctions.
 A changed/deleted original is a conflict even when a different column changed. Show original baseline, latest Oracle value and proposed value;
 retain the draft. Offer keep latest or explicitly reapply an edit onto the latest baseline; never provide a silent force-overwrite path.
-Unrelated rows outside the update set do not conflict. A fetch/permission/metadata failure blocks writes, not local editing.
+Unrelated rows outside the change set do not conflict. A fetch/permission/metadata failure blocks writes, not local editing.
 If there are no conflicts, proceed directly to the backend transaction described in MQ-15 without another confirmation dialog.
-Reject a late preflight response if connection or draft revision changed. Disable duplicate submission while this revision is in flight.
-For INSERT packages, refresh referenced parents and new-ID availability before generation; a collision blocks generation.
+Reject a late preflight response if connection or draft revision changed. Check new-ID absence and referenced parents for the entire mixed batch.
+A parent may exist in Oracle or be a reviewed new row earlier in this batch. A new-ID collision blocks the batch; do not update the colliding row.
+From Checking Latest until a confirmed result, disable editing, Add, Clone, reorder, Discard Draft, target/menu switching and duplicate submission.
+Keep read-only inspection available. Persist the submitted revision and request ID before dispatch; persistence failure blocks dispatch.
+If navigation tears down the tool, retain the in-flight request independently of the view. Closing/reloading the app is not rollback;
+restore any submitted request without a confirmed result as Outcome Unknown and reconcile before permitting another write.
+After a confirmed failure/conflict, unlock editing. After commit, replace the submitted baseline with returned rows and clear its applied edits.
+Outcome Unknown keeps the submitted revision frozen until read-only reconciliation completes and the user explicitly resumes.
+Script generation performs the same parent/ID preflight; guards are repeated when the script executes.
 
 **MQ-13.** An immutable generated package contains:
 
 - `manifest.json`: format version, package ID, source identity/schema, schema fingerprint, baseline/read times,
   draft revision, declared actor, operations, warnings, expected-state comparison rules and script SHA-256.
-- `apply.sql`: guarded INSERT script for new rows; target identity assertions, rollback-on-error and one commit on success.
-  Direct UPDATE review/export instead contains parameterized UPDATE templates and their typed bind values; it is not the execution API.
+- `apply.sql`: standalone guarded MERGE script for the reviewed existing/new rows, with embedded serialized values,
+  target identity assertions, baseline/existence checks, rollback-on-error and one commit on success. No unresolved outer bind placeholders.
+  Stored dashboard binds remain inside CLOB data. Parameterized backend templates are a separate read-only preview labelled
+  **MERGE template — requires backend bindings**; they are never the content of Copy SQL or Open in Run Query.
 - `verify.sql`: explicit PK-scoped SELECTs with PK first, affected fields and full CLOB readback; no recent-time heuristics.
 - `changes.json`: original/desired typed values for changed rows, supporting inspection and verification; contains no credentials.
 
-Direct-update review also exposes the exact generated UPDATE statements, changed columns and bind values before applying.
+Direct-apply review also exposes the generated MERGE templates, reviewed create/update intent, changed columns and typed bind values.
 The backend regenerates SQL from validated structured operations; it never trusts a client-provided SQL string.
-See [UPDATE-EXAMPLES.md](UPDATE-EXAMPLES.md) for representative SELECT/UPDATE templates and bind contracts.
+See [MERGE-EXAMPLES.md](MERGE-EXAMPLES.md) for representative SELECT/MERGE templates and bind contracts.
 
 The package includes SQL/configuration and must be treated as internal development data.
 Do not send it to analytics or a Worker storage service. Copy SQL copies exactly apply.sql; download includes all four files.
 Any further edit or target change invalidates the active package and requires a new review/generation.
 Old packages remain identifiable by their revision and creation time; they cannot masquerade as the current draft.
 
-## 9. Direct UPDATE and Oracle script contracts
+## 9. Guarded MERGE and Oracle script contracts
 
 **MQ-14.** Use a feature-specific, metadata-checked allowlist of five managed tables and their exact PKs.
-Use explicit `MONITORING.<TABLE>` and explicit column lists. No DDL, GRANT, DELETE, unconstrained UPDATE or generic MERGE/upsert.
-INSERT means a reviewed new row; UPDATE means a reviewed existing row. A collision or missing original is an error.
-Generate UPDATE assignments only for changed editable columns, plus DSH*MENU.UPDATED_BY/UPDATED_AT where applicable.
-Bind every supplied value, including the PK; identifiers come only from the backend allowlist. PKs/parent IDs/CREATED*\* cannot be changed.
+Use explicit `MONITORING.<TABLE>` and explicit column lists. No DDL, GRANT, DELETE, unconstrained writes or unrestricted upsert.
+Generate MERGE matched on the physical PK only; never use SQL CLOBs or mutable fields in ON.
+For a reviewed existing row, emit WHEN MATCHED THEN UPDATE only; omit the INSERT branch.
+For a reviewed new row, emit WHEN NOT MATCHED THEN INSERT only; omit the UPDATE branch.
+Both are MERGE statements in one mixed transaction. A collision or missing original is a conflict, never permission to switch branches.
+Generate UPDATE assignments only for changed editable columns, plus DSH_MENU.UPDATED_BY/UPDATED_AT where applicable.
+Bind every supplied value, including the PK; identifiers come only from the backend allowlist.
+Existing PKs/parent IDs/CREATED_* cannot be changed; new rows supply reviewed PK/parent IDs and creation attributes.
+Oracle MERGE syntax and privileges: [Oracle SQL Reference](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/MERGE.html).
+Validate required privileges for the generated statements; do not assume previously confirmed UPDATE access proves MERGE/creation access.
 
-**MQ-15.** Direct updates require a new dedicated Tauri → Rust → Oracle sidecar write operation, separate from existing read-query endpoints.
+**MQ-15.** Direct apply requires a dedicated Tauri → Rust → Oracle sidecar managed-apply operation, separate from read-query endpoints.
 One explicit Update Oracle action produces one transaction on one acquired connection with autocommit disabled:
 
-1. Assert target database/service/schema and permissions; revalidate the managed-table contract.
-2. Lock every existing row in the batch using explicit-column SELECT ... FOR UPDATE WAIT 5 in deterministic table/PK order.
-   Fetch complete original values while holding the locks; never hold a transaction open while the user resolves a conflict.
-3. Recompare locked rows with the submitted baseline for all columns. Compare nulls and scalar types explicitly and CLOBs by complete content,
-   using materialized LOB values while the connection is open or DBMS_LOB.COMPARE where applicable. A missing row is a conflict.
-4. If a row changed after the UI's latest-data fetch, roll back and return its current values as a conflict. No batch row may be updated.
-5. Validate changed values/referenced parents and execute parameterized UPDATE statements. Bind SQL_TEXT/CHART_SQL explicitly as CLOBs.
-   Require cursor.rowcount=1 for every intended row. A no-op draft has no UPDATE operations and must not update audit timestamps.
-6. Read back expected updated values on the same transaction connection. Any constraint, row-count or readback failure rolls back the entire batch.
-7. Commit once after all rows pass; return committed outcome and readback values. Close cursors/release connection in all cases.
+1. Assert target database/service/schema and permissions; revalidate the managed-table contract and operation intent.
+   Reject duplicate table/PK operations, malformed typed values and references to parents absent from both Oracle and the new-row plan.
+2. Lock every reviewed existing row using explicit-column SELECT ... FOR UPDATE WAIT 5 in deterministic table/PK order.
+   Validate and lock existing referenced parents, including the logical summary-group parent, in the same deterministic lock plan.
+   Fetch complete original values while holding locks; never hold a transaction open while the user resolves a conflict.
+3. Recompare locked existing rows with the complete submitted baseline. Compare typed scalars, nulls and full CLOB content.
+   Missing/changed originals conflict. Check every new PK is absent. Missing new keys cannot be row-locked;
+   concurrent creation is handled by the insert-only branch, PK constraint and exact row-count check.
+4. On conflict, roll back without applying any row and return current values. Do not silently turn creation into update or update into creation.
+5. Execute parameterized intent-specific MERGEs in parent-before-child order, with deterministic PK ordering within each level.
+   Bind SQL_TEXT/CHART_SQL as CLOBs. Require cursor.rowcount=1 for every operation. A concurrent new-ID collision,
+   zero-row MERGE or constraint failure rolls back the whole batch. A no-op draft executes no MERGE and changes no audit timestamp.
+6. Read back all expected affected values on the same transaction connection. Any readback failure/mismatch rolls back the entire batch.
+7. Commit once after all rows pass; return confirmed outcome and typed readback values. Close cursors/release connection in all cases.
 
-The initial latest-data fetch provides a clear conflict experience. The locked recheck prevents another writer changing the row between
-that fetch and the UPDATE. Lock timeout returns a retryable busy state; it is not automatically retried as a write.
-A permission failure is reported directly; it does not silently redirect updates to Jenkins.
-Unchanged fields are preserved. Do not replace/delete sibling collections; concurrent additions outside the change set are not removed.
-After commit, refresh the baseline and clear only the successfully applied edits of the submitted draft revision.
-Read-only verification may run again after commit; a concurrent subsequent edit is reported as changed since apply, not as a failed commit.
+The latest fetch provides the conflict experience; locked recheck protects existing rows until commit.
+Lock timeout returns a retryable busy state without automatically retrying a write. Permission failure never silently redirects to Jenkins.
+Preserve unedited columns and sibling collections. After commit, refresh the baseline and clear only the submitted revision's applied edits.
+Postcommit verification reports a later concurrent edit as changed since apply, not as a failed commit.
 
-The direct-update request is structured, versioned and limited to UPDATE operations:
+The versioned request contains reviewed intent, never executable client SQL:
 
 ```text
 { version: 1, requestId, connectionProfileId, expectedDatabaseIdentity,
   schema: "MONITORING", schemaFingerprint, draftId, draftRevision,
-  operations: [{ table, primaryKey, baseline: <complete typed original row>,
-                 changes: <changed editable columns only> }] }
+  operations: [
+    { operationId, intent: "update", table, primaryKey,
+      baseline: <complete typed original row>, changes: <changed editable columns> },
+    { operationId, intent: "create", table, primaryKey,
+      expectedAbsent: true, values: <reviewed typed new-row values> }
+  ] }
 ```
 
-Resolve credentials in the backend; use no client-supplied executable SQL or arbitrary target identifiers.
-Typed data must preserve NUMBER precision, timestamp precision, null and empty CLOBs without lossy JavaScript coercion.
-Return structured conflict, validation, permission, lock-timeout and execution errors with operation IDs; never expose credentials.
-If connection loss makes commit outcome uncertain, return **Outcome Unknown**. Preserve the draft/request ID and offer readback reconciliation;
-never blindly retry. Request IDs support correlation but are not durable exactly-once guarantees without a separately implemented receipt store.
-On reconciliation distinguish matching desired values, unchanged baseline, divergence and unavailable readback; require explicit user action
-before a new write. A match establishes observed database state, not proof that this particular request was the writer.
+Resolve credentials in the backend. Return structured conflict, validation, permission, lock-timeout and execution errors with operation IDs.
+Never expose credentials. Connection loss around commit returns **Outcome Unknown**; preserve draft/request ID and reconcile by readback.
+Never blindly retry. Request IDs provide correlation, not durable exactly-once guarantees without a receipt store.
+Reconciliation distinguishes desired values, baseline/absence, divergence and unavailable readback; require explicit action before another write.
+Matching desired values establishes observed state, not proof this request was the writer.
 
-Generated INSERT packages still use one guarded PL/SQL transaction unit for the external runner: assert target, verify parents/new IDs,
-INSERT menus before groups/detail tables and fields/columns, require one row per operation, commit once and roll back/re-raise on any failure.
-The generated script must not contain updates already applied directly. Runner compatibility is a gate for INSERT handoff only.
-Rollback-on-error is transaction recovery, not a post-commit undo feature. A reversal requires fresh review and conflict checks.
+**Typed value contract (version 1).** Use the same representation for loading, drafts, requests, conflicts, exports and readback:
 
-**MQ-16.** For direct updates, bind stored query text as CLOB data; inner :startDate/:endDate/:offset/:limit tokens stay
-inside that value and are not bound as part of the outer UPDATE. Direct writes do not need SQL\*Plus substitution settings or literal chunking.
-The remaining serialization requirements apply to standalone generated INSERT scripts. Serialize stored SQL as data. Escape apostrophes correctly and preserve ampersands, semicolons, comments, Unicode,
+- SQL NULL: JSON null. An unchanged column is omitted from changes, never represented as null.
+- VARCHAR2/CHAR: exact text without trimming, case folding or Unicode normalization; empty VARCHAR2 follows Oracle NULL semantics.
+- NUMBER: `{type: "number", value: "<canonical decimal>"}`; use exact decimal arithmetic, no JavaScript Number/float conversion.
+  Remove redundant leading/trailing decimal zeros, normalize negative zero, and validate precision/scale against metadata.
+- DATE: `{type: "date", value: "YYYY-MM-DDTHH:mm:ss"}` without an invented timezone.
+- TIMESTAMP(p): `{type: "timestamp", precision: p, value: "YYYY-MM-DDTHH:mm:ss.<p digits>"}`;
+  preserve declared fractional precision without browser Date conversion or session NLS formatting. For p=0 omit the fractional part.
+  Unexpected timezone-aware types require a compatibility decision; do not coerce them into this timestamp representation.
+- CLOB: `{type: "clob", value: "<complete text>"}`; an empty string inside this wrapper is a non-null empty LOB, distinct from JSON null.
+  Preserve whitespace, CR/LF, Unicode and nested bind tokens. Read/conversion errors must fail, never become placeholder strings.
+
+Typed schema metadata determines conversion. The backend parses/validates wrappers and binds actual Oracle types.
+Paged reads return an explicit completion marker/continuation token; callers cannot treat a row limit as a complete baseline.
+A truncated CLOB or incomplete page set blocks apply/generation. Prove precision, null/empty and completeness round trips before enabling writes.
+
+Generated MERGE packages implement the same reviewed intents and conflict rules inside one guarded PL/SQL transaction unit.
+Lock/recompare existing rows, check new IDs, apply parent-first, require one affected row per MERGE and verify before a single commit.
+Use type-explicit, NLS-independent values and full CLOB comparisons. Roll back/re-raise any error; never use error logging to skip failed rows.
+Applied operations invalidate their package for execution; further use requires fresh load/review/generation.
+Runner compatibility gates optional script handoff only. Rollback is transaction recovery, not postcommit undo.
+
+**MQ-16.** For direct apply, bind stored query text as CLOB data; inner :startDate/:endDate/:offset/:limit tokens stay
+inside that value and are not bound as part of the outer MERGE. Direct writes do not need SQL\*Plus substitution settings or literal chunking.
+The remaining serialization requirements apply to standalone generated MERGE scripts. Serialize stored SQL as data. Escape apostrophes correctly and preserve ampersands, semicolons, comments, Unicode,
 CR/LF sequences and Oracle bind tokens inside that data. Disable SQL client substitution where the verified runner supports/requires it.
 Never interpolate stored SQL as executable statements in the apply script.
 Build CLOBs with temporary LOBs and escaped chunks safely below Oracle literal byte limits (target <= 2000 encoded bytes per chunk),
 without splitting Unicode characters; release temporary LOBs on success and failure. No entire-CLOB VARCHAR2 or single-literal assumption.
 If target encoding/runner transport cannot preserve the content, block generation/handoff with a specific error.
 
-**MQ-17.** Direct updates and generated INSERT scripts do not write DSH_CONFIG_AUDIT in V1. The app must disclose “Database audit entries are not written” in review.
+**MQ-17.** Direct apply and generated MERGE scripts do not write DSH_CONFIG_AUDIT in V1. The app must disclose “Database audit entries are not written” in review.
 A local manifest is provenance for a proposed script, not a substitute for authenticated server audit history.
 Defining audit action vocabulary, JSON serialization and execution actor is a prerequisite for adding database audit writes later.
 
-## 10. Optional INSERT handoff and update verification
+## 10. Optional MERGE handoff and verification
 
-**MQ-18.** Direct updates have no Jenkins dependency. For creating/cloning rows, reuse `run-query` navigation and SQL injection; Open in Run Query populates the editor and never triggers a job.
+**MQ-18.** Direct apply have no Jenkins dependency. For optional execution of the reviewed mixed batch, reuse `run-query` navigation and SQL injection; Open in Run Query populates the editor and never triggers a job.
 Extend the route contract with versioned optional metadata:
 
 ```text
@@ -317,10 +356,10 @@ CLOB transport, single-session execution, commit/rollback, stop-on-error and pro
 The current semicolon validator and size-split behavior are integration risks, not proof of PL/SQL compatibility.
 Compatibility work belongs to this feature's implementation scope. Do not silently downgrade to unguarded DML if the runner fails this gate.
 
-**MQ-21.** Direct-update states: **Draft**, **Checking Latest**, **Conflict**, **Updating**, **Committed**,
+**MQ-21.** Direct-apply states: **Draft**, **Checking Latest**, **Conflict**, **Updating**, **Committed**,
 **Outcome Unknown**, **Verified**, **Verification Mismatch** and **Failed**. Never show Committed without a confirmed commit response.
 Precommit readback failure rolls back; postcommit refresh failure retains Committed with verification pending.
-INSERT-package lifecycle states: **Draft**, **Needs Refresh**, **Conflict**, **Ready for Review**, **Generated**, **Handed Off**,
+MERGE-package lifecycle states: **Draft**, **Needs Refresh**, **Conflict**, **Ready for Review**, **Generated**, **Handed Off**,
 **Verified**, **Verification Mismatch**. Run Query owns actual job status; no automatic completion callback is assumed.
 Handed Off records editor transfer only. Verify Database is an explicit read-only operation against the package's source target.
 Compare all intended changed/new rows with package expectations using typed values and complete CLOBs.
@@ -330,24 +369,24 @@ Verification of database values does not assert dashboard cache refresh, renderi
 ## 11. Technical composition
 
 Current checkout is a Vanilla JS SPA with class-based BaseTool, shared Oracle/Monaco services and Tauri Oracle connectivity.
-Extend the Oracle bridge with a dedicated managed-update transaction command; Jenkins remains optional for INSERT scripts.
+Extend the Oracle bridge with a dedicated managed-apply transaction command; Jenkins remains optional for MERGE scripts.
 Implement in that active architecture; do not make this feature contingent on a React cutover or add a second shell.
 If the implementation checkout has since migrated, follow its active architecture contract and preserve the same service/data behavior.
 
 | Boundary                                   | Responsibility                                                                                           |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | Tool controller / template / scoped styles | Navigation, forms, review, state rendering and widget lifecycle                                          |
-| Oracle repository                          | Explicit metadata/configuration reads, complete fetches, identity, refresh and managed-update invocation |
-| Managed-update backend                     | Allowlist, typed binds, full-row locked conflict check, one transaction, rollback and committed readback |
+| Oracle repository                          | Explicit metadata/configuration reads, complete fetches, identity, refresh and managed-apply invocation |
+| Managed-apply backend                     | Allowlist, typed binds, full-row locked conflict check, one transaction, rollback and committed readback |
 | Domain graph                               | Typed values, original/draft separation, ID maps, dependency traversal and clone rules                   |
 | Validation / health service                | DDL-backed rules, advisory SQL analysis and scoped findings                                              |
-| Change planner                             | Baseline comparison, deterministic INSERT/UPDATE plan and conflicts                                      |
+| Change planner                             | Baseline comparison, intent-specific MERGE plan and conflicts                                      |
 | Oracle serializer / package service        | Guarded script, CLOB encoding, verification SQL, manifest/hash and exports                               |
 | Draft store                                | Feature-owned IndexedDB persistence and revision management                                              |
 | Run Query adapter                          | Versioned handoff, target mapping, atomic-package policy and provenance                                  |
 
 Register `monitoring-query` in tools.json/toolDefinitions.js and use standard Desktop capability handling.
-Reuse OracleConnectionService and keychain-backed credentials. Add a separate managed-update method and matching Rust/sidecar endpoint;
+Reuse OracleConnectionService and keychain-backed credentials. Add a separate managed-apply method and matching Rust/sidecar endpoint;
 keep existing query endpoints separate from DML. Enforce the existing bridge authentication/access boundary for the new endpoint too.
 Use existing Monaco and shared components. Dispose editor models, listeners and pending work on lifecycle teardown;
 restore persisted edits after navigation. Route cancellation must not lose a draft or inject stale data into a new connection.
@@ -370,31 +409,36 @@ Do not install missing tooling automatically. No live UAT mutation is needed to 
 | AC-07 | Draft survives navigation/reload; two connections with identical menu IDs remain independent; persistence failure is visible               |
 | AC-08 | Remote edit before latest fetch shows a conflict; edit after latest fetch fails the locked recheck and rolls back all updates              |
 | AC-09 | Apostrophes, ampersands, Unicode, embedded binds, >4000-character SQL and optional empty/null CLOBs survive a full LOCAL Oracle round trip |
-| AC-10 | Forced failure midway through direct LOCAL updates leaves all rows unchanged; AD Tools receives structured failure                         |
-| AC-11 | Stale update retry fails baseline checks; zero-row UPDATE/lock timeout cannot succeed; INSERT collision fails script guards                |
+| AC-10 | Forced failure midway through direct LOCAL MERGEs leaves all rows unchanged; AD Tools receives structured failure                         |
+| AC-11 | Stale update retry fails baseline checks; zero-row MERGE/lock timeout cannot succeed; new-ID collision fails direct/script guards                |
 | AC-12 | Run Query receives exact script/hash, requires a matching target, never auto-runs, and rejects managed-script edits/splitting              |
 | AC-13 | Package near/above actual runner size limit gets correct byte-based behavior; no partial/chunked execution occurs                          |
 | AC-14 | Confirmed commit, outcome unknown and verified state stay distinct; mismatches preserve recoverable draft/package                          |
 | AC-15 | Normal and half-width Desktop, light/dark, keyboard use, empty state, long names and large SQL lists keep controls reachable               |
 | AC-16 | Wrong schema, drift, missing credentials, interrupted/partial fetch and stale response produce explicit recoverable states                 |
+| AC-17 | One mixed MERGE batch edits an existing row and creates a parent/children; all commit together or all roll back                          |
+| AC-18 | Deleted existing row is not recreated; colliding new ID is not overwritten, including a collision after preflight                       |
+| AC-19 | Editing/target changes/duplicate submission are disabled in flight; reload restores unresolved requests for reconciliation              |
+| AC-20 | Exact NUMBER and TIMESTAMP(6) values, null/empty CLOB and paged completeness survive every read/draft/apply boundary                      |
+| AC-21 | Copy SQL and Run Query receive standalone guarded MERGE SQL with embedded values; backend templates are clearly labelled separately    |
 
 For each E2E run retain a dated artifact containing commit, commands, environment, fixture/setup, screenshots or trace,
-package hash, expected/actual database comparisons, result, cleanup and reproduction steps. Keep credentials out of artifacts. Add E2E cases for denied UPDATE permission, double submission, connection changes during preflight,
+package hash, expected/actual database comparisons, result, cleanup and reproduction steps. Keep credentials out of artifacts. Add E2E cases for denied MERGE/creation permission, double submission, connection changes during preflight,
 commit acknowledgment loss, readback reconciliation and stored SQL containing nested bind tokens.
 Label source checks, fixtures, browser behavior, LOCAL Oracle execution, Jenkins execution and packaged Desktop evidence separately.
 Generated SQL success on LOCAL Oracle is not proof of Jenkins or UAT behavior.
 
 ## 13. Delivery gates and unresolved application contracts
 
-1. Validate schema/identity loading and the dedicated Oracle UPDATE API contract.
+1. Validate schema/identity loading, standardized typed reads and the dedicated Oracle managed-apply API contract.
 2. Implement hierarchy, drafts, editing/cloning, health and review.
-3. Implement direct updates and prove latest-fetch/locked-recheck, CLOB binding, rollback, uncertain-commit handling and readback in LOCAL Oracle.
-4. Implement INSERT generation and optional Run Query target mapping/atomic transport; verify the runner before enabling INSERT handoff.
-   Direct UPDATE delivery does not depend on Jenkins availability or this integration gate.
+3. Implement mixed-batch guarded MERGE and prove intent checks, dependency order, locked recheck, typed/CLOB binding, rollback and uncertain-commit recovery in LOCAL Oracle.
+4. Implement standalone MERGE generation and optional Run Query target mapping/atomic transport; verify the runner before enabling handoff.
+   Direct MERGE delivery does not depend on Jenkins availability or this integration gate.
 5. Complete Desktop acceptance, read-only UAT load/readback checks and reproducible evidence.
 
 Monitoring application cache/refresh behavior, exact value-format vocabulary, alias casing, pagination contract,
 chart fallback and DSH_SUMMARY_QUERY usage remain unverified. V1 can inspect/edit confirmed configuration while preserving unknown values;
 it must not claim runtime preview or compatibility-table editing. These unknowns do not justify inventing defaults or automatic reload actions.
-Database audit writes/history and future direct INSERT/DELETE require separately agreed contracts.
-Direct UPDATE access is confirmed by the user; the feature still handles actual runtime permission/connection failures.
+Database audit writes/history and future DELETE require separately agreed contracts.
+MERGE-based creation and editing are in scope; validate actual runtime privileges rather than assuming UPDATE access includes creation.
