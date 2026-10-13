@@ -100,22 +100,79 @@ Primary actions: **Load**, **Edit**, **Add**, **Clone**, **Review Changes**, **U
 reviewed revision is unchanged. If conflicts exist, stop and show baseline/latest/draft values. Resolution requires another Update Oracle action.
 Do not label local persistence as “Save to database” or handoff as “Applied.”
 
+### User flow: local before, local after, and Oracle
+
+The Git labels below are analogies for the actions. There are no branches or local commits in V1.
+**Commit** means committing the Oracle transaction, including its change-history records.
+
+Keep two local states: **Before (baseline)** is the complete original row fetched from Oracle;
+**After (draft)** is the proposed row after local editing. Editing changes After without changing Before.
+Review compares **Before ↔ After**. Conflict checks compare **latest Oracle ↔ Before**, not Oracle against After.
+The latest fetch alone never overwrites Before or discards After. Compare complete affected rows, including full SQL/CLOBs.
+For a new row, Before means **absent**: its ID must still be available. New parents may be created earlier in the same batch.
+
 ```mermaid
-flowchart LR
-  A[Load Oracle baseline] --> B[Inspect and edit locally]
-  B --> C[Review changes]
-  C --> D[Update Oracle]
-  D --> E[Fetch latest and compare]
-  E --> F[No conflict: lock and recheck in transaction]
-  F --> G[Execute bound INSERTs and UPDATEs, read back, then write audit records]
-  G --> H[Configuration and audit commit together]
-  H --> V[Refresh baseline and view History]
-  E --> I[Conflict: baseline / latest / draft]
-  F --> I
-  I --> B
-  C --> J[Optional: generate guarded INSERT/UPDATE package]
-  J --> K[Copy / download / Run Query]
+flowchart TD
+  subgraph PULL["1 · PULL — Fetch from DB"]
+    A["Select connection → Load"] --> B["Fetch configuration from Oracle<br/>Store local BEFORE baseline"]
+  end
+
+  subgraph WORK["2 · WORK — Edit locally"]
+    C["Browse menu → Edit / Add / Clone"] --> D["Autosave local AFTER draft<br/>Keep BEFORE unchanged; Oracle unchanged"]
+  end
+
+  subgraph DIFF["3 · DIFF — Review changes"]
+    E["Compare local BEFORE vs AFTER<br/>Review INSERTs, UPDATEs, SQL and warnings"]
+    E -->|Validation errors| F["Fix draft"]
+    F --> E
+  end
+
+  subgraph FETCH["4 · FETCH — Check DB again"]
+    G["Click Update Oracle<br/>Freeze draft; disable editing"]
+    G --> H["Fetch latest affected rows<br/>Check new IDs and parents"]
+    H --> I{"Latest Oracle matches local BEFORE?<br/>New IDs still available?"}
+  end
+
+  subgraph CONFLICT["5 · CONFLICT — Resolve before applying"]
+    J["Keep draft; unlock editing<br/>Show BEFORE / latest Oracle / AFTER"]
+    J --> K["Keep latest or explicitly reapply edits<br/>onto the latest baseline; resolve ID collisions"]
+  end
+
+  subgraph COMMIT["6 · COMMIT — One Oracle transaction"]
+    L["Lock existing rows briefly and fetch again<br/>Compare locked Oracle values vs local BEFORE<br/>Recheck new IDs and parents"]
+    L -->|Checks pass| M["Apply AFTER values with INSERTs and UPDATEs<br/>Create parents before children"]
+    M --> N["Read back from DB<br/>Verify expected configuration values"]
+    N --> O["Write and verify audit records<br/>One shared change ID"]
+    O --> Q["COMMIT ONCE<br/>Configuration + audit together; release locks"]
+  end
+
+  subgraph HISTORY["7 · HISTORY — Inspect committed changes"]
+    R["Refresh BEFORE from committed results<br/>Clear applied edits; unlock editing"]
+    R --> S["History → Open transaction<br/>Actor, time and complete before/after diffs"]
+  end
+
+  B --> C
+  D --> E
+  E -->|Ready| G
+  I -->|No| J
+  K --> E
+  I -->|Yes| L
+  L -->|Conflict: rollback and release locks| J
+  M -->|Failure| X["Roll back all configuration and audit writes<br/>Release locks; keep draft; unlock editing"]
+  N -->|Failure or mismatch| X
+  O -->|Failure| X
+  X --> E
+  Q -->|Confirmed| R
+  Q -->|Commit result uncertain| U["Outcome Unknown: keep submitted draft frozen<br/>Read DB and history to reconcile<br/>Explicit action before another write"]
+  E -->|Optional: Generate SQL| W["Guarded INSERT/UPDATE package<br/>Copy / Download / Open in Run Query<br/>No automatic execution"]
 ```
+
+Fetch Oracle data on **Load**, again on **Update Oracle**, and again under the transaction locks before writing.
+Locks are held only during the short apply transaction, never during editing or conflict resolution.
+Commit only after configuration readback and audit writes/readback pass. A precommit failure rolls back the whole batch.
+After a confirmed commit, postcommit refresh failure keeps **Committed** with verification pending; it cannot undo that commit.
+Optional script execution follows the same guards, readback and audit transaction rules; use **Verify Database** afterward.
+
 
 ## 5. Loading and schema compatibility
 
