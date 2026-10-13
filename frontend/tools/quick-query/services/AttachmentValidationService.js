@@ -2,7 +2,8 @@ import { UsageTracker } from "../../../core/UsageTracker.js";
 
 export class AttachmentValidationService {
   validateAttachment(value, dataType, maxLength, attachments, tableName) {
-    if (!value || !attachments?.length) return null;
+    // Only text cells can reference a filename; preserve typed spreadsheet values.
+    if (typeof value !== "string" || !value || !attachments?.length) return null;
 
     // Find matching file (case-insensitive)
     const matchingFile = attachments.find((file) => file.name.toLowerCase() === value.toLowerCase());
