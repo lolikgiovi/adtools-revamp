@@ -121,6 +121,7 @@ describe("manual approval", () => {
           }),
         ),
       },
+      adtools: { get: vi.fn(async (key) => (key === "session:session-1" ? JSON.stringify({ email: "person@example.com" }) : null)) },
     };
     const response = await handleManualApprovalStatus(
       new Request("https://example.test/register/manual-approval-status", {
@@ -134,6 +135,42 @@ describe("manual approval", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, status: "approved", token: "session-1" });
     expect(env.DB.prepare).toHaveBeenCalledTimes(1);
+  });
+
+  it("issues a fresh session when the completed approval session has expired", async () => {
+    const sessions = new Map();
+    const row = {
+      id: "request-1",
+      email: "person@example.com",
+      display_name: "Person",
+      device_id: "device-1",
+      platform: "Browser",
+      status: "approved",
+      completed_at: "2026-01-01 10:00:00",
+      session_token: "expired-session",
+    };
+    const env = {
+      DB: { prepare: vi.fn(() => statement({ first: row })) },
+      adtools: {
+        get: vi.fn(async (key) => sessions.get(key) ?? null),
+        put: vi.fn(async (key, value) => sessions.set(key, value)),
+      },
+    };
+    const response = await handleManualApprovalStatus(
+      new Request("https://example.test/register/manual-approval-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: "request-1", email: "person@example.com", deviceId: "device-1" }),
+      }),
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, status: "approved" });
+    expect(body.token).toBeTruthy();
+    expect(body.token).not.toBe("expired-session");
+    expect(sessions.has(`session:${body.token}`)).toBe(true);
   });
 
   it("requires dashboard authentication to list and approve requests", async () => {

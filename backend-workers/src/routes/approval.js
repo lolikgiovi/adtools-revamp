@@ -15,6 +15,16 @@ async function requireDashboardAuth(request, env) {
   return (await validateDashboardToken(request, env)) ? null : json({ ok: false, error: "Unauthorized" }, 401);
 }
 
+async function hasLiveSession(env, token) {
+  if (!token || !env?.adtools?.get) return false;
+  try {
+    return Boolean(await env.adtools.get(`session:${token}`));
+  } catch (_) {
+    // Unreadable session storage counts as expired so the client is issued a new session.
+    return false;
+  }
+}
+
 export async function handleManualApprovalRequest(request, env) {
   try {
     if ((await getRegistrationAuthMode(env)) !== "manual") {
@@ -84,16 +94,16 @@ export async function handleManualApprovalStatus(request, env) {
       .bind(requestId, email, deviceId)
       .first();
     if (!row) return json({ ok: false, error: "Approval request not found" }, 404);
-    if (row.completed_at) {
-      return row.session_token
-        ? json({ ok: true, status: "approved", token: row.session_token })
-        : json({ ok: false, error: "Approval was already completed" }, 409);
+    // Sessions live in KV with a TTL, so the cached token can outlive it. Replay it only while it still resolves,
+    // otherwise approve the caller with a fresh session instead of handing back a dead token.
+    if (row.completed_at && (await hasLiveSession(env, row.session_token))) {
+      return json({ ok: true, status: "approved", token: row.session_token });
     }
     if (row.status !== "approved") return json({ ok: true, status: "pending" });
 
     const claimId = crypto.randomUUID();
     const claim = await env.DB.prepare(
-      "UPDATE manual_approval_requests SET claim_id = ?, claimed_at = ? WHERE id = ? AND completed_at IS NULL AND (claim_id IS NULL OR claimed_at < ?)",
+      "UPDATE manual_approval_requests SET claim_id = ?, claimed_at = ? WHERE id = ? AND (claim_id IS NULL OR claimed_at < ?)",
     )
       .bind(claimId, tsGmt7Plain(), row.id, tsGmt7Plain(-2 * 60 * 1000))
       .run();
