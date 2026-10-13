@@ -2446,9 +2446,20 @@ export class QuickQueryUI {
     document.addEventListener("click", this._queryTypeDocumentClick);
   }
 
+  isConfigIdMerge(tableName, queryType, schemaData, inputData = null) {
+    const fields = schemaData.map((row) => String(row[0]).toLowerCase());
+    const headers = inputData ? (inputData[0] || []).map((field) => String(field).toLowerCase()) : fields;
+    return (
+      queryType === "merge" &&
+      tableName.toLowerCase().endsWith("config") &&
+      ["parameter_key", "config_id"].every((field) => fields.includes(field) && headers.includes(field))
+    );
+  }
+
   async handleGenerateQuery() {
     // Prevent duplicate generation
-    if (this.isGenerating || this._blobChoicePending) return;
+    if (this.isGenerating || this._blobChoicePending || this._queryPreparationPending) return;
+    this._queryPreparationPending = true;
 
     try {
       await this.flushPendingDataAutosave();
@@ -2513,6 +2524,16 @@ export class QuickQueryUI {
       }
 
       const options = { defaultSysdate: this.elements.defaultSysdateToggle.checked, auditUserMode };
+      if (this.isConfigIdMerge(tableName, queryType, schemaData, inputData)) {
+        options.updateConfigIds = await confirmAction({
+          title: "Update existing CONFIG_IDs?",
+          description:
+            "Rows are matched using PARAMETER_KEY. Updating CONFIG_ID will replace the existing ID on matched rows. " +
+            "New rows still use the configured INSERT behavior.",
+          confirmLabel: "Update IDs",
+          cancelLabel: "Keep existing IDs",
+        });
+      }
       if (auditUserMode === "custom") options.customAuditUser = customAuditUser;
       const blobAttachments = findReferencedBlobAttachments(schemaData, inputData, this.processedFiles);
       const importedBlobs = findImportedBlobValues(schemaData, inputData);
@@ -2526,6 +2547,8 @@ export class QuickQueryUI {
     } catch (error) {
       this.showError(error.message);
       this.editor.setValue("");
+    } finally {
+      this._queryPreparationPending = false;
     }
   }
 

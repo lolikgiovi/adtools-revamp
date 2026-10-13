@@ -382,7 +382,7 @@ export class QueryGenerationService {
       queryParts.push(this.generateUpdateStatement(tableName, processedRows, primaryKeys, fieldNames));
     } else {
       for (const processedFields of processedRows) {
-        queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys));
+        queryParts.push(this.generateMergeStatement(tableName, processedFields, primaryKeys, options));
       }
     }
 
@@ -439,17 +439,23 @@ export class QueryGenerationService {
     return `INSERT INTO ${tableName} (${fields.join(", ")}) \nVALUES (${values.join(", ")});`;
   }
 
-  generateMergeStatement(tableName, processedFields, primaryKeys) {
+  generateMergeStatement(tableName, processedFields, primaryKeys, options = {}) {
     // Format fields for SELECT part
     const selectFields = processedFields.map((f) => `\n  ${f.formattedValue} AS ${this.formatFieldName(f.fieldName)}`).join(",");
 
     // Format ON conditions for primary keys
     const pkConditions = primaryKeys.map((pk) => `tgt.${this.formatFieldName(pk)} = src.${this.formatFieldName(pk)}`).join(" AND ");
 
-    // Format UPDATE SET clause (excluding PKs and creation fields)
+    const preserveConfigId =
+      tableName.toLowerCase().endsWith("config") &&
+      primaryKeys.some((field) => field.toLowerCase() === "parameter_key") &&
+      options.updateConfigIds !== true;
+
+    // Preserve physical config IDs on matched rows unless explicitly opted in.
     const updateFieldsList = processedFields
       // lowercase comparison is mandatory, we want to exclude created field ignoring case
-      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(String(f.fieldName).toLowerCase()));
+      .filter((f) => !primaryKeys.includes(f.fieldName) && !["created_time", "created_by"].includes(String(f.fieldName).toLowerCase()))
+      .filter((f) => !preserveConfigId || f.fieldName.toLowerCase() !== "config_id");
 
     // Format INSERT fields and values (excluding primary keys as per Oracle SQL conventions)
     const insertFields = processedFields.map((f) => this.formatFieldName(f.fieldName)).join(", ");
